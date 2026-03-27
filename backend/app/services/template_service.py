@@ -35,3 +35,10 @@ class TemplateService:
         if not values:
             return template
         return self.repository.update(db, template, values)
+
+    def delete_template(self, db: Session, template_id: int) -> bool:
+        template = self.repository.get(db, template_id)
+        if template is None:
+            return False
+        self.repository.delete(db, template)
+        return True

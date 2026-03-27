@@ -24,3 +24,7 @@ class ElementDefinitionRepository:
         db.commit()
         db.refresh(entity)
         return entity
+
+    def delete(self, db: Session, entity: ElementDefinition) -> None:
+        db.delete(entity)
+        db.commit()

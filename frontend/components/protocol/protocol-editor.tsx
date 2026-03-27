@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
+import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { ProtocolElement, ProtocolImage, ProtocolSummary, ProtocolTodo, SaveState } from "@/types/api";
 
 type ProtocolEditorProps = {
@@ -33,6 +34,7 @@ export function ProtocolEditor({ protocol, initialElements, initialTodos, initia
   const [newTodoTask, setNewTodoTask] = useState<Record<number, string>>({});
   const [selectedFiles, setSelectedFiles] = useState<Record<number, File | null>>({});
   const [blockStatus, setBlockStatus] = useState<Record<number, SaveState>>({});
+  const [selectedElementId, setSelectedElementId] = useState<number | null>(initialElements[0]?.id ?? null);
   const timers = useRef<Record<number, number>>({});
 
   useEffect(() => {
@@ -48,6 +50,12 @@ export function ProtocolEditor({ protocol, initialElements, initialTodos, initia
 
   function setStatus(protocolElementId: number, status: SaveState) {
     setBlockStatus((current) => ({ ...current, [protocolElementId]: status }));
+  }
+
+  function focusElement(protocolElementId: number) {
+    setSelectedElementId(protocolElementId);
+    const target = document.getElementById(`protocol-element-${protocolElementId}`);
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function handleTextChange(protocolElementId: number, content: string) {
@@ -180,13 +188,55 @@ export function ProtocolEditor({ protocol, initialElements, initialTodos, initia
         <span className="pill">Autosave: text debounced, todos immediate</span>
       </div>
 
+      <article className="card">
+        <DataToolbar
+          title="Protocol elements"
+          description="Click a row to jump to the matching editor block."
+        />
+        <DataTable columns={["Block", "Type", "Section", "State", "Content"]}>
+          {visibleElements.map((element) => {
+            const saveState = blockStatus[element.id] ?? "saved";
+            return (
+              <tr
+                key={element.id}
+                className={`table-row-clickable${selectedElementId === element.id ? " table-row-active" : ""}`}
+                onClick={() => focusElement(element.id)}
+              >
+                <td>
+                  <strong>{element.heading_text_snapshot ?? element.display_title_snapshot ?? element.title_snapshot}</strong>
+                  <div className="muted">Block #{element.id}</div>
+                </td>
+                <td>{element.element_type_code ?? "unknown"}</td>
+                <td>{element.section_name_snapshot ?? "No section"}</td>
+                <td>
+                  <span className="pill">{saveState}</span>
+                </td>
+                <td className="table-content-cell">
+                  {element.text_content ??
+                    element.display_compiled_text ??
+                    ((todosByElement[element.id] ?? []).length > 0
+                      ? `${(todosByElement[element.id] ?? []).length} todo items`
+                      : (imagesByElement[element.id] ?? []).length > 0
+                        ? `${(imagesByElement[element.id] ?? []).length} uploaded images`
+                        : "No content yet")}
+                </td>
+              </tr>
+            );
+          })}
+        </DataTable>
+      </article>
+
       <div className="block-list">
         {visibleElements.map((element) => {
           const status = blockStatus[element.id] ?? "saved";
           const elementType = element.element_type_code ?? "unknown";
 
           return (
-            <section className="block" key={element.id}>
+            <section
+              className={`block${selectedElementId === element.id ? " block-active" : ""}`}
+              key={element.id}
+              id={`protocol-element-${element.id}`}
+            >
               <div className="status-row">
                 <span className="pill">{elementType}</span>
                 <span className="pill">block #{element.id}</span>

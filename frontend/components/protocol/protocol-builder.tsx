@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
+import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { browserApiFetch } from "@/lib/api/client";
 import { ProtocolSummary, TemplateSummary } from "@/types/api";
@@ -20,11 +22,13 @@ type ProtocolFormState = {
 };
 
 export function ProtocolBuilder({ initialProtocols, templates }: ProtocolBuilderProps) {
+  const router = useRouter();
   const [protocols, setProtocols] = useState(initialProtocols);
   const [status, setStatus] = useState("Ready");
   const [statusTone, setStatusTone] = useState<"neutral" | "success" | "error">("neutral");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [showCreateForm, setShowCreateForm] = useState(false);
   const [form, setForm] = useState<ProtocolFormState>({
     template_id: templates[0] ? String(templates[0].id) : "",
     protocol_number: "",
@@ -73,63 +77,86 @@ export function ProtocolBuilder({ initialProtocols, templates }: ProtocolBuilder
         protocol_number: "",
         title: ""
       }));
+      setShowCreateForm(false);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Protocol creation failed");
       setStatusTone("error");
     }
   }
 
+  async function deleteProtocol(protocolId: number) {
+    setStatus(`Deleting protocol #${protocolId}...`);
+    setStatusTone("neutral");
+
+    try {
+      await browserApiFetch<{ message: string }>(`/api/protocols/${protocolId}`, { method: "DELETE" });
+      setProtocols((current) => current.filter((protocol) => protocol.id !== protocolId));
+      setStatus(`Deleted protocol #${protocolId}`);
+      setStatusTone("success");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Protocol deletion failed");
+      setStatusTone("error");
+    }
+  }
+
   return (
     <div className="grid">
-      <article className="card">
-        <div className="eyebrow">Create Protocol</div>
-        <h3>Create from template snapshot</h3>
-        <form className="grid" onSubmit={createProtocol}>
-          <select
-            value={form.template_id}
-            onChange={(event) => setForm((current) => ({ ...current, template_id: event.target.value }))}
-          >
-            {templates.map((template) => (
-              <option key={template.id} value={template.id}>
-                #{template.id} {template.name}
-              </option>
-            ))}
-          </select>
-          <input
-            placeholder="Protocol number"
-            value={form.protocol_number}
-            onChange={(event) => setForm((current) => ({ ...current, protocol_number: event.target.value }))}
-            required
-          />
-          <input
-            type="date"
-            value={form.protocol_date}
-            onChange={(event) => setForm((current) => ({ ...current, protocol_date: event.target.value }))}
-            required
-          />
-          <input
-            placeholder="Optional title"
-            value={form.title}
-            onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
-          />
-          <button type="submit" disabled={!form.template_id}>
-            Create protocol from template
+      <DataToolbar
+        title="Protocols"
+        description="Create protocol snapshots from templates and open them from the table."
+        actions={
+          <button type="button" className="button-inline" onClick={() => setShowCreateForm((current) => !current)}>
+            {showCreateForm ? "Close create form" : "New protocol"}
           </button>
-        </form>
-        <StatusBanner tone={statusTone} message={status} />
-      </article>
+        }
+      />
 
-      <article className="card">
-        <div className="eyebrow">Snapshot Rule</div>
-        <h3>Protocols freeze template structure</h3>
-        <p className="muted">
-          Creation calls the backend snapshot function so later template changes do not mutate older protocols.
-        </p>
-      </article>
+      {showCreateForm ? (
+        <article className="card">
+          <div className="eyebrow">Create Protocol</div>
+          <form className="grid" onSubmit={createProtocol}>
+            <div className="two-col">
+              <select
+                value={form.template_id}
+                onChange={(event) => setForm((current) => ({ ...current, template_id: event.target.value }))}
+              >
+                {templates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    #{template.id} {template.name}
+                  </option>
+                ))}
+              </select>
+              <input
+                placeholder="Protocol number"
+                value={form.protocol_number}
+                onChange={(event) => setForm((current) => ({ ...current, protocol_number: event.target.value }))}
+                required
+              />
+            </div>
+            <div className="two-col">
+              <input
+                type="date"
+                value={form.protocol_date}
+                onChange={(event) => setForm((current) => ({ ...current, protocol_date: event.target.value }))}
+                required
+              />
+              <input
+                placeholder="Optional title"
+                value={form.title}
+                onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+              />
+            </div>
+            <div className="table-toolbar-actions">
+              <button type="submit" className="button-inline" disabled={!form.template_id}>
+                Create protocol
+              </button>
+            </div>
+          </form>
+        </article>
+      ) : null}
 
       <article className="card">
         <div className="eyebrow">Filter</div>
-        <h3>Search existing protocols</h3>
         <div className="two-col">
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by number or title" />
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
@@ -141,25 +168,40 @@ export function ProtocolBuilder({ initialProtocols, templates }: ProtocolBuilder
         </div>
       </article>
 
-      <div className="grid">
+      <StatusBanner tone={statusTone} message={status} />
+
+      <DataTable columns={["Protocol", "Title", "Template", "Date", "Actions"]}>
         {sortedProtocols.map((protocol) => (
-          <article className="card" key={protocol.id}>
-            <div className="eyebrow">{protocol.protocol_number}</div>
-            <h3>{protocol.title ?? "Untitled protocol"}</h3>
-            <p className="muted">
-              Template #{protocol.template_id} · {protocol.status}
-            </p>
-            <p className="muted">{protocol.protocol_date ?? "No protocol date"}</p>
-            <Link href={`/protocols/${protocol.id}`}>Open protocol detail</Link>
-          </article>
+          <tr key={protocol.id} className="table-row-clickable" onClick={() => router.push(`/protocols/${protocol.id}`)}>
+            <td>
+              <strong>{protocol.protocol_number}</strong>
+              <div className="muted">Protocol #{protocol.id}</div>
+            </td>
+            <td>{protocol.title ?? "Untitled protocol"}</td>
+            <td>
+              Template #{protocol.template_id}
+              <div className="muted">{protocol.status}</div>
+            </td>
+            <td>{protocol.protocol_date ?? "No date"}</td>
+            <td>
+              <div className="table-actions">
+                <button
+                  type="button"
+                  className="button-inline button-danger"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void deleteProtocol(protocol.id);
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
+            </td>
+          </tr>
         ))}
-        {sortedProtocols.length === 0 ? (
-          <article className="card">
-            <h3>No protocols yet</h3>
-            <p className="muted">Create the first protocol from one of your templates above.</p>
-          </article>
-        ) : null}
-      </div>
+      </DataTable>
+
+      {sortedProtocols.length === 0 ? <p className="muted">No protocols found for the current filter.</p> : null}
     </div>
   );
 }
@@ -187,10 +229,10 @@ export function ProtocolOverview({ protocol }: ProtocolOverviewProps) {
         </article>
 
         <article className="card">
-          <div className="eyebrow">Next Step</div>
-          <h3>Editor and export are active</h3>
+          <div className="eyebrow">Navigation</div>
+          <h3>Open related protocol work</h3>
           <p className="muted">
-            This detail page now combines protocol metadata, block editing, autosave and export actions in one place.
+            The table below jumps into block editing, and export actions stay available on the same page.
           </p>
           <Link href="/protocols">Back to protocol list</Link>
         </article>
