@@ -140,3 +140,13 @@ class ProtocolImageRead(BaseModel):
     mime_type: str | None = None
     file_size_bytes: int | None = None
     content_url: str
+
+
+class ProtocolExportRead(BaseModel):
+    protocol_id: int
+    export_format: str
+    generated_file_id: int | None = None
+    content_url: str | None = None
+    storage_path: str | None = None
+    created_at: datetime | None = None
+    status: str

@@ -1,4 +1,5 @@
 import { ProtocolEditor } from "@/components/protocol/protocol-editor";
+import { ProtocolExportPanel } from "@/components/protocol/protocol-export-panel";
 import { ProtocolOverview } from "@/components/protocol/protocol-builder";
 import { AppShell } from "@/components/ui/app-shell";
 import { backendFetch } from "@/lib/api/client";
@@ -36,6 +37,17 @@ export default async function ProtocolDetailPage({ params }: { params: { id: str
     }))
   );
   const initialImages = Object.fromEntries(imageLists.map((item) => [item.protocolElementId, item.images]));
+  const latestExport =
+    (await backendFetch<{
+      protocol_id: number;
+      export_format: string;
+      generated_file_id?: number | null;
+      content_url?: string | null;
+      storage_path?: string | null;
+      created_at?: string | null;
+      status: string;
+    }>(`/api/protocols/${params.id}/exports/latest`)) ??
+    { protocol_id: protocol.id, export_format: "none", status: "missing" };
 
   return (
     <AppShell>
@@ -44,6 +56,7 @@ export default async function ProtocolDetailPage({ params }: { params: { id: str
         <h1>{protocol.title ?? protocol.protocol_number}</h1>
         <p className="muted">This editor now renders real protocol blocks and starts the autosave flow for text and todos.</p>
         <ProtocolOverview protocol={protocol} />
+        <ProtocolExportPanel protocol={protocol} initialLatestExport={latestExport} />
         <ProtocolEditor
           protocol={protocol}
           initialElements={elements}

@@ -159,9 +159,9 @@ export function ProtocolOverview({ protocol }: ProtocolOverviewProps) {
 
         <article className="card">
           <div className="eyebrow">Next Step</div>
-          <h3>Protocol editor follows in step 6</h3>
+          <h3>Editor and export are active</h3>
           <p className="muted">
-            This detail page already loads real protocol metadata. The block editor and autosave will attach here next.
+            This detail page now combines protocol metadata, block editing, autosave and export actions in one place.
           </p>
           <Link href="/protocols">Back to protocol list</Link>
         </article>
