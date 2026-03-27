@@ -15,9 +15,17 @@ export type TemplateSummary = {
 
 export type ProtocolSummary = {
   id: number;
+  tenant_id?: number;
+  template_id?: number;
+  template_version?: number;
   protocol_number: string;
   title: string | null;
+  protocol_date?: string;
+  event_id?: number | null;
   status: string;
+  created_by?: number | null;
+  created_at?: string;
+  updated_at?: string;
 };
 
 export type ElementDefinition = {
