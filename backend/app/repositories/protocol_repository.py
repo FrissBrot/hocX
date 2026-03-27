@@ -27,6 +27,10 @@ class ProtocolRepository:
         db.refresh(protocol)
         return protocol
 
+    def delete(self, db: Session, protocol: Protocol) -> None:
+        db.delete(protocol)
+        db.commit()
+
     def create_from_template(
         self,
         db: Session,

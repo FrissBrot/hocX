@@ -60,3 +60,20 @@ def patch_protocol(
     if protocol is None:
         raise HTTPException(status_code=404, detail="Protocol not found")
     return protocol
+
+
+@router.delete("/protocols/{protocol_id}", response_model=dict[str, str])
+def delete_protocol(
+    protocol_id: int,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_editor(user)
+    try:
+        deleted = service.delete_protocol(db, protocol_id)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Protocol could not be deleted") from exc
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Protocol not found")
+    return {"message": "Protocol deleted"}

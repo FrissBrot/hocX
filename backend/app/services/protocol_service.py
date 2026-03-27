@@ -34,3 +34,10 @@ class ProtocolService:
         if not values:
             return protocol
         return self.repository.update(db, protocol, values)
+
+    def delete_protocol(self, db: Session, protocol_id: int) -> bool:
+        protocol = self.repository.get(db, protocol_id)
+        if protocol is None:
+            return False
+        self.repository.delete(db, protocol)
+        return True

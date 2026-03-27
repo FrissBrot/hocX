@@ -30,3 +30,7 @@ class TemplateRepository:
         db.commit()
         db.refresh(template)
         return template
+
+    def delete(self, db: Session, template: Template) -> None:
+        db.delete(template)
+        db.commit()

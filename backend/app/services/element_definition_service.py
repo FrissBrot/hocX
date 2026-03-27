@@ -27,3 +27,10 @@ class ElementDefinitionService:
         if not values:
             return entity
         return self.repository.update(db, entity, values)
+
+    def delete_element_definition(self, db: Session, element_definition_id: int) -> bool:
+        entity = self.repository.get(db, element_definition_id)
+        if entity is None:
+            return False
+        self.repository.delete(db, entity)
+        return True

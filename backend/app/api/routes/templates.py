@@ -75,6 +75,23 @@ def patch_template(
     return template
 
 
+@router.delete("/templates/{template_id}", response_model=dict[str, str])
+def delete_template(
+    template_id: int,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_editor(user)
+    try:
+        deleted = service.delete_template(db, template_id)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Template could not be deleted") from exc
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return {"message": "Template deleted"}
+
+
 @router.get("/templates/{template_id}/elements", response_model=list[TemplateElementRead])
 def list_template_elements(template_id: int, db: Session = Depends(get_db)):
     return template_element_service.list_template_elements(db, template_id)
@@ -161,3 +178,20 @@ def patch_element_definition(
     if element_definition is None:
         raise HTTPException(status_code=404, detail="Element definition not found")
     return element_definition
+
+
+@router.delete("/element-definitions/{element_definition_id}", response_model=dict[str, str])
+def delete_element_definition(
+    element_definition_id: int,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_editor(user)
+    try:
+        deleted = element_definition_service.delete_element_definition(db, element_definition_id)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Element definition could not be deleted") from exc
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Element definition not found")
+    return {"message": "Element definition deleted"}
