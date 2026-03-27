@@ -3,6 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 
 import { browserApiFetch } from "@/lib/api/client";
+import { StatusBanner } from "@/components/ui/status-banner";
 import { ElementDefinition, TemplateElement, TemplateSummary } from "@/types/api";
 
 type TemplateBuilderProps = {
@@ -25,15 +26,29 @@ export function TemplateBuilder({ initialTemplates }: TemplateBuilderProps) {
   const [templates, setTemplates] = useState(initialTemplates);
   const [form, setForm] = useState(initialState);
   const [status, setStatus] = useState<string>("Ready");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusTone, setStatusTone] = useState<"neutral" | "success" | "error">("neutral");
 
   const sortedTemplates = useMemo(
-    () => [...templates].sort((left, right) => right.id - left.id),
-    [templates]
+    () =>
+      [...templates]
+        .filter((template) => {
+          const matchesSearch =
+            !search ||
+            template.name.toLowerCase().includes(search.toLowerCase()) ||
+            (template.description ?? "").toLowerCase().includes(search.toLowerCase());
+          const matchesStatus = statusFilter === "all" || template.status === statusFilter;
+          return matchesSearch && matchesStatus;
+        })
+        .sort((left, right) => right.id - left.id),
+    [templates, search, statusFilter]
   );
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus("Creating template...");
+    setStatusTone("neutral");
 
     try {
       const created = await browserApiFetch<TemplateSummary>("/api/templates", {
@@ -52,8 +67,10 @@ export function TemplateBuilder({ initialTemplates }: TemplateBuilderProps) {
       setTemplates((current) => [created, ...current]);
       setForm(initialState);
       setStatus(`Created template #${created.id}`);
+      setStatusTone("success");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Template creation failed");
+      setStatusTone("error");
     }
   }
 
@@ -84,7 +101,7 @@ export function TemplateBuilder({ initialTemplates }: TemplateBuilderProps) {
           />
           <button type="submit">Create template</button>
         </form>
-        <p className="muted">{status}</p>
+        <StatusBanner tone={statusTone} message={status} />
       </article>
 
       <article className="card">
@@ -94,6 +111,19 @@ export function TemplateBuilder({ initialTemplates }: TemplateBuilderProps) {
           Create templates, inspect existing ones, and open the detail builder to manage structure and element
           assignment.
         </p>
+      </article>
+
+      <article className="card">
+        <div className="eyebrow">Filter</div>
+        <h3>Search existing templates</h3>
+        <div className="two-col">
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name or description" />
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <option value="all">All statuses</option>
+            <option value="active">Active</option>
+            <option value="archived">Archived</option>
+          </select>
+        </div>
       </article>
 
       <div className="grid">
@@ -182,6 +212,7 @@ export function TemplateEditor({
     render_type_id: "2"
   });
   const [status, setStatus] = useState<string>("Ready");
+  const [statusTone, setStatusTone] = useState<"neutral" | "success" | "error">("neutral");
 
   const definitionById = useMemo(
     () => new Map(definitions.map((definition) => [definition.id, definition])),
@@ -191,6 +222,7 @@ export function TemplateEditor({
   async function saveTemplate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus("Saving template...");
+    setStatusTone("neutral");
 
     try {
       const updated = await browserApiFetch<TemplateSummary>(`/api/templates/${template.id}`, {
@@ -204,14 +236,17 @@ export function TemplateEditor({
       });
       setTemplate(updated);
       setStatus("Template saved");
+      setStatusTone("success");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Template save failed");
+      setStatusTone("error");
     }
   }
 
   async function addElement(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus("Adding template element...");
+    setStatusTone("neutral");
 
     try {
       const created = await browserApiFetch<TemplateElement>(`/api/templates/${template.id}/elements`, {
@@ -232,14 +267,17 @@ export function TemplateEditor({
 
       setElements((current) => [...current, created].sort((left, right) => left.sort_index - right.sort_index));
       setStatus(`Added template element #${created.id}`);
+      setStatusTone("success");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Adding template element failed");
+      setStatusTone("error");
     }
   }
 
   async function createDefinition(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus("Creating element definition...");
+    setStatusTone("neutral");
 
     try {
       const created = await browserApiFetch<ElementDefinition>("/api/element-definitions", {
@@ -268,8 +306,10 @@ export function TemplateEditor({
         render_type_id: "2"
       });
       setStatus(`Created element definition #${created.id}`);
+      setStatusTone("success");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Element definition creation failed");
+      setStatusTone("error");
     }
   }
 
@@ -287,8 +327,10 @@ export function TemplateEditor({
           .sort((left, right) => left.sort_index - right.sort_index)
       );
       setStatus(`Saved element #${elementId}`);
+      setStatusTone("success");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Element update failed");
+      setStatusTone("error");
     }
   }
 
@@ -301,8 +343,10 @@ export function TemplateEditor({
       });
       setElements((current) => current.filter((element) => element.id !== elementId));
       setStatus(`Deleted element #${elementId}`);
+      setStatusTone("success");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Element deletion failed");
+      setStatusTone("error");
     }
   }
 
@@ -310,8 +354,9 @@ export function TemplateEditor({
     <div className="grid">
       <div className="status-row">
         <span className="pill">Template #{template.id}</span>
-        <span className="pill">Status: {status}</span>
+        <span className="pill">Status: {template.status}</span>
       </div>
+      <StatusBanner tone={statusTone} message={status} />
 
       <div className="two-col">
         <article className="card">

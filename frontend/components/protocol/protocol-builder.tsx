@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 
+import { StatusBanner } from "@/components/ui/status-banner";
 import { browserApiFetch } from "@/lib/api/client";
 import { ProtocolSummary, TemplateSummary } from "@/types/api";
 
@@ -21,6 +22,9 @@ type ProtocolFormState = {
 export function ProtocolBuilder({ initialProtocols, templates }: ProtocolBuilderProps) {
   const [protocols, setProtocols] = useState(initialProtocols);
   const [status, setStatus] = useState("Ready");
+  const [statusTone, setStatusTone] = useState<"neutral" | "success" | "error">("neutral");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [form, setForm] = useState<ProtocolFormState>({
     template_id: templates[0] ? String(templates[0].id) : "",
     protocol_number: "",
@@ -29,13 +33,22 @@ export function ProtocolBuilder({ initialProtocols, templates }: ProtocolBuilder
   });
 
   const sortedProtocols = useMemo(
-    () => [...protocols].sort((left, right) => right.id - left.id),
-    [protocols]
+    () =>
+      [...protocols]
+        .filter((protocol) => {
+          const haystack = `${protocol.protocol_number} ${protocol.title ?? ""}`.toLowerCase();
+          const matchesSearch = !search || haystack.includes(search.toLowerCase());
+          const matchesStatus = statusFilter === "all" || protocol.status === statusFilter;
+          return matchesSearch && matchesStatus;
+        })
+        .sort((left, right) => right.id - left.id),
+    [protocols, search, statusFilter]
   );
 
   async function createProtocol(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus("Creating protocol...");
+    setStatusTone("neutral");
 
     try {
       const created = await browserApiFetch<{ id: number }>("/api/protocols/from-template", {
@@ -54,6 +67,7 @@ export function ProtocolBuilder({ initialProtocols, templates }: ProtocolBuilder
       const full = await browserApiFetch<ProtocolSummary>(`/api/protocols/${created.id}`);
       setProtocols((current) => [full, ...current]);
       setStatus(`Created protocol #${created.id}`);
+      setStatusTone("success");
       setForm((current) => ({
         ...current,
         protocol_number: "",
@@ -61,6 +75,7 @@ export function ProtocolBuilder({ initialProtocols, templates }: ProtocolBuilder
       }));
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Protocol creation failed");
+      setStatusTone("error");
     }
   }
 
@@ -101,7 +116,7 @@ export function ProtocolBuilder({ initialProtocols, templates }: ProtocolBuilder
             Create protocol from template
           </button>
         </form>
-        <p className="muted">{status}</p>
+        <StatusBanner tone={statusTone} message={status} />
       </article>
 
       <article className="card">
@@ -110,6 +125,20 @@ export function ProtocolBuilder({ initialProtocols, templates }: ProtocolBuilder
         <p className="muted">
           Creation calls the backend snapshot function so later template changes do not mutate older protocols.
         </p>
+      </article>
+
+      <article className="card">
+        <div className="eyebrow">Filter</div>
+        <h3>Search existing protocols</h3>
+        <div className="two-col">
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by number or title" />
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <option value="all">All statuses</option>
+            <option value="draft">Draft</option>
+            <option value="released">Released</option>
+            <option value="archived">Archived</option>
+          </select>
+        </div>
       </article>
 
       <div className="grid">

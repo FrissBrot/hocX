@@ -9,8 +9,8 @@ class TemplateService:
     def __init__(self, repository: TemplateRepository | None = None) -> None:
         self.repository = repository or TemplateRepository()
 
-    def list_templates(self, db: Session):
-        return self.repository.list(db)
+    def list_templates(self, db: Session, *, query: str | None = None, status: str | None = None):
+        return self.repository.list(db, query=query, status=status)
 
     def get_template(self, db: Session, template_id: int):
         return self.repository.get(db, template_id)

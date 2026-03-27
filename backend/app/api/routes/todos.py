@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.db import get_db
+from app.core.security import CurrentUser, get_current_user, require_editor
 from app.schemas.protocol import ProtocolTodoCreate, ProtocolTodoRead, ProtocolTodoUpdate
 from app.services.protocol_todo_service import ProtocolTodoService
 
@@ -21,7 +22,13 @@ def list_todos(protocol_element_id: int, db: Session = Depends(get_db)):
     response_model=ProtocolTodoRead,
     status_code=status.HTTP_201_CREATED,
 )
-def create_todo(protocol_element_id: int, payload: ProtocolTodoCreate, db: Session = Depends(get_db)):
+def create_todo(
+    protocol_element_id: int,
+    payload: ProtocolTodoCreate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_editor(user)
     try:
         todo = service.create_todo(db, protocol_element_id, payload)
     except SQLAlchemyError as exc:
@@ -32,7 +39,13 @@ def create_todo(protocol_element_id: int, payload: ProtocolTodoCreate, db: Sessi
 
 
 @router.patch("/protocol-todos/{todo_id}", response_model=ProtocolTodoRead)
-def patch_todo(todo_id: int, payload: ProtocolTodoUpdate, db: Session = Depends(get_db)):
+def patch_todo(
+    todo_id: int,
+    payload: ProtocolTodoUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_editor(user)
     try:
         todo = service.update_todo(db, todo_id, payload)
     except SQLAlchemyError as exc:
@@ -45,7 +58,12 @@ def patch_todo(todo_id: int, payload: ProtocolTodoUpdate, db: Session = Depends(
 
 
 @router.delete("/protocol-todos/{todo_id}", response_model=dict[str, str])
-def delete_todo(todo_id: int, db: Session = Depends(get_db)):
+def delete_todo(
+    todo_id: int,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_editor(user)
     try:
         deleted = service.delete_todo(db, todo_id)
     except SQLAlchemyError as exc:

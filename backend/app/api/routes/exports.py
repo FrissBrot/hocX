@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.db import get_db
+from app.core.security import CurrentUser, get_current_user, require_editor
 from app.schemas.protocol import ProtocolExportRead
 from app.services.export_service import ExportService
 
@@ -12,7 +13,12 @@ service = ExportService()
 
 
 @router.post("/protocols/{protocol_id}/exports/latex", response_model=ProtocolExportRead)
-def export_latex(protocol_id: int, db: Session = Depends(get_db)):
+def export_latex(
+    protocol_id: int,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_editor(user)
     try:
         return service.export_latex(db, protocol_id)
     except ValueError as exc:
@@ -23,7 +29,12 @@ def export_latex(protocol_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/protocols/{protocol_id}/exports/pdf", response_model=ProtocolExportRead)
-def export_pdf(protocol_id: int, db: Session = Depends(get_db)):
+def export_pdf(
+    protocol_id: int,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_editor(user)
     try:
         return service.export_pdf(db, protocol_id)
     except ValueError as exc:

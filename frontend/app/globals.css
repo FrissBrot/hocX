@@ -135,6 +135,29 @@ main {
   font-size: 0.9rem;
 }
 
+.status-banner {
+  border-radius: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+}
+
+.status-neutral {
+  background: #f6efe4;
+  color: var(--text);
+}
+
+.status-success {
+  background: #e4f3e8;
+  color: var(--success);
+  border-color: #b9d9c0;
+}
+
+.status-error {
+  background: #f8dfda;
+  color: #8c2f22;
+  border-color: #e5b7af;
+}
+
 .block-list {
   display: grid;
   gap: 14px;

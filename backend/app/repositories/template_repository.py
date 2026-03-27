@@ -5,8 +5,14 @@ from app.models import Template
 
 
 class TemplateRepository:
-    def list(self, db: Session) -> list[Template]:
-        return list(db.scalars(select(Template).order_by(Template.id.desc())))
+    def list(self, db: Session, *, query: str | None = None, status: str | None = None) -> list[Template]:
+        statement = select(Template)
+        if query:
+            statement = statement.where(Template.name.ilike(f"%{query}%"))
+        if status:
+            statement = statement.where(Template.status == status)
+        statement = statement.order_by(Template.id.desc())
+        return list(db.scalars(statement))
 
     def get(self, db: Session, template_id: int) -> Template | None:
         return db.get(Template, template_id)

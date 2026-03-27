@@ -8,8 +8,8 @@ class ProtocolService:
     def __init__(self, repository: ProtocolRepository | None = None) -> None:
         self.repository = repository or ProtocolRepository()
 
-    def list_protocols(self, db: Session):
-        return self.repository.list(db)
+    def list_protocols(self, db: Session, *, query: str | None = None, status: str | None = None):
+        return self.repository.list(db, query=query, status=status)
 
     def get_protocol(self, db: Session, protocol_id: int):
         return self.repository.get(db, protocol_id)

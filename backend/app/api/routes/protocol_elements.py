@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.db import get_db
+from app.core.security import CurrentUser, get_current_user, require_editor
 from app.schemas.protocol import ProtocolElementRead, ProtocolElementUpdate, ProtocolTextRead, ProtocolTextUpdate
 from app.services.autosave_service import AutosaveService
 from app.services.protocol_element_service import ProtocolElementService
@@ -23,7 +24,9 @@ def patch_protocol_element(
     protocol_element_id: int,
     payload: ProtocolElementUpdate,
     db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
 ):
+    require_editor(user)
     try:
         protocol_element = service.update_protocol_element(db, protocol_element_id, payload)
     except SQLAlchemyError as exc:
@@ -46,7 +49,9 @@ def put_protocol_text(
     protocol_element_id: int,
     payload: ProtocolTextUpdate,
     db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
 ):
+    require_editor(user)
     try:
         result = autosave_service.save_text_block(db, protocol_element_id, payload.content)
     except SQLAlchemyError as exc:

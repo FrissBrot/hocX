@@ -1,5 +1,12 @@
 export type SaveState = "saving" | "saved" | "error";
 
+export type SessionInfo = {
+  mode: string;
+  user_id: number | null;
+  role: string;
+  message: string;
+};
+
 export type TemplateSummary = {
   id: number;
   tenant_id?: number;

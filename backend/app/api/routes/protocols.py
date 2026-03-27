@@ -1,8 +1,9 @@
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from app.core.security import CurrentUser, get_current_user, require_editor
 from app.core.db import get_db
 from app.schemas.protocol import ProtocolCreateFromTemplate, ProtocolRead, ProtocolUpdate
 from app.services.protocol_service import ProtocolService
@@ -12,12 +13,21 @@ service = ProtocolService()
 
 
 @router.get("/protocols", response_model=list[ProtocolRead])
-def list_protocols(db: Session = Depends(get_db)):
-    return service.list_protocols(db)
+def list_protocols(
+    q: str | None = Query(default=None),
+    status_filter: str | None = Query(default=None, alias="status"),
+    db: Session = Depends(get_db),
+):
+    return service.list_protocols(db, query=q, status=status_filter)
 
 
 @router.post("/protocols/from-template", response_model=dict[str, int], status_code=status.HTTP_201_CREATED)
-def create_protocol_from_template(payload: ProtocolCreateFromTemplate, db: Session = Depends(get_db)):
+def create_protocol_from_template(
+    payload: ProtocolCreateFromTemplate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_editor(user)
     try:
         protocol_id = service.create_from_template(db, payload)
     except SQLAlchemyError as exc:
@@ -35,7 +45,13 @@ def get_protocol(protocol_id: int, db: Session = Depends(get_db)):
 
 
 @router.patch("/protocols/{protocol_id}", response_model=ProtocolRead)
-def patch_protocol(protocol_id: int, payload: ProtocolUpdate, db: Session = Depends(get_db)):
+def patch_protocol(
+    protocol_id: int,
+    payload: ProtocolUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_editor(user)
     try:
         protocol = service.update_protocol(db, protocol_id, payload)
     except SQLAlchemyError as exc:

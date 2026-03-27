@@ -1,8 +1,9 @@
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from app.core.security import CurrentUser, get_current_user, require_editor
 from app.core.db import get_db
 from app.schemas.template import (
     ElementDefinitionCreate,
@@ -26,12 +27,21 @@ template_element_service = TemplateElementService()
 
 
 @router.get("/templates", response_model=list[TemplateRead])
-def list_templates(db: Session = Depends(get_db)):
-    return service.list_templates(db)
+def list_templates(
+    q: str | None = Query(default=None),
+    status_filter: str | None = Query(default=None, alias="status"),
+    db: Session = Depends(get_db),
+):
+    return service.list_templates(db, query=q, status=status_filter)
 
 
 @router.post("/templates", response_model=TemplateRead, status_code=status.HTTP_201_CREATED)
-def create_template(payload: TemplateCreate, db: Session = Depends(get_db)):
+def create_template(
+    payload: TemplateCreate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_editor(user)
     try:
         return service.create_template(db, payload)
     except SQLAlchemyError as exc:
@@ -48,7 +58,13 @@ def get_template(template_id: int, db: Session = Depends(get_db)):
 
 
 @router.patch("/templates/{template_id}", response_model=TemplateRead)
-def patch_template(template_id: int, payload: TemplateUpdate, db: Session = Depends(get_db)):
+def patch_template(
+    template_id: int,
+    payload: TemplateUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_editor(user)
     try:
         template = service.update_template(db, template_id, payload)
     except SQLAlchemyError as exc:
@@ -65,7 +81,13 @@ def list_template_elements(template_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/templates/{template_id}/elements", response_model=TemplateElementRead, status_code=status.HTTP_201_CREATED)
-def create_template_element(template_id: int, payload: TemplateElementCreate, db: Session = Depends(get_db)):
+def create_template_element(
+    template_id: int,
+    payload: TemplateElementCreate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_editor(user)
     try:
         return template_element_service.create_template_element(db, template_id, payload)
     except SQLAlchemyError as exc:
@@ -74,7 +96,13 @@ def create_template_element(template_id: int, payload: TemplateElementCreate, db
 
 
 @router.patch("/template-elements/{template_element_id}", response_model=TemplateElementRead)
-def patch_template_element(template_element_id: int, payload: TemplateElementUpdate, db: Session = Depends(get_db)):
+def patch_template_element(
+    template_element_id: int,
+    payload: TemplateElementUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_editor(user)
     try:
         template_element = template_element_service.update_template_element(db, template_element_id, payload)
     except SQLAlchemyError as exc:
@@ -86,7 +114,12 @@ def patch_template_element(template_element_id: int, payload: TemplateElementUpd
 
 
 @router.delete("/template-elements/{template_element_id}", response_model=dict[str, str])
-def delete_template_element(template_element_id: int, db: Session = Depends(get_db)):
+def delete_template_element(
+    template_element_id: int,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_editor(user)
     deleted = template_element_service.delete_template_element(db, template_element_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Template element not found")
@@ -99,7 +132,12 @@ def list_element_definitions(db: Session = Depends(get_db)):
 
 
 @router.post("/element-definitions", response_model=ElementDefinitionRead, status_code=status.HTTP_201_CREATED)
-def create_element_definition(payload: ElementDefinitionCreate, db: Session = Depends(get_db)):
+def create_element_definition(
+    payload: ElementDefinitionCreate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_editor(user)
     try:
         return element_definition_service.create_element_definition(db, payload)
     except SQLAlchemyError as exc:
@@ -112,7 +150,9 @@ def patch_element_definition(
     element_definition_id: int,
     payload: ElementDefinitionUpdate,
     db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
 ):
+    require_editor(user)
     try:
         element_definition = element_definition_service.update_element_definition(db, element_definition_id, payload)
     except SQLAlchemyError as exc:

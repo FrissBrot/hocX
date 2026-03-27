@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 
 from app.core.db import get_db
 from app.core.config import settings
+from app.core.security import CurrentUser, get_current_user, require_editor
 from app.models import ProtocolElement
 from app.schemas.protocol import ProtocolImageRead
 from app.services.file_service import FileService
@@ -27,7 +28,9 @@ async def upload_image(
     title: str | None = Form(default=None),
     caption: str | None = Form(default=None),
     db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
 ):
+    require_editor(user)
     protocol_element = db.get(ProtocolElement, protocol_element_id)
     if protocol_element is None:
         raise HTTPException(status_code=404, detail="Protocol element not found")
@@ -46,7 +49,12 @@ async def upload_image(
 
 
 @router.delete("/protocol-images/{image_id}", response_model=dict[str, str])
-def delete_image(image_id: int, db: Session = Depends(get_db)):
+def delete_image(
+    image_id: int,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_editor(user)
     try:
         deleted = service.delete_protocol_image(db, image_id)
     except SQLAlchemyError as exc:

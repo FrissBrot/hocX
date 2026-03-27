@@ -5,8 +5,16 @@ from app.models import Protocol
 
 
 class ProtocolRepository:
-    def list(self, db: Session) -> list[Protocol]:
-        return list(db.scalars(select(Protocol).order_by(Protocol.id.desc())))
+    def list(self, db: Session, *, query: str | None = None, status: str | None = None) -> list[Protocol]:
+        statement = select(Protocol)
+        if query:
+            statement = statement.where(
+                Protocol.protocol_number.ilike(f"%{query}%") | Protocol.title.ilike(f"%{query}%")
+            )
+        if status:
+            statement = statement.where(Protocol.status == status)
+        statement = statement.order_by(Protocol.id.desc())
+        return list(db.scalars(statement))
 
     def get(self, db: Session, protocol_id: int) -> Protocol | None:
         return db.get(Protocol, protocol_id)
