@@ -1,4 +1,20 @@
 services:
+  traefik:
+    image: traefik:v3.1
+    restart: unless-stopped
+    depends_on:
+      - frontend
+      - backend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./infra/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./infra/traefik/letsencrypt:/letsencrypt
+    command:
+      - --configFile=/etc/traefik/traefik.yml
+
   db:
     image: postgres:16
     restart: unless-stopped
@@ -34,12 +50,17 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    ports:
-      - "${API_PORT:-8000}:8000"
     volumes:
       - ./backend:/app
       - ./storage:/app/storage
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.hocx-backend.rule=Host(`${TRAEFIK_DOMAIN}`) && (PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`))"
+      - "traefik.http.routers.hocx-backend.entrypoints=websecure"
+      - "traefik.http.routers.hocx-backend.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.hocx-backend.priority=100"
+      - "traefik.http.services.hocx-backend.loadbalancer.server.port=8000"
 
   frontend:
     build:
@@ -52,13 +73,18 @@ services:
       INTERNAL_API_URL: ${INTERNAL_API_URL}
     depends_on:
       - backend
-    ports:
-      - "${WEB_PORT:-3000}:3000"
     volumes:
       - ./frontend:/app
       - /app/node_modules
       - /app/.next
     command: npm run dev
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.hocx-frontend.rule=Host(`${TRAEFIK_DOMAIN}`)"
+      - "traefik.http.routers.hocx-frontend.entrypoints=websecure"
+      - "traefik.http.routers.hocx-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.hocx-frontend.priority=10"
+      - "traefik.http.services.hocx-frontend.loadbalancer.server.port=3000"
 
 volumes:
   postgres_data:
