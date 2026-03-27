@@ -1,11 +1,8 @@
-type TemplateItem = {
-  id: number;
-  name: string;
-  version: number;
-  status: string;
-};
+import Link from "next/link";
 
-export function TemplateList({ items }: { items: TemplateItem[] }) {
+import { TemplateSummary } from "@/types/api";
+
+export function TemplateList({ items }: { items: TemplateSummary[] }) {
   return (
     <div className="grid">
       {items.map((item) => (
@@ -15,9 +12,10 @@ export function TemplateList({ items }: { items: TemplateItem[] }) {
           <p className="muted">
             Version {item.version} · {item.status}
           </p>
+          <p className="muted">{item.description ?? "No description yet."}</p>
+          <Link href={`/templates/${item.id}`}>Open template builder</Link>
         </article>
       ))}
     </div>
   );
 }
-

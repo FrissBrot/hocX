@@ -148,13 +148,39 @@ main {
 }
 
 .block textarea,
-.block input {
+.block input,
+.grid input,
+.grid textarea,
+.grid select,
+button {
   width: 100%;
   padding: 12px;
   border-radius: 12px;
   border: 1px solid var(--border);
   background: #fff;
   font: inherit;
+}
+
+button {
+  cursor: pointer;
+  background: var(--accent);
+  color: #fff7f1;
+  border-color: var(--accent);
+}
+
+button:hover {
+  filter: brightness(0.96);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+input[type="checkbox"] {
+  width: auto;
+  margin-right: 8px;
+  padding: 0;
 }
 
 .two-col {
@@ -172,4 +198,3 @@ main {
     position: static;
   }
 }
-

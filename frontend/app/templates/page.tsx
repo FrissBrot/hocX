@@ -1,13 +1,7 @@
 import { AppShell } from "@/components/ui/app-shell";
-import { TemplateList } from "@/components/template/template-list";
+import { TemplateBuilder } from "@/components/template/template-builder";
 import { backendFetch } from "@/lib/api/client";
-
-type TemplateSummary = {
-  id: number;
-  name: string;
-  version: number;
-  status: string;
-};
+import { TemplateSummary } from "@/types/api";
 
 export default async function TemplatesPage() {
   const data = await backendFetch<TemplateSummary[]>("/api/templates");
@@ -17,17 +11,9 @@ export default async function TemplatesPage() {
       <section className="panel">
         <div className="eyebrow">Template Builder</div>
         <h1>Template list</h1>
-        <p className="muted">The current starter exposes template endpoints and a UI shell for the builder flow.</p>
-        <TemplateList
-          items={
-            data ?? [
-              { id: 1, name: "Default protocol template", version: 1, status: "active" },
-              { id: 2, name: "Camp retrospective", version: 1, status: "draft-ui" }
-            ]
-          }
-        />
+        <p className="muted">Create templates and jump straight into the structure editor.</p>
+        <TemplateBuilder initialTemplates={data ?? []} />
       </section>
     </AppShell>
   );
 }
-

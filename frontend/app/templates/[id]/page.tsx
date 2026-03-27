@@ -1,23 +1,39 @@
 import { AppShell } from "@/components/ui/app-shell";
+import { TemplateEditor } from "@/components/template/template-builder";
+import { backendFetch } from "@/lib/api/client";
+import { ElementDefinition, TemplateElement, TemplateSummary } from "@/types/api";
 
-export default function TemplateDetailPage({ params }: { params: { id: string } }) {
+export default async function TemplateDetailPage({ params }: { params: { id: string } }) {
+  const [template, elements, definitions] = await Promise.all([
+    backendFetch<TemplateSummary>(`/api/templates/${params.id}`),
+    backendFetch<TemplateElement[]>(`/api/templates/${params.id}/elements`),
+    backendFetch<ElementDefinition[]>("/api/element-definitions")
+  ]);
+
+  if (!template) {
+    return (
+      <AppShell>
+        <section className="panel">
+          <div className="eyebrow">Template Detail</div>
+          <h1>Template not found</h1>
+          <p className="muted">The requested template could not be loaded from the backend.</p>
+        </section>
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell>
       <section className="panel">
         <div className="eyebrow">Template Detail</div>
-        <h1>Template #{params.id}</h1>
-        <div className="two-col">
-          <article className="card">
-            <h3>Structure</h3>
-            <p className="muted">Template elements, sections and ordering will live here.</p>
-          </article>
-          <article className="card">
-            <h3>Document Template</h3>
-            <p className="muted">Versioned LaTeX template assignment belongs here.</p>
-          </article>
-        </div>
+        <h1>{template.name}</h1>
+        <p className="muted">Manage template metadata, assign element definitions and control ordering and sections.</p>
+        <TemplateEditor
+          initialTemplate={template}
+          initialElements={elements ?? []}
+          initialDefinitions={definitions ?? []}
+        />
       </section>
     </AppShell>
   );
 }
-
