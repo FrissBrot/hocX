@@ -2,9 +2,10 @@ const internalApiUrl = process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_A
 const publicApiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 export const browserApiBaseUrl = publicApiUrl;
 
-export async function backendFetch<T>(path: string): Promise<T | null> {
+export async function backendFetch<T>(path: string, init?: RequestInit): Promise<T | null> {
   try {
     const response = await fetch(`${internalApiUrl}${path}`, {
+      ...init,
       cache: "no-store"
     });
 
@@ -22,6 +23,7 @@ export async function browserApiFetch<T>(path: string, init?: RequestInit): Prom
   const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
   const response = await fetch(`${publicApiUrl}${path}`, {
     ...init,
+    credentials: "include",
     headers: isFormData
       ? init?.headers
       : {

@@ -37,19 +37,38 @@ class TemplateRead(TemplateBase):
     model_config = {"from_attributes": True}
 
 
-class ElementDefinitionBase(BaseModel):
-    tenant_id: int = 1
+class ElementDefinitionBlockBase(BaseModel):
+    id: int
+    title: str
+    description: str | None = None
+    block_title: str | None = None
+    default_content: str | None = None
     element_type_id: int
     render_type_id: int
-    title: str
-    display_title: str | None = None
-    description: str | None = None
     is_editable: bool = True
     allows_multiple_values: bool = False
     export_visible: bool = True
+    is_visible: bool = True
+    sort_index: int
+    render_order: int | None = None
     latex_template: str | None = None
     configuration_json: dict[str, Any] = Field(default_factory=dict)
+
+
+class ElementDefinitionBlockCreate(ElementDefinitionBlockBase):
+    pass
+
+
+class ElementDefinitionBlockRead(ElementDefinitionBlockBase):
+    pass
+
+
+class ElementDefinitionBase(BaseModel):
+    tenant_id: int = 1
+    title: str
+    description: str | None = None
     is_active: bool = True
+    blocks: list[ElementDefinitionBlockCreate] = Field(default_factory=list)
 
 
 class ElementDefinitionCreate(ElementDefinitionBase):
@@ -57,60 +76,63 @@ class ElementDefinitionCreate(ElementDefinitionBase):
 
 
 class ElementDefinitionUpdate(BaseModel):
-    element_type_id: int | None = None
-    render_type_id: int | None = None
     title: str | None = None
-    display_title: str | None = None
     description: str | None = None
-    is_editable: bool | None = None
-    allows_multiple_values: bool | None = None
-    export_visible: bool | None = None
-    latex_template: str | None = None
-    configuration_json: dict[str, Any] | None = None
     is_active: bool | None = None
+    blocks: list[ElementDefinitionBlockCreate] | None = None
 
 
-class ElementDefinitionRead(ElementDefinitionBase):
+class ElementDefinitionRead(BaseModel):
     id: int
+    tenant_id: int
+    title: str
+    description: str | None = None
+    is_active: bool
+    blocks: list[ElementDefinitionBlockRead] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
 
 
-class TemplateElementBase(BaseModel):
-    element_definition_id: int
+class TemplateElementBlockRead(BaseModel):
+    id: int
+    template_element_id: int
+    element_definition_block_id: int | None = None
+    title: str
+    description: str | None = None
+    block_title: str | None = None
+    default_content: str | None = None
+    element_type_id: int
+    render_type_id: int
+    is_editable: bool
+    allows_multiple_values: bool
+    export_visible: bool
+    is_visible: bool
     sort_index: int
     render_order: int | None = None
-    section_name: str | None = None
-    section_order: int | None = None
-    is_required: bool = False
-    is_visible: bool = True
-    export_visible: bool = True
-    heading_text: str | None = None
-    configuration_override_json: dict[str, Any] = Field(default_factory=dict)
+    latex_template: str | None = None
+    configuration_json: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
 
 
-class TemplateElementCreate(TemplateElementBase):
-    pass
+class TemplateElementCreate(BaseModel):
+    element_definition_id: int
+    sort_index: int
 
 
 class TemplateElementUpdate(BaseModel):
-    element_definition_id: int | None = None
     sort_index: int | None = None
-    render_order: int | None = None
-    section_name: str | None = None
-    section_order: int | None = None
-    is_required: bool | None = None
-    is_visible: bool | None = None
-    export_visible: bool | None = None
-    heading_text: str | None = None
-    configuration_override_json: dict[str, Any] | None = None
 
 
-class TemplateElementRead(TemplateElementBase):
+class TemplateElementRead(BaseModel):
     id: int
     template_id: int
+    element_definition_id: int
+    sort_index: int
+    title: str
+    description: str | None = None
     created_at: datetime
+    blocks: list[TemplateElementBlockRead] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}

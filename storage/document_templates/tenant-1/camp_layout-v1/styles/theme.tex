@@ -1,0 +1,18 @@
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{hyperref}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{xcolor}
+\definecolor{hocxPrimary}{HTML}{1E6B52}
+\definecolor{hocxSecondary}{HTML}{5C4A37}
+\makeatletter
+\renewcommand\section{\@startsection{section}{1}{\z@}{-3.5ex \@plus -1ex \@minus -.2ex}{2.3ex \@plus.2ex}{\normalfont\Large\bfseries\color{hocxPrimary}}}
+\renewcommand\subsection{\@startsection{subsection}{2}{\z@}{-3.25ex\@plus -1ex \@minus -.2ex}{1.5ex \@plus .2ex}{\normalfont\large\bfseries\color{hocxSecondary}}}
+\makeatother
+\color{black}
+\AtBeginDocument{\fontsize{12}{14}\selectfont}
+% helvet requested; container falls back to default roman font
+\setcounter{secnumdepth}{2}
+\setcounter{tocdepth}{2}
+

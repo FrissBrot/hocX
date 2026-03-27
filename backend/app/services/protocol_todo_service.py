@@ -9,8 +9,8 @@ class ProtocolTodoService:
     def __init__(self, repository: ProtocolTodoRepository | None = None) -> None:
         self.repository = repository or ProtocolTodoRepository()
 
-    def list_todos(self, db: Session, protocol_element_id: int) -> list[ProtocolTodoRead]:
-        rows = self.repository.list_for_protocol_element(db, protocol_element_id)
+    def list_todos(self, db: Session, protocol_element_block_id: int) -> list[ProtocolTodoRead]:
+        rows = self.repository.list_for_protocol_block(db, protocol_element_block_id)
         return [
             ProtocolTodoRead(
                 **row.ProtocolTodo.__dict__,
@@ -19,10 +19,10 @@ class ProtocolTodoService:
             for row in rows
         ]
 
-    def create_todo(self, db: Session, protocol_element_id: int, payload: ProtocolTodoCreate) -> ProtocolTodo:
+    def create_todo(self, db: Session, protocol_element_block_id: int, payload: ProtocolTodoCreate) -> ProtocolTodo:
         todo = ProtocolTodo(
-            protocol_element_id=protocol_element_id,
-            sort_index=self.repository.next_sort_index(db, protocol_element_id),
+            protocol_element_block_id=protocol_element_block_id,
+            sort_index=self.repository.next_sort_index(db, protocol_element_block_id),
             task=payload.task,
             assigned_user_id=payload.assigned_user_id,
             todo_status_id=payload.todo_status_id,

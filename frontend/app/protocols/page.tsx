@@ -1,21 +1,23 @@
 import { AppShell } from "@/components/ui/app-shell";
 import { ProtocolBuilder } from "@/components/protocol/protocol-builder";
-import { backendFetch } from "@/lib/api/client";
-import { ProtocolSummary, TemplateSummary } from "@/types/api";
+import { backendFetchWithSession, requireSession } from "@/lib/api/server";
+import { DocumentTemplate, ProtocolSummary, TemplateSummary } from "@/types/api";
 
 export default async function ProtocolsPage() {
-  const [items, templates] = await Promise.all([
-    backendFetch<ProtocolSummary[]>("/api/protocols"),
-    backendFetch<TemplateSummary[]>("/api/templates")
+  const session = await requireSession();
+  const [items, templates, documentTemplates] = await Promise.all([
+    backendFetchWithSession<ProtocolSummary[]>("/api/protocols"),
+    backendFetchWithSession<TemplateSummary[]>("/api/templates"),
+    backendFetchWithSession<DocumentTemplate[]>("/api/document-templates")
   ]);
 
   return (
-    <AppShell>
+    <AppShell initialSession={session}>
       <section className="panel">
         <div className="eyebrow">Protocols</div>
         <h1>Protocol list</h1>
         <p className="muted">Create new protocol snapshots from templates and inspect the resulting protocol records.</p>
-        <ProtocolBuilder initialProtocols={items ?? []} templates={templates ?? []} />
+        <ProtocolBuilder initialProtocols={items ?? []} templates={templates ?? []} documentTemplates={documentTemplates ?? []} />
       </section>
     </AppShell>
   );

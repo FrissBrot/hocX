@@ -1,6 +1,7 @@
 from app.models.entities import (
     AppUser,
     DocumentTemplate,
+    DocumentTemplatePart,
     ElementDefinition,
     ElementType,
     Event,
@@ -10,6 +11,7 @@ from app.models.entities import (
     Protocol,
     ProtocolDisplaySnapshot,
     ProtocolElement,
+    ProtocolElementBlock,
     ProtocolExportCache,
     ProtocolImage,
     ProtocolText,
@@ -19,14 +21,17 @@ from app.models.entities import (
     StoredFile,
     Template,
     TemplateElement,
+    TemplateElementBlock,
     Tenant,
     TodoStatus,
     UserRole,
+    UserTenantRole,
 )
 
 __all__ = [
     "AppUser",
     "DocumentTemplate",
+    "DocumentTemplatePart",
     "ElementDefinition",
     "ElementType",
     "Event",
@@ -36,6 +41,7 @@ __all__ = [
     "Protocol",
     "ProtocolDisplaySnapshot",
     "ProtocolElement",
+    "ProtocolElementBlock",
     "ProtocolExportCache",
     "ProtocolImage",
     "ProtocolText",
@@ -45,7 +51,9 @@ __all__ = [
     "StoredFile",
     "Template",
     "TemplateElement",
+    "TemplateElementBlock",
     "Tenant",
     "TodoStatus",
     "UserRole",
+    "UserTenantRole",
 ]

@@ -18,18 +18,18 @@ class StoredFileRepository:
 
 
 class ProtocolImageRepository:
-    def list_for_protocol_element(self, db: Session, protocol_element_id: int):
+    def list_for_protocol_block(self, db: Session, protocol_element_block_id: int):
         query = (
             select(ProtocolImage, StoredFile)
             .join(StoredFile, StoredFile.id == ProtocolImage.stored_file_id)
-            .where(ProtocolImage.protocol_element_id == protocol_element_id)
+            .where(ProtocolImage.protocol_element_block_id == protocol_element_block_id)
             .order_by(ProtocolImage.sort_index.asc(), ProtocolImage.id.asc())
         )
         return db.execute(query).all()
 
-    def next_sort_index(self, db: Session, protocol_element_id: int) -> int:
+    def next_sort_index(self, db: Session, protocol_element_block_id: int) -> int:
         current = db.scalar(
-            select(func.max(ProtocolImage.sort_index)).where(ProtocolImage.protocol_element_id == protocol_element_id)
+            select(func.max(ProtocolImage.sort_index)).where(ProtocolImage.protocol_element_block_id == protocol_element_block_id)
         )
         return 0 if current is None else int(current) + 1
 

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
+import { browserApiFetch } from "@/lib/api/client";
 import { ProtocolSummary } from "@/types/api";
 
 type ProtocolExport = {
@@ -22,17 +22,21 @@ export function ProtocolExportPanel({
   protocol: ProtocolSummary;
   initialLatestExport: ProtocolExport;
 }) {
-  const [latestExport, setLatestExport] = useState(initialLatestExport);
+  const [latestExport, setLatestExport] = useState(
+    initialLatestExport.export_format === "pdf"
+      ? initialLatestExport
+      : { ...initialLatestExport, export_format: "pdf", status: "missing", content_url: null, generated_file_id: null }
+  );
   const [status, setStatus] = useState("Ready");
 
-  async function runExport(format: "latex" | "pdf") {
-    setStatus(`Generating ${format.toUpperCase()}...`);
+  async function runExport() {
+    setStatus("Generating PDF...");
     try {
-      const result = await browserApiFetch<ProtocolExport>(`/api/protocols/${protocol.id}/exports/${format}`, {
+      const result = await browserApiFetch<ProtocolExport>(`/api/protocols/${protocol.id}/exports/pdf`, {
         method: "POST"
       });
       setLatestExport(result);
-      setStatus(`${format.toUpperCase()} generated`);
+      setStatus("PDF generated");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Export failed");
     }
@@ -40,27 +44,18 @@ export function ProtocolExportPanel({
 
   return (
     <article className="card">
-      <div className="eyebrow">Export</div>
-      <h3>LaTeX and PDF</h3>
+      <div className="eyebrow">PDF Export</div>
+      <h3>Create PDF</h3>
       <div className="status-row">
-        <button type="button" onClick={() => runExport("latex")}>
-          Generate LaTeX
-        </button>
-        <button type="button" onClick={() => runExport("pdf")}>
+        <button type="button" onClick={runExport}>
           Generate PDF
         </button>
       </div>
       <p className="muted">{status}</p>
+      <p className="muted">Latest PDF export: {latestExport.status}</p>
       <p className="muted">
-        Latest export: {latestExport.export_format} · {latestExport.status}
+        The PDF download is available from the protocol table.
       </p>
-      {latestExport.content_url ? (
-        <a href={`${browserApiBaseUrl}${latestExport.content_url}`} target="_blank" rel="noreferrer">
-          Download latest export
-        </a>
-      ) : (
-        <p className="muted">No export generated yet.</p>
-      )}
     </article>
   );
 }

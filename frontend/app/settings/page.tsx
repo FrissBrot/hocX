@@ -1,23 +1,30 @@
+import { DocumentTemplateManager } from "@/components/settings/document-template-manager";
 import { AppShell } from "@/components/ui/app-shell";
+import { backendFetchWithSession, requireSession } from "@/lib/api/server";
+import { DocumentTemplate, DocumentTemplatePart } from "@/types/api";
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const session = await requireSession();
+  const [documentTemplates, documentTemplateParts] = await Promise.all([
+    backendFetchWithSession<DocumentTemplate[]>("/api/document-templates"),
+    backendFetchWithSession<DocumentTemplatePart[]>("/api/document-template-parts")
+  ]);
+
   return (
-    <AppShell>
+    <AppShell initialSession={session}>
       <section className="panel">
-        <div className="eyebrow">Master Data</div>
-        <h1>Settings and reference data</h1>
-        <div className="two-col">
-          <article className="card">
-            <h3>Tenants / users / roles</h3>
-            <p className="muted">Prepared in the schema, still intentionally lightweight in V1.</p>
-          </article>
-          <article className="card">
-            <h3>Leaders / groups / events</h3>
-            <p className="muted">Master data endpoints can be expanded next without changing the core stack.</p>
-          </article>
+        <div className="eyebrow">Settings</div>
+        <h1>Document template library</h1>
+        <p className="muted">
+          Manage reusable LaTeX building parts per tenant and compose full PDF layouts that protocols can choose later.
+        </p>
+        <div className="section-stack">
+          <DocumentTemplateManager
+            initialTemplates={documentTemplates ?? []}
+            initialParts={documentTemplateParts ?? []}
+          />
         </div>
       </section>
     </AppShell>
   );
 }
-

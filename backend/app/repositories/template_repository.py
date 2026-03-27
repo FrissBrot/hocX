@@ -5,8 +5,8 @@ from app.models import Template
 
 
 class TemplateRepository:
-    def list(self, db: Session, *, query: str | None = None, status: str | None = None) -> list[Template]:
-        statement = select(Template)
+    def list(self, db: Session, *, tenant_id: int, query: str | None = None, status: str | None = None) -> list[Template]:
+        statement = select(Template).where(Template.tenant_id == tenant_id)
         if query:
             statement = statement.where(Template.name.ilike(f"%{query}%"))
         if status:

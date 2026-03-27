@@ -5,8 +5,8 @@ from app.models import Protocol
 
 
 class ProtocolRepository:
-    def list(self, db: Session, *, query: str | None = None, status: str | None = None) -> list[Protocol]:
-        statement = select(Protocol)
+    def list(self, db: Session, *, tenant_id: int, query: str | None = None, status: str | None = None) -> list[Protocol]:
+        statement = select(Protocol).where(Protocol.tenant_id == tenant_id)
         if query:
             statement = statement.where(
                 Protocol.protocol_number.ilike(f"%{query}%") | Protocol.title.ilike(f"%{query}%")

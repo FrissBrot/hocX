@@ -8,7 +8,7 @@ from fastapi import UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models import ProtocolElement, ProtocolImage, StoredFile
+from app.models import Protocol, ProtocolElement, ProtocolElementBlock, ProtocolImage, StoredFile
 from app.repositories.file_repository import ProtocolImageRepository, StoredFileRepository
 from app.schemas.protocol import ProtocolImageRead
 
@@ -29,12 +29,12 @@ class FileService:
     def build_content_url(self, stored_file_id: int) -> str:
         return f"/api/stored-files/{stored_file_id}/content"
 
-    def list_protocol_images(self, db: Session, protocol_element_id: int) -> list[ProtocolImageRead]:
-        rows = self.protocol_image_repository.list_for_protocol_element(db, protocol_element_id)
+    def list_protocol_images(self, db: Session, protocol_element_block_id: int) -> list[ProtocolImageRead]:
+        rows = self.protocol_image_repository.list_for_protocol_block(db, protocol_element_block_id)
         return [
             ProtocolImageRead(
                 id=row.ProtocolImage.id,
-                protocol_element_id=row.ProtocolImage.protocol_element_id,
+                protocol_element_block_id=row.ProtocolImage.protocol_element_block_id,
                 stored_file_id=row.ProtocolImage.stored_file_id,
                 sort_index=row.ProtocolImage.sort_index,
                 title=row.ProtocolImage.title,
@@ -51,7 +51,7 @@ class FileService:
         self,
         db: Session,
         *,
-        protocol_element: ProtocolElement,
+        protocol_element_block: ProtocolElementBlock,
         file: UploadFile,
         title: str | None = None,
         caption: str | None = None,
@@ -60,8 +60,8 @@ class FileService:
         self.ensure_storage()
 
         suffix = Path(file.filename or "").suffix
-        tenant_id = self._resolve_tenant_id(db, protocol_element.id)
-        storage_dir = Path(settings.upload_root) / f"tenant-{tenant_id}" / f"element-{protocol_element.id}"
+        tenant_id = self._resolve_tenant_id(db, protocol_element_block.id)
+        storage_dir = Path(settings.upload_root) / f"tenant-{tenant_id}" / f"block-{protocol_element_block.id}"
         storage_dir.mkdir(parents=True, exist_ok=True)
         generated_name = f"{uuid4().hex}{suffix}"
         target_path = storage_dir / generated_name
@@ -84,9 +84,9 @@ class FileService:
         stored_file = self.stored_file_repository.create(db, stored_file)
 
         protocol_image = ProtocolImage(
-            protocol_element_id=protocol_element.id,
+            protocol_element_block_id=protocol_element_block.id,
             stored_file_id=stored_file.id,
-            sort_index=self.protocol_image_repository.next_sort_index(db, protocol_element.id),
+            sort_index=self.protocol_image_repository.next_sort_index(db, protocol_element_block.id),
             title=title,
             caption=caption,
         )
@@ -95,7 +95,7 @@ class FileService:
 
         return ProtocolImageRead(
             id=protocol_image.id,
-            protocol_element_id=protocol_image.protocol_element_id,
+            protocol_element_block_id=protocol_image.protocol_element_block_id,
             stored_file_id=protocol_image.stored_file_id,
             sort_index=protocol_image.sort_index,
             title=protocol_image.title,
@@ -124,12 +124,13 @@ class FileService:
         db.commit()
         return True
 
-    def _resolve_tenant_id(self, db: Session, protocol_element_id: int) -> int:
-        protocol_element = db.get(ProtocolElement, protocol_element_id)
+    def _resolve_tenant_id(self, db: Session, protocol_element_block_id: int) -> int:
+        protocol_element_block = db.get(ProtocolElementBlock, protocol_element_block_id)
+        if protocol_element_block is None:
+            raise ValueError("Protocol element block not found")
+        protocol_element = db.get(ProtocolElement, protocol_element_block.protocol_element_id)
         if protocol_element is None:
             raise ValueError("Protocol element not found")
-        from app.models import Protocol
-
         protocol = db.get(Protocol, protocol_element.protocol_id)
         if protocol is None:
             raise ValueError("Protocol not found")

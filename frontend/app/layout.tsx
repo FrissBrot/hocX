@@ -8,9 +8,26 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" suppressHydrationWarning>
+      <body suppressHydrationWarning>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function () {
+                try {
+                  var stored = localStorage.getItem("hocx-theme");
+                  var preference = stored || "auto";
+                  var theme = preference === "auto"
+                    ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+                    : preference;
+                  document.documentElement.dataset.theme = theme;
+                } catch (error) {}
+              })();
+            `
+          }}
+        />
+        {children}
+      </body>
     </html>
   );
 }
-

@@ -1,13 +1,14 @@
 import { AppShell } from "@/components/ui/app-shell";
 import { TemplateBuilder } from "@/components/template/template-builder";
-import { backendFetch } from "@/lib/api/client";
+import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { TemplateSummary } from "@/types/api";
 
 export default async function TemplatesPage() {
-  const data = await backendFetch<TemplateSummary[]>("/api/templates");
+  const session = await requireSession();
+  const data = await backendFetchWithSession<TemplateSummary[]>("/api/templates");
 
   return (
-    <AppShell>
+    <AppShell initialSession={session}>
       <section className="panel">
         <div className="eyebrow">Template Builder</div>
         <h1>Template list</h1>

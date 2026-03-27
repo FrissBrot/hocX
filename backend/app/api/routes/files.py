@@ -8,36 +8,41 @@ from fastapi.responses import FileResponse
 
 from app.core.db import get_db
 from app.core.config import settings
-from app.core.security import CurrentUser, get_current_user, require_editor
-from app.models import ProtocolElement
+from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
+from app.models import ProtocolElementBlock
 from app.schemas.protocol import ProtocolImageRead
 from app.services.file_service import FileService
 
 router = APIRouter()
 service = FileService()
 
-@router.get("/protocol-elements/{protocol_element_id}/images", response_model=list[ProtocolImageRead])
-def list_images(protocol_element_id: int, db: Session = Depends(get_db)):
-    return service.list_protocol_images(db, protocol_element_id)
+@router.get("/protocol-element-blocks/{protocol_element_block_id}/images", response_model=list[ProtocolImageRead])
+def list_images(
+    protocol_element_block_id: int,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_reader(user)
+    return service.list_protocol_images(db, protocol_element_block_id)
 
 
-@router.post("/protocol-elements/{protocol_element_id}/images", response_model=ProtocolImageRead)
+@router.post("/protocol-element-blocks/{protocol_element_block_id}/images", response_model=ProtocolImageRead)
 async def upload_image(
-    protocol_element_id: int,
+    protocol_element_block_id: int,
     file: UploadFile,
     title: str | None = Form(default=None),
     caption: str | None = Form(default=None),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_editor(user)
-    protocol_element = db.get(ProtocolElement, protocol_element_id)
-    if protocol_element is None:
-        raise HTTPException(status_code=404, detail="Protocol element not found")
+    require_writer(user)
+    protocol_element_block = db.get(ProtocolElementBlock, protocol_element_block_id)
+    if protocol_element_block is None:
+        raise HTTPException(status_code=404, detail="Protocol element block not found")
     try:
         return await service.save_protocol_image(
             db,
-            protocol_element=protocol_element,
+            protocol_element_block=protocol_element_block,
             file=file,
             title=title,
             caption=caption,
@@ -54,7 +59,7 @@ def delete_image(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_editor(user)
+    require_writer(user)
     try:
         deleted = service.delete_protocol_image(db, image_id)
     except SQLAlchemyError as exc:
@@ -66,7 +71,12 @@ def delete_image(
 
 
 @router.get("/stored-files/{stored_file_id}/content")
-def get_stored_file_content(stored_file_id: int, db: Session = Depends(get_db)):
+def get_stored_file_content(
+    stored_file_id: int,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_reader(user)
     stored_file = service.get_stored_file(db, stored_file_id)
     if stored_file is None:
         raise HTTPException(status_code=404, detail="Stored file not found")

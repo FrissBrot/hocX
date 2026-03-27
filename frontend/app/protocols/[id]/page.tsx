@@ -1,16 +1,16 @@
 import { ProtocolEditor } from "@/components/protocol/protocol-editor";
-import { ProtocolExportPanel } from "@/components/protocol/protocol-export-panel";
 import { ProtocolOverview } from "@/components/protocol/protocol-builder";
 import { AppShell } from "@/components/ui/app-shell";
-import { backendFetch } from "@/lib/api/client";
-import { ProtocolElement, ProtocolImage, ProtocolSummary, ProtocolTodo } from "@/types/api";
+import { backendFetchWithSession, requireSession } from "@/lib/api/server";
+import { DocumentTemplate, ProtocolElement, ProtocolImage, ProtocolSummary, ProtocolTodo } from "@/types/api";
 
 export default async function ProtocolDetailPage({ params }: { params: { id: string } }) {
-  const protocol = await backendFetch<ProtocolSummary>(`/api/protocols/${params.id}`);
+  const session = await requireSession();
+  const protocol = await backendFetchWithSession<ProtocolSummary>(`/api/protocols/${params.id}`);
 
   if (!protocol) {
     return (
-      <AppShell>
+      <AppShell initialSession={session}>
         <section className="panel">
           <div className="eyebrow">Protocol Detail</div>
           <h1>Protocol not found</h1>
@@ -20,43 +20,31 @@ export default async function ProtocolDetailPage({ params }: { params: { id: str
     );
   }
 
-  const elements = (await backendFetch<ProtocolElement[]>(`/api/protocols/${params.id}/elements`)) ?? [];
-  const todoElements = elements.filter((element) => element.element_type_code === "todo");
+  const documentTemplates = (await backendFetchWithSession<DocumentTemplate[]>("/api/document-templates")) ?? [];
+  const elements = (await backendFetchWithSession<ProtocolElement[]>(`/api/protocols/${params.id}/elements`)) ?? [];
+  const todoBlocks = elements.flatMap((element) => element.blocks.filter((block) => block.element_type_code === "todo"));
   const todoLists = await Promise.all(
-    todoElements.map(async (element) => ({
-      protocolElementId: element.id,
-      todos: (await backendFetch<ProtocolTodo[]>(`/api/protocol-elements/${element.id}/todos`)) ?? []
+    todoBlocks.map(async (block) => ({
+      protocolElementBlockId: block.id,
+      todos: (await backendFetchWithSession<ProtocolTodo[]>(`/api/protocol-element-blocks/${block.id}/todos`)) ?? []
     }))
   );
-  const initialTodos = Object.fromEntries(todoLists.map((item) => [item.protocolElementId, item.todos]));
-  const imageElements = elements.filter((element) => element.element_type_code === "image");
+  const initialTodos = Object.fromEntries(todoLists.map((item) => [item.protocolElementBlockId, item.todos]));
+  const imageBlocks = elements.flatMap((element) => element.blocks.filter((block) => block.element_type_code === "image"));
   const imageLists = await Promise.all(
-    imageElements.map(async (element) => ({
-      protocolElementId: element.id,
-      images: (await backendFetch<ProtocolImage[]>(`/api/protocol-elements/${element.id}/images`)) ?? []
+    imageBlocks.map(async (block) => ({
+      protocolElementBlockId: block.id,
+      images: (await backendFetchWithSession<ProtocolImage[]>(`/api/protocol-element-blocks/${block.id}/images`)) ?? []
     }))
   );
-  const initialImages = Object.fromEntries(imageLists.map((item) => [item.protocolElementId, item.images]));
-  const latestExport =
-    (await backendFetch<{
-      protocol_id: number;
-      export_format: string;
-      generated_file_id?: number | null;
-      content_url?: string | null;
-      storage_path?: string | null;
-      created_at?: string | null;
-      status: string;
-    }>(`/api/protocols/${params.id}/exports/latest`)) ??
-    { protocol_id: protocol.id, export_format: "none", status: "missing" };
-
+  const initialImages = Object.fromEntries(imageLists.map((item) => [item.protocolElementBlockId, item.images]));
   return (
-    <AppShell>
+    <AppShell initialSession={session}>
       <section className="panel">
         <div className="eyebrow">Protocol Detail</div>
         <h1>{protocol.title ?? protocol.protocol_number}</h1>
         <p className="muted">This editor now renders real protocol blocks and starts the autosave flow for text and todos.</p>
-        <ProtocolOverview protocol={protocol} />
-        <ProtocolExportPanel protocol={protocol} initialLatestExport={latestExport} />
+        <ProtocolOverview protocol={protocol} documentTemplates={documentTemplates} />
         <ProtocolEditor
           protocol={protocol}
           initialElements={elements}

@@ -124,74 +124,121 @@ class ExportService:
         shutil.copytree(template_path, template_copy_dir)
 
         body_path = export_dir / "protocol_body.tex"
-        body_path.write_text(self._render_protocol_body(db, protocol.id), encoding="utf-8")
+        body_path.write_text(self._render_protocol_body(db, protocol.id, export_dir), encoding="utf-8")
 
         latex_source = self._build_main_tex(protocol, template_copy_dir, body_path)
         return protocol, export_dir, latex_source
 
     def _build_main_tex(self, protocol, template_copy_dir: Path, body_path: Path) -> str:
-        title_page = (template_copy_dir / "title_page.tex").read_text(encoding="utf-8") if (template_copy_dir / "title_page.tex").exists() else ""
-        macros = (template_copy_dir / "macros.tex").read_text(encoding="utf-8") if (template_copy_dir / "macros.tex").exists() else ""
-        return f"""\\documentclass{{article}}
-\\usepackage[utf8]{{inputenc}}
-\\usepackage{{graphicx}}
-\\usepackage{{float}}
-\\usepackage{{hyperref}}
-\\usepackage[a4paper,margin=2.5cm]{{geometry}}
-\\setlength\\parindent{{0pt}}
-\\setlength\\parskip{{0.6em}}
-{macros}
-\\begin{{document}}
-{title_page}
-\\section*{{Protocol Metadata}}
+        preamble = self._read_optional(template_copy_dir / "preamble.tex")
+        theme = self._read_optional(template_copy_dir / "styles" / "theme.tex")
+        macros = self._read_optional(template_copy_dir / "macros.tex")
+        header_footer = self._read_optional(template_copy_dir / "header_footer.tex")
+        title_page = self._read_optional(template_copy_dir / "title_page.tex")
+        toc = self._read_optional(template_copy_dir / "toc.tex")
+
+        metadata_block = f"""\\section*{{Protocol Metadata}}
 Protocol number: {self._escape_latex(protocol.protocol_number)}\\\\
 Title: {self._escape_latex(protocol.title or "Untitled protocol")}\\\\
 Date: {self._escape_latex(str(protocol.protocol_date))}\\\\
 Status: {self._escape_latex(protocol.status)}
+"""
 
+        return f"""\\documentclass{{article}}
+{theme}
+{preamble}
+{macros}
+\\setlength\\parindent{{0pt}}
+\\setlength\\parskip{{0.6em}}
+\\begin{{document}}
+{header_footer}
+{title_page}
+{toc}
+{metadata_block}
 \\input{{{body_path.as_posix()}}}
 \\end{{document}}
 """
 
-    def _render_protocol_body(self, db: Session, protocol_id: int) -> str:
+    def _render_protocol_body(self, db: Session, protocol_id: int, export_dir: Path) -> str:
         parts: list[str] = []
+        image_export_dir = export_dir / "images"
+        image_export_dir.mkdir(parents=True, exist_ok=True)
+
         for element in self.repository.list_protocol_elements(db, protocol_id):
             if not element.export_visible_snapshot:
                 continue
 
-            heading = element.heading_text_snapshot or element.display_title_snapshot or element.title_snapshot
-            parts.append(f"\\section*{{{self._escape_latex(heading)}}}")
+            parts.append(f"\\section*{{{self._escape_latex(element.section_name_snapshot)}}}")
 
-            if element.element_type_id == 1:
-                text = self.repository.get_protocol_text(db, element.id)
-                parts.append(self._escape_latex(text.content if text else ""))
-            elif element.element_type_id == 2:
-                todo_rows = self.repository.list_protocol_todos(db, element.id)
-                if not todo_rows:
-                    parts.append("No open items.")
-                else:
-                    parts.append("\\begin{itemize}")
-                    for row in todo_rows:
-                        label = row.todo_status_code or "unknown"
-                        parts.append(
-                            f"\\item [{self._escape_latex(label)}] {self._escape_latex(row.ProtocolTodo.task)}"
-                        )
-                    parts.append("\\end{itemize}")
-            elif element.element_type_id == 3:
-                image_rows = self.repository.list_protocol_images(db, element.id)
-                if not image_rows:
-                    parts.append("No images uploaded.")
-                else:
-                    parts.append("\\begin{itemize}")
-                    for row in image_rows:
-                        parts.append(
-                            f"\\item Image attachment: {self._escape_latex(row.StoredFile.original_name)}"
-                        )
-                    parts.append("\\end{itemize}")
-            else:
-                parts.append(self._escape_latex(element.description_snapshot or "No snapshot text available."))
+            for block in self.repository.list_protocol_element_blocks(db, element.id):
+                if not block.export_visible_snapshot:
+                    continue
+
+                block_heading = block.block_title_snapshot or block.display_title_snapshot or block.title_snapshot
+                parts.append(self._render_block(db, block, block_heading, export_dir, image_export_dir))
 
         return "\n".join(parts)
+
+    def _render_block(self, db: Session, block, block_heading: str, export_dir: Path, image_export_dir: Path) -> str:
+        content = self._default_block_content(db, block, image_export_dir)
+        partial_path = None
+        if block.latex_template_snapshot:
+            partial_path = export_dir / "template" / block.latex_template_snapshot
+        if partial_path and partial_path.exists():
+            template = partial_path.read_text(encoding="utf-8")
+            return self._fill_block_partial(template, block_heading, content)
+
+        return f"""\\subsection*{{{self._escape_latex(block_heading)}}}
+{content}
+"""
+
+    def _default_block_content(self, db: Session, block, image_export_dir: Path) -> str:
+        if block.element_type_id == 1:
+            text = self.repository.get_protocol_text(db, block.id)
+            return self._escape_latex(text.content if text else "")
+        if block.element_type_id == 2:
+            todo_rows = self.repository.list_protocol_todos(db, block.id)
+            if not todo_rows:
+                return "No open items."
+            lines = ["\\begin{itemize}"]
+            for row in todo_rows:
+                label = row.todo_status_code or "unknown"
+                lines.append(f"\\item [{self._escape_latex(label)}] {self._escape_latex(row.ProtocolTodo.task)}")
+            lines.append("\\end{itemize}")
+            return "\n".join(lines)
+        if block.element_type_id == 3:
+            image_rows = self.repository.list_protocol_images(db, block.id)
+            if not image_rows:
+                return "No images uploaded."
+            parts: list[str] = []
+            for index, row in enumerate(image_rows, start=1):
+                source_path = Path(settings.storage_root) / row.StoredFile.storage_path
+                if not source_path.exists():
+                    parts.append(f"Missing image file: {self._escape_latex(row.StoredFile.original_name)}")
+                    continue
+                copied_path = image_export_dir / f"block-{block.id}-{index}{source_path.suffix}"
+                shutil.copy2(source_path, copied_path)
+                caption = row.ProtocolImage.caption or row.ProtocolImage.title or row.StoredFile.original_name
+                parts.extend(
+                    [
+                        "\\begin{figure}[H]",
+                        "\\centering",
+                        f"\\includegraphics[width=0.82\\textwidth]{{{copied_path.as_posix()}}}",
+                        f"\\caption*{{{self._escape_latex(caption)}}}",
+                        "\\end{figure}",
+                    ]
+                )
+            return "\n".join(parts)
+        return self._escape_latex(block.description_snapshot or "No snapshot text available.")
+
+    def _fill_block_partial(self, template: str, heading: str, content: str) -> str:
+        return (
+            template.replace("{{ block_heading }}", self._escape_latex(heading))
+            .replace("{{ block_content }}", content)
+        )
+
+    def _read_optional(self, path: Path) -> str:
+        return path.read_text(encoding="utf-8") if path.exists() else ""
 
     def _compile_pdf(self, main_tex_path: Path) -> None:
         command = [
