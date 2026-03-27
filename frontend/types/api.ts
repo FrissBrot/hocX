@@ -28,6 +28,51 @@ export type ProtocolSummary = {
   updated_at?: string;
 };
 
+export type ProtocolElement = {
+  id: number;
+  protocol_id: number;
+  template_element_id: number | null;
+  element_definition_id: number | null;
+  element_type_id: number;
+  render_type_id: number;
+  element_type_code: string | null;
+  render_type_code: string | null;
+  title_snapshot: string;
+  display_title_snapshot: string | null;
+  description_snapshot: string | null;
+  is_editable_snapshot: boolean;
+  allows_multiple_values_snapshot: boolean;
+  sort_index: number;
+  render_order: number | null;
+  section_name_snapshot: string | null;
+  section_order_snapshot: number | null;
+  is_required_snapshot: boolean;
+  is_visible_snapshot: boolean;
+  export_visible_snapshot: boolean;
+  heading_text_snapshot: string | null;
+  latex_template_snapshot: string | null;
+  configuration_snapshot_json: Record<string, unknown>;
+  text_content: string | null;
+  display_compiled_text: string | null;
+  display_snapshot_json: Record<string, unknown> | null;
+};
+
+export type ProtocolTodo = {
+  id: number;
+  protocol_element_id: number;
+  sort_index: number;
+  task: string;
+  assigned_user_id: number | null;
+  todo_status_id: number;
+  todo_status_code: string | null;
+  due_date: string | null;
+  completed_at: string | null;
+  reference_link: string | null;
+  created_by: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type ElementDefinition = {
   id: number;
   tenant_id: number;

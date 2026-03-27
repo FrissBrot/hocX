@@ -1,4 +1,18 @@
-class AutosaveService:
-    def save_text_block(self, protocol_element_id: int, content: str) -> dict[str, str | int]:
-        return {"status": "saved", "protocol_element_id": protocol_element_id, "content": content}
+from sqlalchemy.orm import Session
 
+from app.models import ProtocolText
+from app.repositories.protocol_element_repository import ProtocolTextRepository
+
+
+class AutosaveService:
+    def __init__(self, text_repository: ProtocolTextRepository | None = None) -> None:
+        self.text_repository = text_repository or ProtocolTextRepository()
+
+    def save_text_block(self, db: Session, protocol_element_id: int, content: str) -> dict[str, str | int]:
+        protocol_text = self.text_repository.get_by_protocol_element_id(db, protocol_element_id)
+        if protocol_text is None:
+            protocol_text = ProtocolText(protocol_element_id=protocol_element_id, content=content)
+        else:
+            protocol_text.content = content
+        saved = self.text_repository.save(db, protocol_text)
+        return {"status": "saved", "protocol_element_id": protocol_element_id, "content": saved.content}
