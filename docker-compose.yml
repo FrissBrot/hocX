@@ -26,6 +26,7 @@ services:
       - .env
     environment:
       DATABASE_URL: ${DATABASE_URL}
+      PYTHONPATH: /app
       STORAGE_ROOT: /app/storage
       LATEX_TEMPLATE_ROOT: /app/storage/latex_templates
       EXPORT_ROOT: /app/storage/exports
