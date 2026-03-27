@@ -66,13 +66,20 @@ docker compose up --build
 
 ## Database
 
-The backend expects PostgreSQL. The initial Alembic migration contains:
+The backend expects PostgreSQL. The initial Alembic migration now builds the composite section/block model:
 
 - core tenant/user/role tables
-- template and protocol tables
-- content tables for text/todos/images/display snapshots
+- `template_element` as section/container rows
+- `template_element_block` as nested predefined blocks inside a section
+- `protocol_element` as snapshot section/container rows
+- `protocol_element_block` as nested protocol block snapshots
+- content tables for text/todos/images/display snapshots linked to protocol blocks
 - export cache and stored file metadata
 - `create_protocol_from_template(...)`
+
+The raw first-setup SQL is stored at:
+
+- [first_setup.sql](/docker/hocX/backend/sql/first_setup.sql)
 
 Migrations run automatically when the backend container starts. You can still run them manually:
 
@@ -101,8 +108,27 @@ docker compose exec db psql -U hocx -d hocx -c "SELECT * FROM role;"
 
 - OIDC is intentionally not implemented yet.
 - The schema already contains OIDC preparation fields on `app_user`.
+- Local login is active for V1 and isolated behind `/api/auth/*`.
+- Users are systemwide, while `user_tenant_role` stores tenant-specific permissions.
+- Global `superadmin` remains separate from tenant roles.
 - Protocols are treated as snapshots and should never be mutated by template changes.
 - Exports are designed to read protocol snapshot data only.
+
+## Local Login And Roles
+
+Seed accounts for a fresh setup:
+
+- `superadmin@hocx.local` / `ChangeMe123!`
+- `admin@hocx.local` / `ChangeMe123!`
+- `writer@hocx.local` / `ChangeMe123!`
+- `reader@hocx.local` / `ChangeMe123!`
+
+Roles:
+
+- `superadmin`: access to all tenants and all permission changes
+- `admin`: full access inside the currently selected tenant
+- `writer`: may work inside the protocol workspace, but not change structure
+- `reader`: may only view workspace data and trigger PDF export
 
 ## Public Access With Traefik
 

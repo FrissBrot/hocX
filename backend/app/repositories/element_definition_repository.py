@@ -5,8 +5,9 @@ from app.models import ElementDefinition
 
 
 class ElementDefinitionRepository:
-    def list(self, db: Session) -> list[ElementDefinition]:
-        return list(db.scalars(select(ElementDefinition).order_by(ElementDefinition.id.desc())))
+    def list(self, db: Session, *, tenant_id: int) -> list[ElementDefinition]:
+        statement = select(ElementDefinition).where(ElementDefinition.tenant_id == tenant_id).order_by(ElementDefinition.id.desc())
+        return list(db.scalars(statement))
 
     def get(self, db: Session, element_definition_id: int) -> ElementDefinition | None:
         return db.get(ElementDefinition, element_definition_id)

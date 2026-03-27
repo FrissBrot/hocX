@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.db import get_db
-from app.core.security import CurrentUser, get_current_user, require_editor
+from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
 from app.schemas.protocol import ProtocolTodoCreate, ProtocolTodoRead, ProtocolTodoUpdate
 from app.services.protocol_todo_service import ProtocolTodoService
 
@@ -12,29 +12,34 @@ router = APIRouter()
 service = ProtocolTodoService()
 
 
-@router.get("/protocol-elements/{protocol_element_id}/todos", response_model=list[ProtocolTodoRead])
-def list_todos(protocol_element_id: int, db: Session = Depends(get_db)):
-    return service.list_todos(db, protocol_element_id)
+@router.get("/protocol-element-blocks/{protocol_element_block_id}/todos", response_model=list[ProtocolTodoRead])
+def list_todos(
+    protocol_element_block_id: int,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_reader(user)
+    return service.list_todos(db, protocol_element_block_id)
 
 
 @router.post(
-    "/protocol-elements/{protocol_element_id}/todos",
+    "/protocol-element-blocks/{protocol_element_block_id}/todos",
     response_model=ProtocolTodoRead,
     status_code=status.HTTP_201_CREATED,
 )
 def create_todo(
-    protocol_element_id: int,
+    protocol_element_block_id: int,
     payload: ProtocolTodoCreate,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_editor(user)
+    require_writer(user)
     try:
-        todo = service.create_todo(db, protocol_element_id, payload)
+        todo = service.create_todo(db, protocol_element_block_id, payload)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Todo could not be created") from exc
-    todos = service.list_todos(db, protocol_element_id)
+    todos = service.list_todos(db, protocol_element_block_id)
     return next(item for item in todos if item.id == todo.id)
 
 
@@ -45,7 +50,7 @@ def patch_todo(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_editor(user)
+    require_writer(user)
     try:
         todo = service.update_todo(db, todo_id, payload)
     except SQLAlchemyError as exc:
@@ -53,7 +58,7 @@ def patch_todo(
         raise HTTPException(status_code=400, detail="Todo could not be updated") from exc
     if todo is None:
         raise HTTPException(status_code=404, detail="Todo not found")
-    todos = service.list_todos(db, todo.protocol_element_id)
+    todos = service.list_todos(db, todo.protocol_element_block_id)
     return next(item for item in todos if item.id == todo_id)
 
 
@@ -63,7 +68,7 @@ def delete_todo(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_editor(user)
+    require_writer(user)
     try:
         deleted = service.delete_todo(db, todo_id)
     except SQLAlchemyError as exc:

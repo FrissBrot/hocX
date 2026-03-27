@@ -1,7 +1,18 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import DocumentTemplate, Protocol, ProtocolElement, ProtocolExportCache, ProtocolImage, ProtocolText, ProtocolTodo, StoredFile, TodoStatus
+from app.models import (
+    DocumentTemplate,
+    Protocol,
+    ProtocolElement,
+    ProtocolElementBlock,
+    ProtocolExportCache,
+    ProtocolImage,
+    ProtocolText,
+    ProtocolTodo,
+    StoredFile,
+    TodoStatus,
+)
 
 
 class ExportRepository:
@@ -22,23 +33,32 @@ class ExportRepository:
             )
         )
 
-    def get_protocol_text(self, db: Session, protocol_element_id: int) -> ProtocolText | None:
-        return db.scalar(select(ProtocolText).where(ProtocolText.protocol_element_id == protocol_element_id))
+    def list_protocol_element_blocks(self, db: Session, protocol_element_id: int) -> list[ProtocolElementBlock]:
+        return list(
+            db.scalars(
+                select(ProtocolElementBlock)
+                .where(ProtocolElementBlock.protocol_element_id == protocol_element_id)
+                .order_by(ProtocolElementBlock.sort_index.asc(), ProtocolElementBlock.id.asc())
+            )
+        )
 
-    def list_protocol_todos(self, db: Session, protocol_element_id: int):
+    def get_protocol_text(self, db: Session, protocol_element_block_id: int) -> ProtocolText | None:
+        return db.scalar(select(ProtocolText).where(ProtocolText.protocol_element_block_id == protocol_element_block_id))
+
+    def list_protocol_todos(self, db: Session, protocol_element_block_id: int):
         query = (
             select(ProtocolTodo, TodoStatus.code.label("todo_status_code"))
             .join(TodoStatus, TodoStatus.id == ProtocolTodo.todo_status_id)
-            .where(ProtocolTodo.protocol_element_id == protocol_element_id)
+            .where(ProtocolTodo.protocol_element_block_id == protocol_element_block_id)
             .order_by(ProtocolTodo.sort_index.asc())
         )
         return db.execute(query).all()
 
-    def list_protocol_images(self, db: Session, protocol_element_id: int):
+    def list_protocol_images(self, db: Session, protocol_element_block_id: int):
         query = (
             select(ProtocolImage, StoredFile)
             .join(StoredFile, StoredFile.id == ProtocolImage.stored_file_id)
-            .where(ProtocolImage.protocol_element_id == protocol_element_id)
+            .where(ProtocolImage.protocol_element_block_id == protocol_element_block_id)
             .order_by(ProtocolImage.sort_index.asc())
         )
         return db.execute(query).all()

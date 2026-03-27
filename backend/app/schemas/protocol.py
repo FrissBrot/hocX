@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ProtocolCreateFromTemplate(BaseModel):
     tenant_id: int = 1
     template_id: int
+    document_template_id: int | None = None
     protocol_number: str
     protocol_date: date
     created_by: int | None = None
@@ -20,6 +21,7 @@ class ProtocolUpdate(BaseModel):
     protocol_date: date | None = None
     event_id: int | None = None
     status: str | None = None
+    document_template_id: int | None = None
 
 
 class ProtocolRead(BaseModel):
@@ -27,6 +29,8 @@ class ProtocolRead(BaseModel):
     tenant_id: int
     template_id: int
     template_version: int
+    document_template_id: int | None = None
+    document_template_version: int | None = None
     protocol_number: str
     title: str | None = None
     protocol_date: date
@@ -39,10 +43,10 @@ class ProtocolRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class ProtocolElementRead(BaseModel):
+class ProtocolElementBlockRead(BaseModel):
     id: int
-    protocol_id: int
-    template_element_id: int | None = None
+    protocol_element_id: int
+    template_element_block_id: int | None = None
     element_definition_id: int | None = None
     element_type_id: int
     render_type_id: int
@@ -51,16 +55,14 @@ class ProtocolElementRead(BaseModel):
     title_snapshot: str
     display_title_snapshot: str | None = None
     description_snapshot: str | None = None
+    block_title_snapshot: str | None = None
     is_editable_snapshot: bool
     allows_multiple_values_snapshot: bool
     sort_index: int
     render_order: int | None = None
-    section_name_snapshot: str | None = None
-    section_order_snapshot: int | None = None
     is_required_snapshot: bool
     is_visible_snapshot: bool
     export_visible_snapshot: bool
-    heading_text_snapshot: str | None = None
     latex_template_snapshot: str | None = None
     configuration_snapshot_json: dict
     text_content: str | None = None
@@ -68,20 +70,36 @@ class ProtocolElementRead(BaseModel):
     display_snapshot_json: dict | None = None
 
 
+class ProtocolElementRead(BaseModel):
+    id: int
+    protocol_id: int
+    template_element_id: int | None = None
+    sort_index: int
+    section_name_snapshot: str
+    section_order_snapshot: int | None = None
+    is_required_snapshot: bool
+    is_visible_snapshot: bool
+    export_visible_snapshot: bool
+    blocks: list[ProtocolElementBlockRead] = Field(default_factory=list)
+
+
 class ProtocolElementUpdate(BaseModel):
-    title_snapshot: str | None = None
-    display_title_snapshot: str | None = None
-    description_snapshot: str | None = None
-    is_editable_snapshot: bool | None = None
-    allows_multiple_values_snapshot: bool | None = None
-    render_order: int | None = None
+    sort_index: int | None = None
     section_name_snapshot: str | None = None
     section_order_snapshot: int | None = None
     is_required_snapshot: bool | None = None
     is_visible_snapshot: bool | None = None
     export_visible_snapshot: bool | None = None
-    heading_text_snapshot: str | None = None
-    latex_template_snapshot: str | None = None
+
+
+class ProtocolElementBlockUpdate(BaseModel):
+    block_title_snapshot: str | None = None
+    description_snapshot: str | None = None
+    sort_index: int | None = None
+    render_order: int | None = None
+    is_required_snapshot: bool | None = None
+    is_visible_snapshot: bool | None = None
+    export_visible_snapshot: bool | None = None
     configuration_snapshot_json: dict | None = None
 
 
@@ -90,7 +108,7 @@ class ProtocolTextUpdate(BaseModel):
 
 
 class ProtocolTextRead(BaseModel):
-    protocol_element_id: int
+    protocol_element_block_id: int
     content: str
     status: str
 
@@ -115,7 +133,7 @@ class ProtocolTodoUpdate(BaseModel):
 
 class ProtocolTodoRead(BaseModel):
     id: int
-    protocol_element_id: int
+    protocol_element_block_id: int
     sort_index: int
     task: str
     assigned_user_id: int | None = None
@@ -131,7 +149,7 @@ class ProtocolTodoRead(BaseModel):
 
 class ProtocolImageRead(BaseModel):
     id: int
-    protocol_element_id: int
+    protocol_element_block_id: int
     stored_file_id: int
     sort_index: int
     title: str | None = None
