@@ -15,6 +15,6 @@ coverage/
 *.log
 storage/uploads/*
 storage/exports/*
+infra/traefik/letsencrypt/acme.json
 !storage/uploads/.gitkeep
 !storage/exports/.gitkeep
-

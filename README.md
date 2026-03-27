@@ -12,7 +12,7 @@ Monorepo for a protocol and template management application with:
 
 This repository contains a Docker-first starter implementation with:
 
-- Docker Compose for `frontend`, `backend`, and `db`
+- Docker Compose for `traefik`, `frontend`, `backend`, and `db`
 - initial FastAPI app with modular route structure
 - initial Next.js App Router UI shell
 - SQLAlchemy models aligned to the V1 PostgreSQL schema
@@ -60,9 +60,9 @@ docker compose up --build
 
 3. Open:
 
-- Frontend: <http://localhost:3000>
-- Backend API: <http://localhost:8000>
-- OpenAPI docs: <http://localhost:8000/docs>
+- Frontend through Traefik: <https://hocx.tweber.ch>
+- Backend API through Traefik: <https://hocx.tweber.ch/api>
+- OpenAPI docs through Traefik: <https://hocx.tweber.ch/docs>
 
 ## Database
 
@@ -103,3 +103,22 @@ docker compose exec db psql -U hocx -d hocx -c "SELECT * FROM role;"
 - The schema already contains OIDC preparation fields on `app_user`.
 - Protocols are treated as snapshots and should never be mutated by template changes.
 - Exports are designed to read protocol snapshot data only.
+
+## Public Access With Traefik
+
+The stack includes Traefik for public HTTPS access under `hocx.tweber.ch`.
+
+Requirements:
+
+- the DNS record for `hocx.tweber.ch` must point to this server
+- ports `80` and `443` must be reachable from the internet
+- Docker must be allowed to bind those ports
+
+Traefik setup files:
+
+- [docker-compose.yml](/docker/hocX/docker-compose.yml)
+- [traefik.yml](/docker/hocX/infra/traefik/traefik.yml)
+
+ACME / Let's Encrypt contact:
+
+- `timoweber2006@gmail.com`
