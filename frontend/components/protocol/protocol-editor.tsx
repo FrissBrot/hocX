@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { browserApiFetch } from "@/lib/api/client";
-import { ProtocolElement, ProtocolSummary, ProtocolTodo, SaveState } from "@/types/api";
+import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
+import { ProtocolElement, ProtocolImage, ProtocolSummary, ProtocolTodo, SaveState } from "@/types/api";
 
 type ProtocolEditorProps = {
   protocol: ProtocolSummary;
   initialElements: ProtocolElement[];
   initialTodos: Record<number, ProtocolTodo[]>;
+  initialImages: Record<number, ProtocolImage[]>;
 };
 
 const TODO_STATUS = {
@@ -18,9 +19,10 @@ const TODO_STATUS = {
   cancelled: 4
 } as const;
 
-export function ProtocolEditor({ protocol, initialElements, initialTodos }: ProtocolEditorProps) {
+export function ProtocolEditor({ protocol, initialElements, initialTodos, initialImages }: ProtocolEditorProps) {
   const [elements, setElements] = useState(initialElements);
   const [todosByElement, setTodosByElement] = useState<Record<number, ProtocolTodo[]>>(initialTodos);
+  const [imagesByElement, setImagesByElement] = useState<Record<number, ProtocolImage[]>>(initialImages);
   const [textDrafts, setTextDrafts] = useState<Record<number, string>>(
     Object.fromEntries(
       initialElements
@@ -29,6 +31,7 @@ export function ProtocolEditor({ protocol, initialElements, initialTodos }: Prot
     )
   );
   const [newTodoTask, setNewTodoTask] = useState<Record<number, string>>({});
+  const [selectedFiles, setSelectedFiles] = useState<Record<number, File | null>>({});
   const [blockStatus, setBlockStatus] = useState<Record<number, SaveState>>({});
   const timers = useRef<Record<number, number>>({});
 
@@ -122,6 +125,46 @@ export function ProtocolEditor({ protocol, initialElements, initialTodos }: Prot
       setTodosByElement((current) => ({
         ...current,
         [protocolElementId]: (current[protocolElementId] ?? []).filter((todo) => todo.id !== todoId)
+      }));
+      setStatus(protocolElementId, "saved");
+    } catch {
+      setStatus(protocolElementId, "error");
+    }
+  }
+
+  async function uploadImage(protocolElementId: number) {
+    const file = selectedFiles[protocolElementId];
+    if (!file) {
+      return;
+    }
+    setStatus(protocolElementId, "saving");
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const created = await browserApiFetch<ProtocolImage>(`/api/protocol-elements/${protocolElementId}/images`, {
+        method: "POST",
+        body
+      });
+      setImagesByElement((current) => ({
+        ...current,
+        [protocolElementId]: [...(current[protocolElementId] ?? []), created].sort(
+          (left, right) => left.sort_index - right.sort_index
+        )
+      }));
+      setSelectedFiles((current) => ({ ...current, [protocolElementId]: null }));
+      setStatus(protocolElementId, "saved");
+    } catch {
+      setStatus(protocolElementId, "error");
+    }
+  }
+
+  async function deleteImage(protocolElementId: number, imageId: number) {
+    setStatus(protocolElementId, "saving");
+    try {
+      await browserApiFetch(`/api/protocol-images/${imageId}`, { method: "DELETE" });
+      setImagesByElement((current) => ({
+        ...current,
+        [protocolElementId]: (current[protocolElementId] ?? []).filter((image) => image.id !== imageId)
       }));
       setStatus(protocolElementId, "saved");
     } catch {
@@ -224,8 +267,42 @@ export function ProtocolEditor({ protocol, initialElements, initialTodos }: Prot
               )}
 
               {elementType === "image" && (
-                <div className="card">
-                  <p className="muted">Image upload and gallery binding follows in step 7.</p>
+                <div className="grid">
+                  <div className="two-col">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(event) =>
+                        setSelectedFiles((current) => ({
+                          ...current,
+                          [element.id]: event.target.files?.[0] ?? null
+                        }))
+                      }
+                    />
+                    <button type="button" onClick={() => uploadImage(element.id)}>
+                      Upload image
+                    </button>
+                  </div>
+                  <div className="grid">
+                    {(imagesByElement[element.id] ?? []).map((image) => (
+                      <div className="card" key={image.id}>
+                        <img
+                          alt={image.title ?? image.original_name}
+                          src={`${browserApiBaseUrl}${image.content_url}`}
+                          style={{ maxWidth: "100%", borderRadius: "16px" }}
+                        />
+                        <p className="muted">{image.original_name}</p>
+                        <button type="button" onClick={() => deleteImage(element.id, image.id)}>
+                          Delete image
+                        </button>
+                      </div>
+                    ))}
+                    {(imagesByElement[element.id] ?? []).length === 0 ? (
+                      <div className="card">
+                        <p className="muted">No images uploaded yet.</p>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               )}
             </section>

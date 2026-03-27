@@ -2,7 +2,7 @@ import { ProtocolEditor } from "@/components/protocol/protocol-editor";
 import { ProtocolOverview } from "@/components/protocol/protocol-builder";
 import { AppShell } from "@/components/ui/app-shell";
 import { backendFetch } from "@/lib/api/client";
-import { ProtocolElement, ProtocolSummary, ProtocolTodo } from "@/types/api";
+import { ProtocolElement, ProtocolImage, ProtocolSummary, ProtocolTodo } from "@/types/api";
 
 export default async function ProtocolDetailPage({ params }: { params: { id: string } }) {
   const protocol = await backendFetch<ProtocolSummary>(`/api/protocols/${params.id}`);
@@ -28,6 +28,14 @@ export default async function ProtocolDetailPage({ params }: { params: { id: str
     }))
   );
   const initialTodos = Object.fromEntries(todoLists.map((item) => [item.protocolElementId, item.todos]));
+  const imageElements = elements.filter((element) => element.element_type_code === "image");
+  const imageLists = await Promise.all(
+    imageElements.map(async (element) => ({
+      protocolElementId: element.id,
+      images: (await backendFetch<ProtocolImage[]>(`/api/protocol-elements/${element.id}/images`)) ?? []
+    }))
+  );
+  const initialImages = Object.fromEntries(imageLists.map((item) => [item.protocolElementId, item.images]));
 
   return (
     <AppShell>
@@ -36,7 +44,12 @@ export default async function ProtocolDetailPage({ params }: { params: { id: str
         <h1>{protocol.title ?? protocol.protocol_number}</h1>
         <p className="muted">This editor now renders real protocol blocks and starts the autosave flow for text and todos.</p>
         <ProtocolOverview protocol={protocol} />
-        <ProtocolEditor protocol={protocol} initialElements={elements} initialTodos={initialTodos} />
+        <ProtocolEditor
+          protocol={protocol}
+          initialElements={elements}
+          initialTodos={initialTodos}
+          initialImages={initialImages}
+        />
       </section>
     </AppShell>
   );

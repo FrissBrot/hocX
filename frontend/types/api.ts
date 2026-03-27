@@ -73,6 +73,19 @@ export type ProtocolTodo = {
   updated_at: string;
 };
 
+export type ProtocolImage = {
+  id: number;
+  protocol_element_id: number;
+  stored_file_id: number;
+  sort_index: number;
+  title: string | null;
+  caption: string | null;
+  original_name: string;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  content_url: string;
+};
+
 export type ElementDefinition = {
   id: number;
   tenant_id: number;

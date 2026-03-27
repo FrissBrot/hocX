@@ -127,3 +127,16 @@ class ProtocolTodoRead(BaseModel):
     created_by: int | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class ProtocolImageRead(BaseModel):
+    id: int
+    protocol_element_id: int
+    stored_file_id: int
+    sort_index: int
+    title: str | None = None
+    caption: str | None = None
+    original_name: str
+    mime_type: str | None = None
+    file_size_bytes: int | None = None
+    content_url: str
