@@ -11,6 +11,14 @@ class ProtocolRepository:
     def get(self, db: Session, protocol_id: int) -> Protocol | None:
         return db.get(Protocol, protocol_id)
 
+    def update(self, db: Session, protocol: Protocol, values: dict) -> Protocol:
+        for key, value in values.items():
+            setattr(protocol, key, value)
+        db.add(protocol)
+        db.commit()
+        db.refresh(protocol)
+        return protocol
+
     def create_from_template(
         self,
         db: Session,
@@ -19,7 +27,7 @@ class ProtocolRepository:
         template_id: int,
         protocol_number: str,
         protocol_date,
-        created_by: int,
+        created_by: int | None,
         title: str | None,
         event_id: int | None,
     ) -> int:
@@ -50,4 +58,3 @@ class ProtocolRepository:
         protocol_id = result.scalar_one()
         db.commit()
         return int(protocol_id)
-

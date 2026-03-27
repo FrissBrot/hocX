@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 
 from app.repositories.protocol_repository import ProtocolRepository
-from app.schemas.protocol import ProtocolCreateFromTemplate
+from app.schemas.protocol import ProtocolCreateFromTemplate, ProtocolUpdate
 
 
 class ProtocolService:
@@ -26,3 +26,11 @@ class ProtocolService:
             event_id=payload.event_id,
         )
 
+    def update_protocol(self, db: Session, protocol_id: int, payload: ProtocolUpdate):
+        protocol = self.repository.get(db, protocol_id)
+        if protocol is None:
+            return None
+        values = payload.model_dump(exclude_unset=True)
+        if not values:
+            return protocol
+        return self.repository.update(db, protocol, values)

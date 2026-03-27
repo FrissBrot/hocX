@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Template
 from app.repositories.template_repository import TemplateRepository
-from app.schemas.template import TemplateCreate
+from app.schemas.template import TemplateCreate, TemplateUpdate
 
 
 class TemplateService:
@@ -27,3 +27,11 @@ class TemplateService:
         )
         return self.repository.create(db, template)
 
+    def update_template(self, db: Session, template_id: int, payload: TemplateUpdate):
+        template = self.repository.get(db, template_id)
+        if template is None:
+            return None
+        values = payload.model_dump(exclude_unset=True)
+        if not values:
+            return template
+        return self.repository.update(db, template, values)

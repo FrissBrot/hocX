@@ -17,3 +17,10 @@ class TemplateRepository:
         db.refresh(template)
         return template
 
+    def update(self, db: Session, template: Template, values: dict) -> Template:
+        for key, value in values.items():
+            setattr(template, key, value)
+        db.add(template)
+        db.commit()
+        db.refresh(template)
+        return template
