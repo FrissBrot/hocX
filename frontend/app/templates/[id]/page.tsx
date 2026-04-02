@@ -1,14 +1,17 @@
 import { AppShell } from "@/components/ui/app-shell";
 import { TemplateEditor } from "@/components/template/template-builder";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
-import { ElementDefinition, TemplateElement, TemplateSummary } from "@/types/api";
+import { ElementDefinition, EventSummary, ParticipantSummary, TemplateElement, TemplateSummary } from "@/types/api";
 
 export default async function TemplateDetailPage({ params }: { params: { id: string } }) {
   const session = await requireSession();
-  const [template, elements, definitions] = await Promise.all([
+  const [template, elements, definitions, events, participants, selectedParticipants] = await Promise.all([
     backendFetchWithSession<TemplateSummary>(`/api/templates/${params.id}`),
     backendFetchWithSession<TemplateElement[]>(`/api/templates/${params.id}/elements`),
-    backendFetchWithSession<ElementDefinition[]>("/api/element-definitions")
+    backendFetchWithSession<ElementDefinition[]>("/api/element-definitions"),
+    backendFetchWithSession<EventSummary[]>("/api/events"),
+    backendFetchWithSession<ParticipantSummary[]>("/api/participants"),
+    backendFetchWithSession<ParticipantSummary[]>(`/api/templates/${params.id}/participants`)
   ]);
 
   if (!template) {
@@ -33,6 +36,9 @@ export default async function TemplateDetailPage({ params }: { params: { id: str
           initialTemplate={template}
           initialElements={elements ?? []}
           initialDefinitions={definitions ?? []}
+          availableEvents={events ?? []}
+          availableParticipants={participants ?? []}
+          initialAssignedParticipants={selectedParticipants ?? []}
         />
       </section>
     </AppShell>

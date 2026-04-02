@@ -13,6 +13,35 @@ class ElementDefinitionService:
     def __init__(self, repository: ElementDefinitionRepository | None = None) -> None:
         self.repository = repository or ElementDefinitionRepository()
 
+    def _render_type_for_element_type(self, element_type_id: int) -> int:
+        mapping = {
+            1: 2,  # text -> paragraph
+            2: 3,  # todo -> todo_list
+            3: 4,  # image -> image
+            5: 6,  # static_text -> plain_text
+            6: 5,  # form -> key_value
+            7: 5,  # event_list -> key_value
+            8: 2,  # bullet_list -> paragraph
+            9: 5,  # attendance -> key_value
+            10: 6,  # session_date -> plain_text
+            11: 5,  # matrix -> key_value
+        }
+        return mapping.get(element_type_id, 2)
+
+    def _normalize_blocks(self, blocks: list[dict]) -> list[dict]:
+        normalized: list[dict] = []
+        for block in blocks:
+            next_block = dict(block)
+            element_type_id = int(next_block.get("element_type_id", 1))
+            next_block["element_type_id"] = element_type_id
+            next_block["render_type_id"] = self._render_type_for_element_type(element_type_id)
+            next_block["allows_multiple_values"] = element_type_id in {2, 3}
+            config = dict(next_block.get("configuration_json") or {})
+            config.setdefault("title_as_subtitle", True)
+            next_block["configuration_json"] = config
+            normalized.append(next_block)
+        return normalized
+
     def _read_model(self, entity: ElementDefinition) -> ElementDefinitionRead:
         config = entity.configuration_json or {}
         return ElementDefinitionRead(
@@ -42,10 +71,10 @@ class ElementDefinitionService:
             display_title=payload.title,
             description=payload.description,
             is_editable=False,
-            allows_multiple_values=True,
+            allows_multiple_values=False,
             export_visible=True,
             latex_template=None,
-            configuration_json={"blocks": [block.model_dump() for block in payload.blocks]},
+            configuration_json={"blocks": self._normalize_blocks([block.model_dump() for block in payload.blocks])},
             is_active=payload.is_active,
         )
         created = self.repository.create(db, entity)
@@ -58,7 +87,7 @@ class ElementDefinitionService:
 
         values = payload.model_dump(exclude_unset=True)
         if "blocks" in values:
-            values["configuration_json"] = {"blocks": values.pop("blocks")}
+            values["configuration_json"] = {"blocks": self._normalize_blocks(values.pop("blocks"))}
         if "title" in values:
             values["display_title"] = values["title"]
         if not values:

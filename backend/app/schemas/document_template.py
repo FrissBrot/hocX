@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 class DocumentTemplatePartBase(BaseModel):
     tenant_id: int = 1
-    code: str
+    code: str | None = None
     name: str
     part_type: str
     description: str | None = None
@@ -31,6 +31,7 @@ class DocumentTemplatePartUpdate(BaseModel):
 
 class DocumentTemplatePartRead(DocumentTemplatePartBase):
     id: int
+    code: str
     storage_path: str
     created_at: datetime
     updated_at: datetime

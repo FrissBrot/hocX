@@ -9,7 +9,10 @@ ENV PYTHONPATH=/app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     texlive-latex-base \
     texlive-latex-recommended \
+    texlive-fonts-recommended \
+    texlive-xetex \
     texlive-pictures \
+    fonts-lmodern \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

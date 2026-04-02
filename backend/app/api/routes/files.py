@@ -11,10 +11,12 @@ from app.core.config import settings
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
 from app.models import ProtocolElementBlock
 from app.schemas.protocol import ProtocolImageRead
+from app.services.access_service import AccessService
 from app.services.file_service import FileService
 
 router = APIRouter()
 service = FileService()
+access_service = AccessService()
 
 @router.get("/protocol-element-blocks/{protocol_element_block_id}/images", response_model=list[ProtocolImageRead])
 def list_images(
@@ -23,6 +25,7 @@ def list_images(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_reader(user)
+    access_service.ensure_can_read_protocol_block(db, user, protocol_element_block_id)
     return service.list_protocol_images(db, protocol_element_block_id)
 
 
@@ -77,10 +80,16 @@ def get_stored_file_content(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_reader(user)
+    access_service.ensure_can_read_stored_file(db, user, stored_file_id)
     stored_file = service.get_stored_file(db, stored_file_id)
     if stored_file is None:
         raise HTTPException(status_code=404, detail="Stored file not found")
     file_path = Path(settings.storage_root) / stored_file.storage_path
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File missing on filesystem")
-    return FileResponse(path=file_path, media_type=stored_file.mime_type, filename=stored_file.original_name)
+    return FileResponse(
+        path=file_path,
+        media_type=stored_file.mime_type,
+        filename=stored_file.original_name,
+        content_disposition_type="inline" if stored_file.mime_type == "application/pdf" else "attachment",
+    )

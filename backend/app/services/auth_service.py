@@ -15,6 +15,8 @@ class AuthService:
         user = db.query(AppUser).filter(AppUser.email == payload.email).one_or_none()
         if user is None or not user.is_active or not verify_password(payload.password, user.password_hash):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+        if (user.external_identity_json or {}).get("login_enabled") is False:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Login is disabled for this account")
 
         current_user = build_current_user(db, user, payload.tenant_id)
         if not current_user.is_superadmin and current_user.current_tenant_id is None:

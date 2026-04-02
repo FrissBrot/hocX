@@ -39,6 +39,7 @@ class CurrentUser:
     email: str
     preferred_language: str
     is_superadmin: bool
+    is_participant_account: bool
     current_tenant_id: int | None
     current_tenant_name: str | None
     current_tenant_profile_image_path: str | None
@@ -180,6 +181,7 @@ def build_current_user(db: Session, user: AppUser, selected_tenant_id: int | Non
         email=user.email,
         preferred_language=user.preferred_language,
         is_superadmin=is_superadmin,
+        is_participant_account=(user.external_identity_json or {}).get("source") == "participant_auto",
         current_tenant_id=current_membership.tenant_id if current_membership else user.default_tenant_id,
         current_tenant_name=current_membership.tenant_name if current_membership else None,
         current_tenant_profile_image_path=current_membership.tenant_profile_image_path if current_membership else None,

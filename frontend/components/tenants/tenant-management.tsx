@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useState } from "react";
+import { ChangeEvent, FormEvent, useMemo, useState } from "react";
 
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
@@ -25,6 +25,16 @@ export function TenantManagement({ initialTenants, canCreateTenant }: Props) {
   const [statusTone, setStatusTone] = useState<"neutral" | "success" | "error">("neutral");
   const [tenantModalOpen, setTenantModalOpen] = useState(false);
   const [tenantForm, setTenantForm] = useState<TenantFormState>({ name: "", profileImage: null });
+  const [search, setSearch] = useState("");
+
+  const filteredTenants = useMemo(
+    () =>
+      tenants.filter((tenant) => {
+        const haystack = `${tenant.name} ${tenant.profile_image_url ? "bild" : ""}`.toLowerCase();
+        return !search || haystack.includes(search.toLowerCase());
+      }),
+    [search, tenants]
+  );
 
   function openTenantModal(tenant?: TenantSummary) {
     setTenantForm({
@@ -86,12 +96,28 @@ export function TenantManagement({ initialTenants, canCreateTenant }: Props) {
         }
       />
 
-      <DataTable columns={["Mandant", "Profilbild", "Aktionen"]}>
-        {tenants.map((tenant) => (
+      <article className="card">
+        <div className="two-col">
+          <label className="field-stack">
+            <span className="field-label">Suche</span>
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Mandanten durchsuchen" />
+          </label>
+          <div className="card">
+            <div className="eyebrow">Überblick</div>
+            <div className="status-row">
+              <span className="pill">{filteredTenants.length} sichtbar</span>
+              <span className="pill">{tenants.length} gesamt</span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <DataTable columns={["Mandant", "Profilbild", "Aktionen"]} emptyMessage="Keine Mandanten für den aktuellen Filter gefunden.">
+        {filteredTenants.map((tenant) => (
           <tr key={tenant.id} className="table-row-clickable" onClick={() => openTenantModal(tenant)}>
             <td>
               <strong>{tenant.name}</strong>
-              <div className="muted">#{tenant.id}</div>
+              <div className="muted">{tenant.profile_image_url ? "Mit Profilbild" : "Ohne Profilbild"}</div>
             </td>
             <td>{tenant.profile_image_url ? "Vorhanden" : "Kein Bild"}</td>
             <td>

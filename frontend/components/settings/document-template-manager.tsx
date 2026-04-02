@@ -14,7 +14,6 @@ type Props = {
 };
 
 type PartFormState = {
-  code: string;
   name: string;
   part_type: string;
   description: string;
@@ -34,6 +33,10 @@ type TemplateFormState = {
   secondary_color: string;
   font_family: string;
   font_size: string;
+  font_regular: string;
+  font_bold: string;
+  font_italic: string;
+  font_bold_italic: string;
   show_toc: boolean;
   numbering_mode: string;
   preamble: string;
@@ -44,11 +47,15 @@ type TemplateFormState = {
   element_text: string;
   element_todo: string;
   element_image: string;
-  element_display: string;
   element_static_text: string;
+  element_form: string;
+  element_events: string;
+  element_bullet_list: string;
+  element_attendance: string;
+  element_session_date: string;
 };
 
-const slotDefinitions = [
+const latexSlotDefinitions = [
   { key: "preamble", label: "Preamble", help: "Packages and global setup before the document starts." },
   { key: "macros", label: "Macros", help: "Reusable commands and helpers shared across layouts." },
   { key: "title_page", label: "Title page", help: "Optional cover page for protocol metadata and branding." },
@@ -57,14 +64,26 @@ const slotDefinitions = [
   { key: "element_text", label: "Text block partial", help: "How text blocks render in PDF." },
   { key: "element_todo", label: "Todo block partial", help: "How todo lists render in PDF." },
   { key: "element_image", label: "Image block partial", help: "How uploaded images render in PDF." },
-  { key: "element_display", label: "Display block partial", help: "How read-only snapshots render in PDF." },
-  { key: "element_static_text", label: "Static text block partial", help: "How fixed text blocks render in PDF." }
+  { key: "element_static_text", label: "Static text block partial", help: "How fixed text blocks render in PDF." },
+  { key: "element_form", label: "Form block partial", help: "How structured form rows render in PDF." },
+  { key: "element_events", label: "Events block partial", help: "How filtered event tables render in PDF." },
+  { key: "element_bullet_list", label: "Bulletpoints block partial", help: "How bulletpoint lists render in PDF." },
+  { key: "element_attendance", label: "Attendance block partial", help: "How attendance lists render in PDF." },
+  { key: "element_session_date", label: "Session date block partial", help: "How the next session date renders in PDF." }
 ] as const;
 
-const partTypeOptions = slotDefinitions.map((entry) => entry.key);
+const fontSlotDefinitions = [
+  { key: "font_regular", label: "Regular font file", help: "Main .ttf or .otf font file used for normal text." },
+  { key: "font_bold", label: "Bold font file", help: "Optional bold font file for headings and emphasis." },
+  { key: "font_italic", label: "Italic font file", help: "Optional italic font file." },
+  { key: "font_bold_italic", label: "Bold italic font file", help: "Optional bold italic font file." }
+] as const;
+
+const partTypeDefinitions = [...latexSlotDefinitions, ...fontSlotDefinitions] as const;
+const partTypeOptions = partTypeDefinitions.map((entry) => entry.key);
+const fontPartTypes = new Set(fontSlotDefinitions.map((entry) => entry.key));
 
 const initialPartForm: PartFormState = {
-  code: "",
   name: "",
   part_type: "preamble",
   description: "",
@@ -82,8 +101,12 @@ const initialTemplateForm: TemplateFormState = {
   is_default: false,
   primary_color: "A83F2F",
   secondary_color: "6F675D",
-  font_family: "default",
+  font_family: "arial",
   font_size: "11pt",
+  font_regular: "",
+  font_bold: "",
+  font_italic: "",
+  font_bold_italic: "",
   show_toc: true,
   numbering_mode: "sections",
   preamble: "",
@@ -94,8 +117,12 @@ const initialTemplateForm: TemplateFormState = {
   element_text: "",
   element_todo: "",
   element_image: "",
-  element_display: "",
-  element_static_text: ""
+  element_static_text: "",
+  element_form: "",
+  element_events: "",
+  element_bullet_list: "",
+  element_attendance: "",
+  element_session_date: ""
 };
 
 function templateFormFromTemplate(template: DocumentTemplate): TemplateFormState {
@@ -103,6 +130,7 @@ function templateFormFromTemplate(template: DocumentTemplate): TemplateFormState
   const theme = config.theme ?? {};
   const options = config.options ?? {};
   const slots = config.slots ?? {};
+  const fontParts = theme.font_parts ?? {};
   return {
     code: template.code,
     name: template.name,
@@ -112,8 +140,12 @@ function templateFormFromTemplate(template: DocumentTemplate): TemplateFormState
     is_default: template.is_default,
     primary_color: theme.primary_color ?? "A83F2F",
     secondary_color: theme.secondary_color ?? "6F675D",
-    font_family: theme.font_family ?? "default",
+    font_family: theme.font_family ?? "arial",
     font_size: theme.font_size ?? "11pt",
+    font_regular: fontParts.font_regular ? String(fontParts.font_regular) : "",
+    font_bold: fontParts.font_bold ? String(fontParts.font_bold) : "",
+    font_italic: fontParts.font_italic ? String(fontParts.font_italic) : "",
+    font_bold_italic: fontParts.font_bold_italic ? String(fontParts.font_bold_italic) : "",
     show_toc: options.show_toc ?? true,
     numbering_mode: options.numbering_mode ?? "sections",
     preamble: slots.preamble ? String(slots.preamble) : "",
@@ -124,8 +156,12 @@ function templateFormFromTemplate(template: DocumentTemplate): TemplateFormState
     element_text: slots.element_text ? String(slots.element_text) : "",
     element_todo: slots.element_todo ? String(slots.element_todo) : "",
     element_image: slots.element_image ? String(slots.element_image) : "",
-    element_display: slots.element_display ? String(slots.element_display) : "",
-    element_static_text: slots.element_static_text ? String(slots.element_static_text) : ""
+    element_static_text: slots.element_static_text ? String(slots.element_static_text) : "",
+    element_form: slots.element_form ? String(slots.element_form) : "",
+    element_events: slots.element_events ? String(slots.element_events) : "",
+    element_bullet_list: slots.element_bullet_list ? String(slots.element_bullet_list) : "",
+    element_attendance: slots.element_attendance ? String(slots.element_attendance) : "",
+    element_session_date: slots.element_session_date ? String(slots.element_session_date) : ""
   };
 }
 
@@ -143,7 +179,12 @@ function buildTemplatePayload(form: TemplateFormState) {
         primary_color: form.primary_color,
         secondary_color: form.secondary_color,
         font_family: form.font_family,
-        font_size: form.font_size
+        font_size: form.font_size,
+        font_parts: Object.fromEntries(
+          ["font_regular", "font_bold", "font_italic", "font_bold_italic"]
+            .filter((slot) => form[slot as keyof TemplateFormState])
+            .map((slot) => [slot, Number(form[slot as keyof TemplateFormState] as string)])
+        )
       },
       options: {
         show_toc: form.show_toc,
@@ -159,8 +200,12 @@ function buildTemplatePayload(form: TemplateFormState) {
           "element_text",
           "element_todo",
           "element_image",
-          "element_display",
-          "element_static_text"
+          "element_static_text",
+          "element_form",
+          "element_events",
+          "element_bullet_list",
+          "element_attendance",
+          "element_session_date"
         ]
           .filter((slot) => form[slot as keyof TemplateFormState])
           .map((slot) => [slot, Number(form[slot as keyof TemplateFormState] as string)])
@@ -173,6 +218,8 @@ export function DocumentTemplateManager({ initialTemplates, initialParts }: Prop
   const [parts, setParts] = useState(initialParts);
   const [templates, setTemplates] = useState(initialTemplates);
   const [activePanel, setActivePanel] = useState<"parts" | "layouts">("layouts");
+  const [partSearch, setPartSearch] = useState("");
+  const [layoutSearch, setLayoutSearch] = useState("");
   const [showPartForm, setShowPartForm] = useState(false);
   const [showTemplateForm, setShowTemplateForm] = useState(false);
   const [partForm, setPartForm] = useState(initialPartForm);
@@ -197,6 +244,28 @@ export function DocumentTemplateManager({ initialTemplates, initialParts }: Prop
     return grouped;
   }, [parts]);
 
+  const filteredParts = useMemo(() => {
+    const query = partSearch.trim().toLowerCase();
+    return parts.filter((part) => {
+      if (!query) {
+        return true;
+      }
+      const haystack = `${part.name} ${part.code} ${part.description ?? ""} ${part.part_type}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [partSearch, parts]);
+
+  const filteredTemplates = useMemo(() => {
+    const query = layoutSearch.trim().toLowerCase();
+    return templates.filter((template) => {
+      if (!query) {
+        return true;
+      }
+      const haystack = `${template.name} ${template.code} ${template.description ?? ""}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [layoutSearch, templates]);
+
   function selectTemplate(template: DocumentTemplate) {
     setSelectedTemplateId(template.id);
     setSelectedTemplateForm(templateFormFromTemplate(template));
@@ -213,7 +282,6 @@ export function DocumentTemplateManager({ initialTemplates, initialParts }: Prop
     setStatusTone("neutral");
     try {
       const body = new FormData();
-      body.append("code", partForm.code);
       body.append("name", partForm.name);
       body.append("part_type", partForm.part_type);
       body.append("description", partForm.description);
@@ -331,18 +399,19 @@ export function DocumentTemplateManager({ initialTemplates, initialParts }: Prop
         <form className="grid" onSubmit={createPart}>
           <div className="three-col">
             <label className="field-stack">
-              <span className="field-label">Code</span>
-              <input value={partForm.code} onChange={(event) => setPartForm((current) => ({ ...current, code: event.target.value }))} required />
-            </label>
-            <label className="field-stack">
               <span className="field-label">Name</span>
               <input value={partForm.name} onChange={(event) => setPartForm((current) => ({ ...current, name: event.target.value }))} required />
             </label>
             <label className="field-stack">
               <span className="field-label">Type</span>
               <select value={partForm.part_type} onChange={(event) => setPartForm((current) => ({ ...current, part_type: event.target.value }))}>
-                {partTypeOptions.map((type) => <option key={type} value={type}>{type}</option>)}
+                {partTypeOptions.map((type) => (
+                  <option key={type} value={type}>
+                    {partTypeDefinitions.find((entry) => entry.key === type)?.label ?? type}
+                  </option>
+                ))}
               </select>
+              <span className="field-help">Der Code wird automatisch aus Name und Typ erzeugt.</span>
             </label>
           </div>
           <div className="three-col">
@@ -355,8 +424,13 @@ export function DocumentTemplateManager({ initialTemplates, initialParts }: Prop
               <input type="number" min={1} value={partForm.version} onChange={(event) => setPartForm((current) => ({ ...current, version: event.target.value }))} />
             </label>
             <label className="field-stack">
-              <span className="field-label">LaTeX file</span>
-              <input type="file" accept=".tex" onChange={(event) => setPartForm((current) => ({ ...current, file: event.target.files?.[0] ?? null }))} required />
+              <span className="field-label">{fontPartTypes.has(partForm.part_type as any) ? "Font file" : "LaTeX file"}</span>
+              <input
+                type="file"
+                accept={fontPartTypes.has(partForm.part_type as any) ? ".ttf,.otf" : ".tex"}
+                onChange={(event) => setPartForm((current) => ({ ...current, file: event.target.files?.[0] ?? null }))}
+                required
+              />
             </label>
           </div>
           <label className="checkbox-row">
@@ -397,14 +471,31 @@ export function DocumentTemplateManager({ initialTemplates, initialParts }: Prop
             TOC behavior and block rendering.
           </div>
 
-          <DataTable columns={["Name", "Type", "Version", "State", "Actions"]}>
-            {parts.map((part) => (
+          <article className="card">
+            <div className="two-col">
+              <label className="field-stack">
+                <span className="field-label">Suche</span>
+                <input value={partSearch} onChange={(event) => setPartSearch(event.target.value)} placeholder="LaTeX-Parts durchsuchen" />
+              </label>
+              <div className="card">
+                <div className="eyebrow">Überblick</div>
+                <div className="status-row">
+                  <span className="pill">{filteredParts.length} sichtbar</span>
+                  <span className="pill">{parts.length} gesamt</span>
+                  <span className="pill">{Object.keys(partsByType).length} Typen</span>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <DataTable columns={["Name", "Type", "Version", "State", "Actions"]} emptyMessage="Keine Parts für den aktuellen Filter gefunden.">
+            {filteredParts.map((part) => (
               <tr key={part.id}>
                 <td>
                   <strong>{part.name}</strong>
                   <div className="muted">{part.code}</div>
                 </td>
-                <td>{slotDefinitions.find((entry) => entry.key === part.part_type)?.label ?? part.part_type}</td>
+                <td>{partTypeDefinitions.find((entry) => entry.key === part.part_type)?.label ?? part.part_type}</td>
                 <td>{part.version}</td>
                 <td><span className="pill">{part.is_active ? "active" : "inactive"}</span></td>
                 <td>
@@ -431,11 +522,28 @@ export function DocumentTemplateManager({ initialTemplates, initialParts }: Prop
             and snapshot it so later exports stay reproducible.
           </div>
 
+          <article className="card">
+            <div className="two-col">
+              <label className="field-stack">
+                <span className="field-label">Suche</span>
+                <input value={layoutSearch} onChange={(event) => setLayoutSearch(event.target.value)} placeholder="Layouts durchsuchen" />
+              </label>
+              <div className="card">
+                <div className="eyebrow">Überblick</div>
+                <div className="status-row">
+                  <span className="pill">{filteredTemplates.length} sichtbar</span>
+                  <span className="pill">{templates.length} gesamt</span>
+                  <span className="pill">{templates.filter((template) => template.is_default).length} Default</span>
+                </div>
+              </div>
+            </div>
+          </article>
+
           <div className="editor-shell">
             <aside className="editor-nav">
               <div className="editor-nav-section">
                 <h3 className="editor-nav-title">Available layouts</h3>
-                {templates.map((template) => (
+                {filteredTemplates.map((template) => (
                   <button
                     key={template.id}
                     type="button"
@@ -450,6 +558,7 @@ export function DocumentTemplateManager({ initialTemplates, initialParts }: Prop
                     </div>
                   </button>
                 ))}
+                {filteredTemplates.length === 0 ? <div className="editor-panel-empty">Keine Layouts für den aktuellen Filter.</div> : null}
               </div>
             </aside>
 
@@ -537,9 +646,11 @@ function TemplateForm({
         <label className="field-stack">
           <span className="field-label">Font family</span>
           <select value={form.font_family} onChange={(event) => setForm((current) => ({ ...current, font_family: event.target.value }))}>
-            <option value="default">Default</option>
+            <option value="arial">Arial</option>
             <option value="helvet">Helvetica</option>
             <option value="palatino">Palatino</option>
+            <option value="century_gothic">Century Gothic</option>
+            <option value="uploaded">Uploaded custom font</option>
           </select>
         </label>
         <label className="field-stack">
@@ -552,8 +663,36 @@ function TemplateForm({
         </label>
       </div>
 
+      {(form.font_family === "century_gothic" || form.font_family === "uploaded") ? (
+        <div className="card inset-card">
+          <div className="grid">
+            <div className="info-note">
+              {form.font_family === "century_gothic"
+                ? "Century Gothic is not bundled in the project. Upload the font files here, then the export will use them automatically."
+                : "Upload your own font files here. Regular is required; bold and italic variants are optional but recommended."}
+            </div>
+            <div className="four-col">
+              {fontSlotDefinitions.map(({ key, label, help }) => (
+                <label className="field-stack" key={key}>
+                  <span className="field-label">{label}</span>
+                  <select value={form[key as keyof TemplateFormState] as string} onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))}>
+                    <option value="">None</option>
+                    {(partsByType[key] ?? []).map((part) => (
+                      <option key={part.id} value={part.id}>
+                        {part.name}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="field-help">{help}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="three-col">
-        {slotDefinitions.map(({ key, label, help }) => (
+        {latexSlotDefinitions.map(({ key, label, help }) => (
           <label className="field-stack" key={key}>
             <span className="field-label">{label}</span>
             <select value={form[key as keyof TemplateFormState] as string} onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))}>

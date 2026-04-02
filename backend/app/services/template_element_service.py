@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from app.models import TemplateElement
+from app.models import ElementDefinition, TemplateElement
 from app.repositories.template_element_repository import TemplateElementRepository
 from app.schemas.template import TemplateElementCreate, TemplateElementRead, TemplateElementUpdate
 
@@ -21,6 +21,7 @@ class TemplateElementService:
                 "description": block.get("description"),
                 "block_title": block.get("block_title"),
                 "default_content": block.get("default_content"),
+                "copy_from_last_protocol": block.get("copy_from_last_protocol", False),
                 "element_type_id": block["element_type_id"],
                 "render_type_id": block["render_type_id"],
                 "is_editable": block.get("is_editable", True),
@@ -42,6 +43,7 @@ class TemplateElementService:
             sort_index=template_element.sort_index,
             title=definition.title,
             description=definition.description,
+            configuration_json=template_element.configuration_json or {},
             created_at=template_element.created_at,
             blocks=blocks,
         )
@@ -54,10 +56,24 @@ class TemplateElementService:
         return self._read_model(row) if row else None
 
     def create_template_element(self, db: Session, template_id: int, payload: TemplateElementCreate):
+        existing_rows = self.repository.list_for_template(db, template_id)
+        existing_sort_indexes = [template_element.sort_index for template_element, _definition in existing_rows]
+        next_sort_index = payload.sort_index
+        if next_sort_index in existing_sort_indexes or next_sort_index <= 0:
+            next_sort_index = (max(existing_sort_indexes) if existing_sort_indexes else 0) + 10
+        definition = db.get(ElementDefinition, payload.element_definition_id)
+        if definition is None:
+            raise ValueError("Element definition not found")
         entity = TemplateElement(
             template_id=template_id,
             element_definition_id=payload.element_definition_id,
-            sort_index=payload.sort_index,
+            sort_index=next_sort_index,
+            section_name=definition.title,
+            section_order=next_sort_index,
+            is_required=False,
+            is_visible=True,
+            export_visible=True,
+            configuration_json=payload.configuration_json or {},
         )
         created = self.repository.create(db, entity)
         return self.get_template_element(db, created.id)

@@ -49,6 +49,7 @@ class UserCreate(UserBase):
     password: str = Field(min_length=8)
     memberships: list[TenantMembershipWrite] = Field(default_factory=list)
     is_superadmin: bool = False
+    login_enabled: bool = True
 
 
 class UserUpdate(BaseModel):
@@ -66,6 +67,7 @@ class UserUpdate(BaseModel):
     default_tenant_id: int | None = None
     memberships: list[TenantMembershipWrite] | None = None
     is_superadmin: bool | None = None
+    login_enabled: bool | None = None
 
 
 class UserSelfUpdate(BaseModel):
@@ -73,10 +75,17 @@ class UserSelfUpdate(BaseModel):
     default_tenant_id: int | None = None
 
 
+class UserMergeRequest(BaseModel):
+    source_user_id: int
+    target_user_id: int
+
+
 class UserRead(UserBase):
     id: int
     memberships: list[TenantMembershipRead] = Field(default_factory=list)
     is_superadmin: bool = False
+    login_enabled: bool = True
+    is_participant_account: bool = False
     created_at: datetime
     updated_at: datetime
 
