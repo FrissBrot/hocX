@@ -64,6 +64,7 @@ function buildNav(session: SessionInfo | null): NavGroup[] {
           {
             title: "Datensätze",
             links: [
+              { href: "/lists", label: "Listen" },
               { href: "/participants", label: "Teilnehmer" },
               { href: "/events", label: "Termine" }
             ]
@@ -90,6 +91,7 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
   const sidebarNavRef = useRef<HTMLElement | null>(null);
   const compactFooterRef = useRef<HTMLDivElement | null>(null);
   const compactFooterPanelsRef = useRef<HTMLDivElement | null>(null);
+  const compactFooterCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [themePreference, setThemePreference] = useState<"light" | "dark" | "auto">("auto");
   const [themeReady, setThemeReady] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -164,6 +166,14 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [compactFooterOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (compactFooterCloseTimerRef.current) {
+        clearTimeout(compactFooterCloseTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const sidebar = sidebarRef.current;
@@ -371,7 +381,7 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
                       const isActive = pathname === link.href || pathname.startsWith(`${link.href}/`);
                       return (
                         <Link
-                          href={link.href}
+                          href={link.href as any}
                           key={link.href}
                           className={isActive ? "nav-link nav-link-active" : "nav-link"}
                           onClick={() => {
@@ -388,7 +398,50 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
               </div>
             ))}
           </nav>
-          <div className={`sidebar-footer${compactFooterEnabled ? " sidebar-footer-compact-enabled" : ""}${compactFooterOpen ? " sidebar-footer-open" : ""}`} ref={compactFooterRef}>
+          <div
+            className={`sidebar-footer${compactFooterEnabled ? " sidebar-footer-compact-enabled" : ""}${compactFooterOpen ? " sidebar-footer-open" : ""}`}
+            ref={compactFooterRef}
+            onMouseEnter={() => {
+              if (compactFooterEnabled) {
+                if (compactFooterCloseTimerRef.current) {
+                  clearTimeout(compactFooterCloseTimerRef.current);
+                  compactFooterCloseTimerRef.current = null;
+                }
+                setCompactFooterOpen(true);
+              }
+            }}
+            onMouseLeave={(event) => {
+              if (!compactFooterEnabled) {
+                return;
+              }
+              const nextTarget = event.relatedTarget;
+              if (!compactFooterRef.current?.contains(nextTarget as Node | null)) {
+                compactFooterCloseTimerRef.current = setTimeout(() => {
+                  setCompactFooterOpen(false);
+                }, 150);
+              }
+            }}
+            onFocusCapture={() => {
+              if (compactFooterEnabled) {
+                if (compactFooterCloseTimerRef.current) {
+                  clearTimeout(compactFooterCloseTimerRef.current);
+                  compactFooterCloseTimerRef.current = null;
+                }
+                setCompactFooterOpen(true);
+              }
+            }}
+            onBlurCapture={(event) => {
+              if (!compactFooterEnabled) {
+                return;
+              }
+              const nextTarget = event.relatedTarget;
+              if (!compactFooterRef.current?.contains(nextTarget as Node | null)) {
+                compactFooterCloseTimerRef.current = setTimeout(() => {
+                  setCompactFooterOpen(false);
+                }, 150);
+              }
+            }}
+          >
             <button
               type="button"
               className="sidebar-footer-trigger"
@@ -398,7 +451,7 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
               onClick={() => setCompactFooterOpen((current) => !current)}
             >
               <div className="identity-avatar sidebar-footer-trigger-avatar">{renderTenantAvatar()}</div>
-              <span className="sidebar-footer-trigger-text">Arbeitsmenü</span>
+              <span className="sidebar-footer-trigger-text">Menü</span>
               <span className="sidebar-footer-trigger-spacer" aria-hidden="true" />
             </button>
 

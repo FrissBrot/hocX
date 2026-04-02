@@ -29,6 +29,8 @@ type UserFormState = {
   preferred_language: string;
   is_active: boolean;
   is_superadmin: boolean;
+  login_enabled: boolean;
+  is_participant_account: boolean;
   memberships: MembershipEntry[];
   selectedTenantId: string;
   selectedRoleCode: string;
@@ -60,6 +62,8 @@ function emptyUserForm(manageableTenants: TenantSummary[]): UserFormState {
     preferred_language: "de",
     is_active: true,
     is_superadmin: false,
+    login_enabled: true,
+    is_participant_account: false,
     memberships: manageableTenants[0] ? [{ tenant_id: manageableTenants[0].id, role_code: "reader" }] : [],
     selectedTenantId: manageableTenants[0] ? String(manageableTenants[0].id) : "",
     selectedRoleCode: "reader"
@@ -70,7 +74,12 @@ export function UserManagement({ initialUsers, manageableTenants, session }: Pro
   const [users, setUsers] = useState(initialUsers);
   const [status, setStatus] = useState("Bereit");
   const [statusTone, setStatusTone] = useState<"neutral" | "success" | "error">("neutral");
+  const [userTab, setUserTab] = useState<"active" | "nologin">("active");
+  const [search, setSearch] = useState("");
   const [userModalOpen, setUserModalOpen] = useState(false);
+  const [mergeModalOpen, setMergeModalOpen] = useState(false);
+  const [mergeSourceUserId, setMergeSourceUserId] = useState<number | null>(null);
+  const [mergeTargetUserId, setMergeTargetUserId] = useState("");
   const [userForm, setUserForm] = useState<UserFormState>(() => emptyUserForm(manageableTenants));
 
   const canSuperadmin = !!session.user?.is_superadmin;
@@ -78,6 +87,20 @@ export function UserManagement({ initialUsers, manageableTenants, session }: Pro
     () => new Map(manageableTenants.map((tenant) => [tenant.id, tenant.name])),
     [manageableTenants]
   );
+  const activeUsers = useMemo(() => users.filter((user) => user.login_enabled), [users]);
+  const usersWithoutLogin = useMemo(() => users.filter((user) => !user.login_enabled), [users]);
+  const tabUsers = userTab === "active" ? activeUsers : usersWithoutLogin;
+  const visibleUsers = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return tabUsers.filter((user) => {
+      if (!query) {
+        return true;
+      }
+      const membershipText = user.memberships.map((membership) => `${membership.tenant_name} ${membership.role_code}`).join(" ");
+      const haystack = `${user.display_name} ${user.first_name} ${user.last_name} ${user.email} ${membershipText}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [search, tabUsers]);
 
   function openNewUser() {
     setUserForm(emptyUserForm(manageableTenants));
@@ -96,11 +119,20 @@ export function UserManagement({ initialUsers, manageableTenants, session }: Pro
       preferred_language: user.preferred_language,
       is_active: user.is_active,
       is_superadmin: user.is_superadmin,
+      login_enabled: user.login_enabled,
+      is_participant_account: user.is_participant_account,
       memberships,
       selectedTenantId: manageableTenants[0] ? String(manageableTenants[0].id) : "",
       selectedRoleCode: "reader"
     });
     setUserModalOpen(true);
+  }
+
+  function openMergeUser(user: UserSummary) {
+    setMergeSourceUserId(user.id);
+    const fallbackTarget = users.find((candidate) => candidate.id !== user.id);
+    setMergeTargetUserId(fallbackTarget ? String(fallbackTarget.id) : "");
+    setMergeModalOpen(true);
   }
 
   function upsertMembership() {
@@ -142,6 +174,7 @@ export function UserManagement({ initialUsers, manageableTenants, session }: Pro
         preferred_language: userForm.preferred_language,
         is_active: userForm.is_active,
         is_superadmin: canSuperadmin ? userForm.is_superadmin : false,
+        login_enabled: userForm.login_enabled,
         memberships: userForm.memberships.map((membership) => ({
           tenant_id: membership.tenant_id,
           role_code: membership.role_code,
@@ -186,6 +219,34 @@ export function UserManagement({ initialUsers, manageableTenants, session }: Pro
     }
   }
 
+  async function mergeUser() {
+    if (!mergeSourceUserId || !mergeTargetUserId) {
+      return;
+    }
+    setStatus("Benutzer werden zusammengeführt...");
+    setStatusTone("neutral");
+    try {
+      const merged = await browserApiFetch<UserSummary>("/api/users/merge", {
+        method: "POST",
+        body: JSON.stringify({
+          source_user_id: mergeSourceUserId,
+          target_user_id: Number(mergeTargetUserId)
+        })
+      });
+      setUsers((current) =>
+        current
+          .filter((user) => user.id !== mergeSourceUserId)
+          .map((user) => (user.id === merged.id ? merged : user))
+      );
+      setMergeModalOpen(false);
+      setStatus("Benutzer zusammengeführt");
+      setStatusTone("success");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Benutzer konnten nicht zusammengeführt werden");
+      setStatusTone("error");
+    }
+  }
+
   return (
     <div className="grid">
       <StatusBanner tone={statusTone} message={status} />
@@ -200,8 +261,42 @@ export function UserManagement({ initialUsers, manageableTenants, session }: Pro
         }
       />
 
+      <div className="segment-control">
+        <button
+          type="button"
+          className={`segment-button${userTab === "active" ? " segment-button-active" : ""}`}
+          onClick={() => setUserTab("active")}
+        >
+          Aktive Benutzer ({activeUsers.length})
+        </button>
+        <button
+          type="button"
+          className={`segment-button${userTab === "nologin" ? " segment-button-active" : ""}`}
+          onClick={() => setUserTab("nologin")}
+        >
+          Ohne Login ({usersWithoutLogin.length})
+        </button>
+      </div>
+
+      <article className="card">
+        <div className="two-col">
+          <label className="field-stack">
+            <span className="field-label">Suche</span>
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Benutzer durchsuchen" />
+          </label>
+          <div className="card">
+            <div className="eyebrow">Überblick</div>
+            <div className="status-row">
+              <span className="pill">{visibleUsers.length} sichtbar</span>
+              <span className="pill">{tabUsers.length} im Tab</span>
+              <span className="pill">{users.length} gesamt</span>
+            </div>
+          </div>
+        </div>
+      </article>
+
       <DataTable columns={["Anzeigename", "Name", "E-Mail", "Rollen", "Aktionen"]}>
-        {users.map((user) => (
+        {visibleUsers.map((user) => (
           <tr key={user.id} className="table-row-clickable" onClick={() => openEditUser(user)}>
             <td>
               <strong>{user.display_name}</strong>
@@ -223,6 +318,18 @@ export function UserManagement({ initialUsers, manageableTenants, session }: Pro
             </td>
             <td>
               <div className="table-actions table-actions-start">
+                {canSuperadmin ? (
+                  <button
+                    type="button"
+                    className="button-inline"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openMergeUser(user);
+                    }}
+                  >
+                    Merge
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="button-inline button-danger"
@@ -286,6 +393,19 @@ export function UserManagement({ initialUsers, manageableTenants, session }: Pro
             </label>
           </div>
 
+          <div className="two-col">
+            <label className="checkbox-line">
+              <input type="checkbox" checked={userForm.login_enabled} onChange={(event) => setUserForm((current) => ({ ...current, login_enabled: event.target.checked }))} />
+              Login aktivieren
+            </label>
+            {userForm.is_participant_account ? (
+              <div className="info-note">
+                Dieses Konto wurde automatisch aus einem Teilnehmer erstellt. Fuer den ersten Login bitte Login aktivieren
+                und ein neues Passwort setzen.
+              </div>
+            ) : null}
+          </div>
+
           {canSuperadmin ? (
             <label className="checkbox-line">
               <input type="checkbox" checked={userForm.is_superadmin} onChange={(event) => setUserForm((current) => ({ ...current, is_superadmin: event.target.checked }))} />
@@ -346,6 +466,45 @@ export function UserManagement({ initialUsers, manageableTenants, session }: Pro
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={mergeModalOpen}
+        onClose={() => setMergeModalOpen(false)}
+        title="Benutzer zusammenführen"
+        description="Nur für Superadmins: Der Quellbenutzer wird in den Zielbenutzer gemergt und danach gelöscht."
+      >
+        <div className="grid">
+          <label className="field-stack">
+            <span className="field-label">Quellbenutzer</span>
+            <input
+              value={users.find((user) => user.id === mergeSourceUserId)?.display_name ?? ""}
+              readOnly
+            />
+          </label>
+          <label className="field-stack">
+            <span className="field-label">Zielbenutzer</span>
+            <select value={mergeTargetUserId} onChange={(event) => setMergeTargetUserId(event.target.value)}>
+              {users
+                .filter((user) => user.id !== mergeSourceUserId)
+                .map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.display_name} ({user.email})
+                  </option>
+                ))}
+            </select>
+          </label>
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="button-inline"
+              onClick={() => void mergeUser()}
+              disabled={!mergeTargetUserId}
+            >
+              Jetzt mergen
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

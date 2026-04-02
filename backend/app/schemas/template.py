@@ -12,6 +12,13 @@ class TemplateBase(BaseModel):
     version: int = Field(default=1, ge=1)
     status: str = "active"
     document_template_id: int | None = None
+    next_event_id: int | None = None
+    last_event_id: int | None = None
+    protocol_number_pattern: str | None = None
+    title_pattern: str | None = None
+    auto_create_next_protocol: bool = False
+    cycle_reset_month: int = Field(default=12, ge=1, le=12)
+    cycle_reset_day: int = Field(default=31, ge=1, le=31)
 
 
 class TemplateCreate(TemplateBase):
@@ -25,6 +32,13 @@ class TemplateUpdate(BaseModel):
     version: int | None = Field(default=None, ge=1)
     status: str | None = None
     document_template_id: int | None = None
+    next_event_id: int | None = None
+    last_event_id: int | None = None
+    protocol_number_pattern: str | None = None
+    title_pattern: str | None = None
+    auto_create_next_protocol: bool | None = None
+    cycle_reset_month: int | None = Field(default=None, ge=1, le=12)
+    cycle_reset_day: int | None = Field(default=None, ge=1, le=31)
 
 
 class TemplateRead(TemplateBase):
@@ -37,12 +51,20 @@ class TemplateRead(TemplateBase):
     model_config = {"from_attributes": True}
 
 
+class TemplateParticipantRead(BaseModel):
+    id: int
+    template_id: int
+    participant_id: int
+    created_at: datetime
+
+
 class ElementDefinitionBlockBase(BaseModel):
     id: int
     title: str
     description: str | None = None
     block_title: str | None = None
     default_content: str | None = None
+    copy_from_last_protocol: bool = False
     element_type_id: int
     render_type_id: int
     is_editable: bool = True
@@ -119,10 +141,12 @@ class TemplateElementBlockRead(BaseModel):
 class TemplateElementCreate(BaseModel):
     element_definition_id: int
     sort_index: int
+    configuration_json: dict[str, Any] = Field(default_factory=dict)
 
 
 class TemplateElementUpdate(BaseModel):
     sort_index: int | None = None
+    configuration_json: dict[str, Any] | None = None
 
 
 class TemplateElementRead(BaseModel):
@@ -132,6 +156,7 @@ class TemplateElementRead(BaseModel):
     sort_index: int
     title: str
     description: str | None = None
+    configuration_json: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
     blocks: list[TemplateElementBlockRead] = Field(default_factory=list)
 

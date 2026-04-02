@@ -14,11 +14,13 @@ from app.schemas.protocol import (
     ProtocolTextUpdate,
 )
 from app.services.autosave_service import AutosaveService
+from app.services.access_service import AccessService
 from app.services.protocol_element_service import ProtocolElementService
 
 router = APIRouter()
 autosave_service = AutosaveService()
 service = ProtocolElementService()
+access_service = AccessService()
 
 
 @router.get("/protocols/{protocol_id}/elements", response_model=list[ProtocolElementRead])
@@ -28,6 +30,7 @@ def list_protocol_elements(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_reader(user)
+    access_service.ensure_can_read_protocol(db, user, protocol_id)
     return service.list_protocol_elements(db, protocol_id)
 
 

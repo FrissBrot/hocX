@@ -1,6 +1,7 @@
 "use client";
 
-import { ReactNode, useEffect } from "react";
+import { ReactNode, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 type ModalProps = {
   open: boolean;
@@ -8,10 +9,17 @@ type ModalProps = {
   description?: string;
   children: ReactNode;
   onClose: () => void;
-  size?: "default" | "wide";
+  size?: "default" | "wide" | "fullscreen";
+  headerActions?: ReactNode;
 };
 
-export function Modal({ open, title, description, children, onClose, size = "default" }: ModalProps) {
+export function Modal({ open, title, description, children, onClose, size = "default", headerActions }: ModalProps) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   useEffect(() => {
     if (!open) {
       return;
@@ -32,11 +40,11 @@ export function Modal({ open, title, description, children, onClose, size = "def
     };
   }, [open, onClose]);
 
-  if (!open) {
+  if (!open || !mounted) {
     return null;
   }
 
-  return (
+  return createPortal(
     <div className="modal-backdrop" onClick={onClose} role="presentation">
       <div className={`modal-shell modal-${size}`} onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-label={title}>
         <div className="modal-header">
@@ -45,12 +53,16 @@ export function Modal({ open, title, description, children, onClose, size = "def
             <h2>{title}</h2>
             {description ? <p className="muted">{description}</p> : null}
           </div>
-          <button type="button" className="button-ghost modal-close" onClick={onClose}>
-            Close
-          </button>
+          <div className="modal-header-actions">
+            {headerActions}
+            <button type="button" className="button-ghost modal-close" onClick={onClose}>
+              Close
+            </button>
+          </div>
         </div>
         <div className="modal-content">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -20,6 +20,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                   var theme = preference === "auto"
                     ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
                     : preference;
+                  document.documentElement.dataset.themePreference = preference;
                   document.documentElement.dataset.theme = theme;
                 } catch (error) {}
               })();

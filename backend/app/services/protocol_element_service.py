@@ -1,5 +1,9 @@
+from datetime import date
+
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models import Event, EventCategory, Protocol, ProtocolElement, ProtocolElementBlock, Template
 from app.repositories.protocol_element_repository import (
     ProtocolElementBlockRepository,
     ProtocolElementRepository,
@@ -42,6 +46,7 @@ class ProtocolElementService:
                     display_title_snapshot=block.display_title_snapshot,
                     description_snapshot=block.description_snapshot,
                     block_title_snapshot=block.block_title_snapshot,
+                    copy_from_last_protocol=bool((block.configuration_snapshot_json or {}).get("copy_from_last_protocol", False)),
                     is_editable_snapshot=block.is_editable_snapshot,
                     allows_multiple_values_snapshot=block.allows_multiple_values_snapshot,
                     sort_index=block.sort_index,
@@ -89,4 +94,62 @@ class ProtocolElementService:
         values = payload.model_dump(exclude_unset=True)
         if not values:
             return protocol_element_block
-        return self.block_repository.update(db, protocol_element_block, values)
+        updated = self.block_repository.update(db, protocol_element_block, values)
+        self._sync_session_date_marker(db, updated)
+        return updated
+
+    def _sync_session_date_marker(self, db: Session, block: ProtocolElementBlock) -> None:
+        config = block.configuration_snapshot_json or {}
+        if config.get("block_kind") != "session_date":
+            return
+
+        protocol_element = db.get(ProtocolElement, block.protocol_element_id)
+        if protocol_element is None:
+            return
+        protocol = db.get(Protocol, protocol_element.protocol_id)
+        if protocol is None:
+            return
+        template = db.get(Template, protocol.template_id)
+        if template is None:
+            return
+
+        selected_date = config.get("selected_date")
+        parsed_date = date.fromisoformat(selected_date) if isinstance(selected_date, str) and selected_date else None
+        title = (config.get("session_label") or "Naechste Sitzung").strip() or "Naechste Sitzung"
+        tag = (config.get("session_tag") or "next_session").strip() or "next_session"
+
+        if not parsed_date:
+            template.next_event_id = None
+            if protocol.event_id:
+                template.last_event_id = protocol.event_id
+            db.add(template)
+            db.commit()
+            return
+
+        next_event = db.get(Event, template.next_event_id) if template.next_event_id else None
+        if next_event is None:
+            category_id = db.scalar(select(EventCategory.id).where(EventCategory.code == "group_session"))
+            if category_id is None:
+                category_id = db.scalar(select(EventCategory.id).where(EventCategory.code == "other"))
+            next_event = Event(
+                tenant_id=protocol.tenant_id,
+                event_date=parsed_date,
+                event_category_id=int(category_id or 1),
+                tag=tag,
+                title=title,
+                description="Generated from session date block",
+            )
+            db.add(next_event)
+            db.flush()
+            template.next_event_id = next_event.id
+        else:
+            next_event.event_date = parsed_date
+            next_event.tag = tag
+            next_event.title = title
+            db.add(next_event)
+
+        if protocol.event_id:
+            template.last_event_id = protocol.event_id
+
+        db.add(template)
+        db.commit()

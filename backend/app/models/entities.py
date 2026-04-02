@@ -121,6 +121,24 @@ class Leader(Base, TimestampMixin, UpdatedAtMixin):
     valid_until: Mapped[date | None] = mapped_column(Date)
 
 
+class Participant(Base, TimestampMixin, UpdatedAtMixin):
+    __tablename__ = "participant"
+    __table_args__ = (
+        Index("idx_participant_tenant_active", "tenant_id", "is_active"),
+        UniqueConstraint("tenant_id", "display_name", name="uq_participant_tenant_display_name"),
+        UniqueConstraint("tenant_id", "app_user_id", name="uq_participant_tenant_app_user"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    app_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    first_name: Mapped[str | None] = mapped_column(Text)
+    last_name: Mapped[str | None] = mapped_column(Text)
+    display_name: Mapped[str] = mapped_column(Text, nullable=False)
+    email: Mapped[str | None] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
+
+
 class EventCategory(Base):
     __tablename__ = "event_category"
 
@@ -139,10 +157,58 @@ class Event(Base, TimestampMixin, UpdatedAtMixin):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     event_date: Mapped[date] = mapped_column(Date, nullable=False)
+    event_end_date: Mapped[date | None] = mapped_column(Date)
     event_category_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("event_category.id", ondelete="RESTRICT"), nullable=False)
+    tag: Mapped[str | None] = mapped_column(Text)
     title: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
+    participant_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     group_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("group_entity.id", ondelete="SET NULL"))
+
+
+class ListDefinition(Base, TimestampMixin, UpdatedAtMixin):
+    __tablename__ = "list_definition"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "name", name="uq_list_definition_tenant_name"),
+        CheckConstraint(
+            "column_one_value_type IN ('text', 'participant', 'participants', 'event')",
+            name="ck_list_definition_column_one_type",
+        ),
+        CheckConstraint(
+            "column_two_value_type IN ('text', 'participant', 'participants', 'event')",
+            name="ck_list_definition_column_two_type",
+        ),
+        Index("idx_list_definition_tenant_active", "tenant_id", "is_active"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    column_one_title: Mapped[str] = mapped_column(Text, nullable=False)
+    column_one_value_type: Mapped[str] = mapped_column(Text, nullable=False)
+    column_two_title: Mapped[str] = mapped_column(Text, nullable=False)
+    column_two_value_type: Mapped[str] = mapped_column(Text, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
+
+
+class ListEntry(Base, TimestampMixin, UpdatedAtMixin):
+    __tablename__ = "list_entry"
+    __table_args__ = (
+        Index("idx_list_entry_definition_sort", "list_definition_id", "sort_index"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    list_definition_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("list_definition.id", ondelete="CASCADE"), nullable=False
+    )
+    sort_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    column_one_value_json: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict
+    )
+    column_two_value_json: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict
+    )
 
 
 class DocumentTemplate(Base, TimestampMixin, UpdatedAtMixin):
@@ -214,11 +280,56 @@ class Template(Base, TimestampMixin, UpdatedAtMixin):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     document_template_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_template.id", ondelete="RESTRICT"))
+    next_event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("event.id", ondelete="SET NULL"))
+    last_event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("event.id", ondelete="SET NULL"))
     name: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
+    protocol_number_pattern: Mapped[str | None] = mapped_column(Text)
+    title_pattern: Mapped[str | None] = mapped_column(Text)
+    auto_create_next_protocol: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
+    cycle_reset_month: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("12"))
+    cycle_reset_day: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("31"))
     version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'active'"))
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+
+
+class TemplateParticipant(Base, TimestampMixin):
+    __tablename__ = "template_participant"
+    __table_args__ = (
+        PrimaryKeyConstraint("template_id", "participant_id", name="pk_template_participant"),
+        Index("idx_template_participant_template", "template_id"),
+        Index("idx_template_participant_participant", "participant_id"),
+    )
+
+    template_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("template.id", ondelete="CASCADE"), nullable=False)
+    participant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("participant.id", ondelete="CASCADE"), nullable=False)
+
+
+class UserTemplateAccess(Base, TimestampMixin):
+    __tablename__ = "user_template_access"
+    __table_args__ = (
+        PrimaryKeyConstraint("user_id", "template_id", name="pk_user_template_access"),
+        Index("idx_user_template_access_tenant_user", "tenant_id", "user_id"),
+        Index("idx_user_template_access_template", "template_id"),
+    )
+
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    template_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("template.id", ondelete="CASCADE"), nullable=False)
+
+
+class UserProtocolAccess(Base, TimestampMixin):
+    __tablename__ = "user_protocol_access"
+    __table_args__ = (
+        PrimaryKeyConstraint("user_id", "protocol_id", name="pk_user_protocol_access"),
+        Index("idx_user_protocol_access_tenant_user", "tenant_id", "user_id"),
+        Index("idx_user_protocol_access_protocol", "protocol_id"),
+    )
+
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    protocol_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="CASCADE"), nullable=False)
 
 
 class ElementDefinition(Base, TimestampMixin, UpdatedAtMixin):
@@ -250,12 +361,19 @@ class TemplateElement(Base, TimestampMixin):
     __table_args__ = (
         UniqueConstraint("template_id", "sort_index", name="uq_template_element_template_sort"),
         Index("idx_template_element_template_sort", "template_id", "sort_index"),
+        Index("idx_template_element_configuration_gin", "configuration_json", postgresql_using="gin"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     template_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("template.id", ondelete="CASCADE"), nullable=False)
     element_definition_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("element_definition.id", ondelete="RESTRICT"), nullable=False)
     sort_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    section_name: Mapped[str] = mapped_column(Text, nullable=False)
+    section_order: Mapped[int | None] = mapped_column(Integer)
+    is_required: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
+    is_visible: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
+    export_visible: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
+    configuration_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
 
 
 class TemplateElementBlock(Base, TimestampMixin):
@@ -285,7 +403,7 @@ class Protocol(Base, TimestampMixin, UpdatedAtMixin):
     __tablename__ = "protocol"
     __table_args__ = (
         UniqueConstraint("tenant_id", "protocol_number", name="uq_protocol_tenant_number"),
-        CheckConstraint("status IN ('draft', 'released', 'archived')", name="ck_protocol_status"),
+        CheckConstraint("status IN ('geplant', 'vorbereitet', 'durchgeführt', 'abgeschlossen')", name="ck_protocol_status"),
         Index("idx_protocol_tenant_date", "tenant_id", "protocol_date"),
         Index("idx_protocol_template", "template_id"),
         Index("idx_protocol_event", "event_id"),
@@ -304,7 +422,7 @@ class Protocol(Base, TimestampMixin, UpdatedAtMixin):
     title: Mapped[str | None] = mapped_column(Text)
     protocol_date: Mapped[date] = mapped_column(Date, nullable=False)
     event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("event.id", ondelete="SET NULL"))
-    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'draft'"))
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'geplant'"))
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
 
 
@@ -413,6 +531,7 @@ class ProtocolTodo(Base, TimestampMixin, UpdatedAtMixin):
         Index("idx_protocol_todo_protocol_element_block", "protocol_element_block_id"),
         Index("idx_protocol_todo_status_due_date", "todo_status_id", "due_date"),
         Index("idx_protocol_todo_assigned_user", "assigned_user_id"),
+        Index("idx_protocol_todo_assigned_participant", "assigned_participant_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -420,8 +539,11 @@ class ProtocolTodo(Base, TimestampMixin, UpdatedAtMixin):
     sort_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     task: Mapped[str] = mapped_column(Text, nullable=False)
     assigned_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    assigned_participant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("participant.id", ondelete="SET NULL"))
     todo_status_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("todo_status.id", ondelete="RESTRICT"), nullable=False)
     due_date: Mapped[date | None] = mapped_column(Date)
+    due_event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("event.id", ondelete="SET NULL"))
+    due_marker: Mapped[str | None] = mapped_column(Text)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     reference_link: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))

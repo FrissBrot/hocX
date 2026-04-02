@@ -6,10 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
 from app.schemas.protocol import ProtocolTodoCreate, ProtocolTodoRead, ProtocolTodoUpdate
+from app.services.access_service import AccessService
 from app.services.protocol_todo_service import ProtocolTodoService
 
 router = APIRouter()
 service = ProtocolTodoService()
+access_service = AccessService()
 
 
 @router.get("/protocol-element-blocks/{protocol_element_block_id}/todos", response_model=list[ProtocolTodoRead])
@@ -19,6 +21,7 @@ def list_todos(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_reader(user)
+    access_service.ensure_can_read_protocol_block(db, user, protocol_element_block_id)
     return service.list_todos(db, protocol_element_block_id)
 
 
@@ -36,7 +39,7 @@ def create_todo(
     require_writer(user)
     try:
         todo = service.create_todo(db, protocol_element_block_id, payload)
-    except SQLAlchemyError as exc:
+    except (SQLAlchemyError, ValueError) as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Todo could not be created") from exc
     todos = service.list_todos(db, protocol_element_block_id)
@@ -53,7 +56,7 @@ def patch_todo(
     require_writer(user)
     try:
         todo = service.update_todo(db, todo_id, payload)
-    except SQLAlchemyError as exc:
+    except (SQLAlchemyError, ValueError) as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Todo could not be updated") from exc
     if todo is None:

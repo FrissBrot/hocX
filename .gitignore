@@ -13,8 +13,28 @@ dist/
 build/
 coverage/
 *.log
+frontend/tsconfig.tsbuildinfo
+frontend/package-lock.json
+
+# Runtime storage — may contain personal/tenant data
 storage/uploads/*
 storage/exports/*
-infra/traefik/letsencrypt/acme.json
+storage/generated/*
+
+# Tenant-specific content: ignore all, but keep tenant-1 demo templates
+storage/document_template_parts/tenant-*/
+!storage/document_template_parts/tenant-1/
+!storage/document_template_parts/tenant-1/**
+storage/document_templates/tenant-*/
+!storage/document_templates/tenant-1/
+!storage/document_templates/tenant-1/**
+
+# Protocol snapshots are generated at runtime (may contain user data)
+storage/document_template_snapshots/
+
+# Keep placeholder files so directories exist after clone
 !storage/uploads/.gitkeep
 !storage/exports/.gitkeep
+
+# Traefik TLS state
+infra/traefik/letsencrypt/acme.json

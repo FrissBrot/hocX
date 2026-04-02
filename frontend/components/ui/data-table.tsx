@@ -2,8 +2,18 @@
 
 import { ReactNode } from "react";
 
+export type DataTableColumn =
+  | string
+  | {
+      key: string;
+      label: string;
+      sortable?: boolean;
+      sortDirection?: "asc" | "desc" | null;
+      onSort?: () => void;
+    };
+
 type DataTableProps = {
-  columns: string[];
+  columns: DataTableColumn[];
   children: ReactNode;
   emptyMessage?: string;
 };
@@ -35,7 +45,20 @@ export function DataTable({ columns, children, emptyMessage }: DataTableProps) {
         <thead>
           <tr>
             {columns.map((column) => (
-              <th key={column}>{column}</th>
+              <th key={typeof column === "string" ? column : column.key}>
+                {typeof column === "string" ? (
+                  column
+                ) : column.sortable && column.onSort ? (
+                  <button type="button" className="table-sort-button" onClick={column.onSort}>
+                    <span>{column.label}</span>
+                    <span className="table-sort-indicator">
+                      {column.sortDirection === "asc" ? "↑" : column.sortDirection === "desc" ? "↓" : "↕"}
+                    </span>
+                  </button>
+                ) : (
+                  column.label
+                )}
+              </th>
             ))}
           </tr>
         </thead>

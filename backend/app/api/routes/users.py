@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user
-from app.schemas.user import UserCreate, UserRead, UserSelfUpdate, UserUpdate
+from app.schemas.user import UserCreate, UserMergeRequest, UserRead, UserSelfUpdate, UserUpdate
 from app.services.user_service import UserService
 
 router = APIRouter()
@@ -52,6 +52,19 @@ def patch_me(
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Profile could not be updated") from exc
+
+
+@router.post("/merge", response_model=UserRead)
+def merge_users(
+    payload: UserMergeRequest,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    try:
+        return service.merge_users(db, source_user_id=payload.source_user_id, target_user_id=payload.target_user_id, actor=user)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Users could not be merged") from exc
 
 
 @router.get("/{user_id}", response_model=UserRead)

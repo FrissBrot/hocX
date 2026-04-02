@@ -88,7 +88,7 @@ def list_document_template_parts(db: Session = Depends(get_db), user: CurrentUse
 
 @router.post("/document-template-parts", response_model=DocumentTemplatePartRead, status_code=status.HTTP_201_CREATED)
 async def create_document_template_part(
-    code: str = Form(...),
+    code: str | None = Form(default=None),
     name: str = Form(...),
     part_type: str = Form(...),
     description: str | None = Form(default=None),

@@ -48,6 +48,8 @@ export type UserSummary = {
   default_tenant_id: number | null;
   memberships: TenantMembership[];
   is_superadmin: boolean;
+  login_enabled: boolean;
+  is_participant_account: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -57,12 +59,72 @@ export type TemplateSummary = {
   tenant_id?: number;
   name: string;
   description?: string | null;
+  next_event_id?: number | null;
+  last_event_id?: number | null;
+  protocol_number_pattern?: string | null;
+  title_pattern?: string | null;
+  auto_create_next_protocol?: boolean;
+  cycle_reset_month?: number;
+  cycle_reset_day?: number;
   version: number;
   status: string;
   document_template_id?: number | null;
   created_by?: number | null;
   created_at?: string;
   updated_at?: string;
+};
+
+export type ParticipantSummary = {
+  id: number;
+  tenant_id: number;
+  app_user_id?: number | null;
+  first_name: string | null;
+  last_name: string | null;
+  display_name: string;
+  email: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EventSummary = {
+  id: number;
+  tenant_id: number;
+  event_date: string;
+  event_end_date: string | null;
+  event_category_id: number;
+  tag: string | null;
+  title: string;
+  description: string | null;
+  participant_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type StructuredListValueType = "text" | "participant" | "participants" | "event";
+
+export type StructuredListDefinition = {
+  id: number;
+  tenant_id: number;
+  name: string;
+  description: string | null;
+  column_one_title: string;
+  column_one_value_type: StructuredListValueType;
+  column_two_title: string;
+  column_two_value_type: StructuredListValueType;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type StructuredListEntry = {
+  id: number;
+  list_definition_id: number;
+  sort_index: number;
+  column_one_value: Record<string, unknown>;
+  column_two_value: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
 };
 
 export type ProtocolSummary = {
@@ -117,6 +179,7 @@ export type ElementDefinitionBlock = {
   description: string | null;
   block_title: string | null;
   default_content: string | null;
+  copy_from_last_protocol?: boolean;
   element_type_id: number;
   render_type_id: number;
   is_editable: boolean;
@@ -148,6 +211,7 @@ export type TemplateElementBlock = {
   description: string | null;
   block_title: string | null;
   default_content: string | null;
+  copy_from_last_protocol?: boolean;
   element_type_id: number;
   render_type_id: number;
   is_editable: boolean;
@@ -168,6 +232,7 @@ export type TemplateElement = {
   sort_index: number;
   title: string;
   description: string | null;
+  configuration_json: Record<string, unknown>;
   created_at: string;
   blocks: TemplateElementBlock[];
 };
@@ -178,9 +243,17 @@ export type ProtocolTodo = {
   sort_index: number;
   task: string;
   assigned_user_id: number | null;
+  assigned_participant_id: number | null;
+  assigned_participant_name: string | null;
   todo_status_id: number;
   todo_status_code: string | null;
   due_date: string | null;
+  due_event_id: number | null;
+  due_event_title?: string | null;
+  due_event_date?: string | null;
+  due_marker?: string | null;
+  resolved_due_date?: string | null;
+  resolved_due_label?: string | null;
   completed_at: string | null;
   reference_link: string | null;
   created_by: number | null;
@@ -214,6 +287,7 @@ export type ProtocolElementBlock = {
   display_title_snapshot: string | null;
   description_snapshot: string | null;
   block_title_snapshot: string | null;
+  copy_from_last_protocol?: boolean;
   is_editable_snapshot: boolean;
   allows_multiple_values_snapshot: boolean;
   sort_index: number;

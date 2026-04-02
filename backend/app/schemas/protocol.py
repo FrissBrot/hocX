@@ -9,7 +9,7 @@ class ProtocolCreateFromTemplate(BaseModel):
     tenant_id: int = 1
     template_id: int
     document_template_id: int | None = None
-    protocol_number: str
+    protocol_number: str | None = None
     protocol_date: date
     created_by: int | None = None
     title: str | None = None
@@ -56,6 +56,7 @@ class ProtocolElementBlockRead(BaseModel):
     display_title_snapshot: str | None = None
     description_snapshot: str | None = None
     block_title_snapshot: str | None = None
+    copy_from_last_protocol: bool = False
     is_editable_snapshot: bool
     allows_multiple_values_snapshot: bool
     sort_index: int
@@ -116,8 +117,11 @@ class ProtocolTextRead(BaseModel):
 class ProtocolTodoCreate(BaseModel):
     task: str
     assigned_user_id: int | None = None
+    assigned_participant_id: int | None = None
     todo_status_id: int = 1
     due_date: date | None = None
+    due_event_id: int | None = None
+    due_marker: str | None = None
     reference_link: str | None = None
     created_by: int | None = None
 
@@ -125,8 +129,11 @@ class ProtocolTodoCreate(BaseModel):
 class ProtocolTodoUpdate(BaseModel):
     task: str | None = None
     assigned_user_id: int | None = None
+    assigned_participant_id: int | None = None
     todo_status_id: int | None = None
     due_date: date | None = None
+    due_event_id: int | None = None
+    due_marker: str | None = None
     completed_at: datetime | None = None
     reference_link: str | None = None
 
@@ -137,9 +144,17 @@ class ProtocolTodoRead(BaseModel):
     sort_index: int
     task: str
     assigned_user_id: int | None = None
+    assigned_participant_id: int | None = None
+    assigned_participant_name: str | None = None
     todo_status_id: int
     todo_status_code: str | None = None
     due_date: date | None = None
+    due_event_id: int | None = None
+    due_event_title: str | None = None
+    due_event_date: date | None = None
+    due_marker: str | None = None
+    resolved_due_date: date | None = None
+    resolved_due_label: str | None = None
     completed_at: datetime | None = None
     reference_link: str | None = None
     created_by: int | None = None

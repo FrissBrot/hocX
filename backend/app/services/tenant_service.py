@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.core.security import CurrentUser, require_admin, require_superadmin
 from app.models import Tenant
 from app.schemas.user import TenantCreate, TenantRead, TenantUpdate
+from app.services.document_template_service import DocumentTemplateService
 
 
 def build_tenant_profile_image_url(tenant_id: int, profile_image_path: str | None) -> str | None:
@@ -20,6 +21,9 @@ def build_tenant_profile_image_url(tenant_id: int, profile_image_path: str | Non
 
 
 class TenantService:
+    def __init__(self) -> None:
+        self.document_template_service = DocumentTemplateService()
+
     def _manageable_tenant_ids(self, actor: CurrentUser) -> set[int]:
         if actor.is_superadmin:
             return {membership.tenant_id for membership in actor.available_tenants}
@@ -60,6 +64,7 @@ class TenantService:
         db.add(tenant)
         db.commit()
         db.refresh(tenant)
+        self.document_template_service.ensure_default_template_for_tenant(db, tenant.id, tenant.name)
         return self._read_model(tenant)
 
     async def update_tenant(

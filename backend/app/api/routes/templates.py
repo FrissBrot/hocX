@@ -17,6 +17,7 @@ from app.schemas.template import (
     TemplateUpdate,
 )
 from app.services.element_definition_service import ElementDefinitionService
+from app.services.access_service import AccessService
 from app.services.template_element_service import TemplateElementService
 from app.services.template_service import TemplateService
 
@@ -24,6 +25,7 @@ router = APIRouter()
 service = TemplateService()
 element_definition_service = ElementDefinitionService()
 template_element_service = TemplateElementService()
+access_service = AccessService()
 
 
 @router.get("/templates", response_model=list[TemplateRead])
@@ -34,7 +36,14 @@ def list_templates(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_reader(user)
-    return service.list_templates(db, tenant_id=user.current_tenant_id, query=q, status=status_filter)
+    return service.list_templates(
+        db,
+        tenant_id=user.current_tenant_id,
+        query=q,
+        status=status_filter,
+        user_id=user.user_id,
+        restrict_to_assigned=access_service._is_restricted_reader(db, user),
+    )
 
 
 @router.post("/templates", response_model=TemplateRead, status_code=status.HTTP_201_CREATED)
@@ -57,6 +66,7 @@ def get_template(template_id: int, db: Session = Depends(get_db), user: CurrentU
     template = service.get_template(db, template_id)
     if template is None or template.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Template not found")
+    access_service.ensure_can_read_template(db, user, template_id)
     return template
 
 
@@ -111,6 +121,7 @@ def list_template_elements(
     template = service.get_template(db, template_id)
     if template is None or template.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Template not found")
+    access_service.ensure_can_read_template(db, user, template_id)
     return template_element_service.list_template_elements(db, template_id)
 
 

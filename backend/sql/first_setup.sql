@@ -88,6 +88,21 @@ CREATE TABLE leader (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE participant (
+    id BIGSERIAL PRIMARY KEY,
+    tenant_id BIGINT NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+    app_user_id BIGINT REFERENCES app_user(id) ON DELETE SET NULL,
+    first_name TEXT,
+    last_name TEXT,
+    display_name TEXT NOT NULL,
+    email TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (tenant_id, display_name),
+    UNIQUE (tenant_id, app_user_id)
+);
+
 CREATE TABLE event_category (
     id SMALLSERIAL PRIMARY KEY,
     code TEXT NOT NULL UNIQUE,
@@ -104,10 +119,38 @@ CREATE TABLE event (
     id BIGSERIAL PRIMARY KEY,
     tenant_id BIGINT NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
     event_date DATE NOT NULL,
+    event_end_date DATE,
     event_category_id SMALLINT NOT NULL REFERENCES event_category(id) ON DELETE RESTRICT,
+    tag TEXT,
     title TEXT NOT NULL,
     description TEXT,
+    participant_count INTEGER NOT NULL DEFAULT 0,
     group_id BIGINT REFERENCES group_entity(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE list_definition (
+    id BIGSERIAL PRIMARY KEY,
+    tenant_id BIGINT NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    description TEXT,
+    column_one_title TEXT NOT NULL,
+    column_one_value_type TEXT NOT NULL CHECK (column_one_value_type IN ('text', 'participant', 'participants', 'event')),
+    column_two_title TEXT NOT NULL,
+    column_two_value_type TEXT NOT NULL CHECK (column_two_value_type IN ('text', 'participant', 'participants', 'event')),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (tenant_id, name)
+);
+
+CREATE TABLE list_entry (
+    id BIGSERIAL PRIMARY KEY,
+    list_definition_id BIGINT NOT NULL REFERENCES list_definition(id) ON DELETE CASCADE,
+    sort_index INTEGER NOT NULL DEFAULT 0,
+    column_one_value_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+    column_two_value_json JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -156,7 +199,13 @@ INSERT INTO element_type (code, description) VALUES
 ('todo', 'Todo element'),
 ('image', 'Image element'),
 ('display', 'Read-only display element'),
-('static_text', 'Static text element');
+('static_text', 'Static text element'),
+('form', 'Structured form block'),
+('event_list', 'Filtered event list'),
+('bullet_list', 'Bullet point list'),
+('attendance', 'Attendance control block'),
+('session_date', 'Next session date block'),
+('matrix', 'Responsive matrix block');
 
 CREATE TABLE render_type (
     id SMALLSERIAL PRIMARY KEY,
@@ -177,8 +226,15 @@ CREATE TABLE template (
     id BIGSERIAL PRIMARY KEY,
     tenant_id BIGINT NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
     document_template_id BIGINT REFERENCES document_template(id) ON DELETE RESTRICT,
+    next_event_id BIGINT REFERENCES event(id) ON DELETE SET NULL,
+    last_event_id BIGINT REFERENCES event(id) ON DELETE SET NULL,
     name TEXT NOT NULL,
     description TEXT,
+    protocol_number_pattern TEXT,
+    title_pattern TEXT,
+    auto_create_next_protocol BOOLEAN NOT NULL DEFAULT FALSE,
+    cycle_reset_month SMALLINT NOT NULL DEFAULT 12,
+    cycle_reset_day SMALLINT NOT NULL DEFAULT 31,
     version INTEGER NOT NULL DEFAULT 1,
     status TEXT NOT NULL DEFAULT 'active',
     created_by BIGINT REFERENCES app_user(id) ON DELETE SET NULL,
@@ -186,6 +242,29 @@ CREATE TABLE template (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CHECK (version >= 1),
     CHECK (status IN ('active', 'archived'))
+);
+
+CREATE TABLE template_participant (
+    template_id BIGINT NOT NULL REFERENCES template(id) ON DELETE CASCADE,
+    participant_id BIGINT NOT NULL REFERENCES participant(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (template_id, participant_id)
+);
+
+CREATE TABLE user_template_access (
+    user_id BIGINT NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    tenant_id BIGINT NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+    template_id BIGINT NOT NULL REFERENCES template(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, template_id)
+);
+
+CREATE TABLE user_protocol_access (
+    user_id BIGINT NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    tenant_id BIGINT NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+    protocol_id BIGINT NOT NULL REFERENCES protocol(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, protocol_id)
 );
 
 CREATE TABLE element_definition (
@@ -216,6 +295,7 @@ CREATE TABLE template_element (
     is_required BOOLEAN NOT NULL DEFAULT FALSE,
     is_visible BOOLEAN NOT NULL DEFAULT TRUE,
     export_visible BOOLEAN NOT NULL DEFAULT TRUE,
+    configuration_json JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (template_id, sort_index)
 );
@@ -247,11 +327,11 @@ CREATE TABLE protocol (
     title TEXT,
     protocol_date DATE NOT NULL,
     event_id BIGINT REFERENCES event(id) ON DELETE SET NULL,
-    status TEXT NOT NULL DEFAULT 'draft',
+    status TEXT NOT NULL DEFAULT 'geplant',
     created_by BIGINT REFERENCES app_user(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CHECK (status IN ('draft', 'released', 'archived')),
+    CHECK (status IN ('geplant', 'vorbereitet', 'durchgeführt', 'abgeschlossen')),
     UNIQUE (tenant_id, protocol_number)
 );
 
@@ -342,8 +422,11 @@ CREATE TABLE protocol_todo (
     sort_index INTEGER NOT NULL DEFAULT 0,
     task TEXT NOT NULL,
     assigned_user_id BIGINT REFERENCES app_user(id) ON DELETE SET NULL,
+    assigned_participant_id BIGINT REFERENCES participant(id) ON DELETE SET NULL,
     todo_status_id SMALLINT NOT NULL REFERENCES todo_status(id) ON DELETE RESTRICT,
     due_date DATE,
+    due_event_id BIGINT REFERENCES event(id) ON DELETE SET NULL,
+    due_marker TEXT,
     completed_at TIMESTAMPTZ,
     reference_link TEXT,
     created_by BIGINT REFERENCES app_user(id) ON DELETE SET NULL,
@@ -382,8 +465,11 @@ CREATE INDEX idx_user_tenant_role_tenant ON user_tenant_role (tenant_id, role_id
 CREATE INDEX idx_user_tenant_role_role ON user_tenant_role (role_id, is_active);
 CREATE INDEX idx_group_entity_tenant_active ON group_entity (tenant_id, is_active);
 CREATE INDEX idx_leader_tenant_active ON leader (tenant_id, is_active);
+CREATE INDEX idx_participant_tenant_active ON participant (tenant_id, is_active);
 CREATE INDEX idx_event_tenant_date ON event (tenant_id, event_date);
 CREATE INDEX idx_event_tenant_category ON event (tenant_id, event_category_id);
+CREATE INDEX idx_list_definition_tenant_active ON list_definition (tenant_id, is_active);
+CREATE INDEX idx_list_entry_definition_sort ON list_entry (list_definition_id, sort_index);
 CREATE INDEX idx_document_template_tenant_code_version ON document_template (tenant_id, code, version);
 CREATE INDEX idx_document_template_tenant_default ON document_template (tenant_id, is_default);
 CREATE INDEX idx_document_template_configuration_gin ON document_template USING GIN (configuration_json);
@@ -393,10 +479,19 @@ CREATE INDEX idx_document_template_part_active ON document_template_part (tenant
 CREATE INDEX idx_template_tenant ON template (tenant_id);
 CREATE INDEX idx_template_status ON template (status);
 CREATE INDEX idx_template_document_template ON template (document_template_id);
+CREATE INDEX idx_template_next_event ON template (next_event_id);
+CREATE INDEX idx_template_last_event ON template (last_event_id);
+CREATE INDEX idx_template_participant_template ON template_participant (template_id);
+CREATE INDEX idx_template_participant_participant ON template_participant (participant_id);
+CREATE INDEX idx_user_template_access_tenant_user ON user_template_access (tenant_id, user_id);
+CREATE INDEX idx_user_template_access_template ON user_template_access (template_id);
+CREATE INDEX idx_user_protocol_access_tenant_user ON user_protocol_access (tenant_id, user_id);
+CREATE INDEX idx_user_protocol_access_protocol ON user_protocol_access (protocol_id);
 CREATE INDEX idx_element_definition_tenant ON element_definition (tenant_id);
 CREATE INDEX idx_element_definition_type ON element_definition (element_type_id);
 CREATE INDEX idx_element_definition_render_type ON element_definition (render_type_id);
 CREATE INDEX idx_template_element_template_sort ON template_element (template_id, sort_index);
+CREATE INDEX idx_template_element_configuration_gin ON template_element USING GIN (configuration_json);
 CREATE INDEX idx_template_element_block_sort ON template_element_block (template_element_id, sort_index);
 CREATE INDEX idx_template_element_block_render ON template_element_block (template_element_id, COALESCE(render_order, sort_index));
 CREATE INDEX idx_protocol_tenant_date ON protocol (tenant_id, protocol_date);
@@ -412,7 +507,9 @@ CREATE INDEX idx_protocol_text_protocol_element_block ON protocol_text (protocol
 CREATE INDEX idx_protocol_display_snapshot_protocol_element_block ON protocol_display_snapshot (protocol_element_block_id);
 CREATE INDEX idx_protocol_todo_protocol_element_block ON protocol_todo (protocol_element_block_id);
 CREATE INDEX idx_protocol_todo_status_due_date ON protocol_todo (todo_status_id, due_date);
+CREATE INDEX idx_protocol_todo_due_event ON protocol_todo (due_event_id);
 CREATE INDEX idx_protocol_todo_assigned_user ON protocol_todo (assigned_user_id);
+CREATE INDEX idx_protocol_todo_assigned_participant ON protocol_todo (assigned_participant_id);
 CREATE INDEX idx_protocol_image_protocol_element_block ON protocol_image (protocol_element_block_id);
 CREATE INDEX idx_stored_file_tenant ON stored_file (tenant_id);
 CREATE INDEX idx_protocol_export_cache_protocol ON protocol_export_cache (protocol_id, export_format);
@@ -426,7 +523,10 @@ CREATE TRIGGER trg_app_user_updated_at BEFORE UPDATE ON app_user FOR EACH ROW EX
 CREATE TRIGGER trg_user_tenant_role_updated_at BEFORE UPDATE ON user_tenant_role FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_group_entity_updated_at BEFORE UPDATE ON group_entity FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_leader_updated_at BEFORE UPDATE ON leader FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER trg_participant_updated_at BEFORE UPDATE ON participant FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_event_updated_at BEFORE UPDATE ON event FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER trg_list_definition_updated_at BEFORE UPDATE ON list_definition FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER trg_list_entry_updated_at BEFORE UPDATE ON list_entry FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_document_template_updated_at BEFORE UPDATE ON document_template FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_document_template_part_updated_at BEFORE UPDATE ON document_template_part FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_template_updated_at BEFORE UPDATE ON template FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -501,7 +601,7 @@ BEGIN
         p_title,
         p_protocol_date,
         p_event_id,
-        'draft',
+        'geplant',
         p_created_by
     )
     RETURNING id INTO v_protocol_id;
@@ -633,7 +733,7 @@ END;
 $$;
 
 INSERT INTO tenant (name, profile_image_path) VALUES
-('Default Tenant', NULL),
+('hocX Workspace', NULL),
 ('Regional Workspace', NULL);
 
 INSERT INTO app_user (
@@ -771,6 +871,10 @@ INSERT INTO template (
     document_template_id,
     name,
     description,
+    protocol_number_pattern,
+    title_pattern,
+    cycle_reset_month,
+    cycle_reset_day,
     version,
     status,
     created_by
@@ -780,6 +884,10 @@ VALUES (
     1,
     'Default protocol template',
     'Starter template with composite sections',
+    'Sitzung {n}',
+    'Sitzung {n} - {date:DD.MM.YYYY}',
+    7,
+    31,
     1,
     'active',
     NULL

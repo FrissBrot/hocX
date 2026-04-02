@@ -6,10 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
 from app.core.db import get_db
 from app.schemas.protocol import ProtocolCreateFromTemplate, ProtocolRead, ProtocolUpdate
+from app.services.access_service import AccessService
 from app.services.protocol_service import ProtocolService
 
 router = APIRouter()
 service = ProtocolService()
+access_service = AccessService()
 
 
 @router.get("/protocols", response_model=list[ProtocolRead])
@@ -20,7 +22,14 @@ def list_protocols(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_reader(user)
-    return service.list_protocols(db, tenant_id=user.current_tenant_id, query=q, status=status_filter)
+    return service.list_protocols(
+        db,
+        tenant_id=user.current_tenant_id,
+        query=q,
+        status=status_filter,
+        user_id=user.user_id,
+        restrict_to_assigned=access_service._is_restricted_reader(db, user),
+    )
 
 
 @router.post("/protocols/from-template", response_model=dict[str, int], status_code=status.HTTP_201_CREATED)
@@ -47,6 +56,7 @@ def get_protocol(protocol_id: int, db: Session = Depends(get_db), user: CurrentU
     protocol = service.get_protocol(db, protocol_id)
     if protocol is None or protocol.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Protocol not found")
+    access_service.ensure_can_read_protocol(db, user, protocol_id)
     return protocol
 
 
