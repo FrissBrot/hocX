@@ -7,8 +7,8 @@ from app.models import Event, EventCategory
 
 
 class EventRepository:
-    def list(self, db: Session, *, tenant_id: int) -> list[Event]:
-        statement = select(Event).where(Event.tenant_id == tenant_id).order_by(Event.event_date.desc(), Event.event_end_date.desc(), Event.id.desc())
+    def list(self, db: Session, *, tenant_id: int, skip: int = 0, limit: int = 100) -> list[Event]:
+        statement = select(Event).where(Event.tenant_id == tenant_id).order_by(Event.event_date.desc(), Event.event_end_date.desc(), Event.id.desc()).offset(skip).limit(limit)
         return list(db.scalars(statement))
 
     def get(self, db: Session, event_id: int) -> Event | None:

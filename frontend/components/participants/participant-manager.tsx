@@ -70,14 +70,31 @@ export function ParticipantManager({ initialParticipants, templates }: Participa
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importing, setImporting] = useState(false);
 
-  const filteredParticipants = useMemo(
-    () =>
-      participants.filter((participant) => {
+  const [sortKey, setSortKey] = useState<"display_name" | "first_name" | "last_name" | "email" | "is_active">("display_name");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+
+  function toggleSort(key: typeof sortKey) {
+    setSortKey((cur) => {
+      if (cur === key) { setSortDirection((d) => d === "asc" ? "desc" : "asc"); return cur; }
+      setSortDirection("asc");
+      return key;
+    });
+  }
+
+  const filteredParticipants = useMemo(() => {
+    const dir = sortDirection === "asc" ? 1 : -1;
+    return participants
+      .filter((participant) => {
         const haystack = `${participant.display_name} ${participant.first_name ?? ""} ${participant.last_name ?? ""} ${participant.email ?? ""}`.toLowerCase();
         return !search || haystack.includes(search.toLowerCase());
-      }),
-    [participants, search]
-  );
+      })
+      .sort((a, b) => {
+        if (sortKey === "is_active") return ((a.is_active ? 1 : 0) - (b.is_active ? 1 : 0)) * dir;
+        const av = String(a[sortKey] ?? "").toLowerCase();
+        const bv = String(b[sortKey] ?? "").toLowerCase();
+        return av.localeCompare(bv) * dir;
+      });
+  }, [participants, search, sortKey, sortDirection]);
 
   function openCreate() {
     setSelectedParticipant(null);
@@ -267,7 +284,18 @@ export function ParticipantManager({ initialParticipants, templates }: Participa
 
       <StatusBanner tone={statusTone} message={status} />
 
-      <DataTable columns={["", "Teilnehmer", "Vorname", "Nachname", "E-Mail", "Status", "Actions"]} emptyMessage="Keine Teilnehmer für den aktuellen Filter gefunden.">
+      <DataTable
+        columns={[
+          "",
+          { key: "display_name", label: "Teilnehmer", sortable: true, sortDirection: sortKey === "display_name" ? sortDirection : null, onSort: () => toggleSort("display_name") },
+          { key: "first_name", label: "Vorname", sortable: true, sortDirection: sortKey === "first_name" ? sortDirection : null, onSort: () => toggleSort("first_name") },
+          { key: "last_name", label: "Nachname", sortable: true, sortDirection: sortKey === "last_name" ? sortDirection : null, onSort: () => toggleSort("last_name") },
+          { key: "email", label: "E-Mail", sortable: true, sortDirection: sortKey === "email" ? sortDirection : null, onSort: () => toggleSort("email") },
+          { key: "is_active", label: "Status", sortable: true, sortDirection: sortKey === "is_active" ? sortDirection : null, onSort: () => toggleSort("is_active") },
+          "Aktionen",
+        ]}
+        emptyMessage="Keine Teilnehmer für den aktuellen Filter gefunden."
+      >
         {filteredParticipants.map((participant) => {
           const isSelected = selectedParticipantIds.includes(participant.id);
           return (

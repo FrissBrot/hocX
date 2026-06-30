@@ -26,12 +26,27 @@ class ProtocolElementService:
         self.block_repository = block_repository or ProtocolElementBlockRepository()
 
     def list_protocol_elements(self, db: Session, protocol_id: int) -> list[ProtocolElementRead]:
-        elements = self.repository.list_for_protocol(db, protocol_id)
+        element_rows = self.repository.list_for_protocol(db, protocol_id)
+        elements = [row[0] for row in element_rows]
+        show_when_empty_by_id = {row[0].id: row[1] for row in element_rows}
         block_rows = self.repository.list_blocks_for_elements(db, [element.id for element in elements])
         blocks_by_element: dict[int, list[ProtocolElementBlockRead]] = {}
 
         for row in block_rows:
             block = row.ProtocolElementBlock
+            config = dict(block.configuration_snapshot_json or {})
+            # For attendance blocks: backfill fine config from element_definition if missing in snapshot
+            if row.element_type_code == "attendance" and row.element_definition_configuration_json:
+                ed_cfg = row.element_definition_configuration_json or {}
+                ed_blocks = ed_cfg.get("blocks") or []
+                fine_source = {}
+                for b in ed_blocks:
+                    if isinstance(b, dict) and b.get("element_type_id") == 9:
+                        fine_source = b.get("configuration_json") or {}
+                        break
+                for fine_key in ("fine_account_id", "fine_amount_late", "fine_amount_absent"):
+                    if config.get(fine_key) is None and fine_source.get(fine_key) is not None:
+                        config[fine_key] = fine_source[fine_key]
             blocks_by_element.setdefault(block.protocol_element_id, []).append(
                 ProtocolElementBlockRead(
                     id=block.id,
@@ -46,7 +61,7 @@ class ProtocolElementService:
                     display_title_snapshot=block.display_title_snapshot,
                     description_snapshot=block.description_snapshot,
                     block_title_snapshot=block.block_title_snapshot,
-                    copy_from_last_protocol=bool((block.configuration_snapshot_json or {}).get("copy_from_last_protocol", False)),
+                    copy_from_last_protocol=bool(config.get("copy_from_last_protocol", False)),
                     is_editable_snapshot=block.is_editable_snapshot,
                     allows_multiple_values_snapshot=block.allows_multiple_values_snapshot,
                     sort_index=block.sort_index,
@@ -55,7 +70,7 @@ class ProtocolElementService:
                     is_visible_snapshot=block.is_visible_snapshot,
                     export_visible_snapshot=block.export_visible_snapshot,
                     latex_template_snapshot=block.latex_template_snapshot,
-                    configuration_snapshot_json=block.configuration_snapshot_json,
+                    configuration_snapshot_json=config,
                     text_content=row.text_content,
                     display_compiled_text=row.display_compiled_text,
                     display_snapshot_json=row.display_snapshot_json or {},
@@ -73,6 +88,7 @@ class ProtocolElementService:
                 is_required_snapshot=element.is_required_snapshot,
                 is_visible_snapshot=element.is_visible_snapshot,
                 export_visible_snapshot=element.export_visible_snapshot,
+                show_when_empty=show_when_empty_by_id.get(element.id, False),
                 blocks=blocks_by_element.get(element.id, []),
             )
             for element in elements
@@ -86,6 +102,13 @@ class ProtocolElementService:
         if not values:
             return protocol_element
         return self.repository.update(db, protocol_element, values)
+
+    def delete_protocol_element_block(self, db: Session, protocol_element_block_id: int) -> bool:
+        protocol_element_block = self.block_repository.get(db, protocol_element_block_id)
+        if protocol_element_block is None:
+            return False
+        self.block_repository.delete(db, protocol_element_block)
+        return True
 
     def update_protocol_element_block(self, db: Session, protocol_element_block_id: int, payload: ProtocolElementBlockUpdate):
         protocol_element_block = self.block_repository.get(db, protocol_element_block_id)

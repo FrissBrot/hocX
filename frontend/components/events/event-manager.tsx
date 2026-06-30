@@ -3,11 +3,15 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
+import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { browserApiFetch } from "@/lib/api/client";
+import { useTableSort } from "@/lib/hooks/use-table-sort";
 import { formatDateRange } from "@/lib/utils/format";
 import { EventSummary } from "@/types/api";
+
+const PAGE_SIZE = 100;
 
 type Props = {
   initialEvents: EventSummary[];
@@ -36,12 +40,13 @@ function emptyForm(): EventFormState {
 
 export function EventManager({ initialEvents }: Props) {
   const [events, setEvents] = useState(initialEvents);
+  const [hasMore, setHasMore] = useState(initialEvents.length === PAGE_SIZE);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("Bereit");
   const [statusTone, setStatusTone] = useState<"neutral" | "success" | "error">("neutral");
   const [tagFilter, setTagFilter] = useState("all");
-  const [sortKey, setSortKey] = useState<"event_date" | "title" | "tag" | "description" | "participant_count">("event_date");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const { sortKey, sortDirection, toggleSort, sortIndicator } = useTableSort<"event_date" | "title" | "tag" | "description" | "participant_count">("event_date");
   const [showParticipantCount, setShowParticipantCount] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<EventFormState>(emptyForm);
@@ -97,17 +102,6 @@ export function EventManager({ initialEvents }: Props) {
         return leftValue.localeCompare(rightValue) * direction;
       });
   }, [events, search, sortDirection, sortKey, tagFilter, todayIso]);
-
-  function toggleSort(nextKey: "event_date" | "title" | "tag" | "description" | "participant_count") {
-    setSortKey((currentKey) => {
-      if (currentKey === nextKey) {
-        setSortDirection((currentDirection) => (currentDirection === "asc" ? "desc" : "asc"));
-        return currentKey;
-      }
-      setSortDirection("asc");
-      return nextKey;
-    });
-  }
 
   function openCreate() {
     setForm(emptyForm());
@@ -173,6 +167,19 @@ export function EventManager({ initialEvents }: Props) {
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Termin konnte nicht gelöscht werden");
       setStatusTone("error");
+    }
+  }
+
+  async function loadMore() {
+    setIsLoadingMore(true);
+    try {
+      const next = await browserApiFetch<EventSummary[]>(`/api/events?skip=${events.length}&limit=${PAGE_SIZE}`);
+      setEvents((current) => [...current, ...next]);
+      setHasMore(next.length === PAGE_SIZE);
+    } catch {
+      // keep current list on error
+    } finally {
+      setIsLoadingMore(false);
     }
   }
 
@@ -287,21 +294,21 @@ export function EventManager({ initialEvents }: Props) {
 
       <DataTable
         columns={[
-          { key: "event_date", label: "Datum", sortable: true, sortDirection: sortKey === "event_date" ? sortDirection : null, onSort: () => toggleSort("event_date") },
-          { key: "title", label: "Titel", sortable: true, sortDirection: sortKey === "title" ? sortDirection : null, onSort: () => toggleSort("title") },
-          { key: "tag", label: "Tag", sortable: true, sortDirection: sortKey === "tag" ? sortDirection : null, onSort: () => toggleSort("tag") },
+          { key: "event_date", label: "Datum", sortable: true, sortDirection: sortIndicator("event_date"), onSort: () => toggleSort("event_date") },
+          { key: "title", label: "Titel", sortable: true, sortDirection: sortIndicator("title"), onSort: () => toggleSort("title") },
+          { key: "tag", label: "Tag", sortable: true, sortDirection: sortIndicator("tag"), onSort: () => toggleSort("tag") },
           ...(showParticipantCount
             ? [
                 {
                   key: "participant_count",
                   label: "Teilnehmer",
                   sortable: true,
-                  sortDirection: sortKey === "participant_count" ? sortDirection : null,
+                  sortDirection: sortIndicator("participant_count"),
                   onSort: () => toggleSort("participant_count"),
                 } as const,
               ]
             : []),
-          { key: "description", label: "Beschreibung", sortable: true, sortDirection: sortKey === "description" ? sortDirection : null, onSort: () => toggleSort("description") },
+          { key: "description", label: "Beschreibung", sortable: true, sortDirection: sortIndicator("description"), onSort: () => toggleSort("description") },
           "Aktionen",
         ]}
       >
@@ -332,6 +339,14 @@ export function EventManager({ initialEvents }: Props) {
         ))}
       </DataTable>
 
+      {hasMore && (
+        <div className="load-more-row">
+          <button type="button" className="button-inline button-ghost" onClick={() => void loadMore()} disabled={isLoadingMore}>
+            {isLoadingMore ? "Lädt…" : `Mehr laden (${events.length} geladen)`}
+          </button>
+        </div>
+      )}
+
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
@@ -342,11 +357,11 @@ export function EventManager({ initialEvents }: Props) {
           <div className="two-col">
             <label className="field-stack">
               <span className="field-label">Startdatum</span>
-              <input type="date" value={form.event_date} onChange={(event) => setForm((current) => ({ ...current, event_date: event.target.value }))} required />
+              <DateInput value={form.event_date} onChange={(value) => setForm((current) => ({ ...current, event_date: value }))} required />
             </label>
             <label className="field-stack">
               <span className="field-label">Enddatum</span>
-              <input type="date" value={form.event_end_date} onChange={(event) => setForm((current) => ({ ...current, event_end_date: event.target.value }))} />
+              <DateInput value={form.event_end_date} onChange={(value) => setForm((current) => ({ ...current, event_end_date: value }))} />
               <span className="field-help">Leer lassen fuer einen einzelnen Tag.</span>
             </label>
           </div>

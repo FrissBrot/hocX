@@ -1,18 +1,25 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
+import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
+import { useTableSort } from "@/lib/hooks/use-table-sort";
 import { formatDate, formatDateTime } from "@/lib/utils/format";
 import { ProtocolSummary, TemplateSummary } from "@/types/api";
+import { protocolStatusClassName, protocolStatusLabel } from "@/components/protocol/protocol-status";
+
+const PAGE_SIZE = 100;
 
 type ProtocolBuilderProps = {
   initialProtocols: ProtocolSummary[];
   templates: TemplateSummary[];
+  readOnly?: boolean;
 };
 
 type ProtocolFormState = {
@@ -22,46 +29,28 @@ type ProtocolFormState = {
   title: string;
 };
 
-function protocolStatusLabel(status: string) {
-  switch (status) {
-    case "geplant":
-      return "Geplant";
-    case "vorbereitet":
-      return "Vorbereitet";
-    case "durchgeführt":
-      return "Durchgeführt";
-    case "abgeschlossen":
-      return "Abgeschlossen";
-    default:
-      return status;
-  }
-}
-
-function protocolStatusClassName(status: string) {
-  switch (status) {
-    case "geplant":
-      return "status-pill-planned";
-    case "vorbereitet":
-      return "status-pill-prepared";
-    case "durchgeführt":
-      return "status-pill-conducted";
-    case "abgeschlossen":
-      return "status-pill-completed";
-    default:
-      return "";
-  }
-}
-
-export function ProtocolBuilder({ initialProtocols, templates }: ProtocolBuilderProps) {
+export function ProtocolBuilder({ initialProtocols, templates, readOnly = false }: ProtocolBuilderProps) {
   const router = useRouter();
   const [protocols, setProtocols] = useState(initialProtocols);
+  const [hasMore, setHasMore] = useState(initialProtocols.length === PAGE_SIZE);
+
+  // When router.refresh() re-renders the server component while already on this page,
+  // sync the updated initialProtocols into local state.
+  useEffect(() => {
+    setProtocols(initialProtocols);
+    setHasMore(initialProtocols.length === PAGE_SIZE);
+  }, [initialProtocols]);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [availableTemplates, setAvailableTemplates] = useState(templates);
-  const [exportsByProtocol, setExportsByProtocol] = useState<Record<number, { content_url?: string | null; status: string; export_format: string }>>({});
   const [pdfBusyByProtocol, setPdfBusyByProtocol] = useState<Record<number, boolean>>({});
+  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
+  const menuBtnRefs = useRef<Record<number, HTMLButtonElement | null>>({});
   const [status, setStatus] = useState("Ready");
   const [statusTone, setStatusTone] = useState<"neutral" | "success" | "error">("neutral");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const { sortKey, sortDirection, toggleSort, sortIndicator } = useTableSort<"id" | "protocol_number" | "title" | "status" | "protocol_date">("id", "desc");
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [form, setForm] = useState<ProtocolFormState>({
     template_id: templates[0] ? String(templates[0].id) : "",
@@ -76,51 +65,30 @@ export function ProtocolBuilder({ initialProtocols, templates }: ProtocolBuilder
   const autoProtocolNumber = !!selectedTemplate?.protocol_number_pattern?.trim();
   const autoTitle = !!selectedTemplate?.title_pattern?.trim();
 
-  const sortedProtocols = useMemo(
-    () =>
-      [...protocols]
-        .filter((protocol) => {
-          const haystack = `${protocol.protocol_number} ${protocol.title ?? ""}`.toLowerCase();
-          const matchesSearch = !search || haystack.includes(search.toLowerCase());
-          const matchesStatus = statusFilter === "all" || protocol.status === statusFilter;
-          return matchesSearch && matchesStatus;
-        })
-        .sort((left, right) => right.id - left.id),
-    [protocols, search, statusFilter]
-  );
+  const sortedProtocols = useMemo(() => {
+    const dir = sortDirection === "asc" ? 1 : -1;
+    return [...protocols]
+      .filter((protocol) => {
+        const haystack = `${protocol.protocol_number} ${protocol.title ?? ""}`.toLowerCase();
+        const matchesSearch = !search || haystack.includes(search.toLowerCase());
+        const matchesStatus = statusFilter === "all" || protocol.status === statusFilter;
+        return matchesSearch && matchesStatus;
+      })
+      .sort((a, b) => {
+        if (sortKey === "protocol_date") return (a.protocol_date ?? "").localeCompare(b.protocol_date ?? "") * dir;
+        if (sortKey === "protocol_number") return (a.protocol_number ?? "").localeCompare(b.protocol_number ?? "") * dir;
+        if (sortKey === "title") return (a.title ?? "").localeCompare(b.title ?? "") * dir;
+        if (sortKey === "status") return a.status.localeCompare(b.status) * dir;
+        return (b.id - a.id) * dir;
+      });
+  }, [protocols, search, statusFilter, sortKey, sortDirection]);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function loadExports() {
-      const entries = await Promise.all(
-        protocols.map(async (protocol) => {
-          try {
-            const latest = await browserApiFetch<{ content_url?: string | null; status: string; export_format: string }>(
-              `/api/protocols/${protocol.id}/exports/latest`
-            );
-            return [protocol.id, latest] as const;
-          } catch {
-            return [protocol.id, { status: "missing", export_format: "none", content_url: null }] as const;
-          }
-        })
-      );
-
-      if (!cancelled) {
-        setExportsByProtocol(Object.fromEntries(entries));
-      }
-    }
-
-    if (protocols.length > 0) {
-      void loadExports();
-    } else {
-      setExportsByProtocol({});
-    }
-
-    return () => {
-      cancelled = true;
-    };
-  }, [protocols]);
+    if (openMenuId === null) return;
+    function handleClick() { setOpenMenuId(null); setMenuPos(null); }
+    document.addEventListener("click", handleClick);
+    return () => document.removeEventListener("click", handleClick);
+  }, [openMenuId]);
 
   useEffect(() => {
     if (!showCreateForm) {
@@ -195,6 +163,7 @@ export function ProtocolBuilder({ initialProtocols, templates }: ProtocolBuilder
       setProtocols((current) => current.filter((protocol) => protocol.id !== protocolId));
       setStatus(`Deleted protocol #${protocolId}`);
       setStatusTone("success");
+      router.refresh();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Protocol deletion failed");
       setStatusTone("error");
@@ -207,11 +176,18 @@ export function ProtocolBuilder({ initialProtocols, templates }: ProtocolBuilder
     setStatusTone("neutral");
 
     try {
-      const result = await browserApiFetch<{ content_url?: string | null; status: string; export_format: string }>(
+      const result = await browserApiFetch<{ content_url?: string | null; status: string; export_format: string; version_major?: number | null; version_minor?: number | null }>(
         `/api/protocols/${protocolId}/exports/pdf`,
         { method: "POST" }
       );
-      setExportsByProtocol((current) => ({ ...current, [protocolId]: result }));
+      // Update version in local protocol list
+      if (result.version_major != null && result.version_minor != null) {
+        setProtocols((current) =>
+          current.map((p) =>
+            p.id === protocolId ? { ...p, version_major: result.version_major!, version_minor: result.version_minor! } : p
+          )
+        );
+      }
       setStatus(`PDF ready for ${protocolNumber}`);
       setStatusTone("success");
 
@@ -226,23 +202,58 @@ export function ProtocolBuilder({ initialProtocols, templates }: ProtocolBuilder
     }
   }
 
+  async function loadMore() {
+    setIsLoadingMore(true);
+    try {
+      const next = await browserApiFetch<ProtocolSummary[]>(`/api/protocols?skip=${protocols.length}&limit=${PAGE_SIZE}`);
+      setProtocols((current) => [...current, ...next]);
+      setHasMore(next.length === PAGE_SIZE);
+    } catch {
+      // keep current list on error
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }
+
+  async function revertStatus(protocolId: number) {
+    try {
+      const updated = await browserApiFetch<ProtocolSummary>(`/api/protocols/${protocolId}/revert-status`, { method: "POST" });
+      setProtocols((current) => current.map((p) => (p.id === protocolId ? updated : p)));
+      setStatus(`Status zurückgesetzt`);
+      setStatusTone("success");
+      router.refresh();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Zurücksetzen fehlgeschlagen");
+      setStatusTone("error");
+    }
+  }
+
   return (
     <div className="grid">
-      <DataToolbar
-        title="Protocols"
-        description="Fast access to planned sessions, preparation states and finished PDF exports."
-        actions={
-          <button type="button" className="button-inline" onClick={() => setShowCreateForm((current) => !current)}>
-            {showCreateForm ? "Close create form" : "New protocol"}
-          </button>
-        }
-      />
+      <div className="protocol-list-toolbar">
+        <div className="segment-control">
+          <button type="button" className={`segment-button${statusFilter === "all" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("all")}>Alle</button>
+          <button type="button" className={`segment-button${statusFilter === "geplant" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("geplant")}>Geplant</button>
+          <button type="button" className={`segment-button${statusFilter === "vorbereitet" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("vorbereitet")}>Vorbereitet</button>
+          <button type="button" className={`segment-button${statusFilter === "durchgeführt" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("durchgeführt")}>Durchgeführt</button>
+          <button type="button" className={`segment-button${statusFilter === "abgeschlossen" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("abgeschlossen")}>Abgeschlossen</button>
+        </div>
+        <div className="protocol-list-toolbar-right">
+          <input className="protocol-search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Suchen…" />
+          <span className="muted protocol-count">{sortedProtocols.length} / {protocols.length}</span>
+          {!readOnly && (
+            <button type="button" className="button-inline" onClick={() => setShowCreateForm((c) => !c)}>
+              {showCreateForm ? "Abbrechen" : "+ Protokoll"}
+            </button>
+          )}
+        </div>
+      </div>
 
       <Modal
         open={showCreateForm}
         onClose={() => setShowCreateForm(false)}
-        title="Create protocol"
-        description="Choose the content template and create a fresh snapshot. Number and title can be generated from the template."
+        title="Protokoll erstellen"
+        description="Template auswählen und neues Protokoll anlegen."
       >
         <form className="grid" onSubmit={createProtocol}>
           <label className="field-stack">
@@ -257,7 +268,6 @@ export function ProtocolBuilder({ initialProtocols, templates }: ProtocolBuilder
                 </option>
               ))}
             </select>
-            <span className="field-help">The document layout is always taken from the selected template.</span>
           </label>
           {selectedTemplate?.protocol_number_pattern || selectedTemplate?.title_pattern ? (
             <div className="info-note">
@@ -268,117 +278,181 @@ export function ProtocolBuilder({ initialProtocols, templates }: ProtocolBuilder
           <div className="three-col">
             {!autoProtocolNumber ? (
               <label className="field-stack">
-                <span className="field-label">Protocol number</span>
+                <span className="field-label">Nummer</span>
                 <input
                   value={form.protocol_number}
                   onChange={(event) => setForm((current) => ({ ...current, protocol_number: event.target.value }))}
-                  placeholder="Erforderlich ohne Template-Muster"
+                  placeholder="Protokollnummer"
                 />
               </label>
             ) : null}
             <label className="field-stack">
-              <span className="field-label">Date</span>
-              <input
-                type="date"
-                value={form.protocol_date}
-                onChange={(event) => setForm((current) => ({ ...current, protocol_date: event.target.value }))}
-                required
-              />
+              <span className="field-label">Datum</span>
+              <DateInput value={form.protocol_date} onChange={(value) => setForm((current) => ({ ...current, protocol_date: value }))} required />
             </label>
             {!autoTitle ? (
               <label className="field-stack">
-                <span className="field-label">Title</span>
+                <span className="field-label">Titel</span>
                 <input
                   value={form.title}
                   onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
-                  placeholder="Optional title"
+                  placeholder="Optionaler Titel"
                 />
               </label>
             ) : null}
           </div>
           <div className="table-toolbar-actions">
             <button type="submit" className="button-inline" disabled={!form.template_id}>
-              Create protocol
+              Erstellen
             </button>
           </div>
         </form>
       </Modal>
 
-      <article className="card">
-        <div className="segment-control">
-          <button type="button" className={`segment-button${statusFilter === "all" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("all")}>All</button>
-          <button type="button" className={`segment-button${statusFilter === "geplant" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("geplant")}>Geplant</button>
-          <button type="button" className={`segment-button${statusFilter === "vorbereitet" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("vorbereitet")}>Vorbereitet</button>
-          <button type="button" className={`segment-button${statusFilter === "durchgeführt" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("durchgeführt")}>Durchgeführt</button>
-          <button type="button" className={`segment-button${statusFilter === "abgeschlossen" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("abgeschlossen")}>Abgeschlossen</button>
-        </div>
-        <div className="two-col">
-          <label className="field-stack">
-            <span className="field-label">Search</span>
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by number or title" />
-          </label>
-          <div className="card">
-            <div className="eyebrow">At a glance</div>
-            <div className="status-row">
-              <span className="pill">{sortedProtocols.length} visible</span>
-              <span className="pill">{protocols.length} total</span>
-              <span className="pill">{templates.length} templates</span>
-            </div>
-          </div>
-        </div>
-      </article>
+      {status !== "Ready" ? <StatusBanner tone={statusTone} message={status} /> : null}
 
-      <StatusBanner tone={statusTone} message={status} />
+      <DataTable columns={[
+        { key: "protocol_number", label: "Protokoll", sortable: true, sortDirection: sortIndicator("protocol_number"), onSort: () => toggleSort("protocol_number") },
+        { key: "title", label: "Titel", sortable: true, sortDirection: sortIndicator("title"), onSort: () => toggleSort("title") },
+        { key: "status", label: "Status", sortable: true, sortDirection: sortIndicator("status"), onSort: () => toggleSort("status") },
+        ...(!readOnly ? ["Template" as const] : []),
+        { key: "protocol_date", label: "Datum", sortable: true, sortDirection: sortIndicator("protocol_date"), onSort: () => toggleSort("protocol_date") },
+        "Aktionen",
+      ]}>
+        {sortedProtocols.map((protocol) => {
+          const isFinal = protocol.status === "abgeschlossen";
+          const displayMinor = isFinal ? (protocol.version_final_minor ?? 0) : (protocol.version_minor ?? 0);
+          const displayMajor = isFinal ? 1 : 0;
+          const versionStr = (displayMajor > 0 || displayMinor > 0) ? `v${displayMajor}.${displayMinor}` : null;
+          const menuOpen = openMenuId === protocol.id;
+          return (
+            <tr key={protocol.id} className="table-row-clickable" onClick={() => router.push(`/protocols/${protocol.id}`)}>
+              <td>
+                <strong>{protocol.protocol_number}</strong>
+              </td>
+              <td>{protocol.title ?? "—"}</td>
+              <td>
+                <div className="status-cell">
+                  <span className={`pill ${protocolStatusClassName(protocol.status)}`}>{protocolStatusLabel(protocol.status)}</span>
+                  {versionStr && <span className="version-badge">{versionStr}</span>}
+                </div>
+              </td>
+              {!readOnly && (
+                <td>{templates.find((t) => t.id === protocol.template_id)?.name ?? "—"}</td>
+              )}
+              <td>{formatDate(protocol.protocol_date) || "—"}</td>
+              <td>
+                <div className="protocol-row-actions" onClick={(e) => e.stopPropagation()}>
+                  {!readOnly && (
+                    <div className="kebab-menu-wrapper">
+                      <button
+                        type="button"
+                        className="kebab-menu-btn"
+                        title="Weitere Aktionen"
+                        ref={(el) => { menuBtnRefs.current[protocol.id] = el; }}
+                        onClick={() => {
+                          if (menuOpen) {
+                            setOpenMenuId(null);
+                            setMenuPos(null);
+                          } else {
+                            const btn = menuBtnRefs.current[protocol.id];
+                            if (btn) {
+                              const rect = btn.getBoundingClientRect();
+                              setMenuPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
+                            }
+                            setOpenMenuId(protocol.id);
+                          }
+                        }}
+                      >
+                        ⋯
+                      </button>
+                    </div>
+                  )}
+                  {isFinal ? (
+                    <button
+                      type="button"
+                      className={`pdf-icon-link pdf-icon-link-success${pdfBusyByProtocol[protocol.id] ? " pdf-icon-disabled" : ""}`}
+                      onClick={() => void generateAndOpenPdf(protocol.id, protocol.protocol_number)}
+                      aria-label={`PDF exportieren für ${protocol.protocol_number}`}
+                      title="PDF exportieren"
+                      disabled={pdfBusyByProtocol[protocol.id]}
+                    >
+                      {pdfBusyByProtocol[protocol.id] ? "..." : "PDF"}
+                    </button>
+                  ) : (
+                    <span className="protocol-row-action-spacer" aria-hidden="true" />
+                  )}
+                </div>
+              </td>
+            </tr>
+          );
+        })}
+      </DataTable>
 
-      <DataTable columns={["Protocol", "Title", "Status", "Template", "Date", "PDF", "Actions"]}>
-        {sortedProtocols.map((protocol) => (
-          <tr key={protocol.id} className="table-row-clickable" onClick={() => router.push(`/protocols/${protocol.id}`)}>
-            <td>
-              <strong>{protocol.protocol_number}</strong>
-              <div className="muted">{protocolStatusLabel(protocol.status)}</div>
-            </td>
-            <td>
-              {protocol.title ?? "Untitled protocol"}
-            </td>
-            <td><span className={`pill ${protocolStatusClassName(protocol.status)}`}>{protocolStatusLabel(protocol.status)}</span></td>
-            <td>
-              {templates.find((template) => template.id === protocol.template_id)?.name ?? "Template"}
-            </td>
-            <td>{formatDate(protocol.protocol_date) || "Kein Datum"}</td>
-            <td>
-              <button
-                type="button"
-                className={`pdf-icon-link${pdfBusyByProtocol[protocol.id] ? " pdf-icon-disabled" : ""}`}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  void generateAndOpenPdf(protocol.id, protocol.protocol_number);
-                }}
-                aria-label={`Generate and open PDF for ${protocol.protocol_number}`}
-                title="Generate and open PDF"
-                disabled={pdfBusyByProtocol[protocol.id]}
-              >
-                {pdfBusyByProtocol[protocol.id] ? "..." : "PDF"}
-              </button>
-            </td>
-            <td>
-              <div className="table-actions table-actions-start">
+      {sortedProtocols.length === 0 ? <p className="muted">Keine Protokolle gefunden.</p> : null}
+
+      {hasMore && (
+        <div className="load-more-row">
+          <button type="button" className="button-inline button-ghost" onClick={() => void loadMore()} disabled={isLoadingMore}>
+            {isLoadingMore ? "Lädt…" : `Mehr laden (${protocols.length} geladen)`}
+          </button>
+        </div>
+      )}
+
+      {!readOnly && openMenuId !== null && menuPos !== null && typeof document !== "undefined" && createPortal(
+        <div
+          className="kebab-menu-dropdown"
+          style={{ position: "fixed", top: menuPos.top, right: menuPos.right }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {(() => {
+            const protocol = sortedProtocols.find((p) => p.id === openMenuId);
+            if (!protocol) return null;
+            const isFinal = protocol.status === "abgeschlossen";
+            const canRevert = protocol.status !== "geplant";
+            return (
+              <>
+                {!isFinal && (
+                  <button
+                    type="button"
+                    className="kebab-menu-item"
+                    onClick={() => {
+                      setOpenMenuId(null);
+                      void generateAndOpenPdf(protocol.id, protocol.protocol_number);
+                    }}
+                    disabled={pdfBusyByProtocol[protocol.id]}
+                  >
+                    {pdfBusyByProtocol[protocol.id] ? "Generiere…" : "PDF-Vorschau"}
+                  </button>
+                )}
+                {canRevert && (
+                  <button
+                    type="button"
+                    className="kebab-menu-item"
+                    onClick={() => {
+                      setOpenMenuId(null);
+                      void revertStatus(protocol.id);
+                    }}
+                  >
+                    Status zurücksetzen
+                  </button>
+                )}
                 <button
                   type="button"
-                  className="button-inline button-danger"
-                  onClick={(event) => {
-                    event.stopPropagation();
+                  className="kebab-menu-item kebab-menu-item-danger"
+                  onClick={() => {
+                    setOpenMenuId(null);
                     void deleteProtocol(protocol.id);
                   }}
                 >
-                  Delete
+                  Löschen
                 </button>
-              </div>
-            </td>
-          </tr>
-        ))}
-      </DataTable>
-
-      {sortedProtocols.length === 0 ? <p className="muted">No protocols found for the current filter.</p> : null}
+              </>
+            );
+          })()}
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

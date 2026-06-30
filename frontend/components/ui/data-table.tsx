@@ -10,6 +10,7 @@ export type DataTableColumn =
       sortable?: boolean;
       sortDirection?: "asc" | "desc" | null;
       onSort?: () => void;
+      header?: ReactNode;
     };
 
 type DataTableProps = {
@@ -48,6 +49,8 @@ export function DataTable({ columns, children, emptyMessage }: DataTableProps) {
               <th key={typeof column === "string" ? column : column.key}>
                 {typeof column === "string" ? (
                   column
+                ) : column.header ? (
+                  column.header
                 ) : column.sortable && column.onSort ? (
                   <button type="button" className="table-sort-button" onClick={column.onSort}>
                     <span>{column.label}</span>

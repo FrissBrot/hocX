@@ -202,6 +202,10 @@ def get_optional_current_user(
     user = db.get(AppUser, int(session_data["user_id"]))
     if user is None or not user.is_active:
         return None
+    if user.session_revoke_at is not None:
+        token_iat = int(session_data.get("iat", 0))
+        if int(user.session_revoke_at.timestamp()) > token_iat:
+            return None
     return build_current_user(db, user, session_data.get("tenant_id"))
 
 
@@ -212,7 +216,7 @@ def get_current_user(user: CurrentUser | None = Depends(get_optional_current_use
 
 
 def require_reader(user: CurrentUser) -> CurrentUser:
-    if user.is_superadmin or user.current_role in {"reader", "writer", "admin"}:
+    if user.is_superadmin or user.current_role in {"reader", "kassier", "writer", "admin"}:
         return user
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Reader role required")
 
@@ -221,6 +225,13 @@ def require_writer(user: CurrentUser) -> CurrentUser:
     if user.is_superadmin or user.current_role in {"writer", "admin"}:
         return user
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Writer role required")
+
+
+def require_finance_access(user: CurrentUser) -> CurrentUser:
+    """Kassier, Writer, Admin and Superadmin may access finance and fines."""
+    if user.is_superadmin or user.current_role in {"kassier", "writer", "admin"}:
+        return user
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Finance access required")
 
 
 def require_admin(user: CurrentUser) -> CurrentUser:

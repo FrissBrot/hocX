@@ -6,7 +6,6 @@ from pydantic import BaseModel, Field
 
 
 class ProtocolCreateFromTemplate(BaseModel):
-    tenant_id: int = 1
     template_id: int
     document_template_id: int | None = None
     protocol_number: str | None = None
@@ -22,6 +21,7 @@ class ProtocolUpdate(BaseModel):
     event_id: int | None = None
     status: str | None = None
     document_template_id: int | None = None
+    session_notes: str | None = None
 
 
 class ProtocolRead(BaseModel):
@@ -36,6 +36,10 @@ class ProtocolRead(BaseModel):
     protocol_date: date
     event_id: int | None = None
     status: str
+    version_major: int = 0
+    version_minor: int = 0
+    version_final_minor: int = 0
+    session_notes: str | None = None
     created_by: int | None = None
     created_at: datetime
     updated_at: datetime
@@ -81,6 +85,7 @@ class ProtocolElementRead(BaseModel):
     is_required_snapshot: bool
     is_visible_snapshot: bool
     export_visible_snapshot: bool
+    show_when_empty: bool = False
     blocks: list[ProtocolElementBlockRead] = Field(default_factory=list)
 
 
@@ -104,6 +109,15 @@ class ProtocolElementBlockUpdate(BaseModel):
     configuration_snapshot_json: dict | None = None
 
 
+class ProtocolElementBlockFromEventCreate(BaseModel):
+    event_id: int
+
+
+class QuickTodoCreate(BaseModel):
+    task: str
+    tag: str = "Sitzungsnotizen"
+
+
 class ProtocolTextUpdate(BaseModel):
     content: str
 
@@ -123,6 +137,7 @@ class ProtocolTodoCreate(BaseModel):
     due_event_id: int | None = None
     due_marker: str | None = None
     reference_link: str | None = None
+    tags: list[str] = []
     created_by: int | None = None
 
 
@@ -136,11 +151,13 @@ class ProtocolTodoUpdate(BaseModel):
     due_marker: str | None = None
     completed_at: datetime | None = None
     reference_link: str | None = None
+    tags: list[str] | None = None
+    closed_in_protocol_id: int | None = None
 
 
 class ProtocolTodoRead(BaseModel):
     id: int
-    protocol_element_block_id: int
+    protocol_element_block_id: int | None = None
     sort_index: int
     task: str
     assigned_user_id: int | None = None
@@ -157,9 +174,20 @@ class ProtocolTodoRead(BaseModel):
     resolved_due_label: str | None = None
     completed_at: datetime | None = None
     reference_link: str | None = None
+    tags: list[str] = []
     created_by: int | None = None
     created_at: datetime
     updated_at: datetime
+    closed_in_protocol_id: int | None = None
+
+
+class TodoListItem(ProtocolTodoRead):
+    protocol_id: int | None = None
+    protocol_number: str | None = None
+    protocol_date: date | None = None
+    protocol_title: str | None = None
+    protocol_status: str | None = None
+    block_title: str | None = None
 
 
 class ProtocolImageRead(BaseModel):
@@ -183,3 +211,5 @@ class ProtocolExportRead(BaseModel):
     storage_path: str | None = None
     created_at: datetime | None = None
     status: str
+    version_major: int | None = None
+    version_minor: int | None = None

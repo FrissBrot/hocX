@@ -5,6 +5,8 @@ import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import {
   DocumentTemplate,
   EventSummary,
+  FinanceAccount,
+  FinanceTransaction,
   ParticipantSummary,
   ProtocolElement,
   ProtocolImage,
@@ -13,10 +15,13 @@ import {
   StructuredListDefinition,
   StructuredListEntry,
   TemplateSummary,
+  TodoListItem,
 } from "@/types/api";
 
 export default async function ProtocolDetailPage({ params }: { params: { id: string } }) {
   const session = await requireSession();
+  const isRestricted = !session.user?.is_superadmin && ["reader", "kassier"].includes(session.current_role ?? "");
+  const canViewFines = session.user?.is_superadmin || ["kassier", "writer", "admin"].includes(session.current_role ?? "");
   const protocol = await backendFetchWithSession<ProtocolSummary>(`/api/protocols/${params.id}`);
 
   if (!protocol) {
@@ -77,16 +82,30 @@ export default async function ProtocolDetailPage({ params }: { params: { id: str
     }))
   );
   const initialImages = Object.fromEntries(imageLists.map((item) => [item.protocolElementBlockId, item.images]));
+
+  const pendingTodos = (await backendFetchWithSession<TodoListItem[]>(`/api/protocols/${params.id}/pending-todos`)) ?? [];
+
+  const financeAccounts = (await backendFetchWithSession<FinanceAccount[]>("/api/finance/accounts")) ?? [];
+  // Pre-load transactions for finance blocks
+  const financeBlockAccountIds = Array.from(new Set(
+    elements.flatMap((element) =>
+      element.blocks
+        .filter((b) => b.element_type_code === "finance_balance" || b.element_type_code === "finance_transactions")
+        .map((b) => Number((b.configuration_snapshot_json as Record<string, unknown>)?.finance_account_id ?? 0))
+        .filter((id) => id > 0)
+    )
+  ));
+  const financeTransactionsList = await Promise.all(
+    financeBlockAccountIds.map(async (accountId) => ({
+      accountId,
+      transactions: (await backendFetchWithSession<FinanceTransaction[]>(`/api/finance/accounts/${accountId}/transactions`)) ?? [],
+    }))
+  );
+  const initialFinanceTransactions = Object.fromEntries(financeTransactionsList.map((item) => [item.accountId, item.transactions]));
+
   return (
     <AppShell initialSession={session}>
       <section className="panel">
-        <div className="page-header-inline">
-          <div>
-            <div className="eyebrow">Protocol Detail</div>
-            <h1>{protocol.title ?? protocol.protocol_number}</h1>
-          </div>
-        </div>
-        <p className="muted">This editor now renders real protocol blocks and starts the autosave flow for text and todos.</p>
         <ProtocolOverview protocol={protocol} />
         <ProtocolEditor
           protocol={protocol}
@@ -98,6 +117,11 @@ export default async function ProtocolDetailPage({ params }: { params: { id: str
           availableLists={lists}
           initialListEntries={initialListEntries}
           availableTemplates={templates}
+          availableAccounts={financeAccounts}
+          initialFinanceTransactions={initialFinanceTransactions}
+          initialPendingTodos={pendingTodos}
+          forceReadOnly={isRestricted}
+          canViewFines={canViewFines}
         />
       </section>
     </AppShell>

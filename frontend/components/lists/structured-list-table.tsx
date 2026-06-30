@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { Modal } from "@/components/ui/modal";
-import { formatDateRange } from "@/lib/utils/format";
+import { formatDate, formatDateRange } from "@/lib/utils/format";
 import {
   EventSummary,
   ParticipantSummary,
@@ -14,6 +14,7 @@ import {
 
 type StructuredListValue = Record<string, unknown>;
 type StructuredListColumnKey = "column_one_value" | "column_two_value";
+type StructuredListDisplayColumn = "column_one" | "column_two";
 
 type StructuredListTableProps = {
   definition: StructuredListDefinition;
@@ -22,6 +23,9 @@ type StructuredListTableProps = {
   availableEvents: EventSummary[];
   editable?: boolean;
   emptyMessage?: string;
+  groupByColumn?: "" | StructuredListDisplayColumn;
+  sortByColumn?: "" | StructuredListDisplayColumn;
+  sortDirection?: "asc" | "desc";
   onCreateEntry: (payload: {
     sort_index: number;
     column_one_value: StructuredListValue;
@@ -133,6 +137,34 @@ function createNewRowDraft(definition: StructuredListDefinition) {
   };
 }
 
+function valueSortText(
+  valueType: StructuredListValueType,
+  rawValue: StructuredListValue,
+  participants: ParticipantSummary[],
+  events: EventSummary[]
+) {
+  const value = normalizeValueForType(valueType, rawValue);
+  if (valueType === "participant") {
+    const participant = participants.find((item) => item.id === Number(value.participant_id ?? 0));
+    return participant?.display_name ?? "";
+  }
+  if (valueType === "participants") {
+    const selectedIds = Array.isArray(value.participant_ids) ? value.participant_ids.map(Number) : [];
+    if (!selectedIds.length) {
+      return "";
+    }
+    return participants
+      .filter((item) => selectedIds.includes(item.id))
+      .map((item) => item.display_name)
+      .join(", ");
+  }
+  if (valueType === "event") {
+    const eventRow = events.find((item) => item.id === Number(value.event_id ?? 0));
+    return eventRow ? `${eventRow.title} ${formatDate(eventRow.event_date)}`.trim() : "";
+  }
+  return String(value.text_value ?? "").trim();
+}
+
 export function StructuredListTable({
   definition,
   entries,
@@ -140,6 +172,9 @@ export function StructuredListTable({
   availableEvents,
   editable = true,
   emptyMessage = "Noch keine Eintraege.",
+  groupByColumn = "",
+  sortByColumn = "",
+  sortDirection = "asc",
   onCreateEntry,
   onUpdateEntry,
   onDeleteEntry,
@@ -273,6 +308,24 @@ export function StructuredListTable({
     );
   }
 
+  function displayColumnKey(column: StructuredListDisplayColumn): StructuredListColumnKey {
+    return column === "column_two" ? "column_two_value" : "column_one_value";
+  }
+
+  function displayColumnType(column: StructuredListDisplayColumn): StructuredListValueType {
+    return column === "column_two" ? definition.column_two_value_type : definition.column_one_value_type;
+  }
+
+  function entryDisplayText(entry: StructuredListEntry, column: StructuredListDisplayColumn) {
+    const columnKey = displayColumnKey(column);
+    return valueSummary(displayColumnType(column), rowValue(entry, columnKey), availableParticipants, sortedEvents);
+  }
+
+  function entrySortText(entry: StructuredListEntry, column: StructuredListDisplayColumn) {
+    const columnKey = displayColumnKey(column);
+    return valueSortText(displayColumnType(column), rowValue(entry, columnKey), availableParticipants, sortedEvents);
+  }
+
   function openParticipantPicker(
     columnKey: StructuredListColumnKey,
     value: StructuredListValue,
@@ -397,10 +450,93 @@ export function StructuredListTable({
     });
   }, [availableParticipants, participantSearch]);
 
-  const sortedEntries = useMemo(
-    () => [...entries].sort((left, right) => (left.sort_index - right.sort_index) || (left.id - right.id)),
-    [entries]
+  const textCollator = useMemo(
+    () => new Intl.Collator("de", { sensitivity: "base", numeric: true }),
+    []
   );
+
+  const sortedEntries = useMemo(() => {
+    const manualCompare = (left: StructuredListEntry, right: StructuredListEntry) =>
+      (left.sort_index - right.sort_index) || (left.id - right.id);
+
+    return [...entries].sort((left, right) => {
+      if (sortByColumn) {
+        const leftText = entrySortText(left, sortByColumn).trim();
+        const rightText = entrySortText(right, sortByColumn).trim();
+        if (leftText && rightText) {
+          const compared = textCollator.compare(leftText, rightText);
+          if (compared !== 0) {
+            return sortDirection === "desc" ? -compared : compared;
+          }
+        } else if (leftText) {
+          return -1;
+        } else if (rightText) {
+          return 1;
+        }
+      }
+      return manualCompare(left, right);
+    });
+  }, [entries, entryDrafts, sortByColumn, sortDirection, textCollator, availableParticipants, sortedEvents, definition.column_one_value_type, definition.column_two_value_type]);
+
+  const groupedEntries = useMemo(() => {
+    if (!groupByColumn) {
+      return [];
+    }
+    const groups: Array<{ key: string; label: string; entries: StructuredListEntry[] }> = [];
+    const groupIndex = new Map<string, number>();
+
+    sortedEntries.forEach((entry) => {
+      const rawLabel = entryDisplayText(entry, groupByColumn);
+      const label = rawLabel !== "—" ? rawLabel : "Ohne Wert";
+      const key = entrySortText(entry, groupByColumn).trim() || "__empty__";
+      const existingIndex = groupIndex.get(key);
+      if (existingIndex == null) {
+        groupIndex.set(key, groups.length);
+        groups.push({ key, label, entries: [entry] });
+        return;
+      }
+      groups[existingIndex].entries.push(entry);
+    });
+
+    return groups;
+  }, [groupByColumn, sortedEntries, entryDrafts, availableParticipants, sortedEvents, definition.column_one_value_type, definition.column_two_value_type]);
+
+  const groupedDisplayRows = useMemo(() => {
+    if (!groupByColumn || editable) {
+      return [];
+    }
+
+    const valueColumn: StructuredListDisplayColumn = groupByColumn === "column_one" ? "column_two" : "column_one";
+
+    return groupedEntries.map((group) => {
+      const groupedValues = group.entries
+        .map((entry) => entryDisplayText(entry, valueColumn))
+        .map((value) => String(value ?? "").replace(/\s+/g, " ").trim())
+        .filter((value) => value && value !== "—");
+      const mergedValue = groupedValues.join(", ") || "—";
+
+      return groupByColumn === "column_one"
+        ? {
+            key: group.key,
+            leftValue: group.label,
+            rightValue: mergedValue,
+          }
+        : {
+            key: group.key,
+            leftValue: mergedValue,
+            rightValue: group.label,
+          };
+    });
+  }, [
+    editable,
+    groupByColumn,
+    groupedEntries,
+    entryDrafts,
+    availableParticipants,
+    sortedEvents,
+    definition.column_one_value_type,
+    definition.column_two_value_type,
+  ]);
 
   return (
     <>
@@ -461,42 +597,63 @@ export function StructuredListTable({
               </tr>
             ) : null}
             {sortedEntries.length ? (
-              sortedEntries.map((entry) => {
-                const firstValue = rowValue(entry, "column_one_value");
-                const secondValue = rowValue(entry, "column_two_value");
-                return (
-                  <tr key={entry.id}>
-                    <td>
-                      {editable
-                        ? renderEditableCell(entry.id, "column_one_value", definition.column_one_value_type, firstValue, {
-                            isNewRow: false,
-                          })
-                        : valueSummary(definition.column_one_value_type, firstValue, availableParticipants, sortedEvents)}
-                    </td>
-                    <td>
-                      {editable
-                        ? renderEditableCell(entry.id, "column_two_value", definition.column_two_value_type, secondValue, {
-                            isNewRow: false,
-                          })
-                        : valueSummary(definition.column_two_value_type, secondValue, availableParticipants, sortedEvents)}
-                    </td>
-                    {editable ? (
-                      <td>
-                        <div className="event-row-actions">
-                          <button
-                            type="button"
-                            className="button-ghost button-icon button-icon-danger"
-                            title="Listenzeile loeschen"
-                            onClick={() => void onDeleteEntry(entry.id)}
-                          >
-                            x
-                          </button>
-                        </div>
-                      </td>
-                    ) : null}
+              groupByColumn && !editable ? (
+                groupedDisplayRows.map((row) => (
+                  <tr key={`structured-list-grouped-${row.key}`}>
+                    <td>{row.leftValue}</td>
+                    <td>{row.rightValue}</td>
                   </tr>
-                );
-              })
+                ))
+              ) : (
+                (groupByColumn
+                  ? groupedEntries
+                  : [{ key: "__all__", label: "", entries: sortedEntries }]
+                ).map((group) => (
+                  <Fragment key={`structured-list-group-${group.key}`}>
+                    {groupByColumn ? (
+                      <tr className="structured-list-group-row">
+                        <td colSpan={editable ? 3 : 2}>{group.label}</td>
+                      </tr>
+                    ) : null}
+                    {group.entries.map((entry) => {
+                      const firstValue = rowValue(entry, "column_one_value");
+                      const secondValue = rowValue(entry, "column_two_value");
+                      return (
+                        <tr key={entry.id}>
+                          <td>
+                            {editable
+                              ? renderEditableCell(entry.id, "column_one_value", definition.column_one_value_type, firstValue, {
+                                  isNewRow: false,
+                                })
+                              : valueSummary(definition.column_one_value_type, firstValue, availableParticipants, sortedEvents)}
+                          </td>
+                          <td>
+                            {editable
+                              ? renderEditableCell(entry.id, "column_two_value", definition.column_two_value_type, secondValue, {
+                                  isNewRow: false,
+                                })
+                              : valueSummary(definition.column_two_value_type, secondValue, availableParticipants, sortedEvents)}
+                          </td>
+                          {editable ? (
+                            <td>
+                              <div className="event-row-actions">
+                                <button
+                                  type="button"
+                                  className="button-ghost button-icon button-icon-danger"
+                                  title="Listenzeile loeschen"
+                                  onClick={() => void onDeleteEntry(entry.id)}
+                                >
+                                  x
+                                </button>
+                              </div>
+                            </td>
+                          ) : null}
+                        </tr>
+                      );
+                    })}
+                  </Fragment>
+                ))
+              )
             ) : !showNewRow ? (
               <tr>
                 <td colSpan={editable ? 3 : 2}>

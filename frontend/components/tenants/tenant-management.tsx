@@ -6,7 +6,7 @@ import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { browserApiFetch } from "@/lib/api/client";
-import { TenantSummary } from "@/types/api";
+import { OidcConfigRead, OidcConfigWrite, TenantSummary } from "@/types/api";
 
 type Props = {
   initialTenants: TenantSummary[];
@@ -19,6 +19,15 @@ type TenantFormState = {
   profileImage: File | null;
 };
 
+const defaultOidcForm: OidcConfigWrite = {
+  enabled: false,
+  auto_redirect: false,
+  issuer_url: "",
+  client_id: "",
+  client_secret: "",
+  scopes: "openid email profile",
+};
+
 export function TenantManagement({ initialTenants, canCreateTenant }: Props) {
   const [tenants, setTenants] = useState(initialTenants);
   const [status, setStatus] = useState("Bereit");
@@ -26,6 +35,14 @@ export function TenantManagement({ initialTenants, canCreateTenant }: Props) {
   const [tenantModalOpen, setTenantModalOpen] = useState(false);
   const [tenantForm, setTenantForm] = useState<TenantFormState>({ name: "", profileImage: null });
   const [search, setSearch] = useState("");
+
+  const [oidcModalOpen, setOidcModalOpen] = useState(false);
+  const [oidcTenantId, setOidcTenantId] = useState<number | null>(null);
+  const [oidcTenantName, setOidcTenantName] = useState("");
+  const [oidcForm, setOidcForm] = useState<OidcConfigWrite>(defaultOidcForm);
+  const [oidcLoading, setOidcLoading] = useState(false);
+  const [oidcStatus, setOidcStatus] = useState("");
+  const [oidcStatusTone, setOidcStatusTone] = useState<"neutral" | "success" | "error">("neutral");
 
   const filteredTenants = useMemo(
     () =>
@@ -43,6 +60,28 @@ export function TenantManagement({ initialTenants, canCreateTenant }: Props) {
       profileImage: null
     });
     setTenantModalOpen(true);
+  }
+
+  async function openOidcModal(tenant: TenantSummary) {
+    setOidcTenantId(tenant.id);
+    setOidcTenantName(tenant.name);
+    setOidcForm(defaultOidcForm);
+    setOidcStatus("");
+    setOidcStatusTone("neutral");
+    setOidcModalOpen(true);
+    try {
+      const cfg = await browserApiFetch<OidcConfigRead>(`/api/tenants/${tenant.id}/oidc-config`);
+      setOidcForm({
+        enabled: cfg.enabled,
+        auto_redirect: cfg.auto_redirect,
+        issuer_url: cfg.issuer_url,
+        client_id: cfg.client_id,
+        client_secret: "",
+        scopes: cfg.scopes,
+      });
+    } catch {
+      // no config yet — defaults are fine
+    }
   }
 
   async function submitTenant(event: FormEvent<HTMLFormElement>) {
@@ -80,6 +119,29 @@ export function TenantManagement({ initialTenants, canCreateTenant }: Props) {
     }
   }
 
+  async function submitOidc(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!oidcTenantId) return;
+    setOidcLoading(true);
+    setOidcStatus("Wird gespeichert…");
+    setOidcStatusTone("neutral");
+    try {
+      await browserApiFetch<OidcConfigRead>(`/api/tenants/${oidcTenantId}/oidc-config`, {
+        method: "PUT",
+        body: JSON.stringify(oidcForm),
+      });
+      setOidcStatus("OIDC-Konfiguration gespeichert");
+      setOidcStatusTone("success");
+      // Clear secret field after successful save
+      setOidcForm((f) => ({ ...f, client_secret: "" }));
+    } catch (error) {
+      setOidcStatus(error instanceof Error ? error.message : "Fehler beim Speichern");
+      setOidcStatusTone("error");
+    } finally {
+      setOidcLoading(false);
+    }
+  }
+
   return (
     <div className="grid">
       <StatusBanner tone={statusTone} message={status} />
@@ -114,7 +176,7 @@ export function TenantManagement({ initialTenants, canCreateTenant }: Props) {
 
       <DataTable columns={["Mandant", "Profilbild", "Aktionen"]} emptyMessage="Keine Mandanten für den aktuellen Filter gefunden.">
         {filteredTenants.map((tenant) => (
-          <tr key={tenant.id} className="table-row-clickable" onClick={() => openTenantModal(tenant)}>
+          <tr key={tenant.id}>
             <td>
               <strong>{tenant.name}</strong>
               <div className="muted">{tenant.profile_image_url ? "Mit Profilbild" : "Ohne Profilbild"}</div>
@@ -124,6 +186,9 @@ export function TenantManagement({ initialTenants, canCreateTenant }: Props) {
               <div className="table-actions table-actions-start">
                 <button type="button" className="button-inline" onClick={() => openTenantModal(tenant)}>
                   Bearbeiten
+                </button>
+                <button type="button" className="button-inline" onClick={() => openOidcModal(tenant)}>
+                  OIDC
                 </button>
               </div>
             </td>
@@ -155,6 +220,90 @@ export function TenantManagement({ initialTenants, canCreateTenant }: Props) {
           <div className="table-actions table-actions-start">
             <button type="submit" className="button-inline">
               Speichern
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={oidcModalOpen}
+        onClose={() => setOidcModalOpen(false)}
+        title={`OIDC – ${oidcTenantName}`}
+        description="OpenID Connect Provider für diesen Mandanten konfigurieren. Admins verwenden immer die lokale Anmeldung."
+      >
+        <form className="grid" onSubmit={submitOidc}>
+          {oidcStatus && <StatusBanner tone={oidcStatusTone} message={oidcStatus} />}
+
+          <div className="two-col">
+            <label className="field-stack">
+              <span className="field-label">OIDC aktiviert</span>
+              <select
+                value={oidcForm.enabled ? "1" : "0"}
+                onChange={(e) => setOidcForm((f) => ({ ...f, enabled: e.target.value === "1" }))}
+              >
+                <option value="0">Nein</option>
+                <option value="1">Ja</option>
+              </select>
+            </label>
+            <label className="field-stack">
+              <span className="field-label">Auto-Redirect (Nicht-Admins)</span>
+              <select
+                value={oidcForm.auto_redirect ? "1" : "0"}
+                onChange={(e) => setOidcForm((f) => ({ ...f, auto_redirect: e.target.value === "1" }))}
+                disabled={!oidcForm.enabled}
+              >
+                <option value="0">Nein</option>
+                <option value="1">Ja</option>
+              </select>
+            </label>
+          </div>
+
+          <label className="field-stack">
+            <span className="field-label">Issuer URL</span>
+            <input
+              value={oidcForm.issuer_url}
+              onChange={(e) => setOidcForm((f) => ({ ...f, issuer_url: e.target.value }))}
+              placeholder="https://accounts.example.com"
+              disabled={!oidcForm.enabled}
+            />
+          </label>
+
+          <div className="two-col">
+            <label className="field-stack">
+              <span className="field-label">Client ID</span>
+              <input
+                value={oidcForm.client_id}
+                onChange={(e) => setOidcForm((f) => ({ ...f, client_id: e.target.value }))}
+                placeholder="my-app"
+                disabled={!oidcForm.enabled}
+              />
+            </label>
+            <label className="field-stack">
+              <span className="field-label">Client Secret</span>
+              <input
+                type="password"
+                value={oidcForm.client_secret}
+                onChange={(e) => setOidcForm((f) => ({ ...f, client_secret: e.target.value }))}
+                placeholder="Leer lassen = unverändert"
+                autoComplete="new-password"
+                disabled={!oidcForm.enabled}
+              />
+            </label>
+          </div>
+
+          <label className="field-stack">
+            <span className="field-label">Scopes</span>
+            <input
+              value={oidcForm.scopes}
+              onChange={(e) => setOidcForm((f) => ({ ...f, scopes: e.target.value }))}
+              placeholder="openid email profile"
+              disabled={!oidcForm.enabled}
+            />
+          </label>
+
+          <div className="table-actions table-actions-start">
+            <button type="submit" className="button-inline" disabled={oidcLoading}>
+              {oidcLoading ? "…" : "Speichern"}
             </button>
           </div>
         </form>

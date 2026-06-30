@@ -1,11 +1,15 @@
 "use client";
 
-import { FormEvent, Fragment, useEffect, useMemo, useState } from "react";
+import { FormEvent, Fragment, ReactNode, useEffect, useMemo, useState } from "react";
 
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
+import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
 import { StatusBanner } from "@/components/ui/status-banner";
+import { TagInput } from "@/components/ui/tag-input";
+import { useTagConfig } from "@/lib/hooks/use-tag-config";
 import { browserApiFetch } from "@/lib/api/client";
+import { formatDateRange } from "@/lib/utils/format";
 import { ElementDefinition, ElementDefinitionBlock, EventSummary, ParticipantSummary, StructuredListDefinition, StructuredListEntry } from "@/types/api";
 
 type ElementDefinitionManagerProps = {
@@ -14,6 +18,7 @@ type ElementDefinitionManagerProps = {
   availableParticipants?: ParticipantSummary[];
   availableEvents?: EventSummary[];
   availableLists?: StructuredListDefinition[];
+  availableAccounts?: { id: number; name: string; currency_label: string }[];
 };
 
 type DefinitionFormState = {
@@ -40,10 +45,12 @@ type BlockFormState = {
   event_date_mode: "relative_window" | "all_future";
   event_include_unlisted_past: boolean;
   event_only_from_protocol_date: boolean;
+  event_only_before_protocol_date: boolean;
   event_gray_past: boolean;
   event_allow_end_date: boolean;
   event_show_date: boolean;
   event_show_tag: boolean;
+  event_show_tag_colors: boolean;
   event_show_title: boolean;
   event_show_description: boolean;
   event_show_participant_count: boolean;
@@ -55,9 +62,20 @@ type BlockFormState = {
   todo_block_title_filter: string;
   todo_task_filter: string;
   todo_open_only: boolean;
+  todo_due_tag_filter: string;
+  finance_account_id: string;
+  finance_filter_type: "all" | "since_last_session" | "this_year" | "last_n";
+  finance_last_n: string;
+  finance_since_date: string;
+  fine_account_id: string;
+  fine_amount_late: string;
+  fine_amount_absent: string;
   left_column_heading: string;
   value_column_heading: string;
   linked_list_id: string;
+  linked_list_group_by: "" | "column_one" | "column_two";
+  linked_list_sort_by: "" | "column_one" | "column_two";
+  linked_list_sort_direction: "asc" | "desc";
   is_editable: boolean;
   export_visible: boolean;
   is_visible: boolean;
@@ -106,10 +124,12 @@ const initialBlockForm: BlockFormState = {
   event_date_mode: "relative_window",
   event_include_unlisted_past: false,
   event_only_from_protocol_date: true,
+  event_only_before_protocol_date: false,
   event_gray_past: true,
   event_allow_end_date: false,
   event_show_date: true,
   event_show_tag: true,
+  event_show_tag_colors: false,
   event_show_title: true,
   event_show_description: true,
   event_show_participant_count: false,
@@ -121,9 +141,20 @@ const initialBlockForm: BlockFormState = {
   todo_block_title_filter: "",
   todo_task_filter: "",
   todo_open_only: true,
+  todo_due_tag_filter: "",
+  finance_account_id: "",
+  finance_filter_type: "all" as "all" | "since_last_session" | "this_year" | "last_n",
+  finance_last_n: "10",
+  finance_since_date: "",
+  fine_account_id: "",
+  fine_amount_late: "",
+  fine_amount_absent: "",
   left_column_heading: "",
   value_column_heading: "",
   linked_list_id: "",
+  linked_list_group_by: "",
+  linked_list_sort_by: "",
+  linked_list_sort_direction: "asc",
   is_editable: true,
   export_visible: true,
   is_visible: true,
@@ -157,13 +188,16 @@ function defaultMatrixColumn(id = "matrix-column-1") {
 
 const elementTypeOptions = [
   { value: "1", label: "Text", description: "Editierbarer Text mit Markdown (fett, kursiv, Listen)" },
-  { value: "2", label: "Todo", description: "Checklist or task list" },
-  { value: "3", label: "Image", description: "Image upload area" },
-  { value: "6", label: "Table", description: "Rows with labels and typed values such as text, participant or event" },
-  { value: "7", label: "Events", description: "Filtered list of events in a table" },
-  { value: "9", label: "Attendance", description: "Attendance list for all template participants" },
-  { value: "10", label: "Session date", description: "Set the next session date inside the protocol" },
-  { value: "11", label: "Matrix", description: "Responsive matrix with free values, participants and automatic event rows" }
+  { value: "2", label: "Todo", description: "Checkliste oder Aufgabenliste" },
+  { value: "3", label: "Bild", description: "Bild-Upload mit Vorschau" },
+  { value: "6", label: "Tabelle", description: "Zeilen mit Labels und typisierten Werten wie Text, Person oder Termin" },
+  { value: "7", label: "Terminliste", description: "Gefilterte Liste von Terminen in Tabellenform" },
+  { value: "9", label: "Anwesenheit", description: "Anwesenheitsliste für alle Vorlagen-Teilnehmenden" },
+  { value: "10", label: "Sitzungsdatum", description: "Setzt das nächste Sitzungsdatum direkt im Protokoll" },
+  { value: "11", label: "Matrix", description: "Flexible Matrix mit freien Werten, Personen und automatischen Terminzeilen" },
+  { value: "12", label: "Kontostand", description: "Zeigt den aktuellen Kontostand eines Finanzkontos" },
+  { value: "13", label: "Transaktionen", description: "Tabelle mit Transaktionen eines Finanzkontos" },
+  { value: "14", label: "Bussenliste", description: "Liste der ausstehenden Bussen aus der Anwesenheitskontrolle" },
 ];
 
 const matrixEmbeddedBlockOptions = [
@@ -177,17 +211,17 @@ const matrixEmbeddedBlockOptions = [
 ];
 
 const renderTypeLabels: Record<string, string> = {
-  "1": "Heading",
-  "2": "Paragraph",
-  "3": "Todo list",
-  "4": "Image",
+  "1": "Titel",
+  "2": "Absatz",
+  "3": "Todo-Liste",
+  "4": "Bild",
   "5": "Key-value",
-  "6": "Plain text",
-  "7": "Raw LaTeX"
+  "6": "Klartext",
+  "7": "Roh-LaTeX"
 };
 
 function optionLabel(options: { value: string; label: string }[], value: number | string) {
-  return options.find((option) => option.value === String(value))?.label ?? `Unknown (${value})`;
+  return options.find((option) => option.value === String(value))?.label ?? `Unbekannt (${value})`;
 }
 
 function optionDescription(options: { value: string; label: string; description?: string }[], value: number | string) {
@@ -222,6 +256,8 @@ function blockKindForElementType(elementTypeId: string | number) {
     "9": "attendance",
     "10": "session_date",
     "11": "matrix",
+    "12": "finance_balance",
+    "13": "finance_transactions",
   };
   return mapping[String(elementTypeId)] ?? "text";
 }
@@ -285,6 +321,7 @@ function matrixEmbeddedBlockConfiguration(elementTypeId: string | number | null 
     return {
       event_tag_filter: "",
       event_only_from_protocol_date: true,
+      event_only_before_protocol_date: false,
       event_gray_past: true,
       event_allow_end_date: false,
       event_use_column_tag_filter: false,
@@ -341,10 +378,12 @@ function blockFormFromBlock(block: ElementDefinitionBlock): BlockFormState {
     event_date_mode: (String(block.configuration_json?.event_date_mode ?? "relative_window") as "relative_window" | "all_future"),
     event_include_unlisted_past: Boolean(block.configuration_json?.event_include_unlisted_past ?? false),
     event_only_from_protocol_date: Boolean(block.configuration_json?.event_only_from_protocol_date ?? true),
+    event_only_before_protocol_date: Boolean(block.configuration_json?.event_only_before_protocol_date ?? false),
     event_gray_past: Boolean(block.configuration_json?.event_gray_past ?? true),
     event_allow_end_date: Boolean(block.configuration_json?.event_allow_end_date ?? false),
     event_show_date: Boolean(block.configuration_json?.event_show_date ?? true),
     event_show_tag: Boolean(block.configuration_json?.event_show_tag ?? true),
+    event_show_tag_colors: Boolean(block.configuration_json?.event_show_tag_colors ?? false),
     event_show_title: Boolean(block.configuration_json?.event_show_title ?? true),
     event_show_description: Boolean(block.configuration_json?.event_show_description ?? true),
     event_show_participant_count: Boolean(block.configuration_json?.event_show_participant_count ?? false),
@@ -370,9 +409,26 @@ function blockFormFromBlock(block: ElementDefinitionBlock): BlockFormState {
     todo_block_title_filter: String(block.configuration_json?.todo_block_title_filter ?? ""),
     todo_task_filter: String(block.configuration_json?.todo_task_filter ?? ""),
     todo_open_only: Boolean(block.configuration_json?.todo_open_only ?? true),
+    todo_due_tag_filter: String(block.configuration_json?.todo_due_tag_filter ?? ""),
+    finance_account_id: block.configuration_json?.finance_account_id != null ? String(block.configuration_json.finance_account_id) : "",
+    finance_filter_type: (String(block.configuration_json?.finance_filter_type ?? "all")) as "all" | "since_last_session" | "this_year" | "last_n",
+    finance_last_n: String(block.configuration_json?.finance_last_n ?? "10"),
+    finance_since_date: String(block.configuration_json?.finance_since_date ?? ""),
+    fine_account_id: block.configuration_json?.fine_account_id != null ? String(block.configuration_json.fine_account_id) : "",
+    fine_amount_late: block.configuration_json?.fine_amount_late != null ? String(block.configuration_json.fine_amount_late) : "",
+    fine_amount_absent: block.configuration_json?.fine_amount_absent != null ? String(block.configuration_json.fine_amount_absent) : "",
     left_column_heading: String(block.configuration_json?.left_column_heading ?? ""),
     value_column_heading: String(block.configuration_json?.value_column_heading ?? ""),
     linked_list_id: block.configuration_json?.linked_list_id != null ? String(block.configuration_json?.linked_list_id) : "",
+    linked_list_group_by:
+      block.configuration_json?.linked_list_group_by === "column_one" || block.configuration_json?.linked_list_group_by === "column_two"
+        ? block.configuration_json.linked_list_group_by
+        : "",
+    linked_list_sort_by:
+      block.configuration_json?.linked_list_sort_by === "column_one" || block.configuration_json?.linked_list_sort_by === "column_two"
+        ? block.configuration_json.linked_list_sort_by
+        : "",
+    linked_list_sort_direction: block.configuration_json?.linked_list_sort_direction === "desc" ? "desc" : "asc",
     is_editable: block.is_editable,
     export_visible: block.export_visible,
     is_visible: block.is_visible,
@@ -467,10 +523,12 @@ function blockPayload(form: BlockFormState): ElementDefinitionBlock {
       event_date_mode: form.event_date_mode,
       event_include_unlisted_past: form.event_include_unlisted_past,
       event_only_from_protocol_date: form.event_only_from_protocol_date,
+      event_only_before_protocol_date: form.event_only_before_protocol_date,
       event_gray_past: form.event_gray_past,
       event_allow_end_date: form.event_allow_end_date,
       event_show_date: form.event_show_date,
       event_show_tag: form.event_show_tag,
+      event_show_tag_colors: form.event_show_tag_colors,
       event_show_title: form.event_show_title,
       event_show_description: form.event_show_description,
       event_show_participant_count: form.event_show_participant_count,
@@ -484,10 +542,24 @@ function blockPayload(form: BlockFormState): ElementDefinitionBlock {
       todo_block_title_filter: form.todo_block_title_filter || null,
       todo_task_filter: form.todo_task_filter || null,
       todo_open_only: form.todo_open_only,
+      todo_due_tag_filter: form.todo_due_tag_filter || null,
+      finance_account_id: form.finance_account_id ? Number(form.finance_account_id) : null,
+      finance_filter_type: form.finance_filter_type,
+      finance_last_n: form.finance_filter_type === "last_n" ? Number(form.finance_last_n) : null,
+      finance_since_date: form.finance_filter_type === "since_last_session" ? (form.finance_since_date || null) : null,
+      fine_account_id: form.fine_account_id ? Number(form.fine_account_id) : null,
+      fine_amount_late: form.fine_amount_late ? parseFloat(form.fine_amount_late) : null,
+      fine_amount_absent: form.fine_amount_absent ? parseFloat(form.fine_amount_absent) : null,
       left_column_heading: form.left_column_heading || null,
       value_column_heading: form.value_column_heading || null,
       linked_list_id:
         form.element_type_id === "6" && form.linked_list_id ? Number(form.linked_list_id) : null,
+      linked_list_group_by:
+        form.element_type_id === "6" && form.linked_list_id && form.linked_list_group_by ? form.linked_list_group_by : null,
+      linked_list_sort_by:
+        form.element_type_id === "6" && form.linked_list_id && form.linked_list_sort_by ? form.linked_list_sort_by : null,
+      linked_list_sort_direction:
+        form.element_type_id === "6" && form.linked_list_id && form.linked_list_sort_by ? form.linked_list_sort_direction : null,
       rows:
         (String(form.element_type_id) === "11" || (String(form.element_type_id) === "6" && !form.linked_list_id))
           ? form.table_fields.map((field, index) => ({
@@ -546,13 +618,138 @@ function blockDisplayName(block: { title?: string | null; block_title?: string |
   return "Direkt unter dem Elementtitel";
 }
 
+function linkedListColumnOptions(definition: StructuredListDefinition | null) {
+  if (!definition) {
+    return [];
+  }
+  return [
+    { value: "column_one" as const, label: definition.column_one_title },
+    { value: "column_two" as const, label: definition.column_two_title },
+  ];
+}
+
+function repeatSourceLabel(value: BlockFormState["repeat_source"]) {
+  switch (value) {
+    case "event":
+      return "Pro Termin";
+    case "todo":
+      return "Pro Todo";
+    default:
+      return "Einmalig";
+  }
+}
+
+function SettingsSection({
+  title,
+  description,
+  actions,
+  children,
+  tone = "default",
+}: {
+  title: string;
+  description?: string;
+  actions?: ReactNode;
+  children: ReactNode;
+  tone?: "default" | "soft";
+}) {
+  return (
+    <section className={`settings-section${tone === "soft" ? " settings-section-soft" : ""}`}>
+      <div className="settings-section-head">
+        <div className="settings-section-copy">
+          <h3>{title}</h3>
+          {description ? <p className="muted">{description}</p> : null}
+        </div>
+        {actions ? <div className="settings-section-actions">{actions}</div> : null}
+      </div>
+      <div className="settings-section-body">{children}</div>
+    </section>
+  );
+}
+
+function BlockEditorSummary({
+  form,
+  mode,
+  onChooseType,
+}: {
+  form: BlockFormState;
+  mode: "create" | "edit";
+  onChooseType: () => void;
+}) {
+  const currentTypeLabel = optionLabel(elementTypeOptions, form.element_type_id);
+  const currentTypeDescription = optionDescription(elementTypeOptions, form.element_type_id);
+  const hasLinkedList = form.element_type_id === "6" && Boolean(form.linked_list_id);
+
+  return (
+    <section className="block-editor-hero">
+      <div className="block-editor-hero-copy">
+        <div className="eyebrow">{mode === "create" ? "Neuer Block" : "Block bearbeiten"}</div>
+        <div className="block-editor-hero-top">
+          <div className="block-editor-hero-text">
+            <h3>{currentTypeLabel}</h3>
+            <p className="muted">{currentTypeDescription || "Wähle den Blocktyp und konfiguriere danach die passenden Einstellungen."}</p>
+          </div>
+          <button type="button" className="button-ghost button-inline block-editor-hero-action" onClick={onChooseType}>
+            Blocktyp wechseln
+          </button>
+        </div>
+        <div className="status-row block-editor-hero-pills">
+          <span className="pill">Typ: {currentTypeLabel}</span>
+          <span className="pill">Wiederholung: {repeatSourceLabel(form.repeat_source)}</span>
+          <span className="pill">{form.is_editable ? "Im Protokoll bearbeitbar" : "Im Protokoll fixiert"}</span>
+          {hasLinkedList ? <span className="pill">Mit globaler Liste gekoppelt</span> : null}
+          {form.copy_from_last_protocol ? <span className="pill">Übernahme aus letzter Sitzung</span> : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ElementEditorSummary({
+  title,
+  description,
+  isActive,
+  blockCount,
+  mode,
+}: {
+  title: string;
+  description?: string;
+  isActive: boolean;
+  blockCount: number;
+  mode: "create" | "edit";
+}) {
+  const resolvedTitle = title.trim() || (mode === "create" ? "Neues Element" : "Element ohne Titel");
+
+  return (
+    <section className="block-editor-hero">
+      <div className="block-editor-hero-copy">
+        <div className="eyebrow">{mode === "create" ? "Neues Element" : "Element bearbeiten"}</div>
+        <div className="block-editor-hero-top">
+          <div className="block-editor-hero-text">
+            <h3>{resolvedTitle}</h3>
+            <p className="muted">
+              {description?.trim() || "Elemente bündeln die internen Blöcke, aus denen Vorlagen und Protokolle später aufgebaut werden."}
+            </p>
+          </div>
+        </div>
+        <div className="status-row block-editor-hero-pills">
+          <span className="pill">{isActive ? "Aktiv" : "Inaktiv"}</span>
+          <span className="pill">{blockCount} {blockCount === 1 ? "Block" : "Blöcke"}</span>
+          <span className="pill">{description?.trim() ? "Mit Beschreibung" : "Ohne Beschreibung"}</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function ElementDefinitionManager({
   initialDefinitions,
   knownEventTags,
   availableParticipants,
   availableEvents,
   availableLists,
+  availableAccounts = [],
 }: ElementDefinitionManagerProps) {
+  const { tagConfig, updateTagColor, renameTag } = useTagConfig();
   const [definitions, setDefinitions] = useState(initialDefinitions);
   const [selectedDefinitionId, setSelectedDefinitionId] = useState<number | null>(initialDefinitions[0]?.id ?? null);
   const [definitionForm, setDefinitionForm] = useState<DefinitionFormState>(
@@ -579,7 +776,7 @@ export function ElementDefinitionManager({
   const [selectedMatrixRowId, setSelectedMatrixRowId] = useState<string | null>(null);
   const [selectedMatrixColumnId, setSelectedMatrixColumnId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("Ready");
+  const [status, setStatus] = useState("Bereit");
   const [statusTone, setStatusTone] = useState<"neutral" | "success" | "error">("neutral");
   const [draggedBlockId, setDraggedBlockId] = useState<number | null>(null);
   const [matrixPreviewColumns, setMatrixPreviewColumns] = useState<Array<{ id: string; title: string }> | null>(null);
@@ -765,7 +962,7 @@ export function ElementDefinitionManager({
             <option value="">Kein Standardwert</option>
             {sortedAvailableEvents.map((eventRow) => (
               <option key={`initial-event-${eventRow.id}`} value={eventRow.id}>
-                {eventRow.event_date} · {eventRow.title}
+                {formatDateRange(eventRow.event_date, eventRow.event_end_date)} · {eventRow.title}
               </option>
             ))}
           </select>
@@ -836,7 +1033,7 @@ export function ElementDefinitionManager({
 
   async function createDefinition(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setStatus("Creating element...");
+    setStatus("Element wird angelegt...");
     setStatusTone("neutral");
     try {
       const created = await browserApiFetch<ElementDefinition>("/api/element-definitions", {
@@ -853,10 +1050,10 @@ export function ElementDefinitionManager({
       setCreateDefinitionForm(initialDefinitionForm);
       setShowCreateDefinition(false);
       selectDefinition(created);
-      setStatus(`Created element #${created.id}`);
+      setStatus(`Element #${created.id} wurde angelegt`);
       setStatusTone("success");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Element creation failed");
+      setStatus(error instanceof Error ? error.message : "Element konnte nicht angelegt werden");
       setStatusTone("error");
     }
   }
@@ -864,7 +1061,7 @@ export function ElementDefinitionManager({
   async function saveDefinition(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedDefinition) return;
-    setStatus(`Saving element #${selectedDefinition.id}...`);
+    setStatus(`Element #${selectedDefinition.id} wird gespeichert...`);
     setStatusTone("neutral");
     try {
       const updated = await browserApiFetch<ElementDefinition>(`/api/element-definitions/${selectedDefinition.id}`, {
@@ -877,16 +1074,16 @@ export function ElementDefinitionManager({
         })
       });
       replaceDefinition(updated);
-      setStatus(`Saved element #${updated.id}`);
+      setStatus(`Element #${updated.id} wurde gespeichert`);
       setStatusTone("success");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Element save failed");
+      setStatus(error instanceof Error ? error.message : "Element konnte nicht gespeichert werden");
       setStatusTone("error");
     }
   }
 
   async function deleteDefinition(definitionId: number) {
-    setStatus(`Deleting element #${definitionId}...`);
+    setStatus(`Element #${definitionId} wird gelöscht...`);
     setStatusTone("neutral");
     try {
       await browserApiFetch(`/api/element-definitions/${definitionId}`, { method: "DELETE" });
@@ -900,10 +1097,10 @@ export function ElementDefinitionManager({
         setDefinitionForm(initialDefinitionForm);
         setBlockForm(initialBlockForm);
       }
-      setStatus(`Deleted element #${definitionId}`);
+      setStatus(`Element #${definitionId} wurde gelöscht`);
       setStatusTone("success");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Element deletion failed");
+      setStatus(error instanceof Error ? error.message : "Element konnte nicht gelöscht werden");
       setStatusTone("error");
     }
   }
@@ -926,7 +1123,7 @@ export function ElementDefinitionManager({
       setCreateBlockForm({ ...initialBlockForm, id: nextBlockId(updated.blocks), sort_index: nextSortIndex(updated.blocks) });
       return updated;
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Block update failed");
+      setStatus(error instanceof Error ? error.message : "Block konnte nicht aktualisiert werden");
       setStatusTone("error");
       return null;
     }
@@ -936,7 +1133,7 @@ export function ElementDefinitionManager({
     if (!selectedDefinition || !selectedBlock) {
       return false;
     }
-    setStatus("Saving block...");
+    setStatus("Block wird gespeichert...");
     setStatusTone("neutral");
     const updatedBlock = blockPayload(blockForm);
     const nextBlocks = resequenceBlocks(
@@ -950,7 +1147,7 @@ export function ElementDefinitionManager({
 
   async function closeMatrixDesigner() {
     if (matrixDesignerMode === "edit") {
-      const saved = await persistEditedBlock("Matrix gespeichert");
+      const saved = await persistEditedBlock("Matrix wurde gespeichert");
       if (!saved) {
         return;
       }
@@ -961,20 +1158,20 @@ export function ElementDefinitionManager({
   async function createBlock(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedDefinition) return;
-    setStatus("Adding block to element...");
+    setStatus("Block wird zum Element hinzugefügt...");
     setStatusTone("neutral");
     const nextBlocks = resequenceBlocks(
       [...selectedDefinition.blocks, blockPayload({ ...createBlockForm, sort_index: nextSortIndex(selectedDefinition.blocks) })].sort(
         (left, right) => left.sort_index - right.sort_index
       )
     );
-    await saveBlocks(nextBlocks, "Block added");
+    await saveBlocks(nextBlocks, "Block wurde hinzugefügt");
     setShowCreateBlockModal(false);
   }
 
   async function updateBlock(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const saved = await persistEditedBlock("Block saved");
+    const saved = await persistEditedBlock("Block wurde gespeichert");
     if (saved) {
       setShowEditBlockModal(false);
     }
@@ -982,15 +1179,15 @@ export function ElementDefinitionManager({
 
   async function deleteBlock(blockId: number) {
     if (!selectedDefinition) return;
-    setStatus("Deleting block...");
+    setStatus("Block wird gelöscht...");
     setStatusTone("neutral");
     const nextBlocks = resequenceBlocks(selectedDefinition.blocks.filter((block) => block.id !== blockId));
-    await saveBlocks(nextBlocks, "Block deleted");
+    await saveBlocks(nextBlocks, "Block wurde gelöscht");
   }
 
   async function reorderBlocks(sourceId: number, targetId: number) {
     if (!selectedDefinition || sourceId === targetId) return;
-    setStatus("Saving block order...");
+    setStatus("Block-Reihenfolge wird gespeichert...");
     setStatusTone("neutral");
     const ordered = [...selectedDefinition.blocks].sort((left, right) => left.sort_index - right.sort_index);
     const sourceIndex = ordered.findIndex((block) => block.id === sourceId);
@@ -1000,7 +1197,7 @@ export function ElementDefinitionManager({
     }
     const [moved] = ordered.splice(sourceIndex, 1);
     ordered.splice(targetIndex, 0, moved);
-    await saveBlocks(resequenceBlocks(ordered), "Block order saved");
+    await saveBlocks(resequenceBlocks(ordered), "Block-Reihenfolge wurde gespeichert");
   }
 
 function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
@@ -1171,11 +1368,11 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
   return (
     <div className="grid">
       <DataToolbar
-        title="Elements"
-        description="Each element has a title and can contain multiple blocks such as text, todos or images. Templates only choose these finished elements and sort them."
+        title="Elemente"
+        description="Elemente bündeln mehrere interne Blöcke wie Text, Todos, Bilder oder Tabellen. Vorlagen wählen später nur das fertige Element."
         actions={
           <button type="button" className="button-inline" onClick={() => setShowCreateDefinition((current) => !current)}>
-            {showCreateDefinition ? "Close create form" : "New element"}
+            {showCreateDefinition ? "Formular schließen" : "Neues Element"}
           </button>
         }
       />
@@ -1183,60 +1380,76 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
       <Modal
         open={showCreateDefinition}
         onClose={() => setShowCreateDefinition(false)}
-        title="Create element"
-        description="Build a reusable element with one title and multiple internal blocks."
+        title="Element anlegen"
+        description="Lege ein wiederverwendbares Element mit einer gemeinsamen Überschrift und mehreren internen Blöcken an."
       >
-        <form className="grid" onSubmit={createDefinition}>
-          <div className="two-col">
-            <label className="field-stack">
-              <span className="field-label">Element title</span>
-              <input value={createDefinitionForm.title} onChange={(event) => setCreateDefinitionForm((current) => ({ ...current, title: event.target.value }))} placeholder="e.g. Zusammenarbeit mit Blauring" required />
-              <span className="field-help">This is the main title of the whole element.</span>
-            </label>
-            <label className="field-stack">
-              <span className="field-label">Description</span>
-              <input value={createDefinitionForm.description} onChange={(event) => setCreateDefinitionForm((current) => ({ ...current, description: event.target.value }))} placeholder="Optional note for editors" />
-              <span className="field-help">Optional explanation of what this element is for.</span>
-            </label>
-          </div>
-          <label className="field-stack">
-            <span className="field-label">State</span>
-            <label className="checkbox-row">
-              <input type="checkbox" checked={createDefinitionForm.is_active} onChange={(event) => setCreateDefinitionForm((current) => ({ ...current, is_active: event.target.checked }))} />
-              Active
-            </label>
-            <span className="field-help">Inactive elements stay in the system but should not be chosen for new templates.</span>
-          </label>
-          <div className="table-toolbar-actions">
-            <button type="submit" className="button-inline">Create element</button>
+        <form className="grid section-stack" onSubmit={createDefinition}>
+          <ElementEditorSummary
+            title={createDefinitionForm.title}
+            description={createDefinitionForm.description}
+            isActive={createDefinitionForm.is_active}
+            blockCount={0}
+            mode="create"
+          />
+          <SettingsSection
+            title="Grundlagen"
+            description="Definiere Titel und Beschreibung für das Element. Die Blöcke fügst du direkt nach dem Anlegen hinzu."
+          >
+            <div className="two-col">
+              <label className="field-stack">
+                <span className="field-label">Elementtitel</span>
+                <input value={createDefinitionForm.title} onChange={(event) => setCreateDefinitionForm((current) => ({ ...current, title: event.target.value }))} placeholder="z. B. Zusammenarbeit mit Blauring" required />
+                <span className="field-help">Dieser Titel erscheint später als gemeinsame Überschrift des Elements.</span>
+              </label>
+              <label className="field-stack">
+                <span className="field-label">Beschreibung</span>
+                <input value={createDefinitionForm.description} onChange={(event) => setCreateDefinitionForm((current) => ({ ...current, description: event.target.value }))} placeholder="Optionale interne Notiz" />
+                <span className="field-help">Hilft Redaktorinnen und Redaktoren beim Einordnen des Elements.</span>
+              </label>
+            </div>
+          </SettingsSection>
+          <SettingsSection
+            title="Status"
+            description="Inaktive Elemente bleiben erhalten, werden aber für neue Vorlagen nicht mehr angeboten."
+            tone="soft"
+          >
+            <div className="config-toggle-grid">
+              <label className="checkbox-row">
+                <input type="checkbox" checked={createDefinitionForm.is_active} onChange={(event) => setCreateDefinitionForm((current) => ({ ...current, is_active: event.target.checked }))} />
+                Element aktiv
+              </label>
+            </div>
+          </SettingsSection>
+          <div className="block-editor-footer">
+            <button type="submit" className="button-inline">Element anlegen</button>
           </div>
         </form>
       </Modal>
 
       <article className="card">
         <div className="two-col">
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search elements" />
-          <div className="info-note">Fixed blocks should be created here as non-editable blocks. They will appear read-only later in the protocol editor.</div>
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Elemente durchsuchen" />
+          <div className="info-note">Fixe Inhalte legst du hier am besten als nicht editierbare Blöcke an. Im Protokoll erscheinen sie später automatisch schreibgeschützt.</div>
         </div>
       </article>
 
       <StatusBanner tone={statusTone} message={status} />
 
-      <DataTable columns={["Element", "Blocks", "State", "Actions"]}>
+      <DataTable columns={["Element", "Blöcke", "Status", "Aktionen"]}>
         {filteredDefinitions.map((definition) => (
           <tr key={definition.id} className={`table-row-clickable${selectedDefinitionId === definition.id ? " table-row-active" : ""}`} onClick={() => selectDefinition(definition)}>
             <td>
               <strong>{definition.title}</strong>
               <div className="muted">Element #{definition.id}</div>
             </td>
-            <td>{definition.blocks.length} block{definition.blocks.length === 1 ? "" : "s"}</td>
-            <td><span className="pill">{definition.is_active ? "active" : "inactive"}</span></td>
+            <td>{definition.blocks.length} {definition.blocks.length === 1 ? "Block" : "Blöcke"}</td>
+            <td><span className="pill">{definition.is_active ? "Aktiv" : "Inaktiv"}</span></td>
             <td>
               <div className="table-actions">
                 <button type="button" className="button-inline button-danger" onClick={(event) => {
                   event.stopPropagation();
                   void deleteDefinition(definition.id);
-                }}>Delete</button>
+                }}>Löschen</button>
               </div>
             </td>
           </tr>
@@ -1251,51 +1464,56 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
           setShowEditBlockModal(false);
           setMatrixDesignerMode(null);
         }}
-        title={selectedDefinition ? selectedDefinition.title : "Element detail"}
-        description="Edit the element metadata and its internal blocks in one focused popup."
+        title={selectedDefinition ? `Element bearbeiten: ${selectedDefinition.title}` : "Element bearbeiten"}
+        description="Bearbeite Metadaten und interne Blöcke in einer gemeinsamen, aufgeräumten Ansicht."
         size="wide"
       >
         {selectedDefinition ? (
-        <>
-          <article className="card">
-            <div className="eyebrow">Element Detail</div>
-            <h3>{selectedDefinition.title}</h3>
-            <form className="grid" onSubmit={saveDefinition}>
-              <div className="two-col">
-                <label className="field-stack">
-                  <span className="field-label">Element title</span>
-                  <input value={definitionForm.title} onChange={(event) => setDefinitionForm((current) => ({ ...current, title: event.target.value }))} />
-                </label>
-                <label className="field-stack">
-                  <span className="field-label">Description</span>
-                  <input value={definitionForm.description} onChange={(event) => setDefinitionForm((current) => ({ ...current, description: event.target.value }))} />
-                </label>
-              </div>
-              <label className="field-stack">
-                <span className="field-label">State</span>
-                <label className="checkbox-row">
-                  <input type="checkbox" checked={definitionForm.is_active} onChange={(event) => setDefinitionForm((current) => ({ ...current, is_active: event.target.checked }))} />
-                  Active
-                </label>
-              </label>
-              <div className="table-toolbar-actions">
-                <button type="submit" className="button-inline">Save element</button>
+          <div className="section-stack">
+            <form className="grid section-stack" onSubmit={saveDefinition}>
+              <ElementEditorSummary
+                title={definitionForm.title}
+                description={definitionForm.description}
+                isActive={definitionForm.is_active}
+                blockCount={selectedDefinition.blocks.length}
+                mode="edit"
+              />
+              <SettingsSection
+                title="Element-Grundlagen"
+                description="Passe Titel, Beschreibung und Aktivstatus des Elements an."
+              >
+                <div className="two-col">
+                  <label className="field-stack">
+                    <span className="field-label">Elementtitel</span>
+                    <input value={definitionForm.title} onChange={(event) => setDefinitionForm((current) => ({ ...current, title: event.target.value }))} />
+                  </label>
+                  <label className="field-stack">
+                    <span className="field-label">Beschreibung</span>
+                    <input value={definitionForm.description} onChange={(event) => setDefinitionForm((current) => ({ ...current, description: event.target.value }))} />
+                  </label>
+                </div>
+                <div className="config-toggle-grid">
+                  <label className="checkbox-row">
+                    <input type="checkbox" checked={definitionForm.is_active} onChange={(event) => setDefinitionForm((current) => ({ ...current, is_active: event.target.checked }))} />
+                    Element aktiv
+                  </label>
+                </div>
+              </SettingsSection>
+              <div className="block-editor-footer">
+                <button type="submit" className="button-inline">Element speichern</button>
               </div>
             </form>
-          </article>
 
-          <article className="card">
-            <DataToolbar
-              title={`Blocks inside ${selectedDefinition.title}`}
-              description="These blocks belong to this element. Templates cannot change them, they only choose the whole element. Drag rows to reorder blocks."
+            <SettingsSection
+              title={`Blöcke in ${selectedDefinition.title}`}
+              description="Diese Blöcke gehören fest zu diesem Element. Die Reihenfolge kannst du hier direkt per Drag & Drop anpassen."
               actions={
                 <button type="button" className="button-inline" onClick={() => setShowCreateBlockModal(true)}>
-                  New block
+                  Neuer Block
                 </button>
               }
-            />
-
-            <DataTable columns={["Block", "Type", "Subtitle", "Order", "Actions"]}>
+            >
+              <DataTable columns={["Block", "Typ", "Untertitel", "Reihenfolge", "Aktionen"]}>
               {selectedDefinition.blocks
                 .slice()
                 .sort((left, right) => left.sort_index - right.sort_index)
@@ -1327,7 +1545,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                     </td>
                     <td>{optionLabel(elementTypeOptions, block.element_type_id)}</td>
                     <td>{block.block_title?.trim() ? block.block_title : "Kein Untertitel"}</td>
-                    <td><span className="pill">Drag</span></td>
+                    <td><span className="pill">Ziehen</span></td>
                     <td>
                       <div className="table-actions">
                         <button
@@ -1340,19 +1558,19 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                             setShowEditBlockModal(true);
                           }}
                         >
-                          Edit
+                          Bearbeiten
                         </button>
                         <button type="button" className="button-inline button-danger" onClick={(event) => {
                           event.stopPropagation();
                           void deleteBlock(block.id);
-                        }}>Delete</button>
+                        }}>Löschen</button>
                       </div>
                     </td>
                   </tr>
                 ))}
-            </DataTable>
-          </article>
-        </>
+              </DataTable>
+            </SettingsSection>
+          </div>
       ) : null}
       </Modal>
 
@@ -1366,62 +1584,58 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
             setTypePickerMode(null);
           }
         }}
-        title="New block"
-        description="Add a new block to this element."
+        title="Block anlegen"
+        description="Füge diesem Element einen neuen Block mit klaren Einstellungen hinzu."
         size="wide"
         headerActions={
           <button type="button" className="button-ghost" onClick={() => setShowCreateBlockHelp((current) => !current)}>
-            Info
+            Hilfe
           </button>
         }
       >
-        <form className="grid section-stack" onSubmit={createBlock}>
+        <form className="grid section-stack block-editor-form" onSubmit={createBlock}>
           {showCreateBlockHelp ? (
             <div className="compact-info-pop">
-              <strong>Block help</strong>
-              <span className="muted">The block title is shown inside the protocol. Fixed blocks should be non-editable. Todo and image blocks can contain multiple entries automatically.</span>
+              <strong>Block-Hinweis</strong>
+              <span className="muted">Der Blocktitel erscheint später im Protokoll. Fixe Blöcke sollten nicht editierbar sein, Mehrfachblöcke wie Todos oder Bilder können mehrere Einträge enthalten.</span>
             </div>
           ) : null}
-          <div className="two-col">
+          <BlockEditorSummary form={createBlockForm} mode="create" onChooseType={() => setTypePickerMode("create")} />
+          <SettingsSection
+            title="Grundlagen"
+            description="Name, Untertitel und Startinhalt für diesen Block. Der Blocktyp kann jederzeit oben gewechselt werden."
+          >
+            <div className="two-col">
+              <label className="field-stack">
+                <span className="field-label">Blockname</span>
+                <input value={createBlockForm.title} onChange={(event) => setCreateBlockForm((current) => ({ ...current, title: event.target.value }))} placeholder="Optional, z. B. Besprechungstext" />
+                <span className="field-help">Optional. Wenn leer, erscheint der Block direkt unter dem Elementtitel.</span>
+              </label>
+              <label className="field-stack">
+                <span className="field-label">Untertitel</span>
+                <input value={createBlockForm.block_title} onChange={(event) => setCreateBlockForm((current) => ({ ...current, block_title: event.target.value }))} placeholder="z. B. Offene Punkte" />
+                <span className="field-help">Optionaler Untertitel innerhalb des Elements im Protokoll.</span>
+              </label>
+            </div>
             <label className="field-stack">
-              <span className="field-label">Block name</span>
-              <input value={createBlockForm.title} onChange={(event) => setCreateBlockForm((current) => ({ ...current, title: event.target.value }))} placeholder="Optional, z. B. Besprechungstext" />
-              <span className="field-help">Optional. Wenn leer, erscheint der Block direkt unter dem Elementtitel.</span>
+              <span className="field-label">Beschreibung</span>
+              <input value={createBlockForm.description} onChange={(event) => setCreateBlockForm((current) => ({ ...current, description: event.target.value }))} placeholder="Optionale Notiz für Redakteure" />
             </label>
             <label className="field-stack">
-              <span className="field-label">Block subtitle</span>
-              <input value={createBlockForm.block_title} onChange={(event) => setCreateBlockForm((current) => ({ ...current, block_title: event.target.value }))} placeholder="e.g. Offene Punkte" />
-              <span className="field-help">Optional subtitle shown inside the element in the protocol editor.</span>
+              <span className="field-label">Standard- oder Fixinhalt</span>
+              <textarea
+                rows={6}
+                value={createBlockForm.default_content}
+                onChange={(event) => setCreateBlockForm((current) => ({ ...current, default_content: event.target.value }))}
+                placeholder="Wird für statische Texte als fixer Inhalt und sonst als Startinhalt genutzt"
+              />
+              <span className="field-help">Für statische Textblöcke ist dies der feste Inhalt, für normale Textblöcke der Startwert.</span>
             </label>
-          </div>
-          <label className="field-stack">
-            <span className="field-label">Description</span>
-            <input value={createBlockForm.description} onChange={(event) => setCreateBlockForm((current) => ({ ...current, description: event.target.value }))} placeholder="Optional note for editors" />
-          </label>
-          <label className="field-stack">
-            <span className="field-label">Default or fixed content</span>
-            <textarea
-              rows={6}
-              value={createBlockForm.default_content}
-              onChange={(event) => setCreateBlockForm((current) => ({ ...current, default_content: event.target.value }))}
-              placeholder="Used for static text or initial text"
-            />
-            <span className="field-help">For static text blocks this becomes the fixed content. For normal text blocks it is the initial text.</span>
-          </label>
-          <div className="field-stack">
-            <label className="field-stack">
-              <span className="field-label">Block type</span>
-              <button type="button" className="button-ghost type-picker-button" onClick={() => setTypePickerMode("create")}>
-                Select
-              </button>
-              <span className="field-help">{optionDescription(elementTypeOptions, createBlockForm.element_type_id)}</span>
-            </label>
-          </div>
-          <article className="card grid">
-            <DataToolbar
-              title="Wiederholung"
-              description="Lege fest, ob dieser Block einmalig erscheint oder sich pro Termin bzw. Todo wiederholt."
-            />
+          </SettingsSection>
+          <SettingsSection
+            title="Wiederholung"
+            description="Lege fest, ob dieser Block einmalig erscheint oder sich pro Termin bzw. Todo wiederholt."
+          >
             <div className="rule-option-grid">
               {[
                 { value: "none", title: "Einmalig", description: "Der Block erscheint genau einmal im Element." },
@@ -1443,16 +1657,19 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
               <>
                 <div className="three-col">
                     <label className="field-stack">
-                      <span className="field-label">Tag filter</span>
-                    <input
-                      value={createBlockForm.event_tag_filter}
-                      onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_tag_filter: event.target.value }))}
-                      placeholder="z. B. Scharanlass"
-                      list="element-event-tag-suggestions"
-                    />
+                      <span className="field-label">Tag-Filter</span>
+                      <TagInput
+                        value={createBlockForm.event_tag_filter}
+                        onChange={(v) => setCreateBlockForm((current) => ({ ...current, event_tag_filter: v }))}
+                        suggestions={knownEventTags}
+                  tagConfig={tagConfig}
+                  onTagColorChange={updateTagColor}
+                  onTagRename={renameTag}
+                        placeholder="z. B. Scharanlass"
+                      />
                   </label>
                   <label className="field-stack">
-                    <span className="field-label">Titel filter</span>
+                    <span className="field-label">Titelfilter</span>
                     <input value={createBlockForm.event_title_filter} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_title_filter: event.target.value }))} placeholder="enthaelt..." />
                   </label>
                   <label className="field-stack">
@@ -1507,20 +1724,130 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 </div>
               </>
             ) : null}
-          </article>
+          </SettingsSection>
+          {createBlockForm.element_type_id === "2" ? (
+            <SettingsSection
+              title="Todo-Einstellungen"
+              description="Zusätzliche Regeln für Aufgabenblöcke, zum Beispiel die Zuordnung des Fälligkeitsdatums."
+            >
+              <div className="three-col">
+                <label className="field-stack">
+                  <span className="field-label">Termin-Tagfilter für Fälligkeitsdatum</span>
+                  <TagInput
+                    value={createBlockForm.todo_due_tag_filter}
+                    onChange={(v) => setCreateBlockForm((current) => ({ ...current, todo_due_tag_filter: v }))}
+                    suggestions={knownEventTags}
+                    tagConfig={tagConfig}
+                    onTagColorChange={updateTagColor}
+                    onTagRename={renameTag}
+                    placeholder="Alle Termine (kein Filter)"
+                  />
+                </label>
+              </div>
+            </SettingsSection>
+          ) : null}
+          {createBlockForm.element_type_id === "9" ? (
+            <SettingsSection
+              title="Anwesenheit & Bussen"
+              description="Optionale Verknüpfung mit einem Bussen-Konto und Standardbeträge für Absenzen."
+            >
+              <div className="three-col">
+                <label className="field-stack">
+                  <span className="field-label">Bussen-Konto (optional)</span>
+                  <select
+                    value={createBlockForm.fine_account_id}
+                    onChange={(e) => setCreateBlockForm((c) => ({ ...c, fine_account_id: e.target.value }))}
+                  >
+                    <option value="">— Kein Bussen-Konto —</option>
+                    {availableAccounts.map((a) => (
+                      <option key={a.id} value={a.id}>{a.name} ({a.currency_label})</option>
+                    ))}
+                  </select>
+                </label>
+                {createBlockForm.fine_account_id ? (
+                  <>
+                    <label className="field-stack">
+                      <span className="field-label">Busse Verspätet (Betrag)</span>
+                      <input type="number" min="0" step="0.50" value={createBlockForm.fine_amount_late} placeholder="z. B. 5.00" onChange={(e) => setCreateBlockForm((c) => ({ ...c, fine_amount_late: e.target.value }))} />
+                    </label>
+                    <label className="field-stack">
+                      <span className="field-label">Busse Unentschuldigt (Betrag)</span>
+                      <input type="number" min="0" step="0.50" value={createBlockForm.fine_amount_absent} placeholder="z. B. 10.00" onChange={(e) => setCreateBlockForm((c) => ({ ...c, fine_amount_absent: e.target.value }))} />
+                    </label>
+                  </>
+                ) : null}
+              </div>
+            </SettingsSection>
+          ) : null}
+          {(createBlockForm.element_type_id === "12" || createBlockForm.element_type_id === "13") ? (
+            <SettingsSection
+              title={createBlockForm.element_type_id === "12" ? "Kontostand" : "Transaktionen"}
+              description="Wähle das Finanzkonto und bei Transaktionen zusätzlich den gewünschten Ausschnitt."
+            >
+              <div className="three-col">
+                <label className="field-stack">
+                  <span className="field-label">Konto</span>
+                  <select
+                    value={createBlockForm.finance_account_id}
+                    onChange={(e) => setCreateBlockForm((c) => ({ ...c, finance_account_id: e.target.value }))}
+                  >
+                    <option value="">— Konto wählen —</option>
+                    {availableAccounts.map((a) => (
+                      <option key={a.id} value={a.id}>{a.name} ({a.currency_label})</option>
+                    ))}
+                  </select>
+                </label>
+                {createBlockForm.element_type_id === "13" ? (
+                  <>
+                    <label className="field-stack">
+                      <span className="field-label">Transaktionen anzeigen</span>
+                      <select
+                        value={createBlockForm.finance_filter_type}
+                        onChange={(e) => setCreateBlockForm((c) => ({ ...c, finance_filter_type: e.target.value as any }))}
+                      >
+                        <option value="all">Alle Transaktionen</option>
+                        <option value="since_last_session">Seit letzter Sitzung</option>
+                        <option value="this_year">Dieses Jahr</option>
+                        <option value="last_n">Letzte N Transaktionen</option>
+                      </select>
+                    </label>
+                    {createBlockForm.finance_filter_type === "last_n" && (
+                      <label className="field-stack">
+                        <span className="field-label">Anzahl (N)</span>
+                        <input type="number" min="1" value={createBlockForm.finance_last_n} onChange={(e) => setCreateBlockForm((c) => ({ ...c, finance_last_n: e.target.value }))} />
+                      </label>
+                    )}
+                    {createBlockForm.finance_filter_type === "since_last_session" && (
+                      <label className="field-stack">
+                        <span className="field-label">Seit Datum (Standard: Protokolldatum)</span>
+                        <DateInput value={createBlockForm.finance_since_date} onChange={(value) => setCreateBlockForm((c) => ({ ...c, finance_since_date: value }))} />
+                      </label>
+                    )}
+                  </>
+                ) : null}
+              </div>
+            </SettingsSection>
+          ) : null}
           {createBlockForm.element_type_id === "7" ? (
-            <div className="grid">
+            <SettingsSection
+              title="Terminliste"
+              description="Steuere Filter, Sichtbarkeit und Tabellenspalten der automatisch angezeigten Termine."
+            >
               <div className="three-col">
               <label className="field-stack">
                 <span className="field-label">Termin-Tagfilter</span>
-                  <input
-                    value={createBlockForm.event_tag_filter}
-                    onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_tag_filter: event.target.value }))}
-                    placeholder="e.g. Sitzung"
-                    list="element-event-tag-suggestions"
-                  />
+                <TagInput
+                  value={createBlockForm.event_tag_filter}
+                  onChange={(v) => setCreateBlockForm((current) => ({ ...current, event_tag_filter: v }))}
+                  suggestions={knownEventTags}
+                  tagConfig={tagConfig}
+                  onTagColorChange={updateTagColor}
+                  onTagRename={renameTag}
+                  placeholder="z. B. Sitzung"
+                />
                 </label>
-              <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.event_only_from_protocol_date} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_only_from_protocol_date: event.target.checked }))} />Nur Termine ab Protokolldatum anzeigen</label>
+              <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.event_only_from_protocol_date} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_only_from_protocol_date: event.target.checked, event_only_before_protocol_date: false }))} />Nur Termine ab Protokolldatum anzeigen</label>
+              <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.event_only_before_protocol_date} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_only_before_protocol_date: event.target.checked, event_only_from_protocol_date: false }))} />Nur Termine vor Protokolldatum anzeigen (Rückblick)</label>
               <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.event_gray_past} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_gray_past: event.target.checked }))} />Vergangene Termine ausgegraut darstellen</label>
               <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.event_allow_end_date} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_allow_end_date: event.target.checked }))} />Mehrtägige Termine erlauben</label>
               </div>
@@ -1530,38 +1857,38 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.event_show_title} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_show_title: event.target.checked }))} />Spalte Titel</label>
                 <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.event_show_description} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_show_description: event.target.checked }))} />Spalte Beschreibung</label>
                 <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.event_show_participant_count} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_show_participant_count: event.target.checked }))} />Spalte Teilnehmerzahl</label>
+                <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.event_show_tag_colors} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_show_tag_colors: event.target.checked }))} />Tag-Farben anzeigen</label>
               </div>
-            </div>
+            </SettingsSection>
           ) : null}
           {createBlockForm.element_type_id === "6" ? (
-            <div className="card grid">
-              <DataToolbar
-                title="Table rows"
-                description={
-                  createBlockForm.linked_list_id
-                    ? "Diese Tabelle ist direkt mit einer globalen Liste gekoppelt."
-                    : "Define the fixed left column and the value type for each row."
-                }
-                actions={
-                  createBlockForm.linked_list_id ? null : (
-                    <button
-                      type="button"
-                      className="button-inline"
-                      onClick={() =>
-                        setCreateBlockForm((current) => ({
-                          ...current,
-                          table_fields: [
-                            ...current.table_fields,
-                            defaultFieldRow(nextTableFieldId(current.table_fields)),
-                          ],
-                        }))
-                      }
-                    >
-                      Add row
-                    </button>
-                  )
-                }
-              />
+            <SettingsSection
+              title="Tabellenblock"
+              description={
+                createBlockForm.linked_list_id
+                  ? "Dieser Tabellenblock ist mit einer globalen Liste gekoppelt."
+                  : "Definiere Spaltenüberschriften, Zeilen und Datentypen für die Tabelle."
+              }
+              actions={
+                createBlockForm.linked_list_id ? null : (
+                  <button
+                    type="button"
+                    className="button-inline"
+                    onClick={() =>
+                      setCreateBlockForm((current) => ({
+                        ...current,
+                        table_fields: [
+                          ...current.table_fields,
+                          defaultFieldRow(nextTableFieldId(current.table_fields)),
+                        ],
+                      }))
+                    }
+                  >
+                    Zeile hinzufügen
+                  </button>
+                )
+              }
+            >
               <label className="field-stack">
                 <span className="field-label">Gekoppelte Liste</span>
                 <select
@@ -1570,6 +1897,9 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                     setCreateBlockForm((current) => ({
                       ...current,
                       linked_list_id: event.target.value,
+                      linked_list_group_by: event.target.value ? current.linked_list_group_by : "",
+                      linked_list_sort_by: event.target.value ? current.linked_list_sort_by : "",
+                      linked_list_sort_direction: event.target.value ? current.linked_list_sort_direction : "asc",
                     }))
                   }
                 >
@@ -1599,6 +1929,66 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                   <p className="muted">
                     Inhalt und Zeilen dieser Tabelle kommen aus `Datensaetze &gt; Listen`. Die lokale Tabellenkonfiguration wird in diesem Fall ignoriert.
                   </p>
+                  <div className="three-col">
+                    <label className="field-stack">
+                      <span className="field-label">Gruppieren nach</span>
+                      <select
+                        value={createBlockForm.linked_list_group_by}
+                        onChange={(event) =>
+                          setCreateBlockForm((current) => ({
+                            ...current,
+                            linked_list_group_by: event.target.value as BlockFormState["linked_list_group_by"],
+                          }))
+                        }
+                      >
+                        <option value="">Keine Gruppierung</option>
+                        {linkedListColumnOptions(createLinkedList).map((option) => (
+                          <option key={`create-linked-group-${option.value}`} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="field-stack">
+                      <span className="field-label">Alphabetisch sortieren nach</span>
+                      <select
+                        value={createBlockForm.linked_list_sort_by}
+                        onChange={(event) =>
+                          setCreateBlockForm((current) => ({
+                            ...current,
+                            linked_list_sort_by: event.target.value as BlockFormState["linked_list_sort_by"],
+                            linked_list_sort_direction: event.target.value ? current.linked_list_sort_direction : "asc",
+                          }))
+                        }
+                      >
+                        <option value="">Manuelle Listenreihenfolge</option>
+                        {linkedListColumnOptions(createLinkedList).map((option) => (
+                          <option key={`create-linked-sort-${option.value}`} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="field-stack">
+                      <span className="field-label">Sortierung</span>
+                      <select
+                        value={createBlockForm.linked_list_sort_direction}
+                        disabled={!createBlockForm.linked_list_sort_by}
+                        onChange={(event) =>
+                          setCreateBlockForm((current) => ({
+                            ...current,
+                            linked_list_sort_direction: event.target.value as BlockFormState["linked_list_sort_direction"],
+                          }))
+                        }
+                      >
+                        <option value="asc">A-Z</option>
+                        <option value="desc">Z-A</option>
+                      </select>
+                    </label>
+                  </div>
+                  <p className="muted">
+                    Diese Anzeigeoptionen gelten nur fuer diesen Tabellenblock und werden auch im PDF-Export beruecksichtigt.
+                  </p>
                 </div>
               ) : (
                 <>
@@ -1616,7 +2006,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 <div className="grid" key={`create-table-field-${field.id}`}>
                 <div className="four-col">
                   <label className="field-stack">
-                    <span className="field-label">Left column label</span>
+                    <span className="field-label">Zeilenlabel</span>
                     <input
                       value={field.label}
                       onChange={(event) =>
@@ -1627,7 +2017,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                           ),
                         }))
                       }
-                      placeholder="e.g. Verantwortlich"
+                      placeholder="z. B. Verantwortlich"
                     />
                   </label>
                   <label className="field-stack">
@@ -1674,7 +2064,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                         }))
                       }
                     >
-                      Remove
+                      Entfernen
                     </button>
                   </div>
                 </div>
@@ -1682,19 +2072,18 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
               ))}
                 </>
               )}
-            </div>
+            </SettingsSection>
           ) : null}
           {createBlockForm.element_type_id === "11" ? (
-            <div className="card grid">
-              <DataToolbar
-                title="Matrix"
-                description="Lege Zeilen und Spalten in einem eigenen Designer an. Danach kannst du pro Zeile den Datentyp und pro Spalte den Terminfilter setzen."
-                actions={
-                  <button type="button" className="button-inline" onClick={() => openMatrixDesigner("create")}>
-                    Matrix konfigurieren
-                  </button>
-                }
-              />
+            <SettingsSection
+              title="Matrix"
+              description="Lege Zeilen und Spalten im Designer an. Danach kannst du pro Zeile den Datentyp und pro Spalte den Terminfilter setzen."
+              actions={
+                <button type="button" className="button-inline" onClick={() => openMatrixDesigner("create")}>
+                  Matrix konfigurieren
+                </button>
+              }
+            >
               <div className="status-row">
                 <span className="pill">{createBlockForm.matrix_columns.length} Spalten</span>
                 <span className="pill">{createBlockForm.table_fields.length} Zeilen</span>
@@ -1716,19 +2105,23 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
               ) : (
                 <p className="muted">Noch keine Matrix angelegt. Oeffne den Designer und fuege zuerst Spalten und Zeilen hinzu.</p>
               )}
-            </div>
+            </SettingsSection>
           ) : null}
-          <div className="three-col">
-            <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.is_editable} onChange={(event) => setCreateBlockForm((current) => ({ ...current, is_editable: event.target.checked }))} />Editable in protocol</label>
-            <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.title_as_subtitle} onChange={(event) => setCreateBlockForm((current) => ({ ...current, title_as_subtitle: event.target.checked }))} />Blocktitel im PDF als Untertitel rendern</label>
-            <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.copy_from_last_protocol} onChange={(event) => setCreateBlockForm((current) => ({ ...current, copy_from_last_protocol: event.target.checked }))} />Daten aus letzter Sitzung übernehmen</label>
-          </div>
-          <div className="four-col">
-            <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.is_visible} onChange={(event) => setCreateBlockForm((current) => ({ ...current, is_visible: event.target.checked }))} />Visible</label>
-            <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.export_visible} onChange={(event) => setCreateBlockForm((current) => ({ ...current, export_visible: event.target.checked }))} />Export visible</label>
-          </div>
-          <div className="table-toolbar-actions">
-            <button type="submit" className="button-inline">Add block</button>
+          <SettingsSection
+            title="Verhalten & Sichtbarkeit"
+            description="Lege fest, ob der Block bearbeitbar ist, wie er im PDF erscheint und ob er sichtbar bleibt."
+            tone="soft"
+          >
+            <div className="config-toggle-grid">
+              <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.is_editable} onChange={(event) => setCreateBlockForm((current) => ({ ...current, is_editable: event.target.checked }))} />Im Protokoll bearbeitbar</label>
+              <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.title_as_subtitle} onChange={(event) => setCreateBlockForm((current) => ({ ...current, title_as_subtitle: event.target.checked }))} />Blocktitel im PDF als Untertitel rendern</label>
+              <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.copy_from_last_protocol} onChange={(event) => setCreateBlockForm((current) => ({ ...current, copy_from_last_protocol: event.target.checked }))} />Daten aus letzter Sitzung übernehmen</label>
+              <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.is_visible} onChange={(event) => setCreateBlockForm((current) => ({ ...current, is_visible: event.target.checked }))} />Im Editor sichtbar</label>
+              <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.export_visible} onChange={(event) => setCreateBlockForm((current) => ({ ...current, export_visible: event.target.checked }))} />Im Export sichtbar</label>
+            </div>
+          </SettingsSection>
+          <div className="block-editor-footer">
+            <button type="submit" className="button-inline">Block anlegen</button>
           </div>
         </form>
       </Modal>
@@ -1743,60 +2136,56 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
             setTypePickerMode(null);
           }
         }}
-        title={selectedBlock ? `Edit block: ${blockDisplayName(selectedBlock)}` : "Edit block"}
-        description="Adjust the selected block without leaving the block overview."
+        title={selectedBlock ? `Block bearbeiten: ${blockDisplayName(selectedBlock)}` : "Block bearbeiten"}
+        description="Passe den gewählten Block direkt in einer aufgeräumten Konfigurationsansicht an."
         size="wide"
         headerActions={
           <button type="button" className="button-ghost" onClick={() => setShowEditBlockHelp((current) => !current)}>
-            Info
+            Hilfe
           </button>
         }
       >
         {selectedBlock ? (
-          <form className="grid section-stack" onSubmit={updateBlock}>
+          <form className="grid section-stack block-editor-form" onSubmit={updateBlock}>
             {showEditBlockHelp ? (
               <div className="compact-info-pop">
-                <strong>Block help</strong>
-                <span className="muted">Enable the carry option if this block should prefill text or todos from the most recent earlier protocol that used the same element.</span>
+                <strong>Block-Hinweis</strong>
+                <span className="muted">Nutze die Übernahme aus der letzten Sitzung, wenn Text oder Todos automatisch aus einem früheren Protokoll vorgefüllt werden sollen.</span>
               </div>
             ) : null}
-            <div className="two-col">
+            <BlockEditorSummary form={blockForm} mode="edit" onChooseType={() => setTypePickerMode("edit")} />
+            <SettingsSection
+              title="Grundlagen"
+              description="Pflege Name, Untertitel und Startinhalt des Blocks. Der Blocktyp kann oben jederzeit gewechselt werden."
+            >
+              <div className="two-col">
+                <label className="field-stack">
+                  <span className="field-label">Blockname</span>
+                  <input value={blockForm.title} onChange={(event) => setBlockForm((current) => ({ ...current, title: event.target.value }))} placeholder="Optional, z. B. Besprechungstext" />
+                  <span className="field-help">Leer lassen, wenn der Block keine eigene Zwischenüberschrift haben soll.</span>
+                </label>
+                <label className="field-stack">
+                  <span className="field-label">Untertitel</span>
+                  <input value={blockForm.block_title} onChange={(event) => setBlockForm((current) => ({ ...current, block_title: event.target.value }))} placeholder="Optionaler Untertitel" />
+                </label>
+              </div>
               <label className="field-stack">
-                <span className="field-label">Block name</span>
-                <input value={blockForm.title} onChange={(event) => setBlockForm((current) => ({ ...current, title: event.target.value }))} placeholder="Optional, z. B. Besprechungstext" />
-                <span className="field-help">Leer lassen, wenn der Block keine eigene Zwischenueberschrift haben soll.</span>
+                <span className="field-label">Beschreibung</span>
+                <input value={blockForm.description} onChange={(event) => setBlockForm((current) => ({ ...current, description: event.target.value }))} />
               </label>
               <label className="field-stack">
-                <span className="field-label">Block subtitle</span>
-                <input value={blockForm.block_title} onChange={(event) => setBlockForm((current) => ({ ...current, block_title: event.target.value }))} placeholder="Optional subtitle" />
+                <span className="field-label">Standard- oder Fixinhalt</span>
+                <textarea
+                  rows={6}
+                  value={blockForm.default_content}
+                  onChange={(event) => setBlockForm((current) => ({ ...current, default_content: event.target.value }))}
+                />
               </label>
-            </div>
-            <label className="field-stack">
-              <span className="field-label">Description</span>
-              <input value={blockForm.description} onChange={(event) => setBlockForm((current) => ({ ...current, description: event.target.value }))} />
-            </label>
-            <label className="field-stack">
-              <span className="field-label">Default or fixed content</span>
-              <textarea
-                rows={6}
-                value={blockForm.default_content}
-                onChange={(event) => setBlockForm((current) => ({ ...current, default_content: event.target.value }))}
-              />
-            </label>
-            <div className="field-stack">
-              <label className="field-stack">
-                <span className="field-label">Block type</span>
-                <button type="button" className="button-ghost type-picker-button" onClick={() => setTypePickerMode("edit")}>
-                  Select
-                </button>
-                <span className="field-help">{optionDescription(elementTypeOptions, blockForm.element_type_id)}</span>
-              </label>
-            </div>
-            <article className="card grid">
-              <DataToolbar
-                title="Wiederholung"
-                description="Die Wiederholung sitzt jetzt direkt auf dem Block und nicht mehr auf dem Template-Element."
-              />
+            </SettingsSection>
+            <SettingsSection
+              title="Wiederholung"
+              description="Die Wiederholung sitzt direkt auf dem Block und kann auf Termine oder Todos reagieren."
+            >
               <div className="rule-option-grid">
                 {[
                   { value: "none", title: "Einmalig", description: "Der Block erscheint genau einmal im Element." },
@@ -1818,16 +2207,19 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 <>
                   <div className="three-col">
                     <label className="field-stack">
-                      <span className="field-label">Tag filter</span>
-                      <input
+                      <span className="field-label">Tag-Filter</span>
+                      <TagInput
                         value={blockForm.event_tag_filter}
-                        onChange={(event) => setBlockForm((current) => ({ ...current, event_tag_filter: event.target.value }))}
+                        onChange={(v) => setBlockForm((current) => ({ ...current, event_tag_filter: v }))}
+                        suggestions={knownEventTags}
+                  tagConfig={tagConfig}
+                  onTagColorChange={updateTagColor}
+                  onTagRename={renameTag}
                         placeholder="z. B. Scharanlass"
-                        list="element-event-tag-suggestions"
                       />
                     </label>
                     <label className="field-stack">
-                      <span className="field-label">Titel filter</span>
+                      <span className="field-label">Titelfilter</span>
                       <input value={blockForm.event_title_filter} onChange={(event) => setBlockForm((current) => ({ ...current, event_title_filter: event.target.value }))} placeholder="enthaelt..." />
                     </label>
                     <label className="field-stack">
@@ -1877,77 +2269,190 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                       Nur offene Todos
                     </label>
                   </div>
-                  <div className="info-note">
-                    Verfuegbare Platzhalter: {"{title}"}, {"{task}"}, {"{description}"}, {"{due_date}"}, {"{participant}"} und {"{id}"}.
-                  </div>
-                </>
-              ) : null}
-            </article>
+                <div className="info-note">
+                  Verfuegbare Platzhalter: {"{title}"}, {"{task}"}, {"{description}"}, {"{due_date}"}, {"{participant}"} und {"{id}"}.
+                </div>
+              </>
+            ) : null}
+            </SettingsSection>
+            {blockForm.element_type_id === "2" ? (
+              <SettingsSection
+                title="Todo-Einstellungen"
+                description="Zusätzliche Regeln für Aufgabenblöcke, zum Beispiel die Zuordnung des Fälligkeitsdatums."
+              >
+                <div className="three-col">
+                  <label className="field-stack">
+                    <span className="field-label">Termin-Tagfilter für Fälligkeitsdatum</span>
+                    <TagInput
+                      value={blockForm.todo_due_tag_filter}
+                      onChange={(v) => setBlockForm((current) => ({ ...current, todo_due_tag_filter: v }))}
+                      suggestions={knownEventTags}
+                      tagConfig={tagConfig}
+                      onTagColorChange={updateTagColor}
+                      onTagRename={renameTag}
+                      placeholder="Alle Termine (kein Filter)"
+                    />
+                  </label>
+                </div>
+              </SettingsSection>
+            ) : null}
+            {blockForm.element_type_id === "9" ? (
+              <SettingsSection
+                title="Anwesenheit & Bussen"
+                description="Optionale Verknüpfung mit einem Bussen-Konto und Standardbeträge für Absenzen."
+              >
+                <div className="three-col">
+                  <label className="field-stack">
+                    <span className="field-label">Bussen-Konto (optional)</span>
+                    <select
+                      value={blockForm.fine_account_id}
+                      onChange={(e) => setBlockForm((c) => ({ ...c, fine_account_id: e.target.value }))}
+                    >
+                      <option value="">— Kein Bussen-Konto —</option>
+                      {availableAccounts.map((a) => (
+                        <option key={a.id} value={a.id}>{a.name} ({a.currency_label})</option>
+                      ))}
+                    </select>
+                  </label>
+                  {blockForm.fine_account_id ? (
+                    <>
+                      <label className="field-stack">
+                        <span className="field-label">Busse Verspätet (Betrag)</span>
+                        <input type="number" min="0" step="0.50" value={blockForm.fine_amount_late} placeholder="z. B. 5.00" onChange={(e) => setBlockForm((c) => ({ ...c, fine_amount_late: e.target.value }))} />
+                      </label>
+                      <label className="field-stack">
+                        <span className="field-label">Busse Unentschuldigt (Betrag)</span>
+                        <input type="number" min="0" step="0.50" value={blockForm.fine_amount_absent} placeholder="z. B. 10.00" onChange={(e) => setBlockForm((c) => ({ ...c, fine_amount_absent: e.target.value }))} />
+                      </label>
+                    </>
+                  ) : null}
+                </div>
+              </SettingsSection>
+            ) : null}
+            {(blockForm.element_type_id === "12" || blockForm.element_type_id === "13") ? (
+              <SettingsSection
+                title={blockForm.element_type_id === "12" ? "Kontostand" : "Transaktionen"}
+                description="Wähle das Finanzkonto und bei Transaktionen zusätzlich den gewünschten Ausschnitt."
+              >
+                <div className="three-col">
+                  <label className="field-stack">
+                    <span className="field-label">Konto</span>
+                    <select
+                      value={blockForm.finance_account_id}
+                      onChange={(e) => setBlockForm((c) => ({ ...c, finance_account_id: e.target.value }))}
+                    >
+                      <option value="">— Konto wählen —</option>
+                      {availableAccounts.map((a) => (
+                        <option key={a.id} value={a.id}>{a.name} ({a.currency_label})</option>
+                      ))}
+                    </select>
+                  </label>
+                  {blockForm.element_type_id === "13" ? (
+                    <>
+                      <label className="field-stack">
+                        <span className="field-label">Transaktionen anzeigen</span>
+                        <select
+                          value={blockForm.finance_filter_type}
+                          onChange={(e) => setBlockForm((c) => ({ ...c, finance_filter_type: e.target.value as any }))}
+                        >
+                          <option value="all">Alle Transaktionen</option>
+                          <option value="since_last_session">Seit letzter Sitzung</option>
+                          <option value="this_year">Dieses Jahr</option>
+                          <option value="last_n">Letzte N Transaktionen</option>
+                        </select>
+                      </label>
+                      {blockForm.finance_filter_type === "last_n" && (
+                        <label className="field-stack">
+                          <span className="field-label">Anzahl (N)</span>
+                          <input type="number" min="1" value={blockForm.finance_last_n} onChange={(e) => setBlockForm((c) => ({ ...c, finance_last_n: e.target.value }))} />
+                        </label>
+                      )}
+                      {blockForm.finance_filter_type === "since_last_session" && (
+                        <label className="field-stack">
+                          <span className="field-label">Seit Datum (Standard: Protokolldatum)</span>
+                          <DateInput value={blockForm.finance_since_date} onChange={(value) => setBlockForm((c) => ({ ...c, finance_since_date: value }))} />
+                        </label>
+                      )}
+                    </>
+                  ) : null}
+                </div>
+              </SettingsSection>
+            ) : null}
             {blockForm.element_type_id === "7" ? (
-              <div className="grid">
+              <SettingsSection
+                title="Terminliste"
+                description="Steuere Filter, Sichtbarkeit und Tabellenspalten der automatisch angezeigten Termine."
+              >
                 <div className="three-col">
                 <label className="field-stack">
                   <span className="field-label">Termin-Tagfilter</span>
-                  <input
+                  <TagInput
                     value={blockForm.event_tag_filter}
-                    onChange={(event) => setBlockForm((current) => ({ ...current, event_tag_filter: event.target.value }))}
-                    placeholder="e.g. Sitzung"
-                    list="element-event-tag-suggestions"
+                    onChange={(v) => setBlockForm((current) => ({ ...current, event_tag_filter: v }))}
+                    suggestions={knownEventTags}
+                  tagConfig={tagConfig}
+                  onTagColorChange={updateTagColor}
+                  onTagRename={renameTag}
+                    placeholder="z. B. Sitzung"
                   />
                 </label>
-                <label className="checkbox-row"><input type="checkbox" checked={blockForm.event_only_from_protocol_date} onChange={(event) => setBlockForm((current) => ({ ...current, event_only_from_protocol_date: event.target.checked }))} />Nur Termine ab Protokolldatum anzeigen</label>
+                <label className="checkbox-row"><input type="checkbox" checked={blockForm.event_only_from_protocol_date} onChange={(event) => setBlockForm((current) => ({ ...current, event_only_from_protocol_date: event.target.checked, event_only_before_protocol_date: false }))} />Nur Termine ab Protokolldatum anzeigen</label>
+                <label className="checkbox-row"><input type="checkbox" checked={blockForm.event_only_before_protocol_date} onChange={(event) => setBlockForm((current) => ({ ...current, event_only_before_protocol_date: event.target.checked, event_only_from_protocol_date: false }))} />Nur Termine vor Protokolldatum anzeigen (Rückblick)</label>
                 <label className="checkbox-row"><input type="checkbox" checked={blockForm.event_gray_past} onChange={(event) => setBlockForm((current) => ({ ...current, event_gray_past: event.target.checked }))} />Vergangene Termine ausgegraut darstellen</label>
                 <label className="checkbox-row"><input type="checkbox" checked={blockForm.event_allow_end_date} onChange={(event) => setBlockForm((current) => ({ ...current, event_allow_end_date: event.target.checked }))} />Mehrtägige Termine erlauben</label>
                 </div>
                 <div className="three-col">
                   <label className="checkbox-row"><input type="checkbox" checked={blockForm.event_show_date} onChange={(event) => setBlockForm((current) => ({ ...current, event_show_date: event.target.checked }))} />Spalte Datum</label>
                   <label className="checkbox-row"><input type="checkbox" checked={blockForm.event_show_tag} onChange={(event) => setBlockForm((current) => ({ ...current, event_show_tag: event.target.checked }))} />Spalte Tag</label>
+                  <label className="checkbox-row"><input type="checkbox" checked={blockForm.event_show_tag_colors} onChange={(event) => setBlockForm((current) => ({ ...current, event_show_tag_colors: event.target.checked }))} />Tag-Farben anzeigen</label>
                   <label className="checkbox-row"><input type="checkbox" checked={blockForm.event_show_title} onChange={(event) => setBlockForm((current) => ({ ...current, event_show_title: event.target.checked }))} />Spalte Titel</label>
                   <label className="checkbox-row"><input type="checkbox" checked={blockForm.event_show_description} onChange={(event) => setBlockForm((current) => ({ ...current, event_show_description: event.target.checked }))} />Spalte Beschreibung</label>
                   <label className="checkbox-row"><input type="checkbox" checked={blockForm.event_show_participant_count} onChange={(event) => setBlockForm((current) => ({ ...current, event_show_participant_count: event.target.checked }))} />Spalte Teilnehmerzahl</label>
                 </div>
-              </div>
+              </SettingsSection>
             ) : null}
             {blockForm.element_type_id === "6" ? (
-              <div className="card grid">
-                <DataToolbar
-                  title="Table rows"
-                  description={
-                    blockForm.linked_list_id
-                      ? "Diese Tabelle ist direkt mit einer globalen Liste gekoppelt."
-                      : "Define the fixed left column and the value type for each row."
-                  }
-                  actions={
-                    blockForm.linked_list_id ? null : (
-                      <button
-                        type="button"
-                        className="button-inline"
-                        onClick={() =>
-                          setBlockForm((current) => ({
-                            ...current,
-                            table_fields: [
-                              ...current.table_fields,
-                              defaultFieldRow(nextTableFieldId(current.table_fields)),
-                            ],
-                          }))
-                        }
-                      >
-                        Add row
-                      </button>
-                    )
-                  }
-                />
+              <SettingsSection
+                title="Tabellenblock"
+                description={
+                  blockForm.linked_list_id
+                    ? "Dieser Tabellenblock ist mit einer globalen Liste gekoppelt."
+                    : "Definiere Spaltenüberschriften, Zeilen und Datentypen für die Tabelle."
+                }
+                actions={
+                  blockForm.linked_list_id ? null : (
+                    <button
+                      type="button"
+                      className="button-inline"
+                      onClick={() =>
+                        setBlockForm((current) => ({
+                          ...current,
+                          table_fields: [
+                            ...current.table_fields,
+                            defaultFieldRow(nextTableFieldId(current.table_fields)),
+                          ],
+                        }))
+                      }
+                    >
+                      Zeile hinzufügen
+                    </button>
+                  )
+                }
+              >
                 <label className="field-stack">
                   <span className="field-label">Gekoppelte Liste</span>
-                  <select
-                    value={blockForm.linked_list_id}
-                    onChange={(event) =>
-                      setBlockForm((current) => ({
-                        ...current,
-                        linked_list_id: event.target.value,
-                      }))
-                    }
-                  >
+                <select
+                  value={blockForm.linked_list_id}
+                  onChange={(event) =>
+                    setBlockForm((current) => ({
+                      ...current,
+                      linked_list_id: event.target.value,
+                      linked_list_group_by: event.target.value ? current.linked_list_group_by : "",
+                      linked_list_sort_by: event.target.value ? current.linked_list_sort_by : "",
+                      linked_list_sort_direction: event.target.value ? current.linked_list_sort_direction : "asc",
+                    }))
+                  }
+                >
                     <option value="">Keine globale Liste</option>
                     {listOptions.map((listDefinition) => (
                       <option key={`edit-linked-list-${listDefinition.id}`} value={listDefinition.id}>
@@ -1974,6 +2479,66 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                     <p className="muted">
                       Inhalt und Zeilen dieser Tabelle kommen aus `Datensaetze &gt; Listen`. Die lokale Tabellenkonfiguration wird in diesem Fall ignoriert.
                     </p>
+                    <div className="three-col">
+                      <label className="field-stack">
+                        <span className="field-label">Gruppieren nach</span>
+                        <select
+                          value={blockForm.linked_list_group_by}
+                          onChange={(event) =>
+                            setBlockForm((current) => ({
+                              ...current,
+                              linked_list_group_by: event.target.value as BlockFormState["linked_list_group_by"],
+                            }))
+                          }
+                        >
+                          <option value="">Keine Gruppierung</option>
+                          {linkedListColumnOptions(editLinkedList).map((option) => (
+                            <option key={`edit-linked-group-${option.value}`} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="field-stack">
+                        <span className="field-label">Alphabetisch sortieren nach</span>
+                        <select
+                          value={blockForm.linked_list_sort_by}
+                          onChange={(event) =>
+                            setBlockForm((current) => ({
+                              ...current,
+                              linked_list_sort_by: event.target.value as BlockFormState["linked_list_sort_by"],
+                              linked_list_sort_direction: event.target.value ? current.linked_list_sort_direction : "asc",
+                            }))
+                          }
+                        >
+                          <option value="">Manuelle Listenreihenfolge</option>
+                          {linkedListColumnOptions(editLinkedList).map((option) => (
+                            <option key={`edit-linked-sort-${option.value}`} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="field-stack">
+                        <span className="field-label">Sortierung</span>
+                        <select
+                          value={blockForm.linked_list_sort_direction}
+                          disabled={!blockForm.linked_list_sort_by}
+                          onChange={(event) =>
+                            setBlockForm((current) => ({
+                              ...current,
+                              linked_list_sort_direction: event.target.value as BlockFormState["linked_list_sort_direction"],
+                            }))
+                          }
+                        >
+                          <option value="asc">A-Z</option>
+                          <option value="desc">Z-A</option>
+                        </select>
+                      </label>
+                    </div>
+                    <p className="muted">
+                      Diese Anzeigeoptionen gelten nur fuer diesen Tabellenblock und werden auch im PDF-Export beruecksichtigt.
+                    </p>
                   </div>
                 ) : (
                   <>
@@ -1999,7 +2564,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 <div className="grid" key={`edit-table-field-${field.id}`}>
                 <div className="four-col">
                   <label className="field-stack">
-                    <span className="field-label">Left column label</span>
+                    <span className="field-label">Zeilenlabel</span>
                       <input
                         value={field.label}
                         onChange={(event) =>
@@ -2010,7 +2575,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                             ),
                           }))
                         }
-                        placeholder="e.g. Verantwortlich"
+                        placeholder="z. B. Verantwortlich"
                       />
                     </label>
                     <label className="field-stack">
@@ -2057,7 +2622,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                           }))
                         }
                       >
-                        Remove
+                      Entfernen
                       </button>
                     </div>
                   </div>
@@ -2065,19 +2630,18 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 ))}
                   </>
                 )}
-              </div>
+              </SettingsSection>
             ) : null}
             {blockForm.element_type_id === "11" ? (
-              <div className="card grid">
-                <DataToolbar
-                  title="Matrix"
-                  description="Oeffne den Matrix-Designer, um Spalten, Zeilen und Datentypen direkt visuell zu konfigurieren."
-                  actions={
-                    <button type="button" className="button-inline" onClick={() => openMatrixDesigner("edit")}>
-                      Matrix konfigurieren
-                    </button>
-                  }
-                />
+              <SettingsSection
+                title="Matrix"
+                description="Öffne den Matrix-Designer, um Spalten, Zeilen und Datentypen direkt visuell zu konfigurieren."
+                actions={
+                  <button type="button" className="button-inline" onClick={() => openMatrixDesigner("edit")}>
+                    Matrix konfigurieren
+                  </button>
+                }
+              >
                 <div className="status-row">
                   <span className="pill">{blockForm.matrix_columns.length} Spalten</span>
                   <span className="pill">{blockForm.table_fields.length} Zeilen</span>
@@ -2099,19 +2663,23 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 ) : (
                   <p className="muted">Noch keine Matrix angelegt. Oeffne den Designer und fuege zuerst Spalten und Zeilen hinzu.</p>
                 )}
-              </div>
+              </SettingsSection>
             ) : null}
-            <div className="three-col">
-              <label className="checkbox-row"><input type="checkbox" checked={blockForm.is_editable} onChange={(event) => setBlockForm((current) => ({ ...current, is_editable: event.target.checked }))} />Editable in protocol</label>
-              <label className="checkbox-row"><input type="checkbox" checked={blockForm.title_as_subtitle} onChange={(event) => setBlockForm((current) => ({ ...current, title_as_subtitle: event.target.checked }))} />Blocktitel im PDF als Untertitel rendern</label>
-              <label className="checkbox-row"><input type="checkbox" checked={blockForm.copy_from_last_protocol} onChange={(event) => setBlockForm((current) => ({ ...current, copy_from_last_protocol: event.target.checked }))} />Daten aus letzter Sitzung übernehmen</label>
-            </div>
-            <div className="four-col">
-              <label className="checkbox-row"><input type="checkbox" checked={blockForm.is_visible} onChange={(event) => setBlockForm((current) => ({ ...current, is_visible: event.target.checked }))} />Visible</label>
-              <label className="checkbox-row"><input type="checkbox" checked={blockForm.export_visible} onChange={(event) => setBlockForm((current) => ({ ...current, export_visible: event.target.checked }))} />Export visible</label>
-            </div>
-            <div className="table-toolbar-actions">
-              <button type="submit" className="button-inline">Save block</button>
+            <SettingsSection
+              title="Verhalten & Sichtbarkeit"
+              description="Lege fest, ob der Block bearbeitbar ist, wie er im PDF erscheint und ob er sichtbar bleibt."
+              tone="soft"
+            >
+              <div className="config-toggle-grid">
+                <label className="checkbox-row"><input type="checkbox" checked={blockForm.is_editable} onChange={(event) => setBlockForm((current) => ({ ...current, is_editable: event.target.checked }))} />Im Protokoll bearbeitbar</label>
+                <label className="checkbox-row"><input type="checkbox" checked={blockForm.title_as_subtitle} onChange={(event) => setBlockForm((current) => ({ ...current, title_as_subtitle: event.target.checked }))} />Blocktitel im PDF als Untertitel rendern</label>
+                <label className="checkbox-row"><input type="checkbox" checked={blockForm.copy_from_last_protocol} onChange={(event) => setBlockForm((current) => ({ ...current, copy_from_last_protocol: event.target.checked }))} />Daten aus letzter Sitzung übernehmen</label>
+                <label className="checkbox-row"><input type="checkbox" checked={blockForm.is_visible} onChange={(event) => setBlockForm((current) => ({ ...current, is_visible: event.target.checked }))} />Im Editor sichtbar</label>
+                <label className="checkbox-row"><input type="checkbox" checked={blockForm.export_visible} onChange={(event) => setBlockForm((current) => ({ ...current, export_visible: event.target.checked }))} />Im Export sichtbar</label>
+              </div>
+            </SettingsSection>
+            <div className="block-editor-footer">
+              <button type="submit" className="button-inline">Block speichern</button>
             </div>
           </form>
         ) : null}
@@ -2120,8 +2688,8 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
       <Modal
         open={typePickerMode !== null}
         onClose={() => setTypePickerMode(null)}
-        title="Choose block type"
-        description="Pick the kind of block you want to add."
+        title="Blocktyp auswählen"
+        description="Wähle die Art des Blocks. Danach erscheinen die passenden Einstellungen automatisch."
         size="fullscreen"
       >
         <div className="block-type-grid">
@@ -2192,12 +2760,14 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                         <option value="list">Liste</option>
                       </select>
                       {matrixDesignerForm.auto_source_type === "events" ? (
-                        <input
+                        <TagInput
                           value={matrixDesignerForm.auto_source_event_tag}
-                          onChange={(e) => updateMatrixDesignerForm((c) => ({ ...c, auto_source_event_tag: e.target.value }))}
-                          list="element-event-tag-suggestions"
+                          onChange={(v) => updateMatrixDesignerForm((c) => ({ ...c, auto_source_event_tag: v }))}
+                          suggestions={knownEventTags}
+                  tagConfig={tagConfig}
+                  onTagColorChange={updateTagColor}
+                  onTagRename={renameTag}
                           placeholder="Tag-Filter (optional)"
-                          style={{ minWidth: 160 }}
                         />
                       ) : null}
                       {matrixDesignerForm.auto_source_type === "list" ? (
@@ -2426,11 +2996,14 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                         <div className="three-col">
                           <label className="field-stack">
                             <span className="field-label">Termin-Tagfilter</span>
-                            <input
+                            <TagInput
                               value={String(selectedMatrixEmbeddedConfig.event_tag_filter ?? "")}
-                              onChange={(event) => updateSelectedMatrixRowConfig({ event_tag_filter: event.target.value })}
-                              list="element-event-tag-suggestions"
-                              placeholder="Leer fuer alle Tags"
+                              onChange={(v) => updateSelectedMatrixRowConfig({ event_tag_filter: v })}
+                              suggestions={knownEventTags}
+                  tagConfig={tagConfig}
+                  onTagColorChange={updateTagColor}
+                  onTagRename={renameTag}
+                              placeholder="Leer für alle Tags"
                             />
                           </label>
                           <label className="checkbox-row">
@@ -2540,11 +3113,14 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                         </label>
                         <label className="field-stack">
                           <span className="field-label">Termin-Tagfilter</span>
-                          <input
+                          <TagInput
                             value={String(selectedMatrixRow.row_config?.event_tag_filter ?? "")}
-                            onChange={(event) => updateSelectedMatrixRowConfig({ event_tag_filter: event.target.value })}
-                            list="element-event-tag-suggestions"
-                            placeholder="Leer fuer alle Tags"
+                            onChange={(v) => updateSelectedMatrixRowConfig({ event_tag_filter: v })}
+                            suggestions={knownEventTags}
+                  tagConfig={tagConfig}
+                  onTagColorChange={updateTagColor}
+                  onTagRename={renameTag}
+                            placeholder="Leer für alle Tags"
                           />
                         </label>
                         <label className="checkbox-row">
@@ -2653,10 +3229,13 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                     </label>
                     <label className="field-stack">
                       <span className="field-label">Tagfilter für Terminzeilen</span>
-                      <input
+                      <TagInput
                         value={selectedMatrixColumn.event_tag_filter ?? ""}
-                        onChange={(e) => updateMatrixDesignerForm((c) => ({ ...c, matrix_columns: c.matrix_columns.map((col) => col.id === selectedMatrixColumn.id ? { ...col, event_tag_filter: e.target.value } : col) }))}
-                        list="element-event-tag-suggestions"
+                        onChange={(v) => updateMatrixDesignerForm((c) => ({ ...c, matrix_columns: c.matrix_columns.map((col) => col.id === selectedMatrixColumn.id ? { ...col, event_tag_filter: v } : col) }))}
+                        suggestions={knownEventTags}
+                  tagConfig={tagConfig}
+                  onTagColorChange={updateTagColor}
+                  onTagRename={renameTag}
                         placeholder="Optional"
                       />
                     </label>
@@ -2668,11 +3247,6 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
         ) : null}
       </Modal>
 
-      <datalist id="element-event-tag-suggestions">
-        {knownEventTags.map((tag) => (
-          <option key={tag} value={tag} />
-        ))}
-      </datalist>
     </div>
   );
 }

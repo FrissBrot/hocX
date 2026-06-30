@@ -15,8 +15,8 @@ class EventService:
     def __init__(self, repository: EventRepository | None = None) -> None:
         self.repository = repository or EventRepository()
 
-    def list_events(self, db: Session, *, tenant_id: int) -> list[Event]:
-        return self.repository.list(db, tenant_id=tenant_id)
+    def list_events(self, db: Session, *, tenant_id: int, skip: int = 0, limit: int = 100) -> list[Event]:
+        return self.repository.list(db, tenant_id=tenant_id, skip=skip, limit=limit)
 
     def get_event(self, db: Session, event_id: int) -> Event | None:
         return self.repository.get(db, event_id)

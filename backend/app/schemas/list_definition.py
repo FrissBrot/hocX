@@ -20,7 +20,7 @@ class ListDefinitionBase(BaseModel):
 
 
 class ListDefinitionCreate(ListDefinitionBase):
-    tenant_id: int = 1
+    pass
 
 
 class ListDefinitionUpdate(BaseModel):

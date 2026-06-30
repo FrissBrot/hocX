@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -12,7 +10,7 @@ from app.core.security import CurrentUser, get_current_user, require_reader, req
 from app.models import ProtocolElementBlock
 from app.schemas.protocol import ProtocolImageRead
 from app.services.access_service import AccessService
-from app.services.file_service import FileService
+from app.services.file_service import FileService, _safe_storage_path
 
 router = APIRouter()
 service = FileService()
@@ -84,7 +82,7 @@ def get_stored_file_content(
     stored_file = service.get_stored_file(db, stored_file_id)
     if stored_file is None:
         raise HTTPException(status_code=404, detail="Stored file not found")
-    file_path = Path(settings.storage_root) / stored_file.storage_path
+    file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File missing on filesystem")
     return FileResponse(

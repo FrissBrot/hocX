@@ -18,11 +18,6 @@ export default async function TenantsPage() {
   return (
     <AppShell initialSession={session}>
       <section className="panel">
-        <div className="eyebrow">Administration</div>
-        <h1>Mandantenverwaltung</h1>
-        <p className="muted">
-          Bearbeite nur jene Mandanten, in denen du wirklich Administrator bist. Profilbild und Name bleiben so klar getrennt von der Benutzerverwaltung.
-        </p>
         <TenantManagement initialTenants={tenants ?? []} canCreateTenant={!!session.user?.is_superadmin} />
       </section>
     </AppShell>

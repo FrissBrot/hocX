@@ -81,6 +81,7 @@ export function UserManagement({ initialUsers, manageableTenants, session }: Pro
   const [mergeSourceUserId, setMergeSourceUserId] = useState<number | null>(null);
   const [mergeTargetUserId, setMergeTargetUserId] = useState("");
   const [userForm, setUserForm] = useState<UserFormState>(() => emptyUserForm(manageableTenants));
+  const [formError, setFormError] = useState<string | null>(null);
 
   const canSuperadmin = !!session.user?.is_superadmin;
   const tenantNameById = useMemo(
@@ -104,6 +105,7 @@ export function UserManagement({ initialUsers, manageableTenants, session }: Pro
 
   function openNewUser() {
     setUserForm(emptyUserForm(manageableTenants));
+    setFormError(null);
     setUserModalOpen(true);
   }
 
@@ -125,6 +127,7 @@ export function UserManagement({ initialUsers, manageableTenants, session }: Pro
       selectedTenantId: manageableTenants[0] ? String(manageableTenants[0].id) : "",
       selectedRoleCode: "reader"
     });
+    setFormError(null);
     setUserModalOpen(true);
   }
 
@@ -162,6 +165,7 @@ export function UserManagement({ initialUsers, manageableTenants, session }: Pro
 
   async function submitUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setFormError(null);
     setStatus(userForm.id ? "Benutzer wird gespeichert..." : "Benutzer wird erstellt...");
     setStatusTone("neutral");
 
@@ -200,7 +204,9 @@ export function UserManagement({ initialUsers, manageableTenants, session }: Pro
       setStatus(userForm.id ? "Benutzer gespeichert" : "Benutzer erstellt");
       setStatusTone("success");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Benutzer konnte nicht gespeichert werden");
+      const msg = error instanceof Error ? error.message : "Benutzer konnte nicht gespeichert werden";
+      setFormError(msg);
+      setStatus(msg);
       setStatusTone("error");
     }
   }
@@ -430,6 +436,7 @@ export function UserManagement({ initialUsers, manageableTenants, session }: Pro
                 <span className="field-label">Rolle</span>
                 <select value={userForm.selectedRoleCode} onChange={(event) => setUserForm((current) => ({ ...current, selectedRoleCode: event.target.value }))}>
                   <option value="reader">Reader</option>
+                  <option value="kassier">Kassier</option>
                   <option value="writer">Writer</option>
                   <option value="admin">Admin</option>
                 </select>
@@ -459,6 +466,10 @@ export function UserManagement({ initialUsers, manageableTenants, session }: Pro
               )}
             </div>
           </div>
+
+          {formError && (
+            <div className="form-error-banner">{formError}</div>
+          )}
 
           <div className="table-actions table-actions-start">
             <button type="submit" className="button-inline">

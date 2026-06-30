@@ -247,6 +247,7 @@ CREATE TABLE template (
 CREATE TABLE template_participant (
     template_id BIGINT NOT NULL REFERENCES template(id) ON DELETE CASCADE,
     participant_id BIGINT NOT NULL REFERENCES participant(id) ON DELETE CASCADE,
+    exclude_from_attendance BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (template_id, participant_id)
 );

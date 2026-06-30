@@ -6,10 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user
 from app.schemas.user import UserCreate, UserMergeRequest, UserRead, UserSelfUpdate, UserUpdate
+from app.services.audit_service import AuditService
 from app.services.user_service import UserService
 
 router = APIRouter()
 service = UserService()
+audit = AuditService()
 
 
 @router.get("", response_model=list[UserRead])
@@ -93,6 +95,9 @@ def patch_user(
         raise HTTPException(status_code=400, detail="User could not be updated") from exc
     if current is None:
         raise HTTPException(status_code=404, detail="User not found")
+    if payload.is_active is not None:
+        action = "user.activated" if payload.is_active else "user.deactivated"
+        audit.log(db, action=action, actor=user, entity_type="user", entity_id=user_id)
     return current
 
 

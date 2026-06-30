@@ -13,6 +13,7 @@ class TenantRead(BaseModel):
     profile_image_url: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    tag_config_json: dict[str, Any] = {}
 
     model_config = {"from_attributes": True}
 

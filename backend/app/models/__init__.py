@@ -1,6 +1,9 @@
 from app.models.entities import (
     AppUser,
+    AttendanceFine,
     DocumentTemplate,
+    FinanceAccount,
+    FinanceTransaction,
     DocumentTemplatePart,
     ElementDefinition,
     ElementType,
@@ -27,6 +30,7 @@ from app.models.entities import (
     TemplateElementBlock,
     TemplateParticipant,
     Tenant,
+    TenantOidcConfig,
     TodoStatus,
     UserRole,
     UserProtocolAccess,
@@ -36,7 +40,10 @@ from app.models.entities import (
 
 __all__ = [
     "AppUser",
+    "AttendanceFine",
     "DocumentTemplate",
+    "FinanceAccount",
+    "FinanceTransaction",
     "DocumentTemplatePart",
     "ElementDefinition",
     "ElementType",
@@ -63,6 +70,7 @@ __all__ = [
     "TemplateElementBlock",
     "TemplateParticipant",
     "Tenant",
+    "TenantOidcConfig",
     "TodoStatus",
     "UserRole",
     "UserProtocolAccess",

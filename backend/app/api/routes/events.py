@@ -1,12 +1,15 @@
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
+from sqlalchemy import update
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from pydantic import BaseModel
 
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
 from app.schemas.event import EventCreate, EventRead, EventUpdate
 from app.services.event_service import EventService
+from app.models.entities import Event
 
 router = APIRouter()
 service = EventService()
@@ -14,11 +17,13 @@ service = EventService()
 
 @router.get("/events", response_model=list[EventRead])
 def list_events(
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_reader(user)
-    return service.list_events(db, tenant_id=user.current_tenant_id)
+    return service.list_events(db, tenant_id=user.current_tenant_id, skip=skip, limit=limit)
 
 
 @router.post("/events", response_model=EventRead, status_code=status.HTTP_201_CREATED)
@@ -89,3 +94,24 @@ def delete_event(
     if not deleted:
         raise HTTPException(status_code=404, detail="Event not found")
     return {"message": "Event deleted"}
+
+
+class RenameTagPayload(BaseModel):
+    old_tag: str
+    new_tag: str
+
+
+@router.post("/events/rename-tag", response_model=dict[str, int])
+def rename_tag(
+    payload: RenameTagPayload,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_writer(user)
+    result = db.execute(
+        update(Event)
+        .where(Event.tenant_id == user.current_tenant_id, Event.tag == payload.old_tag)
+        .values(tag=payload.new_tag or None)
+    )
+    db.commit()
+    return {"updated": result.rowcount}

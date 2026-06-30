@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -72,18 +74,79 @@ class UserService:
             updated_at=user.updated_at,
         )
 
+    def _read_model_from_preloaded(
+        self,
+        user: AppUser,
+        memberships: list[TenantMembershipRead],
+        is_superadmin: bool,
+    ) -> UserRead:
+        external_identity = user.external_identity_json or {}
+        return UserRead(
+            id=user.id,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            display_name=user.display_name,
+            email=user.email,
+            preferred_language=user.preferred_language,
+            is_active=user.is_active,
+            oidc_subject=user.oidc_subject,
+            oidc_issuer=user.oidc_issuer,
+            oidc_email=user.oidc_email,
+            external_identity_json=external_identity,
+            default_tenant_id=user.default_tenant_id,
+            memberships=memberships,
+            is_superadmin=is_superadmin,
+            login_enabled=external_identity.get("login_enabled") is not False,
+            is_participant_account=external_identity.get("source") == "participant_auto",
+            created_at=user.created_at,
+            updated_at=user.updated_at,
+        )
+
     def list_users(self, db: Session, actor: CurrentUser):
         require_admin(actor)
         users = self.repository.list(db)
-        if actor.is_superadmin:
-            return [self._read_model(db, user) for user in users]
+        if not users:
+            return []
 
-        allowed_user_ids = {
-            membership.user_id
-            for membership in self.repository.list_memberships(db, tenant_id=actor.current_tenant_id)
-            if membership.is_active
-        }
-        return [self._read_model(db, user) for user in users if user.id in allowed_user_ids]
+        user_ids = [u.id for u in users]
+
+        # Batch-load all required data in 4 queries total (was N*4 before)
+        all_memberships = self.repository.list_memberships_batch(db, user_ids=user_ids)
+        role_map = {r.id: r.code for r in self.repository.list_roles(db)}
+        tenant_map = {t.id: t for t in self.repository.list_tenants(db)}
+        superadmin_ids = set(self.repository.list_superadmin_user_ids(db))
+
+        memberships_by_user: dict[int, list[TenantMembershipRead]] = {uid: [] for uid in user_ids}
+        for m in all_memberships:
+            tenant = tenant_map.get(m.tenant_id)
+            if tenant is None:
+                continue
+            memberships_by_user[m.user_id].append(
+                TenantMembershipRead(
+                    tenant_id=tenant.id,
+                    tenant_name=tenant.name,
+                    tenant_profile_image_path=tenant.profile_image_path,
+                    role_code=role_map.get(m.role_id, "reader"),
+                    is_active=m.is_active,
+                )
+            )
+
+        if not actor.is_superadmin:
+            allowed_ids = {
+                m.user_id
+                for m in self.repository.list_memberships(db, tenant_id=actor.current_tenant_id)
+                if m.is_active
+            }
+            users = [u for u in users if u.id in allowed_ids]
+
+        return [
+            self._read_model_from_preloaded(
+                user,
+                memberships_by_user.get(user.id, []),
+                user.id in superadmin_ids,
+            )
+            for user in users
+        ]
 
     def get_user(self, db: Session, user_id: int, actor: CurrentUser):
         require_admin(actor)
@@ -134,7 +197,6 @@ class UserService:
             first_name=payload.first_name,
             last_name=payload.last_name,
             display_name=payload.display_name,
-            name=payload.display_name,
             email=payload.email,
             password_hash=hash_password(payload.password),
             preferred_language=payload.preferred_language,
@@ -234,10 +296,16 @@ class UserService:
                 **current_external,
                 "login_enabled": payload.login_enabled,
             }
-        if "display_name" in values:
-            values["name"] = values["display_name"]
         if payload.password:
             values["password_hash"] = hash_password(payload.password)
+            # Password change invalidates all existing sessions
+            values["session_revoke_at"] = datetime.now(UTC)
+        if payload.is_active is False:
+            # Deactivation invalidates all existing sessions
+            values["session_revoke_at"] = datetime.now(UTC)
+        if payload.login_enabled is False:
+            # Disabling login invalidates all existing sessions
+            values.setdefault("session_revoke_at", datetime.now(UTC))
         if values:
             self.repository.update(db, user, values)
         if payload.memberships is not None:

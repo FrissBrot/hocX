@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ParticipantBase(BaseModel):
@@ -15,7 +15,7 @@ class ParticipantBase(BaseModel):
 
 
 class ParticipantCreate(ParticipantBase):
-    tenant_id: int = 1
+    pass
 
 
 class ParticipantUpdate(BaseModel):
@@ -35,6 +35,17 @@ class ParticipantRead(ParticipantBase):
     model_config = {"from_attributes": True}
 
 
+class TemplateParticipantAssignment(BaseModel):
+    participant_id: int
+    exclude_from_attendance: bool = False
+
+
+class TemplateParticipantAssignmentRead(ParticipantRead):
+    exclude_from_attendance: bool = False
+
+    model_config = {"from_attributes": True}
+
+
 class ParticipantImportRow(BaseModel):
     display_name: str
     first_name: str | None = None
@@ -49,7 +60,8 @@ class ParticipantImportResult(BaseModel):
 
 
 class TemplateParticipantAssignmentUpdate(BaseModel):
-    participant_ids: list[int]
+    participant_ids: list[int] = Field(default_factory=list)
+    participants: list[TemplateParticipantAssignment] | None = None
 
 
 class ParticipantTemplateAssignmentUpdate(BaseModel):

@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 
 from app.models import ProtocolTodo
 from app.repositories.protocol_todo_repository import ProtocolTodoRepository
-from app.schemas.protocol import ProtocolTodoCreate, ProtocolTodoRead, ProtocolTodoUpdate
+from app.schemas.protocol import ProtocolTodoCreate, ProtocolTodoRead, ProtocolTodoUpdate, TodoListItem
 
 
 class ProtocolTodoService:
@@ -11,18 +11,58 @@ class ProtocolTodoService:
 
     def list_todos(self, db: Session, protocol_element_block_id: int) -> list[ProtocolTodoRead]:
         rows = self.repository.list_for_protocol_block(db, protocol_element_block_id)
+        return [self._row_to_todo_read(row) for row in rows]
+
+    def _common_fields(self, row) -> dict:
+        return {
+            **row.ProtocolTodo.__dict__,
+            "todo_status_code": row.todo_status_code,
+            "assigned_participant_name": row.assigned_participant_name,
+            "due_event_title": row.due_event_title,
+            "due_event_date": row.due_event_date,
+            "resolved_due_date": row.resolved_due_date,
+            "resolved_due_label": row.resolved_due_label,
+        }
+
+    def _row_to_todo_read(self, row) -> ProtocolTodoRead:
+        return ProtocolTodoRead(**self._common_fields(row))
+
+    def _row_to_list_item(self, row) -> TodoListItem:
+        return TodoListItem(
+            **self._common_fields(row),
+            protocol_id=row.protocol_id,
+            protocol_number=row.protocol_number,
+            protocol_date=row.protocol_date,
+            protocol_title=row.protocol_title,
+            protocol_status=row.protocol_status,
+            block_title=row.block_title,
+        )
+
+    def list_todo_blocks(self, db: Session, tenant_id: int) -> list[dict]:
+        rows = self.repository.list_todo_blocks(db, tenant_id)
         return [
-            ProtocolTodoRead(
-                **row.ProtocolTodo.__dict__,
-                todo_status_code=row.todo_status_code,
-                assigned_participant_name=row.assigned_participant_name,
-                due_event_title=row.due_event_title,
-                due_event_date=row.due_event_date,
-                resolved_due_date=row.resolved_due_date,
-                resolved_due_label=row.resolved_due_label,
-            )
+            {
+                "block_id": row.block_id,
+                "block_title": row.block_title,
+                "protocol_id": row.protocol_id,
+                "protocol_number": row.protocol_number,
+                "protocol_title": row.protocol_title,
+                "protocol_date": str(row.protocol_date),
+            }
             for row in rows
         ]
+
+    def list_todos_for_tenant(self, db: Session, tenant_id: int, skip: int = 0, limit: int = 100) -> list[TodoListItem]:
+        rows = self.repository.list_for_tenant(db, tenant_id, skip=skip, limit=limit)
+        return [self._row_to_list_item(row) for row in rows]
+
+    def list_todos_for_user(self, db: Session, tenant_id: int, user_id: int, skip: int = 0, limit: int = 100) -> list[TodoListItem]:
+        rows = self.repository.list_for_user(db, tenant_id, user_id, skip=skip, limit=limit)
+        return [self._row_to_list_item(row) for row in rows]
+
+    def list_pending_for_protocol(self, db: Session, protocol_id: int, template_id: int, protocol_date) -> list[TodoListItem]:
+        rows = self.repository.list_pending_for_protocol(db, protocol_id, template_id, protocol_date)
+        return [self._row_to_list_item(row) for row in rows]
 
     def _normalize_due_fields(self, values: dict) -> dict:
         if values.get("due_marker"):
@@ -36,6 +76,25 @@ class ProtocolTodoService:
             values["due_event_id"] = None
             values["due_marker"] = None
         return values
+
+    def create_standalone_todo(self, db: Session, tenant_id: int, payload: ProtocolTodoCreate) -> ProtocolTodo:
+        values = self._normalize_due_fields(payload.model_dump())
+        todo = ProtocolTodo(
+            tenant_id=tenant_id,
+            protocol_element_block_id=None,
+            sort_index=self.repository.next_sort_index(db, None),
+            task=payload.task,
+            assigned_user_id=payload.assigned_user_id,
+            assigned_participant_id=payload.assigned_participant_id,
+            todo_status_id=payload.todo_status_id,
+            due_date=values.get("due_date"),
+            due_event_id=values.get("due_event_id"),
+            due_marker=values.get("due_marker"),
+            reference_link=payload.reference_link,
+            tags=payload.tags,
+            created_by=payload.created_by,
+        )
+        return self.repository.create(db, todo)
 
     def create_todo(self, db: Session, protocol_element_block_id: int, payload: ProtocolTodoCreate) -> ProtocolTodo:
         if payload.assigned_participant_id is not None and not self.repository.participant_allowed_for_block(
@@ -62,6 +121,7 @@ class ProtocolTodoService:
             due_event_id=values.get("due_event_id"),
             due_marker=values.get("due_marker"),
             reference_link=payload.reference_link,
+            tags=payload.tags,
             created_by=payload.created_by,
         )
         return self.repository.create(db, todo)

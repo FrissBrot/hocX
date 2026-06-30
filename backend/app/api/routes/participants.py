@@ -4,13 +4,15 @@ from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 
 from app.core.db import get_db
-from app.core.security import CurrentUser, get_current_user, require_admin, require_reader
+from app.core.security import CurrentUser, get_current_user, require_admin, require_reader, require_writer
 from app.schemas.participant import (
     ParticipantBulkDelete,
     ParticipantCreate,
     ParticipantImportResult,
     ParticipantRead,
     ParticipantTemplateAssignmentUpdate,
+    TemplateParticipantAssignment,
+    TemplateParticipantAssignmentRead,
     ParticipantUpdate,
     TemplateParticipantAssignmentUpdate,
 )
@@ -25,14 +27,27 @@ template_service = TemplateService()
 access_service = AccessService()
 
 
+def _normalized_template_participant_assignments(payload: TemplateParticipantAssignmentUpdate) -> list[tuple[int, bool]]:
+    raw_assignments = payload.participants or [
+        TemplateParticipantAssignment(participant_id=participant_id)
+        for participant_id in payload.participant_ids
+    ]
+    assignments_by_participant_id: dict[int, bool] = {}
+    for assignment in raw_assignments:
+        assignments_by_participant_id[int(assignment.participant_id)] = bool(assignment.exclude_from_attendance)
+    return sorted(assignments_by_participant_id.items())
+
+
 @router.get("/participants", response_model=list[ParticipantRead])
 def list_participants(
     active_only: bool = Query(default=False),
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
-    return participant_service.list_participants(db, tenant_id=user.current_tenant_id, active_only=active_only)
+    require_writer(user)
+    return participant_service.list_participants(db, tenant_id=user.current_tenant_id, active_only=active_only, skip=skip, limit=limit)
 
 
 @router.post("/participants", response_model=ParticipantRead, status_code=status.HTTP_201_CREATED)
@@ -41,7 +56,7 @@ def create_participant(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_writer(user)
     try:
         return participant_service.create_participant(db, payload, tenant_id=user.current_tenant_id)
     except SQLAlchemyError as exc:
@@ -56,7 +71,7 @@ def patch_participant(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_writer(user)
     participant = participant_service.get_participant(db, participant_id)
     if participant is None or participant.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Participant not found")
@@ -76,7 +91,7 @@ def delete_participant(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_writer(user)
     participant = participant_service.get_participant(db, participant_id)
     if participant is None or participant.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Participant not found")
@@ -96,7 +111,7 @@ async def import_participants_csv(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_writer(user)
     try:
         content = (await file.read()).decode("utf-8-sig")
         return participant_service.import_csv(db, content, tenant_id=user.current_tenant_id)
@@ -111,7 +126,7 @@ def bulk_delete_participants(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_writer(user)
     try:
         deleted_count = participant_service.delete_participants(db, payload.participant_ids, tenant_id=user.current_tenant_id)
     except SQLAlchemyError as exc:
@@ -120,7 +135,7 @@ def bulk_delete_participants(
     return {"deleted_count": deleted_count}
 
 
-@router.get("/templates/{template_id}/participants", response_model=list[ParticipantRead])
+@router.get("/templates/{template_id}/participants", response_model=list[TemplateParticipantAssignmentRead])
 def list_template_participants(
     template_id: int,
     db: Session = Depends(get_db),
@@ -134,14 +149,14 @@ def list_template_participants(
     return template_service.list_template_participants(db, template_id)
 
 
-@router.put("/templates/{template_id}/participants", response_model=list[ParticipantRead])
+@router.put("/templates/{template_id}/participants", response_model=list[TemplateParticipantAssignmentRead])
 def replace_template_participants(
     template_id: int,
     payload: TemplateParticipantAssignmentUpdate,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_writer(user)
     template = template_service.get_template(db, template_id)
     if template is None or template.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Template not found")
@@ -150,11 +165,12 @@ def replace_template_participants(
         participant.id
         for participant in participant_service.list_participants(db, tenant_id=user.current_tenant_id)
     }
-    if any(participant_id not in allowed_ids for participant_id in payload.participant_ids):
+    assignments = _normalized_template_participant_assignments(payload)
+    if any(participant_id not in allowed_ids for participant_id, _ in assignments):
         raise HTTPException(status_code=400, detail="One or more participants do not belong to the current tenant")
 
     try:
-        return template_service.replace_template_participants(db, template_id, sorted(set(payload.participant_ids)))
+        return template_service.replace_template_participants(db, template_id, assignments)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Template participants could not be updated") from exc
@@ -166,7 +182,7 @@ def list_participant_templates(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_writer(user)
     participant = participant_service.get_participant(db, participant_id)
     if participant is None or participant.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Participant not found")
@@ -183,7 +199,7 @@ def replace_participant_templates(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_writer(user)
     participant = participant_service.get_participant(db, participant_id)
     if participant is None or participant.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Participant not found")

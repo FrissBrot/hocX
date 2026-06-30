@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 from sqlalchemy import delete, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.models import Participant, Template, TemplateParticipant
 
 
 class ParticipantRepository:
-    def list(self, db: Session, *, tenant_id: int, active_only: bool = False) -> list[Participant]:
+    def list(self, db: Session, *, tenant_id: int, active_only: bool = False, skip: int = 0, limit: int = 100) -> list[Participant]:
         statement = select(Participant).where(Participant.tenant_id == tenant_id)
         if active_only:
             statement = statement.where(Participant.is_active.is_(True))
-        statement = statement.order_by(Participant.display_name.asc(), Participant.id.asc())
+        statement = statement.order_by(Participant.display_name.asc(), Participant.id.asc()).offset(skip).limit(limit)
         return list(db.scalars(statement))
 
     def get(self, db: Session, participant_id: int) -> Participant | None:
@@ -52,8 +53,26 @@ class ParticipantRepository:
         return list(db.scalars(statement))
 
     def replace_templates_for_participant(self, db: Session, participant_id: int, template_ids: list[int]) -> list[Template]:
-        db.execute(delete(TemplateParticipant).where(TemplateParticipant.participant_id == participant_id))
-        for template_id in template_ids:
-            db.add(TemplateParticipant(template_id=template_id, participant_id=participant_id))
+        template_id_set = set(template_ids)
+        if template_id_set:
+            # Remove only assignments no longer in the desired set.
+            db.execute(
+                delete(TemplateParticipant).where(
+                    TemplateParticipant.participant_id == participant_id,
+                    TemplateParticipant.template_id.not_in(template_id_set),
+                )
+            )
+            # Insert new assignments; skip rows that already exist so existing
+            # exclude_from_attendance flags are preserved (ON CONFLICT DO NOTHING).
+            db.execute(
+                pg_insert(TemplateParticipant)
+                .values([
+                    {"template_id": tid, "participant_id": participant_id, "exclude_from_attendance": False}
+                    for tid in template_id_set
+                ])
+                .on_conflict_do_nothing()
+            )
+        else:
+            db.execute(delete(TemplateParticipant).where(TemplateParticipant.participant_id == participant_id))
         db.commit()
         return self.list_templates_for_participant(db, participant_id)

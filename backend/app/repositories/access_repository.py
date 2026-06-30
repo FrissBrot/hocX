@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import delete, distinct, func, select
+from sqlalchemy import delete, distinct, exists, func, or_, select, union_all
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -35,19 +35,26 @@ class AccessRepository:
         return list(db.scalars(statement))
 
     def has_scoped_access(self, db: Session, *, user_id: int, tenant_id: int) -> bool:
-        template_count = db.scalar(
-            select(func.count(UserTemplateAccess.template_id)).where(
-                UserTemplateAccess.user_id == user_id,
-                UserTemplateAccess.tenant_id == tenant_id,
+        return bool(
+            db.scalar(
+                select(
+                    or_(
+                        exists(
+                            select(UserTemplateAccess.user_id).where(
+                                UserTemplateAccess.user_id == user_id,
+                                UserTemplateAccess.tenant_id == tenant_id,
+                            )
+                        ),
+                        exists(
+                            select(UserProtocolAccess.user_id).where(
+                                UserProtocolAccess.user_id == user_id,
+                                UserProtocolAccess.tenant_id == tenant_id,
+                            )
+                        ),
+                    )
+                )
             )
         )
-        protocol_count = db.scalar(
-            select(func.count(UserProtocolAccess.protocol_id)).where(
-                UserProtocolAccess.user_id == user_id,
-                UserProtocolAccess.tenant_id == tenant_id,
-            )
-        )
-        return bool((template_count or 0) > 0 or (protocol_count or 0) > 0)
 
     def replace_template_access(self, db: Session, *, user_id: int, tenant_id: int, template_ids: list[int]) -> None:
         db.execute(
@@ -137,16 +144,14 @@ class AccessRepository:
         return db.scalar(statement)
 
     def protocol_id_for_stored_file(self, db: Session, *, stored_file_id: int) -> int | None:
-        export_protocol_id = db.scalar(
-            select(ProtocolExportCache.protocol_id).where(ProtocolExportCache.generated_file_id == stored_file_id)
+        export_q = select(ProtocolExportCache.protocol_id.label("protocol_id")).where(
+            ProtocolExportCache.generated_file_id == stored_file_id
         )
-        if export_protocol_id is not None:
-            return export_protocol_id
-
-        image_protocol_id = db.scalar(
-            select(ProtocolElement.protocol_id)
+        image_q = (
+            select(ProtocolElement.protocol_id.label("protocol_id"))
             .join(ProtocolElementBlock, ProtocolElementBlock.protocol_element_id == ProtocolElement.id)
             .join(ProtocolImage, ProtocolImage.protocol_element_block_id == ProtocolElementBlock.id)
             .where(ProtocolImage.stored_file_id == stored_file_id)
         )
-        return image_protocol_id
+        combined = union_all(export_q, image_q).subquery()
+        return db.scalar(select(combined.c.protocol_id).limit(1))

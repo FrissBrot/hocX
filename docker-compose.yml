@@ -53,14 +53,28 @@ services:
     volumes:
       - ./backend:/app
       - ./storage:/app/storage
-    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"
     labels:
       - "traefik.enable=true"
+      # Main API router (all non-auth paths)
       - "traefik.http.routers.hocx-backend.rule=Host(`${TRAEFIK_DOMAIN}`) && (PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`))"
       - "traefik.http.routers.hocx-backend.entrypoints=websecure"
       - "traefik.http.routers.hocx-backend.tls.certresolver=letsencrypt"
       - "traefik.http.routers.hocx-backend.priority=100"
+      - "traefik.http.routers.hocx-backend.service=hocx-backend"
       - "traefik.http.services.hocx-backend.loadbalancer.server.port=8000"
+      # Dedicated router for auth endpoints with rate limiting
+      - "traefik.http.routers.hocx-auth.rule=Host(`${TRAEFIK_DOMAIN}`) && PathPrefix(`/api/auth`)"
+      - "traefik.http.routers.hocx-auth.entrypoints=websecure"
+      - "traefik.http.routers.hocx-auth.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.hocx-auth.priority=200"
+      - "traefik.http.routers.hocx-auth.service=hocx-auth"
+      - "traefik.http.routers.hocx-auth.middlewares=auth-ratelimit"
+      - "traefik.http.services.hocx-auth.loadbalancer.server.port=8000"
+      # Rate limit: max 10 login attempts per minute per IP
+      - "traefik.http.middlewares.auth-ratelimit.ratelimit.average=10"
+      - "traefik.http.middlewares.auth-ratelimit.ratelimit.burst=5"
+      - "traefik.http.middlewares.auth-ratelimit.ratelimit.period=1m"
 
   frontend:
     build:
@@ -77,7 +91,7 @@ services:
       - ./frontend:/app
       - /app/node_modules
       - /app/.next
-    command: npm run dev
+    command: sh -c "npm run build && npm start"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.hocx-frontend.rule=Host(`${TRAEFIK_DOMAIN}`)"

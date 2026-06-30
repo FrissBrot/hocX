@@ -2,24 +2,30 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import (
+    ElementDefinition,
     ElementType,
     ProtocolDisplaySnapshot,
     ProtocolElement,
     ProtocolElementBlock,
     ProtocolText,
     RenderType,
+    TemplateElement,
 )
 
 
 class ProtocolElementRepository:
-    def list_for_protocol(self, db: Session, protocol_id: int) -> list[ProtocolElement]:
-        return list(
-            db.scalars(
-                select(ProtocolElement)
-                .where(ProtocolElement.protocol_id == protocol_id)
-                .order_by(ProtocolElement.sort_index.asc(), ProtocolElement.id.asc())
+    def list_for_protocol(self, db: Session, protocol_id: int):
+        rows = db.execute(
+            select(
+                ProtocolElement,
+                ElementDefinition.configuration_json.label("element_definition_configuration_json"),
             )
-        )
+            .outerjoin(TemplateElement, TemplateElement.id == ProtocolElement.template_element_id)
+            .outerjoin(ElementDefinition, ElementDefinition.id == TemplateElement.element_definition_id)
+            .where(ProtocolElement.protocol_id == protocol_id)
+            .order_by(ProtocolElement.sort_index.asc(), ProtocolElement.id.asc())
+        ).all()
+        return [(row.ProtocolElement, bool((row.element_definition_configuration_json or {}).get("show_when_empty", False))) for row in rows]
 
     def list_blocks_for_elements(self, db: Session, protocol_element_ids: list[int]):
         if not protocol_element_ids:
@@ -32,11 +38,13 @@ class ProtocolElementRepository:
                 ProtocolText.content.label("text_content"),
                 ProtocolDisplaySnapshot.compiled_text.label("display_compiled_text"),
                 ProtocolDisplaySnapshot.snapshot_json.label("display_snapshot_json"),
+                ElementDefinition.configuration_json.label("element_definition_configuration_json"),
             )
             .join(ElementType, ElementType.id == ProtocolElementBlock.element_type_id)
             .join(RenderType, RenderType.id == ProtocolElementBlock.render_type_id)
             .outerjoin(ProtocolText, ProtocolText.protocol_element_block_id == ProtocolElementBlock.id)
             .outerjoin(ProtocolDisplaySnapshot, ProtocolDisplaySnapshot.protocol_element_block_id == ProtocolElementBlock.id)
+            .outerjoin(ElementDefinition, ElementDefinition.id == ProtocolElementBlock.element_definition_id)
             .where(ProtocolElementBlock.protocol_element_id.in_(protocol_element_ids))
             .order_by(ProtocolElementBlock.protocol_element_id.asc(), ProtocolElementBlock.sort_index.asc(), ProtocolElementBlock.id.asc())
         )
@@ -65,6 +73,10 @@ class ProtocolElementBlockRepository:
         db.commit()
         db.refresh(protocol_element_block)
         return protocol_element_block
+
+    def delete(self, db: Session, protocol_element_block: ProtocolElementBlock) -> None:
+        db.delete(protocol_element_block)
+        db.commit()
 
 
 class ProtocolTextRepository:

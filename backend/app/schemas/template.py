@@ -14,6 +14,7 @@ class TemplateBase(BaseModel):
     document_template_id: int | None = None
     next_event_id: int | None = None
     last_event_id: int | None = None
+    todo_due_event_tag: str | None = None
     protocol_number_pattern: str | None = None
     title_pattern: str | None = None
     auto_create_next_protocol: bool = False
@@ -22,7 +23,6 @@ class TemplateBase(BaseModel):
 
 
 class TemplateCreate(TemplateBase):
-    tenant_id: int = 1
     created_by: int | None = None
 
 
@@ -34,6 +34,7 @@ class TemplateUpdate(BaseModel):
     document_template_id: int | None = None
     next_event_id: int | None = None
     last_event_id: int | None = None
+    todo_due_event_tag: str | None = None
     protocol_number_pattern: str | None = None
     title_pattern: str | None = None
     auto_create_next_protocol: bool | None = None
@@ -86,7 +87,6 @@ class ElementDefinitionBlockRead(ElementDefinitionBlockBase):
 
 
 class ElementDefinitionBase(BaseModel):
-    tenant_id: int = 1
     title: str
     description: str | None = None
     is_active: bool = True

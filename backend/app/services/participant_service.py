@@ -114,8 +114,8 @@ class ParticipantService:
             tenant_id=participant.tenant_id,
         )
 
-    def list_participants(self, db: Session, *, tenant_id: int, active_only: bool = False) -> list[Participant]:
-        return self.repository.list(db, tenant_id=tenant_id, active_only=active_only)
+    def list_participants(self, db: Session, *, tenant_id: int, active_only: bool = False, skip: int = 0, limit: int = 100) -> list[Participant]:
+        return self.repository.list(db, tenant_id=tenant_id, active_only=active_only, skip=skip, limit=limit)
 
     def get_participant(self, db: Session, participant_id: int) -> Participant | None:
         return self.repository.get(db, participant_id)

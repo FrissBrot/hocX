@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.db import get_db
-from app.core.security import CurrentUser, get_current_user, require_admin, require_reader, require_writer
+from app.core.security import CurrentUser, get_current_user, require_writer
 from app.schemas.list_definition import (
     ListDefinitionCreate,
     ListDefinitionRead,
@@ -24,7 +24,7 @@ def list_definitions(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
+    require_writer(user)
     return service.list_definitions(db, tenant_id=user.current_tenant_id)
 
 
@@ -34,7 +34,7 @@ def create_definition(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_writer(user)
     try:
         return service.create_definition(db, payload, tenant_id=user.current_tenant_id)
     except (SQLAlchemyError, ValueError) as exc:
@@ -49,7 +49,7 @@ def patch_definition(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_writer(user)
     current = service.get_definition(db, list_definition_id)
     if current is None or current.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Liste nicht gefunden")
@@ -69,7 +69,7 @@ def delete_definition(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_writer(user)
     current = service.get_definition(db, list_definition_id)
     if current is None or current.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Liste nicht gefunden")
@@ -89,7 +89,7 @@ def list_entries(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
+    require_writer(user)
     definition = service.get_definition(db, list_definition_id)
     if definition is None or definition.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Liste nicht gefunden")

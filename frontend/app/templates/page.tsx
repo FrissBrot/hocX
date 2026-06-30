@@ -10,9 +10,6 @@ export default async function TemplatesPage() {
   return (
     <AppShell initialSession={session}>
       <section className="panel">
-        <div className="eyebrow">Template Builder</div>
-        <h1>Template list</h1>
-        <p className="muted">Create templates and jump straight into the structure editor.</p>
         <TemplateBuilder initialTemplates={data ?? []} />
       </section>
     </AppShell>

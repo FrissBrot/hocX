@@ -13,11 +13,6 @@ export default async function SettingsPage() {
   return (
     <AppShell initialSession={session}>
       <section className="panel">
-        <div className="eyebrow">Settings</div>
-        <h1>Document template library</h1>
-        <p className="muted">
-          Manage reusable LaTeX building parts per tenant and compose full PDF layouts that protocols can choose later.
-        </p>
         <div className="section-stack">
           <DocumentTemplateManager
             initialTemplates={documentTemplates ?? []}

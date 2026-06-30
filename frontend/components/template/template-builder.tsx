@@ -1,6 +1,6 @@
 "use client";
 
-import { DragEvent, FormEvent, useMemo, useState } from "react";
+import { DragEvent, FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
@@ -8,7 +8,15 @@ import { Modal } from "@/components/ui/modal";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { browserApiFetch } from "@/lib/api/client";
 import { formatDateRange } from "@/lib/utils/format";
-import { ElementDefinition, EventSummary, ParticipantSummary, TemplateElement, TemplateSummary } from "@/types/api";
+import {
+  ElementDefinition,
+  EventSummary,
+  ParticipantSummary,
+  StructuredListDefinition,
+  StructuredListEntry,
+  TemplateElement,
+  TemplateSummary,
+} from "@/types/api";
 
 type TemplateBuilderProps = {
   initialTemplates: TemplateSummary[];
@@ -20,6 +28,7 @@ type TemplateEditorProps = {
   initialDefinitions: ElementDefinition[];
   availableEvents: EventSummary[];
   availableParticipants: ParticipantSummary[];
+  availableLists: StructuredListDefinition[];
   initialAssignedParticipants: ParticipantSummary[];
 };
 
@@ -39,6 +48,40 @@ type TemplateItemForm = {
   element_definition_ids: string[];
 };
 
+type TemplateParticipantAssignmentState = {
+  participant_id: number;
+  exclude_from_attendance: boolean;
+};
+
+type ResponsibleNameMode = "display_name" | "first_name" | "last_name";
+
+type ResponsibilityAssignment = {
+  participant_id: number;
+  list_definition_id: number | null;
+  list_entry_id: number | null;
+  locked: boolean;
+};
+
+type ResponsibilityConfig = {
+  name_display_mode: ResponsibleNameMode;
+  assignments: ResponsibilityAssignment[];
+};
+
+type ResponsibilityDisplayGroup = {
+  key: string;
+  participantIds: number[];
+  listDefinitionId: number | null;
+  listEntryId: number | null;
+  locked: boolean;
+};
+
+type EligibleResponsibleList = {
+  definition: StructuredListDefinition;
+  textColumn: "column_one" | "column_two";
+  participantColumn: "column_one" | "column_two";
+  participantValueType: "participant" | "participants";
+};
+
 const initialTemplateCreate: TemplateCreateState = {
   name: "",
   description: "",
@@ -54,6 +97,20 @@ const initialTemplateCreate: TemplateCreateState = {
 const initialTemplateItemForm: TemplateItemForm = {
   element_definition_ids: []
 };
+
+function normalizeTemplateParticipantAssignments(participants: ParticipantSummary[]): TemplateParticipantAssignmentState[] {
+  return Array.from(
+    new Map(
+      participants.map((participant) => [
+        participant.id,
+        {
+          participant_id: participant.id,
+          exclude_from_attendance: Boolean(participant.exclude_from_attendance),
+        } satisfies TemplateParticipantAssignmentState,
+      ])
+    ).values()
+  );
+}
 
 function resequenceTemplateElements(items: TemplateElement[]) {
   return items.map((item, index) => ({ ...item, sort_index: (index + 1) * 10 }));
@@ -73,6 +130,175 @@ function definitionTypeSummary(definition: ElementDefinition) {
     )
   );
   return labels.length ? labels.join(", ") : `${definition.blocks.length} Block${definition.blocks.length === 1 ? "" : "e"}`;
+}
+
+function normalizeMatchText(value: string) {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function eligibleResponsibleList(definition: StructuredListDefinition): EligibleResponsibleList | null {
+  const firstIsText = definition.column_one_value_type === "text";
+  const secondIsText = definition.column_two_value_type === "text";
+  const firstIsParticipants = definition.column_one_value_type === "participant" || definition.column_one_value_type === "participants";
+  const secondIsParticipants = definition.column_two_value_type === "participant" || definition.column_two_value_type === "participants";
+
+  if (firstIsText && secondIsParticipants) {
+    return {
+      definition,
+      textColumn: "column_one",
+      participantColumn: "column_two",
+      participantValueType: definition.column_two_value_type === "participant" ? "participant" : "participants",
+    };
+  }
+  if (secondIsText && firstIsParticipants) {
+    return {
+      definition,
+      textColumn: "column_two",
+      participantColumn: "column_one",
+      participantValueType: definition.column_one_value_type === "participant" ? "participant" : "participants",
+    };
+  }
+  return null;
+}
+
+function parseResponsibilityConfig(configurationJson: Record<string, unknown> | null | undefined): ResponsibilityConfig {
+  const responsibility = configurationJson?.responsibility;
+  const raw = responsibility && typeof responsibility === "object" ? (responsibility as Record<string, unknown>) : {};
+  const rawAssignments = Array.isArray(raw.assignments) ? raw.assignments : [];
+  const assignments = rawAssignments
+    .map((item) => {
+      if (!item || typeof item !== "object") {
+        return null;
+      }
+      const entry = item as Record<string, unknown>;
+      const participantId = Number(entry.participant_id ?? 0);
+      const listDefinitionId = Number(entry.list_definition_id ?? 0);
+      const listEntryId = Number(entry.list_entry_id ?? 0);
+      if (!participantId) {
+        return null;
+      }
+      return {
+        participant_id: participantId,
+        list_definition_id: listDefinitionId || null,
+        list_entry_id: listEntryId || null,
+        locked: Boolean(entry.locked ?? false),
+      } satisfies ResponsibilityAssignment;
+    })
+    .filter((assignment): assignment is ResponsibilityAssignment => Boolean(assignment));
+  const dedupedAssignments: ResponsibilityAssignment[] = [];
+  const seenParticipantIds = new Set<number>();
+  for (const assignment of assignments) {
+    if (seenParticipantIds.has(assignment.participant_id)) {
+      continue;
+    }
+    dedupedAssignments.push(assignment);
+    seenParticipantIds.add(assignment.participant_id);
+  }
+  return {
+    name_display_mode:
+      raw.name_display_mode === "first_name" || raw.name_display_mode === "last_name" ? raw.name_display_mode : "display_name",
+    assignments: dedupedAssignments,
+  };
+}
+
+function buildResponsibilityConfig(
+  currentConfigurationJson: Record<string, unknown>,
+  responsibility: ResponsibilityConfig
+) {
+  return {
+    ...currentConfigurationJson,
+    responsibility: {
+      name_display_mode: responsibility.name_display_mode,
+      assignments: responsibility.assignments.map((assignment) => ({
+        participant_id: assignment.participant_id,
+        list_definition_id: assignment.list_definition_id,
+        list_entry_id: assignment.list_entry_id,
+        locked: assignment.locked,
+      })),
+    },
+  };
+}
+
+function responsibilityConfigsEqual(left: ResponsibilityConfig, right: ResponsibilityConfig) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function participantName(participant: ParticipantSummary | undefined, mode: ResponsibleNameMode, fallbackId?: number) {
+  if (!participant) {
+    return fallbackId ? `Teilnehmer ${fallbackId}` : "Unbekannt";
+  }
+  if (mode === "first_name") {
+    return participant.first_name?.trim() || participant.display_name;
+  }
+  if (mode === "last_name") {
+    return participant.last_name?.trim() || participant.display_name;
+  }
+  return participant.display_name;
+}
+
+function titleWithResponsibility(
+  item: TemplateElement,
+  participantsById: Map<number, ParticipantSummary>,
+  fallbackMode: ResponsibleNameMode
+) {
+  const responsibility = parseResponsibilityConfig(item.configuration_json);
+  const mode = responsibility.name_display_mode || fallbackMode;
+  const names = responsibility.assignments
+    .map((assignment) => participantName(participantsById.get(assignment.participant_id), mode, assignment.participant_id))
+    .filter(Boolean);
+  return names.length ? `${item.title} (${names.join(", ")})` : item.title;
+}
+
+function listTextValue(entry: StructuredListEntry, column: "column_one" | "column_two") {
+  const value = column === "column_one" ? entry.column_one_value : entry.column_two_value;
+  return String(value?.text_value ?? "").trim();
+}
+
+function listParticipantIds(
+  entry: StructuredListEntry,
+  column: "column_one" | "column_two",
+  valueType: "participant" | "participants"
+) {
+  const value = column === "column_one" ? entry.column_one_value : entry.column_two_value;
+  if (valueType === "participant") {
+    const participantId = Number(value?.participant_id ?? 0);
+    return participantId ? [participantId] : [];
+  }
+  return Array.isArray(value?.participant_ids) ? value.participant_ids.map(Number).filter(Boolean) : [];
+}
+
+function rowOptionLabel(
+  entry: StructuredListEntry,
+  meta: EligibleResponsibleList,
+  participantsById: Map<number, ParticipantSummary>,
+  mode: ResponsibleNameMode
+) {
+  const text = listTextValue(entry, meta.textColumn) || `Zeile ${entry.id}`;
+  const names = listParticipantIds(entry, meta.participantColumn, meta.participantValueType)
+    .map((participantId) => participantName(participantsById.get(participantId), mode, participantId))
+    .filter(Boolean);
+  return names.length ? `${text} -> ${names.join(", ")}` : text;
+}
+
+function ResponsibilityLockIcon({ locked }: { locked: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      {locked ? (
+        <>
+          <path d="M8 10V7.5a4 4 0 1 1 8 0V10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          <rect x="5.5" y="10" width="13" height="10" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
+          <circle cx="12" cy="15" r="1.2" fill="currentColor" />
+        </>
+      ) : (
+        <>
+          <path d="M8 10V7.5a4 4 0 1 1 7 2.65" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M14.5 12.5 18 9" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          <rect x="5.5" y="10" width="13" height="10" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
+          <circle cx="12" cy="15" r="1.2" fill="currentColor" />
+        </>
+      )}
+    </svg>
+  );
 }
 
 export function TemplateBuilder({ initialTemplates }: TemplateBuilderProps) {
@@ -253,6 +479,7 @@ export function TemplateEditor({
   initialDefinitions,
   availableEvents,
   availableParticipants,
+  availableLists,
   initialAssignedParticipants,
 }: TemplateEditorProps) {
   const router = useRouter();
@@ -264,6 +491,7 @@ export function TemplateEditor({
     status: initialTemplate.status,
     next_event_id: initialTemplate.next_event_id ? String(initialTemplate.next_event_id) : "",
     last_event_id: initialTemplate.last_event_id ? String(initialTemplate.last_event_id) : "",
+    todo_due_event_tag: initialTemplate.todo_due_event_tag ?? "",
     protocol_number_pattern: initialTemplate.protocol_number_pattern ?? "",
     title_pattern: initialTemplate.title_pattern ?? "",
     auto_create_next_protocol: Boolean(initialTemplate.auto_create_next_protocol),
@@ -275,17 +503,495 @@ export function TemplateEditor({
   });
   const [showCreateItem, setShowCreateItem] = useState(false);
   const [showParticipantModal, setShowParticipantModal] = useState(false);
+  const [showResponsibilityModalFor, setShowResponsibilityModalFor] = useState<number | null>(null);
   const [status, setStatus] = useState("Ready");
   const [statusTone, setStatusTone] = useState<"neutral" | "success" | "error">("neutral");
   const [draggedTemplateElementId, setDraggedTemplateElementId] = useState<number | null>(null);
-  const [assignedParticipantIds, setAssignedParticipantIds] = useState<number[]>(
-    initialAssignedParticipants.map((participant) => participant.id)
+  const [activeTemplateDropIndex, setActiveTemplateDropIndex] = useState<number | null>(null);
+  const [expandedTemplateDropIndex, setExpandedTemplateDropIndex] = useState<number | null>(null);
+  const [positionDrafts, setPositionDrafts] = useState<Record<number, string>>({});
+  const [responsibilityAutoListId, setResponsibilityAutoListId] = useState("");
+  const [responsibilityNameMode, setResponsibilityNameMode] = useState<ResponsibleNameMode>(() => {
+    const firstConfiguredElement = initialElements.find((item) => Array.isArray((item.configuration_json?.responsibility as { assignments?: unknown } | undefined)?.assignments));
+    return parseResponsibilityConfig(firstConfiguredElement?.configuration_json ?? {}).name_display_mode;
+  });
+  const [listEntriesByListId, setListEntriesByListId] = useState<Record<number, StructuredListEntry[]>>({});
+  const [loadingResponsibleListId, setLoadingResponsibleListId] = useState<number | null>(null);
+  const [responsibilitySearch, setResponsibilitySearch] = useState("");
+  const [manualLinkListId, setManualLinkListId] = useState("");
+  const [manualLinkEntryId, setManualLinkEntryId] = useState("");
+  const [participantAssignments, setParticipantAssignments] = useState<TemplateParticipantAssignmentState[]>(
+    () => normalizeTemplateParticipantAssignments(initialAssignedParticipants)
   );
 
+  const participantsById = useMemo(
+    () => new Map(availableParticipants.map((participant) => [participant.id, participant])),
+    [availableParticipants]
+  );
   const allParticipantIds = useMemo(
     () => availableParticipants.filter((participant) => participant.is_active).map((participant) => participant.id),
     [availableParticipants]
   );
+  const participantAssignmentsById = useMemo(
+    () => new Map(participantAssignments.map((assignment) => [assignment.participant_id, assignment])),
+    [participantAssignments]
+  );
+  const assignedParticipantIds = useMemo(
+    () => participantAssignments.map((assignment) => assignment.participant_id),
+    [participantAssignments]
+  );
+  const excludedAttendanceCount = useMemo(
+    () => participantAssignments.filter((assignment) => assignment.exclude_from_attendance).length,
+    [participantAssignments]
+  );
+  const eligibleResponsibleLists = useMemo(
+    () =>
+      availableLists
+        .map((definition) => eligibleResponsibleList(definition))
+        .filter((definition): definition is EligibleResponsibleList => Boolean(definition)),
+    [availableLists]
+  );
+  const orderedElements = useMemo(
+    () => [...elements].sort((left, right) => left.sort_index - right.sort_index),
+    [elements]
+  );
+  const responsibilityModalElement = useMemo(
+    () => orderedElements.find((item) => item.id === showResponsibilityModalFor) ?? null,
+    [orderedElements, showResponsibilityModalFor]
+  );
+  const templateDropExpandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const templateDragPreviewRef = useRef<HTMLElement | null>(null);
+  const filteredResponsibilityParticipants = useMemo(() => {
+    const query = responsibilitySearch.trim().toLowerCase();
+    return [...availableParticipants]
+      .sort((left, right) => left.display_name.localeCompare(right.display_name, "de", { sensitivity: "base" }))
+      .filter((participant) => {
+        if (!query) {
+          return true;
+        }
+        const haystack = [
+          participant.display_name,
+          participant.first_name ?? "",
+          participant.last_name ?? "",
+          participant.email ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(query);
+      });
+  }, [availableParticipants, responsibilitySearch]);
+  const manualLinkListMeta = useMemo(
+    () => eligibleResponsibleLists.find((item) => String(item.definition.id) === manualLinkListId) ?? null,
+    [eligibleResponsibleLists, manualLinkListId]
+  );
+
+  useEffect(() => {
+    setPositionDrafts(
+      Object.fromEntries(orderedElements.map((item, index) => [item.id, String(index + 1)]))
+    );
+  }, [orderedElements]);
+
+  useEffect(
+    () => () => {
+      if (templateDropExpandTimerRef.current) {
+        clearTimeout(templateDropExpandTimerRef.current);
+      }
+      if (templateDragPreviewRef.current) {
+        templateDragPreviewRef.current.remove();
+        templateDragPreviewRef.current = null;
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (!showResponsibilityModalFor || !responsibilityModalElement) {
+      setResponsibilitySearch("");
+      setManualLinkListId("");
+      setManualLinkEntryId("");
+      return;
+    }
+    const firstLinkedListId =
+      parseResponsibilityConfig(responsibilityModalElement.configuration_json).assignments.find((assignment) => assignment.list_definition_id)?.list_definition_id
+      ?? (responsibilityAutoListId ? Number(responsibilityAutoListId) : null)
+      ?? eligibleResponsibleLists[0]?.definition.id
+      ?? null;
+    setManualLinkListId(firstLinkedListId ? String(firstLinkedListId) : "");
+    setManualLinkEntryId("");
+    setResponsibilitySearch("");
+  }, [showResponsibilityModalFor, responsibilityAutoListId, eligibleResponsibleLists]);
+
+  useEffect(() => {
+    if (!manualLinkListId) {
+      setManualLinkEntryId("");
+      return;
+    }
+    const listDefinitionId = Number(manualLinkListId);
+    if (!Number.isFinite(listDefinitionId) || listDefinitionId <= 0) {
+      setManualLinkEntryId("");
+      return;
+    }
+    void ensureResponsibleListEntries(listDefinitionId);
+    setManualLinkEntryId("");
+  }, [manualLinkListId]);
+
+  useEffect(() => {
+    if (!responsibilityModalElement) {
+      return;
+    }
+    const listDefinitionIds = Array.from(
+      new Set(
+        parseResponsibilityConfig(responsibilityModalElement.configuration_json).assignments
+          .map((assignment) => assignment.list_definition_id)
+          .filter((value): value is number => Number(value) > 0)
+      )
+    );
+    listDefinitionIds.forEach((listDefinitionId) => {
+      void ensureResponsibleListEntries(listDefinitionId);
+    });
+  }, [responsibilityModalElement]);
+
+  async function ensureResponsibleListEntries(listDefinitionId: number) {
+    if (listEntriesByListId[listDefinitionId]) {
+      return listEntriesByListId[listDefinitionId];
+    }
+    setLoadingResponsibleListId(listDefinitionId);
+    try {
+      const entries = await browserApiFetch<StructuredListEntry[]>(`/api/lists/${listDefinitionId}/entries`);
+      setListEntriesByListId((current) => ({ ...current, [listDefinitionId]: entries ?? [] }));
+      return entries ?? [];
+    } finally {
+      setLoadingResponsibleListId((current) => (current === listDefinitionId ? null : current));
+    }
+  }
+
+  async function patchTemplateElementConfiguration(templateElementId: number, configurationJson: Record<string, unknown>) {
+    const updated = await browserApiFetch<TemplateElement>(`/api/template-elements/${templateElementId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ configuration_json: configurationJson }),
+    });
+    setElements((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+    return updated;
+  }
+
+  async function saveElementResponsibility(
+    templateElementId: number,
+    updater: (current: ResponsibilityConfig) => ResponsibilityConfig
+  ) {
+    const templateElement = orderedElements.find((item) => item.id === templateElementId);
+    if (!templateElement) {
+      return null;
+    }
+    const currentResponsibility = parseResponsibilityConfig(templateElement.configuration_json);
+    const nextResponsibility = updater(currentResponsibility);
+    if (responsibilityConfigsEqual(currentResponsibility, nextResponsibility)) {
+      return templateElement;
+    }
+    return patchTemplateElementConfiguration(
+      templateElementId,
+      buildResponsibilityConfig(templateElement.configuration_json, nextResponsibility)
+    );
+  }
+
+  function currentResponsibilityTitle(item: TemplateElement) {
+    return titleWithResponsibility(item, participantsById, responsibilityNameMode);
+  }
+
+  async function applyResponsibilityNameMode(nextMode: ResponsibleNameMode) {
+    setResponsibilityNameMode(nextMode);
+    const itemsToUpdate = orderedElements.filter((item) => {
+      const currentResponsibility = parseResponsibilityConfig(item.configuration_json);
+      return currentResponsibility.assignments.length > 0 || "responsibility" in item.configuration_json;
+    });
+    if (!itemsToUpdate.length) {
+      setStatus("Namensformat für Verantwortliche gesetzt");
+      setStatusTone("success");
+      return;
+    }
+    setStatus("Namensformat für Verantwortliche wird gespeichert...");
+    setStatusTone("neutral");
+    try {
+      for (const item of itemsToUpdate) {
+        await saveElementResponsibility(item.id, (current) => ({
+          ...current,
+          name_display_mode: nextMode,
+        }));
+      }
+      setStatus("Namensformat für Verantwortliche gespeichert");
+      setStatusTone("success");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Namensformat konnte nicht gespeichert werden");
+      setStatusTone("error");
+    }
+  }
+
+  async function autoAssignResponsiblesFromList(listDefinitionId: number, targetItems: TemplateElement[] = orderedElements) {
+    const listMeta = eligibleResponsibleLists.find((item) => item.definition.id === listDefinitionId);
+    if (!listMeta) {
+      return;
+    }
+    setResponsibilityAutoListId(String(listDefinitionId));
+    setStatus("Verantwortliche werden aus der Liste zugeordnet...");
+    setStatusTone("neutral");
+    try {
+      const entries = await ensureResponsibleListEntries(listDefinitionId);
+      let matchedElementCount = 0;
+      for (const item of targetItems) {
+        const matchedAssignments = entries
+          .filter((entry) => normalizeMatchText(listTextValue(entry, listMeta.textColumn)) === normalizeMatchText(item.title))
+          .flatMap((entry) =>
+            listParticipantIds(entry, listMeta.participantColumn, listMeta.participantValueType).map((participantId) => ({
+              participant_id: participantId,
+              list_definition_id: listDefinitionId,
+              list_entry_id: entry.id,
+              locked: false,
+            }))
+          );
+        if (matchedAssignments.length > 0) {
+          matchedElementCount += 1;
+        }
+        const dedupedMatches: ResponsibilityAssignment[] = [];
+        const matchedParticipantIds = new Set<number>();
+        for (const assignment of matchedAssignments) {
+          if (matchedParticipantIds.has(assignment.participant_id)) {
+            continue;
+          }
+          dedupedMatches.push(assignment);
+          matchedParticipantIds.add(assignment.participant_id);
+        }
+        await saveElementResponsibility(item.id, (current) => {
+          const preservedAssignments = current.assignments.filter((assignment) => {
+            if (assignment.locked) {
+              return true;
+            }
+            if (assignment.list_definition_id === listDefinitionId) {
+              return false;
+            }
+            return true;
+          });
+          const existingParticipantIds = new Set(preservedAssignments.map((assignment) => assignment.participant_id));
+          const nextAssignments = [...preservedAssignments];
+          for (const assignment of dedupedMatches) {
+            if (existingParticipantIds.has(assignment.participant_id)) {
+              continue;
+            }
+            nextAssignments.push(assignment);
+            existingParticipantIds.add(assignment.participant_id);
+          }
+          return {
+            name_display_mode: responsibilityNameMode,
+            assignments: nextAssignments,
+          };
+        });
+      }
+      setStatus(
+        matchedElementCount
+          ? `${matchedElementCount} Element${matchedElementCount === 1 ? "" : "e"} wurden automatisch zugeordnet`
+          : "Keine passenden Listeneinträge für die aktuellen Elementtitel gefunden"
+      );
+      setStatusTone(matchedElementCount ? "success" : "neutral");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Automatische Zuordnung konnte nicht gespeichert werden");
+      setStatusTone("error");
+    }
+  }
+
+  async function toggleResponsibleParticipant(templateElementId: number, participantId: number, enabled: boolean) {
+    setStatus(enabled ? "Verantwortliche Person wird zugewiesen..." : "Verantwortliche Person wird entfernt...");
+    setStatusTone("neutral");
+    try {
+      await saveElementResponsibility(templateElementId, (current) => {
+        const nextAssignments = current.assignments.filter((assignment) => assignment.participant_id !== participantId);
+        if (enabled) {
+          nextAssignments.push({
+            participant_id: participantId,
+            list_definition_id: null,
+            list_entry_id: null,
+            locked: false,
+          });
+        }
+        return {
+          name_display_mode: responsibilityNameMode,
+          assignments: nextAssignments,
+        };
+      });
+      setStatus(enabled ? "Verantwortliche Person zugewiesen" : "Verantwortliche Person entfernt");
+      setStatusTone("success");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Verantwortliche Person konnte nicht aktualisiert werden");
+      setStatusTone("error");
+    }
+  }
+
+  async function toggleResponsibilityLock(templateElementId: number, participantId: number) {
+    setStatus("Tabellen-Verknüpfung wird aktualisiert...");
+    setStatusTone("neutral");
+    try {
+      await saveElementResponsibility(templateElementId, (current) => ({
+        name_display_mode: responsibilityNameMode,
+        assignments: current.assignments.map((assignment) =>
+          assignment.participant_id === participantId && assignment.list_definition_id && assignment.list_entry_id
+            ? { ...assignment, locked: !assignment.locked }
+            : assignment
+        ),
+      }));
+      setStatus("Tabellen-Verknüpfung aktualisiert");
+      setStatusTone("success");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Tabellen-Verknüpfung konnte nicht aktualisiert werden");
+      setStatusTone("error");
+    }
+  }
+
+  async function toggleResponsibilityRowLock(templateElementId: number, listDefinitionId: number, listEntryId: number) {
+    setStatus("Tabellen-Verknüpfung wird aktualisiert...");
+    setStatusTone("neutral");
+    try {
+      await saveElementResponsibility(templateElementId, (current) => {
+        const matchingAssignments = current.assignments.filter(
+          (assignment) => assignment.list_definition_id === listDefinitionId && assignment.list_entry_id === listEntryId
+        );
+        if (!matchingAssignments.length) {
+          return current;
+        }
+        const nextLocked = !matchingAssignments.every((assignment) => assignment.locked);
+        return {
+          name_display_mode: responsibilityNameMode,
+          assignments: current.assignments.map((assignment) =>
+            assignment.list_definition_id === listDefinitionId && assignment.list_entry_id === listEntryId
+              ? { ...assignment, locked: nextLocked }
+              : assignment
+          ),
+        };
+      });
+      setStatus("Tabellen-Verknüpfung aktualisiert");
+      setStatusTone("success");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Tabellen-Verknüpfung konnte nicht aktualisiert werden");
+      setStatusTone("error");
+    }
+  }
+
+  async function linkElementToResponsibleRow() {
+    if (!responsibilityModalElement || !manualLinkListMeta || !manualLinkEntryId) {
+      return;
+    }
+    const entryId = Number(manualLinkEntryId);
+    const listDefinitionId = manualLinkListMeta.definition.id;
+    setStatus("Element wird mit der Tabellenzeile verknüpft...");
+    setStatusTone("neutral");
+    try {
+      const entries = await ensureResponsibleListEntries(listDefinitionId);
+      const selectedEntry = entries.find((entry) => entry.id === entryId);
+      if (!selectedEntry) {
+        setStatus("Die gewählte Tabellenzeile wurde nicht gefunden");
+        setStatusTone("error");
+        return;
+      }
+      const participantIds = listParticipantIds(selectedEntry, manualLinkListMeta.participantColumn, manualLinkListMeta.participantValueType);
+      if (!participantIds.length) {
+        setStatus("Die gewählte Tabellenzeile enthält keine Teilnehmenden");
+        setStatusTone("error");
+        return;
+      }
+      await saveElementResponsibility(responsibilityModalElement.id, (current) => {
+        const nextAssignmentsByParticipant = new Map<number, ResponsibilityAssignment>();
+        for (const assignment of current.assignments) {
+          if (assignment.list_definition_id === listDefinitionId) {
+            continue;
+          }
+          nextAssignmentsByParticipant.set(assignment.participant_id, assignment);
+        }
+        for (const participantId of participantIds) {
+          nextAssignmentsByParticipant.set(participantId, {
+            participant_id: participantId,
+            list_definition_id: listDefinitionId,
+            list_entry_id: entryId,
+            locked: true,
+          });
+        }
+        return {
+          name_display_mode: responsibilityNameMode,
+          assignments: [...nextAssignmentsByParticipant.values()],
+        };
+      });
+      setStatus("Element mit Tabellenzeile verknüpft");
+      setStatusTone("success");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Tabellenzeilen-Verknüpfung konnte nicht gespeichert werden");
+      setStatusTone("error");
+    }
+  }
+
+  function responsibilityLinkTooltip(assignment: ResponsibilityAssignment) {
+    if (!assignment.list_definition_id || !assignment.list_entry_id) {
+      return "";
+    }
+    const listMeta = eligibleResponsibleLists.find((item) => item.definition.id === assignment.list_definition_id);
+    const listName = listMeta?.definition.name ?? `Liste ${assignment.list_definition_id}`;
+    const linkedEntry = listEntriesByListId[assignment.list_definition_id]?.find((entry) => entry.id === assignment.list_entry_id);
+    const rowLabel = linkedEntry && listMeta
+      ? listTextValue(linkedEntry, listMeta.textColumn) || `Zeile ${assignment.list_entry_id}`
+      : `Zeile ${assignment.list_entry_id}`;
+    return `${listName} · ${rowLabel}`;
+  }
+
+  function responsibilityDisplayGroups(templateElement: TemplateElement) {
+    const responsibility = parseResponsibilityConfig(templateElement.configuration_json);
+    const groups: ResponsibilityDisplayGroup[] = [];
+    const groupIndexes = new Map<string, number>();
+    for (const assignment of responsibility.assignments) {
+      const groupKey =
+        assignment.list_definition_id && assignment.list_entry_id
+          ? `linked:${assignment.list_definition_id}:${assignment.list_entry_id}`
+          : `manual:${assignment.participant_id}`;
+      const existingIndex = groupIndexes.get(groupKey);
+      if (existingIndex === undefined) {
+        groupIndexes.set(groupKey, groups.length);
+        groups.push({
+          key: groupKey,
+          participantIds: [assignment.participant_id],
+          listDefinitionId: assignment.list_definition_id,
+          listEntryId: assignment.list_entry_id,
+          locked: assignment.locked,
+        });
+        continue;
+      }
+      groups[existingIndex] = {
+        ...groups[existingIndex],
+        participantIds: [...groups[existingIndex].participantIds, assignment.participant_id],
+        locked: groups[existingIndex].locked && assignment.locked,
+      };
+    }
+    return groups.map((group) => ({
+      ...group,
+      names: group.participantIds
+        .map((participantId) =>
+          participantName(
+            participantsById.get(participantId),
+            responsibility.name_display_mode || responsibilityNameMode,
+            participantId
+          )
+        )
+        .filter(Boolean)
+        .join(", "),
+      tooltip:
+        group.listDefinitionId && group.listEntryId
+          ? responsibilityLinkTooltip({
+              participant_id: group.participantIds[0] ?? 0,
+              list_definition_id: group.listDefinitionId,
+              list_entry_id: group.listEntryId,
+              locked: group.locked,
+            })
+          : "",
+    }));
+  }
+
+  function isParticipantResponsible(templateElement: TemplateElement, participantId: number) {
+    return parseResponsibilityConfig(templateElement.configuration_json).assignments.some(
+      (assignment) => assignment.participant_id === participantId
+    );
+  }
   async function saveTemplate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus("Saving template...");
@@ -299,6 +1005,7 @@ export function TemplateEditor({
           status: templateMeta.status,
           next_event_id: templateMeta.next_event_id ? Number(templateMeta.next_event_id) : null,
           last_event_id: templateMeta.last_event_id ? Number(templateMeta.last_event_id) : null,
+          todo_due_event_tag: templateMeta.todo_due_event_tag || null,
           protocol_number_pattern: templateMeta.protocol_number_pattern || null,
           title_pattern: templateMeta.title_pattern || null,
           auto_create_next_protocol: templateMeta.auto_create_next_protocol,
@@ -322,7 +1029,12 @@ export function TemplateEditor({
     try {
       await browserApiFetch(`/api/templates/${template.id}/participants`, {
         method: "PUT",
-        body: JSON.stringify({ participant_ids: assignedParticipantIds }),
+        body: JSON.stringify({
+          participants: participantAssignments.map((assignment) => ({
+            participant_id: assignment.participant_id,
+            exclude_from_attendance: assignment.exclude_from_attendance,
+          })),
+        }),
       });
       setStatus("Participant assignments saved");
       setStatusTone("success");
@@ -364,22 +1076,11 @@ export function TemplateEditor({
     }
   }
 
-  async function reorderTemplateItems(sourceId: number, targetId: number) {
-    if (sourceId === targetId) {
-      return;
-    }
-    setStatus("Saving template order...");
+  async function persistTemplateOrder(nextOrdered: TemplateElement[], successMessage: string) {
+    setStatus("Speichere Template-Reihenfolge...");
     setStatusTone("neutral");
     try {
-      const ordered = [...elements].sort((left, right) => left.sort_index - right.sort_index);
-      const sourceIndex = ordered.findIndex((item) => item.id === sourceId);
-      const targetIndex = ordered.findIndex((item) => item.id === targetId);
-      if (sourceIndex === -1 || targetIndex === -1) {
-        return;
-      }
-      const [moved] = ordered.splice(sourceIndex, 1);
-      ordered.splice(targetIndex, 0, moved);
-      const resequenced = resequenceTemplateElements(ordered);
+      const resequenced = resequenceTemplateElements(nextOrdered);
       const temporaryItems = resequenced.map((item, index) => ({
         ...item,
         sort_index: -1000 - index,
@@ -399,30 +1100,178 @@ export function TemplateEditor({
         updatedItems.push(updated);
       }
       setElements(updatedItems.sort((left, right) => left.sort_index - right.sort_index));
-      setStatus("Template order saved");
+      setStatus(successMessage);
       setStatusTone("success");
       router.refresh();
+      return true;
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Template order update failed");
+      setStatus(error instanceof Error ? error.message : "Template-Reihenfolge konnte nicht gespeichert werden");
       setStatusTone("error");
+      return false;
     }
+  }
+
+  async function reorderTemplateItems(sourceId: number, targetId: number) {
+    if (sourceId === targetId) {
+      return;
+    }
+    const sourceIndex = orderedElements.findIndex((item) => item.id === sourceId);
+    const targetIndex = orderedElements.findIndex((item) => item.id === targetId);
+    if (sourceIndex === -1 || targetIndex === -1) {
+      return;
+    }
+    const nextOrdered = [...orderedElements];
+    const [moved] = nextOrdered.splice(sourceIndex, 1);
+    nextOrdered.splice(targetIndex, 0, moved);
+    await persistTemplateOrder(nextOrdered, "Template-Reihenfolge gespeichert");
+  }
+
+  async function moveTemplateItemToPosition(templateElementId: number, requestedPosition: number) {
+    const currentIndex = orderedElements.findIndex((item) => item.id === templateElementId);
+    if (currentIndex === -1) {
+      return;
+    }
+    const clampedIndex = Math.min(Math.max(requestedPosition - 1, 0), orderedElements.length - 1);
+    setPositionDrafts((current) => ({ ...current, [templateElementId]: String(clampedIndex + 1) }));
+    if (currentIndex === clampedIndex) {
+      return;
+    }
+    const nextOrdered = [...orderedElements];
+    const [moved] = nextOrdered.splice(currentIndex, 1);
+    nextOrdered.splice(clampedIndex, 0, moved);
+    await persistTemplateOrder(nextOrdered, `Element auf Position ${clampedIndex + 1} verschoben`);
+  }
+
+  function handlePositionSubmit(templateElementId: number, rawValue: string) {
+    const parsed = Number(rawValue);
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      const currentIndex = orderedElements.findIndex((item) => item.id === templateElementId);
+      setPositionDrafts((current) => ({
+        ...current,
+        [templateElementId]: String(currentIndex >= 0 ? currentIndex + 1 : 1),
+      }));
+      return;
+    }
+    void moveTemplateItemToPosition(templateElementId, Math.trunc(parsed));
+  }
+
+  function clearTemplateDropExpansionTimer() {
+    if (templateDropExpandTimerRef.current) {
+      clearTimeout(templateDropExpandTimerRef.current);
+      templateDropExpandTimerRef.current = null;
+    }
+  }
+
+  function clearTemplateDragPreview() {
+    if (templateDragPreviewRef.current) {
+      templateDragPreviewRef.current.remove();
+      templateDragPreviewRef.current = null;
+    }
+  }
+
+  function resetTemplateDragState() {
+    clearTemplateDropExpansionTimer();
+    clearTemplateDragPreview();
+    setDraggedTemplateElementId(null);
+    setActiveTemplateDropIndex(null);
+    setExpandedTemplateDropIndex(null);
+  }
+
+  function scheduleTemplateDropExpansion(dropIndex: number) {
+    clearTemplateDropExpansionTimer();
+    templateDropExpandTimerRef.current = setTimeout(() => {
+      setExpandedTemplateDropIndex(dropIndex);
+    }, 180);
   }
 
   function handleTemplateDragStart(event: DragEvent<HTMLElement>, templateElementId: number) {
     setDraggedTemplateElementId(templateElementId);
+    setActiveTemplateDropIndex(null);
+    setExpandedTemplateDropIndex(null);
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/template-element", String(templateElementId));
+    const rowElement = event.currentTarget.closest(".template-element-row");
+    if (rowElement instanceof HTMLElement) {
+      clearTemplateDragPreview();
+      const preview = rowElement.cloneNode(true) as HTMLElement;
+      preview.style.position = "fixed";
+      preview.style.top = "-1000px";
+      preview.style.left = "-1000px";
+      preview.style.width = `${rowElement.offsetWidth}px`;
+      preview.style.pointerEvents = "none";
+      preview.style.transform = "rotate(-1deg)";
+      preview.style.boxShadow = "0 16px 34px rgba(15, 23, 42, 0.28)";
+      preview.style.opacity = "0.96";
+      preview.classList.add("template-element-drag-preview");
+      document.body.appendChild(preview);
+      templateDragPreviewRef.current = preview;
+      event.dataTransfer.setDragImage(preview, 28, 24);
+    }
   }
 
-  function handleTemplateDrop(event: DragEvent<HTMLElement>, targetId: number) {
+  function handleTemplateDragEnd() {
+    resetTemplateDragState();
+  }
+
+  function templateDropIndexForRow(event: DragEvent<HTMLElement>, rowIndex: number) {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const midpoint = bounds.top + bounds.height / 2;
+    return event.clientY >= midpoint ? rowIndex + 1 : rowIndex;
+  }
+
+  function handleTemplateDropSlotDragOver(event: DragEvent<HTMLElement>, dropIndex: number) {
+    event.preventDefault();
+    if (!draggedTemplateElementId) {
+      return;
+    }
+    event.dataTransfer.dropEffect = "move";
+    const isSameDropTarget = activeTemplateDropIndex === dropIndex;
+    setActiveTemplateDropIndex((current) => (current === dropIndex ? current : dropIndex));
+    if (!isSameDropTarget) {
+      scheduleTemplateDropExpansion(dropIndex);
+      return;
+    }
+    if (expandedTemplateDropIndex !== dropIndex && !templateDropExpandTimerRef.current) {
+      scheduleTemplateDropExpansion(dropIndex);
+    }
+  }
+
+  function handleTemplateRowDragOver(event: DragEvent<HTMLElement>, rowIndex: number) {
+    if (!draggedTemplateElementId) {
+      return;
+    }
+    handleTemplateDropSlotDragOver(event, templateDropIndexForRow(event, rowIndex));
+  }
+
+  async function handleTemplateDropAtIndex(event: DragEvent<HTMLElement>, dropIndex: number) {
     event.preventDefault();
     const transferValue = event.dataTransfer.getData("text/template-element");
     const sourceId = transferValue ? Number(transferValue) : draggedTemplateElementId;
-    setDraggedTemplateElementId(null);
     if (!sourceId || Number.isNaN(sourceId)) {
+      resetTemplateDragState();
       return;
     }
-    void reorderTemplateItems(sourceId, targetId);
+    const movedItem = orderedElements.find((item) => item.id === sourceId);
+    const sourceIndex = orderedElements.findIndex((item) => item.id === sourceId);
+    resetTemplateDragState();
+    if (!movedItem) {
+      return;
+    }
+    if (sourceIndex === -1) {
+      return;
+    }
+    const nextOrdered = orderedElements.filter((item) => item.id !== sourceId);
+    const rawIndex = Math.min(Math.max(dropIndex, 0), orderedElements.length);
+    const targetIndex = rawIndex > sourceIndex ? rawIndex - 1 : rawIndex;
+    if (targetIndex === sourceIndex) {
+      return;
+    }
+    nextOrdered.splice(targetIndex, 0, movedItem);
+    await persistTemplateOrder(nextOrdered, `Element auf Position ${targetIndex + 1} verschoben`);
+  }
+
+  async function handleTemplateRowDrop(event: DragEvent<HTMLElement>, rowIndex: number) {
+    await handleTemplateDropAtIndex(event, templateDropIndexForRow(event, rowIndex));
   }
 
   async function deleteTemplateItem(templateElementId: number) {
@@ -504,6 +1353,19 @@ export function TemplateEditor({
               <span className="field-help">Bleibt als Template-Kontext erhalten und ist nicht auf das heutige Datum bezogen.</span>
             </label>
           </div>
+          <label className="field-stack">
+            <span className="field-label">Todo-Termin-Tag</span>
+            <select
+              value={templateMeta.todo_due_event_tag}
+              onChange={(event) => setTemplateMeta((current) => ({ ...current, todo_due_event_tag: event.target.value }))}
+            >
+              <option value="">Alle Termine</option>
+              {Array.from(new Set(availableEvents.map((e) => e.tag).filter(Boolean))).sort().map((tag) => (
+                <option key={tag} value={tag!}>{tag}</option>
+              ))}
+            </select>
+            <span className="field-help">Nur Termine mit diesem Tag werden in der Todo-Fällig-Auswahl angezeigt. Leer = alle Termine.</span>
+          </label>
           <label className="checkbox-row">
             <input
               type="checkbox"
@@ -538,7 +1400,7 @@ export function TemplateEditor({
       <article className="card">
         <DataToolbar
           title="Teilnehmer im Template"
-          description="Nur diese Teilnehmer werden spaeter in den Todo-Bloecken dieses Templates zur Auswahl angeboten."
+          description="Nur diese Teilnehmer sind spaeter im Protokoll auswählbar. Pro Person kannst du zusaetzlich festlegen, ob sie in der Anwesenheitskontrolle erscheinen soll."
           actions={
             <div className="table-toolbar-actions">
               <button type="button" className="button-inline" onClick={() => setShowParticipantModal(true)}>
@@ -549,6 +1411,7 @@ export function TemplateEditor({
         />
         <div className="status-row">
           <span className="pill">{assignedParticipantIds.length} ausgewaehlt</span>
+          <span className="pill">{excludedAttendanceCount} ohne Anwesenheitskontrolle</span>
           <span className="pill">{availableParticipants.length} verfuegbar</span>
         </div>
 
@@ -556,7 +1419,7 @@ export function TemplateEditor({
           open={showParticipantModal}
           onClose={() => setShowParticipantModal(false)}
           title="Teilnehmer waehlen"
-          description="Mit Haken festlegen, welche Teilnehmer in diesem Template spaeter in Todos und passenden Bloecken zur Auswahl stehen."
+          description="Mit Haken legst du fest, wer in diesem Template im Protokoll auswählbar ist. Für ausgewählte Teilnehmer kannst du sie hier direkt aus der Anwesenheitskontrolle entfernen."
           size="fullscreen"
         >
           <div className="grid">
@@ -564,34 +1427,63 @@ export function TemplateEditor({
               <button
                 type="button"
                 className="button-ghost button-inline"
-                onClick={() => setAssignedParticipantIds(allParticipantIds)}
+                onClick={() =>
+                  setParticipantAssignments((current) => {
+                    const currentAssignmentsById = new Map(current.map((assignment) => [assignment.participant_id, assignment]));
+                    return allParticipantIds.map((participantId) => ({
+                      participant_id: participantId,
+                      exclude_from_attendance: currentAssignmentsById.get(participantId)?.exclude_from_attendance ?? false,
+                    }));
+                  })
+                }
               >
                 Alle auswaehlen
               </button>
             </div>
             <div className="selection-list">
               {availableParticipants.map((participant) => {
-                const checked = assignedParticipantIds.includes(participant.id);
+                const assignment = participantAssignmentsById.get(participant.id);
+                const checked = Boolean(assignment);
                 return (
-                  <label key={participant.id} className={`selection-card selection-card-checkbox${checked ? " selection-card-active" : ""}`}>
+                  <div key={participant.id} className={`selection-card selection-card-checkbox${checked ? " selection-card-active" : ""}`}>
                     <input
                       type="checkbox"
                       checked={checked}
                       onChange={(event) =>
-                        setAssignedParticipantIds((current) =>
+                        setParticipantAssignments((current) =>
                           event.target.checked
-                            ? [...new Set([...current, participant.id])]
-                            : current.filter((id) => id !== participant.id)
+                            ? current.some((entry) => entry.participant_id === participant.id)
+                              ? current
+                              : [...current, { participant_id: participant.id, exclude_from_attendance: false }]
+                            : current.filter((entry) => entry.participant_id !== participant.id)
                         )
                       }
                     />
-                    <div>
+                    <div className="grid">
                       <strong>{participant.display_name}</strong>
                       <div className="muted">
                         {[participant.first_name, participant.last_name].filter(Boolean).join(" ") || participant.email || "Teilnehmer"}
                       </div>
+                      {checked ? (
+                        <label className="checkbox-row">
+                          <input
+                            type="checkbox"
+                            checked={assignment?.exclude_from_attendance ?? false}
+                            onChange={(event) =>
+                              setParticipantAssignments((current) =>
+                                current.map((entry) =>
+                                  entry.participant_id === participant.id
+                                    ? { ...entry, exclude_from_attendance: event.target.checked }
+                                    : entry
+                                )
+                              )
+                            }
+                          />
+                          <span>Aus Anwesenheitskontrolle entfernen</span>
+                        </label>
+                      ) : null}
                     </div>
-                  </label>
+                  </div>
                 );
               })}
             </div>
@@ -614,6 +1506,68 @@ export function TemplateEditor({
             </button>
           }
         />
+
+        <div className="grid">
+          <div className="three-col">
+            <label className="field-stack">
+              <span className="field-label">Namensanzeige</span>
+              <select
+                value={responsibilityNameMode}
+                onChange={(event) => void applyResponsibilityNameMode(event.target.value as ResponsibleNameMode)}
+              >
+                <option value="display_name">Anzeigename</option>
+                <option value="first_name">Vorname</option>
+                <option value="last_name">Nachname</option>
+              </select>
+              <span className="field-help">Dieses Format wird für die Anzeige der Verantwortlichen hinter dem Elementtitel verwendet.</span>
+            </label>
+            <label className="field-stack">
+              <span className="field-label">Initiale Zuordnung aus Liste</span>
+              <select
+                value={responsibilityAutoListId}
+                onChange={(event) => {
+                  const nextValue = event.target.value;
+                  setResponsibilityAutoListId(nextValue);
+                  if (nextValue) {
+                    void autoAssignResponsiblesFromList(Number(nextValue));
+                  }
+                }}
+              >
+                <option value="">Keine Liste ausgewählt</option>
+                {eligibleResponsibleLists.map((item) => (
+                  <option key={item.definition.id} value={item.definition.id}>
+                    {item.definition.name}
+                  </option>
+                ))}
+              </select>
+              <span className="field-help">Es werden nur Listen mit genau einer Textspalte und einer Teilnehmer-Spalte angeboten.</span>
+            </label>
+            <div className="table-toolbar-actions align-end">
+              <button
+                type="button"
+                className="button-ghost button-inline"
+                disabled={!responsibilityAutoListId}
+                onClick={() => responsibilityAutoListId && void autoAssignResponsiblesFromList(Number(responsibilityAutoListId))}
+              >
+                Erneut abgleichen
+              </button>
+            </div>
+          </div>
+          <div className="info-note">
+            Beim Listenabgleich wird der Freitext der Liste mit dem Elementtitel verglichen. Gefundene Teilnehmende werden einmalig übernommen. Mit dem Schloss fixierst du danach bei Bedarf die Verknüpfung auf eine konkrete Tabellenzeile.
+          </div>
+          <div className="status-row">
+            <span className="pill">
+              {orderedElements.filter((item) => parseResponsibilityConfig(item.configuration_json).assignments.length > 0).length} mit Verantwortlichen
+            </span>
+            <span className="pill">{eligibleResponsibleLists.length} passende Listen</span>
+            {responsibilityAutoListId ? (
+              <span className="pill">
+                Auto-Liste: {eligibleResponsibleLists.find((item) => String(item.definition.id) === responsibilityAutoListId)?.definition.name ?? responsibilityAutoListId}
+              </span>
+            ) : null}
+          </div>
+        </div>
 
         <Modal
           open={showCreateItem}
@@ -656,50 +1610,312 @@ export function TemplateEditor({
                 );
               })}
             </DataTable>
-            <span className="field-help">Neue Elemente werden automatisch hinten angehaengt. Die Reihenfolge kannst du danach per Drag and Drop anpassen.</span>
+            <span className="field-help">Neue Elemente werden automatisch hinten angehaengt. Die Reihenfolge kannst du danach per Drag and Drop oder direkt ueber die Positionszahl anpassen.</span>
             <div className="table-toolbar-actions">
               <button type="submit" className="button-inline" disabled={newItemForm.element_definition_ids.length === 0}>Ausgewaehlte Elemente hinzufuegen</button>
             </div>
           </form>
         </Modal>
 
-        <DataTable columns={["Element", "Blocks", "Order", "Actions"]}>
-          {elements
-            .slice()
-            .sort((left, right) => left.sort_index - right.sort_index)
-            .map((item) => (
-            <tr
-              key={item.id}
-              className={draggedTemplateElementId === item.id ? "table-row-dragging" : ""}
-              onDragEnd={() => setDraggedTemplateElementId(null)}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => handleTemplateDrop(event, item.id)}
-            >
-              <td>
-                <strong>{item.title}</strong>
-                <div className="muted">{item.description ?? "No description"}</div>
-              </td>
-              <td>{item.blocks.length} block{item.blocks.length === 1 ? "" : "s"}</td>
-              <td>
-                <button
-                  type="button"
-                  draggable
-                  className="pill table-drag-handle"
-                  onDragStart={(event) => handleTemplateDragStart(event, item.id)}
-                  onDragEnd={() => setDraggedTemplateElementId(null)}
-                  title="Ziehen zum Umordnen"
+        <Modal
+          open={!!responsibilityModalElement}
+          onClose={() => setShowResponsibilityModalFor(null)}
+          title={responsibilityModalElement ? `Verantwortliche für ${responsibilityModalElement.title}` : "Verantwortliche"}
+          description="Weise diesem Element Teilnehmende zu, verknüpfe sie optional mit einer Listenzeile und fixiere Verbindungen bei Bedarf mit dem Schloss."
+          size="fullscreen"
+        >
+          {responsibilityModalElement ? (() => {
+            const responsibility = parseResponsibilityConfig(responsibilityModalElement.configuration_json);
+            const assignments = responsibility.assignments;
+            const availableManualEntries = manualLinkListMeta ? (listEntriesByListId[manualLinkListMeta.definition.id] ?? []) : [];
+            return (
+              <div className="grid section-stack">
+                <article className="card">
+                  <div className="eyebrow">Titelvorschau</div>
+                  <h3>{currentResponsibilityTitle(responsibilityModalElement)}</h3>
+                  <p className="muted">Wenn Verantwortliche gesetzt sind, werden sie später im Protokoll direkt hinter dem Elementtitel angezeigt.</p>
+                  <div className="status-row">
+                    <span className="pill">{assignments.length} zugewiesen</span>
+                    <span className="pill">
+                      Anzeige: {responsibilityNameMode === "display_name" ? "Anzeigename" : responsibilityNameMode === "first_name" ? "Vorname" : "Nachname"}
+                    </span>
+                  </div>
+                </article>
+
+                <article className="card">
+                  <div className="eyebrow">Aktuelle Verantwortliche</div>
+                  {assignments.length ? (
+                    <div className="responsibility-list">
+                      {assignments.map((assignment) => {
+                        const participant = participantsById.get(assignment.participant_id);
+                        const sourceLabel = assignment.list_definition_id
+                          ? assignment.locked
+                            ? "Fix mit Tabellenzeile verknüpft"
+                            : "Aus Liste erkannt"
+                          : "Manuell zugewiesen";
+                        const lockTitle = responsibilityLinkTooltip(assignment);
+                        return (
+                          <div className="responsibility-card" key={`responsibility-${responsibilityModalElement.id}-${assignment.participant_id}`}>
+                            <div className="responsibility-card-head">
+                              <div>
+                                <strong>{participantName(participant, responsibilityNameMode, assignment.participant_id)}</strong>
+                                <div className="muted">{sourceLabel}</div>
+                              </div>
+                              <div className="responsibility-card-actions">
+                                {assignment.list_definition_id && assignment.list_entry_id ? (
+                                  <button
+                                    type="button"
+                                    className={`responsibility-lock-button${assignment.locked ? " responsibility-lock-button-active" : ""}`}
+                                    title={lockTitle}
+                                    onClick={() => void toggleResponsibilityLock(responsibilityModalElement.id, assignment.participant_id)}
+                                  >
+                                    {assignment.locked ? "🔒" : "🔓"}
+                                  </button>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  className="button-ghost button-inline"
+                                  onClick={() => void toggleResponsibleParticipant(responsibilityModalElement.id, assignment.participant_id, false)}
+                                >
+                                  Entfernen
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="responsibility-empty">Noch keine Verantwortlichen gesetzt.</div>
+                  )}
+                </article>
+
+                <article className="card">
+                  <div className="eyebrow">Mit Tabellenzeile verknüpfen</div>
+                  <div className="two-col">
+                    <label className="field-stack">
+                      <span className="field-label">Liste</span>
+                      <select value={manualLinkListId} onChange={(event) => setManualLinkListId(event.target.value)}>
+                        <option value="">Liste wählen</option>
+                        {eligibleResponsibleLists.map((item) => (
+                          <option key={`responsibility-list-${item.definition.id}`} value={item.definition.id}>
+                            {item.definition.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="field-stack">
+                      <span className="field-label">Zeile</span>
+                      <select
+                        value={manualLinkEntryId}
+                        onChange={(event) => setManualLinkEntryId(event.target.value)}
+                        disabled={!manualLinkListMeta || loadingResponsibleListId === manualLinkListMeta.definition.id}
+                      >
+                        <option value="">
+                          {!manualLinkListMeta
+                            ? "Zuerst Liste wählen"
+                            : loadingResponsibleListId === manualLinkListMeta.definition.id
+                            ? "Zeilen werden geladen..."
+                            : "Zeile wählen"}
+                        </option>
+                        {manualLinkListMeta
+                          ? availableManualEntries.map((entry) => (
+                              <option key={`responsibility-entry-${entry.id}`} value={entry.id}>
+                                {rowOptionLabel(entry, manualLinkListMeta, participantsById, responsibilityNameMode)}
+                              </option>
+                            ))
+                          : null}
+                      </select>
+                    </label>
+                  </div>
+                  <div className="table-toolbar-actions">
+                    <button
+                      type="button"
+                      className="button-inline"
+                      disabled={!manualLinkEntryId}
+                      onClick={() => void linkElementToResponsibleRow()}
+                    >
+                      Zeile verknüpfen
+                    </button>
+                  </div>
+                  <span className="field-help">Diese Aktion setzt die Teilnehmenden der gewählten Zeile für dieses Element und fixiert die Verbindung direkt über die Tabellenzeilen-ID.</span>
+                </article>
+
+                <article className="card">
+                  <div className="eyebrow">Teilnehmende manuell zuweisen</div>
+                  <label className="field-stack">
+                    <span className="field-label">Suchen</span>
+                    <input
+                      value={responsibilitySearch}
+                      onChange={(event) => setResponsibilitySearch(event.target.value)}
+                      placeholder="Teilnehmer suchen"
+                    />
+                  </label>
+                  <div className="selection-list selection-grid">
+                    {filteredResponsibilityParticipants.map((participant) => {
+                      const checked = isParticipantResponsible(responsibilityModalElement, participant.id);
+                      const linkedAssignment = assignments.find((assignment) => assignment.participant_id === participant.id);
+                      return (
+                        <label
+                          key={`responsibility-participant-${participant.id}`}
+                          className={`selection-card selection-card-checkbox${checked ? " selection-card-active" : ""}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) => void toggleResponsibleParticipant(responsibilityModalElement.id, participant.id, event.target.checked)}
+                          />
+                          <div>
+                            <strong>{participantName(participant, responsibilityNameMode, participant.id)}</strong>
+                            <div className="muted">{participant.display_name}</div>
+                            {linkedAssignment?.list_definition_id ? (
+                              <div className="muted">{responsibilityLinkTooltip(linkedAssignment)}</div>
+                            ) : null}
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  {filteredResponsibilityParticipants.length === 0 ? (
+                    <div className="responsibility-empty">Keine Teilnehmenden für den aktuellen Suchbegriff gefunden.</div>
+                  ) : null}
+                </article>
+              </div>
+            );
+          })() : null}
+        </Modal>
+
+        <div
+          className={`template-element-list${draggedTemplateElementId ? " template-element-list-dragging" : ""}`}
+          onDragOver={(event) => event.preventDefault()}
+        >
+          {orderedElements.length === 0 && !draggedTemplateElementId ? (
+            <div className="template-element-empty">Noch keine Elemente im Template.</div>
+          ) : null}
+
+          {orderedElements.map((item, index) => {
+            const responsibility = parseResponsibilityConfig(item.configuration_json);
+            const responsibilityCount = responsibility.assignments.length;
+            const currentPosition = orderedElements.findIndex((entry) => entry.id === item.id) + 1;
+            const displayGroups = responsibilityDisplayGroups(item);
+            return (
+              <div className="template-element-list-item" key={item.id}>
+                <div
+                  className={`template-element-drop-slot${activeTemplateDropIndex === index ? " template-element-drop-slot-active" : ""}${expandedTemplateDropIndex === index ? " template-element-drop-slot-expanded" : ""}`}
+                  onDragOver={(event) => handleTemplateDropSlotDragOver(event, index)}
+                  onDrop={(event) => void handleTemplateDropAtIndex(event, index)}
+                />
+
+                <div
+                  className={`template-element-row${draggedTemplateElementId === item.id ? " template-element-row-dragging" : ""}`}
+                  onDragOver={(event) => handleTemplateRowDragOver(event, index)}
+                  onDrop={(event) => void handleTemplateRowDrop(event, index)}
                 >
-                  Drag
-                </button>
-              </td>
-              <td>
-                <div className="table-actions">
-                  <button type="button" className="button-inline button-danger" onClick={() => void deleteTemplateItem(item.id)}>Remove</button>
+                  <button
+                    type="button"
+                    draggable
+                    className="template-element-drag-handle"
+                    onDragStart={(event) => handleTemplateDragStart(event, item.id)}
+                    onDragEnd={handleTemplateDragEnd}
+                    title="Ziehen zum Umordnen"
+                    aria-label={`Element ${item.title} ziehen`}
+                  >
+                    ⋮⋮
+                  </button>
+
+                  <div className="template-element-row-copy">
+                    <div className="template-element-row-copy-main">
+                      <div className="template-element-title-line">
+                        <strong>{item.title}</strong>
+                        {displayGroups.length ? (
+                          <span className="template-element-inline-responsibility">
+                            (
+                            {displayGroups.map((group, groupIndex) => (
+                              <span className="template-element-inline-responsibility-group" key={`template-element-row-group-${item.id}-${group.key}`}>
+                                {groupIndex > 0 ? <span className="template-element-inline-responsibility-separator">, </span> : null}
+                                <span className="template-element-inline-responsibility-text">{group.names}</span>
+                              </span>
+                            ))}
+                            )
+                          </span>
+                        ) : null}
+                        {displayGroups.some((group) => group.listDefinitionId && group.listEntryId) ? (
+                          <span className="template-element-inline-locks">
+                            {displayGroups
+                              .filter((group) => group.listDefinitionId && group.listEntryId)
+                              .map((group) => (
+                                <button
+                                  key={`template-element-row-lock-${item.id}-${group.key}`}
+                                  type="button"
+                                  className={`template-element-inline-lock${group.locked ? " template-element-inline-lock-locked" : " template-element-inline-lock-unlocked"}`}
+                                  title={group.tooltip}
+                                  onClick={() => void toggleResponsibilityRowLock(item.id, group.listDefinitionId!, group.listEntryId!)}
+                                >
+                                  <ResponsibilityLockIcon locked={group.locked} />
+                                </button>
+                              ))}
+                          </span>
+                        ) : null}
+                      </div>
+                      {item.description ? <span className="muted">{item.description}</span> : null}
+                    </div>
+                  </div>
+
+                  <div className="template-element-row-meta">
+                    <span className="pill">{item.blocks.length} {item.blocks.length === 1 ? "Block" : "Blöcke"}</span>
+                    {responsibilityCount ? <span className="pill">{responsibilityCount} Verantwortliche</span> : null}
+                  </div>
+
+                  <label className="table-order-field template-element-position-field">
+                    <span className="muted">Pos.</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={orderedElements.length}
+                      value={positionDrafts[item.id] ?? String(currentPosition)}
+                      onChange={(event) =>
+                        setPositionDrafts((current) => ({ ...current, [item.id]: event.target.value }))
+                      }
+                      onBlur={(event) => handlePositionSubmit(item.id, event.target.value)}
+                      onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          event.currentTarget.blur();
+                        }
+                        if (event.key === "Escape") {
+                          event.preventDefault();
+                          setPositionDrafts((current) => ({ ...current, [item.id]: String(currentPosition) }));
+                        }
+                      }}
+                      aria-label={`Position für ${item.title}`}
+                    />
+                  </label>
+
+                  <div className="template-element-row-actions">
+                    <button
+                      type="button"
+                      className="button-inline button-ghost"
+                      onClick={() => setShowResponsibilityModalFor(item.id)}
+                    >
+                      Verantwortliche
+                    </button>
+                    <button type="button" className="button-inline button-danger" onClick={() => void deleteTemplateItem(item.id)}>
+                      Entfernen
+                    </button>
+                  </div>
                 </div>
-              </td>
-            </tr>
-          ))}
-        </DataTable>
+              </div>
+            );
+          })}
+
+          {orderedElements.length > 0 ? (
+            <div
+              className={`template-element-drop-slot${activeTemplateDropIndex === orderedElements.length ? " template-element-drop-slot-active" : ""}${expandedTemplateDropIndex === orderedElements.length ? " template-element-drop-slot-expanded" : ""}`}
+              onDragOver={(event) => handleTemplateDropSlotDragOver(event, orderedElements.length)}
+              onDrop={(event) => void handleTemplateDropAtIndex(event, orderedElements.length)}
+            />
+          ) : null}
+        </div>
       </article>
     </div>
   );

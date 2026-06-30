@@ -13,6 +13,8 @@ class ProtocolRepository:
         query: str | None = None,
         status: str | None = None,
         protocol_ids: list[int] | None = None,
+        skip: int = 0,
+        limit: int = 100,
     ) -> list[Protocol]:
         statement = select(Protocol).where(Protocol.tenant_id == tenant_id)
         if protocol_ids is not None:
@@ -25,7 +27,7 @@ class ProtocolRepository:
             )
         if status:
             statement = statement.where(Protocol.status == status)
-        statement = statement.order_by(Protocol.id.desc())
+        statement = statement.order_by(Protocol.id.desc()).offset(skip).limit(limit)
         return list(db.scalars(statement))
 
     def get(self, db: Session, protocol_id: int) -> Protocol | None:

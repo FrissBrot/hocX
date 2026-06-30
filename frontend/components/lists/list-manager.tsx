@@ -81,15 +81,27 @@ export function ListManager({
   const [editingListId, setEditingListId] = useState<number | null>(null);
   const [form, setForm] = useState(initialFormState);
 
+  const [sortKey, setSortKey] = useState<"name" | "is_active">("name");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+
+  function toggleSort(key: typeof sortKey) {
+    setSortKey((cur) => {
+      if (cur === key) { setSortDirection((d) => d === "asc" ? "desc" : "asc"); return cur; }
+      setSortDirection("asc");
+      return key;
+    });
+  }
+
   const filteredLists = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return lists.filter((definition) => {
-      if (!query) {
-        return true;
-      }
-      return `${definition.name} ${definition.description ?? ""}`.toLowerCase().includes(query);
-    });
-  }, [lists, search]);
+    const dir = sortDirection === "asc" ? 1 : -1;
+    return lists
+      .filter((definition) => !query || `${definition.name} ${definition.description ?? ""}`.toLowerCase().includes(query))
+      .sort((a, b) => {
+        if (sortKey === "is_active") return ((a.is_active ? 1 : 0) - (b.is_active ? 1 : 0)) * dir;
+        return a.name.localeCompare(b.name) * dir;
+      });
+  }, [lists, search, sortKey, sortDirection]);
 
   const selectedList = useMemo(
     () => lists.find((definition) => definition.id === selectedListId) ?? null,
@@ -264,7 +276,16 @@ export function ListManager({
         </div>
       </article>
 
-      <DataTable columns={["Liste", "Spalte 1", "Spalte 2", "Status", "Aktionen"]} emptyMessage="Noch keine Listen angelegt.">
+      <DataTable
+        columns={[
+          { key: "name", label: "Liste", sortable: true, sortDirection: sortKey === "name" ? sortDirection : null, onSort: () => toggleSort("name") },
+          "Spalte 1",
+          "Spalte 2",
+          { key: "is_active", label: "Status", sortable: true, sortDirection: sortKey === "is_active" ? sortDirection : null, onSort: () => toggleSort("is_active") },
+          "Aktionen",
+        ]}
+        emptyMessage="Noch keine Listen angelegt."
+      >
         {filteredLists.map((definition) => (
           <tr
             key={definition.id}

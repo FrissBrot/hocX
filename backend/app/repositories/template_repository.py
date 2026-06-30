@@ -49,18 +49,27 @@ class TemplateRepository:
         db.delete(template)
         db.commit()
 
-    def list_participants(self, db: Session, template_id: int) -> list[Participant]:
+    def list_participant_assignments(self, db: Session, template_id: int) -> list[tuple[Participant, bool]]:
         statement = (
-            select(Participant)
+            select(Participant, TemplateParticipant.exclude_from_attendance)
             .join(TemplateParticipant, TemplateParticipant.participant_id == Participant.id)
             .where(TemplateParticipant.template_id == template_id)
             .order_by(Participant.display_name.asc(), Participant.id.asc())
         )
-        return list(db.scalars(statement))
+        return [(participant, bool(exclude_from_attendance)) for participant, exclude_from_attendance in db.execute(statement).all()]
 
-    def replace_participants(self, db: Session, template_id: int, participant_ids: list[int]) -> list[Participant]:
+    def list_participants(self, db: Session, template_id: int) -> list[Participant]:
+        return [participant for participant, _ in self.list_participant_assignments(db, template_id)]
+
+    def replace_participants(self, db: Session, template_id: int, assignments: list[tuple[int, bool]]) -> list[tuple[Participant, bool]]:
         db.execute(delete(TemplateParticipant).where(TemplateParticipant.template_id == template_id))
-        for participant_id in participant_ids:
-            db.add(TemplateParticipant(template_id=template_id, participant_id=participant_id))
+        for participant_id, exclude_from_attendance in assignments:
+            db.add(
+                TemplateParticipant(
+                    template_id=template_id,
+                    participant_id=participant_id,
+                    exclude_from_attendance=exclude_from_attendance,
+                )
+            )
         db.commit()
-        return self.list_participants(db, template_id)
+        return self.list_participant_assignments(db, template_id)

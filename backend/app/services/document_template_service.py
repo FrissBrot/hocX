@@ -401,6 +401,7 @@ class DocumentTemplateService:
 \fancyhead[L]{\color{hocxSecondary}\small \HocxProtocolNumber}
 \fancyhead[R]{\color{hocxSecondary}\small \HocxProtocolDate}
 \fancyfoot[L]{\color{hocxSecondary}\small \HocxProtocolStatus}
+\fancyfoot[C]{\color{hocxSecondary}\small \HocxProtocolVersion}
 \fancyfoot[R]{\color{hocxSecondary}\small Seite \thepage}
 \renewcommand{\headrulewidth}{0.4pt}
 \renewcommand{\footrulewidth}{0.4pt}
@@ -551,7 +552,7 @@ class DocumentTemplateService:
         return f"""\\usepackage[utf8]{{inputenc}}
 \\usepackage{{graphicx}}
 \\usepackage{{float}}
-\\usepackage{{hyperref}}
+\\usepackage[hidelinks]{{hyperref}}
 \\usepackage[a4paper,margin=2.5cm]{{geometry}}
 \\usepackage{{xcolor}}
 \\definecolor{{hocxPrimary}}{{HTML}}{{{primary}}}

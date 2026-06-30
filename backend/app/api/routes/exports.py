@@ -31,7 +31,7 @@ def export_latex(
 
 
 @router.post("/protocols/{protocol_id}/exports/pdf", response_model=ProtocolExportRead)
-def export_pdf(
+async def export_pdf(
     protocol_id: int,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
@@ -39,7 +39,7 @@ def export_pdf(
     require_reader(user)
     access_service.ensure_can_read_protocol(db, user, protocol_id)
     try:
-        return service.export_pdf(db, protocol_id)
+        return await service.export_pdf(db, protocol_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except (SQLAlchemyError, RuntimeError) as exc:

@@ -10,11 +10,13 @@ export async function backendFetch<T>(path: string, init?: RequestInit): Promise
     });
 
     if (!response.ok) {
+      console.error(`[backendFetch] ${init?.method ?? "GET"} ${path} → HTTP ${response.status}`);
       return null;
     }
 
     return (await response.json()) as T;
-  } catch {
+  } catch (err) {
+    console.error(`[backendFetch] ${init?.method ?? "GET"} ${path} → network error:`, err);
     return null;
   }
 }
@@ -33,8 +35,26 @@ export async function browserApiFetch<T>(path: string, init?: RequestInit): Prom
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || `Request failed with status ${response.status}`);
+    const text = await response.text();
+    let message = text || `Request failed with status ${response.status}`;
+    try {
+      const json = JSON.parse(text);
+      if (json?.detail) {
+        if (typeof json.detail === "string") {
+          message = json.detail;
+        } else if (Array.isArray(json.detail)) {
+          message = json.detail
+            .map((e: { msg?: string; loc?: string[] }) => {
+              const field = e.loc ? e.loc.filter((l) => l !== "body").join(".") : null;
+              return field ? `${field}: ${e.msg ?? e}` : (e.msg ?? String(e));
+            })
+            .join(" · ");
+        }
+      }
+    } catch {
+      // keep raw text if not parseable JSON
+    }
+    throw new Error(message);
   }
 
   return (await response.json()) as T;

@@ -1,23 +1,25 @@
 import { AppShell } from "@/components/ui/app-shell";
 import { ProtocolBuilder } from "@/components/protocol/protocol-builder";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
-import { DocumentTemplate, ProtocolSummary, TemplateSummary } from "@/types/api";
+import { ProtocolSummary, TemplateSummary } from "@/types/api";
 
 export default async function ProtocolsPage() {
   const session = await requireSession();
-  const [items, templates, documentTemplates] = await Promise.all([
+  const canWrite = session.user?.is_superadmin || ["admin", "writer"].includes(session.current_role ?? "");
+
+  const [items, templates] = await Promise.all([
     backendFetchWithSession<ProtocolSummary[]>("/api/protocols"),
-    backendFetchWithSession<TemplateSummary[]>("/api/templates"),
-    backendFetchWithSession<DocumentTemplate[]>("/api/document-templates")
+    canWrite ? backendFetchWithSession<TemplateSummary[]>("/api/templates") : Promise.resolve([]),
   ]);
 
   return (
     <AppShell initialSession={session}>
       <section className="panel">
-        <div className="eyebrow">Protocols</div>
-        <h1>Protocol list</h1>
-        <p className="muted">Create new protocol snapshots from templates and inspect the resulting protocol records.</p>
-        <ProtocolBuilder initialProtocols={items ?? []} templates={templates ?? []} />
+        <ProtocolBuilder
+          initialProtocols={items ?? []}
+          templates={templates ?? []}
+          readOnly={!canWrite}
+        />
       </section>
     </AppShell>
   );

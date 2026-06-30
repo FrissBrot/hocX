@@ -7,10 +7,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { browserApiFetch } from "@/lib/api/client";
 import { SessionInfo, TenantMembership } from "@/types/api";
 
-import { Modal } from "@/components/ui/modal";
-
-type NavLink = { href: string; label: string };
-type NavGroup = { title: string; links: NavLink[] };
+import { buildNav, formatRoleLabel } from "@/components/ui/app-shell-nav";
+import { ProfileModal } from "@/components/ui/profile-modal";
+import { TenantSelectorModal } from "@/components/ui/tenant-selector-modal";
 
 function readStoredThemePreference(): "light" | "dark" | "auto" {
   if (typeof window === "undefined") {
@@ -24,62 +23,6 @@ function readStoredThemePreference(): "light" | "dark" | "auto" {
 
   const storedTheme = window.localStorage.getItem("hocx-theme");
   return storedTheme === "dark" || storedTheme === "light" || storedTheme === "auto" ? storedTheme : "auto";
-}
-
-function formatRoleLabel(role: string | null | undefined) {
-  switch (role) {
-    case "superadmin":
-      return "Superadmin";
-    case "admin":
-      return "Admin";
-    case "writer":
-      return "Writer";
-    case "reader":
-      return "Reader";
-    default:
-      return role ?? "Status";
-  }
-}
-
-function buildNav(session: SessionInfo | null): NavGroup[] {
-  const canAdmin = !!session?.user && (session.user.is_superadmin || session.current_role === "admin");
-
-  return [
-    {
-      title: "Workspace",
-      links: [
-        { href: "/", label: "Dashboard" },
-        { href: "/protocols", label: "Protocols" }
-      ]
-    },
-    ...(canAdmin
-      ? [
-          {
-            title: "Structure",
-            links: [
-              { href: "/templates", label: "Templates" },
-              { href: "/elements", label: "Elements" }
-            ]
-          },
-          {
-            title: "Datensätze",
-            links: [
-              { href: "/lists", label: "Listen" },
-              { href: "/participants", label: "Teilnehmer" },
-              { href: "/events", label: "Termine" }
-            ]
-          },
-          {
-            title: "Administration",
-            links: [
-              { href: "/users", label: "Users" },
-              { href: "/tenants", label: "Tenants" },
-              { href: "/settings", label: "Document Templates" }
-            ]
-          }
-        ]
-      : [])
-  ];
 }
 
 export function AppShell({ children, initialSession = null }: { children: ReactNode; initialSession?: SessionInfo | null }) {
@@ -532,60 +475,27 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
                 {mobileNavOpen ? "Schliessen" : "☰"}
               </button>
             </div>
-            <div>
-              <div className="eyebrow">Current space</div>
-              <h1 className="topbar-title">{activeLabel}</h1>
-            </div>
+            <h1 className="topbar-title">{activeLabel}</h1>
           </header>
           <div className="shell-content">{children}</div>
         </div>
       </div>
 
-      <Modal
+      <TenantSelectorModal
         open={tenantModalOpen}
         onClose={() => setTenantModalOpen(false)}
-        title="Mandant wechseln"
-        description="Wähle den Arbeitsbereich, in dem du gerade arbeiten möchtest."
-      >
-        <div className="selection-list">
-          {session?.available_tenants.map((membership) => (
-            <button key={membership.tenant_id} type="button" className="selection-item" onClick={() => void switchTenant(membership)}>
-              <div>
-                <strong>{membership.tenant_name}</strong>
-                <div className="muted">{membership.role_code}</div>
-              </div>
-              <span className="pill">{membership.tenant_id === session.current_tenant?.id ? "Aktiv" : "Wechseln"}</span>
-            </button>
-          ))}
-        </div>
-      </Modal>
+        session={session}
+        onSelect={(membership) => void switchTenant(membership)}
+      />
 
-      <Modal
+      <ProfileModal
         open={profileModalOpen}
         onClose={() => setProfileModalOpen(false)}
-        title="Benutzerprofil"
-        description="Passe deine Sprache an oder melde dich ab."
-      >
-        <div className="grid">
-          <label className="field-stack">
-            <span className="field-label">Sprache</span>
-            <select value={language} onChange={(event) => setLanguage(event.target.value)}>
-              <option value="de">Deutsch</option>
-              <option value="en">English</option>
-              <option value="fr">Français</option>
-              <option value="it">Italiano</option>
-            </select>
-          </label>
-          <div className="table-actions table-actions-start">
-            <button type="button" className="button-inline" onClick={() => void saveProfile()}>
-              Profil speichern
-            </button>
-            <button type="button" className="button-inline button-danger" onClick={() => void logout()}>
-              Logout
-            </button>
-          </div>
-        </div>
-      </Modal>
+        language={language}
+        onLanguageChange={setLanguage}
+        onSave={() => void saveProfile()}
+        onLogout={() => void logout()}
+      />
     </main>
   );
 }

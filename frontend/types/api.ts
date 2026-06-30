@@ -25,6 +25,24 @@ export type TenantSummary = {
   updated_at?: string | null;
 };
 
+export type OidcConfigRead = {
+  tenant_id: number;
+  enabled: boolean;
+  auto_redirect: boolean;
+  issuer_url: string;
+  client_id: string;
+  scopes: string;
+};
+
+export type OidcConfigWrite = {
+  enabled: boolean;
+  auto_redirect: boolean;
+  issuer_url: string;
+  client_id: string;
+  client_secret: string;
+  scopes: string;
+};
+
 export type TenantMembership = {
   tenant_id: number;
   tenant_name: string;
@@ -61,6 +79,7 @@ export type TemplateSummary = {
   description?: string | null;
   next_event_id?: number | null;
   last_event_id?: number | null;
+  todo_due_event_tag?: string | null;
   protocol_number_pattern?: string | null;
   title_pattern?: string | null;
   auto_create_next_protocol?: boolean;
@@ -83,6 +102,7 @@ export type ParticipantSummary = {
   display_name: string;
   email: string | null;
   is_active: boolean;
+  exclude_from_attendance?: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -139,6 +159,10 @@ export type ProtocolSummary = {
   protocol_date?: string;
   event_id?: number | null;
   status: string;
+  version_major?: number;
+  version_minor?: number;
+  version_final_minor?: number;
+  session_notes?: string | null;
   created_by?: number | null;
   created_at?: string;
   updated_at?: string;
@@ -256,9 +280,29 @@ export type ProtocolTodo = {
   resolved_due_label?: string | null;
   completed_at: string | null;
   reference_link: string | null;
+  tags: string[];
   created_by: number | null;
   created_at: string;
   updated_at: string;
+  closed_in_protocol_id: number | null;
+};
+
+export type TodoListItem = ProtocolTodo & {
+  protocol_id: number | null;
+  protocol_number: string | null;
+  protocol_date: string | null;
+  protocol_title: string | null;
+  protocol_status: string | null;
+  block_title: string | null;
+};
+
+export type TodoBlock = {
+  block_id: number;
+  block_title: string | null;
+  protocol_id: number;
+  protocol_number: string;
+  protocol_title: string | null;
+  protocol_date: string;
 };
 
 export type ProtocolImage = {
@@ -312,5 +356,47 @@ export type ProtocolElement = {
   is_required_snapshot: boolean;
   is_visible_snapshot: boolean;
   export_visible_snapshot: boolean;
+  show_when_empty: boolean;
   blocks: ProtocolElementBlock[];
+};
+
+export type FinanceAccount = {
+  id: number;
+  name: string;
+  currency_label: string;
+  description: string | null;
+  balance: number;
+  provisional_balance: number;
+  transaction_count: number;
+  created_at: string;
+};
+
+export type AttendanceFine = {
+  id: number;
+  protocol_id: number;
+  participant_id: number | null;
+  participant_name_snapshot: string;
+  fine_type: "late" | "absent";
+  amount: number;
+  account_id: number;
+  status: "pending" | "collected";
+  collected_at: string | null;
+  collected_transaction_id: number | null;
+  created_at: string;
+};
+
+export type AttendanceFineListItem = AttendanceFine & {
+  protocol_number: string | null;
+  protocol_date: string | null;
+  currency_label: string | null;
+};
+
+export type FinanceTransaction = {
+  id: number;
+  account_id: number;
+  amount: number;
+  description: string;
+  transaction_date: string;
+  protocol_id: number | null;
+  created_at: string;
 };

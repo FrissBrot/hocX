@@ -4,13 +4,31 @@ import hashlib
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import UploadFile
+from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models import Protocol, ProtocolElement, ProtocolElementBlock, ProtocolImage, StoredFile
 from app.repositories.file_repository import ProtocolImageRepository, StoredFileRepository
 from app.schemas.protocol import ProtocolImageRead
+
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
+ALLOWED_IMAGE_MIME_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    "image/bmp",
+    "image/tiff",
+}
+
+
+def _safe_storage_path(storage_root: str, relative_path: str) -> Path:
+    root = Path(storage_root).resolve()
+    full = (root / relative_path).resolve()
+    if not str(full).startswith(str(root) + "/") and full != root:
+        raise HTTPException(status_code=400, detail="Invalid file path")
+    return full
 
 
 class FileService:
@@ -59,14 +77,21 @@ class FileService:
     ) -> ProtocolImageRead:
         self.ensure_storage()
 
-        suffix = Path(file.filename or "").suffix
+        mime = (file.content_type or "").split(";")[0].strip().lower()
+        if mime not in ALLOWED_IMAGE_MIME_TYPES:
+            raise HTTPException(status_code=400, detail=f"Unsupported file type '{mime}'. Allowed: JPEG, PNG, GIF, WebP, BMP, TIFF")
+
+        content = await file.read()
+        if len(content) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail=f"File too large. Maximum size is {MAX_UPLOAD_BYTES // 1024 // 1024} MB")
+
+        suffix = Path(file.filename or "").suffix.lower() or ".bin"
         tenant_id = self._resolve_tenant_id(db, protocol_element_block.id)
         storage_dir = Path(settings.upload_root) / f"tenant-{tenant_id}" / f"block-{protocol_element_block.id}"
         storage_dir.mkdir(parents=True, exist_ok=True)
         generated_name = f"{uuid4().hex}{suffix}"
         target_path = storage_dir / generated_name
 
-        content = await file.read()
         checksum = hashlib.sha256(content).hexdigest()
         target_path.write_bytes(content)
 

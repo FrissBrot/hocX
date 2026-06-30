@@ -1,4 +1,50 @@
 const APP_TIME_ZONE = "Europe/Zurich";
+const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+const DISPLAY_DATE_PATTERN = /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/;
+
+function isValidIsoDateParts(year: number, month: number, day: number) {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    return false;
+  }
+  if (month < 1 || month > 12 || day < 1 || day > 31) {
+    return false;
+  }
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return (
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+  );
+}
+
+export function parseDateInputValue(input: string | null | undefined) {
+  const trimmed = String(input ?? "").trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const isoMatch = trimmed.match(ISO_DATE_PATTERN);
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch;
+    return isValidIsoDateParts(Number(year), Number(month), Number(day)) ? trimmed : null;
+  }
+
+  const displayMatch = trimmed.match(DISPLAY_DATE_PATTERN);
+  if (!displayMatch) {
+    return null;
+  }
+
+  const [, day, month, year] = displayMatch;
+  const normalizedDay = day.padStart(2, "0");
+  const normalizedMonth = month.padStart(2, "0");
+  const isoValue = `${year}-${normalizedMonth}-${normalizedDay}`;
+  return isValidIsoDateParts(Number(year), Number(normalizedMonth), Number(normalizedDay)) ? isoValue : null;
+}
+
+export function formatDateInputValue(input: string | null | undefined) {
+  const normalized = parseDateInputValue(input);
+  return normalized ? formatDate(normalized) : "";
+}
 
 export function formatDate(input: string | null | undefined) {
   if (!input) {

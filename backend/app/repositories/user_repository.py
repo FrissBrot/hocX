@@ -59,6 +59,24 @@ class UserRepository:
             db.add(membership)
         db.flush()
 
+    def list_memberships_batch(self, db: Session, *, user_ids: list[int]) -> list[UserTenantRole]:
+        if not user_ids:
+            return []
+        statement = (
+            select(UserTenantRole)
+            .where(UserTenantRole.user_id.in_(user_ids))
+            .order_by(UserTenantRole.tenant_id.asc(), UserTenantRole.user_id.asc())
+        )
+        return list(db.scalars(statement))
+
+    def list_superadmin_user_ids(self, db: Session) -> list[int]:
+        statement = (
+            select(UserRole.user_id)
+            .join(Role, Role.id == UserRole.role_id)
+            .where(Role.code == "superadmin")
+        )
+        return list(db.scalars(statement))
+
     def list_global_roles(self, db: Session, *, user_id: int) -> list[str]:
         statement = (
             select(Role.code)

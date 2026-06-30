@@ -1,16 +1,25 @@
 "use client";
 
 import { Dispatch, Fragment, ReactNode, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 
+import { SessionPanel, SessionPanelHandle } from "@/components/protocol/session-panel";
+import { TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
 import { StructuredListTable } from "@/components/lists/structured-list-table";
 import { DataToolbar } from "@/components/ui/data-table";
+import { DateInput } from "@/components/ui/date-input";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Modal } from "@/components/ui/modal";
+import { TagInput } from "@/components/ui/tag-input";
+import { useTagConfig } from "@/lib/hooks/use-tag-config";
 import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { formatDate, formatDateRange } from "@/lib/utils/format";
 import {
+  AttendanceFine,
   EventSummary,
+  FinanceAccount,
+  FinanceTransaction,
   ParticipantSummary,
   ProtocolElement,
   ProtocolImage,
@@ -20,6 +29,7 @@ import {
   StructuredListDefinition,
   StructuredListEntry,
   TemplateSummary,
+  TodoListItem,
 } from "@/types/api";
 
 type ProtocolEditorProps = {
@@ -32,6 +42,11 @@ type ProtocolEditorProps = {
   availableLists: StructuredListDefinition[];
   initialListEntries: Record<number, StructuredListEntry[]>;
   availableTemplates: TemplateSummary[];
+  availableAccounts: FinanceAccount[];
+  initialFinanceTransactions: Record<number, FinanceTransaction[]>;
+  initialPendingTodos?: TodoListItem[];
+  forceReadOnly?: boolean;
+  canViewFines?: boolean;
 };
 
 const TODO_STATUS = {
@@ -60,15 +75,19 @@ function resequenceProtocolElements(items: ProtocolElement[]) {
   return items.map((item, index) => ({ ...item, sort_index: (index + 1) * 10 }));
 }
 
-function elementSaveState(element: ProtocolElement, blockStatus: Record<number, SaveState>): SaveState {
-  const states = element.blocks.map((block) => blockStatus[block.id] ?? "saved");
-  if (states.includes("error")) return "error";
-  if (states.includes("saving")) return "saving";
-  return "saved";
+/** Strip trailing "(…)" from section names, e.g. "Gliähwurm (Enea, Archie)" → "Gliähwurm" */
+function trimSectionName(name: string): string {
+  return name.replace(/\s*\(.*\)$/, "").trim();
 }
+
 
 function formatShortDate(value: string | null | undefined) {
   return formatDate(value);
+}
+
+function formatFinanceAmount(amount: number, currency: string): string {
+  const formatted = Math.abs(amount).toLocaleString("de-CH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `${amount < 0 ? "−" : ""}${formatted} ${currency}`;
 }
 
 function compareIsoDate(left: string | null | undefined, right: string | null | undefined) {
@@ -84,6 +103,10 @@ const ATTENDANCE_OPTIONS = [
   { value: "excused", label: "Entschuldigt" },
   { value: "absent", label: "Unentschuldigt" },
 ] as const;
+
+function attendanceParticipants(participants: ParticipantSummary[]) {
+  return participants.filter((participant) => !participant.exclude_from_attendance);
+}
 
 const EMBEDDED_BLOCK_OPTIONS = [
   { value: 1, label: "Text" },
@@ -155,6 +178,10 @@ function embeddedBlockKindForElementType(elementTypeId: number | string) {
     "8": "bullet_list",
     "9": "attendance",
     "10": "session_date",
+    "11": "matrix",
+    "12": "finance_balance",
+    "13": "finance_transactions",
+    "14": "fine_list",
   };
   return mapping[String(elementTypeId)] ?? "text";
 }
@@ -269,16 +296,17 @@ function createMatrixEmbeddedBlock(
   }
 
   if (elementTypeId === 9) {
+    const eligibleParticipants = attendanceParticipants(availableParticipants);
     return {
       element_type_id: elementTypeId,
       title: rowLabel || embeddedBlockTypeLabel(elementTypeId),
       block_kind: blockKind,
       configuration_snapshot_json: {
         block_kind: blockKind,
-        attendance_entries: availableParticipants.map((participant) => ({
+        attendance_entries: eligibleParticipants.map((participant) => ({
           participant_id: participant.id,
           participant_name: participant.display_name,
-          status: "absent",
+          status: null,
         })),
         ...override,
       },
@@ -359,14 +387,15 @@ function embeddedBlockSummary(
   }
 
   if (elementTypeId === 7) {
-    const tagFilter = String(config.event_tag_filter ?? "").trim().toLowerCase();
-    const columnTagFilter = config.event_use_column_tag_filter === true
-      ? String(matrixColumn?.event_tag_filter || matrixColumn?.title || "").trim().toLowerCase() : "";
+    const tagFilters = String(config.event_tag_filter ?? "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
+    const columnTagFilters = config.event_use_column_tag_filter === true
+      ? String(matrixColumn?.event_tag_filter || matrixColumn?.title || "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean) : [];
     const matchingEvents = availableEvents.filter((event) => {
       const effectiveEndDate = event.event_end_date || event.event_date;
-      const matchesDate = config.event_only_from_protocol_date === false || !protocol.protocol_date || effectiveEndDate >= protocol.protocol_date;
-      const matchesTag = (!tagFilter || (event.tag ?? "").toLowerCase().includes(tagFilter)) &&
-        (!columnTagFilter || (event.tag ?? "").toLowerCase().includes(columnTagFilter));
+      const matchesDate = !protocol.protocol_date ? true : config.event_only_before_protocol_date === true ? effectiveEndDate < protocol.protocol_date : config.event_only_from_protocol_date === false ? true : effectiveEndDate >= protocol.protocol_date;
+      const eventTag = (event.tag ?? "").toLowerCase();
+      const matchesTag = (!tagFilters.length || tagFilters.some((t) => eventTag.includes(t))) &&
+        (!columnTagFilters.length || columnTagFilters.some((t) => eventTag.includes(t)));
       return matchesDate && matchesTag;
     });
     return matchingEvents.length ? `${matchingEvents.length} Termin${matchingEvents.length === 1 ? "" : "e"}` : "Keine Termine";
@@ -380,8 +409,12 @@ function embeddedBlockSummary(
 
   if (elementTypeId === 9) {
     const entries = (Array.isArray(config.attendance_entries) ? config.attendance_entries : []) as Array<Record<string, any>>;
-    const presentCount = entries.filter((entry) => String(entry.status ?? "") === "present").length;
-    return entries.length ? `${presentCount}/${entries.length} anwesend` : `${availableParticipants.length} Teilnehmer`;
+    const eligibleParticipants = attendanceParticipants(availableParticipants);
+    const presentCount = eligibleParticipants.filter((participant) => {
+      const entry = entries.find((currentEntry) => Number(currentEntry.participant_id) === participant.id);
+      return String(entry?.status ?? "") === "present";
+    }).length;
+    return eligibleParticipants.length ? `${presentCount}/${eligibleParticipants.length} anwesend` : "0 Teilnehmer";
   }
 
   if (elementTypeId === 10) {
@@ -415,21 +448,35 @@ function TodoMiniMenu({
   children: (close: () => void) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>({});
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    if (triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setPopoverStyle({
+        position: "fixed",
+        top: rect.bottom + 6,
+        ...(align === "end"
+          ? { right: window.innerWidth - rect.right }
+          : { left: rect.left }),
+        minWidth: Math.max(rect.width, 220),
+        zIndex: 9999,
+      });
+    }
+  }, [open, align]);
 
   useEffect(() => {
     function onPointerDown(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (!triggerRef.current?.contains(target) && !(document.getElementById("due-date-portal")?.contains(target))) {
         setOpen(false);
       }
     }
-
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setOpen(false);
-      }
+      if (event.key === "Escape") setOpen(false);
     }
-
     document.addEventListener("mousedown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
     return () => {
@@ -438,9 +485,17 @@ function TodoMiniMenu({
     };
   }, []);
 
+  const popover = open && typeof document !== "undefined" ? createPortal(
+    <div id="due-date-portal" className="mini-menu-popover-portal" style={popoverStyle} role="menu">
+      {children(() => setOpen(false))}
+    </div>,
+    document.body
+  ) : null;
+
   return (
-    <div className={`mini-menu${compact ? " mini-menu-compact" : ""}${align === "end" ? " mini-menu-end" : ""}`} ref={rootRef}>
+    <div className={`mini-menu${compact ? " mini-menu-compact" : ""}`}>
       <button
+        ref={triggerRef}
         type="button"
         className={`mini-menu-trigger${open ? " mini-menu-trigger-open" : ""}`}
         onClick={() => setOpen((current) => !current)}
@@ -450,11 +505,7 @@ function TodoMiniMenu({
         <span className="mini-menu-trigger-label">{label}</span>
         <span className="mini-menu-trigger-icon">⌄</span>
       </button>
-      {open ? (
-        <div className="mini-menu-popover" role="menu">
-          {children(() => setOpen(false))}
-        </div>
-      ) : null}
+      {popover}
     </div>
   );
 }
@@ -477,6 +528,7 @@ function TodoMenuOption({
     </button>
   );
 }
+
 
 function MatrixEmbeddedBlockEditor({
   embeddedBlock,
@@ -507,6 +559,10 @@ function MatrixEmbeddedBlockEditor({
   const embeddedConfig = asObject(embeddedBlock.configuration_snapshot_json);
   const sortedEvents = [...availableEvents].sort((left, right) => compareIsoDate(left.event_date, right.event_date));
   const embeddedBlockClassName = "matrix-embedded-block";
+  const eligibleAttendanceParticipants = useMemo(
+    () => attendanceParticipants(availableParticipants),
+    [availableParticipants]
+  );
   const [embeddedEventDrafts, setEmbeddedEventDrafts] = useState<Record<number, Partial<EventSummary>>>({});
   const embeddedEventAutosaveTimers = useRef<Record<number, number>>({});
   const forcedEmbeddedTag =
@@ -893,7 +949,7 @@ function MatrixEmbeddedBlockEditor({
           {rows.length ? (
             <div className="form-block-list">
               {rows.map((row, index) => {
-                const rowType = String(row.value_type ?? "text");
+                const rowType = String(row.value_type ?? row.row_type ?? "text");
                 const rowValue =
                   rowType === "participant"
                     ? participantNameById(row.participant_id)
@@ -1056,15 +1112,16 @@ function MatrixEmbeddedBlockEditor({
   }
 
   if (elementTypeId === 7) {
-    const tagFilter = String(embeddedConfig.event_tag_filter ?? "").trim().toLowerCase();
-    const columnTagFilter = embeddedConfig.event_use_column_tag_filter === true
-      ? String(matrixColumn?.event_tag_filter || matrixColumn?.title || "").trim().toLowerCase() : "";
+    const tagFilters = String(embeddedConfig.event_tag_filter ?? "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
+    const columnTagFilters = embeddedConfig.event_use_column_tag_filter === true
+      ? String(matrixColumn?.event_tag_filter || matrixColumn?.title || "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean) : [];
     const matchingEvents = sortedEvents.filter((eventRow) => {
       const effectiveEndDate = eventRow.event_end_date || eventRow.event_date;
+      const eventTag = (eventRow.tag ?? "").toLowerCase();
       const matchesTag =
-        (!tagFilter || (eventRow.tag ?? "").toLowerCase().includes(tagFilter)) &&
-        (!columnTagFilter || (eventRow.tag ?? "").toLowerCase().includes(columnTagFilter));
-      const matchesDate = embeddedConfig.event_only_from_protocol_date === false || !protocol.protocol_date || effectiveEndDate >= protocol.protocol_date;
+        (!tagFilters.length || tagFilters.some((t) => eventTag.includes(t))) &&
+        (!columnTagFilters.length || columnTagFilters.some((t) => eventTag.includes(t)));
+      const matchesDate = !protocol.protocol_date ? true : embeddedConfig.event_only_before_protocol_date === true ? effectiveEndDate < protocol.protocol_date : embeddedConfig.event_only_from_protocol_date === false ? true : effectiveEndDate >= protocol.protocol_date;
       return matchesTag && matchesDate;
     });
     const embeddedEventDraftValue = (eventRow: EventSummary) => ({
@@ -1116,20 +1173,18 @@ function MatrixEmbeddedBlockEditor({
                     {embeddedEventColumns.showDate ? (
                       <td>
                         <div className={`event-date-fields${allowEmbeddedEndDate ? " event-date-fields-range" : ""}`}>
-                          <input
-                            type="date"
+                          <DateInput
                             className="event-field-date"
                             value={newEmbeddedEventDraft.event_date}
                             disabled={creatingEmbeddedEvent}
-                            onChange={(event) => patchNewEmbeddedEventDraft({ event_date: event.target.value })}
+                            onChange={(value) => patchNewEmbeddedEventDraft({ event_date: value })}
                           />
                           {allowEmbeddedEndDate ? (
-                            <input
-                              type="date"
+                            <DateInput
                               className="event-field-date"
                               value={newEmbeddedEventDraft.event_end_date}
                               disabled={creatingEmbeddedEvent}
-                              onChange={(event) => patchNewEmbeddedEventDraft({ event_end_date: event.target.value })}
+                              onChange={(value) => patchNewEmbeddedEventDraft({ event_end_date: value })}
                             />
                           ) : null}
                         </div>
@@ -1178,6 +1233,7 @@ function MatrixEmbeddedBlockEditor({
                           value={newEmbeddedEventDraft.participant_count}
                           disabled={creatingEmbeddedEvent}
                           onChange={(event) => patchNewEmbeddedEventDraft({ participant_count: event.target.value })}
+                          onFocus={(e) => e.target.select()}
                           placeholder="TN"
                         />
                       </td>
@@ -1209,18 +1265,16 @@ function MatrixEmbeddedBlockEditor({
                         <td>
                           {editable ? (
                             <div className={`event-date-fields${allowEmbeddedEndDate ? " event-date-fields-range" : ""}`}>
-                              <input
-                                type="date"
+                              <DateInput
                                 className="event-field-date"
                                 value={editableEventRow.event_date}
-                                onChange={(event) => queueEmbeddedEventSave(eventRow, { event_date: event.target.value })}
+                                onChange={(value) => queueEmbeddedEventSave(eventRow, { event_date: value })}
                               />
                               {allowEmbeddedEndDate ? (
-                                <input
-                                  type="date"
+                                <DateInput
                                   className="event-field-date"
                                   value={editableEventRow.event_end_date ?? ""}
-                                  onChange={(event) => queueEmbeddedEventSave(eventRow, { event_end_date: event.target.value || null })}
+                                  onChange={(value) => queueEmbeddedEventSave(eventRow, { event_end_date: value || null })}
                                 />
                               ) : null}
                             </div>
@@ -1278,6 +1332,7 @@ function MatrixEmbeddedBlockEditor({
                               min="0"
                               value={editableEventRow.participant_count ?? 0}
                               onChange={(event) => queueEmbeddedEventSave(eventRow, { participant_count: Math.max(0, Number(event.target.value || "0")) })}
+                              onFocus={(e) => e.target.select()}
                             />
                           ) : (
                             eventRow.participant_count ?? 0
@@ -1403,11 +1458,11 @@ function MatrixEmbeddedBlockEditor({
       return (
         <div className={embeddedBlockClassName}>
           <div className="matrix-static-list">
-            {availableParticipants.map((participant) => {
+            {eligibleAttendanceParticipants.map((participant) => {
               const currentEntry = attendanceEntries.find((entry) => Number(entry.participant_id) === participant.id);
               return (
                 <div className="matrix-static-list-item" key={`embedded-attendance-${participant.id}`}>
-                  <strong>{participant.display_name}</strong>: {attendanceStatusLabel(String(currentEntry?.status ?? "absent"))}
+                  <strong>{participant.display_name}</strong>: {currentEntry?.status ? attendanceStatusLabel(currentEntry.status) : "—"}
                 </div>
               );
             })}
@@ -1418,12 +1473,12 @@ function MatrixEmbeddedBlockEditor({
     return (
       <div className={embeddedBlockClassName}>
         <div className="attendance-list">
-          {availableParticipants.map((participant) => {
+          {eligibleAttendanceParticipants.map((participant) => {
             const currentEntry = attendanceEntries.find((entry) => Number(entry.participant_id) === participant.id);
-            const selectedStatus = String(currentEntry?.status ?? "absent");
+            const selectedStatus = currentEntry?.status ?? null;
             return (
               <div className="attendance-row" key={`embedded-attendance-${participant.id}`}>
-                <strong>{participant.display_name}</strong>
+                <span className="attendance-name">{participant.display_name}</span>
                 <div className="segment-control attendance-segment-control">
                   {ATTENDANCE_OPTIONS.map((option) => (
                     <button
@@ -1486,13 +1541,12 @@ function MatrixEmbeddedBlockEditor({
           </label>
           <label className="field-stack">
             <span className="field-label">Datum</span>
-            <input
-              type="date"
+            <DateInput
               value={String(embeddedConfig.selected_date ?? "")}
-              onChange={(event) =>
+              onChange={(value) =>
                 updateEmbeddedConfig((current) => ({
                   ...current,
-                  selected_date: event.target.value || null,
+                  selected_date: value || null,
                 }), true)
               }
             />
@@ -1515,12 +1569,21 @@ export function ProtocolEditor({
   availableLists,
   initialListEntries,
   availableTemplates,
+  availableAccounts,
+  initialFinanceTransactions,
+  initialPendingTodos = [],
+  forceReadOnly = false,
+  canViewFines = true,
 }: ProtocolEditorProps) {
+  const router = useRouter();
   const [elements, setElements] = useState(initialElements);
   const [events, setEvents] = useState(availableEvents);
   const [listEntriesByDefinition, setListEntriesByDefinition] = useState<Record<number, StructuredListEntry[]>>(initialListEntries);
   const [todosByBlock, setTodosByBlock] = useState<Record<number, ProtocolTodo[]>>(initialTodos);
+  const [pendingTodos, setPendingTodos] = useState<TodoListItem[]>(initialPendingTodos);
   const [imagesByBlock, setImagesByBlock] = useState<Record<number, ProtocolImage[]>>(initialImages);
+  const [financeTransactions, setFinanceTransactions] = useState<Record<number, FinanceTransaction[]>>(initialFinanceTransactions);
+  const [protocolFines, setProtocolFines] = useState<AttendanceFine[]>([]);
   const [textDrafts, setTextDrafts] = useState<Record<number, string>>(
     Object.fromEntries(
       initialElements.flatMap((element) =>
@@ -1531,21 +1594,91 @@ export function ProtocolEditor({
     )
   );
   const [newTodoTask, setNewTodoTask] = useState<Record<number, string>>({});
+  const [newTodoTags, setNewTodoTags] = useState<Record<number, string>>({});
+  const [todoTagFilter, setTodoTagFilter] = useState<Record<number, string | null>>({});
   const [newEventDrafts, setNewEventDrafts] = useState<Record<number, ProtocolEventDraft>>({});
   const [selectedFiles, setSelectedFiles] = useState<Record<number, File | null>>({});
   const [blockStatus, setBlockStatus] = useState<Record<number, SaveState>>({});
   const [selectedElementId, setSelectedElementId] = useState<number | null>(initialElements[0]?.id ?? null);
   const [draggedElementId, setDraggedElementId] = useState<number | null>(null);
+  const [protocolStatus, setProtocolStatus] = useState(protocol.status);
+  const [sessionNotes, setSessionNotes] = useState(protocol.session_notes ?? "");
+  const [transitioningStatus, setTransitioningStatus] = useState(false);
+  const [showSavedIndicator, setShowSavedIndicator] = useState(false);
+  const savedIndicatorTimerRef = useRef<number | null>(null);
+  const prevBlockStatusRef = useRef<Record<number, SaveState>>({});
+
+  useEffect(() => {
+    if (!canViewFines) return;
+    browserApiFetch<AttendanceFine[]>(`/api/protocols/${protocol.id}/fines`)
+      .then((data) => { if (data) setProtocolFines(data); })
+      .catch(() => { /* silently ignore 403 for restricted roles */ });
+  }, [protocol.id, canViewFines]);
+
+  // Editing mode derived from status and role
+  const forceEditable = !forceReadOnly && (protocolStatus === "geplant" || protocolStatus === "durchgeführt");
+  const isReadOnly = forceReadOnly || protocolStatus === "abgeschlossen";
+  const isPrepareMode = (protocolStatus === "geplant" || protocolStatus === "durchgeführt") && !forceReadOnly;
+
+  const workflowMeta: Record<string, { modeLabel: string; ctaLabel: string; nextStatus: string }> = {
+    geplant:       { modeLabel: "Vorbereitungsmodus",   ctaLabel: "Vorbereitung abschliessen", nextStatus: "vorbereitet" },
+    vorbereitet:   { modeLabel: "Sitzungsmodus",         ctaLabel: "Sitzung abschliessen",      nextStatus: "durchgeführt" },
+    durchgeführt:  { modeLabel: "Nachbearbeitungsmodus", ctaLabel: "Protokoll abschliessen",    nextStatus: "abgeschlossen" },
+    abgeschlossen: { modeLabel: "Abgeschlossen",         ctaLabel: "",                          nextStatus: "" },
+  };
+
+  const transitionStatus = async () => {
+    const next = workflowMeta[protocolStatus]?.nextStatus;
+    if (!next) return;
+    setTransitioningStatus(true);
+    try {
+      await browserApiFetch(`/api/protocols/${protocol.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: next }),
+      });
+      setProtocolStatus(next);
+      router.refresh();
+      router.push("/protocols");
+    } finally {
+      setTransitioningStatus(false);
+    }
+  };
   const timers = useRef<Record<number, number>>({});
   const shouldScrollToElementRef = useRef(false);
   const navRef = useRef<HTMLElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
+  const sessionPanelRef = useRef<SessionPanelHandle | null>(null);
+  const editorRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    // Slight delay lets the browser finish layout before scrolling
+    const t = window.setTimeout(() => {
+      const top = el.getBoundingClientRect().top + window.scrollY - 24;
+      window.scrollTo({ top, behavior: "smooth" });
+    }, 120);
+    return () => window.clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     return () => {
       Object.values(timers.current).forEach((timerId) => window.clearTimeout(timerId));
     };
   }, []);
+
+  useEffect(() => {
+    const prev = prevBlockStatusRef.current;
+    const justSaved = Object.entries(blockStatus).some(
+      ([id, state]) => state === "saved" && prev[Number(id)] === "saving"
+    );
+    prevBlockStatusRef.current = { ...blockStatus };
+    if (justSaved) {
+      setShowSavedIndicator(true);
+      if (savedIndicatorTimerRef.current) window.clearTimeout(savedIndicatorTimerRef.current);
+      savedIndicatorTimerRef.current = window.setTimeout(() => setShowSavedIndicator(false), 2000);
+    }
+  }, [blockStatus]);
 
   const visibleElements = useMemo(
     () =>
@@ -1554,12 +1687,12 @@ export function ProtocolEditor({
         .map((element) => ({
           ...element,
           blocks: [...element.blocks]
-            .filter((block) => block.is_visible_snapshot && block.element_type_code !== "display")
+            .filter((block) => (isPrepareMode || block.is_visible_snapshot) && block.element_type_code !== "display")
             .sort((left, right) => left.sort_index - right.sort_index)
         }))
-        .filter((element) => element.blocks.length > 0)
+        .filter((element) => element.blocks.length > 0 || element.show_when_empty)
         .sort((left, right) => left.sort_index - right.sort_index),
-    [elements]
+    [elements, isPrepareMode]
   );
 
   const selectedElement = useMemo(
@@ -1637,15 +1770,53 @@ export function ProtocolEditor({
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
-      if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) {
+      const inFormField = target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
+
+      // Ctrl+Alt+T → open session panel and focus todo input
+      if (event.key === "t" && (event.ctrlKey || event.metaKey) && event.altKey) {
+        event.preventDefault();
+        sessionPanelRef.current?.openAndFocusTodo();
         return;
       }
-      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") {
+
+      // Ctrl+Alt+N → open session panel and focus notes
+      if (event.key === "n" && (event.ctrlKey || event.metaKey) && event.altKey) {
+        event.preventDefault();
+        sessionPanelRef.current?.openAndFocusNotes();
         return;
       }
-      if (!visibleElements.length) {
+
+      // Ctrl+Shift+Enter → go to previous element
+      if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && event.shiftKey) {
+        if (!visibleElements.length) return;
+        const currentIndex = visibleElements.findIndex((el) => el.id === selectedElementId);
+        const prevIndex = currentIndex <= 0 ? 0 : currentIndex - 1;
+        if (currentIndex > 0) {
+          event.preventDefault();
+          focusElement(visibleElements[prevIndex].id);
+        }
         return;
       }
+
+      // Ctrl+Enter → advance to next element (works everywhere, including form fields)
+      if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+        if (!visibleElements.length) return;
+        const currentIndex = visibleElements.findIndex((el) => el.id === selectedElementId);
+        const nextIndex = currentIndex === -1 ? 0 : currentIndex + 1;
+        if (nextIndex < visibleElements.length) {
+          event.preventDefault();
+          focusElement(visibleElements[nextIndex].id);
+        } else if (workflowMeta[protocolStatus]?.ctaLabel) {
+          event.preventDefault();
+          void transitionStatus();
+        }
+        return;
+      }
+
+      if (inFormField) return;
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+      if (!visibleElements.length) return;
+
       const currentIndex = visibleElements.findIndex((element) => element.id === selectedElementId);
       const safeIndex = currentIndex === -1 ? 0 : currentIndex;
       const nextIndex =
@@ -1774,15 +1945,20 @@ export function ProtocolEditor({
     if (!task) return;
     setStatus(protocolElementBlockId, "saving");
     try {
+      const tagsStr = newTodoTags[protocolElementBlockId] ?? "";
+      const activeFilter = todoTagFilter[protocolElementBlockId] ?? null;
+      const parsedTags = tagsStr ? tagsStr.split(",").map((t) => t.trim()).filter(Boolean) : [];
+      if (activeFilter && !parsedTags.includes(activeFilter)) parsedTags.push(activeFilter);
       const created = await browserApiFetch<ProtocolTodo>(`/api/protocol-element-blocks/${protocolElementBlockId}/todos`, {
         method: "POST",
-        body: JSON.stringify({ task, todo_status_id: TODO_STATUS.open, created_by: null })
+        body: JSON.stringify({ task, tags: parsedTags, todo_status_id: TODO_STATUS.open, created_by: null })
       });
       setTodosByBlock((current) => ({
         ...current,
         [protocolElementBlockId]: [...(current[protocolElementBlockId] ?? []), created].sort((left, right) => left.sort_index - right.sort_index)
       }));
       setNewTodoTask((current) => ({ ...current, [protocolElementBlockId]: "" }));
+      setNewTodoTags((current) => ({ ...current, [protocolElementBlockId]: "" }));
       setStatus(protocolElementBlockId, "saved");
     } catch {
       setStatus(protocolElementBlockId, "error");
@@ -1986,26 +2162,120 @@ export function ProtocolEditor({
     }
   }
 
+  async function hideEventBlock(blockId: number) {
+    const block = elements.flatMap((e) => e.blocks).find((b) => b.id === blockId);
+    if (!block) return;
+    const newConfig = { ...(block.configuration_snapshot_json ?? {}), manually_hidden: true };
+    updateBlockInState(blockId, (b) => ({ ...b, is_visible_snapshot: false, configuration_snapshot_json: newConfig }));
+    try {
+      await browserApiFetch(`/api/protocol-element-blocks/${blockId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_visible_snapshot: false, configuration_snapshot_json: newConfig }),
+      });
+    } catch {
+      // revert on error
+      updateBlockInState(blockId, (b) => ({ ...b, is_visible_snapshot: true, configuration_snapshot_json: block.configuration_snapshot_json }));
+    }
+  }
+
+  async function unhideEventBlock(blockId: number) {
+    const block = elements.flatMap((e) => e.blocks).find((b) => b.id === blockId);
+    if (!block) return;
+    const newConfig = { ...(block.configuration_snapshot_json ?? {}), manually_hidden: false };
+    updateBlockInState(blockId, (b) => ({ ...b, is_visible_snapshot: true, configuration_snapshot_json: newConfig }));
+    try {
+      await browserApiFetch(`/api/protocol-element-blocks/${blockId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_visible_snapshot: true, configuration_snapshot_json: newConfig }),
+      });
+    } catch {
+      updateBlockInState(blockId, (b) => ({ ...b, is_visible_snapshot: false, configuration_snapshot_json: block.configuration_snapshot_json }));
+    }
+  }
+
+  async function removeEventBlock(blockId: number) {
+    setElements((current) =>
+      current.map((element) => ({
+        ...element,
+        blocks: element.blocks.filter((b) => b.id !== blockId),
+      }))
+    );
+    try {
+      await browserApiFetch(`/api/protocol-element-blocks/${blockId}`, { method: "DELETE" });
+    } catch {
+      // block stays removed in UI — not critical to revert
+    }
+  }
+
+  async function handleQuickTodoCreated(blockId: number, _todoId: number, elementId: number) {
+    // Fetch updated element (may be newly created session element)
+    try {
+      const updatedElements = await browserApiFetch<ProtocolElement[]>(`/api/protocols/${protocol.id}/elements`);
+      if (updatedElements) {
+        const sessionElement = updatedElements.find((e) => e.id === elementId);
+        if (sessionElement) {
+          setElements((current) => {
+            const idx = current.findIndex((e) => e.id === elementId);
+            if (idx >= 0) {
+              const updated = [...current];
+              updated[idx] = sessionElement;
+              return updated;
+            }
+            return [...current, sessionElement];
+          });
+        }
+      }
+      const todos = await browserApiFetch<ProtocolTodo[]>(`/api/protocol-element-blocks/${blockId}/todos`);
+      if (todos) {
+        setTodosByBlock((current) => ({ ...current, [blockId]: todos }));
+      }
+    } catch {
+      // best-effort
+    }
+  }
+
+  async function addEventBlockToElement(elementId: number, eventId: number): Promise<ProtocolElement["blocks"][number] | null> {
+    try {
+      const newBlock = await browserApiFetch<ProtocolElement["blocks"][number]>(
+        `/api/protocol-elements/${elementId}/blocks/from-event`,
+        {
+          method: "POST",
+          body: JSON.stringify({ event_id: eventId }),
+        }
+      );
+      setElements((current) =>
+        current.map((element) =>
+          element.id === elementId
+            ? { ...element, blocks: [...element.blocks, newBlock] }
+            : element
+        )
+      );
+      return newBlock;
+    } catch {
+      return null;
+    }
+  }
+
   return (
-    <div className="grid">
+    <div className="grid" ref={editorRef}>
       <div className="status-row">
         <span className="pill">{protocol.protocol_number}</span>
-        <span className="pill">Protocol status: {protocolStatusLabel(protocol.status)}</span>
-        <span className="pill">Autosave per block</span>
+        <span className="pill">{workflowMeta[protocolStatus]?.modeLabel ?? protocolStatusLabel(protocolStatus)}</span>
       </div>
+
+      {showSavedIndicator && <div className="save-indicator">✓ Gespeichert</div>}
 
       <div className="editor-shell">
         <aside className="editor-nav" ref={navRef}>
-          <DataToolbar title="Protocol navigator" description="Choose a complete point, then edit all blocks inside it together. Arrow up/down jumps to the next point." />
           {visibleElements.map((element) => (
             <div
               className={`editor-nav-section${draggedElementId === element.id ? " editor-nav-section-dragging" : ""}`}
               key={element.id}
-              draggable
-              onDragStart={() => setDraggedElementId(element.id)}
-              onDragEnd={() => setDraggedElementId(null)}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => {
+              draggable={!isReadOnly}
+              onDragStart={isReadOnly ? undefined : () => setDraggedElementId(element.id)}
+              onDragEnd={isReadOnly ? undefined : () => setDraggedElementId(null)}
+              onDragOver={isReadOnly ? undefined : (event) => event.preventDefault()}
+              onDrop={isReadOnly ? undefined : (event) => {
                 event.preventDefault();
                 const sourceId = draggedElementId;
                 setDraggedElementId(null);
@@ -2025,19 +2295,6 @@ export function ProtocolEditor({
                 <span className="muted editor-nav-subtitle">
                   {element.blocks.map((block) => visibleBlockTitle(block)).filter(Boolean).join(" · ")}
                 </span>
-                <span className="muted editor-nav-count">
-                  {element.blocks.length} Block{element.blocks.length === 1 ? "" : "e"}
-                </span>
-                <div className="table-pill-wrap editor-nav-pill-wrap">
-                  {element.blocks.map((block) => (
-                    <span className="pill" key={block.id}>
-                      {visibleBlockTitle(block) ?? "Ohne eigenen Titel"}
-                    </span>
-                  ))}
-                </div>
-                <div className="status-row">
-                  <span className="pill">{elementSaveState(element, blockStatus)}</span>
-                </div>
               </button>
             </div>
           ))}
@@ -2048,7 +2305,6 @@ export function ProtocolEditor({
             <FocusedElementEditor
               element={selectedElement}
               elementIndex={selectedElementIndex}
-              blockStatus={blockStatus}
               textDrafts={textDrafts}
               todosByBlock={todosByBlock}
               imagesByBlock={imagesByBlock}
@@ -2058,6 +2314,10 @@ export function ProtocolEditor({
               availableParticipants={availableParticipants}
               availableEvents={events}
               availableTemplates={availableTemplates}
+              availableAccounts={availableAccounts}
+              financeTransactions={financeTransactions}
+              protocolFines={protocolFines}
+              setProtocolFines={setProtocolFines}
               newEventDrafts={newEventDrafts}
               selectedFiles={selectedFiles}
               setTodosByBlock={setTodosByBlock}
@@ -2067,13 +2327,8 @@ export function ProtocolEditor({
               saveBlockConfiguration={saveBlockConfiguration}
               updateBlockInState={updateBlockInState}
               handleTextChange={handleTextChange}
-              hasNextElement={selectedElementIndex >= 0 && selectedElementIndex < visibleElements.length - 1}
-              onNextElement={() => {
-                const nextElement = visibleElements[selectedElementIndex + 1];
-                if (nextElement) {
-                  focusElement(nextElement.id);
-                }
-              }}
+              forceEditable={forceEditable}
+              isReadOnly={isReadOnly}
               addTodo={addTodo}
               updateTodo={updateTodo}
               deleteTodo={deleteTodo}
@@ -2087,6 +2342,19 @@ export function ProtocolEditor({
               createListEntryFromBlock={createListEntryFromBlock}
               updateListEntryFromBlock={updateListEntryFromBlock}
               deleteListEntryFromBlock={deleteListEntryFromBlock}
+              todoTagFilter={todoTagFilter}
+              setTodoTagFilter={setTodoTagFilter}
+              newTodoTags={newTodoTags}
+              setNewTodoTags={setNewTodoTags}
+              isPrepareMode={isPrepareMode}
+              hideEventBlock={hideEventBlock}
+              unhideEventBlock={unhideEventBlock}
+              removeEventBlock={removeEventBlock}
+              addEventBlockToElement={addEventBlockToElement}
+              onQuickTodoCreated={handleQuickTodoCreated}
+              pendingTodos={pendingTodos}
+              onPendingUpdate={(updated) => setPendingTodos((prev) => prev.map((t) => t.id === updated.id ? { ...t, ...updated } : t))}
+              onPendingDone={(todoId) => setPendingTodos((prev) => prev.filter((t) => t.id !== todoId))}
             />
           ) : (
             <div className="editor-panel-empty">
@@ -2099,6 +2367,59 @@ export function ProtocolEditor({
           )}
         </article>
       </div>
+
+      {/* Session notes — visible in post-processing mode */}
+      {protocolStatus === "durchgeführt" && sessionNotes && (
+        <div className="session-notes-inline">
+          <div className="session-notes-inline-label">Sitzungsnotizen</div>
+          <div className="session-notes-inline-text">{sessionNotes}</div>
+        </div>
+      )}
+
+      <div className="editor-fixed-actions">
+        {!isReadOnly && selectedElementIndex >= 0 && selectedElementIndex < visibleElements.length - 1 ? (
+          <button
+            type="button"
+            className="button-inline"
+            onClick={() => {
+              const nextElement = visibleElements[selectedElementIndex + 1];
+              if (nextElement) focusElement(nextElement.id);
+            }}
+          >
+            Weiter →
+          </button>
+        ) : !isReadOnly && workflowMeta[protocolStatus]?.ctaLabel ? (
+          <button
+            type="button"
+            className="button-primary"
+            disabled={transitioningStatus}
+            onClick={transitionStatus}
+          >
+            {transitioningStatus ? "…" : workflowMeta[protocolStatus]?.ctaLabel}
+          </button>
+        ) : (
+          <a href="/protocols" className="button-inline">← Zurück zu den Protokollen</a>
+        )}
+      </div>
+
+      {/* Floating session panel — only during active session */}
+      {protocolStatus === "vorbereitet" && !forceReadOnly && (
+        <SessionPanel
+          ref={sessionPanelRef}
+          protocol={protocol}
+          participants={availableParticipants}
+          dueEvents={(() => {
+            const tpl = availableTemplates.find((t) => t.id === protocol.template_id);
+            const tag = tpl?.todo_due_event_tag?.trim().toLowerCase();
+            const today = new Date().toISOString().slice(0, 10);
+            const upcoming = events.filter((e) => e.event_date >= today);
+            return tag ? upcoming.filter((e) => (e.tag ?? "").toLowerCase().includes(tag)) : upcoming;
+          })()}
+          currentSectionName={selectedElement ? trimSectionName(selectedElement.section_name_snapshot) : null}
+          onSessionNotesChange={(notes) => setSessionNotes(notes)}
+          onQuickTodoCreated={(blockId, todoId, elementId) => void handleQuickTodoCreated(blockId, todoId, elementId)}
+        />
+      )}
     </div>
   );
 }
@@ -2106,7 +2427,6 @@ export function ProtocolEditor({
 function FocusedElementEditor({
   element,
   elementIndex,
-  blockStatus,
   textDrafts,
   todosByBlock,
   imagesByBlock,
@@ -2116,6 +2436,10 @@ function FocusedElementEditor({
   availableParticipants,
   availableEvents,
   availableTemplates,
+  availableAccounts,
+  financeTransactions,
+  protocolFines,
+  setProtocolFines,
   newEventDrafts,
   selectedFiles,
   setTodosByBlock,
@@ -2125,8 +2449,8 @@ function FocusedElementEditor({
   saveBlockConfiguration,
   updateBlockInState,
   handleTextChange,
-  hasNextElement,
-  onNextElement,
+  forceEditable,
+  isReadOnly,
   addTodo,
   updateTodo,
   deleteTodo,
@@ -2139,11 +2463,23 @@ function FocusedElementEditor({
   listEntriesByDefinition,
   createListEntryFromBlock,
   updateListEntryFromBlock,
-  deleteListEntryFromBlock
+  deleteListEntryFromBlock,
+  todoTagFilter,
+  setTodoTagFilter,
+  newTodoTags,
+  setNewTodoTags,
+  isPrepareMode,
+  hideEventBlock,
+  unhideEventBlock,
+  removeEventBlock,
+  addEventBlockToElement,
+  onQuickTodoCreated,
+  pendingTodos,
+  onPendingUpdate,
+  onPendingDone,
 }: {
   element: ProtocolElement;
   elementIndex: number;
-  blockStatus: Record<number, SaveState>;
   textDrafts: Record<number, string>;
   todosByBlock: Record<number, ProtocolTodo[]>;
   imagesByBlock: Record<number, ProtocolImage[]>;
@@ -2153,6 +2489,10 @@ function FocusedElementEditor({
   availableParticipants: ParticipantSummary[];
   availableEvents: EventSummary[];
   availableTemplates: TemplateSummary[];
+  availableAccounts: FinanceAccount[];
+  financeTransactions: Record<number, FinanceTransaction[]>;
+  protocolFines: AttendanceFine[];
+  setProtocolFines: Dispatch<SetStateAction<AttendanceFine[]>>;
   newEventDrafts: Record<number, ProtocolEventDraft>;
   selectedFiles: Record<number, File | null>;
   setTodosByBlock: Dispatch<SetStateAction<Record<number, ProtocolTodo[]>>>;
@@ -2162,8 +2502,8 @@ function FocusedElementEditor({
   saveBlockConfiguration: (blockId: number, configurationSnapshotJson: Record<string, unknown>) => Promise<void>;
   updateBlockInState: (blockId: number, updater: (current: ProtocolElement["blocks"][number]) => ProtocolElement["blocks"][number]) => void;
   handleTextChange: (protocolElementBlockId: number, content: string) => void;
-  hasNextElement: boolean;
-  onNextElement: () => void;
+  forceEditable: boolean;
+  isReadOnly: boolean;
   addTodo: (protocolElementBlockId: number) => Promise<void>;
   updateTodo: (protocolElementBlockId: number, todoId: number, patch: Partial<ProtocolTodo>) => Promise<void>;
   deleteTodo: (protocolElementBlockId: number, todoId: number) => Promise<void>;
@@ -2177,9 +2517,26 @@ function FocusedElementEditor({
   createListEntryFromBlock: (protocolElementBlockId: number, listDefinitionId: number, payload: { sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }) => Promise<boolean>;
   updateListEntryFromBlock: (protocolElementBlockId: number, listDefinitionId: number, entryId: number, payload: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>) => Promise<boolean>;
   deleteListEntryFromBlock: (protocolElementBlockId: number, listDefinitionId: number, entryId: number) => Promise<void>;
+  todoTagFilter: Record<number, string | null>;
+  setTodoTagFilter: Dispatch<SetStateAction<Record<number, string | null>>>;
+  newTodoTags: Record<number, string>;
+  setNewTodoTags: Dispatch<SetStateAction<Record<number, string>>>;
+  isPrepareMode: boolean;
+  hideEventBlock: (blockId: number) => Promise<void>;
+  unhideEventBlock: (blockId: number) => Promise<void>;
+  removeEventBlock: (blockId: number) => Promise<void>;
+  addEventBlockToElement: (elementId: number, eventId: number) => Promise<ProtocolElement["blocks"][number] | null>;
+  onQuickTodoCreated: (blockId: number, todoId: number, elementId: number) => void | Promise<void>;
+  pendingTodos: TodoListItem[];
+  onPendingUpdate: (updated: Partial<TodoListItem> & { id: number }) => void;
+  onPendingDone: (todoId: number) => void;
 }) {
-  const router = useRouter();
   const sectionRef = useRef<HTMLElement | null>(null);
+  const [openBlockMenu, setOpenBlockMenu] = useState<number | null>(null);
+  const blockMenuRef = useRef<HTMLDivElement | null>(null);
+  const [showEventPicker, setShowEventPicker] = useState(false);
+  const [eventPickerSearch, setEventPickerSearch] = useState("");
+  const [addingEventBlock, setAddingEventBlock] = useState(false);
   const [multiParticipantPicker, setMultiParticipantPicker] = useState<{
     kind: "form" | "matrix" | "embedded_form";
     blockId: number;
@@ -2193,6 +2550,11 @@ function FocusedElementEditor({
   const [eventDrafts, setEventDrafts] = useState<Record<number, Partial<EventSummary>>>({});
   const [openNewEventRows, setOpenNewEventRows] = useState<Record<number, boolean>>({});
   const [creatingNewEventRows, setCreatingNewEventRows] = useState<Record<number, boolean>>({});
+  const knownEventTags = useMemo(
+    () => Array.from(new Set(availableEvents.map((e) => (e.tag ?? "").trim()).filter(Boolean))).sort(),
+    [availableEvents]
+  );
+  const { tagConfig, updateTagColor, renameTag } = useTagConfig();
   const eventAutosaveTimers = useRef<Record<number, number>>({});
   const newEventCreateTimers = useRef<Record<number, number>>({});
   const upcomingEvents = useMemo(
@@ -2202,6 +2564,10 @@ function FocusedElementEditor({
   const sortedAvailableEvents = useMemo(
     () => [...availableEvents].sort((left, right) => compareIsoDate(left.event_date, right.event_date)),
     [availableEvents]
+  );
+  const eligibleAttendanceParticipants = useMemo(
+    () => attendanceParticipants(availableParticipants),
+    [availableParticipants]
   );
   const filteredParticipants = useMemo(() => {
     const query = multiParticipantSearch.trim().toLowerCase();
@@ -2230,7 +2596,7 @@ function FocusedElementEditor({
 
   function dueMenuLabel(todo: ProtocolTodo) {
     if (todo.due_marker === "next_session") {
-      return todo.resolved_due_date ? `${formatShortDate(todo.resolved_due_date)} (Naechste Sitzung)` : "Naechste Sitzung";
+      return todo.resolved_due_date ? `${formatShortDate(todo.resolved_due_date)} (Nächste Sitzung)` : "Nächste Sitzung";
     }
     if (todo.due_event_id) {
       const label = todo.resolved_due_label ?? "Termin";
@@ -2418,10 +2784,10 @@ function FocusedElementEditor({
   function eventRowsForBlock(blockConfig: Record<string, any>) {
     return [...availableEvents]
       .filter((eventRow) => {
-        const tagFilter = String(blockConfig.event_tag_filter ?? "").trim().toLowerCase();
-        const matchesTag = !tagFilter || (eventRow.tag ?? "").toLowerCase().includes(tagFilter);
+        const tagFilters = String(blockConfig.event_tag_filter ?? "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
+        const matchesTag = !tagFilters.length || tagFilters.some((t) => (eventRow.tag ?? "").toLowerCase().includes(t));
         const effectiveEndDate = eventRow.event_end_date || eventRow.event_date;
-        const matchesDate = blockConfig.event_only_from_protocol_date === false || !protocol.protocol_date || effectiveEndDate >= protocol.protocol_date;
+        const matchesDate = !protocol.protocol_date ? true : blockConfig.event_only_before_protocol_date === true ? effectiveEndDate < protocol.protocol_date : blockConfig.event_only_from_protocol_date === false ? true : effectiveEndDate >= protocol.protocol_date;
         return matchesTag && matchesDate;
       })
       .sort((left, right) => compareIsoDate(left.event_date, right.event_date));
@@ -2592,20 +2958,21 @@ function FocusedElementEditor({
   function matrixEventsForRow(row: Record<string, any>, column: Record<string, any>) {
     // New schema: event filters in row_config; old schema: directly on row
     const rc = (row.row_config && typeof row.row_config === "object" ? row.row_config : {}) as Record<string, any>;
-    const tagFilter = String(row.event_tag_filter ?? rc.event_tag_filter ?? "").trim().toLowerCase();
-    const columnTagFilter = String(column.event_tag_filter ?? "").trim().toLowerCase();
+    const tagFilters = String(row.event_tag_filter ?? rc.event_tag_filter ?? "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
+    const columnTagFilters = String(column.event_tag_filter ?? "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
     const titleFilter = String(row.event_title_filter ?? rc.event_title_filter ?? "").trim().toLowerCase();
     const useColumnTitleAsTag = (row.use_column_title_as_tag ?? rc.use_column_title_as_tag) !== false;
     const hidePastEvents = (row.hide_past_events ?? rc.hide_past_events) !== false;
-    const columnTitle = String(column.title ?? "");
+    const columnTitle = String(column.title ?? "").trim().toLowerCase();
     return [...availableEvents]
       .filter((event) => {
         const effectiveEndDate = event.event_end_date || event.event_date;
         const matchesPast = !hidePastEvents || !protocol.protocol_date || effectiveEndDate >= protocol.protocol_date;
+        const eventTag = (event.tag ?? "").toLowerCase();
         const matchesTag =
-          (!tagFilter || (event.tag ?? "").toLowerCase().includes(tagFilter)) &&
-          (!columnTagFilter || (event.tag ?? "").toLowerCase().includes(columnTagFilter)) &&
-          (!useColumnTitleAsTag || !columnTitle.trim() || (event.tag ?? "").toLowerCase().includes(columnTitle.trim().toLowerCase()));
+          (!tagFilters.length || tagFilters.some((t) => eventTag.includes(t))) &&
+          (!columnTagFilters.length || columnTagFilters.some((t) => eventTag.includes(t))) &&
+          (!useColumnTitleAsTag || !columnTitle || eventTag.includes(columnTitle));
         const matchesTitle = !titleFilter || event.title.toLowerCase().includes(titleFilter);
         return matchesPast && matchesTag && matchesTitle;
       })
@@ -2854,7 +3221,7 @@ function FocusedElementEditor({
           if (sourceField) {
             let text = "";
             if (sourceField === "title") text = event.title;
-            else if (sourceField === "event_date") text = event.event_date;
+            else if (sourceField === "event_date") text = formatDate(event.event_date);
             else if (sourceField === "tag") text = String(event.tag ?? "");
             else if (sourceField === "participant_count") text = String((event as any).participant_count ?? "");
             row_values[rowId] = rowCellValue(row, text);
@@ -2909,76 +3276,178 @@ function FocusedElementEditor({
   }
 
   useEffect(() => {
+    if (!openBlockMenu) return;
+    function handleDocClick(e: MouseEvent) {
+      if (blockMenuRef.current && !blockMenuRef.current.contains(e.target as Node)) {
+        setOpenBlockMenu(null);
+      }
+    }
+    document.addEventListener("mousedown", handleDocClick);
+    return () => document.removeEventListener("mousedown", handleDocClick);
+  }, [openBlockMenu]);
+
+  useEffect(() => {
     const fields = sectionRef.current?.querySelectorAll<HTMLTextAreaElement>(".todo-main-compact .todo-input") ?? [];
     fields.forEach((field) => autoResizeTodoField(field));
   }, [element.id, todosByBlock]);
 
+  useEffect(() => {
+    const section = sectionRef.current;
+    if (!section) return;
+    const wraps = section.querySelectorAll<HTMLElement>(".event-table-wrap-scrollable");
+    wraps.forEach((wrap) => {
+      const upcomingRow = wrap.querySelector<HTMLElement>("tr[data-upcoming]");
+      if (!upcomingRow) return;
+      const theadH = wrap.querySelector<HTMLElement>("thead")?.offsetHeight ?? 0;
+      wrap.scrollTop = upcomingRow.offsetTop - theadH;
+    });
+  }, [element.id]);
+
   return (
     <>
-    <section className="block block-active" id={`protocol-element-${element.id}`} ref={sectionRef}>
+    <section id={`protocol-element-${element.id}`} ref={sectionRef}>
       <div className="editor-panel-header">
         <div>
-          <div className="eyebrow">Protokollpunkt</div>
+          <div className="eyebrow">Punkt {elementIndex + 1}</div>
           <h2>{element.section_name_snapshot}</h2>
-          <p className="muted">
-            Alle Bloecke dieses Elements werden zusammen bearbeitet. Pfeiltasten oben/unten springen direkt zum naechsten Punkt.
-          </p>
-        </div>
-        <div className="status-row">
-          <span className="pill">Punkt {elementIndex + 1}</span>
-          <span className="pill">{element.blocks.length} Block{element.blocks.length === 1 ? "" : "e"}</span>
-          <span className="pill">{elementSaveState(element, blockStatus)}</span>
         </div>
       </div>
       <div className="element-block-stack">
+        {element.blocks.length === 0 && element.show_when_empty && (
+          <div className="element-block-empty-hint">Keine Termine in diesem Zeitraum.</div>
+        )}
         {element.blocks.map((block) => {
           const blockTitle = visibleBlockTitle(block);
           const elementType = block.element_type_code ?? "unknown";
           const blockConfig = asObject(block.configuration_snapshot_json);
+          // Effective editability: forced open in geplant/durchgeführt, locked in abgeschlossen
+          const blockEditable = !isReadOnly && (forceEditable || block.is_editable_snapshot);
           const editableEventRows = elementType === "event_list" ? eventRowsForBlock(blockConfig) : [];
           const editableEventColumns = elementType === "event_list" ? eventColumnVisibility(blockConfig) : null;
           const forcedEventTag = elementType === "event_list" ? String(blockConfig.event_tag_filter ?? "").trim() : "";
           const allowEventEndDate = elementType === "event_list" ? blockConfig.event_allow_end_date === true : false;
+          const firstUpcomingIndex = elementType === "event_list" ? editableEventRows.findIndex((row) => {
+            const endDate = row.event_end_date || row.event_date;
+            return !(protocol.protocol_date && endDate < protocol.protocol_date);
+          }) : -1;
+          const hasPastEvents = elementType === "event_list" && editableEventRows.some((row) => {
+            const endDate = row.event_end_date || row.event_date;
+            return !!(protocol.protocol_date && endDate < protocol.protocol_date);
+          });
           const newEventDraft =
             elementType === "event_list" ? newEventDrafts[block.id] ?? newEventRowDraft(blockConfig) : null;
           const showNewEventRow = elementType === "event_list" ? openNewEventRows[block.id] === true : false;
           const creatingNewEventRow = elementType === "event_list" ? creatingNewEventRows[block.id] === true : false;
           const allowMatrixColumnManagement =
-            elementType === "matrix" ? block.is_editable_snapshot && (blockConfig.allow_column_management === true || blockConfig.matrix_allow_column_management === true) : false;
+            elementType === "matrix" ? blockEditable && (blockConfig.allow_column_management === true || blockConfig.matrix_allow_column_management === true) : false;
+          const todoDueTagFilters = elementType === "todo"
+            ? String(blockConfig.todo_due_tag_filter ?? "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean)
+            : [];
+          const todoDueEvents = elementType === "todo"
+            ? [...availableEvents]
+                .filter((e) => !todoDueTagFilters.length || todoDueTagFilters.some((f) => (e.tag ?? "").toLowerCase().includes(f)))
+                .sort((a, b) => a.event_date.localeCompare(b.event_date))
+            : [];
+          const isAutoEventBlock = blockConfig.repeat_source_type === "event" && blockConfig.repeat_source_id != null;
+          const isHidden = !block.is_visible_snapshot;
           return (
-            <section className="card editor-block-card" key={block.id}>
+            <section className={`card editor-block-card${elementType === "event_list" ? " editor-block-card-event-list" : ""}${isHidden ? " editor-block-card-hidden" : ""}`} key={block.id}>
               <div className="editor-panel-header">
                 <div>
-                  <div className="eyebrow">{elementType}</div>
+                  <div className="eyebrow">{elementType}{isHidden ? " · ausgeblendet" : ""}</div>
                   {blockTitle ? <h3>{blockTitle}</h3> : null}
                   {block.description_snapshot ? <p className="muted">{block.description_snapshot}</p> : null}
                 </div>
-                <div className="status-row">
-                  <span className="pill">{blockStatus[block.id] ?? "saved"}</span>
-                </div>
+                {isPrepareMode && isAutoEventBlock && (
+                  <div className="block-menu-wrap" ref={openBlockMenu === block.id ? blockMenuRef : undefined}>
+                    <button
+                      type="button"
+                      className="btn-icon-sm block-menu-trigger"
+                      title="Optionen"
+                      onClick={() => setOpenBlockMenu((prev) => prev === block.id ? null : block.id)}
+                    >
+                      ⋮
+                    </button>
+                    {openBlockMenu === block.id && (
+                      <div className="block-menu-dropdown">
+                        {isHidden ? (
+                          <button
+                            type="button"
+                            className="block-menu-item"
+                            onClick={() => { setOpenBlockMenu(null); void unhideEventBlock(block.id); }}
+                          >
+                            Einblenden
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="block-menu-item"
+                            onClick={() => { setOpenBlockMenu(null); void hideEventBlock(block.id); }}
+                          >
+                            Ausblenden
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="block-menu-item block-menu-item-danger"
+                          onClick={() => { setOpenBlockMenu(null); void removeEventBlock(block.id); }}
+                        >
+                          Entfernen
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {(elementType === "text" || elementType === "static_text") && (
                 <RichTextEditor
                   value={textDrafts[block.id] ?? ""}
                   onChange={(md) => handleTextChange(block.id, md)}
-                  readOnly={!block.is_editable_snapshot}
+                  readOnly={!blockEditable}
                   placeholder="Text schreiben… Fett mit **text**, kursiv mit *text*, Liste mit - oder 1."
                 />
               )}
 
-              {elementType === "todo" && (
+              {elementType === "todo" && (() => {
+                const blockTodos = todosByBlock[block.id] ?? [];
+                const allBlockTags = Array.from(new Set(blockTodos.flatMap((t) => t.tags ?? []))).sort();
+                const activeTag = todoTagFilter[block.id] ?? null;
+                const visibleTodos = activeTag ? blockTodos.filter((t) => (t.tags ?? []).includes(activeTag)) : blockTodos;
+                return (
                 <div className="grid">
+                  {allBlockTags.length > 0 && (
+                    <div className="tag-filter-bar">
+                      <button
+                        type="button"
+                        className={`tag-filter-chip${activeTag === null ? " tag-filter-chip-active" : ""}`}
+                        onClick={() => setTodoTagFilter((c) => ({ ...c, [block.id]: null }))}
+                      >
+                        Alle
+                      </button>
+                      {allBlockTags.map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          className={`tag-filter-chip${activeTag === tag ? " tag-filter-chip-active" : ""}`}
+                          onClick={() => setTodoTagFilter((c) => ({ ...c, [block.id]: c[block.id] === tag ? null : tag }))}
+                        >
+                          {tag}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <div className="todo-list">
-                    {(todosByBlock[block.id] ?? []).map((todo) => {
+                    {visibleTodos.map((todo) => {
                       const isDone = todo.todo_status_code === "done";
                       return (
                         <article className={`todo-card todo-card-compact${isDone ? " todo-card-done" : ""}`} key={todo.id}>
                           <button
                             type="button"
                             className={`todo-toggle${isDone ? " todo-toggle-done" : ""}`}
+                            disabled={!blockEditable}
                             onClick={() =>
-                              updateTodo(block.id, todo.id, {
+                              blockEditable && updateTodo(block.id, todo.id, {
                                 todo_status_id: isDone ? TODO_STATUS.open : TODO_STATUS.done,
                                 completed_at: isDone ? null : new Date().toISOString(),
                               })
@@ -2992,8 +3461,10 @@ function FocusedElementEditor({
                               className="todo-input"
                               rows={1}
                               value={todo.task}
+                              readOnly={!blockEditable}
                               onInput={(event) => autoResizeTodoField(event.currentTarget)}
                               onChange={(event) => {
+                                if (!blockEditable) return;
                                 const task = event.target.value;
                                 setTodosByBlock((current) => ({
                                   ...current,
@@ -3005,52 +3476,24 @@ function FocusedElementEditor({
                               }}
                             />
                           </div>
+                          {blockEditable && (
                           <div className="todo-inline-meta">
-                            <TodoMiniMenu label={todo.assigned_participant_name ?? "Niemand"} compact>
-                              {(closeMenu) => (
-                              <div className="mini-menu-section">
-                                <TodoMenuOption
-                                  label="Niemand"
-                                  active={!todo.assigned_participant_id}
-                                  onClick={() => {
-                                    setTodosByBlock((current) => ({
-                                      ...current,
-                                      [block.id]: (current[block.id] ?? []).map((item) =>
-                                        item.id === todo.id
-                                          ? { ...item, assigned_participant_id: null, assigned_participant_name: null }
-                                          : item
-                                        ),
-                                    }));
-                                    void updateTodo(block.id, todo.id, { assigned_participant_id: null });
-                                    closeMenu();
-                                  }}
-                                />
-                                {availableParticipants.map((participant) => (
-                                  <TodoMenuOption
-                                    key={participant.id}
-                                    label={participant.display_name}
-                                    active={todo.assigned_participant_id === participant.id}
-                                    onClick={() => {
-                                      setTodosByBlock((current) => ({
-                                        ...current,
-                                        [block.id]: (current[block.id] ?? []).map((item) =>
-                                          item.id === todo.id
-                                            ? {
-                                                ...item,
-                                                assigned_participant_id: participant.id,
-                                                assigned_participant_name: participant.display_name,
-                                              }
-                                            : item
-                                        ),
-                                      }));
-                                      void updateTodo(block.id, todo.id, { assigned_participant_id: participant.id });
-                                      closeMenu();
-                                    }}
-                                  />
-                                ))}
-                              </div>
-                              )}
-                            </TodoMiniMenu>
+                            <TodoAssigneeMenu
+                              label={todo.assigned_participant_name ?? "Niemand"}
+                              participants={availableParticipants}
+                              activeId={todo.assigned_participant_id}
+                              onChange={(option) => {
+                                setTodosByBlock((current) => ({
+                                  ...current,
+                                  [block.id]: (current[block.id] ?? []).map((item) =>
+                                    item.id === todo.id
+                                      ? { ...item, assigned_participant_id: option.id, assigned_participant_name: option.id ? option.display_name : null }
+                                      : item
+                                  ),
+                                }));
+                                void updateTodo(block.id, todo.id, { assigned_participant_id: option.id });
+                              }}
+                            />
                             <TodoMiniMenu label={dueMenuLabel(todo)} compact align="end">
                               {(closeMenu) => (
                               <>
@@ -3073,7 +3516,7 @@ function FocusedElementEditor({
                                   }}
                                 />
                                 <TodoMenuOption
-                                  label="Naechste Sitzung"
+                                  label="Nächste Sitzung"
                                   active={todo.due_marker === "next_session"}
                                   onClick={() => {
                                     void updateTodo(block.id, todo.id, { due_date: null, due_event_id: null, due_marker: "next_session" });
@@ -3081,10 +3524,10 @@ function FocusedElementEditor({
                                   }}
                                 />
                               </div>
-                              {upcomingEvents.length ? (
+                              {todoDueEvents.length ? (
                                 <div className="mini-menu-section">
-                                  <div className="mini-menu-section-title">Naechste Termine</div>
-                                  {upcomingEvents.map((event) => (
+                                  <div className="mini-menu-section-title">Termine</div>
+                                  {todoDueEvents.map((event) => (
                                     <TodoMenuOption
                                       key={event.id}
                                       label={event.title}
@@ -3108,12 +3551,13 @@ function FocusedElementEditor({
                             {(todo.due_marker || todo.due_event_id || todo.due_date) ? (
                               <div className="todo-due-inline">
                                 {todo.due_date && !todo.due_event_id && !todo.due_marker ? (
-                                  <input
-                                    type="date"
+                                  <DateInput
                                     value={todo.due_date}
-                                    onChange={(event) => {
+                                    readOnly={!blockEditable}
+                                    onChange={(value) => {
+                                      if (!blockEditable) return;
                                       void updateTodo(block.id, todo.id, {
-                                        due_date: event.target.value || null,
+                                        due_date: value || null,
                                         due_event_id: null,
                                         due_marker: null,
                                       });
@@ -3121,35 +3565,56 @@ function FocusedElementEditor({
                                   />
                                 ) : (
                                   <span className="pill">
-                                    {todo.resolved_due_date ?? todo.due_date ?? ""}{todo.resolved_due_label ? ` (${todo.resolved_due_label})` : ""}
+                                    {formatDate(todo.resolved_due_date ?? todo.due_date) || todo.resolved_due_label || ""}
+                                    {formatDate(todo.resolved_due_date ?? todo.due_date) && todo.resolved_due_label ? ` (${todo.resolved_due_label})` : ""}
                                   </span>
                                 )}
                               </div>
                             ) : null}
                           </div>
-                          <button
-                            type="button"
-                            className="button-inline button-danger todo-delete"
-                            onClick={() => deleteTodo(block.id, todo.id)}
-                          >
-                            Delete
-                          </button>
+                          )}
+                          {(todo.tags ?? []).length > 0 && (
+                            <div className="todo-tags-row">
+                              {(todo.tags ?? []).map((tag) => (
+                                <span key={tag} className="tag-chip tag-chip-sm">{tag}</span>
+                              ))}
+                            </div>
+                          )}
+                          {blockEditable && (
+                            <button
+                              type="button"
+                              className="button-inline button-danger todo-delete"
+                              onClick={() => deleteTodo(block.id, todo.id)}
+                            >
+                              Delete
+                            </button>
+                          )}
                         </article>
                       );
                     })}
                   </div>
-                  <div className="todo-create todo-create-inline">
-                    <input
-                      value={newTodoTask[block.id] ?? ""}
-                      onChange={(event) => setNewTodoTask((current) => ({ ...current, [block.id]: event.target.value }))}
-                      placeholder="Neue Aufgabe"
-                    />
-                    <button type="button" onClick={() => addTodo(block.id)}>
-                      + Todo
-                    </button>
-                  </div>
+                  {blockEditable && (
+                    <div className="todo-create todo-create-inline">
+                      <input
+                        value={newTodoTask[block.id] ?? ""}
+                        onChange={(event) => setNewTodoTask((current) => ({ ...current, [block.id]: event.target.value }))}
+                        onKeyDown={(e) => { if (e.key === "Enter") void addTodo(block.id); }}
+                        placeholder="Neue Aufgabe"
+                      />
+                      <TagInput
+                        value={newTodoTags[block.id] ?? ""}
+                        onChange={(v) => setNewTodoTags((c) => ({ ...c, [block.id]: v }))}
+                        suggestions={allBlockTags}
+                        placeholder="Tags…"
+                      />
+                      <button type="button" onClick={() => addTodo(block.id)}>
+                        + Todo
+                      </button>
+                    </div>
+                  )}
                 </div>
-              )}
+                );
+              })()}
 
               {elementType === "bullet_list" && (
                 <div className="grid">
@@ -3213,18 +3678,70 @@ function FocusedElementEditor({
                   const linkedListId = Number(blockConfig.linked_list_id ?? 0);
                   const linkedListDefinition = listDefinitionsById.get(linkedListId);
                   if (linkedListId && linkedListDefinition) {
+                    const linkedListGroupBy =
+                      blockConfig.linked_list_group_by === "column_one" || blockConfig.linked_list_group_by === "column_two"
+                        ? blockConfig.linked_list_group_by
+                        : "";
+                    const linkedListSortBy =
+                      blockConfig.linked_list_sort_by === "column_one" || blockConfig.linked_list_sort_by === "column_two"
+                        ? blockConfig.linked_list_sort_by
+                        : "";
+                    const linkedListSortDirection = blockConfig.linked_list_sort_direction === "desc" ? "desc" : "asc";
+                    const listColOptions = [
+                      { value: "column_one", label: linkedListDefinition.column_one_title },
+                      { value: "column_two", label: linkedListDefinition.column_two_title },
+                    ];
                     return (
-                      <StructuredListTable
-                        definition={linkedListDefinition}
-                        entries={listEntriesByDefinition[linkedListId] ?? []}
-                        availableParticipants={availableParticipants}
-                        availableEvents={availableEvents}
-                        editable={block.is_editable_snapshot}
-                        emptyMessage="Noch keine Eintraege in dieser Liste."
-                        onCreateEntry={(payload) => createListEntryFromBlock(block.id, linkedListId, payload)}
-                        onUpdateEntry={(entryId, payload) => updateListEntryFromBlock(block.id, linkedListId, entryId, payload)}
-                        onDeleteEntry={(entryId) => deleteListEntryFromBlock(block.id, linkedListId, entryId)}
-                      />
+                      <div className="grid">
+                        <div className="list-block-config-bar">
+                          <label className="list-block-config-item">
+                            <span className="list-block-config-label">Gruppieren</span>
+                            <select
+                              value={linkedListGroupBy}
+                              disabled={!blockEditable}
+                              onChange={(e) => void saveBlockConfiguration(block.id, { ...blockConfig, linked_list_group_by: e.target.value || null })}
+                            >
+                              <option value="">Keine Gruppierung</option>
+                              {listColOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                            </select>
+                          </label>
+                          <label className="list-block-config-item">
+                            <span className="list-block-config-label">Sortieren</span>
+                            <select
+                              value={linkedListSortBy}
+                              disabled={!blockEditable}
+                              onChange={(e) => void saveBlockConfiguration(block.id, { ...blockConfig, linked_list_sort_by: e.target.value || null, linked_list_sort_direction: e.target.value ? linkedListSortDirection : "asc" })}
+                            >
+                              <option value="">Manuell</option>
+                              {listColOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                            </select>
+                          </label>
+                          <label className="list-block-config-item">
+                            <select
+                              value={linkedListSortDirection}
+                              disabled={!blockEditable || !linkedListSortBy}
+                              onChange={(e) => void saveBlockConfiguration(block.id, { ...blockConfig, linked_list_sort_direction: e.target.value })}
+                            >
+                              <option value="asc">A–Z</option>
+                              <option value="desc">Z–A</option>
+                            </select>
+                          </label>
+                        </div>
+                        <StructuredListTable
+                          definition={linkedListDefinition}
+                          entries={listEntriesByDefinition[linkedListId] ?? []}
+                          availableParticipants={availableParticipants}
+                          availableEvents={availableEvents}
+                          editable={blockEditable}
+                          emptyMessage="Noch keine Eintraege in dieser Liste."
+                          groupByColumn={linkedListGroupBy}
+                          sortByColumn={linkedListSortBy}
+                          sortDirection={linkedListSortDirection}
+                          onCreateEntry={(payload) => createListEntryFromBlock(block.id, linkedListId, payload)}
+                          onUpdateEntry={(entryId, payload) => updateListEntryFromBlock(block.id, linkedListId, entryId, payload)}
+                          onDeleteEntry={(entryId) => deleteListEntryFromBlock(block.id, linkedListId, entryId)}
+                        />
+                      </div>
                     );
                   }
                   return (
@@ -3237,10 +3754,12 @@ function FocusedElementEditor({
                         </div>
                       ) : null}
                       <div className="form-block-list">
-                        {((Array.isArray(blockConfig.rows) ? blockConfig.rows : []) as Array<Record<string, any>>).map((row, index) => (
+                        {((Array.isArray(blockConfig.rows) ? blockConfig.rows : []) as Array<Record<string, any>>).map((row, index) => {
+                          const rowType = String(row.value_type ?? row.row_type ?? "text");
+                          return (
                           <div className="form-block-row" key={`${block.id}-form-${index}`}>
                             <div className="field-label-inline">{row.label ?? `Feld ${index + 1}`}</div>
-                            {row.value_type === "participant" ? (
+                            {rowType === "participant" ? (
                               <select
                                 value={row.participant_id ?? ""}
                                 onChange={(event) => {
@@ -3256,7 +3775,7 @@ function FocusedElementEditor({
                                   </option>
                                 ))}
                               </select>
-                            ) : row.value_type === "participants" ? (
+                            ) : rowType === "participants" ? (
                               <button
                                 type="button"
                                 className="button-ghost form-participant-picker-button"
@@ -3264,7 +3783,7 @@ function FocusedElementEditor({
                               >
                                 {multiParticipantSummary(row)}
                               </button>
-                            ) : row.value_type === "event" ? (
+                            ) : rowType === "event" ? (
                               <select
                                 value={row.event_id ?? ""}
                                 onChange={(event) => {
@@ -3308,7 +3827,7 @@ function FocusedElementEditor({
                               Delete
                             </button>
                           </div>
-                        ))}
+                        );})}
                       </div>
                     </div>
                   );
@@ -3398,14 +3917,14 @@ function FocusedElementEditor({
                                 const rowId = String(row.id ?? rowIndex);
                                 const value = isPlaceholder ? {} : matrixCellValue(column!, row, rowId);
                                 const embeddedBlock = isPlaceholder ? null : matrixEmbeddedBlockForRow(row, value);
-                                const cellEditable = !isPlaceholder && block.is_editable_snapshot && matrixRowEditable(row);
+                                const cellEditable = !isPlaceholder && blockEditable && (forceEditable || matrixRowEditable(row));
                                 const autoEvents = (!isPlaceholder && !embeddedBlock && matrixRowType(row) === "events")
                                   ? matrixEventsForRow(row, column!) : [];
                                 return (
                                   <div key={`${rowId}-${columnIndex}`} className="matrix-card-row">
-                                    <div className={`matrix-card-row-label${!matrixRowEditable(row) ? " matrix-row-locked" : ""}`}>
+                                    <div className={`matrix-card-row-label${(!forceEditable && !matrixRowEditable(row)) ? " matrix-row-locked" : ""}`}>
                                       {row.label ?? `Zeile ${rowIndex + 1}`}
-                                      {!matrixRowEditable(row) ? <span className="matrix-lock-icon"> 🔒</span> : null}
+                                      {(!forceEditable && !matrixRowEditable(row)) ? <span className="matrix-lock-icon"> 🔒</span> : null}
                                     </div>
                                     <div className="matrix-card-row-cell">
                                       {isPlaceholder ? (
@@ -3516,8 +4035,8 @@ function FocusedElementEditor({
               )}
 
               {elementType === "event_list" && (
-                <div className="grid">
-                  <div className="event-table-wrap">
+                <div className="grid event-list-grid">
+                  <div className={`event-table-wrap${hasPastEvents ? " event-table-wrap-scrollable" : ""}`}>
                     <table className="data-table event-table event-table-compact">
                       <thead>
                         <tr>
@@ -3526,7 +4045,7 @@ function FocusedElementEditor({
                           {editableEventColumns?.showTitle ? <th>Titel</th> : null}
                           {editableEventColumns?.showDescription ? <th>Beschreibung</th> : null}
                           {editableEventColumns?.showParticipantCount ? <th className="event-column-count">TN</th> : null}
-                          {block.is_editable_snapshot ? (
+                          {blockEditable ? (
                             <th className="event-column-actions" aria-label="Aktionen">
                               <button
                                 type="button"
@@ -3548,25 +4067,23 @@ function FocusedElementEditor({
                         </tr>
                       </thead>
                       <tbody>
-                        {showNewEventRow && newEventDraft ? (
+                        {blockEditable && showNewEventRow && newEventDraft ? (
                           <tr className="event-row-new">
                             {editableEventColumns?.showDate ? (
                               <td>
                                 <div className={`event-date-fields${allowEventEndDate ? " event-date-fields-range" : ""}`}>
-                                  <input
-                                    type="date"
+                                  <DateInput
                                     className="event-field-date"
                                     value={newEventDraft.event_date}
                                     disabled={creatingNewEventRow}
-                                    onChange={(event) => patchNewEventDraft(block.id, blockConfig, { event_date: event.target.value })}
+                                    onChange={(value) => patchNewEventDraft(block.id, blockConfig, { event_date: value })}
                                   />
                                   {allowEventEndDate ? (
-                                    <input
-                                      type="date"
+                                    <DateInput
                                       className="event-field-date"
                                       value={newEventDraft.event_end_date}
                                       disabled={creatingNewEventRow}
-                                      onChange={(event) => patchNewEventDraft(block.id, blockConfig, { event_end_date: event.target.value })}
+                                      onChange={(value) => patchNewEventDraft(block.id, blockConfig, { event_end_date: value })}
                                     />
                                   ) : null}
                                 </div>
@@ -3574,13 +4091,16 @@ function FocusedElementEditor({
                             ) : null}
                             {editableEventColumns?.showTag ? (
                               <td>
-                                <input
-                                  className="event-field-tag"
+                                <TagInput
                                   value={forcedEventTag || newEventDraft.tag}
-                                  readOnly={Boolean(forcedEventTag)}
-                                  disabled={creatingNewEventRow}
-                                  onChange={(event) => patchNewEventDraft(block.id, blockConfig, { tag: event.target.value })}
+                                  onChange={(v) => patchNewEventDraft(block.id, blockConfig, { tag: v })}
+                                  suggestions={knownEventTags}
                                   placeholder="Tag"
+                                  multi={false}
+                                  readOnly={Boolean(forcedEventTag) || creatingNewEventRow}
+                                  tagConfig={tagConfig}
+                                  onTagColorChange={updateTagColor}
+                                  onTagRename={renameTag}
                                 />
                               </td>
                             ) : null}
@@ -3615,11 +4135,12 @@ function FocusedElementEditor({
                                   value={newEventDraft.participant_count}
                                   disabled={creatingNewEventRow}
                                   onChange={(event) => patchNewEventDraft(block.id, blockConfig, { participant_count: event.target.value })}
+                                  onFocus={(e) => e.target.select()}
                                   placeholder="TN"
                                 />
                               </td>
                             ) : null}
-                            {block.is_editable_snapshot ? (
+                            {blockEditable ? (
                               <td>
                                 <div className="event-row-actions">
                                   <button
@@ -3637,34 +4158,36 @@ function FocusedElementEditor({
                           </tr>
                         ) : null}
                         {editableEventRows.length ? (
-                          editableEventRows.map((eventRow) => {
+                          editableEventRows.map((eventRow, rowIndex) => {
                             const effectiveEndDate = eventRow.event_end_date || eventRow.event_date;
                             const isPast = !!protocol.protocol_date && effectiveEndDate < protocol.protocol_date;
                             const editableEventRow = eventDraftValue(eventRow);
                             return (
-                              <tr key={eventRow.id} className={isPast && blockConfig.event_gray_past !== false ? "event-row-past" : ""}>
+                              <tr
+                                key={eventRow.id}
+                                className={isPast && blockConfig.event_gray_past !== false ? "event-row-past" : ""}
+                                data-upcoming={rowIndex === firstUpcomingIndex ? "true" : undefined}
+                              >
                                 {editableEventColumns?.showDate ? (
                                   <td>
-                                    {block.is_editable_snapshot ? (
+                                    {blockEditable ? (
                                       <div className={`event-date-fields${allowEventEndDate ? " event-date-fields-range" : ""}`}>
-                                        <input
-                                          type="date"
+                                        <DateInput
                                           className="event-field-date"
                                           value={editableEventRow.event_date}
-                                          onChange={(event) =>
-                                            queueEventRowSave(block.id, eventRow, { event_date: event.target.value }, {
+                                          onChange={(value) =>
+                                            queueEventRowSave(block.id, eventRow, { event_date: value }, {
                                               forcedTag: forcedEventTag,
                                               allowEndDate: allowEventEndDate,
                                             })
                                           }
                                         />
                                         {allowEventEndDate ? (
-                                          <input
-                                            type="date"
+                                          <DateInput
                                             className="event-field-date"
                                             value={editableEventRow.event_end_date ?? ""}
-                                            onChange={(event) =>
-                                              queueEventRowSave(block.id, eventRow, { event_end_date: event.target.value || null }, {
+                                            onChange={(value) =>
+                                              queueEventRowSave(block.id, eventRow, { event_end_date: value || null }, {
                                                 forcedTag: forcedEventTag,
                                                 allowEndDate: allowEventEndDate,
                                               })
@@ -3679,18 +4202,34 @@ function FocusedElementEditor({
                                 ) : null}
                                 {editableEventColumns?.showTag ? (
                                   <td>
-                                    {block.is_editable_snapshot ? (
-                                      <input
-                                        className="event-field-tag"
-                                        value={editableEventRow.tag ?? forcedEventTag}
-                                        readOnly={Boolean(forcedEventTag)}
-                                        onChange={(event) =>
-                                          queueEventRowSave(block.id, eventRow, { tag: event.target.value || null }, {
+                                    {blockEditable ? (
+                                      <TagInput
+                                        value={editableEventRow.tag ?? forcedEventTag ?? ""}
+                                        onChange={(v) =>
+                                          queueEventRowSave(block.id, eventRow, { tag: v || null }, {
                                             forcedTag: forcedEventTag,
                                             allowEndDate: allowEventEndDate,
                                           })
                                         }
+                                        suggestions={knownEventTags}
+                                        placeholder="Tag"
+                                        multi={false}
+                                        readOnly={Boolean(forcedEventTag)}
+                                        tagConfig={tagConfig}
+                                        onTagColorChange={updateTagColor}
+                                        onTagRename={renameTag}
                                       />
+                                    ) : blockConfig.event_show_tag_colors && eventRow.tag && tagConfig[eventRow.tag]?.color ? (
+                                      <span
+                                        className="tag-color-badge"
+                                        style={{
+                                          backgroundColor: `${tagConfig[eventRow.tag].color}22`,
+                                          color: tagConfig[eventRow.tag].color,
+                                          borderColor: `${tagConfig[eventRow.tag].color}55`,
+                                        }}
+                                      >
+                                        {eventRow.tag}
+                                      </span>
                                     ) : (
                                       eventRow.tag || "—"
                                     )}
@@ -3698,7 +4237,7 @@ function FocusedElementEditor({
                                 ) : null}
                                 {editableEventColumns?.showTitle ? (
                                   <td>
-                                    {block.is_editable_snapshot ? (
+                                    {blockEditable ? (
                                       <input
                                         className="event-field-title"
                                         value={editableEventRow.title}
@@ -3716,7 +4255,7 @@ function FocusedElementEditor({
                                 ) : null}
                                 {editableEventColumns?.showDescription ? (
                                   <td>
-                                    {block.is_editable_snapshot ? (
+                                    {blockEditable ? (
                                       <input
                                         className="event-field-description"
                                         value={editableEventRow.description ?? ""}
@@ -3734,7 +4273,7 @@ function FocusedElementEditor({
                                 ) : null}
                                 {editableEventColumns?.showParticipantCount ? (
                                   <td className="event-column-count">
-                                    {block.is_editable_snapshot ? (
+                                    {blockEditable ? (
                                       <input
                                         type="number"
                                         className="event-field-count"
@@ -3748,13 +4287,14 @@ function FocusedElementEditor({
                                             allowEndDate: allowEventEndDate,
                                           })
                                         }
+                                        onFocus={(e) => e.target.select()}
                                       />
                                     ) : (
                                       eventRow.participant_count ?? 0
                                     )}
                                   </td>
                                 ) : null}
-                                {block.is_editable_snapshot ? (
+                                {blockEditable ? (
                                   <td>
                                     <div className="event-row-actions">
                                       <button
@@ -3773,7 +4313,7 @@ function FocusedElementEditor({
                           })
                         ) : !showNewEventRow ? (
                           <tr>
-                            <td colSpan={Number(editableEventColumns?.showDate) + Number(editableEventColumns?.showTag) + Number(editableEventColumns?.showTitle) + Number(editableEventColumns?.showDescription) + Number(editableEventColumns?.showParticipantCount) + Number(block.is_editable_snapshot)}>
+                            <td colSpan={Number(editableEventColumns?.showDate) + Number(editableEventColumns?.showTag) + Number(editableEventColumns?.showTitle) + Number(editableEventColumns?.showDescription) + Number(editableEventColumns?.showParticipantCount) + Number(blockEditable)}>
                               <span className="muted">Keine passenden Termine.</span>
                             </td>
                           </tr>
@@ -3784,49 +4324,115 @@ function FocusedElementEditor({
                 </div>
               )}
 
-              {elementType === "attendance" && (
-                <div className="attendance-list">
-                  {availableParticipants.map((participant) => {
-                    const currentEntries = Array.isArray(blockConfig.attendance_entries) ? (blockConfig.attendance_entries as Array<Record<string, any>>) : [];
-                    const currentEntry = currentEntries.find((entry) => Number(entry.participant_id) === participant.id);
-                    const selectedStatus = String(currentEntry?.status ?? "absent");
-                    return (
-                      <div className="attendance-row" key={`${block.id}-${participant.id}`}>
-                        <strong>{participant.display_name}</strong>
-                        <div className="segment-control attendance-segment-control">
-                          {ATTENDANCE_OPTIONS.map((option) => (
-                            <button
-                              key={option.value}
-                              type="button"
-                              className={`segment-button attendance-segment-button${selectedStatus === option.value ? " segment-button-active" : ""}`}
-                              onClick={() => {
-                                const nextEntries = currentEntries.filter((entry) => Number(entry.participant_id) !== participant.id);
-                                nextEntries.push({
-                                  participant_id: participant.id,
-                                  participant_name: participant.display_name,
-                                  status: option.value,
-                                });
-                                void saveBlockConfiguration(block.id, { ...blockConfig, attendance_entries: nextEntries });
-                              }}
-                            >
-                              {option.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              {elementType === "attendance" && (() => {
+                const attendanceEntries = Array.isArray(blockConfig.attendance_entries) ? (blockConfig.attendance_entries as Array<Record<string, any>>) : [];
+                const fineAccountId = Number(blockConfig.fine_account_id ?? 0);
+                const fineAmountLate = Number(blockConfig.fine_amount_late ?? 0);
+                const fineAmountAbsent = Number(blockConfig.fine_amount_absent ?? 0);
+                const hasFineConfig = fineAccountId > 0 && (fineAmountLate > 0 || fineAmountAbsent > 0);
+
+                async function handleAttendanceChange(participant: ParticipantSummary, newStatus: string) {
+                  const nextEntries = attendanceEntries.filter((entry) => Number(entry.participant_id) !== participant.id);
+                  nextEntries.push({ participant_id: participant.id, participant_name: participant.display_name, status: newStatus });
+                  await saveBlockConfiguration(block.id, { ...blockConfig, attendance_entries: nextEntries });
+
+                  if (!hasFineConfig) return;
+
+                  const existingFine = protocolFines.find(
+                    (f) => f.participant_id === participant.id && (f.fine_type === "late" || f.fine_type === "absent") && f.status === "pending"
+                  );
+
+                  if (newStatus === "late" && fineAmountLate > 0) {
+                    if (!existingFine || existingFine.fine_type !== "late") {
+                      if (existingFine) {
+                        await browserApiFetch(`/api/fines/${existingFine.id}`, { method: "DELETE" });
+                        setProtocolFines((prev) => prev.filter((f) => f.id !== existingFine.id));
+                      }
+                      const created = await browserApiFetch<AttendanceFine>("/api/fines", {
+                        method: "POST",
+                        body: JSON.stringify({ protocol_id: protocol.id, participant_id: participant.id, participant_name_snapshot: participant.display_name, fine_type: "late", amount: fineAmountLate, account_id: fineAccountId }),
+                      });
+                      if (created) setProtocolFines((prev) => [...prev.filter((f) => !(f.participant_id === participant.id && f.status === "pending")), created]);
+                    }
+                  } else if (newStatus === "absent" && fineAmountAbsent > 0) {
+                    if (!existingFine || existingFine.fine_type !== "absent") {
+                      if (existingFine) {
+                        await browserApiFetch(`/api/fines/${existingFine.id}`, { method: "DELETE" });
+                        setProtocolFines((prev) => prev.filter((f) => f.id !== existingFine.id));
+                      }
+                      const created = await browserApiFetch<AttendanceFine>("/api/fines", {
+                        method: "POST",
+                        body: JSON.stringify({ protocol_id: protocol.id, participant_id: participant.id, participant_name_snapshot: participant.display_name, fine_type: "absent", amount: fineAmountAbsent, account_id: fineAccountId }),
+                      });
+                      if (created) setProtocolFines((prev) => [...prev.filter((f) => !(f.participant_id === participant.id && f.status === "pending")), created]);
+                    }
+                  } else {
+                    if (existingFine) {
+                      await browserApiFetch(`/api/fines/${existingFine.id}`, { method: "DELETE" });
+                      setProtocolFines((prev) => prev.filter((f) => f.id !== existingFine.id));
+                    }
+                  }
+                }
+
+                const countByStatus = (s: string) => eligibleAttendanceParticipants.filter((p) => {
+                  const e = attendanceEntries.find(e => Number(e.participant_id) === p.id);
+                  return (e?.status ?? null) === s;
+                }).length;
+                const nPresent = countByStatus("present");
+                const nLate = countByStatus("late");
+                const nExcused = countByStatus("excused");
+                const nAbsent = countByStatus("absent");
+                return (
+                  <>
+                    <div className="attendance-list">
+                      {eligibleAttendanceParticipants.map((participant) => {
+                        const currentEntry = attendanceEntries.find((entry) => Number(entry.participant_id) === participant.id);
+                        const selectedStatus = currentEntry?.status ?? null;
+                        const pendingFine = hasFineConfig ? protocolFines.find((f) => f.participant_id === participant.id && f.status === "pending") : null;
+                        return (
+                          <div className="attendance-row" key={`${block.id}-${participant.id}`}>
+                            <span className="attendance-name">
+                              {participant.display_name}
+                              {pendingFine ? <span className="fine-badge" title={`Busse: ${pendingFine.amount} (${pendingFine.fine_type === "late" ? "Verspätet" : "Unentschuldigt"})`}> 💰</span> : null}
+                            </span>
+                            <div className="segment-control attendance-segment-control">
+                              {ATTENDANCE_OPTIONS.map((option) => (
+                                <button
+                                  key={option.value}
+                                  type="button"
+                                  className={`segment-button attendance-segment-button${selectedStatus === option.value ? " segment-button-active" : ""}`}
+                                  disabled={!blockEditable}
+                                  onClick={() => blockEditable && void handleAttendanceChange(participant, option.value)}
+                                >
+                                  {option.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="attendance-summary">
+                      <span>{nPresent} Anwesend</span>
+                      <span>·</span>
+                      <span>{nLate} Verspätet</span>
+                      <span>·</span>
+                      <span>{nExcused} Entschuldigt</span>
+                      <span>·</span>
+                      <span>{nAbsent} Unentschuldigt</span>
+                    </div>
+                  </>
+                );
+              })()}
 
               {elementType === "session_date" && (
                 <div className="two-col">
                   <label className="field-stack">
                     <span className="field-label">Nächste Sitzung</span>
-                    <input
-                      type="date"
+                    <DateInput
                       value={String(blockConfig.selected_date ?? "")}
-                      onChange={(event) => patchBlockConfigValue(block.id, "selected_date", event.target.value || null, blockConfig)}
+                      readOnly={!blockEditable}
+                      onChange={(value) => { if (blockEditable) patchBlockConfigValue(block.id, "selected_date", value || null, blockConfig); }}
                     />
                   </label>
                   <label className="field-stack">
@@ -3853,6 +4459,120 @@ function FocusedElementEditor({
                   </label>
                 </div>
               )}
+
+              {(elementType === "finance_balance" || elementType === "finance_transactions") && (() => {
+                const accountId = Number(blockConfig.finance_account_id ?? 0);
+                const account = availableAccounts.find((a) => a.id === accountId) ?? null;
+                const txAll = accountId > 0 ? (financeTransactions[accountId] ?? []) : [];
+
+                if (!account) {
+                  return (
+                    <div className="finance-block-empty">
+                      <span className="muted">Kein Konto ausgewählt. Konfiguriere diesen Block im Template.</span>
+                    </div>
+                  );
+                }
+
+                if (elementType === "finance_balance") {
+                  return (
+                    <div className="finance-balance-block">
+                      <div className={`finance-balance-amount${account.balance < 0 ? " finance-balance-negative" : ""}`}>
+                        {formatFinanceAmount(account.balance, account.currency_label)}
+                      </div>
+                      <div className="finance-balance-label">{account.name}</div>
+                    </div>
+                  );
+                }
+
+                // finance_transactions
+                const filterType = String(blockConfig.finance_filter_type ?? "all");
+                const lastN = Number(blockConfig.finance_last_n ?? 10);
+                const sinceDate = String(blockConfig.finance_since_date ?? protocol.protocol_date ?? "");
+                const thisYear = new Date().getFullYear();
+
+                const filtered = txAll.filter((tx) => {
+                  if (filterType === "since_last_session") return !sinceDate || tx.transaction_date >= sinceDate;
+                  if (filterType === "this_year") return new Date(tx.transaction_date).getFullYear() === thisYear;
+                  return true;
+                }).slice(0, filterType === "last_n" ? lastN : undefined);
+
+                if (filtered.length === 0) {
+                  return <p className="muted">Keine Transaktionen für den gewählten Zeitraum.</p>;
+                }
+
+                let running = 0;
+                const withBalance = [...filtered].reverse().map((tx) => { running += tx.amount; return { tx, running }; }).reverse();
+
+                return (
+                  <div className="finance-proto-table">
+                    <div className="finance-proto-header">
+                      <span>Datum</span>
+                      <span>Beschreibung</span>
+                      <span className="finance-tx-cell-right">Betrag</span>
+                      <span className="finance-tx-cell-right">Saldo</span>
+                    </div>
+                    {withBalance.map(({ tx, running: r }) => (
+                      <div key={tx.id} className="finance-proto-row">
+                        <span>{formatDate(tx.transaction_date)}</span>
+                        <span>{tx.description}</span>
+                        <span className={`finance-tx-cell-right${tx.amount < 0 ? " finance-amount-neg" : " finance-amount-pos"}`}>
+                          {tx.amount > 0 ? "+" : ""}{formatFinanceAmount(tx.amount, account.currency_label)}
+                        </span>
+                        <span className={`finance-tx-cell-right${r < 0 ? " finance-balance-negative" : ""}`}>
+                          {formatFinanceAmount(r, account.currency_label)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              {elementType === "fine_list" && (() => {
+                const blockFines = protocolFines;
+                if (blockFines.length === 0) {
+                  return <p className="muted">Keine Bussen für dieses Protokoll.</p>;
+                }
+                const fineAccount = (fineId: number) => availableAccounts.find((a) => a.id === fineId);
+                return (
+                  <div className="fine-list-block">
+                    {blockFines.map((fine) => {
+                      const account = fineAccount(fine.account_id);
+                      const cur = account?.currency_label ?? "";
+                      const isCollected = fine.status === "collected";
+                      return (
+                        <div key={fine.id} className={`fine-list-row${isCollected ? " fine-collected" : ""}`}>
+                          <span className="fine-participant">{fine.participant_name_snapshot}</span>
+                          <span className="fine-type-label">{fine.fine_type === "late" ? "Verspätet" : "Unentschuldigt"}</span>
+                          <span className="fine-amount">{fine.amount.toFixed(2)} {cur}</span>
+                          <span className="fine-status">{isCollected ? "✓ Kassiert" : "Ausstehend"}</span>
+                          {!isCollected && !isReadOnly ? (
+                            <button
+                              type="button"
+                              className="btn-icon-sm fine-collect-btn"
+                              title="Busse kassieren"
+                              onClick={async () => {
+                                const updated = await browserApiFetch<AttendanceFine>(`/api/fines/${fine.id}/collect`, { method: "POST" });
+                                if (updated) setProtocolFines((prev) => prev.map((f) => f.id === updated.id ? updated : f));
+                              }}
+                            >✓</button>
+                          ) : null}
+                          {!isCollected && !isReadOnly ? (
+                            <button
+                              type="button"
+                              className="btn-icon-sm btn-icon-danger fine-delete-btn"
+                              title="Busse löschen"
+                              onClick={async () => {
+                                await browserApiFetch(`/api/fines/${fine.id}`, { method: "DELETE" });
+                                setProtocolFines((prev) => prev.filter((f) => f.id !== fine.id));
+                              }}
+                            >✕</button>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
 
               {elementType === "image" && (
                 <div className="grid">
@@ -3884,18 +4604,90 @@ function FocusedElementEditor({
             </section>
           );
         })}
-      </div>
-      <div className={`editor-panel-footer${hasNextElement ? " editor-panel-footer-split" : ""}`}>
-        <button type="button" className="button-ghost" onClick={() => router.push("/protocols")}>
-          Zur Protokoll-Liste
-        </button>
-        {hasNextElement ? (
-          <button type="button" className="button-inline" onClick={onNextElement}>
-            Weiter
-          </button>
-        ) : null}
+        {isPrepareMode && (element.blocks.some((b) => asObject(b.configuration_snapshot_json).repeat_source_type === "event") || (element.show_when_empty && element.blocks.length === 0)) && (
+          <div className="add-event-block-row">
+            <button
+              type="button"
+              className="button-inline"
+              onClick={() => { setEventPickerSearch(""); setShowEventPicker(true); }}
+            >
+              + Termin hinzufügen
+            </button>
+          </div>
+        )}
       </div>
     </section>
+    <SessionTodosSection
+      sectionTag={trimSectionName(element.section_name_snapshot)}
+      todos={Object.values(todosByBlock).flat().filter((t) => (t.tags ?? []).includes(trimSectionName(element.section_name_snapshot).toLowerCase()))}
+      pendingTodos={pendingTodos.filter((t) => (t.tags ?? []).includes(trimSectionName(element.section_name_snapshot).toLowerCase()))}
+      isReadOnly={isReadOnly}
+      participants={availableParticipants}
+      dueEvents={[...availableEvents].sort((a, b) => a.event_date.localeCompare(b.event_date))}
+      protocol={protocol}
+      onUpdate={updateTodo}
+      onPendingUpdate={onPendingUpdate}
+      onPendingDone={onPendingDone}
+      onQuickTodoCreated={onQuickTodoCreated}
+    />
+    <Modal
+      open={showEventPicker}
+      onClose={() => setShowEventPicker(false)}
+      title="Termin hinzufügen"
+      description="Wähle einen Termin, der als Block hinzugefügt werden soll."
+    >
+      {(() => {
+        const existingEventIds = new Set(
+          element.blocks
+            .map((b) => asObject(b.configuration_snapshot_json).repeat_source_id)
+            .filter((id) => id != null)
+            .map(Number)
+        );
+        const query = eventPickerSearch.trim().toLowerCase();
+        const filteredEvents = availableEvents.filter((e) => {
+          if (existingEventIds.has(e.id)) return false;
+          if (!query) return true;
+          return (e.title ?? "").toLowerCase().includes(query) || (e.tag ?? "").toLowerCase().includes(query);
+        }).sort((a, b) => a.event_date.localeCompare(b.event_date));
+        return (
+          <div className="grid">
+            <label className="field-stack">
+              <span className="field-label">Suche</span>
+              <input
+                value={eventPickerSearch}
+                onChange={(e) => setEventPickerSearch(e.target.value)}
+                placeholder="Termin suchen…"
+                autoFocus
+              />
+            </label>
+            <div className="selection-list">
+              {filteredEvents.length === 0 && (
+                <p className="muted">Keine Termine gefunden.</p>
+              )}
+              {filteredEvents.map((evt) => (
+                <button
+                  key={evt.id}
+                  type="button"
+                  className="selection-card"
+                  disabled={addingEventBlock}
+                  onClick={async () => {
+                    setAddingEventBlock(true);
+                    await addEventBlockToElement(element.id, evt.id);
+                    setAddingEventBlock(false);
+                    setShowEventPicker(false);
+                  }}
+                >
+                  <div>
+                    <strong>{evt.title ?? `Termin ${evt.id}`}</strong>
+                    <div className="muted">{formatDate(evt.event_date)}{evt.tag ? ` · ${evt.tag}` : ""}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+    </Modal>
     <Modal
       open={Boolean(multiParticipantPicker)}
       onClose={() => {
@@ -3912,6 +4704,7 @@ function FocusedElementEditor({
             value={multiParticipantSearch}
             onChange={(event) => setMultiParticipantSearch(event.target.value)}
             placeholder="Teilnehmer suchen"
+            autoFocus
           />
         </label>
         <div className="status-row">
@@ -3957,5 +4750,277 @@ function FocusedElementEditor({
       </div>
     </Modal>
     </>
+  );
+}
+
+type DueDraft =
+  | { type: "none" }
+  | { type: "date"; date: string }
+  | { type: "next_session" }
+  | { type: "event"; eventId: number; eventTitle: string };
+
+function SessionTodosSection({
+  sectionTag,
+  todos,
+  pendingTodos = [],
+  isReadOnly,
+  participants,
+  dueEvents,
+  protocol,
+  onUpdate,
+  onPendingUpdate,
+  onPendingDone,
+  onQuickTodoCreated,
+}: {
+  sectionTag: string;
+  todos: ProtocolTodo[];
+  pendingTodos?: TodoListItem[];
+  isReadOnly: boolean;
+  participants: ParticipantSummary[];
+  dueEvents: EventSummary[];
+  protocol: ProtocolSummary;
+  onUpdate: (blockId: number, todoId: number, patch: Partial<ProtocolTodo>) => Promise<void>;
+  onPendingUpdate: (updated: Partial<TodoListItem> & { id: number }) => void;
+  onPendingDone: (todoId: number) => void;
+  onQuickTodoCreated: (blockId: number, todoId: number, elementId: number) => void | Promise<void>;
+}) {
+  const [newTask, setNewTask] = useState("");
+  const [newParticipantId, setNewParticipantId] = useState<number | null>(null);
+  const [newDue, setNewDue] = useState<DueDraft>({ type: "none" });
+  const [creating, setCreating] = useState(false);
+
+  if (todos.length === 0 && pendingTodos.length === 0) return null;
+  if (!sectionTag) return null;
+
+  function sessionDueLabel(todo: ProtocolTodo) {
+    if (todo.due_marker === "next_session") return todo.resolved_due_date ? `${formatShortDate(todo.resolved_due_date)} (Nächste Sitzung)` : "Nächste Sitzung";
+    if (todo.due_event_id) { const lbl = todo.resolved_due_label ?? "Termin"; return todo.resolved_due_date ? `${formatShortDate(todo.resolved_due_date)} (${lbl})` : lbl; }
+    if (todo.due_date) return formatShortDate(todo.due_date);
+    return "Kein Enddatum";
+  }
+
+  function newDueLabel() {
+    if (newDue.type === "none") return "Kein Enddatum";
+    if (newDue.type === "next_session") return "Nächste Sitzung";
+    if (newDue.type === "date") return newDue.date ? formatShortDate(newDue.date) : "Datum wählen";
+    if (newDue.type === "event") return newDue.eventTitle;
+    return "Kein Enddatum";
+  }
+
+  async function handleCreate() {
+    const task = newTask.trim();
+    if (!task) return;
+    setCreating(true);
+    try {
+      const result = await browserApiFetch<{ block_id: number; todo_id: number; element_id: number }>(
+        `/api/protocols/${protocol.id}/quick-todos`,
+        { method: "POST", body: JSON.stringify({ task, tag: sectionTag.toLowerCase() }) }
+      );
+      const patch: Record<string, unknown> = {};
+      if (newParticipantId) patch.assigned_participant_id = newParticipantId;
+      if (newDue.type === "date") { patch.due_date = newDue.date; patch.due_event_id = null; patch.due_marker = null; }
+      else if (newDue.type === "next_session") { patch.due_date = null; patch.due_event_id = null; patch.due_marker = "next_session"; }
+      else if (newDue.type === "event") { patch.due_date = null; patch.due_event_id = newDue.eventId; patch.due_marker = null; }
+      if (Object.keys(patch).length > 0) {
+        await browserApiFetch(`/api/protocol-todos/${result.todo_id}`, { method: "PATCH", body: JSON.stringify(patch) });
+      }
+      onQuickTodoCreated(result.block_id, result.todo_id, result.element_id);
+      setNewTask("");
+      setNewParticipantId(null);
+      setNewDue({ type: "none" });
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  return (
+    <section className="card editor-block-card">
+      <div className="editor-panel-header">
+        <div>
+          <div className="eyebrow">Sitzungs-Todos</div>
+          <h3>{sectionTag}</h3>
+        </div>
+      </div>
+      {pendingTodos.length > 0 && (
+        <div className="todo-list todo-list-pending">
+          <div className="todo-pending-header">Pendenzen aus früheren Protokollen</div>
+          {pendingTodos.map((todo) => {
+            const isClosedElsewhere = !!todo.closed_in_protocol_id;
+            const isDirectlyDone = todo.todo_status_code === "done" || todo.todo_status_code === "cancelled";
+            const isResolved = isClosedElsewhere || isDirectlyDone;
+            return (
+              <article className={`todo-card todo-card-compact todo-card-pending${isResolved ? " todo-card-done" : ""}`} key={todo.id}>
+                <button
+                  type="button"
+                  className={`todo-toggle${isResolved ? " todo-toggle-done" : ""}`}
+                  disabled={isReadOnly || isResolved}
+                  onClick={async () => {
+                    if (isReadOnly || isResolved) return;
+                    await browserApiFetch(`/api/protocol-todos/${todo.id}`, {
+                      method: "PATCH",
+                      body: JSON.stringify({ closed_in_protocol_id: protocol.id }),
+                    });
+                    onPendingUpdate({ id: todo.id, closed_in_protocol_id: protocol.id });
+                  }}
+                >
+                  {isResolved ? "✓" : "○"}
+                </button>
+                <div className="todo-main todo-main-compact">
+                  <span className={`todo-task-text${isResolved ? " todo-task-done" : ""}`}>{todo.task}</span>
+                  <div className="todo-pending-meta">
+                    <span className="todo-pending-origin">
+                      {todo.protocol_number ? `Protokoll ${todo.protocol_number}` : ""}
+                      {todo.protocol_date ? ` · ${formatShortDate(todo.protocol_date)}` : ""}
+                    </span>
+                    {isResolved && <span className="todo-pending-resolved">Erledigt</span>}
+                  </div>
+                  {!isReadOnly && !isResolved && (
+                    <div className="todo-inline-meta">
+                      <TodoAssigneeMenu
+                        label={todo.assigned_participant_name ?? "Niemand"}
+                        participants={participants}
+                        activeId={todo.assigned_participant_id}
+                        onChange={async (option) => {
+                          await browserApiFetch(`/api/protocol-todos/${todo.id}`, {
+                            method: "PATCH",
+                            body: JSON.stringify({ assigned_participant_id: option.id }),
+                          });
+                          onPendingUpdate({ id: todo.id, assigned_participant_id: option.id, assigned_participant_name: option.display_name });
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+      <div className="todo-list">
+        {todos.map((todo) => {
+          const isDone = todo.todo_status_code === "done";
+          const isClosedElsewhere = !!todo.closed_in_protocol_id;
+          const isLocked = isClosedElsewhere;
+          return (
+            <article className={`todo-card todo-card-compact${isDone ? " todo-card-done" : ""}${isLocked ? " todo-card-locked" : ""}`} key={todo.id}>
+              <button
+                type="button"
+                className={`todo-toggle${isDone || isLocked ? " todo-toggle-done" : ""}`}
+                disabled={isReadOnly || isLocked}
+                onClick={() => {
+                  if (!isReadOnly && !isLocked) void onUpdate(todo.protocol_element_block_id, todo.id, {
+                    todo_status_id: isDone ? TODO_STATUS.open : TODO_STATUS.done,
+                    completed_at: isDone ? null : new Date().toISOString(),
+                  });
+                }}
+              >
+                {isDone || isLocked ? "✓" : "○"}
+              </button>
+              <div className="todo-main todo-main-compact">
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span className="todo-task-text">{todo.task}</span>
+                  {isLocked && <span className="todo-closed-elsewhere-badge">Später geschlossen</span>}
+                </div>
+                {!isReadOnly && !isLocked && (
+                  <div className="todo-inline-meta">
+                    <TodoAssigneeMenu
+                      label={todo.assigned_participant_name ?? "Niemand"}
+                      participants={participants}
+                      activeId={todo.assigned_participant_id}
+                      onChange={(option) => void onUpdate(todo.protocol_element_block_id, todo.id, { assigned_participant_id: option.id })}
+                    />
+                    <TodoMiniMenu label={sessionDueLabel(todo)} compact align="end">
+                      {(closeMenu) => (
+                        <>
+                          <div className="mini-menu-section">
+                            <TodoMenuOption label="Kein Enddatum" active={!todo.due_date && !todo.due_event_id && !todo.due_marker}
+                              onClick={() => { void onUpdate(todo.protocol_element_block_id, todo.id, { due_date: null, due_event_id: null, due_marker: null }); closeMenu(); }} />
+                            <TodoMenuOption label="Freies Datum" active={!!todo.due_date && !todo.due_event_id && !todo.due_marker}
+                              onClick={() => { void onUpdate(todo.protocol_element_block_id, todo.id, { due_date: todo.due_date ?? protocol.protocol_date, due_event_id: null, due_marker: null }); closeMenu(); }} />
+                            <TodoMenuOption label="Nächste Sitzung" active={todo.due_marker === "next_session"}
+                              onClick={() => { void onUpdate(todo.protocol_element_block_id, todo.id, { due_date: null, due_event_id: null, due_marker: "next_session" }); closeMenu(); }} />
+                          </div>
+                          {dueEvents.length > 0 && (
+                            <div className="mini-menu-section">
+                              <div className="mini-menu-section-title">Termine</div>
+                              {dueEvents.map((event) => (
+                                <TodoMenuOption key={event.id} label={event.title} subtle={formatDateRange(event.event_date, event.event_end_date ?? null)}
+                                  active={todo.due_event_id === event.id}
+                                  onClick={() => { void onUpdate(todo.protocol_element_block_id, todo.id, { due_date: null, due_event_id: event.id, due_marker: null }); closeMenu(); }} />
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </TodoMiniMenu>
+                    {(todo.due_marker || todo.due_event_id || todo.due_date) && (
+                      <div className="todo-due-inline">
+                        {todo.due_date && !todo.due_event_id && !todo.due_marker ? (
+                          <DateInput value={todo.due_date} readOnly={false}
+                            onChange={(value) => void onUpdate(todo.protocol_element_block_id, todo.id, { due_date: value || null, due_event_id: null, due_marker: null })} />
+                        ) : (
+                          <span className="pill">
+                            {formatDate(todo.resolved_due_date ?? todo.due_date) || todo.resolved_due_label || ""}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+      {!isReadOnly && (
+        <div className="todo-create todo-create-inline">
+          <input
+            value={newTask}
+            onChange={(e) => setNewTask(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") void handleCreate(); }}
+            placeholder="Neue Aufgabe…"
+          />
+          <div className="todo-inline-meta">
+            <TodoAssigneeMenu
+              label={participants.find((p) => p.id === newParticipantId)?.display_name ?? "Niemand"}
+              participants={participants}
+              activeId={newParticipantId}
+              onChange={(option) => setNewParticipantId(option.id)}
+            />
+            <TodoMiniMenu label={newDueLabel()} compact align="end">
+              {(closeMenu) => (
+                <>
+                  <div className="mini-menu-section">
+                    <TodoMenuOption label="Kein Enddatum" active={newDue.type === "none"}
+                      onClick={() => { setNewDue({ type: "none" }); closeMenu(); }} />
+                    <TodoMenuOption label="Freies Datum" active={newDue.type === "date"}
+                      onClick={() => { setNewDue({ type: "date", date: protocol.protocol_date ?? "" }); closeMenu(); }} />
+                    <TodoMenuOption label="Nächste Sitzung" active={newDue.type === "next_session"}
+                      onClick={() => { setNewDue({ type: "next_session" }); closeMenu(); }} />
+                  </div>
+                  {dueEvents.length > 0 && (
+                    <div className="mini-menu-section">
+                      <div className="mini-menu-section-title">Termine</div>
+                      {dueEvents.map((event) => (
+                        <TodoMenuOption key={event.id} label={event.title} subtle={formatDateRange(event.event_date, event.event_end_date ?? null)}
+                          active={newDue.type === "event" && (newDue as { eventId: number }).eventId === event.id}
+                          onClick={() => { setNewDue({ type: "event", eventId: event.id, eventTitle: event.title }); closeMenu(); }} />
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </TodoMiniMenu>
+            {newDue.type === "date" && (
+              <DateInput value={(newDue as { date: string }).date} readOnly={false}
+                onChange={(value) => setNewDue({ type: "date", date: value ?? "" })} />
+            )}
+          </div>
+          <button type="button" disabled={creating || !newTask.trim()} onClick={() => void handleCreate()}>
+            + Todo
+          </button>
+        </div>
+      )}
+    </section>
   );
 }

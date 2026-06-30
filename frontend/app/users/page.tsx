@@ -21,11 +21,6 @@ export default async function UsersPage() {
   return (
     <AppShell initialSession={session}>
       <section className="panel">
-        <div className="eyebrow">Administration</div>
-        <h1>Benutzerverwaltung</h1>
-        <p className="muted">
-          Verwalte systemweite Konten und weise gezielt Rollen in genau den Mandanten zu, die du administrieren darfst.
-        </p>
         <UserManagement initialUsers={users ?? []} manageableTenants={tenants ?? []} session={session} />
       </section>
     </AppShell>

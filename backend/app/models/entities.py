@@ -7,11 +7,13 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    Computed,
     Date,
     DateTime,
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     PrimaryKeyConstraint,
     SmallInteger,
     Text,
@@ -39,6 +41,20 @@ class Tenant(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(Text, nullable=False)
     profile_image_path: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    tag_config_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
+
+
+class TenantOidcConfig(Base, TimestampMixin, UpdatedAtMixin):
+    __tablename__ = "tenant_oidc_config"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False, unique=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
+    auto_redirect: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
+    issuer_url: Mapped[str] = mapped_column(Text, nullable=False)
+    client_id: Mapped[str] = mapped_column(Text, nullable=False)
+    client_secret: Mapped[str] = mapped_column(Text, nullable=False)
+    scopes: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'openid email profile'"))
 
 
 class Role(Base):
@@ -64,11 +80,12 @@ class AppUser(Base, TimestampMixin, UpdatedAtMixin):
     first_name: Mapped[str] = mapped_column(Text, nullable=False)
     last_name: Mapped[str] = mapped_column(Text, nullable=False)
     display_name: Mapped[str] = mapped_column(Text, nullable=False)
-    name: Mapped[str] = mapped_column(Text, nullable=False)
+    name: Mapped[str] = mapped_column(Text, Computed("display_name", persisted=True))
     email: Mapped[str] = mapped_column(Text, nullable=False)
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
     preferred_language: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'de'"))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
+    session_revoke_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     oidc_subject: Mapped[str | None] = mapped_column(Text)
     oidc_issuer: Mapped[str | None] = mapped_column(Text)
     oidc_email: Mapped[str | None] = mapped_column(Text)
@@ -282,6 +299,7 @@ class Template(Base, TimestampMixin, UpdatedAtMixin):
     document_template_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_template.id", ondelete="RESTRICT"))
     next_event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("event.id", ondelete="SET NULL"))
     last_event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("event.id", ondelete="SET NULL"))
+    todo_due_event_tag: Mapped[str | None] = mapped_column(Text)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     protocol_number_pattern: Mapped[str | None] = mapped_column(Text)
@@ -304,6 +322,7 @@ class TemplateParticipant(Base, TimestampMixin):
 
     template_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("template.id", ondelete="CASCADE"), nullable=False)
     participant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("participant.id", ondelete="CASCADE"), nullable=False)
+    exclude_from_attendance: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
 
 
 class UserTemplateAccess(Base, TimestampMixin):
@@ -423,6 +442,10 @@ class Protocol(Base, TimestampMixin, UpdatedAtMixin):
     protocol_date: Mapped[date] = mapped_column(Date, nullable=False)
     event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("event.id", ondelete="SET NULL"))
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'geplant'"))
+    version_major: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    version_minor: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    version_final_minor: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    session_notes: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
 
 
@@ -535,7 +558,8 @@ class ProtocolTodo(Base, TimestampMixin, UpdatedAtMixin):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    protocol_element_block_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("protocol_element_block.id", ondelete="CASCADE"), nullable=False)
+    tenant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"))
+    protocol_element_block_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("protocol_element_block.id", ondelete="CASCADE"))
     sort_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     task: Mapped[str] = mapped_column(Text, nullable=False)
     assigned_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
@@ -546,7 +570,9 @@ class ProtocolTodo(Base, TimestampMixin, UpdatedAtMixin):
     due_marker: Mapped[str | None] = mapped_column(Text)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     reference_link: Mapped[str | None] = mapped_column(Text)
+    tags: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    closed_in_protocol_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="SET NULL"))
 
 
 class ProtocolImage(Base, TimestampMixin):
@@ -577,3 +603,52 @@ class ProtocolExportCache(Base, TimestampMixin):
     latex_source: Mapped[str | None] = mapped_column(Text)
     generated_file_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("stored_file.id", ondelete="SET NULL"))
     generator_version: Mapped[str | None] = mapped_column(Text)
+
+
+# ── Finance ───────────────────────────────────────────────────────────────────
+
+class FinanceAccount(Base, TimestampMixin, UpdatedAtMixin):
+    __tablename__ = "finance_account"
+    __table_args__ = (
+        Index("idx_finance_account_tenant", "tenant_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    currency_label: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'CHF'"))
+    description: Mapped[str | None] = mapped_column(Text)
+
+
+class FinanceTransaction(Base, TimestampMixin):
+    __tablename__ = "finance_transaction"
+    __table_args__ = (
+        Index("idx_finance_transaction_account", "account_id", "transaction_date"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    account_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("finance_account.id", ondelete="CASCADE"), nullable=False)
+    amount: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    transaction_date: Mapped[date] = mapped_column(Date, nullable=False)
+    protocol_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="SET NULL"))
+
+
+class AttendanceFine(Base, TimestampMixin):
+    __tablename__ = "attendance_fine"
+    __table_args__ = (
+        Index("idx_attendance_fine_protocol", "protocol_id"),
+        Index("idx_attendance_fine_participant", "participant_id"),
+        Index("idx_attendance_fine_account", "account_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    protocol_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="CASCADE"), nullable=False)
+    participant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("participant.id", ondelete="SET NULL"))
+    participant_name_snapshot: Mapped[str] = mapped_column(Text, nullable=False)
+    fine_type: Mapped[str] = mapped_column(Text, nullable=False)
+    amount: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
+    account_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("finance_account.id", ondelete="CASCADE"), nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'pending'"))
+    collected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    collected_transaction_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("finance_transaction.id", ondelete="SET NULL"))

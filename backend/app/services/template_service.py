@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Participant, Template
 from app.repositories.template_repository import TemplateRepository
+from app.schemas.participant import TemplateParticipantAssignmentRead
 from app.services.access_service import AccessService
 from app.services.document_template_service import DocumentTemplateService
 from app.schemas.template import TemplateCreate, TemplateUpdate
@@ -75,15 +76,29 @@ class TemplateService:
         self.repository.delete(db, template)
         return True
 
-    def list_template_participants(self, db: Session, template_id: int) -> list[Participant]:
-        return self.repository.list_participants(db, template_id)
+    def _serialize_template_participants(self, rows: list[tuple[Participant, bool]]) -> list[dict[str, object]]:
+        return [
+            {
+                **TemplateParticipantAssignmentRead.model_validate(participant).model_dump(),
+                "exclude_from_attendance": exclude_from_attendance,
+            }
+            for participant, exclude_from_attendance in rows
+        ]
 
-    def replace_template_participants(self, db: Session, template_id: int, participant_ids: list[int]) -> list[Participant]:
-        previous = self.repository.list_participants(db, template_id)
-        current = self.repository.replace_participants(db, template_id, participant_ids)
+    def list_template_participants(self, db: Session, template_id: int) -> list[dict[str, object]]:
+        return self._serialize_template_participants(self.repository.list_participant_assignments(db, template_id))
+
+    def replace_template_participants(
+        self,
+        db: Session,
+        template_id: int,
+        assignments: list[tuple[int, bool]],
+    ) -> list[dict[str, object]]:
+        previous = self.repository.list_participant_assignments(db, template_id)
+        current = self.repository.replace_participants(db, template_id, assignments)
         affected_user_ids = {
             participant.app_user_id
-            for participant in [*previous, *current]
+            for participant, _ in [*previous, *current]
             if participant.app_user_id is not None
         }
         template = self.repository.get(db, template_id)
@@ -91,4 +106,4 @@ class TemplateService:
             for user_id in affected_user_ids:
                 self.access_service.sync_user_access_from_participants(db, user_id=user_id, tenant_id=template.tenant_id)
             db.commit()
-        return current
+        return self._serialize_template_participants(current)

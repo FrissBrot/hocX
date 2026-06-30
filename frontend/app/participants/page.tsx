@@ -7,9 +7,9 @@ import { ParticipantSummary, TemplateSummary } from "@/types/api";
 
 export default async function ParticipantsPage() {
   const session = await requireSession();
-  const canAdmin = session.user?.is_superadmin || session.current_role === "admin";
+  const canWrite = session.user?.is_superadmin || session.current_role === "admin" || session.current_role === "writer";
 
-  if (!canAdmin) {
+  if (!canWrite) {
     redirect("/");
   }
 
@@ -21,11 +21,6 @@ export default async function ParticipantsPage() {
   return (
     <AppShell initialSession={session}>
       <section className="panel">
-        <div className="eyebrow">Datensaetze</div>
-        <h1>Teilnehmer</h1>
-        <p className="muted">
-          Pflege hier mandantenweite Teilnehmerlisten. Diese Personen koennen Templates zugeordnet und in Todos direkt ausgewaehlt werden.
-        </p>
         <ParticipantManager initialParticipants={participants ?? []} templates={templates ?? []} />
       </section>
     </AppShell>

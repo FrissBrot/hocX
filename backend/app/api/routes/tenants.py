@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy.exc import SQLAlchemyError
@@ -9,6 +7,7 @@ from app.core.config import settings
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user
 from app.schemas.user import TenantCreate, TenantRead, TenantUpdate
+from app.services.file_service import _safe_storage_path
 from app.services.tenant_service import TenantService
 
 router = APIRouter()
@@ -63,7 +62,7 @@ def tenant_profile_image(
     tenant = service.get_tenant(db, tenant_id, user)
     if tenant is None or tenant.profile_image_path is None:
         raise HTTPException(status_code=404, detail="Tenant profile image not found")
-    file_path = Path(settings.storage_root) / tenant.profile_image_path
+    file_path = _safe_storage_path(settings.storage_root, tenant.profile_image_path)
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Tenant profile image missing")
     return FileResponse(file_path)

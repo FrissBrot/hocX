@@ -7,7 +7,10 @@ from app.core.config import settings
 from app.core.security import CurrentUser, build_current_user, create_session_token, verify_password
 from app.models import AppUser
 from app.schemas.user import LoginRequest, SessionRead, SessionUserRead, TenantMembershipRead, TenantRead
+from app.services.audit_service import AuditService
 from app.services.tenant_service import build_tenant_profile_image_url
+
+_audit = AuditService()
 
 
 class AuthService:
@@ -32,6 +35,7 @@ class AuthService:
             max_age=settings.auth_session_ttl_hours * 3600,
             path="/",
         )
+        _audit.log(db, action="user.login", actor=current_user)
         return self.session(current_user)
 
     def logout(self, response: Response) -> dict[str, str]:
