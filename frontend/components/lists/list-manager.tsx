@@ -5,8 +5,8 @@ import { FormEvent, useMemo, useState } from "react";
 import { StructuredListTable } from "@/components/lists/structured-list-table";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
-import { StatusBanner } from "@/components/ui/status-banner";
 import { browserApiFetch } from "@/lib/api/client";
+import { useToast } from "@/contexts/toast-context";
 import {
   EventSummary,
   ParticipantSummary,
@@ -71,12 +71,11 @@ export function ListManager({
   availableParticipants,
   availableEvents,
 }: ListManagerProps) {
+  const showToast = useToast();
   const [lists, setLists] = useState(initialLists);
   const [entriesByList, setEntriesByList] = useState(initialEntriesByList);
   const [selectedListId, setSelectedListId] = useState<number | null>(initialLists[0]?.id ?? null);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("Bereit");
-  const [statusTone, setStatusTone] = useState<"neutral" | "success" | "error">("neutral");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingListId, setEditingListId] = useState<number | null>(null);
   const [form, setForm] = useState(initialFormState);
@@ -123,8 +122,6 @@ export function ListManager({
 
   async function saveDefinition(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setStatus(editingListId ? "Liste wird gespeichert..." : "Liste wird erstellt...");
-    setStatusTone("neutral");
     try {
       const payload = {
         name: form.name,
@@ -151,17 +148,13 @@ export function ListManager({
       setEntriesByList((current) => ({ ...current, [saved.id]: current[saved.id] ?? [] }));
       setSelectedListId(saved.id);
       setModalOpen(false);
-      setStatus(editingListId ? "Liste gespeichert" : "Liste erstellt");
-      setStatusTone("success");
+      showToast(editingListId ? "Liste gespeichert" : "Liste erstellt", "success");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Liste konnte nicht gespeichert werden");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Liste konnte nicht gespeichert werden", "error");
     }
   }
 
   async function deleteDefinition(listId: number) {
-    setStatus("Liste wird geloescht...");
-    setStatusTone("neutral");
     try {
       await browserApiFetch(`/api/lists/${listId}`, { method: "DELETE" });
       const remainingLists = lists.filter((item) => item.id !== listId);
@@ -172,17 +165,13 @@ export function ListManager({
         return next;
       });
       setSelectedListId((current) => (current === listId ? (remainingLists[0]?.id ?? null) : current));
-      setStatus("Liste geloescht");
-      setStatusTone("success");
+      showToast("Liste geloescht", "success");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Liste konnte nicht geloescht werden");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Liste konnte nicht geloescht werden", "error");
     }
   }
 
   async function createEntry(listId: number, payload: { sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }) {
-    setStatus("Eintrag wird erstellt...");
-    setStatusTone("neutral");
     try {
       const created = await browserApiFetch<StructuredListEntry>(`/api/lists/${listId}/entries`, {
         method: "POST",
@@ -192,12 +181,10 @@ export function ListManager({
         ...current,
         [listId]: [...(current[listId] ?? []), created].sort((left, right) => left.sort_index - right.sort_index),
       }));
-      setStatus("Eintrag erstellt");
-      setStatusTone("success");
+      showToast("Eintrag erstellt", "success");
       return true;
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Eintrag konnte nicht erstellt werden");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Eintrag konnte nicht erstellt werden", "error");
       return false;
     }
   }
@@ -207,8 +194,6 @@ export function ListManager({
     entryId: number,
     payload: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>
   ) {
-    setStatus("Eintrag wird gespeichert...");
-    setStatusTone("neutral");
     try {
       const updated = await browserApiFetch<StructuredListEntry>(`/api/list-entries/${entryId}`, {
         method: "PATCH",
@@ -218,37 +203,29 @@ export function ListManager({
         ...current,
         [listId]: (current[listId] ?? []).map((entry) => (entry.id === entryId ? updated : entry)),
       }));
-      setStatus("Eintrag gespeichert");
-      setStatusTone("success");
+      showToast("Eintrag gespeichert", "success");
       return true;
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Eintrag konnte nicht gespeichert werden");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Eintrag konnte nicht gespeichert werden", "error");
       return false;
     }
   }
 
   async function deleteEntry(listId: number, entryId: number) {
-    setStatus("Eintrag wird geloescht...");
-    setStatusTone("neutral");
     try {
       await browserApiFetch(`/api/list-entries/${entryId}`, { method: "DELETE" });
       setEntriesByList((current) => ({
         ...current,
         [listId]: (current[listId] ?? []).filter((entry) => entry.id !== entryId),
       }));
-      setStatus("Eintrag geloescht");
-      setStatusTone("success");
+      showToast("Eintrag geloescht", "success");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Eintrag konnte nicht geloescht werden");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Eintrag konnte nicht geloescht werden", "error");
     }
   }
 
   return (
     <div className="grid">
-      {status !== "Bereit" ? <StatusBanner tone={statusTone} message={status} /> : null}
-
       <DataToolbar
         title="Listen"
         description="Globale Zweispalten-Listen, die du spaeter direkt an Tabellenbloecke koppeln kannst."

@@ -216,6 +216,7 @@ class ExportService:
             else ""
         )
         include_toc = "\\setcounter{tocdepth}{-1}" not in theme
+        hide_metadata = "\\HocxHideMetadata" in theme
         # If the theme uses fontspec (XeTeX/LuaTeX), remove T1 fontenc from the preamble
         # to avoid "Corrupted NFSS tables" — fontspec handles encoding internally.
         uses_fontspec = "\\usepackage{fontspec}" in theme or "\\setmainfont" in theme
@@ -247,7 +248,7 @@ Status: {protocol_status}
 {header_footer}
 {title_page}
 {toc if include_toc else ""}
-{metadata_block}
+{metadata_block if not hide_metadata else ""}
 \\input{{{body_path.as_posix()}}}
 \\end{{document}}
 """
@@ -637,29 +638,65 @@ Status: {protocol_status}
         )
 
     def _fine_list_content(self, db: Session, protocol_id: int) -> str:
-        fines = db.scalars(
+        current_protocol = db.get(ProtocolModel, protocol_id)
+
+        # Own fines (created in this protocol)
+        own_fines = db.scalars(
             select(AttendanceFine)
             .where(AttendanceFine.protocol_id == protocol_id)
+            .where(AttendanceFine.status.in_(["pending", "collected", "deleted"]))
             .order_by(AttendanceFine.created_at.asc())
         ).all()
-        if not fines:
+
+        # Pending fines from earlier protocols that were collected HERE
+        collected_here = db.scalars(
+            select(AttendanceFine)
+            .where(AttendanceFine.closed_in_protocol_id == protocol_id)
+            .order_by(AttendanceFine.collected_at.asc())
+        ).all()
+
+        if not own_fines and not collected_here:
             return "Keine Bussen."
-        fine_type_labels = {"late": "Verspaetet", "absent": "Unentschuldigt"}
-        status_labels = {"pending": "ausstehend", "collected": "kassiert"}
-        lines = ["\\begin{flushleft}", "\\begin{tabular}{p{0.35\\textwidth}p{0.2\\textwidth}p{0.15\\textwidth}p{0.15\\textwidth}}"]
-        lines.append("\\textbf{Teilnehmer} & \\textbf{Grund} & \\textbf{Betrag} & \\textbf{Status} \\\\")
-        for fine in fines:
+
+        fine_type_labels = {"late": "Verspätet", "absent": "Unentschuldigt"}
+        col_spec = "p{0.33\\textwidth}p{0.20\\textwidth}p{0.16\\textwidth}p{0.22\\textwidth}"
+        header = "\\textbf{Teilnehmer} & \\textbf{Grund} & \\textbf{Betrag} & \\textbf{Status} \\\\"
+        lines = ["\\begin{flushleft}", f"\\begin{{tabular}}{{{col_spec}}}", header]
+
+        for fine in own_fines:
             account = db.get(FinanceAccount, fine.account_id)
             cur = account.currency_label if account else ""
             amount_str = f"{float(fine.amount):,.2f}".replace(",", "'")
+            if fine.status == "deleted":
+                comment_part = f" ({self._escape_latex(fine.delete_comment)})" if fine.delete_comment else ""
+                status_label = f"Gelöscht{comment_part}"
+            elif fine.status == "collected" and fine.closed_in_protocol_id is None:
+                status_label = "Kassiert"
+            elif fine.status == "collected":
+                status_label = "Sp\\\"ater beglichen"
+            else:
+                status_label = "Offen"
             lines.append(
                 f"{self._escape_latex(fine.participant_name_snapshot)} & "
                 f"{self._escape_latex(fine_type_labels.get(fine.fine_type, fine.fine_type))} & "
                 f"{self._escape_latex(amount_str + ' ' + cur)} & "
-                f"{self._escape_latex(status_labels.get(fine.status, fine.status))} \\\\"
+                f"{status_label} \\\\"
             )
-        lines.append("\\end{tabular}")
-        lines.append("\\end{flushleft}")
+
+        for fine in collected_here:
+            account = db.get(FinanceAccount, fine.account_id)
+            cur = account.currency_label if account else ""
+            amount_str = f"{float(fine.amount):,.2f}".replace(",", "'")
+            origin = db.get(ProtocolModel, fine.protocol_id)
+            origin_label = f"aus {self._escape_latex(origin.protocol_number)}" if origin else "aus früherem Protokoll"
+            lines.append(
+                f"{self._escape_latex(fine.participant_name_snapshot)} & "
+                f"{self._escape_latex(fine_type_labels.get(fine.fine_type, fine.fine_type))} & "
+                f"{self._escape_latex(amount_str + ' ' + cur)} & "
+                f"Kassiert ({origin_label}) \\\\"
+            )
+
+        lines += ["\\end{tabular}", "\\end{flushleft}"]
         return "\n".join(lines)
 
     def _finance_balance_content(self, db: Session, config: dict) -> str:

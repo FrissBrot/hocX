@@ -8,7 +8,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, require_finance_access, require_reader
 from app.repositories.fines_repository import FinesRepository
-from app.schemas.fines import AttendanceFineCreate, AttendanceFineListItem, AttendanceFineRead
+from app.schemas.fines import (
+    AttendanceFineCreate,
+    AttendanceFineListItem,
+    AttendanceFineRead,
+    CollectFinePayload,
+    DeleteFinePayload,
+    SetDeleteCommentPayload,
+)
 
 router = APIRouter()
 repo = FinesRepository()
@@ -28,6 +35,16 @@ def list_fines(
     if participant_id is None:
         return []
     return repo.list_fines_for_participant(db, user.current_tenant_id, participant_id)
+
+
+@router.get("/protocols/{protocol_id}/pending-fines", response_model=list[AttendanceFineListItem])
+def list_pending_fines(
+    protocol_id: int,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_finance_access(user)
+    return repo.list_pending_fines_for_protocol(db, protocol_id)
 
 
 @router.get("/protocols/{protocol_id}/fines", response_model=list[AttendanceFineRead])
@@ -54,27 +71,48 @@ def create_fine(
         raise HTTPException(status_code=400, detail="Fine could not be created") from exc
 
 
-@router.delete("/fines/{fine_id}", response_model=dict[str, str])
+@router.post("/fines/{fine_id}/delete", response_model=AttendanceFineRead)
 def delete_fine(
     fine_id: int,
-    db: Session = Depends(get_db),
-    user: CurrentUser = Depends(get_current_user),
-):
-    require_finance_access(user)
-    if not repo.delete_fine(db, fine_id):
-        raise HTTPException(status_code=404, detail="Fine not found or already collected")
-    return {"message": "Fine deleted"}
-
-
-@router.post("/fines/{fine_id}/collect", response_model=AttendanceFineRead)
-def collect_fine(
-    fine_id: int,
+    payload: DeleteFinePayload = DeleteFinePayload(),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_finance_access(user)
     try:
-        result = repo.collect_fine(db, fine_id, user.current_tenant_id)
+        result = repo.delete_fine(db, fine_id, user.current_tenant_id, payload.delete_comment, payload.closing_protocol_id)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Fine could not be deleted") from exc
+    if result is None:
+        raise HTTPException(status_code=404, detail="Fine not found or already collected")
+    return result
+
+
+@router.patch("/fines/{fine_id}/delete-comment", response_model=AttendanceFineRead)
+def set_delete_comment(
+    fine_id: int,
+    payload: SetDeleteCommentPayload,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_finance_access(user)
+    result = repo.set_delete_comment(db, fine_id, user.current_tenant_id, payload.delete_comment)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Fine not found or not in deleted state")
+    return result
+
+
+@router.post("/fines/{fine_id}/collect", response_model=AttendanceFineRead)
+def collect_fine(
+    fine_id: int,
+    payload: CollectFinePayload = CollectFinePayload(),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_finance_access(user)
+    try:
+        result = repo.collect_fine(db, fine_id, user.current_tenant_id, payload.collecting_protocol_id)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Fine could not be collected") from exc

@@ -4,8 +4,8 @@ import { ChangeEvent, FormEvent, useMemo, useState } from "react";
 
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
-import { StatusBanner } from "@/components/ui/status-banner";
 import { browserApiFetch } from "@/lib/api/client";
+import { useToast } from "@/contexts/toast-context";
 import { ParticipantSummary, TemplateSummary } from "@/types/api";
 
 type CsvPreviewRow = { display_name: string; first_name: string | null; last_name: string | null; email: string | null };
@@ -57,12 +57,11 @@ const emptyForm: ParticipantFormState = {
 };
 
 export function ParticipantManager({ initialParticipants, templates }: ParticipantManagerProps) {
+  const showToast = useToast();
   const [participants, setParticipants] = useState(initialParticipants);
   const [selectedParticipant, setSelectedParticipant] = useState<ParticipantSummary | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("Ready");
-  const [statusTone, setStatusTone] = useState<"neutral" | "success" | "error">("neutral");
   const [form, setForm] = useState<ParticipantFormState>(emptyForm);
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<number[]>([]);
   const [assignedTemplateIds, setAssignedTemplateIds] = useState<number[]>([]);
@@ -123,8 +122,6 @@ export function ParticipantManager({ initialParticipants, templates }: Participa
 
   async function saveParticipant(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setStatus(selectedParticipant ? "Updating participant..." : "Creating participant...");
-    setStatusTone("neutral");
 
     try {
       const payload = {
@@ -137,6 +134,7 @@ export function ParticipantManager({ initialParticipants, templates }: Participa
 
       let participantId: number;
       let updatedParticipant: ParticipantSummary;
+      let successMessage = "";
 
       if (selectedParticipant) {
         updatedParticipant = await browserApiFetch<ParticipantSummary>(`/api/participants/${selectedParticipant.id}`, {
@@ -145,7 +143,7 @@ export function ParticipantManager({ initialParticipants, templates }: Participa
         });
         participantId = updatedParticipant.id;
         setParticipants((current) => current.map((item) => (item.id === updatedParticipant.id ? updatedParticipant : item)));
-        setStatus(`Updated ${updatedParticipant.display_name}`);
+        successMessage = `Updated ${updatedParticipant.display_name}`;
       } else {
         updatedParticipant = await browserApiFetch<ParticipantSummary>("/api/participants", {
           method: "POST",
@@ -153,7 +151,7 @@ export function ParticipantManager({ initialParticipants, templates }: Participa
         });
         participantId = updatedParticipant.id;
         setParticipants((current) => [updatedParticipant, ...current]);
-        setStatus(`Created ${updatedParticipant.display_name}`);
+        successMessage = `Created ${updatedParticipant.display_name}`;
       }
 
       await browserApiFetch(`/api/participants/${participantId}/templates`, {
@@ -161,29 +159,24 @@ export function ParticipantManager({ initialParticipants, templates }: Participa
         body: JSON.stringify({ template_ids: assignedTemplateIds }),
       });
 
-      setStatusTone("success");
+      showToast(successMessage, "success");
       setShowModal(false);
       setSelectedParticipant(null);
       setForm(emptyForm);
       setAssignedTemplateIds([]);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Participant could not be saved");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Participant could not be saved", "error");
     }
   }
 
   async function deleteParticipant(participantId: number) {
-    setStatus(`Deleting participant #${participantId}...`);
-    setStatusTone("neutral");
     try {
       await browserApiFetch(`/api/participants/${participantId}`, { method: "DELETE" });
       setParticipants((current) => current.filter((participant) => participant.id !== participantId));
       setSelectedParticipantIds((current) => current.filter((id) => id !== participantId));
-      setStatus(`Deleted participant #${participantId}`);
-      setStatusTone("success");
+      showToast(`Deleted participant #${participantId}`, "success");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Participant could not be deleted");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Participant could not be deleted", "error");
     }
   }
 
@@ -191,8 +184,6 @@ export function ParticipantManager({ initialParticipants, templates }: Participa
     if (!selectedParticipantIds.length) {
       return;
     }
-    setStatus(`Deleting ${selectedParticipantIds.length} participants...`);
-    setStatusTone("neutral");
     try {
       await browserApiFetch("/api/participants", {
         method: "DELETE",
@@ -200,11 +191,9 @@ export function ParticipantManager({ initialParticipants, templates }: Participa
       });
       setParticipants((current) => current.filter((participant) => !selectedParticipantIds.includes(participant.id)));
       setSelectedParticipantIds([]);
-      setStatus("Participants deleted");
-      setStatusTone("success");
+      showToast("Participants deleted", "success");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Participants could not be deleted");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Participants could not be deleted", "error");
     }
   }
 
@@ -231,8 +220,7 @@ export function ParticipantManager({ initialParticipants, templates }: Participa
       setCsvPreview(null);
       setImportResult(result);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "CSV import failed");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "CSV import failed", "error");
       setCsvPreview(null);
     } finally {
       setImporting(false);
@@ -281,8 +269,6 @@ export function ParticipantManager({ initialParticipants, templates }: Participa
           </div>
         </div>
       </article>
-
-      <StatusBanner tone={statusTone} message={status} />
 
       <DataTable
         columns={[

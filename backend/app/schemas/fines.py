@@ -31,6 +31,8 @@ class AttendanceFineRead(BaseModel):
     status: str
     collected_at: datetime | None
     collected_transaction_id: int | None
+    closed_in_protocol_id: int | None = None
+    delete_comment: str | None = None
     created_at: datetime
 
 
@@ -38,3 +40,16 @@ class AttendanceFineListItem(AttendanceFineRead):
     protocol_number: str | None = None
     protocol_date: str | None = None
     currency_label: str | None = None
+
+
+class CollectFinePayload(BaseModel):
+    collecting_protocol_id: int | None = None
+
+
+class DeleteFinePayload(BaseModel):
+    delete_comment: str | None = None
+    closing_protocol_id: int | None = None
+
+
+class SetDeleteCommentPayload(BaseModel):
+    delete_comment: str

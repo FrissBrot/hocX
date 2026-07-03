@@ -7,8 +7,8 @@ import { useRouter } from "next/navigation";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
-import { StatusBanner } from "@/components/ui/status-banner";
 import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
+import { useToast } from "@/contexts/toast-context";
 import { useTableSort } from "@/lib/hooks/use-table-sort";
 import { formatDate, formatDateTime } from "@/lib/utils/format";
 import { ProtocolSummary, TemplateSummary } from "@/types/api";
@@ -40,14 +40,13 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
     setProtocols(initialProtocols);
     setHasMore(initialProtocols.length === PAGE_SIZE);
   }, [initialProtocols]);
+  const showToast = useToast();
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [availableTemplates, setAvailableTemplates] = useState(templates);
   const [pdfBusyByProtocol, setPdfBusyByProtocol] = useState<Record<number, boolean>>({});
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
   const menuBtnRefs = useRef<Record<number, HTMLButtonElement | null>>({});
-  const [status, setStatus] = useState("Ready");
-  const [statusTone, setStatusTone] = useState<"neutral" | "success" | "error">("neutral");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const { sortKey, sortDirection, toggleSort, sortIndicator } = useTableSort<"id" | "protocol_number" | "title" | "status" | "protocol_date">("id", "desc");
@@ -121,8 +120,6 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
 
   async function createProtocol(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setStatus("Creating protocol...");
-    setStatusTone("neutral");
 
     try {
       const created = await browserApiFetch<{ id: number }>("/api/protocols/from-template", {
@@ -139,8 +136,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
 
       const full = await browserApiFetch<ProtocolSummary>(`/api/protocols/${created.id}`);
       setProtocols((current) => [full, ...current]);
-      setStatus(`Created protocol #${created.id}`);
-      setStatusTone("success");
+      showToast(`Created protocol #${created.id}`, "success");
       setForm((current) => ({
         ...current,
         protocol_number: "",
@@ -149,31 +145,23 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
       setShowCreateForm(false);
       router.push(`/protocols/${created.id}`);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Protocol creation failed");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Protocol creation failed", "error");
     }
   }
 
   async function deleteProtocol(protocolId: number) {
-    setStatus(`Deleting protocol #${protocolId}...`);
-    setStatusTone("neutral");
-
     try {
       await browserApiFetch<{ message: string }>(`/api/protocols/${protocolId}`, { method: "DELETE" });
       setProtocols((current) => current.filter((protocol) => protocol.id !== protocolId));
-      setStatus(`Deleted protocol #${protocolId}`);
-      setStatusTone("success");
+      showToast(`Deleted protocol #${protocolId}`, "success");
       router.refresh();
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Protocol deletion failed");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Protocol deletion failed", "error");
     }
   }
 
   async function generateAndOpenPdf(protocolId: number, protocolNumber: string) {
     setPdfBusyByProtocol((current) => ({ ...current, [protocolId]: true }));
-    setStatus(`Generating PDF for ${protocolNumber}...`);
-    setStatusTone("neutral");
 
     try {
       const result = await browserApiFetch<{ content_url?: string | null; status: string; export_format: string; version_major?: number | null; version_minor?: number | null }>(
@@ -188,15 +176,13 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
           )
         );
       }
-      setStatus(`PDF ready for ${protocolNumber}`);
-      setStatusTone("success");
+      showToast(`PDF ready for ${protocolNumber}`, "success");
 
       if (result.content_url) {
         window.open(`${browserApiBaseUrl}${result.content_url}`, "_blank", "noopener,noreferrer");
       }
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "PDF export failed");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "PDF export failed", "error");
     } finally {
       setPdfBusyByProtocol((current) => ({ ...current, [protocolId]: false }));
     }
@@ -219,12 +205,10 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
     try {
       const updated = await browserApiFetch<ProtocolSummary>(`/api/protocols/${protocolId}/revert-status`, { method: "POST" });
       setProtocols((current) => current.map((p) => (p.id === protocolId ? updated : p)));
-      setStatus(`Status zurückgesetzt`);
-      setStatusTone("success");
+      showToast(`Status zurückgesetzt`, "success");
       router.refresh();
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Zurücksetzen fehlgeschlagen");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Zurücksetzen fehlgeschlagen", "error");
     }
   }
 
@@ -308,8 +292,6 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
           </div>
         </form>
       </Modal>
-
-      {status !== "Ready" ? <StatusBanner tone={statusTone} message={status} /> : null}
 
       <DataTable columns={[
         { key: "protocol_number", label: "Protokoll", sortable: true, sortDirection: sortIndicator("protocol_number"), onSort: () => toggleSort("protocol_number") },

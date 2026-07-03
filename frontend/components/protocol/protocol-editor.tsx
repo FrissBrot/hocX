@@ -3,6 +3,7 @@
 import { Dispatch, Fragment, ReactNode, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import { useToast } from "@/contexts/toast-context";
 
 import { SessionPanel, SessionPanelHandle } from "@/components/protocol/session-panel";
 import { TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
@@ -17,6 +18,7 @@ import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { formatDate, formatDateRange } from "@/lib/utils/format";
 import {
   AttendanceFine,
+  AttendanceFineListItem,
   EventSummary,
   FinanceAccount,
   FinanceTransaction,
@@ -1584,6 +1586,7 @@ export function ProtocolEditor({
   const [imagesByBlock, setImagesByBlock] = useState<Record<number, ProtocolImage[]>>(initialImages);
   const [financeTransactions, setFinanceTransactions] = useState<Record<number, FinanceTransaction[]>>(initialFinanceTransactions);
   const [protocolFines, setProtocolFines] = useState<AttendanceFine[]>([]);
+  const [pendingFines, setPendingFines] = useState<AttendanceFineListItem[]>([]);
   const [textDrafts, setTextDrafts] = useState<Record<number, string>>(
     Object.fromEntries(
       initialElements.flatMap((element) =>
@@ -1604,6 +1607,9 @@ export function ProtocolEditor({
   const [protocolStatus, setProtocolStatus] = useState(protocol.status);
   const [sessionNotes, setSessionNotes] = useState(protocol.session_notes ?? "");
   const [transitioningStatus, setTransitioningStatus] = useState(false);
+  const showToast = useToast();
+  const elementSaveTimerRef = useRef<number | null>(null);
+  const isRestoringRef = useRef(true);
   const [showSavedIndicator, setShowSavedIndicator] = useState(false);
   const savedIndicatorTimerRef = useRef<number | null>(null);
   const prevBlockStatusRef = useRef<Record<number, SaveState>>({});
@@ -1613,7 +1619,41 @@ export function ProtocolEditor({
     browserApiFetch<AttendanceFine[]>(`/api/protocols/${protocol.id}/fines`)
       .then((data) => { if (data) setProtocolFines(data); })
       .catch(() => { /* silently ignore 403 for restricted roles */ });
+    browserApiFetch<AttendanceFineListItem[]>(`/api/protocols/${protocol.id}/pending-fines`)
+      .then((data) => { if (data) setPendingFines(data); })
+      .catch(() => {});
   }, [protocol.id, canViewFines]);
+
+  // Restore last active element from backend
+  useEffect(() => {
+    browserApiFetch<{ element_id: number | null }>(`/api/protocols/${protocol.id}/scroll-position`)
+      .then((data) => {
+        isRestoringRef.current = false;
+        if (!data?.element_id) return;
+        const id = data.element_id;
+        if (initialElements.some((e) => e.id === id)) {
+          shouldScrollToElementRef.current = true;
+          setSelectedElementId(id);
+        }
+      })
+      .catch(() => { isRestoringRef.current = false; });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [protocol.id]);
+
+  // Save active element to backend (debounced, skip during initial restore)
+  useEffect(() => {
+    if (!selectedElementId || isRestoringRef.current) return;
+    if (elementSaveTimerRef.current) window.clearTimeout(elementSaveTimerRef.current);
+    elementSaveTimerRef.current = window.setTimeout(() => {
+      void browserApiFetch(`/api/protocols/${protocol.id}/scroll-position`, {
+        method: "PUT",
+        body: JSON.stringify({ element_id: selectedElementId }),
+      });
+    }, 800);
+    return () => {
+      if (elementSaveTimerRef.current) window.clearTimeout(elementSaveTimerRef.current);
+    };
+  }, [selectedElementId, protocol.id]);
 
   // Editing mode derived from status and role
   const forceEditable = !forceReadOnly && (protocolStatus === "geplant" || protocolStatus === "durchgeführt");
@@ -1627,9 +1667,37 @@ export function ProtocolEditor({
     abgeschlossen: { modeLabel: "Abgeschlossen",         ctaLabel: "",                          nextStatus: "" },
   };
 
+
   const transitionStatus = async () => {
     const next = workflowMeta[protocolStatus]?.nextStatus;
     if (!next) return;
+
+    if (next === "abgeschlossen") {
+      const hasRealContent = (s: string | null | undefined) => /[\p{L}\p{N}]/u.test(s ?? "");
+      const missingComment = (f: { status: string; delete_comment: string | null }) =>
+        f.status === "deleted" && !hasRealContent(f.delete_comment);
+      const missing = [
+        ...protocolFines.filter(missingComment),
+        ...pendingFines.filter(missingComment),
+      ];
+      if (missing.length > 0) {
+        const fineTypeLabel = (t: string) => t === "late" ? "Verspätet" : "Unentschuldigt";
+        const names = missing.map((f) => `${f.participant_name_snapshot} (${fineTypeLabel(f.fine_type)})`).join(", ");
+        const firstId = missing[0].id;
+        showToast(`Fehlender Kommentar bei gelöschten Bussen: ${names} – klicken zum Hinspringen`, "error", {
+          onMessageClick: () => {
+            const el = document.getElementById(`fine-row-${firstId}`);
+            if (el) {
+              el.scrollIntoView({ behavior: "smooth", block: "center" });
+              el.classList.add("fine-row-highlight");
+              setTimeout(() => el.classList.remove("fine-row-highlight"), 1800);
+            }
+          },
+        });
+        return;
+      }
+    }
+
     setTransitioningStatus(true);
     try {
       await browserApiFetch(`/api/protocols/${protocol.id}`, {
@@ -1639,6 +1707,8 @@ export function ProtocolEditor({
       setProtocolStatus(next);
       router.refresh();
       router.push("/protocols");
+    } catch (err: unknown) {
+      if (err instanceof Error) showToast(err.message);
     } finally {
       setTransitioningStatus(false);
     }
@@ -2318,6 +2388,8 @@ export function ProtocolEditor({
               financeTransactions={financeTransactions}
               protocolFines={protocolFines}
               setProtocolFines={setProtocolFines}
+              pendingFines={pendingFines}
+              setPendingFines={setPendingFines}
               newEventDrafts={newEventDrafts}
               selectedFiles={selectedFiles}
               setTodosByBlock={setTodosByBlock}
@@ -2420,6 +2492,7 @@ export function ProtocolEditor({
           onQuickTodoCreated={(blockId, todoId, elementId) => void handleQuickTodoCreated(blockId, todoId, elementId)}
         />
       )}
+
     </div>
   );
 }
@@ -2440,6 +2513,8 @@ function FocusedElementEditor({
   financeTransactions,
   protocolFines,
   setProtocolFines,
+  pendingFines,
+  setPendingFines,
   newEventDrafts,
   selectedFiles,
   setTodosByBlock,
@@ -2493,6 +2568,8 @@ function FocusedElementEditor({
   financeTransactions: Record<number, FinanceTransaction[]>;
   protocolFines: AttendanceFine[];
   setProtocolFines: Dispatch<SetStateAction<AttendanceFine[]>>;
+  pendingFines: AttendanceFineListItem[];
+  setPendingFines: Dispatch<SetStateAction<AttendanceFineListItem[]>>;
   newEventDrafts: Record<number, ProtocolEventDraft>;
   selectedFiles: Record<number, File | null>;
   setTodosByBlock: Dispatch<SetStateAction<Record<number, ProtocolTodo[]>>>;
@@ -2536,6 +2613,7 @@ function FocusedElementEditor({
   const blockMenuRef = useRef<HTMLDivElement | null>(null);
   const [showEventPicker, setShowEventPicker] = useState(false);
   const [eventPickerSearch, setEventPickerSearch] = useState("");
+  const [deleteFineModal, setDeleteFineModal] = useState<{ fineId: number; fromPending: boolean; comment: string } | null>(null);
   const [addingEventBlock, setAddingEventBlock] = useState(false);
   const [multiParticipantPicker, setMultiParticipantPicker] = useState<{
     kind: "form" | "matrix" | "embedded_form";
@@ -4528,48 +4606,200 @@ function FocusedElementEditor({
               })()}
 
               {elementType === "fine_list" && (() => {
-                const blockFines = protocolFines;
-                if (blockFines.length === 0) {
-                  return <p className="muted">Keine Bussen für dieses Protokoll.</p>;
-                }
-                const fineAccount = (fineId: number) => availableAccounts.find((a) => a.id === fineId);
+                const fineAccount = (accountId: number) => availableAccounts.find((a) => a.id === accountId);
                 return (
-                  <div className="fine-list-block">
-                    {blockFines.map((fine) => {
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    {/* Pending fines from earlier protocols */}
+                    {pendingFines.length > 0 && (
+                      <div className="fine-list-block fine-list-block-pending">
+                        <div className="fine-pending-section-header">Offene Bussen aus früheren Protokollen</div>
+                        {pendingFines.map((fine) => {
+                          const account = fineAccount(fine.account_id);
+                          const cur = account?.currency_label ?? fine.currency_label ?? "";
+                          const isCollected = fine.status === "collected";
+                          const isDeleted = fine.status === "deleted";
+                          const isDone = isCollected || isDeleted;
+                          return (
+                            <div key={fine.id} id={`fine-row-${fine.id}`} className={`fine-list-row${isDone ? " fine-collected" : ""}`}>
+                              <div>
+                                <span className="fine-participant">{fine.participant_name_snapshot}</span>
+                                <span className="fine-pending-origin" style={{ display: "block" }}>
+                                  {fine.protocol_number ? `Protokoll ${fine.protocol_number}` : ""}
+                                  {fine.protocol_date ? ` · ${formatShortDate(fine.protocol_date)}` : ""}
+                                </span>
+                              </div>
+                              <span className="fine-type-label">{fine.fine_type === "late" ? "Verspätet" : "Unentschuldigt"}</span>
+                              <span className="fine-amount">{fine.amount.toFixed(2)} {cur}</span>
+                              <span className="fine-status">
+                                {isCollected && <span className="todo-pending-resolved">Kassiert</span>}
+                                {isDeleted && (
+                                  <span className="fine-deleted-badge">
+                                    Gelöscht
+                                    {fine.delete_comment && <span className="fine-delete-comment"> · {fine.delete_comment}</span>}
+                                  </span>
+                                )}
+                              </span>
+                              {isDeleted && !isReadOnly ? (
+                                <button
+                                  type="button"
+                                  className={`fine-action-btn fine-comment-btn${!fine.delete_comment ? " fine-comment-missing" : ""}`}
+                                  title={fine.delete_comment ? "Kommentar bearbeiten" : "Kommentar fehlt – hinzufügen"}
+                                  onClick={() => setDeleteFineModal({ fineId: fine.id, fromPending: true, comment: fine.delete_comment ?? "" })}
+                                >✎</button>
+                              ) : !isDone && !isReadOnly ? (
+                                <button
+                                  type="button"
+                                  className="fine-action-btn fine-collect-btn"
+                                  title="Busse kassieren"
+                                  onClick={async () => {
+                                    const updated = await browserApiFetch<AttendanceFine>(
+                                      `/api/fines/${fine.id}/collect`,
+                                      { method: "POST", body: JSON.stringify({ collecting_protocol_id: protocol.id }) }
+                                    );
+                                    if (updated) setPendingFines((prev) => prev.map((f) => f.id === updated.id ? { ...f, ...updated } : f));
+                                  }}
+                                >✓</button>
+                              ) : <span />}
+                              {!isDone && !isReadOnly ? (
+                                <button
+                                  type="button"
+                                  className="fine-action-btn fine-delete-btn"
+                                  title="Busse löschen"
+                                  onClick={() => setDeleteFineModal({ fineId: fine.id, fromPending: true, comment: "" })}
+                                >✕</button>
+                              ) : <span />}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Own fines (created in this protocol) */}
+                    {protocolFines.length === 0 && pendingFines.length === 0 && (
+                      <p className="muted">Keine Bussen für dieses Protokoll.</p>
+                    )}
+                    {protocolFines.length > 0 && <div className="fine-list-block">
+                    {protocolFines.map((fine) => {
                       const account = fineAccount(fine.account_id);
                       const cur = account?.currency_label ?? "";
                       const isCollected = fine.status === "collected";
+                      const isDeleted = fine.status === "deleted";
+                      const isCollectedElsewhere = isCollected && !!fine.closed_in_protocol_id;
                       return (
-                        <div key={fine.id} className={`fine-list-row${isCollected ? " fine-collected" : ""}`}>
+                        <div key={fine.id} id={`fine-row-${fine.id}`} className={`fine-list-row${isCollected || isDeleted ? " fine-collected" : ""}`}>
                           <span className="fine-participant">{fine.participant_name_snapshot}</span>
                           <span className="fine-type-label">{fine.fine_type === "late" ? "Verspätet" : "Unentschuldigt"}</span>
                           <span className="fine-amount">{fine.amount.toFixed(2)} {cur}</span>
-                          <span className="fine-status">{isCollected ? "✓ Kassiert" : "Ausstehend"}</span>
-                          {!isCollected && !isReadOnly ? (
+                          <span className="fine-status">
+                            {isDeleted ? (
+                              <span className="fine-deleted-badge">
+                                Gelöscht
+                                {fine.delete_comment && <span className="fine-delete-comment"> · {fine.delete_comment}</span>}
+                              </span>
+                            ) : isCollectedElsewhere ? (
+                              <span className="todo-closed-elsewhere-badge">Später beglichen</span>
+                            ) : isCollected ? "✓ Kassiert" : "Ausstehend"}
+                          </span>
+                          {isDeleted && !isReadOnly ? (
                             <button
                               type="button"
-                              className="btn-icon-sm fine-collect-btn"
+                              className={`fine-action-btn fine-comment-btn${!fine.delete_comment ? " fine-comment-missing" : ""}`}
+                              title={fine.delete_comment ? "Kommentar bearbeiten" : "Kommentar fehlt – hinzufügen"}
+                              onClick={() => setDeleteFineModal({ fineId: fine.id, fromPending: false, comment: fine.delete_comment ?? "" })}
+                            >✎</button>
+                          ) : !isCollected && !isDeleted && !isReadOnly ? (
+                            <button
+                              type="button"
+                              className="fine-action-btn fine-collect-btn"
                               title="Busse kassieren"
                               onClick={async () => {
                                 const updated = await browserApiFetch<AttendanceFine>(`/api/fines/${fine.id}/collect`, { method: "POST" });
                                 if (updated) setProtocolFines((prev) => prev.map((f) => f.id === updated.id ? updated : f));
                               }}
                             >✓</button>
-                          ) : null}
-                          {!isCollected && !isReadOnly ? (
+                          ) : <span />}
+                          {!isCollected && !isDeleted && !isReadOnly ? (
                             <button
                               type="button"
-                              className="btn-icon-sm btn-icon-danger fine-delete-btn"
+                              className="fine-action-btn fine-delete-btn"
                               title="Busse löschen"
-                              onClick={async () => {
-                                await browserApiFetch(`/api/fines/${fine.id}`, { method: "DELETE" });
-                                setProtocolFines((prev) => prev.filter((f) => f.id !== fine.id));
-                              }}
+                              onClick={() => setDeleteFineModal({ fineId: fine.id, fromPending: false, comment: "" })}
                             >✕</button>
-                          ) : null}
+                          ) : <span />}
                         </div>
                       );
                     })}
+                    </div>}
+
+                    {/* Delete-fine modal */}
+                    {deleteFineModal && (() => {
+                      const isEditComment = (() => {
+                        const own = protocolFines.find(f => f.id === deleteFineModal.fineId);
+                        if (own) return own.status === "deleted";
+                        const pending = pendingFines.find(f => f.id === deleteFineModal.fineId);
+                        return (pending?.status ?? "") === "deleted";
+                      })();
+                      const submitDelete = async () => {
+                        const comment = deleteFineModal.comment.trim() || null;
+                        if (isEditComment) {
+                          if (!comment) return;
+                          const updated = await browserApiFetch<AttendanceFine>(
+                            `/api/fines/${deleteFineModal.fineId}/delete-comment`,
+                            { method: "PATCH", body: JSON.stringify({ delete_comment: comment }) }
+                          );
+                          if (updated) {
+                            if (deleteFineModal.fromPending) {
+                              setPendingFines((prev) => prev.map((f) => f.id === updated.id ? { ...f, ...updated } : f));
+                            } else {
+                              setProtocolFines((prev) => prev.map((f) => f.id === updated.id ? updated : f));
+                            }
+                          }
+                        } else {
+                          const body: Record<string, unknown> = { delete_comment: comment };
+                          if (deleteFineModal.fromPending) body.closing_protocol_id = protocol.id;
+                          const updated = await browserApiFetch<AttendanceFine>(
+                            `/api/fines/${deleteFineModal.fineId}/delete`,
+                            { method: "POST", body: JSON.stringify(body) }
+                          );
+                          if (updated) {
+                            if (deleteFineModal.fromPending) {
+                              setPendingFines((prev) => prev.map((f) => f.id === updated.id ? { ...f, ...updated } : f));
+                            } else {
+                              setProtocolFines((prev) => prev.map((f) => f.id === updated.id ? updated : f));
+                            }
+                          }
+                        }
+                        setDeleteFineModal(null);
+                      };
+                      return (
+                        <Modal
+                          open
+                          title={isEditComment ? "Kommentar bearbeiten" : "Busse löschen"}
+                          description={isEditComment ? "Kommentar für die gelöschte Busse." : "Optionaler Kommentar – kann auch später noch ergänzt werden."}
+                          onClose={() => setDeleteFineModal(null)}
+                        >
+                          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                            <input
+                              type="text"
+                              className="input"
+                              placeholder="Grund für Löschung…"
+                              autoFocus
+                              value={deleteFineModal.comment}
+                              onChange={(e) => setDeleteFineModal((m) => m ? { ...m, comment: e.target.value } : m)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") { e.preventDefault(); void submitDelete(); }
+                              }}
+                            />
+                            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                              <button type="button" className="button-ghost" onClick={() => setDeleteFineModal(null)}>Abbrechen</button>
+                              <button type="button" className={isEditComment ? "button-primary" : "button-danger"} onClick={submitDelete}>
+                                {isEditComment ? "Speichern" : "Löschen"}
+                              </button>
+                            </div>
+                          </div>
+                        </Modal>
+                      );
+                    })()}
                   </div>
                 );
               })()}

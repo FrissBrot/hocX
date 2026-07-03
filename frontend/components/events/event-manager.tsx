@@ -5,8 +5,8 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
-import { StatusBanner } from "@/components/ui/status-banner";
 import { browserApiFetch } from "@/lib/api/client";
+import { useToast } from "@/contexts/toast-context";
 import { useTableSort } from "@/lib/hooks/use-table-sort";
 import { formatDateRange } from "@/lib/utils/format";
 import { EventSummary } from "@/types/api";
@@ -39,12 +39,11 @@ function emptyForm(): EventFormState {
 }
 
 export function EventManager({ initialEvents }: Props) {
+  const showToast = useToast();
   const [events, setEvents] = useState(initialEvents);
   const [hasMore, setHasMore] = useState(initialEvents.length === PAGE_SIZE);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("Bereit");
-  const [statusTone, setStatusTone] = useState<"neutral" | "success" | "error">("neutral");
   const [tagFilter, setTagFilter] = useState("all");
   const { sortKey, sortDirection, toggleSort, sortIndicator } = useTableSort<"event_date" | "title" | "tag" | "description" | "participant_count">("event_date");
   const [showParticipantCount, setShowParticipantCount] = useState(false);
@@ -123,8 +122,6 @@ export function EventManager({ initialEvents }: Props) {
 
   async function saveEvent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setStatus(form.id ? "Termin wird gespeichert..." : "Termin wird erstellt...");
-    setStatusTone("neutral");
     try {
       const payload = {
         event_date: form.event_date,
@@ -148,25 +145,19 @@ export function EventManager({ initialEvents }: Props) {
         form.id ? current.map((item) => (item.id === saved.id ? saved : item)) : [saved, ...current]
       );
       setModalOpen(false);
-      setStatus(form.id ? "Termin gespeichert" : "Termin erstellt");
-      setStatusTone("success");
+      showToast(form.id ? "Termin gespeichert" : "Termin erstellt", "success");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Termin konnte nicht gespeichert werden");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Termin konnte nicht gespeichert werden", "error");
     }
   }
 
   async function deleteEvent(eventId: number) {
-    setStatus("Termin wird gelöscht...");
-    setStatusTone("neutral");
     try {
       await browserApiFetch(`/api/events/${eventId}`, { method: "DELETE" });
       setEvents((current) => current.filter((event) => event.id !== eventId));
-      setStatus("Termin gelöscht");
-      setStatusTone("success");
+      showToast("Termin gelöscht", "success");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Termin konnte nicht gelöscht werden");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Termin konnte nicht gelöscht werden", "error");
     }
   }
 
@@ -188,8 +179,6 @@ export function EventManager({ initialEvents }: Props) {
     if (!file) {
       return;
     }
-    setStatus(`Importiere ${file.name}...`);
-    setStatusTone("neutral");
     try {
       const body = new FormData();
       body.append("file", file);
@@ -198,11 +187,9 @@ export function EventManager({ initialEvents }: Props) {
         body,
       });
       setEvents((current) => [...imported, ...current]);
-      setStatus(`${imported.length} Termine importiert`);
-      setStatusTone("success");
+      showToast(`${imported.length} Termine importiert`, "success");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "CSV-Import fehlgeschlagen");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "CSV-Import fehlgeschlagen", "error");
     } finally {
       event.target.value = "";
     }
@@ -210,8 +197,6 @@ export function EventManager({ initialEvents }: Props) {
 
   return (
     <div className="grid">
-      {status !== "Bereit" ? <StatusBanner tone={statusTone} message={status} /> : null}
-
       <DataToolbar
         title="Termine"
         actions={

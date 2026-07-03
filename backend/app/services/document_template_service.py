@@ -48,6 +48,11 @@ FONT_SLOT_TARGETS = {
     "font_bold_italic": "fonts/bold_italic",
 }
 
+IMAGE_ASSET_TARGETS = {
+    "title_header_image": "header_image",
+    "title_footer_image": "footer_image",
+}
+
 
 class DocumentTemplateService:
     def __init__(
@@ -174,7 +179,6 @@ class DocumentTemplateService:
         tenant_id: int,
     ) -> DocumentTemplatePartRead:
         storage_payload = DocumentTemplatePartCreate(
-            tenant_id=tenant_id,
             code=payload.code or self._generate_part_code(db, tenant_id=tenant_id, name=payload.name, part_type=payload.part_type, version=payload.version),
             name=payload.name,
             part_type=payload.part_type,
@@ -182,7 +186,7 @@ class DocumentTemplateService:
             version=payload.version,
             is_active=payload.is_active,
         )
-        storage_path = await self._save_part_file(storage_payload, file)
+        storage_path = await self._save_part_file(storage_payload, file, tenant_id=tenant_id)
         entity = DocumentTemplatePart(
             tenant_id=tenant_id,
             code=storage_payload.code or "",
@@ -217,7 +221,7 @@ class DocumentTemplateService:
                 version=values.get("version", entity.version),
                 is_active=values.get("is_active", entity.is_active),
             )
-            values["storage_path"] = await self._save_part_file(part_payload, file)
+            values["storage_path"] = await self._save_part_file(part_payload, file, tenant_id=entity.tenant_id)
         if not values:
             return DocumentTemplatePartRead.model_validate(entity)
         updated = self.part_repository.update(db, entity, values)
@@ -272,12 +276,12 @@ class DocumentTemplateService:
         db.refresh(protocol)
         return protocol
 
-    async def _save_part_file(self, payload: DocumentTemplatePartCreate, file: UploadFile) -> str:
+    async def _save_part_file(self, payload: DocumentTemplatePartCreate, file: UploadFile, *, tenant_id: int) -> str:
         suffix = Path(file.filename or "part.tex").suffix or ".tex"
         target_dir = (
             Path(settings.storage_root)
             / "document_template_parts"
-            / f"tenant-{payload.tenant_id}"
+            / f"tenant-{tenant_id}"
             / payload.part_type
             / payload.code
         )
@@ -303,6 +307,25 @@ class DocumentTemplateService:
         slots = config.get("slots", {})
         parts_by_id = {part.id: part for part in self.part_repository.list(db, template.tenant_id)}
 
+        presets = config.get("presets", {})
+
+        # Copy image assets (header/footer images for combined_toc preset)
+        image_paths: dict[str, str] = {}
+        title_assets = config.get("title_assets", {})
+        for asset_key, target_stem in IMAGE_ASSET_TARGETS.items():
+            part_id = title_assets.get(f"{target_stem.replace('_image', '')}_image_part_id")
+            if not part_id:
+                continue
+            part_id = int(part_id) if not isinstance(part_id, int) else part_id
+            if part_id not in parts_by_id:
+                continue
+            part_file = Path(settings.storage_root) / parts_by_id[part_id].storage_path
+            if not part_file.exists():
+                continue
+            target = output_dir / f"{target_stem}{part_file.suffix}"
+            shutil.copy2(part_file, target)
+            image_paths[target_stem] = f"template/{target_stem}{part_file.suffix}"
+
         for slot, relative_path in PART_SLOT_FILES.items():
             content = ""
             part_id = slots.get(slot)
@@ -311,7 +334,7 @@ class DocumentTemplateService:
                 if part_file.exists():
                     content = part_file.read_text(encoding="utf-8")
             if not content:
-                content = self._default_slot_content(slot)
+                content = self._preset_slot_content(slot, presets, config, image_paths)
             target = output_dir / relative_path
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(content, encoding="utf-8")
@@ -333,12 +356,14 @@ class DocumentTemplateService:
             font_files[slot] = target.relative_to(output_dir).as_posix()
 
         options = config.get("options", {})
+        is_combined_toc = presets.get("title_page") == "combined_toc"
+        show_toc = True if is_combined_toc else (presets.get("toc", "standard") != "none" if presets else bool(options.get("show_toc", True)))
         (output_dir / "styles" / "theme.tex").write_text(
-            self._build_theme_tex(theme_config, options, font_files),
+            self._build_theme_tex(theme_config, options, font_files, title_text=config.get("title_text", {})),
             encoding="utf-8",
         )
         (output_dir / "main.tex").write_text(
-            self._build_main_tex(show_toc=bool(options.get("show_toc", True))),
+            self._build_main_tex(show_toc=show_toc),
             encoding="utf-8",
         )
         return str(output_dir)
@@ -359,6 +384,224 @@ class DocumentTemplateService:
             },
             "slots": {},
         }
+
+    def _preset_slot_content(self, slot: str, presets: dict, config: dict | None = None, image_paths: dict | None = None) -> str:
+        is_combined = presets.get("title_page") == "combined_toc"
+        if slot == "header_footer":
+            return self._header_footer_from_presets(
+                presets.get("header", "standard"),
+                presets.get("footer", "standard"),
+            )
+        if slot == "title_page":
+            if is_combined:
+                return self._title_page_combined_toc(config or {}, image_paths or {})
+            return self._title_page_from_preset(presets.get("title_page", "modern"))
+        if slot == "toc":
+            if is_combined:
+                return ""
+            return self._toc_from_preset(presets.get("toc", "standard"))
+        return self._default_slot_content(slot)
+
+    @staticmethod
+    def _escape_latex(text: str) -> str:
+        chars = {"&": r"\&", "%": r"\%", "$": r"\$", "#": r"\#",
+                 "_": r"\_", "{": r"\{", "}": r"\}", "~": r"\textasciitilde{}",
+                 "^": r"\textasciicircum{}", "\\": r"\textbackslash{}"}
+        return "".join(chars.get(c, c) for c in str(text))
+
+    def _title_page_combined_toc(self, config: dict, image_paths: dict) -> str:
+        tt = config.get("title_text", {})
+        location = self._escape_latex(tt.get("location", ""))
+        footer_contact_raw = str(tt.get("footer_contact", "")).strip()
+        toc_spacing = config.get("options", {}).get("toc_spacing", "normal")
+        toc_spacing_tex = {
+            "compact":      "\\setlength{\\cftbeforesecskip}{3pt}\n\\setlength{\\cftbeforesubsecskip}{0pt}\n",
+            "very_compact": "\\setlength{\\cftbeforesecskip}{0pt}\n\\setlength{\\cftbeforesubsecskip}{0pt}\n",
+        }.get(toc_spacing, "")
+        footer_contact_lines = [self._escape_latex(l) for l in footer_contact_raw.splitlines() if l.strip()]
+        footer_contact_tex = r" \\ ".join(footer_contact_lines)
+
+        header_img = image_paths.get("header_image", "")
+        footer_img = image_paths.get("footer_image", "")
+
+        header_img_tex = (
+            f"\\includegraphics[height=3.5cm,keepaspectratio]{{{header_img}}}"
+            if header_img else ""
+        )
+
+        # Both image and contact text placed via tikz overlay at physical page bottom.
+        # \pagestyle{empty} (set below) ensures fancyhdr does NOT render on this page,
+        # so there is no "Seite X" footer competing with the image.
+        tikz_nodes: list[str] = []
+        if footer_img:
+            tikz_nodes.append(
+                "  \\node[anchor=south west, inner sep=0pt] at (current page.south west)\n"
+                f"    {{\\includegraphics[width=\\paperwidth]{{{footer_img}}}}};"
+            )
+        if footer_contact_tex:
+            tikz_nodes.append(
+                "  \\node[anchor=south, inner sep=28pt,\n"
+                "        text width=0.6\\paperwidth, align=center] at (current page.south)\n"
+                f"    {{\\small\\color{{hocxFooterText}} {footer_contact_tex}}};"
+            )
+        tikz_overlay = (
+            "\\begin{tikzpicture}[remember picture, overlay]\n"
+            + "\n".join(tikz_nodes) + "\n"
+            "\\end{tikzpicture}%\n"
+        ) if tikz_nodes else ""
+
+        date_line = (
+            f"\\par\\vspace{{0.4em}}{{\\small {location},\\ \\HocxProtocolDate}}"
+            if location else
+            "\\par\\vspace{0.4em}{\\small \\HocxProtocolDate}"
+        )
+
+        return f"""\\pagestyle{{empty}}\\thispagestyle{{empty}}
+% ── Header row ──────────────────────────────────────────────────────────────
+\\noindent%
+\\begin{{minipage}}[c]{{0.38\\textwidth}}
+  {header_img_tex}
+\\end{{minipage}}%
+\\hfill%
+\\begin{{minipage}}[c]{{0.58\\textwidth}}
+  \\raggedleft
+  {{\\bfseries\\large\\color{{black}} \\HocxProtocolTitle}}\\par
+  {{\\normalsize \\HocxProtocolNumber}}
+  {date_line}
+\\end{{minipage}}
+\\par\\vspace{{1.0em}}
+% ── Table of contents ───────────────────────────────────────────────────────
+\\setlength{{\\cftbeforetoctitleskip}}{{0pt}}
+\\setlength{{\\cftaftertoctitleskip}}{{0.3em}}
+\\setcounter{{tocdepth}}{{2}}
+{toc_spacing_tex}\\begingroup\\hypersetup{{hidelinks}}\\tableofcontents\\endgroup
+\\vfill
+% ── Footer: image pinned to physical bottom + contact text overlay ───────────
+{tikz_overlay}\\thispagestyle{{empty}}\\clearpage
+\\pagestyle{{fancy}}
+"""
+
+    def _header_footer_from_presets(self, header: str, footer: str) -> str:
+        if header == "none" and footer == "none":
+            return "\\pagestyle{empty}\n"
+        lines = ["\\pagestyle{fancy}", "\\fancyhf{}"]
+        if header == "minimal":
+            lines += [
+                "\\fancyhead[R]{\\color{hocxSecondary}\\small \\thepage}",
+            ]
+        elif header == "standard":
+            lines += [
+                "\\fancyhead[L]{\\color{hocxSecondary}\\small\\itshape \\HocxProtocolTitle}",
+                "\\fancyhead[R]{\\color{hocxSecondary}\\small \\HocxProtocolDate}",
+                "\\renewcommand{\\headrulewidth}{0.4pt}",
+            ]
+        elif header == "bar":
+            lines += [
+                "\\fancyhead[L]{\\color{hocxPrimary}\\small\\bfseries \\HocxProtocolTitle}",
+                "\\fancyhead[R]{\\color{hocxPrimary}\\small \\HocxProtocolDate}",
+                "\\renewcommand{\\headrulewidth}{2pt}",
+                "\\renewcommand{\\headrule}{\\hbox to\\headwidth{\\color{hocxPrimary}\\leaders\\hrule height \\headrulewidth\\hfill}}",
+            ]
+        else:
+            lines.append("\\renewcommand{\\headrulewidth}{0pt}")
+
+        if footer == "none":
+            lines.append("\\renewcommand{\\footrulewidth}{0pt}")
+        elif footer == "minimal":
+            lines += [
+                "\\fancyfoot[C]{\\color{hocxSecondary}\\small Seite~\\thepage}",
+                "\\renewcommand{\\footrulewidth}{0pt}",
+            ]
+        elif footer == "standard":
+            lines += [
+                "\\fancyfoot[L]{\\color{hocxSecondary}\\small \\HocxProtocolNumber}",
+                "\\fancyfoot[R]{\\color{hocxSecondary}\\small Seite~\\thepage}",
+                "\\renewcommand{\\footrulewidth}{0.4pt}",
+            ]
+        elif footer == "with_version":
+            lines += [
+                "\\fancyfoot[L]{\\color{hocxSecondary}\\small \\HocxProtocolNumber}",
+                "\\fancyfoot[C]{\\color{hocxSecondary}\\small \\HocxProtocolVersion}",
+                "\\fancyfoot[R]{\\color{hocxSecondary}\\small Seite~\\thepage}",
+                "\\renewcommand{\\footrulewidth}{0.4pt}",
+            ]
+        return "\n".join(lines) + "\n"
+
+    def _title_page_from_preset(self, preset: str) -> str:
+        if preset == "none":
+            return ""
+        if preset == "minimal":
+            return r"""\begin{titlepage}
+\thispagestyle{empty}
+\vspace*{3.5cm}
+\begin{center}
+{\color{hocxPrimary}\fontsize{28}{34}\selectfont\bfseries \HocxProtocolTitle\par}
+\vspace{0.5cm}
+{\color{hocxSecondary}\Large \HocxProtocolNumber\par}
+\vspace{2.5cm}
+{\color{hocxPrimary}\rule{5cm}{1.5pt}\par}
+\vspace{1.5cm}
+{\color{hocxSecondary}\small \HocxProtocolDate\quad\textbullet\quad\HocxProtocolStatus}
+\end{center}
+\vfill
+\end{titlepage}
+"""
+        if preset == "bold":
+            return r"""\begin{titlepage}
+\thispagestyle{empty}
+\pagecolor{hocxPrimary}
+\color{white}
+\vspace*{\fill}
+\begin{center}
+{\fontsize{34}{42}\selectfont\bfseries \HocxProtocolTitle\par}
+\vspace{0.9cm}
+{\Large \HocxProtocolNumber\par}
+\vspace{2.2cm}
+{\color{white}\rule{6cm}{0.6pt}\par}
+\vspace{1.3cm}
+{\normalsize \HocxProtocolDate\par}
+\vspace{0.5cm}
+{\small \HocxProtocolStatus}
+\end{center}
+\vspace*{\fill}
+\end{titlepage}
+\pagecolor{white}
+\color{black}
+"""
+        # modern (default)
+        return r"""\begin{titlepage}
+\thispagestyle{empty}
+\noindent\colorbox{hocxPrimary}{%
+  \parbox{\textwidth}{\vspace{1.4cm}
+  \hspace{1.2cm}{\color{white}\fontsize{26}{32}\selectfont\bfseries \HocxProtocolTitle\par}
+  \vspace{0.45cm}
+  \hspace{1.2cm}{\color{white!70!hocxPrimary}\large \HocxProtocolNumber}
+  \vspace{1.4cm}}}
+\vspace{2.5cm}
+\begin{tabular}{@{\hspace{1.2cm}}p{0.28\textwidth}p{0.58\textwidth}@{}}
+\textbf{Datum} & \HocxProtocolDate \\[0.7em]
+\textbf{Status} & \HocxProtocolStatus \\
+\end{tabular}
+\vfill
+\noindent\hspace{1.2cm}{\color{hocxSecondary}\small \HocxProtocolVersion}
+\vspace{0.8cm}
+\noindent\color{hocxPrimary}\rule{\textwidth}{1pt}
+\vspace{0.15cm}
+\noindent\color{hocxSecondary}\rule{\textwidth}{0.4pt}
+\end{titlepage}
+"""
+
+    def _toc_from_preset(self, preset: str) -> str:
+        if preset == "none":
+            return ""
+        if preset == "compact":
+            return r"""{\small\tableofcontents}
+\clearpage
+"""
+        # standard (default)
+        return r"""\tableofcontents
+\clearpage
+"""
 
     def _default_slot_content(self, slot: str) -> str:
         if slot == "preamble":
@@ -486,14 +729,15 @@ class DocumentTemplateService:
         return templates[0].id if templates else None
 
     def part_type_choices(self) -> list[str]:
-        return [*PART_SLOT_FILES.keys(), *FONT_SLOT_TARGETS.keys()]
+        return [*PART_SLOT_FILES.keys(), *FONT_SLOT_TARGETS.keys(), *IMAGE_ASSET_TARGETS.keys()]
 
     def slot_choices(self) -> list[str]:
-        return [*PART_SLOT_FILES.keys(), *FONT_SLOT_TARGETS.keys()]
+        return [*PART_SLOT_FILES.keys(), *FONT_SLOT_TARGETS.keys(), *IMAGE_ASSET_TARGETS.keys()]
 
-    def _build_theme_tex(self, theme: dict, options: dict, font_files: dict[str, str] | None = None) -> str:
+    def _build_theme_tex(self, theme: dict, options: dict, font_files: dict[str, str] | None = None, title_text: dict | None = None) -> str:
         primary = str(theme.get("primary_color", "A83F2F")).replace("#", "")
         secondary = str(theme.get("secondary_color", "6F675D")).replace("#", "")
+        footer_color = str((title_text or {}).get("footer_color", "444444")).replace("#", "")
         font_size = str(theme.get("font_size", "11pt"))
         font_family = theme.get("font_family", "arial")
         show_toc = bool(options.get("show_toc", True))
@@ -546,22 +790,26 @@ class DocumentTemplateService:
             numbering_setup = "\\setcounter{secnumdepth}{2}\n"
 
         toc_setup = "\\setcounter{tocdepth}{2}\n" if show_toc else "\\setcounter{tocdepth}{-1}\n"
+        hide_metadata_cmd = "\\newcommand{\\HocxHideMetadata}{1}\n" if options.get("hide_metadata", False) else ""
         font_size_value = font_size.replace("pt", "")
         baseline_size = str(int(font_size_value) + 2) if font_size_value.isdigit() else "13"
 
-        return f"""\\usepackage[utf8]{{inputenc}}
+        return f"""\\usepackage{{xcolor}}
+\\usepackage[utf8]{{inputenc}}
 \\usepackage{{graphicx}}
 \\usepackage{{float}}
 \\usepackage[hidelinks]{{hyperref}}
 \\usepackage[a4paper,margin=2.5cm]{{geometry}}
-\\usepackage{{xcolor}}
+\\usepackage{{tikz}}
+\\usetikzlibrary{{calc}}
+\\usepackage{{tocloft}}
 \\definecolor{{hocxPrimary}}{{HTML}}{{{primary}}}
 \\definecolor{{hocxSecondary}}{{HTML}}{{{secondary}}}
+\\definecolor{{hocxFooterText}}{{HTML}}{{{footer_color}}}
 \\makeatletter
 \\renewcommand\\section{{\\@startsection{{section}}{{1}}{{\\z@}}{{-3.5ex \\@plus -1ex \\@minus -.2ex}}{{2.3ex \\@plus.2ex}}{{\\normalfont\\Large\\bfseries\\color{{hocxPrimary}}}}}}
 \\renewcommand\\subsection{{\\@startsection{{subsection}}{{2}}{{\\z@}}{{-3.25ex\\@plus -1ex \\@minus -.2ex}}{{1.5ex \\@plus .2ex}}{{\\normalfont\\large\\bfseries\\color{{hocxSecondary}}}}}}
 \\makeatother
 \\color{{black}}
-\\AtBeginDocument{{\\fontsize{{{font_size_value}}}{{{baseline_size}}}\\selectfont}}
-{font_setup}{numbering_setup}{toc_setup}
-"""
+\\AtBeginDocument{{\\fontsize{{{font_size_value}}}{{{baseline_size}}}\\selectfont\\renewcommand{{\\contentsname}}{{Inhaltsverzeichnis}}}}
+{font_setup}{numbering_setup}{toc_setup}{hide_metadata_cmd}"""

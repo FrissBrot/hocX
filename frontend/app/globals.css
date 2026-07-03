@@ -726,6 +726,25 @@ button:disabled {
   min-width: 0;
 }
 
+.input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border-strong, var(--border));
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.95rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
+}
+.input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.input::placeholder { color: var(--muted); }
+
 .button-danger {
   background: linear-gradient(135deg, color-mix(in srgb, var(--danger) 92%, black 8%), var(--danger));
 }
@@ -1899,6 +1918,79 @@ input[type="checkbox"] {
 .block-type-card-active {
   border-color: color-mix(in srgb, var(--accent) 34%, transparent 66%);
   background: color-mix(in srgb, var(--accent) 10%, transparent 90%);
+}
+
+/* ── Preset card preview ───────────────────────── */
+
+.preset-card-preview {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 8px 0 4px;
+  min-height: 100px;
+}
+
+/* ── Color picker field ────────────────────────── */
+
+.color-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.color-field-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.color-swatch-label {
+  display: block;
+  cursor: pointer;
+  position: relative;
+}
+
+.color-swatch {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  border: 2px solid var(--border);
+  transition: transform 0.1s;
+}
+
+.color-swatch-label:hover .color-swatch {
+  transform: scale(1.06);
+}
+
+.color-input-hidden {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+}
+
+.color-hex-input {
+  width: 90px !important;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.9rem;
+  letter-spacing: 0.05em;
+}
+
+/* ── Font family cards ─────────────────────────── */
+
+.font-family-card {
+  align-items: center;
+  text-align: center;
+}
+
+.font-sample {
+  font-size: 2rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text);
+  padding: 8px 0 4px;
 }
 
 .block-type-preview {
@@ -5394,6 +5486,21 @@ input[type="checkbox"] {
   overflow: hidden;
 }
 
+.fine-list-block-pending {
+  border-color: color-mix(in srgb, var(--warning, #f59e0b) 40%, var(--border));
+  background: color-mix(in srgb, var(--warning, #f59e0b) 3%, transparent);
+}
+
+.fine-pending-section-header {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--warning, #f59e0b);
+  padding: 8px 14px 4px;
+  border-bottom: 1px solid var(--border);
+}
+
 .fine-list-row {
   display: grid;
   grid-template-columns: 1fr auto auto auto auto auto;
@@ -5412,9 +5519,59 @@ input[type="checkbox"] {
 .fine-type-label { font-size: 0.8rem; color: var(--muted); }
 .fine-amount { font-variant-numeric: tabular-nums; font-weight: 600; }
 .fine-status { font-size: 0.78rem; color: var(--muted); }
-.fine-collect-btn { color: var(--success, #22c55e) !important; }
-.fine-delete-btn { }
 .fine-badge { font-size: 0.85em; cursor: help; }
+.fine-pending-origin { font-size: 0.75rem; color: var(--muted); }
+
+.fine-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.fine-action-btn:hover { background: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
+.fine-collect-btn { color: var(--success, #22c55e); border-color: color-mix(in srgb, var(--success, #22c55e) 30%, transparent); }
+.fine-collect-btn:hover { background: color-mix(in srgb, var(--success, #22c55e) 12%, var(--panel)); }
+.fine-delete-btn { color: var(--danger, #ef4444); border-color: color-mix(in srgb, var(--danger, #ef4444) 30%, transparent); }
+.fine-delete-btn:hover { background: color-mix(in srgb, var(--danger, #ef4444) 12%, var(--panel)); }
+.fine-comment-btn { color: var(--muted); }
+.fine-comment-missing { color: var(--warning, #f59e0b); border-color: color-mix(in srgb, var(--warning, #f59e0b) 40%, transparent); animation: fine-comment-pulse 1.8s infinite; }
+@keyframes fine-comment-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.fine-deleted-badge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--danger, #ef4444);
+  background: color-mix(in srgb, var(--danger, #ef4444) 10%, transparent);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.fine-delete-comment {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.fine-close-error {
+  font-size: 0.8rem;
+  color: var(--danger, #ef4444);
+  max-width: 300px;
+  text-align: right;
+}
 
 /* ── Fines page (standalone /fines) ────────────────────────────── */
 .fines-summary-bar {
@@ -5586,4 +5743,97 @@ input[type="checkbox"] {
   height: 1px;
   background: var(--border);
   margin: 3px 0;
+}
+
+/* ── Editor toast ───────────────────────────────────────────────── */
+/* ── Global toast stack ─────────────────────────────────────────── */
+.app-toast-stack {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(480px, calc(100vw - 40px));
+  pointer-events: none;
+}
+.app-toast {
+  display: flex;
+  align-items: center;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 16px 48px rgba(12, 23, 44, 0.24), 0 4px 12px rgba(12, 23, 44, 0.12);
+  pointer-events: all;
+  animation: toast-in 0.28s cubic-bezier(0.25, 1.15, 0.5, 1) both;
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+/* Left accent stripe */
+.app-toast::before {
+  content: "";
+  display: block;
+  width: 5px;
+  flex-shrink: 0;
+  align-self: stretch;
+}
+.app-toast-error   { background: color-mix(in srgb, var(--danger)  7%, var(--panel-solid)); border: 1px solid color-mix(in srgb, var(--danger)  22%, transparent); }
+.app-toast-success { background: color-mix(in srgb, var(--success)  7%, var(--panel-solid)); border: 1px solid color-mix(in srgb, var(--success) 22%, transparent); }
+.app-toast-info    { background: color-mix(in srgb, var(--accent)   7%, var(--panel-solid)); border: 1px solid color-mix(in srgb, var(--accent)  22%, transparent); }
+.app-toast-error::before   { background: var(--danger); }
+.app-toast-success::before { background: var(--success); }
+.app-toast-info::before    { background: var(--accent); }
+.app-toast-message {
+  flex: 1;
+  padding: 15px 18px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.app-toast-close {
+  flex-shrink: 0;
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin: 0 12px 0 0;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.7rem;
+  box-shadow: none;
+  transition: background 0.15s, color 0.15s;
+}
+.app-toast-close:hover {
+  background: color-mix(in srgb, var(--muted) 14%, transparent);
+  color: var(--text);
+  transform: none;
+  box-shadow: none;
+}
+.app-toast-navigable {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+}
+.app-toast-navigable:hover {
+  text-decoration-style: solid;
+}
+@keyframes fine-row-flash {
+  0%   { background: color-mix(in srgb, var(--warning, #f59e0b) 28%, transparent); }
+  60%  { background: color-mix(in srgb, var(--warning, #f59e0b) 18%, transparent); }
+  100% { background: transparent; }
+}
+.fine-row-highlight {
+  animation: fine-row-flash 1.8s ease-out forwards;
+  border-radius: 8px;
+  outline: 2px solid color-mix(in srgb, var(--warning, #f59e0b) 60%, transparent);
+  outline-offset: 2px;
 }

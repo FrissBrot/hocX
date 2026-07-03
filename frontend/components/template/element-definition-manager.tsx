@@ -5,8 +5,8 @@ import { FormEvent, Fragment, ReactNode, useEffect, useMemo, useState } from "re
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
-import { StatusBanner } from "@/components/ui/status-banner";
 import { TagInput } from "@/components/ui/tag-input";
+import { useToast } from "@/contexts/toast-context";
 import { useTagConfig } from "@/lib/hooks/use-tag-config";
 import { browserApiFetch } from "@/lib/api/client";
 import { formatDateRange } from "@/lib/utils/format";
@@ -750,6 +750,7 @@ export function ElementDefinitionManager({
   availableAccounts = [],
 }: ElementDefinitionManagerProps) {
   const { tagConfig, updateTagColor, renameTag } = useTagConfig();
+  const showToast = useToast();
   const [definitions, setDefinitions] = useState(initialDefinitions);
   const [selectedDefinitionId, setSelectedDefinitionId] = useState<number | null>(initialDefinitions[0]?.id ?? null);
   const [definitionForm, setDefinitionForm] = useState<DefinitionFormState>(
@@ -776,8 +777,6 @@ export function ElementDefinitionManager({
   const [selectedMatrixRowId, setSelectedMatrixRowId] = useState<string | null>(null);
   const [selectedMatrixColumnId, setSelectedMatrixColumnId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("Bereit");
-  const [statusTone, setStatusTone] = useState<"neutral" | "success" | "error">("neutral");
   const [draggedBlockId, setDraggedBlockId] = useState<number | null>(null);
   const [matrixPreviewColumns, setMatrixPreviewColumns] = useState<Array<{ id: string; title: string }> | null>(null);
   const [matrixPreviewLoading, setMatrixPreviewLoading] = useState(false);
@@ -1033,8 +1032,6 @@ export function ElementDefinitionManager({
 
   async function createDefinition(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setStatus("Element wird angelegt...");
-    setStatusTone("neutral");
     try {
       const created = await browserApiFetch<ElementDefinition>("/api/element-definitions", {
         method: "POST",
@@ -1050,19 +1047,15 @@ export function ElementDefinitionManager({
       setCreateDefinitionForm(initialDefinitionForm);
       setShowCreateDefinition(false);
       selectDefinition(created);
-      setStatus(`Element #${created.id} wurde angelegt`);
-      setStatusTone("success");
+      showToast(`Element #${created.id} wurde angelegt`, "success");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Element konnte nicht angelegt werden");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Element konnte nicht angelegt werden", "error");
     }
   }
 
   async function saveDefinition(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedDefinition) return;
-    setStatus(`Element #${selectedDefinition.id} wird gespeichert...`);
-    setStatusTone("neutral");
     try {
       const updated = await browserApiFetch<ElementDefinition>(`/api/element-definitions/${selectedDefinition.id}`, {
         method: "PATCH",
@@ -1074,17 +1067,13 @@ export function ElementDefinitionManager({
         })
       });
       replaceDefinition(updated);
-      setStatus(`Element #${updated.id} wurde gespeichert`);
-      setStatusTone("success");
+      showToast(`Element #${updated.id} wurde gespeichert`, "success");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Element konnte nicht gespeichert werden");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Element konnte nicht gespeichert werden", "error");
     }
   }
 
   async function deleteDefinition(definitionId: number) {
-    setStatus(`Element #${definitionId} wird gelöscht...`);
-    setStatusTone("neutral");
     try {
       await browserApiFetch(`/api/element-definitions/${definitionId}`, { method: "DELETE" });
       const nextDefinitions = definitions.filter((definition) => definition.id !== definitionId);
@@ -1097,11 +1086,9 @@ export function ElementDefinitionManager({
         setDefinitionForm(initialDefinitionForm);
         setBlockForm(initialBlockForm);
       }
-      setStatus(`Element #${definitionId} wurde gelöscht`);
-      setStatusTone("success");
+      showToast(`Element #${definitionId} wurde gelöscht`, "success");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Element konnte nicht gelöscht werden");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Element konnte nicht gelöscht werden", "error");
     }
   }
 
@@ -1115,16 +1102,14 @@ export function ElementDefinitionManager({
         })
       });
       replaceDefinition(updated);
-      setStatus(message);
-      setStatusTone("success");
+      showToast(message, "success");
       const selected = updated.blocks.find((block) => block.id === selectedBlockId) ?? updated.blocks[0] ?? null;
       setSelectedBlockId(selected?.id ?? null);
       setBlockForm(selected ? blockFormFromBlock(selected) : { ...initialBlockForm, id: nextBlockId(updated.blocks), sort_index: nextSortIndex(updated.blocks) });
       setCreateBlockForm({ ...initialBlockForm, id: nextBlockId(updated.blocks), sort_index: nextSortIndex(updated.blocks) });
       return updated;
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Block konnte nicht aktualisiert werden");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Block konnte nicht aktualisiert werden", "error");
       return null;
     }
   }
@@ -1133,8 +1118,6 @@ export function ElementDefinitionManager({
     if (!selectedDefinition || !selectedBlock) {
       return false;
     }
-    setStatus("Block wird gespeichert...");
-    setStatusTone("neutral");
     const updatedBlock = blockPayload(blockForm);
     const nextBlocks = resequenceBlocks(
       selectedDefinition.blocks
@@ -1158,8 +1141,6 @@ export function ElementDefinitionManager({
   async function createBlock(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedDefinition) return;
-    setStatus("Block wird zum Element hinzugefügt...");
-    setStatusTone("neutral");
     const nextBlocks = resequenceBlocks(
       [...selectedDefinition.blocks, blockPayload({ ...createBlockForm, sort_index: nextSortIndex(selectedDefinition.blocks) })].sort(
         (left, right) => left.sort_index - right.sort_index
@@ -1179,16 +1160,12 @@ export function ElementDefinitionManager({
 
   async function deleteBlock(blockId: number) {
     if (!selectedDefinition) return;
-    setStatus("Block wird gelöscht...");
-    setStatusTone("neutral");
     const nextBlocks = resequenceBlocks(selectedDefinition.blocks.filter((block) => block.id !== blockId));
     await saveBlocks(nextBlocks, "Block wurde gelöscht");
   }
 
   async function reorderBlocks(sourceId: number, targetId: number) {
     if (!selectedDefinition || sourceId === targetId) return;
-    setStatus("Block-Reihenfolge wird gespeichert...");
-    setStatusTone("neutral");
     const ordered = [...selectedDefinition.blocks].sort((left, right) => left.sort_index - right.sort_index);
     const sourceIndex = ordered.findIndex((block) => block.id === sourceId);
     const targetIndex = ordered.findIndex((block) => block.id === targetId);
@@ -1432,8 +1409,6 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
           <div className="info-note">Fixe Inhalte legst du hier am besten als nicht editierbare Blöcke an. Im Protokoll erscheinen sie später automatisch schreibgeschützt.</div>
         </div>
       </article>
-
-      <StatusBanner tone={statusTone} message={status} />
 
       <DataTable columns={["Element", "Blöcke", "Status", "Aktionen"]}>
         {filteredDefinitions.map((definition) => (

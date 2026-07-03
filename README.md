@@ -147,4 +147,4 @@ Traefik setup files:
 
 ACME / Let's Encrypt contact:
 
-- `your@email.com`
+- Set via `ACME_EMAIL` in `.env`

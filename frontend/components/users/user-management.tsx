@@ -4,8 +4,8 @@ import { FormEvent, useMemo, useState } from "react";
 
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
-import { StatusBanner } from "@/components/ui/status-banner";
 import { browserApiFetch } from "@/lib/api/client";
+import { useToast } from "@/contexts/toast-context";
 import { SessionInfo, TenantSummary, UserSummary } from "@/types/api";
 
 type Props = {
@@ -71,9 +71,8 @@ function emptyUserForm(manageableTenants: TenantSummary[]): UserFormState {
 }
 
 export function UserManagement({ initialUsers, manageableTenants, session }: Props) {
+  const showToast = useToast();
   const [users, setUsers] = useState(initialUsers);
-  const [status, setStatus] = useState("Bereit");
-  const [statusTone, setStatusTone] = useState<"neutral" | "success" | "error">("neutral");
   const [userTab, setUserTab] = useState<"active" | "nologin">("active");
   const [search, setSearch] = useState("");
   const [userModalOpen, setUserModalOpen] = useState(false);
@@ -166,8 +165,6 @@ export function UserManagement({ initialUsers, manageableTenants, session }: Pro
   async function submitUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError(null);
-    setStatus(userForm.id ? "Benutzer wird gespeichert..." : "Benutzer wird erstellt...");
-    setStatusTone("neutral");
 
     try {
       const payload = {
@@ -201,27 +198,21 @@ export function UserManagement({ initialUsers, manageableTenants, session }: Pro
         userForm.id ? current.map((user) => (user.id === updated.id ? updated : user)) : [updated, ...current]
       );
       setUserModalOpen(false);
-      setStatus(userForm.id ? "Benutzer gespeichert" : "Benutzer erstellt");
-      setStatusTone("success");
+      showToast(userForm.id ? "Benutzer gespeichert" : "Benutzer erstellt", "success");
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Benutzer konnte nicht gespeichert werden";
       setFormError(msg);
-      setStatus(msg);
-      setStatusTone("error");
+      showToast(msg, "error");
     }
   }
 
   async function deleteUser(userId: number) {
-    setStatus("Benutzer wird gelöscht...");
-    setStatusTone("neutral");
     try {
       await browserApiFetch(`/api/users/${userId}`, { method: "DELETE" });
       setUsers((current) => current.filter((user) => user.id !== userId));
-      setStatus("Benutzer gelöscht");
-      setStatusTone("success");
+      showToast("Benutzer gelöscht", "success");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Benutzer konnte nicht gelöscht werden");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Benutzer konnte nicht gelöscht werden", "error");
     }
   }
 
@@ -229,8 +220,6 @@ export function UserManagement({ initialUsers, manageableTenants, session }: Pro
     if (!mergeSourceUserId || !mergeTargetUserId) {
       return;
     }
-    setStatus("Benutzer werden zusammengeführt...");
-    setStatusTone("neutral");
     try {
       const merged = await browserApiFetch<UserSummary>("/api/users/merge", {
         method: "POST",
@@ -245,18 +234,14 @@ export function UserManagement({ initialUsers, manageableTenants, session }: Pro
           .map((user) => (user.id === merged.id ? merged : user))
       );
       setMergeModalOpen(false);
-      setStatus("Benutzer zusammengeführt");
-      setStatusTone("success");
+      showToast("Benutzer zusammengeführt", "success");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Benutzer konnten nicht zusammengeführt werden");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Benutzer konnten nicht zusammengeführt werden", "error");
     }
   }
 
   return (
     <div className="grid">
-      <StatusBanner tone={statusTone} message={status} />
-
       <DataToolbar
         title="Benutzer"
         description="Systemweite Konten mit genau den Mandantenrollen, die du verwalten darfst."

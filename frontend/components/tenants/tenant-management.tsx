@@ -4,8 +4,8 @@ import { ChangeEvent, FormEvent, useMemo, useState } from "react";
 
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
-import { StatusBanner } from "@/components/ui/status-banner";
 import { browserApiFetch } from "@/lib/api/client";
+import { useToast } from "@/contexts/toast-context";
 import { OidcConfigRead, OidcConfigWrite, TenantSummary } from "@/types/api";
 
 type Props = {
@@ -29,9 +29,8 @@ const defaultOidcForm: OidcConfigWrite = {
 };
 
 export function TenantManagement({ initialTenants, canCreateTenant }: Props) {
+  const showToast = useToast();
   const [tenants, setTenants] = useState(initialTenants);
-  const [status, setStatus] = useState("Bereit");
-  const [statusTone, setStatusTone] = useState<"neutral" | "success" | "error">("neutral");
   const [tenantModalOpen, setTenantModalOpen] = useState(false);
   const [tenantForm, setTenantForm] = useState<TenantFormState>({ name: "", profileImage: null });
   const [search, setSearch] = useState("");
@@ -41,8 +40,6 @@ export function TenantManagement({ initialTenants, canCreateTenant }: Props) {
   const [oidcTenantName, setOidcTenantName] = useState("");
   const [oidcForm, setOidcForm] = useState<OidcConfigWrite>(defaultOidcForm);
   const [oidcLoading, setOidcLoading] = useState(false);
-  const [oidcStatus, setOidcStatus] = useState("");
-  const [oidcStatusTone, setOidcStatusTone] = useState<"neutral" | "success" | "error">("neutral");
 
   const filteredTenants = useMemo(
     () =>
@@ -66,8 +63,6 @@ export function TenantManagement({ initialTenants, canCreateTenant }: Props) {
     setOidcTenantId(tenant.id);
     setOidcTenantName(tenant.name);
     setOidcForm(defaultOidcForm);
-    setOidcStatus("");
-    setOidcStatusTone("neutral");
     setOidcModalOpen(true);
     try {
       const cfg = await browserApiFetch<OidcConfigRead>(`/api/tenants/${tenant.id}/oidc-config`);
@@ -86,9 +81,6 @@ export function TenantManagement({ initialTenants, canCreateTenant }: Props) {
 
   async function submitTenant(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setStatus(tenantForm.id ? "Mandant wird gespeichert..." : "Mandant wird erstellt...");
-    setStatusTone("neutral");
-
     try {
       let updated: TenantSummary;
       if (tenantForm.id) {
@@ -111,11 +103,9 @@ export function TenantManagement({ initialTenants, canCreateTenant }: Props) {
       }
 
       setTenantModalOpen(false);
-      setStatus(tenantForm.id ? "Mandant gespeichert" : "Mandant erstellt");
-      setStatusTone("success");
+      showToast(tenantForm.id ? "Mandant gespeichert" : "Mandant erstellt", "success");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Mandant konnte nicht gespeichert werden");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Mandant konnte nicht gespeichert werden", "error");
     }
   }
 
@@ -123,20 +113,16 @@ export function TenantManagement({ initialTenants, canCreateTenant }: Props) {
     event.preventDefault();
     if (!oidcTenantId) return;
     setOidcLoading(true);
-    setOidcStatus("Wird gespeichert…");
-    setOidcStatusTone("neutral");
     try {
       await browserApiFetch<OidcConfigRead>(`/api/tenants/${oidcTenantId}/oidc-config`, {
         method: "PUT",
         body: JSON.stringify(oidcForm),
       });
-      setOidcStatus("OIDC-Konfiguration gespeichert");
-      setOidcStatusTone("success");
+      showToast("OIDC-Konfiguration gespeichert", "success");
       // Clear secret field after successful save
       setOidcForm((f) => ({ ...f, client_secret: "" }));
     } catch (error) {
-      setOidcStatus(error instanceof Error ? error.message : "Fehler beim Speichern");
-      setOidcStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Fehler beim Speichern", "error");
     } finally {
       setOidcLoading(false);
     }
@@ -144,8 +130,6 @@ export function TenantManagement({ initialTenants, canCreateTenant }: Props) {
 
   return (
     <div className="grid">
-      <StatusBanner tone={statusTone} message={status} />
-
       <DataToolbar
         title="Mandanten"
         description="Nur Mandanten, in denen du Admin bist, können hier bearbeitet werden."
@@ -232,8 +216,6 @@ export function TenantManagement({ initialTenants, canCreateTenant }: Props) {
         description="OpenID Connect Provider für diesen Mandanten konfigurieren. Admins verwenden immer die lokale Anmeldung."
       >
         <form className="grid" onSubmit={submitOidc}>
-          {oidcStatus && <StatusBanner tone={oidcStatusTone} message={oidcStatus} />}
-
           <div className="two-col">
             <label className="field-stack">
               <span className="field-label">OIDC aktiviert</span>

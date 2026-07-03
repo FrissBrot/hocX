@@ -634,6 +634,16 @@ class FinanceTransaction(Base, TimestampMixin):
     protocol_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="SET NULL"))
 
 
+class UserProtocolScroll(Base):
+    __tablename__ = "user_protocol_scroll"
+    __table_args__ = (PrimaryKeyConstraint("user_id", "protocol_id"),)
+
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False)
+    protocol_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="CASCADE"), nullable=False)
+    last_element_id: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+
+
 class AttendanceFine(Base, TimestampMixin):
     __tablename__ = "attendance_fine"
     __table_args__ = (
@@ -652,3 +662,5 @@ class AttendanceFine(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'pending'"))
     collected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     collected_transaction_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("finance_transaction.id", ondelete="SET NULL"))
+    closed_in_protocol_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="SET NULL"))
+    delete_comment: Mapped[str | None] = mapped_column(Text, nullable=True)

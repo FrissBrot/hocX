@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -307,11 +308,11 @@ app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
+    allow_origins=[o for o in [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
-        "https://your-domain.example.com",
-    ],
+        f"https://{os.getenv('TRAEFIK_DOMAIN')}" if os.getenv('TRAEFIK_DOMAIN') else None,
+    ] if o],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Cookie", "Authorization"],

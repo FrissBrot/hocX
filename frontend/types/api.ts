@@ -379,9 +379,11 @@ export type AttendanceFine = {
   fine_type: "late" | "absent";
   amount: number;
   account_id: number;
-  status: "pending" | "collected";
+  status: "pending" | "collected" | "deleted";
   collected_at: string | null;
   collected_transaction_id: number | null;
+  closed_in_protocol_id: number | null;
+  delete_comment: string | null;
   created_at: string;
 };
 

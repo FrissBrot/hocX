@@ -1,21 +1,26 @@
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
 from app.core.db import get_db
 from app.schemas.protocol import ProtocolCreateFromTemplate, ProtocolRead, ProtocolTodoRead, ProtocolUpdate, QuickTodoCreate, TodoListItem
+from app.repositories.fines_repository import FinesRepository
 from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
 from app.services.protocol_service import ProtocolService
 from app.services.protocol_todo_service import ProtocolTodoService
+from app.models.entities import UserProtocolScroll
 
 router = APIRouter()
 service = ProtocolService()
 todo_service = ProtocolTodoService()
 access_service = AccessService()
 audit = AuditService()
+fines_repo = FinesRepository()
 
 
 @router.get("/protocols", response_model=list[ProtocolRead])
@@ -83,6 +88,12 @@ def patch_protocol(
     existing = service.get_protocol(db, protocol_id)
     if existing is None or existing.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Protocol not found")
+    if payload.status == "abgeschlossen" and existing.status != "abgeschlossen":
+        if fines_repo.has_uncommented_deleted_fines(db, protocol_id):
+            raise HTTPException(
+                status_code=422,
+                detail="Gelöschte Bussen ohne Kommentar: Alle gelöschten Bussen müssen einen Kommentar haben, bevor das Protokoll abgeschlossen werden kann.",
+            )
     try:
         protocol = service.update_protocol(db, protocol_id, payload)
     except SQLAlchemyError as exc:
@@ -195,3 +206,38 @@ def delete_protocol(
     if not deleted:
         raise HTTPException(status_code=404, detail="Protocol not found")
     return {"message": "Protocol deleted"}
+
+
+class ElementPositionPayload(BaseModel):
+    element_id: int
+
+
+@router.get("/protocols/{protocol_id}/scroll-position")
+def get_element_position(
+    protocol_id: int,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_reader(user)
+    row = db.get(UserProtocolScroll, (user.user_id, protocol_id))
+    return {"element_id": row.last_element_id if row else None}
+
+
+@router.put("/protocols/{protocol_id}/scroll-position", status_code=status.HTTP_204_NO_CONTENT)
+def save_element_position(
+    protocol_id: int,
+    payload: ElementPositionPayload,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_reader(user)
+    stmt = (
+        pg_insert(UserProtocolScroll)
+        .values(user_id=user.user_id, protocol_id=protocol_id, last_element_id=payload.element_id)
+        .on_conflict_do_update(
+            index_elements=["user_id", "protocol_id"],
+            set_={"last_element_id": payload.element_id, "updated_at": __import__("sqlalchemy").func.now()},
+        )
+    )
+    db.execute(stmt)
+    db.commit()

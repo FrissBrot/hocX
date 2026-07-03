@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.entities import AttendanceFine, FinanceAccount, FinanceTransaction, Participant, Protocol
@@ -36,6 +36,34 @@ class FinesRepository:
             .join(FinanceAccount, FinanceAccount.id == AttendanceFine.account_id)
             .where(Protocol.tenant_id == tenant_id, AttendanceFine.participant_id == participant_id)
             .order_by(AttendanceFine.created_at.desc())
+        ).all()
+        return [self._to_list_item(row) for row in rows]
+
+    def list_pending_fines_for_protocol(self, db: Session, protocol_id: int) -> list[AttendanceFineListItem]:
+        """Fines from other protocols relevant to this protocol:
+        - Still-pending fines from earlier protocols
+        - Fines from any other protocol that were collected or deleted here (closed_in_protocol_id)
+        """
+        current = db.get(Protocol, protocol_id)
+        if not current:
+            return []
+        earlier_condition = or_(
+            Protocol.protocol_date < current.protocol_date,
+            and_(Protocol.protocol_date == current.protocol_date, Protocol.id < protocol_id),
+        )
+        rows = db.execute(
+            select(AttendanceFine, Protocol.protocol_number, Protocol.protocol_date, FinanceAccount.currency_label)
+            .join(Protocol, Protocol.id == AttendanceFine.protocol_id)
+            .join(FinanceAccount, FinanceAccount.id == AttendanceFine.account_id)
+            .where(
+                Protocol.tenant_id == current.tenant_id,
+                AttendanceFine.protocol_id != protocol_id,
+                or_(
+                    and_(AttendanceFine.status == "pending", earlier_condition),
+                    AttendanceFine.closed_in_protocol_id == protocol_id,
+                ),
+            )
+            .order_by(Protocol.protocol_date.asc(), AttendanceFine.created_at.asc())
         ).all()
         return [self._to_list_item(row) for row in rows]
 
@@ -74,17 +102,54 @@ class FinesRepository:
         db.refresh(fine)
         return self._to_read(fine)
 
-    def delete_fine(self, db: Session, fine_id: int) -> bool:
+    def delete_fine(self, db: Session, fine_id: int, tenant_id: int, delete_comment: str | None = None, closing_protocol_id: int | None = None) -> AttendanceFineRead | None:
+        """Soft-delete: marks fine as 'deleted' with optional comment."""
         fine = db.get(AttendanceFine, fine_id)
         if fine is None or fine.status == "collected":
-            return False
-        db.delete(fine)
+            return None
+        protocol = db.get(Protocol, fine.protocol_id)
+        if protocol is None or protocol.tenant_id != tenant_id:
+            return None
+        fine.status = "deleted"
+        fine.delete_comment = delete_comment or None
+        if closing_protocol_id and closing_protocol_id != fine.protocol_id:
+            fine.closed_in_protocol_id = closing_protocol_id
         db.commit()
-        return True
+        db.refresh(fine)
+        return self._to_read(fine)
 
-    def collect_fine(self, db: Session, fine_id: int, tenant_id: int) -> AttendanceFineRead | None:
+    def set_delete_comment(self, db: Session, fine_id: int, tenant_id: int, comment: str) -> AttendanceFineRead | None:
         fine = db.get(AttendanceFine, fine_id)
-        if fine is None or fine.status == "collected":
+        if fine is None or fine.status != "deleted":
+            return None
+        protocol = db.get(Protocol, fine.protocol_id)
+        if protocol is None or protocol.tenant_id != tenant_id:
+            return None
+        fine.delete_comment = comment
+        db.commit()
+        db.refresh(fine)
+        return self._to_read(fine)
+
+    def _comment_has_content(self, comment: str | None) -> bool:
+        return bool(comment and any(c.isalnum() for c in comment))
+
+    def has_uncommented_deleted_fines(self, db: Session, protocol_id: int) -> bool:
+        """Returns True if any deleted fine associated with this protocol lacks a real comment."""
+        fines = db.scalars(
+            select(AttendanceFine)
+            .where(
+                or_(
+                    AttendanceFine.protocol_id == protocol_id,
+                    AttendanceFine.closed_in_protocol_id == protocol_id,
+                ),
+                AttendanceFine.status == "deleted",
+            )
+        ).all()
+        return any(not self._comment_has_content(f.delete_comment) for f in fines)
+
+    def collect_fine(self, db: Session, fine_id: int, tenant_id: int, collecting_protocol_id: int | None = None) -> AttendanceFineRead | None:
+        fine = db.get(AttendanceFine, fine_id)
+        if fine is None or fine.status != "pending":
             return None
         protocol = db.get(Protocol, fine.protocol_id)
         if protocol is None or protocol.tenant_id != tenant_id:
@@ -104,6 +169,8 @@ class FinesRepository:
         fine.status = "collected"
         fine.collected_at = now
         fine.collected_transaction_id = tx.id
+        if collecting_protocol_id and collecting_protocol_id != fine.protocol_id:
+            fine.closed_in_protocol_id = collecting_protocol_id
         db.commit()
         db.refresh(fine)
         return self._to_read(fine)
@@ -120,6 +187,8 @@ class FinesRepository:
             status=fine.status,
             collected_at=fine.collected_at,
             collected_transaction_id=fine.collected_transaction_id,
+            closed_in_protocol_id=fine.closed_in_protocol_id,
+            delete_comment=fine.delete_comment,
             created_at=fine.created_at,
         )
 
@@ -136,6 +205,8 @@ class FinesRepository:
             status=fine.status,
             collected_at=fine.collected_at,
             collected_transaction_id=fine.collected_transaction_id,
+            closed_in_protocol_id=fine.closed_in_protocol_id,
+            delete_comment=fine.delete_comment,
             created_at=fine.created_at,
             protocol_number=protocol_number,
             protocol_date=str(protocol_date) if protocol_date else None,

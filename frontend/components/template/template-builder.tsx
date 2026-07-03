@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
-import { StatusBanner } from "@/components/ui/status-banner";
 import { browserApiFetch } from "@/lib/api/client";
+import { useToast } from "@/contexts/toast-context";
 import { formatDateRange } from "@/lib/utils/format";
 import {
+  DocumentTemplate,
   ElementDefinition,
   EventSummary,
   ParticipantSummary,
@@ -30,6 +31,7 @@ type TemplateEditorProps = {
   availableParticipants: ParticipantSummary[];
   availableLists: StructuredListDefinition[];
   initialAssignedParticipants: ParticipantSummary[];
+  availableDocumentTemplates: DocumentTemplate[];
 };
 
 type TemplateCreateState = {
@@ -303,11 +305,10 @@ function ResponsibilityLockIcon({ locked }: { locked: boolean }) {
 
 export function TemplateBuilder({ initialTemplates }: TemplateBuilderProps) {
   const router = useRouter();
+  const showToast = useToast();
   const [templates, setTemplates] = useState(initialTemplates);
   const [form, setForm] = useState(initialTemplateCreate);
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [status, setStatus] = useState("Ready");
-  const [statusTone, setStatusTone] = useState<"neutral" | "success" | "error">("neutral");
   const [search, setSearch] = useState("");
 
   const filteredTemplates = useMemo(
@@ -321,8 +322,6 @@ export function TemplateBuilder({ initialTemplates }: TemplateBuilderProps) {
 
   async function createTemplate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setStatus("Creating template...");
-    setStatusTone("neutral");
 
     try {
       const created = await browserApiFetch<TemplateSummary>("/api/templates", {
@@ -343,25 +342,19 @@ export function TemplateBuilder({ initialTemplates }: TemplateBuilderProps) {
       setTemplates((current) => [created, ...current]);
       setForm(initialTemplateCreate);
       setShowCreateForm(false);
-      setStatus(`Created template #${created.id}`);
-      setStatusTone("success");
+      showToast(`Created template #${created.id}`, "success");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Template creation failed");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Template creation failed", "error");
     }
   }
 
   async function deleteTemplate(templateId: number) {
-    setStatus(`Deleting template #${templateId}...`);
-    setStatusTone("neutral");
     try {
       await browserApiFetch(`/api/templates/${templateId}`, { method: "DELETE" });
       setTemplates((current) => current.filter((template) => template.id !== templateId));
-      setStatus(`Deleted template #${templateId}`);
-      setStatusTone("success");
+      showToast(`Deleted template #${templateId}`, "success");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Template deletion failed");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Template deletion failed", "error");
     }
   }
 
@@ -447,8 +440,6 @@ export function TemplateBuilder({ initialTemplates }: TemplateBuilderProps) {
         </div>
       </article>
 
-      <StatusBanner tone={statusTone} message={status} />
-
       <DataTable columns={["Template", "Description", "Version", "Actions"]}>
         {filteredTemplates.map((template) => (
           <tr key={template.id} className="table-row-clickable" onClick={() => router.push(`/templates/${template.id}`)}>
@@ -481,8 +472,10 @@ export function TemplateEditor({
   availableParticipants,
   availableLists,
   initialAssignedParticipants,
+  availableDocumentTemplates,
 }: TemplateEditorProps) {
   const router = useRouter();
+  const showToast = useToast();
   const [template, setTemplate] = useState(initialTemplate);
   const [elements, setElements] = useState(initialElements);
   const [templateMeta, setTemplateMeta] = useState({
@@ -496,7 +489,8 @@ export function TemplateEditor({
     title_pattern: initialTemplate.title_pattern ?? "",
     auto_create_next_protocol: Boolean(initialTemplate.auto_create_next_protocol),
     cycle_reset_month: String(initialTemplate.cycle_reset_month ?? 7),
-    cycle_reset_day: String(initialTemplate.cycle_reset_day ?? 31)
+    cycle_reset_day: String(initialTemplate.cycle_reset_day ?? 31),
+    document_template_id: initialTemplate.document_template_id ? String(initialTemplate.document_template_id) : "",
   });
   const [newItemForm, setNewItemForm] = useState<TemplateItemForm>({
     ...initialTemplateItemForm
@@ -504,8 +498,6 @@ export function TemplateEditor({
   const [showCreateItem, setShowCreateItem] = useState(false);
   const [showParticipantModal, setShowParticipantModal] = useState(false);
   const [showResponsibilityModalFor, setShowResponsibilityModalFor] = useState<number | null>(null);
-  const [status, setStatus] = useState("Ready");
-  const [statusTone, setStatusTone] = useState<"neutral" | "success" | "error">("neutral");
   const [draggedTemplateElementId, setDraggedTemplateElementId] = useState<number | null>(null);
   const [activeTemplateDropIndex, setActiveTemplateDropIndex] = useState<number | null>(null);
   const [expandedTemplateDropIndex, setExpandedTemplateDropIndex] = useState<number | null>(null);
@@ -704,12 +696,9 @@ export function TemplateEditor({
       return currentResponsibility.assignments.length > 0 || "responsibility" in item.configuration_json;
     });
     if (!itemsToUpdate.length) {
-      setStatus("Namensformat für Verantwortliche gesetzt");
-      setStatusTone("success");
+      showToast("Namensformat für Verantwortliche gesetzt", "success");
       return;
     }
-    setStatus("Namensformat für Verantwortliche wird gespeichert...");
-    setStatusTone("neutral");
     try {
       for (const item of itemsToUpdate) {
         await saveElementResponsibility(item.id, (current) => ({
@@ -717,11 +706,9 @@ export function TemplateEditor({
           name_display_mode: nextMode,
         }));
       }
-      setStatus("Namensformat für Verantwortliche gespeichert");
-      setStatusTone("success");
+      showToast("Namensformat für Verantwortliche gespeichert", "success");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Namensformat konnte nicht gespeichert werden");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Namensformat konnte nicht gespeichert werden", "error");
     }
   }
 
@@ -731,8 +718,6 @@ export function TemplateEditor({
       return;
     }
     setResponsibilityAutoListId(String(listDefinitionId));
-    setStatus("Verantwortliche werden aus der Liste zugeordnet...");
-    setStatusTone("neutral");
     try {
       const entries = await ensureResponsibleListEntries(listDefinitionId);
       let matchedElementCount = 0;
@@ -784,21 +769,15 @@ export function TemplateEditor({
           };
         });
       }
-      setStatus(
-        matchedElementCount
-          ? `${matchedElementCount} Element${matchedElementCount === 1 ? "" : "e"} wurden automatisch zugeordnet`
-          : "Keine passenden Listeneinträge für die aktuellen Elementtitel gefunden"
-      );
-      setStatusTone(matchedElementCount ? "success" : "neutral");
+      if (matchedElementCount) {
+        showToast(`${matchedElementCount} Element${matchedElementCount === 1 ? "" : "e"} wurden automatisch zugeordnet`, "success");
+      }
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Automatische Zuordnung konnte nicht gespeichert werden");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Automatische Zuordnung konnte nicht gespeichert werden", "error");
     }
   }
 
   async function toggleResponsibleParticipant(templateElementId: number, participantId: number, enabled: boolean) {
-    setStatus(enabled ? "Verantwortliche Person wird zugewiesen..." : "Verantwortliche Person wird entfernt...");
-    setStatusTone("neutral");
     try {
       await saveElementResponsibility(templateElementId, (current) => {
         const nextAssignments = current.assignments.filter((assignment) => assignment.participant_id !== participantId);
@@ -815,17 +794,13 @@ export function TemplateEditor({
           assignments: nextAssignments,
         };
       });
-      setStatus(enabled ? "Verantwortliche Person zugewiesen" : "Verantwortliche Person entfernt");
-      setStatusTone("success");
+      showToast(enabled ? "Verantwortliche Person zugewiesen" : "Verantwortliche Person entfernt", "success");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Verantwortliche Person konnte nicht aktualisiert werden");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Verantwortliche Person konnte nicht aktualisiert werden", "error");
     }
   }
 
   async function toggleResponsibilityLock(templateElementId: number, participantId: number) {
-    setStatus("Tabellen-Verknüpfung wird aktualisiert...");
-    setStatusTone("neutral");
     try {
       await saveElementResponsibility(templateElementId, (current) => ({
         name_display_mode: responsibilityNameMode,
@@ -835,17 +810,13 @@ export function TemplateEditor({
             : assignment
         ),
       }));
-      setStatus("Tabellen-Verknüpfung aktualisiert");
-      setStatusTone("success");
+      showToast("Tabellen-Verknüpfung aktualisiert", "success");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Tabellen-Verknüpfung konnte nicht aktualisiert werden");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Tabellen-Verknüpfung konnte nicht aktualisiert werden", "error");
     }
   }
 
   async function toggleResponsibilityRowLock(templateElementId: number, listDefinitionId: number, listEntryId: number) {
-    setStatus("Tabellen-Verknüpfung wird aktualisiert...");
-    setStatusTone("neutral");
     try {
       await saveElementResponsibility(templateElementId, (current) => {
         const matchingAssignments = current.assignments.filter(
@@ -864,11 +835,9 @@ export function TemplateEditor({
           ),
         };
       });
-      setStatus("Tabellen-Verknüpfung aktualisiert");
-      setStatusTone("success");
+      showToast("Tabellen-Verknüpfung aktualisiert", "success");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Tabellen-Verknüpfung konnte nicht aktualisiert werden");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Tabellen-Verknüpfung konnte nicht aktualisiert werden", "error");
     }
   }
 
@@ -878,20 +847,16 @@ export function TemplateEditor({
     }
     const entryId = Number(manualLinkEntryId);
     const listDefinitionId = manualLinkListMeta.definition.id;
-    setStatus("Element wird mit der Tabellenzeile verknüpft...");
-    setStatusTone("neutral");
     try {
       const entries = await ensureResponsibleListEntries(listDefinitionId);
       const selectedEntry = entries.find((entry) => entry.id === entryId);
       if (!selectedEntry) {
-        setStatus("Die gewählte Tabellenzeile wurde nicht gefunden");
-        setStatusTone("error");
+        showToast("Die gewählte Tabellenzeile wurde nicht gefunden", "error");
         return;
       }
       const participantIds = listParticipantIds(selectedEntry, manualLinkListMeta.participantColumn, manualLinkListMeta.participantValueType);
       if (!participantIds.length) {
-        setStatus("Die gewählte Tabellenzeile enthält keine Teilnehmenden");
-        setStatusTone("error");
+        showToast("Die gewählte Tabellenzeile enthält keine Teilnehmenden", "error");
         return;
       }
       await saveElementResponsibility(responsibilityModalElement.id, (current) => {
@@ -915,11 +880,9 @@ export function TemplateEditor({
           assignments: [...nextAssignmentsByParticipant.values()],
         };
       });
-      setStatus("Element mit Tabellenzeile verknüpft");
-      setStatusTone("success");
+      showToast("Element mit Tabellenzeile verknüpft", "success");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Tabellenzeilen-Verknüpfung konnte nicht gespeichert werden");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Tabellenzeilen-Verknüpfung konnte nicht gespeichert werden", "error");
     }
   }
 
@@ -994,8 +957,6 @@ export function TemplateEditor({
   }
   async function saveTemplate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setStatus("Saving template...");
-    setStatusTone("neutral");
     try {
       const updated = await browserApiFetch<TemplateSummary>(`/api/templates/${template.id}`, {
         method: "PATCH",
@@ -1010,22 +971,19 @@ export function TemplateEditor({
           title_pattern: templateMeta.title_pattern || null,
           auto_create_next_protocol: templateMeta.auto_create_next_protocol,
           cycle_reset_month: Number(templateMeta.cycle_reset_month),
-          cycle_reset_day: Number(templateMeta.cycle_reset_day)
+          cycle_reset_day: Number(templateMeta.cycle_reset_day),
+          document_template_id: templateMeta.document_template_id ? Number(templateMeta.document_template_id) : null,
         })
       });
       setTemplate(updated);
-      setStatus("Template saved");
-      setStatusTone("success");
+      showToast("Template saved", "success");
       router.refresh();
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Template save failed");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Template save failed", "error");
     }
   }
 
   async function saveTemplateParticipants(closeAfter = false) {
-    setStatus("Saving participant assignments...");
-    setStatusTone("neutral");
     try {
       await browserApiFetch(`/api/templates/${template.id}/participants`, {
         method: "PUT",
@@ -1036,22 +994,18 @@ export function TemplateEditor({
           })),
         }),
       });
-      setStatus("Participant assignments saved");
-      setStatusTone("success");
+      showToast("Participant assignments saved", "success");
       router.refresh();
       if (closeAfter) {
         setShowParticipantModal(false);
       }
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Participant assignments could not be saved");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Participant assignments could not be saved", "error");
     }
   }
 
   async function addElementToTemplate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-      setStatus("Adding element to template...");
-    setStatusTone("neutral");
     try {
       const createdItems = await Promise.all(
         newItemForm.element_definition_ids.map((elementDefinitionId, index) =>
@@ -1067,18 +1021,14 @@ export function TemplateEditor({
       setElements((current) => [...current, ...createdItems].sort((left, right) => left.sort_index - right.sort_index));
       setNewItemForm(initialTemplateItemForm);
       setShowCreateItem(false);
-      setStatus(`${createdItems.length} Element${createdItems.length === 1 ? "" : "e"} hinzugefuegt`);
-      setStatusTone("success");
+      showToast(`${createdItems.length} Element${createdItems.length === 1 ? "" : "e"} hinzugefuegt`, "success");
       router.refresh();
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Template element creation failed");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Template element creation failed", "error");
     }
   }
 
   async function persistTemplateOrder(nextOrdered: TemplateElement[], successMessage: string) {
-    setStatus("Speichere Template-Reihenfolge...");
-    setStatusTone("neutral");
     try {
       const resequenced = resequenceTemplateElements(nextOrdered);
       const temporaryItems = resequenced.map((item, index) => ({
@@ -1100,13 +1050,11 @@ export function TemplateEditor({
         updatedItems.push(updated);
       }
       setElements(updatedItems.sort((left, right) => left.sort_index - right.sort_index));
-      setStatus(successMessage);
-      setStatusTone("success");
+      showToast(successMessage, "success");
       router.refresh();
       return true;
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Template-Reihenfolge konnte nicht gespeichert werden");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Template-Reihenfolge konnte nicht gespeichert werden", "error");
       return false;
     }
   }
@@ -1275,24 +1223,18 @@ export function TemplateEditor({
   }
 
   async function deleteTemplateItem(templateElementId: number) {
-    setStatus("Removing element from template...");
-    setStatusTone("neutral");
     try {
       await browserApiFetch(`/api/template-elements/${templateElementId}`, { method: "DELETE" });
       setElements((current) => current.filter((item) => item.id !== templateElementId));
-      setStatus("Element removed from template");
-      setStatusTone("success");
+      showToast("Element removed from template", "success");
       router.refresh();
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Template element deletion failed");
-      setStatusTone("error");
+      showToast(error instanceof Error ? error.message : "Template element deletion failed", "error");
     }
   }
 
   return (
     <div className="grid">
-      <StatusBanner tone={statusTone} message={status} />
-
       <article className="card">
         <DataToolbar title="Template settings" description="General information about this template and the document layout it uses." />
         <form className="grid" onSubmit={saveTemplate}>
@@ -1379,13 +1321,30 @@ export function TemplateEditor({
           <div className="info-note">
             Kurzinfo: [n] zaehlt alle Protokolle, [n_year] pro Kalenderjahr, [n_month] pro Monat und [n_cycle] im eigenen Zyklus. Du kannst frei kombinieren, z. B. Sitzung [mm].[n_month] oder Protokoll [n_cycle]/[cycle_yyyy_end].
           </div>
-          <label className="field-stack">
-            <span className="field-label">Template status</span>
-            <select value={templateMeta.status} onChange={(event) => setTemplateMeta((current) => ({ ...current, status: event.target.value }))}>
-              <option value="active">Active</option>
-              <option value="archived">Archived</option>
-            </select>
-          </label>
+          <div className="two-col">
+            <label className="field-stack">
+              <span className="field-label">PDF-Layout</span>
+              <select
+                value={templateMeta.document_template_id}
+                onChange={(event) => setTemplateMeta((current) => ({ ...current, document_template_id: event.target.value }))}
+              >
+                <option value="">Kein Layout zugewiesen</option>
+                {availableDocumentTemplates.filter((dt) => dt.is_active).map((dt) => (
+                  <option key={dt.id} value={dt.id}>
+                    {dt.name}{dt.is_default ? " (Standard)" : ""}
+                  </option>
+                ))}
+              </select>
+              <span className="field-help">Wird beim PDF-Export verwendet. Kann in den Einstellungen → Dokumentlayouts konfiguriert werden.</span>
+            </label>
+            <label className="field-stack">
+              <span className="field-label">Template status</span>
+              <select value={templateMeta.status} onChange={(event) => setTemplateMeta((current) => ({ ...current, status: event.target.value }))}>
+                <option value="active">Active</option>
+                <option value="archived">Archived</option>
+              </select>
+            </label>
+          </div>
           <div className="table-toolbar-actions">
             <button type="submit" className="button-inline">Save template</button>
           </div>

@@ -8,6 +8,7 @@ import { browserApiFetch } from "@/lib/api/client";
 import { SessionInfo, TenantMembership } from "@/types/api";
 
 import { buildNav, formatRoleLabel } from "@/components/ui/app-shell-nav";
+import { ToastProvider } from "@/contexts/toast-context";
 import { ProfileModal } from "@/components/ui/profile-modal";
 import { TenantSelectorModal } from "@/components/ui/tenant-selector-modal";
 
@@ -264,6 +265,7 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
   }
 
   return (
+    <ToastProvider>
     <main className={`app-frame${isProtocolWriting ? " app-frame-writing" : ""}`}>
       {isProtocolWriting ? (
         <button
@@ -497,5 +499,6 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
         onLogout={() => void logout()}
       />
     </main>
+    </ToastProvider>
   );
 }
