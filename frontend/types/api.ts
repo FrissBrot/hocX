@@ -21,8 +21,69 @@ export type TenantSummary = {
   name: string;
   profile_image_path: string | null;
   profile_image_url: string | null;
+  public_slug: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+};
+
+export type SubmissionSourceType = "events" | "list";
+export type SubmissionElementStatus = "open" | "submitted" | "reopened";
+
+export type SubmissionAssignment = {
+  id: number;
+  tenant_id: number;
+  title: string;
+  description: string | null;
+  public_slug: string;
+  source_type: SubmissionSourceType;
+  tag_filter: string | null;
+  offset_days_before: number | null;
+  offset_days_after: number | null;
+  list_definition_id: number | null;
+  deadline: string | null;
+  allowed_file_types: string[];
+  max_files_per_element: number;
+  max_file_size_mb: number;
+  is_active: boolean;
+  responsible_participant_source: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AssignmentSummary = {
+  submitted: number;
+  quarantine: number;
+  infected: number;
+  total: number | null;
+};
+
+export type SubmissionFile = {
+  id: number;
+  original_name: string;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  content_url: string;
+  scan_status: string;
+};
+
+export type SubmissionUploadLogEntry = {
+  id: number;
+  element_ref: string;
+  status: string;
+  error_message: string | null;
+  created_at: string;
+};
+
+export type SubmissionElementStatusEntry = {
+  element_ref: string;
+  label: string;
+  window_start: string | null;
+  window_end: string | null;
+  status: SubmissionElementStatus;
+  submitted_at: string | null;
+  upload_id: number | null;
+  files: SubmissionFile[];
+  responsible_participant_id: number | null;
 };
 
 export type OidcConfigRead = {
@@ -83,14 +144,35 @@ export type TemplateSummary = {
   protocol_number_pattern?: string | null;
   title_pattern?: string | null;
   auto_create_next_protocol?: boolean;
-  cycle_reset_month?: number;
-  cycle_reset_day?: number;
+  cycle_config_id?: number | null;
+  cycle_config?: CycleConfigSummary | null;
   version: number;
   status: string;
   document_template_id?: number | null;
   created_by?: number | null;
   created_at?: string;
   updated_at?: string;
+};
+
+export type CycleConfigSummary = {
+  id: number;
+  tenant_id: number;
+  name: string;
+  reset_month: number;
+  reset_day: number;
+  name_pattern?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type CycleAssignment = {
+  cycle_config_id: number;
+  cycle_year: number;
+};
+
+export type CycleInfo = {
+  cycle_year: number;
+  name: string;
 };
 
 export type ParticipantSummary = {
@@ -117,6 +199,17 @@ export type EventSummary = {
   title: string;
   description: string | null;
   participant_count: number;
+  organizer_ids: number[] | null;
+  leadership_ids: number[] | null;
+  participant_ids: number[] | null;
+  spezial1_ids: number[] | null;
+  spezial2_ids: number[] | null;
+  spezial3_ids: number[] | null;
+  location: string | null;
+  spezial_text1: string | null;
+  spezial_text2: string | null;
+  spezial_text3: string | null;
+  cycle_assignments: CycleAssignment[];
   created_at: string;
   updated_at: string;
 };
@@ -166,6 +259,7 @@ export type ProtocolSummary = {
   created_by?: number | null;
   created_at?: string;
   updated_at?: string;
+  latest_pdf_url?: string | null;
 };
 
 export type DocumentTemplatePart = {
@@ -294,6 +388,8 @@ export type TodoListItem = ProtocolTodo & {
   protocol_title: string | null;
   protocol_status: string | null;
   block_title: string | null;
+  submission_assignment_id: number | null;
+  element_ref: string | null;
 };
 
 export type TodoBlock = {
@@ -379,11 +475,10 @@ export type AttendanceFine = {
   fine_type: "late" | "absent";
   amount: number;
   account_id: number;
-  status: "pending" | "collected" | "deleted";
+  status: "pending" | "collected";
   collected_at: string | null;
   collected_transaction_id: number | null;
   closed_in_protocol_id: number | null;
-  delete_comment: string | null;
   created_at: string;
 };
 
@@ -401,4 +496,18 @@ export type FinanceTransaction = {
   transaction_date: string;
   protocol_id: number | null;
   created_at: string;
+};
+
+export type StatisticsOverview = {
+  attendance_by_participant: { name: string; present: number; absent: number; excused: number; total: number }[];
+  attendance_over_time: { month: string; present: number; absent: number; excused: number; total: number }[];
+  todos: { open: number; done: number; total: number };
+  fines_by_participant: { name: string; count: number; amount: number }[];
+  fines_by_type: { fine_type: string; label: string; count: number; amount: number }[];
+  finance_by_month: { month: string; account_id: number; account_name: string; income: number; expenses: number; net: number }[];
+  participants_total: number;
+  participants_active: number;
+  protocols_total: number;
+  cycles: { cycle_config_id: number; cycle_config_name: string; cycle_year: number; label: string }[];
+  groups_stats: { group_id: number; group_name: string; cycle_config_id: number | null; cycle_year: number | null; session_count: number; session_count_with_participants: number; avg_participants: number }[];
 };

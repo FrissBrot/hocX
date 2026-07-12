@@ -47,12 +47,22 @@ services:
       LATEX_TEMPLATE_ROOT: /app/storage/latex_templates
       EXPORT_ROOT: /app/storage/exports
       UPLOAD_ROOT: /app/storage/uploads
+      ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
+      ABGABEBOX_DB_PASSWORD: ${ABGABEBOX_DB_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      CLAMAV_HOST: clamav
     depends_on:
       db:
         condition: service_healthy
     volumes:
       - ./backend:/app
       - ./storage:/app/storage
+      # Zugriff auf die von der Abgabebox geschriebenen Dateien fuer Admin-Downloads
+      # und zum Loeschen beim "Wieder aufschalten" (siehe submission_service.py).
+      # Read-write, da das Haupt-Backend ohnehin voll vertrauenswuerdig ist - die
+      # eigentliche Isolationsgrenze ist die restricted DB-Rolle des abgabebox-backend,
+      # nicht dieser Mount.
+      - ./storage/abgabebox-uploads:/app/abgabebox-storage
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"
     labels:
       - "traefik.enable=true"
@@ -100,5 +110,88 @@ services:
       - "traefik.http.routers.hocx-frontend.priority=10"
       - "traefik.http.services.hocx-frontend.loadbalancer.server.port=3000"
 
+  # Oeffentliche Abgabebox (kein Login) auf eigener Subdomain, eigener Codebase,
+  # eigene restricted DB-Rolle (siehe backend/alembic/versions/0020_abgabebox.py).
+  abgabebox-backend:
+    build:
+      context: ./abgabebox-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      ABGABEBOX_DATABASE_URL: ${ABGABEBOX_DATABASE_URL}
+      ABGABEBOX_STORAGE_ROOT: /app/storage
+      ABGABEBOX_CORS_ORIGIN: https://${TRAEFIK_ABGABEBOX_DOMAIN}
+      FRIENDLY_CAPTCHA_SITEKEY: ${FRIENDLY_CAPTCHA_SITEKEY}
+      FRIENDLY_CAPTCHA_API_KEY: ${FRIENDLY_CAPTCHA_API_KEY}
+      CLAMAV_HOST: clamav
+    depends_on:
+      db:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    volumes:
+      - ./abgabebox-backend:/app
+      - ./storage/abgabebox-uploads:/app/storage
+    command: sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.abgabebox-backend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.abgabebox-backend.entrypoints=websecure"
+      - "traefik.http.routers.abgabebox-backend.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.abgabebox-backend.priority=100"
+      - "traefik.http.routers.abgabebox-backend.service=abgabebox-backend"
+      - "traefik.http.services.abgabebox-backend.loadbalancer.server.port=8000"
+      # Dedizierter Router nur fuer den Upload-POST, mit Rate-Limit gegen Spam/DoS
+      # (analog auth-ratelimit) - da dieser Endpoint komplett unauthentifiziert ist.
+      - "traefik.http.routers.abgabebox-upload.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && PathPrefix(`/api/public`) && Method(`POST`)"
+      - "traefik.http.routers.abgabebox-upload.entrypoints=websecure"
+      - "traefik.http.routers.abgabebox-upload.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.abgabebox-upload.priority=200"
+      - "traefik.http.routers.abgabebox-upload.service=abgabebox-backend"
+      - "traefik.http.routers.abgabebox-upload.middlewares=abgabebox-upload-ratelimit"
+      - "traefik.http.middlewares.abgabebox-upload-ratelimit.ratelimit.average=5"
+      - "traefik.http.middlewares.abgabebox-upload-ratelimit.ratelimit.burst=3"
+      - "traefik.http.middlewares.abgabebox-upload-ratelimit.ratelimit.period=1m"
+
+  clamav:
+    image: clamav/clamav:latest
+    restart: unless-stopped
+    volumes:
+      - clamav_db:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 60s
+      timeout: 30s
+      start_period: 300s
+      retries: 5
+
+  abgabebox-frontend:
+    build:
+      context: ./abgabebox-frontend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NEXT_PUBLIC_ABGABEBOX_API_URL: https://${TRAEFIK_ABGABEBOX_DOMAIN}
+      INTERNAL_ABGABEBOX_API_URL: http://abgabebox-backend:8000
+      NEXT_PUBLIC_FRIENDLY_CAPTCHA_SITEKEY: ${FRIENDLY_CAPTCHA_SITEKEY}
+      NEXT_PUBLIC_DEFAULT_TENANT_SLUG: ${NEXT_PUBLIC_DEFAULT_TENANT_SLUG}
+    depends_on:
+      - abgabebox-backend
+    volumes:
+      - ./abgabebox-frontend:/app
+      - /app/node_modules
+      - /app/.next
+    command: sh -c "npm run build && npm start"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.abgabebox-frontend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`)"
+      - "traefik.http.routers.abgabebox-frontend.entrypoints=websecure"
+      - "traefik.http.routers.abgabebox-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.abgabebox-frontend.priority=10"
+      - "traefik.http.services.abgabebox-frontend.loadbalancer.server.port=3000"
+
 volumes:
   postgres_data:
+  clamav_db:
