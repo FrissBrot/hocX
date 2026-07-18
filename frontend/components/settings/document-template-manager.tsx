@@ -23,12 +23,12 @@ type PartFormState = {
 };
 
 type TemplateFormState = {
-  code: string;
   name: string;
   description: string;
   version: string;
   is_active: boolean;
   is_default: boolean;
+  orientation: string;
   primary_color: string;
   secondary_color: string;
   font_family: string;
@@ -114,7 +114,8 @@ const initialPartForm: PartFormState = {
 };
 
 const initialTemplateForm: TemplateFormState = {
-  code: "", name: "", description: "", version: "1", is_active: true, is_default: false,
+  name: "", description: "", version: "1", is_active: true, is_default: false,
+  orientation: "portrait",
   primary_color: "174B7A", secondary_color: "4F6D7A",
   font_family: "arial", font_size: "11pt",
   font_regular: "", font_bold: "", font_italic: "", font_bold_italic: "",
@@ -141,12 +142,12 @@ function templateFormFromTemplate(template: DocumentTemplate): TemplateFormState
   const fontParts = theme.font_parts ?? {};
   const presets = config.presets ?? {};
   return {
-    code: template.code,
     name: template.name,
     description: template.description ?? "",
     version: String(template.version),
     is_active: template.is_active,
     is_default: template.is_default,
+    orientation: options.orientation ?? "portrait",
     primary_color: theme.primary_color ?? "174B7A",
     secondary_color: theme.secondary_color ?? "4F6D7A",
     font_family: theme.font_family ?? "arial",
@@ -190,7 +191,6 @@ function templateFormFromTemplate(template: DocumentTemplate): TemplateFormState
 function buildTemplatePayload(form: TemplateFormState) {
   return {
     tenant_id: 1,
-    code: form.code,
     name: form.name,
     description: form.description || null,
     version: Number(form.version),
@@ -219,6 +219,7 @@ function buildTemplatePayload(form: TemplateFormState) {
         numbering_mode: form.numbering_mode,
         toc_spacing: form.toc_spacing,
         hide_metadata: !form.show_metadata,
+        orientation: form.orientation,
       },
       title_assets: {
         header_image_part_id: form.title_header_image ? Number(form.title_header_image) : null,
@@ -253,6 +254,28 @@ function PageMockup({ children, bg = "white" }: { children?: React.ReactNode; bg
       <rect x="2" y="2" width="55" height="77" rx="2" fill={bg} stroke="#e0e0e0" strokeWidth="0.6" />
       {children}
     </svg>
+  );
+}
+
+function LandscapePageMockup({ children, bg = "white" }: { children?: React.ReactNode; bg?: string }) {
+  return (
+    <svg viewBox="0 0 82 60" width="72" height="52" style={{ display: "block", margin: "0 auto" }}>
+      <rect x="3" y="3" width="77" height="55" rx="2" fill="#d8d8d8" />
+      <rect x="2" y="2" width="77" height="55" rx="2" fill={bg} stroke="#e0e0e0" strokeWidth="0.6" />
+      {children}
+    </svg>
+  );
+}
+
+const LANDSCAPE_CONTENT_LINES = [16, 20, 24, 28, 32, 36, 40];
+
+function LandscapeContentLines({ from = 0, count = 5, accent = "#e4e4e4" }: { from?: number; count?: number; accent?: string }) {
+  return (
+    <>
+      {LANDSCAPE_CONTENT_LINES.slice(from, from + count).map((y, i) => (
+        <rect key={y} x="8" y={y} width={i % 3 === 2 ? 44 : 62} height="1.8" fill={accent} rx="0.9" />
+      ))}
+    </>
   );
 }
 
@@ -330,6 +353,104 @@ const footerPreviews: Record<string, React.ReactNode> = {
       <rect x="24" y="72" width="10" height="1.8" fill="#bbb" rx="0.9" />
       <rect x="46" y="72" width="8" height="1.8" fill="#aaa" rx="0.9" />
     </PageMockup>
+  ),
+};
+
+// ── Landscape header/footer previews ────────────────────────────────────────
+
+const landscapeHeaderPreviews: Record<string, React.ReactNode> = {
+  none: (
+    <LandscapePageMockup>
+      <LandscapeContentLines />
+    </LandscapePageMockup>
+  ),
+  minimal: (
+    <LandscapePageMockup>
+      <rect x="64" y="5.5" width="12" height="1.8" fill="#bbb" rx="0.9" />
+      <LandscapeContentLines from={1} />
+    </LandscapePageMockup>
+  ),
+  standard: (
+    <LandscapePageMockup>
+      <rect x="8" y="5.5" width="28" height="1.8" fill="#aaa" rx="0.9" />
+      <rect x="58" y="5.5" width="16" height="1.8" fill="#aaa" rx="0.9" />
+      <line x1="8" y1="9.5" x2="76" y2="9.5" stroke="#ddd" strokeWidth="0.7" />
+      <LandscapeContentLines from={1} />
+    </LandscapePageMockup>
+  ),
+  bar: (
+    <LandscapePageMockup>
+      <rect x="2" y="2" width="77" height="10" fill="var(--dt-accent, #174B7A)" rx="2" />
+      <rect x="8" y="5" width="30" height="2" fill="rgba(255,255,255,0.85)" rx="1" />
+      <rect x="62" y="5" width="12" height="2" fill="rgba(255,255,255,0.6)" rx="1" />
+      <LandscapeContentLines from={1} />
+    </LandscapePageMockup>
+  ),
+  logo: (
+    <LandscapePageMockup>
+      <rect x="8" y="3.5" width="10" height="7" fill="var(--dt-accent, #174B7A)" rx="1" opacity="0.7" />
+      <rect x="25" y="5.5" width="26" height="1.8" fill="#aaa" rx="0.9" />
+      <rect x="58" y="5.5" width="16" height="1.8" fill="#aaa" rx="0.9" />
+      <line x1="8" y1="12" x2="76" y2="12" stroke="#ddd" strokeWidth="0.7" />
+      <LandscapeContentLines from={1} />
+    </LandscapePageMockup>
+  ),
+  logo_bar: (
+    <LandscapePageMockup>
+      <rect x="2" y="2" width="77" height="11" fill="var(--dt-accent, #174B7A)" rx="2" />
+      <rect x="5" y="3.5" width="9" height="7" fill="rgba(255,255,255,0.8)" rx="1" />
+      <rect x="22" y="5.5" width="30" height="2" fill="rgba(255,255,255,0.85)" rx="1" />
+      <rect x="60" y="5.5" width="16" height="2" fill="rgba(255,255,255,0.6)" rx="1" />
+      <LandscapeContentLines from={1} />
+    </LandscapePageMockup>
+  ),
+  logo_date: (
+    <LandscapePageMockup>
+      <rect x="8" y="3.5" width="10" height="7" fill="var(--dt-accent, #174B7A)" rx="1" opacity="0.7" />
+      <rect x="30" y="5.5" width="22" height="1.8" fill="#bbb" rx="0.9" />
+      <rect x="64" y="5.5" width="10" height="1.8" fill="#bbb" rx="0.9" />
+      <line x1="8" y1="12" x2="76" y2="12" stroke="#ddd" strokeWidth="0.7" />
+      <LandscapeContentLines from={1} />
+    </LandscapePageMockup>
+  ),
+};
+
+const landscapeFooterPreviews: Record<string, React.ReactNode> = {
+  none: (
+    <LandscapePageMockup>
+      <LandscapeContentLines />
+    </LandscapePageMockup>
+  ),
+  minimal: (
+    <LandscapePageMockup>
+      <LandscapeContentLines count={4} />
+      <rect x="37" y="49" width="8" height="1.8" fill="#bbb" rx="0.9" />
+    </LandscapePageMockup>
+  ),
+  standard: (
+    <LandscapePageMockup>
+      <LandscapeContentLines count={4} />
+      <line x1="8" y1="47" x2="76" y2="47" stroke="#ddd" strokeWidth="0.7" />
+      <rect x="8" y="49" width="20" height="1.8" fill="#aaa" rx="0.9" />
+      <rect x="62" y="49" width="12" height="1.8" fill="#aaa" rx="0.9" />
+    </LandscapePageMockup>
+  ),
+  date_page: (
+    <LandscapePageMockup>
+      <LandscapeContentLines count={4} />
+      <line x1="8" y1="47" x2="76" y2="47" stroke="#ddd" strokeWidth="0.7" />
+      <rect x="8" y="49" width="18" height="1.8" fill="#aaa" rx="0.9" />
+      <rect x="64" y="49" width="10" height="1.8" fill="#aaa" rx="0.9" />
+    </LandscapePageMockup>
+  ),
+  with_version: (
+    <LandscapePageMockup>
+      <LandscapeContentLines count={4} />
+      <line x1="8" y1="47" x2="76" y2="47" stroke="#ddd" strokeWidth="0.7" />
+      <rect x="8" y="49" width="16" height="1.8" fill="#aaa" rx="0.9" />
+      <rect x="34" y="49" width="14" height="1.8" fill="#bbb" rx="0.9" />
+      <rect x="62" y="49" width="12" height="1.8" fill="#aaa" rx="0.9" />
+    </LandscapePageMockup>
   ),
 };
 
@@ -559,15 +680,30 @@ function TemplateForm({
     [allParts]
   );
   const [activeTab, setActiveTab] = useState<"design" | "structure" | "advanced">("design");
+  const isLandscape = form.orientation === "landscape";
 
-  const headerOptions: PresetOption[] = [
+  const headerOptions: PresetOption[] = isLandscape ? [
+    { value: "none", label: "Kein Header", description: "Seite ohne Kopfzeile", preview: landscapeHeaderPreviews.none },
+    { value: "minimal", label: "Seitennummer", description: "Nur Seitennummer oben rechts", preview: landscapeHeaderPreviews.minimal },
+    { value: "standard", label: "Titel & Datum", description: "Titel links, Datum rechts", preview: landscapeHeaderPreviews.standard },
+    { value: "bar", label: "Farbiger Balken", description: "Akzentfarbe mit weissem Text", preview: landscapeHeaderPreviews.bar },
+    { value: "logo", label: "Logo + Titel", description: "Logo links, Titel Mitte, Datum rechts", preview: landscapeHeaderPreviews.logo },
+    { value: "logo_bar", label: "Logo + Farbbalken", description: "Logo und Titel in farbigem Balken", preview: landscapeHeaderPreviews.logo_bar },
+    { value: "logo_date", label: "Logo + Datum", description: "Logo links, Datum Mitte, Seite rechts", preview: landscapeHeaderPreviews.logo_date },
+  ] : [
     { value: "none", label: "Kein Header", description: "Seite ohne Kopfzeile", preview: headerPreviews.none },
     { value: "minimal", label: "Seitennummer", description: "Nur Seitennummer oben rechts", preview: headerPreviews.minimal },
     { value: "standard", label: "Titel & Datum", description: "Titel links, Datum rechts", preview: headerPreviews.standard },
     { value: "bar", label: "Farbiger Balken", description: "Akzentfarbe mit weissem Text", preview: headerPreviews.bar },
   ];
 
-  const footerOptions: PresetOption[] = [
+  const footerOptions: PresetOption[] = isLandscape ? [
+    { value: "none", label: "Kein Footer", description: "Seite ohne Fusszeile", preview: landscapeFooterPreviews.none },
+    { value: "minimal", label: "Seitennummer", description: "Nur Seitennummer zentriert", preview: landscapeFooterPreviews.minimal },
+    { value: "standard", label: "Protokoll & Seite", description: "Protokollnummer links, Seite rechts", preview: landscapeFooterPreviews.standard },
+    { value: "date_page", label: "Datum & Seite", description: "Datum links, Seitennummer rechts", preview: landscapeFooterPreviews.date_page },
+    { value: "with_version", label: "Mit Version", description: "Nummer links, Version Mitte, Seite rechts", preview: landscapeFooterPreviews.with_version },
+  ] : [
     { value: "none", label: "Kein Footer", description: "Seite ohne Fusszeile", preview: footerPreviews.none },
     { value: "minimal", label: "Seitennummer", description: "Nur Seitennummer zentriert", preview: footerPreviews.minimal },
     { value: "standard", label: "Protokoll & Seite", description: "Protokollnummer links, Seite rechts", preview: footerPreviews.standard },
@@ -594,11 +730,7 @@ function TemplateForm({
     <div className="grid">
       {/* Metadata — always visible */}
       <div className="three-col">
-        <label className="field-stack">
-          <span className="field-label">Code</span>
-          <input value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} required />
-        </label>
-        <label className="field-stack">
+        <label className="field-stack" style={{ gridColumn: "span 2" }}>
           <span className="field-label">Name</span>
           <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
         </label>
@@ -621,6 +753,34 @@ function TemplateForm({
             <input type="checkbox" checked={form.is_default} onChange={(e) => setForm((f) => ({ ...f, is_default: e.target.checked }))} />
             Standard für Tenant
           </label>
+        </div>
+      </div>
+
+      {/* Orientation selector */}
+      <div className="card inset-card" style={{ padding: "12px 16px" }}>
+        <div className="eyebrow" style={{ marginBottom: "8px" }}>Format</div>
+        <div style={{ display: "flex", gap: "10px" }}>
+          {([["portrait", "Hochformat", "A4 vertikal — für Protokolle"], ["landscape", "Querformat", "A4 horizontal — für Listen & Tabellen"]] as const).map(([val, label, desc]) => (
+            <button
+              key={val}
+              type="button"
+              className={`block-type-card${form.orientation === val ? " block-type-card-active" : ""}`}
+              style={{ flex: 1, padding: "10px 14px" }}
+              onClick={() => setForm((f) => ({
+                ...f,
+                orientation: val,
+                preset_header: val === "landscape" ? "logo" : "standard",
+                preset_footer: val === "landscape" ? "date_page" : "standard",
+                preset_title_page: val === "landscape" ? "none" : f.preset_title_page,
+              }))}
+            >
+              <div style={{ fontSize: "1.4rem", marginBottom: "4px" }}>{val === "portrait" ? "📄" : "📋"}</div>
+              <div className="block-type-summary">
+                <strong>{label}</strong>
+                <span className="muted" style={{ fontSize: "0.78rem" }}>{desc}</span>
+              </div>
+            </button>
+          ))}
         </div>
       </div>
 
@@ -727,6 +887,20 @@ function TemplateForm({
             <div style={{ marginTop: "12px" }}>
               <PresetCardGrid options={headerOptions} value={form.preset_header} onChange={(v) => setForm((f) => ({ ...f, preset_header: v }))} accentColor={form.primary_color} />
             </div>
+            {["logo", "logo_bar", "logo_date"].includes(form.preset_header) && (
+              <div style={{ marginTop: "14px" }}>
+                <label className="field-stack">
+                  <span className="field-label">Logo / Bild für Header</span>
+                  <select value={form.title_header_image} onChange={(e) => setForm((f) => ({ ...f, title_header_image: e.target.value }))}>
+                    <option value="">Kein Bild</option>
+                    {imageParts.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                  <span className="field-help">PNG oder JPG — aus der Parts-Bibliothek wählen. Höhe im Header: ca. 0.8 cm.</span>
+                </label>
+              </div>
+            )}
           </div>
 
           <div className="card inset-card"
@@ -739,6 +913,7 @@ function TemplateForm({
             </div>
           </div>
 
+          {!isLandscape && (
           <div className="card inset-card"
             style={{ "--dt-accent": `#${form.primary_color}` } as React.CSSProperties}
           >
@@ -748,8 +923,9 @@ function TemplateForm({
               <PresetCardGrid options={titlePageOptions} value={form.preset_title_page} onChange={(v) => setForm((f) => ({ ...f, preset_title_page: v }))} accentColor={form.primary_color} />
             </div>
           </div>
+          )}
 
-          {form.preset_title_page === "combined_toc" ? (
+          {!isLandscape && (form.preset_title_page === "combined_toc" ? (
             <div className="card inset-card" style={{ "--dt-accent": `#${form.primary_color}` } as React.CSSProperties}>
               <div className="eyebrow">Titelblatt + Inhaltsverzeichnis — Konfiguration</div>
               <p className="muted" style={{ marginTop: "4px", fontSize: "0.82rem" }}>
@@ -817,7 +993,7 @@ function TemplateForm({
                 <PresetCardGrid options={tocOptions} value={form.preset_toc} onChange={(v) => setForm((f) => ({ ...f, preset_toc: v }))} accentColor={form.primary_color} />
               </div>
             </div>
-          )}
+          ))}
 
           <div className="card inset-card">
             <div className="eyebrow">Nummerierung</div>
@@ -918,7 +1094,7 @@ export function DocumentTemplateManager({ initialTemplates, initialParts }: Prop
 
   const filteredTemplates = useMemo(() => {
     const q = layoutSearch.trim().toLowerCase();
-    return !q ? templates : templates.filter((t) => `${t.name} ${t.code} ${t.description ?? ""}`.toLowerCase().includes(q));
+    return !q ? templates : templates.filter((t) => `${t.name} ${t.description ?? ""}`.toLowerCase().includes(q));
   }, [layoutSearch, templates]);
 
   function selectTemplate(template: DocumentTemplate) {
@@ -1101,21 +1277,28 @@ export function DocumentTemplateManager({ initialTemplates, initialParts }: Prop
                 <label className="field-stack" style={{ padding: "0 8px 8px" }}>
                   <input value={layoutSearch} onChange={(e) => setLayoutSearch(e.target.value)} placeholder="Suchen…" style={{ fontSize: "0.82rem" }} />
                 </label>
-                {filteredTemplates.map((template) => (
-                  <button
-                    key={template.id}
-                    type="button"
-                    className={`editor-nav-item${selectedTemplateId === template.id ? " editor-nav-item-active" : ""}`}
-                    onClick={() => selectTemplate(template)}
-                  >
-                    <strong>{template.name}</strong>
-                    <span className="muted">{template.code}</span>
-                    <div className="status-row">
-                      <span className="pill">v{template.version}</span>
-                      {template.is_default && <span className="pill">Standard</span>}
-                    </div>
-                  </button>
-                ))}
+                {filteredTemplates.map((template) => {
+                  const cfg = (template.configuration_json ?? {}) as Record<string, any>;
+                  const isLandscape = cfg?.options?.orientation === "landscape";
+                  return (
+                    <button
+                      key={template.id}
+                      type="button"
+                      className={`editor-nav-item${selectedTemplateId === template.id ? " editor-nav-item-active" : ""}`}
+                      onClick={() => selectTemplate(template)}
+                    >
+                      <span className="editor-nav-index" title={isLandscape ? "Querformat" : "Hochformat"}>
+                        {isLandscape ? "Q" : "H"}
+                      </span>
+                      <span className="editor-nav-label">{template.name}</span>
+                      <div className="editor-nav-subtitle status-row" style={{ gap: "4px" }}>
+                        <span className="pill">v{template.version}</span>
+                        {template.is_default && <span className="pill">Standard</span>}
+                        {!template.is_active && <span className="pill">Inaktiv</span>}
+                      </div>
+                    </button>
+                  );
+                })}
                 {filteredTemplates.length === 0 && <div className="editor-panel-empty">Keine Layouts.</div>}
               </div>
             </aside>

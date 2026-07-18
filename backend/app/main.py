@@ -5,10 +5,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select, text
 
-from app.api.routes import auth, document_templates, events, exports, files, finance, fines, lists, oidc, participants, protocol_elements, protocols, tag_config, templates, tenants, todos, users
+from app.api.routes import admin, admin_auth, auth, collaboration_ws, cycle_configs, document_templates, events, exports, files, finance, fines, lists, oidc, participants, protocol_elements, protocols, statistics, submission_assignments, tag_config, templates, tenants, todos, users
 from app.core.db import SessionLocal
 from app.core.config import settings
-from app.models import ElementType, Role, Tenant
+from app.core.redis_client import close_redis_pool
+from app.core.security import hash_password
+from app.models import ElementType, PlatformAdmin, Role, Tenant
 from app.services.document_template_service import DocumentTemplateService
 from app.services.file_service import FileService
 
@@ -17,7 +19,6 @@ def ensure_roles() -> None:
     with SessionLocal() as db:
         existing = set(db.scalars(select(Role.code)))
         desired = [
-            (1, "superadmin", "Global access across all tenants"),
             (2, "admin", "Tenant administrator"),
             (3, "writer", "Workspace write access"),
             (4, "reader", "Read-only access to finalized protocols and own todos/fines"),
@@ -31,6 +32,29 @@ def ensure_roles() -> None:
             changed = True
         if changed:
             db.commit()
+
+
+def ensure_platform_admin_bootstrap() -> None:
+    """Creates the first platform-admin account from env vars if the table is still empty.
+
+    Deliberate one-time bootstrap instead of a hardcoded seed password: operators set
+    INITIAL_ADMIN_EMAIL/INITIAL_ADMIN_PASSWORD before the first deploy, then manage
+    further admins through the panel itself.
+    """
+    if not settings.initial_admin_email or not settings.initial_admin_password:
+        return
+    with SessionLocal() as db:
+        if db.query(PlatformAdmin).first() is not None:
+            return
+        db.add(
+            PlatformAdmin(
+                email=settings.initial_admin_email,
+                password_hash=hash_password(settings.initial_admin_password),
+                display_name="Admin",
+                is_active=True,
+            )
+        )
+        db.commit()
 
 
 def ensure_lookup_values() -> None:
@@ -51,6 +75,7 @@ def ensure_lookup_values() -> None:
             ("finance_balance", "Finance account balance"),
             ("finance_transactions", "Finance transaction table"),
             ("fine_list", "Attendance fine list"),
+            ("chart", "Statistics chart block"),
         ]
         changed = False
         next_id = int(max(db.scalars(select(ElementType.id)).all() or [0]))
@@ -299,9 +324,11 @@ async def lifespan(_: FastAPI):
     FileService().ensure_storage()
     ensure_runtime_columns()
     ensure_roles()
+    ensure_platform_admin_bootstrap()
     ensure_lookup_values()
     ensure_default_document_templates()
     yield
+    await close_redis_pool()
 
 
 app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
@@ -325,11 +352,14 @@ def health() -> dict[str, str]:
 
 
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+app.include_router(admin_auth.router, prefix="/api/admin/auth", tags=["admin-auth"])
+app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 app.include_router(oidc.router, prefix="/api", tags=["oidc"])
 app.include_router(tenants.router, prefix="/api", tags=["tenants"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(document_templates.router, prefix="/api", tags=["document-templates"])
 app.include_router(templates.router, prefix="/api", tags=["templates"])
+app.include_router(cycle_configs.router, prefix="/api", tags=["cycle-configs"])
 app.include_router(participants.router, prefix="/api", tags=["participants"])
 app.include_router(events.router, prefix="/api", tags=["events"])
 app.include_router(tag_config.router, prefix="/api", tags=["tag-config"])
@@ -341,3 +371,6 @@ app.include_router(files.router, prefix="/api", tags=["files"])
 app.include_router(exports.router, prefix="/api", tags=["exports"])
 app.include_router(finance.router, prefix="/api", tags=["finance"])
 app.include_router(fines.router, prefix="/api", tags=["fines"])
+app.include_router(statistics.router, prefix="/api", tags=["statistics"])
+app.include_router(submission_assignments.router, prefix="/api", tags=["submission-assignments"])
+app.include_router(collaboration_ws.router, tags=["collaboration"])

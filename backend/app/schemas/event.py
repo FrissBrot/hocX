@@ -5,6 +5,13 @@ from datetime import date, datetime
 from pydantic import BaseModel
 
 
+class CycleAssignment(BaseModel):
+    cycle_config_id: int
+    cycle_year: int
+
+    model_config = {"from_attributes": True}
+
+
 class EventBase(BaseModel):
     event_date: date
     event_end_date: date | None = None
@@ -12,10 +19,20 @@ class EventBase(BaseModel):
     title: str
     description: str | None = None
     participant_count: int = 0
+    organizer_ids: list[int] | None = None
+    leadership_ids: list[int] | None = None
+    participant_ids: list[int] | None = None
+    spezial1_ids: list[int] | None = None
+    spezial2_ids: list[int] | None = None
+    spezial3_ids: list[int] | None = None
+    location: str | None = None
+    spezial_text1: str | None = None
+    spezial_text2: str | None = None
+    spezial_text3: str | None = None
 
 
 class EventCreate(EventBase):
-    pass
+    cycle_assignments: list[CycleAssignment] | None = None
 
 
 class EventUpdate(BaseModel):
@@ -25,12 +42,24 @@ class EventUpdate(BaseModel):
     title: str | None = None
     description: str | None = None
     participant_count: int | None = None
+    organizer_ids: list[int] | None = None
+    leadership_ids: list[int] | None = None
+    participant_ids: list[int] | None = None
+    spezial1_ids: list[int] | None = None
+    spezial2_ids: list[int] | None = None
+    spezial3_ids: list[int] | None = None
+    location: str | None = None
+    spezial_text1: str | None = None
+    spezial_text2: str | None = None
+    spezial_text3: str | None = None
+    cycle_assignments: list[CycleAssignment] | None = None
 
 
 class EventRead(EventBase):
     id: int
     tenant_id: int
     event_category_id: int
+    cycle_assignments: list[CycleAssignment] = []
     created_at: datetime
     updated_at: datetime
 

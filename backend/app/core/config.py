@@ -18,8 +18,14 @@ class Settings(BaseSettings):
     auth_session_cookie: str = "hocx_session"
     auth_session_ttl_hours: int = 72
     auth_secure_cookies: bool = True
+    admin_auth_secret: str = "hocx-local-dev-admin-secret"
+    admin_session_cookie: str = "hocx_admin_session"
+    admin_session_ttl_hours: int = 12
+    initial_admin_email: str | None = None
+    initial_admin_password: str | None = None
     clamav_host: str = "clamav"
     clamav_port: int = 3310
+    redis_url: str = "redis://redis:6379/0"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -27,6 +33,13 @@ class Settings(BaseSettings):
         if self.auth_secret in _INSECURE_DEFAULTS or len(self.auth_secret) < 32:
             print(
                 "FATAL: AUTH_SECRET is insecure or not set. "
+                "Set a random value of at least 32 characters in .env.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        if self.admin_auth_secret in _INSECURE_DEFAULTS or len(self.admin_auth_secret) < 32:
+            print(
+                "FATAL: ADMIN_AUTH_SECRET is insecure or not set. "
                 "Set a random value of at least 32 characters in .env.",
                 file=sys.stderr,
             )

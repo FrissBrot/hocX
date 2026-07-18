@@ -22,7 +22,7 @@ class AuthService:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Login is disabled for this account")
 
         current_user = build_current_user(db, user, payload.tenant_id)
-        if not current_user.is_superadmin and current_user.current_tenant_id is None:
+        if current_user.current_tenant_id is None:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenant membership assigned")
 
         token = create_session_token(user.id, current_user.current_tenant_id)
@@ -43,12 +43,12 @@ class AuthService:
         return {"message": "Logged out"}
 
     def select_tenant(self, db: Session, response: Response, user: CurrentUser, tenant_id: int) -> SessionRead:
-        if not user.is_superadmin and all(membership.tenant_id != tenant_id for membership in user.available_tenants):
+        if all(membership.tenant_id != tenant_id for membership in user.available_tenants):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant not assigned to current user")
 
         db_user = db.get(AppUser, user.user_id)
         refreshed = build_current_user(db, db_user, tenant_id) if db_user else None
-        if refreshed is None or (not refreshed.is_superadmin and refreshed.current_tenant_id != tenant_id):
+        if refreshed is None or refreshed.current_tenant_id != tenant_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant switch failed")
 
         token = create_session_token(user.user_id, tenant_id)
@@ -85,7 +85,7 @@ class AuthService:
                 display_name=user.display_name,
                 email=user.email,
                 preferred_language=user.preferred_language,
-                is_superadmin=user.is_superadmin,
+                default_tenant_id=user.default_tenant_id,
             ),
             current_tenant=current_tenant,
             current_role=user.current_role,
@@ -94,6 +94,7 @@ class AuthService:
                     tenant_id=membership.tenant_id,
                     tenant_name=membership.tenant_name,
                     tenant_profile_image_path=membership.tenant_profile_image_path,
+                    tenant_profile_image_url=build_tenant_profile_image_url(membership.tenant_id, membership.tenant_profile_image_path),
                     role_code=membership.role_code,
                     is_active=membership.is_active,
                 )

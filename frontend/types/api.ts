@@ -9,7 +9,7 @@ export type SessionInfo = {
     display_name: string;
     email: string;
     preferred_language: string;
-    is_superadmin: boolean;
+    default_tenant_id: number | null;
   } | null;
   current_tenant: TenantSummary | null;
   current_role: string | null;
@@ -108,6 +108,7 @@ export type TenantMembership = {
   tenant_id: number;
   tenant_name: string;
   tenant_profile_image_path: string | null;
+  tenant_profile_image_url: string | null;
   role_code: string;
   is_active: boolean;
 };
@@ -126,9 +127,33 @@ export type UserSummary = {
   external_identity_json: Record<string, unknown>;
   default_tenant_id: number | null;
   memberships: TenantMembership[];
-  is_superadmin: boolean;
   login_enabled: boolean;
   is_participant_account: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdminSessionInfo = {
+  authenticated: boolean;
+  admin: { id: number; email: string; display_name: string } | null;
+};
+
+export type AdminTenantSummary = {
+  id: number;
+  name: string;
+  profile_image_path: string | null;
+  profile_image_url: string | null;
+  public_slug: string | null;
+  participant_count: number;
+  user_count: number;
+  created_at: string;
+};
+
+export type PlatformAdminSummary = {
+  id: number;
+  email: string;
+  display_name: string;
+  is_active: boolean;
   created_at: string;
   updated_at: string;
 };

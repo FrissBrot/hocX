@@ -40,7 +40,7 @@ class DocumentTemplatePartRead(DocumentTemplatePartBase):
 
 
 class DocumentTemplateBase(BaseModel):
-    code: str
+    code: str | None = None
     name: str
     description: str | None = None
     version: int = Field(default=1, ge=1)
@@ -66,6 +66,7 @@ class DocumentTemplateUpdate(BaseModel):
 class DocumentTemplateRead(DocumentTemplateBase):
     id: int
     tenant_id: int
+    code: str
     filesystem_path: str
     created_at: datetime
     updated_at: datetime

@@ -25,7 +25,6 @@ CREATE TABLE role (
 );
 
 INSERT INTO role (code, description) VALUES
-('superadmin', 'Global access across all tenants'),
 ('admin', 'Tenant administrator'),
 ('writer', 'Workspace write access'),
 ('reader', 'Read-only workspace access with PDF export');
@@ -799,11 +798,11 @@ VALUES
     '{}'::jsonb
 );
 
-INSERT INTO user_role (user_id, role_id)
-VALUES (
-    1,
-    (SELECT id FROM role WHERE code = 'superadmin')
-);
+-- Platform-admin access (cross-tenant) is no longer part of this schema; it lives in the
+-- separate platform_admin table, bootstrapped via INITIAL_ADMIN_EMAIL/INITIAL_ADMIN_PASSWORD
+-- at application startup (see app/main.py:ensure_platform_admin_bootstrap). The seeded
+-- "Super Admin" app_user above is a regular tenant-less placeholder in this fresh-install
+-- script only.
 
 INSERT INTO user_tenant_role (user_id, tenant_id, role_id, is_active)
 VALUES

@@ -43,6 +43,7 @@ class ProtocolRead(BaseModel):
     created_by: int | None = None
     created_at: datetime
     updated_at: datetime
+    latest_pdf_url: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -188,6 +189,8 @@ class TodoListItem(ProtocolTodoRead):
     protocol_title: str | None = None
     protocol_status: str | None = None
     block_title: str | None = None
+    submission_assignment_id: int | None = None
+    element_ref: str | None = None
 
 
 class ProtocolImageRead(BaseModel):

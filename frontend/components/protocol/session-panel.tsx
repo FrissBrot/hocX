@@ -385,7 +385,10 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
                           }}
                           onMouseEnter={() => setAssigneeHighlighted(index)}
                         >
-                          {p.display_name}
+                          <span className="session-panel-option-avatar">
+                            {p.display_name.trim().charAt(0)}
+                          </span>
+                          <span className="session-panel-option-name">{p.display_name}</span>
                         </button>
                       ))}
                     </div>
@@ -422,8 +425,10 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
                           }}
                           onMouseEnter={() => setDueHighlighted(index)}
                         >
-                          <span>{opt.label}</span>
-                          {opt.sub && <span className="session-panel-assignee-option-sub">{opt.sub}</span>}
+                          <span className="session-panel-option-text">
+                            <span className="session-panel-option-name">{opt.label}</span>
+                            {opt.sub && <span className="session-panel-assignee-option-sub">{opt.sub}</span>}
+                          </span>
                         </button>
                       ))}
                     </div>

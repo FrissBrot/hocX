@@ -7,7 +7,7 @@ import { ParticipantSummary, TemplateSummary } from "@/types/api";
 
 export default async function ParticipantsPage() {
   const session = await requireSession();
-  const canWrite = session.user?.is_superadmin || session.current_role === "admin" || session.current_role === "writer";
+  const canWrite = session.current_role === "admin" || session.current_role === "writer";
 
   if (!canWrite) {
     redirect("/");

@@ -57,7 +57,7 @@ def list_all_todos(
 ):
     """All todos for the tenant (admin) or only the user's assigned todos (non-admin)."""
     require_reader(user)
-    can_admin = user.is_superadmin or user.current_role == "admin"
+    can_admin = user.current_role == "admin"
     if can_admin:
         return service.list_todos_for_tenant(db, user.current_tenant_id, skip=skip, limit=limit)
     return service.list_todos_for_user(db, user.current_tenant_id, user.user_id, skip=skip, limit=limit)

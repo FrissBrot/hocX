@@ -42,12 +42,19 @@ export function TodoDueMenu({ todoId, label, onApply }: Props) {
     if (!open) return;
     if (triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
+      const gap = 6, margin = 8, estimatedHeight = 320;
+      const spaceBelow = window.innerHeight - rect.bottom - margin;
+      const spaceAbove = rect.top - margin;
+      const showAbove = spaceBelow < estimatedHeight && spaceAbove > spaceBelow;
       setPopoverStyle({
         position: "fixed",
-        top: rect.bottom + 6,
+        ...(showAbove
+          ? { bottom: window.innerHeight - rect.top + gap, maxHeight: spaceAbove }
+          : { top: rect.bottom + gap, maxHeight: spaceBelow }),
         left: rect.left,
         minWidth: Math.max(rect.width, 260),
         zIndex: 9999,
+        overflowY: "auto",
       });
     }
     if (!data) {

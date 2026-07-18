@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { DataTable } from "@/components/ui/data-table";
@@ -9,7 +9,8 @@ import { TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
 import { TodoDueMenu, DuePatch } from "@/components/todos/todo-due-menu";
 import { browserApiFetch } from "@/lib/api/client";
 import { formatDate } from "@/lib/utils/format";
-import { ParticipantSummary, TodoBlock, TodoListItem } from "@/types/api";
+import { Modal } from "@/components/ui/modal";
+import { DocumentTemplate, EventSummary, ParticipantSummary, TodoBlock, TodoListItem } from "@/types/api";
 
 const STATUS_LABEL: Record<string, string> = {
   open: "Offen",
@@ -36,9 +37,11 @@ type Props = {
   canEdit?: boolean;
   todoBlocks?: TodoBlock[];
   participants?: ParticipantSummary[];
+  documentTemplates?: DocumentTemplate[];
+  events?: EventSummary[];
 };
 
-export function TodoListView({ allTodos, myTodos, canAdmin, canEdit = true, todoBlocks = [], participants = [] }: Props) {
+export function TodoListView({ allTodos, myTodos, canAdmin, canEdit = true, todoBlocks = [], participants = [], documentTemplates = [], events = [] }: Props) {
   const router = useRouter();
   const [scope, setScope] = useState<"all" | "my">(canAdmin ? "all" : "my");
   const [statusFilter, setStatusFilter] = useState<"open" | "done" | "all">("open");
@@ -54,6 +57,109 @@ export function TodoListView({ allTodos, myTodos, canAdmin, canEdit = true, todo
   const [hasMoreAll, setHasMoreAll] = useState((allTodos?.length ?? 0) === PAGE_SIZE);
   const [hasMoreMy, setHasMoreMy] = useState(myTodos.length === PAGE_SIZE);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  const landscapeTemplates = documentTemplates.filter(
+    (t) => t.is_active && (t.configuration_json as { options?: { orientation?: string } })?.options?.orientation === "landscape"
+  );
+
+  // Export modal state
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportTemplateId, setExportTemplateId] = useState<number | "">(landscapeTemplates[0]?.id ?? "");
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportUrl, setExportUrl] = useState<string | null>(null);
+  const [exportFilter, setExportFilter] = useState<"all" | "open">("open");
+  const [exportPersonMode, setExportPersonMode] = useState<"all" | "filter" | "group">("all");
+  const [exportParticipantId, setExportParticipantId] = useState<number | "">("");
+  const [exportDateMode, setExportDateMode] = useState<"all" | "next-hock" | "until-event" | "custom-date">("all");
+  const [exportUntilEventId, setExportUntilEventId] = useState<number | "">("");
+  const [exportCustomDate, setExportCustomDate] = useState("");
+  const [templateDropdownOpen, setTemplateDropdownOpen] = useState(false);
+  const templateDropdownRef = useRef<HTMLDivElement>(null);
+  const [participantSearch, setParticipantSearch] = useState("");
+  const [participantSuggestions, setParticipantSuggestions] = useState<ParticipantSummary[]>([]);
+
+  useEffect(() => {
+    if (!templateDropdownOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (templateDropdownRef.current && !templateDropdownRef.current.contains(e.target as Node)) {
+        setTemplateDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [templateDropdownOpen]);
+
+  useEffect(() => {
+    if (!participantSearch.trim()) { setParticipantSuggestions([]); return; }
+    const q = participantSearch.toLowerCase();
+    setParticipantSuggestions(participants.filter((p) => p.display_name.toLowerCase().includes(q)).slice(0, 6));
+  }, [participantSearch, participants]);
+
+  const sortedEvents = useMemo(
+    () => [...events].sort((a, b) => a.event_date.localeCompare(b.event_date)),
+    [events]
+  );
+
+  const nextHockEvent = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const openTodos = (allTodos ?? []).filter((t) => (t.todo_status_code ?? "open") === "open" || t.todo_status_code === "in_progress");
+    const dueDates = openTodos.map((t) => t.resolved_due_date).filter(Boolean) as string[];
+    if (!dueDates.length) return sortedEvents.find((e) => e.event_date >= today) ?? null;
+    const counts: Record<string, number> = {};
+    dueDates.forEach((d) => { counts[d] = (counts[d] ?? 0) + 1; });
+    const mostCommon = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
+    if (mostCommon && mostCommon >= today) {
+      const matchingEvent = sortedEvents.find((e) => e.event_date === mostCommon);
+      if (matchingEvent) return matchingEvent;
+    }
+    return sortedEvents.find((e) => e.event_date >= today) ?? null;
+  }, [allTodos, sortedEvents]);
+
+  function getUntilDate(): string | null {
+    if (exportDateMode === "all") return null;
+    if (exportDateMode === "next-hock") return nextHockEvent?.event_date ?? null;
+    if (exportDateMode === "until-event" && exportUntilEventId) {
+      return events.find((e) => e.id === exportUntilEventId)?.event_date ?? null;
+    }
+    if (exportDateMode === "custom-date" && exportCustomDate) return exportCustomDate;
+    return null;
+  }
+
+  function triggerDownload(url: string) {
+    const a = document.createElement("a");
+    a.href = `${url}?download=1`;
+    a.target = "_blank";
+    a.rel = "noreferrer";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  async function handlePdfClick() {
+    if (exportBusy) return;
+    if (exportUrl) { triggerDownload(exportUrl); return; }
+    if (!exportTemplateId) return;
+    setExportBusy(true);
+    try {
+      const result = await browserApiFetch<{ content_url?: string | null }>("/api/exports/todos", {
+        method: "POST",
+        body: JSON.stringify({
+          template_id: exportTemplateId,
+          filter: exportFilter,
+          participant_id: exportPersonMode === "filter" && exportParticipantId ? exportParticipantId : null,
+          group_by_person: exportPersonMode === "group",
+          until_date: getUntilDate(),
+        }),
+      });
+      const url = result.content_url ?? null;
+      setExportUrl(url);
+      if (url) triggerDownload(url);
+    } catch {
+      // keep accessible on error
+    } finally {
+      setExportBusy(false);
+    }
+  }
 
   const [showCreate, setShowCreate] = useState(false);
   const [createTask, setCreateTask] = useState("");
@@ -265,6 +371,11 @@ export function TodoListView({ allTodos, myTodos, canAdmin, canEdit = true, todo
         <div className="protocol-list-toolbar-right">
           <input className="protocol-search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Suchen…" />
           <span className="muted protocol-count">{filtered.length} / {activeTodos.length}</span>
+          {landscapeTemplates.length > 0 && (
+            <button type="button" className="button-inline button-ghost" onClick={() => setExportModalOpen(true)}>
+              Export
+            </button>
+          )}
           {canEdit && (
             <button type="button" className="button-inline" onClick={() => setShowCreate((v) => !v)}>
               {showCreate ? "Abbrechen" : "+ Todo"}
@@ -319,19 +430,25 @@ export function TodoListView({ allTodos, myTodos, canAdmin, canEdit = true, todo
           return (
             <tr key={todo.id} className={isDone ? "table-row-done" : ""}>
               <td>
-                <button
-                  type="button"
-                  className={`todo-check${isDone ? " todo-check-done" : ""}${!canEdit ? " todo-check-readonly" : ""}`}
-                  title={!canEdit ? "" : isDone ? "Als offen markieren" : "Als erledigt markieren"}
-                  disabled={busy[todo.id] || !canEdit}
-                  onClick={() => canEdit && void cycleStatus(todo)}
-                >
-                  {isDone ? (
-                    <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" strokeWidth="1.5"/><path d="M4.5 8.5l2.5 2.5 4.5-4.5" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  ) : (
-                    <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" strokeWidth="1.5"/></svg>
-                  )}
-                </button>
+                {(() => {
+                  const isAuto = !!todo.submission_assignment_id;
+                  const lockedClass = !isDone && isAuto ? " todo-check-locked" : !canEdit ? " todo-check-readonly" : "";
+                  return (
+                    <button
+                      type="button"
+                      className={`todo-check${isDone ? " todo-check-done" : ""}${lockedClass}`}
+                      title={isAuto ? "Wird automatisch durch Abgabe geschlossen" : !canEdit ? "" : isDone ? "Als offen markieren" : "Als erledigt markieren"}
+                      disabled={busy[todo.id] || !canEdit || isAuto}
+                      onClick={() => (canEdit && !isAuto) && void cycleStatus(todo)}
+                    >
+                      {isDone ? (
+                        <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" strokeWidth="1.5"/><path d="M4.5 8.5l2.5 2.5 4.5-4.5" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                      ) : (
+                        <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" strokeWidth="1.5"/></svg>
+                      )}
+                    </button>
+                  );
+                })()}
               </td>
               <td>
                 <span className="todo-row-task-text">{todo.task}</span>
@@ -361,6 +478,11 @@ export function TodoListView({ allTodos, myTodos, canAdmin, canEdit = true, todo
                     {todo.protocol_title ? <span className="todo-protocol-title">{todo.protocol_title}</span> : null}
                     {todo.block_title ? <span className="todo-protocol-block">· {todo.block_title}</span> : null}
                   </button>
+                ) : todo.reference_link ? (
+                  <a href={todo.reference_link} target="_blank" rel="noreferrer" className="todo-protocol-link">
+                    <span className="todo-protocol-num">Abgabebox</span>
+                    <span className="todo-protocol-block">↗</span>
+                  </a>
                 ) : (
                   <span className="muted">—</span>
                 )}
@@ -413,6 +535,249 @@ export function TodoListView({ allTodos, myTodos, canAdmin, canEdit = true, todo
           </button>
         </div>
       )}
+
+      <Modal
+        open={exportModalOpen}
+        title="Todos exportieren"
+        onClose={() => { setExportModalOpen(false); setExportUrl(null); }}
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 20, minWidth: 360, maxWidth: 480 }}>
+
+          {/* Status filter */}
+          <div>
+            <div style={{ fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", marginBottom: 8 }}>Status</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {(["open", "all"] as const).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  className={exportFilter === f ? "tag-filter-chip tag-filter-chip-active" : "tag-filter-chip"}
+                  style={{ width: "auto", minHeight: 0 }}
+                  onClick={() => { setExportFilter(f); setExportUrl(null); }}
+                >
+                  {f === "open" ? "Offene Todos" : "Alle Todos"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Person filter */}
+          <div>
+            <div style={{ fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", marginBottom: 8 }}>Person</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {(["all", "filter", "group"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  className={exportPersonMode === mode ? "tag-filter-chip tag-filter-chip-active" : "tag-filter-chip"}
+                  style={{ width: "auto", minHeight: 0 }}
+                  onClick={() => { setExportPersonMode(mode); setExportUrl(null); if (mode !== "filter") { setExportParticipantId(""); setParticipantSearch(""); } }}
+                >
+                  {mode === "all" ? "Alle" : mode === "filter" ? "Person filtern" : "Nach Person gruppieren"}
+                </button>
+              ))}
+            </div>
+            {exportPersonMode === "filter" && (
+              <div style={{ marginTop: 10, position: "relative" }}>
+                <input
+                  type="text"
+                  placeholder="Person suchen…"
+                  value={participantSearch}
+                  onChange={(e) => { setParticipantSearch(e.target.value); if (!e.target.value) setExportParticipantId(""); }}
+                  style={{
+                    width: "100%", boxSizing: "border-box",
+                    padding: "6px 10px", borderRadius: 6,
+                    border: "1px solid var(--border)",
+                    backgroundColor: "var(--surface)",
+                    color: "var(--text)",
+                    fontSize: "0.9rem",
+                    minHeight: 0,
+                    outline: "none",
+                  }}
+                />
+                {participantSuggestions.length > 0 && (
+                  <div style={{
+                    position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 60,
+                    backgroundColor: "var(--panel-solid)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 6,
+                    boxShadow: "0 6px 20px rgba(0,0,0,0.2)",
+                    padding: "4px 0",
+                  }}>
+                    {participantSuggestions.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        style={{
+                          display: "block", width: "100%", textAlign: "left",
+                          padding: "6px 12px", background: "none", border: "none",
+                          color: "var(--text)", cursor: "pointer", fontSize: "0.9rem",
+                          minHeight: 0,
+                          fontWeight: exportParticipantId === p.id ? 700 : 400,
+                        }}
+                        onClick={() => {
+                          setExportParticipantId(p.id);
+                          setParticipantSearch(p.display_name);
+                          setParticipantSuggestions([]);
+                          setExportUrl(null);
+                        }}
+                      >
+                        {p.display_name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Date filter */}
+          <div>
+            <div style={{ fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", marginBottom: 8 }}>Zeitraum</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {(["all", "next-hock", "until-event", "custom-date"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  className={exportDateMode === mode ? "tag-filter-chip tag-filter-chip-active" : "tag-filter-chip"}
+                  style={{ width: "auto", minHeight: 0 }}
+                  onClick={() => { setExportDateMode(mode); setExportUrl(null); }}
+                >
+                  {mode === "all" ? "Alle" : mode === "next-hock" ? "Nächster Hock" : mode === "until-event" ? "Bis Termin" : "Eigenes Datum"}
+                </button>
+              ))}
+            </div>
+            {exportDateMode === "next-hock" && (
+              <div style={{ marginTop: 8, fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                {nextHockEvent
+                  ? `Bis ${nextHockEvent.title ?? "Termin"} (${formatDate(nextHockEvent.event_date)})`
+                  : "Kein passender Hock gefunden"}
+              </div>
+            )}
+            {exportDateMode === "until-event" && (
+              <div style={{ marginTop: 8 }}>
+                <select
+                  value={exportUntilEventId}
+                  onChange={(e) => { setExportUntilEventId(Number(e.target.value)); setExportUrl(null); }}
+                  style={{
+                    padding: "6px 10px", borderRadius: 6,
+                    border: "1px solid var(--border)",
+                    backgroundColor: "var(--panel-solid)",
+                    color: "var(--text)",
+                    fontSize: "0.9rem",
+                    width: "100%",
+                    boxSizing: "border-box",
+                    minHeight: 0,
+                  }}
+                >
+                  <option value="">Termin wählen…</option>
+                  {sortedEvents.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {formatDate(e.event_date)}{e.title ? ` — ${e.title}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {exportDateMode === "custom-date" && (
+              <div style={{ marginTop: 8 }}>
+                <input
+                  type="date"
+                  value={exportCustomDate}
+                  onChange={(e) => { setExportCustomDate(e.target.value); setExportUrl(null); }}
+                  style={{
+                    padding: "6px 10px", borderRadius: 6,
+                    border: "1px solid var(--border)",
+                    backgroundColor: "var(--panel-solid)",
+                    color: "var(--text)",
+                    fontSize: "0.9rem",
+                    minHeight: 0,
+                    width: "100%",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Action bar */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+            <button
+              type="button"
+              className="pdf-icon-link pdf-icon-link-success"
+              style={{ minWidth: 56, textAlign: "center" }}
+              onClick={() => void handlePdfClick()}
+              disabled={!exportTemplateId}
+            >
+              {exportBusy ? "…" : exportUrl ? "PDF ↓" : "PDF"}
+            </button>
+            <button
+              type="button"
+              className="pdf-icon-link"
+              style={{ minWidth: 56, textAlign: "center", backgroundColor: "#a78bfa", color: "#fff", opacity: 0.5, cursor: "not-allowed" }}
+              disabled
+            >
+              MD
+            </button>
+
+            <div style={{ flex: 1 }} />
+
+            {/* Template dropdown */}
+            {landscapeTemplates.length > 1 && (
+              <div ref={templateDropdownRef} style={{ position: "relative" }}>
+                <button
+                  type="button"
+                  onClick={() => setTemplateDropdownOpen((v) => !v)}
+                  style={{
+                    padding: "5px 10px",
+                    borderRadius: 6,
+                    border: "1px solid var(--border)",
+                    backgroundColor: "transparent",
+                    color: "var(--text)",
+                    fontSize: "0.85rem",
+                    cursor: "pointer",
+                    minHeight: 0,
+                    whiteSpace: "nowrap",
+                    maxWidth: 180,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {landscapeTemplates.find((t) => t.id === exportTemplateId)?.name ?? "Vorlage"} ▾
+                </button>
+                {templateDropdownOpen && (
+                  <div style={{
+                    position: "absolute", right: 0, bottom: "calc(100% + 4px)", zIndex: 70,
+                    backgroundColor: "var(--panel-solid)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 6,
+                    boxShadow: "0 6px 20px rgba(0,0,0,0.2)",
+                    padding: "4px 0",
+                    minWidth: 180,
+                  }}>
+                    {landscapeTemplates.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => { setExportTemplateId(t.id); setTemplateDropdownOpen(false); setExportUrl(null); }}
+                        style={{
+                          display: "block", width: "100%", textAlign: "left",
+                          padding: "6px 12px", background: "none", border: "none",
+                          color: "var(--text)", cursor: "pointer", fontSize: "0.9rem",
+                          minHeight: 0,
+                          fontWeight: exportTemplateId === t.id ? 700 : 400,
+                        }}
+                      >
+                        {t.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

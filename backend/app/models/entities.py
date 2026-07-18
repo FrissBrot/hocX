@@ -21,7 +21,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
@@ -42,6 +42,7 @@ class Tenant(Base, TimestampMixin):
     profile_image_path: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
     tag_config_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
+    public_slug: Mapped[str | None] = mapped_column(Text, unique=True)
 
 
 class TenantOidcConfig(Base, TimestampMixin, UpdatedAtMixin):
@@ -90,6 +91,20 @@ class AppUser(Base, TimestampMixin, UpdatedAtMixin):
     oidc_issuer: Mapped[str | None] = mapped_column(Text)
     oidc_email: Mapped[str | None] = mapped_column(Text)
     external_identity_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
+
+
+class PlatformAdmin(Base, TimestampMixin, UpdatedAtMixin):
+    """Betreiber-Account fürs zentrale Admin-Panel. Komplett getrennt vom Kunden-`AppUser`-System."""
+
+    __tablename__ = "platform_admin"
+    __table_args__ = (UniqueConstraint("email", name="uq_platform_admin_email"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    email: Mapped[str] = mapped_column(Text, nullable=False)
+    password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    display_name: Mapped[str] = mapped_column(Text, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
+    session_revoke_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class UserRole(Base):
@@ -181,6 +196,47 @@ class Event(Base, TimestampMixin, UpdatedAtMixin):
     description: Mapped[str | None] = mapped_column(Text)
     participant_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     group_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("group_entity.id", ondelete="SET NULL"))
+    organizer_ids: Mapped[list[int] | None] = mapped_column(JSONB)
+    leadership_ids: Mapped[list[int] | None] = mapped_column(JSONB)
+    participant_ids: Mapped[list[int] | None] = mapped_column(JSONB)
+    spezial1_ids: Mapped[list[int] | None] = mapped_column(JSONB)
+    spezial2_ids: Mapped[list[int] | None] = mapped_column(JSONB)
+    spezial3_ids: Mapped[list[int] | None] = mapped_column(JSONB)
+    location: Mapped[str | None] = mapped_column(Text)
+    spezial_text1: Mapped[str | None] = mapped_column(Text)
+    spezial_text2: Mapped[str | None] = mapped_column(Text)
+    spezial_text3: Mapped[str | None] = mapped_column(Text)
+    cycle_assignments: Mapped[list[EventCycle]] = relationship(
+        "EventCycle",
+        primaryjoin="Event.id == EventCycle.event_id",
+        foreign_keys="EventCycle.event_id",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+
+
+class CycleConfig(Base, TimestampMixin, UpdatedAtMixin):
+    __tablename__ = "cycle_config"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    reset_month: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("12"))
+    reset_day: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("31"))
+    name_pattern: Mapped[str | None] = mapped_column(Text)
+
+
+class EventCycle(Base):
+    __tablename__ = "event_cycle"
+    __table_args__ = (
+        PrimaryKeyConstraint("event_id", "cycle_config_id", "cycle_year", name="pk_event_cycle"),
+        Index("idx_event_cycle_event", "event_id"),
+        Index("idx_event_cycle_config_year", "cycle_config_id", "cycle_year"),
+    )
+
+    event_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("event.id", ondelete="CASCADE"), nullable=False)
+    cycle_config_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("cycle_config.id", ondelete="CASCADE"), nullable=False)
+    cycle_year: Mapped[int] = mapped_column(SmallInteger, nullable=False)
 
 
 class ListDefinition(Base, TimestampMixin, UpdatedAtMixin):
@@ -305,8 +361,8 @@ class Template(Base, TimestampMixin, UpdatedAtMixin):
     protocol_number_pattern: Mapped[str | None] = mapped_column(Text)
     title_pattern: Mapped[str | None] = mapped_column(Text)
     auto_create_next_protocol: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
-    cycle_reset_month: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("12"))
-    cycle_reset_day: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("31"))
+    cycle_config_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("cycle_config.id", ondelete="SET NULL"))
+    cycle_config: Mapped[CycleConfig | None] = relationship("CycleConfig", foreign_keys="Template.cycle_config_id", lazy="selectin")
     version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'active'"))
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
@@ -512,6 +568,7 @@ class StoredFile(Base, TimestampMixin):
     latex_path: Mapped[str | None] = mapped_column(Text)
     file_size_bytes: Mapped[int | None] = mapped_column(BigInteger)
     checksum_sha256: Mapped[str | None] = mapped_column(Text)
+    scan_status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'clean'"))
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
 
 
@@ -573,6 +630,8 @@ class ProtocolTodo(Base, TimestampMixin, UpdatedAtMixin):
     tags: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
     closed_in_protocol_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="SET NULL"))
+    submission_assignment_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("submission_assignment.id", ondelete="CASCADE"))
+    element_ref: Mapped[str | None] = mapped_column(Text)
 
 
 class ProtocolImage(Base, TimestampMixin):
@@ -663,4 +722,100 @@ class AttendanceFine(Base, TimestampMixin):
     collected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     collected_transaction_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("finance_transaction.id", ondelete="SET NULL"))
     closed_in_protocol_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="SET NULL"))
+
+
+class SubmissionAssignment(Base, TimestampMixin, UpdatedAtMixin):
+    """Konfiguration einer Abgabe (Upload-Box), gekoppelt an Termine (per Tag-Filter + Offset) oder eine Liste (+ Stichtag)."""
+
+    __tablename__ = "submission_assignment"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "public_slug", name="uq_submission_assignment_tenant_slug"),
+        CheckConstraint("source_type IN ('events', 'list')", name="ck_submission_assignment_source_type"),
+        CheckConstraint(
+            "(source_type = 'events' AND tag_filter IS NOT NULL AND offset_days_before IS NOT NULL "
+            "AND offset_days_after IS NOT NULL AND list_definition_id IS NULL AND deadline IS NULL) OR "
+            "(source_type = 'list' AND list_definition_id IS NOT NULL AND deadline IS NOT NULL "
+            "AND tag_filter IS NULL AND offset_days_before IS NULL AND offset_days_after IS NULL)",
+            name="ck_submission_assignment_source_fields",
+        ),
+        CheckConstraint("offset_days_before IS NULL OR offset_days_before >= 0", name="ck_submission_assignment_offset_before"),
+        CheckConstraint("offset_days_after IS NULL OR offset_days_after >= 0", name="ck_submission_assignment_offset_after"),
+        CheckConstraint("max_files_per_element >= 1", name="ck_submission_assignment_max_files"),
+        CheckConstraint("max_file_size_mb >= 1", name="ck_submission_assignment_max_size"),
+        Index("idx_submission_assignment_tenant_active", "tenant_id", "is_active"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    public_slug: Mapped[str] = mapped_column(Text, nullable=False)
+    source_type: Mapped[str] = mapped_column(Text, nullable=False)
+    tag_filter: Mapped[str | None] = mapped_column(Text)
+    offset_days_before: Mapped[int | None] = mapped_column(Integer)
+    offset_days_after: Mapped[int | None] = mapped_column(Integer)
+    list_definition_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("list_definition.id", ondelete="RESTRICT"))
+    deadline: Mapped[date | None] = mapped_column(Date)
+    allowed_file_types: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
+    max_files_per_element: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("5"))
+    max_file_size_mb: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("20"))
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
+    responsible_participant_source: Mapped[str | None] = mapped_column(Text)
+
+
+class SubmissionUpload(Base, TimestampMixin):
+    """Append-only Log der Abgabe-Ereignisse (Erstabgabe/Reopen/erneute Abgabe) je Element.
+
+    Bewusst append-only statt mutierbar: die restricted Postgres-Rolle des separaten
+    abgabebox-backend-Service darf auf dieser Tabelle nur INSERT (kein UPDATE/DELETE),
+    damit ein kompromittierter öffentlicher Prozess frühere Abgaben nicht verändern kann.
+    Der aktuelle Zustand eines Elements ist der Status der Zeile mit der höchsten id
+    je (assignment_id, event_id|list_entry_id).
+    """
+
+    __tablename__ = "submission_upload"
+    __table_args__ = (
+        CheckConstraint(
+            "(event_id IS NOT NULL AND list_entry_id IS NULL) OR (event_id IS NULL AND list_entry_id IS NOT NULL)",
+            name="ck_submission_upload_exactly_one_target",
+        ),
+        CheckConstraint("status IN ('submitted', 'reopened')", name="ck_submission_upload_status"),
+        Index("idx_submission_upload_assignment_event", "assignment_id", "event_id"),
+        Index("idx_submission_upload_assignment_list_entry", "assignment_id", "list_entry_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    assignment_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("submission_assignment.id", ondelete="CASCADE"), nullable=False)
+    event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("event.id", ondelete="CASCADE"))
+    list_entry_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("list_entry.id", ondelete="CASCADE"))
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SubmissionUploadFile(Base, TimestampMixin):
+    __tablename__ = "submission_upload_file"
+    __table_args__ = (
+        UniqueConstraint("upload_id", "sort_index", name="uq_submission_upload_file_sort"),
+        Index("idx_submission_upload_file_upload", "upload_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    upload_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("submission_upload.id", ondelete="CASCADE"), nullable=False)
+    stored_file_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("stored_file.id", ondelete="RESTRICT"), nullable=False)
+    sort_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     delete_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class SubmissionUploadLog(Base):
+    __tablename__ = "submission_upload_log"
+    __table_args__ = (
+        Index("idx_upload_log_assignment_element", "assignment_id", "element_ref"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    assignment_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("submission_assignment.id", ondelete="CASCADE"), nullable=False)
+    element_ref: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+

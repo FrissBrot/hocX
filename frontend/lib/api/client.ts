@@ -57,5 +57,8 @@ export async function browserApiFetch<T>(path: string, init?: RequestInit): Prom
     throw new Error(message);
   }
 
+  if (response.status === 204 || response.headers.get("content-length") === "0") {
+    return null as T;
+  }
   return (await response.json()) as T;
 }

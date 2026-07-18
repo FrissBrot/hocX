@@ -5,7 +5,7 @@ import { ElementDefinition, EventSummary, FinanceAccount, ParticipantSummary, St
 
 export default async function ElementsPage() {
   const session = await requireSession();
-  const canAdmin = session.user?.is_superadmin || session.current_role === "admin";
+  const canAdmin = session.current_role === "admin";
   const definitions = await backendFetchWithSession<ElementDefinition[]>("/api/element-definitions");
   const events = (await backendFetchWithSession<EventSummary[]>("/api/events")) ?? [];
   const lists = (await backendFetchWithSession<StructuredListDefinition[]>("/api/lists")) ?? [];

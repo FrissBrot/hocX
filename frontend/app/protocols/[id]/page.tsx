@@ -1,5 +1,6 @@
 import { ProtocolEditor } from "@/components/protocol/protocol-editor";
 import { ProtocolOverview } from "@/components/protocol/protocol-builder";
+import { ProtocolExportPanel } from "@/components/protocol/protocol-export-panel";
 import { AppShell } from "@/components/ui/app-shell";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import {
@@ -20,8 +21,8 @@ import {
 
 export default async function ProtocolDetailPage({ params }: { params: { id: string } }) {
   const session = await requireSession();
-  const isRestricted = !session.user?.is_superadmin && ["reader", "kassier"].includes(session.current_role ?? "");
-  const canViewFines = session.user?.is_superadmin || ["kassier", "writer", "admin"].includes(session.current_role ?? "");
+  const isRestricted = ["reader", "kassier"].includes(session.current_role ?? "");
+  const canViewFines = ["kassier", "writer", "admin"].includes(session.current_role ?? "");
   const protocol = await backendFetchWithSession<ProtocolSummary>(`/api/protocols/${params.id}`);
 
   if (!protocol) {
@@ -84,6 +85,7 @@ export default async function ProtocolDetailPage({ params }: { params: { id: str
   const initialImages = Object.fromEntries(imageLists.map((item) => [item.protocolElementBlockId, item.images]));
 
   const pendingTodos = (await backendFetchWithSession<TodoListItem[]>(`/api/protocols/${params.id}/pending-todos`)) ?? [];
+  const latestExport = (await backendFetchWithSession(`/api/protocols/${params.id}/exports/latest`)) ?? { protocol_id: Number(params.id), export_format: "none", status: "missing" };
 
   const financeAccounts = (await backendFetchWithSession<FinanceAccount[]>("/api/finance/accounts")) ?? [];
   // Pre-load transactions for finance blocks
@@ -107,6 +109,10 @@ export default async function ProtocolDetailPage({ params }: { params: { id: str
     <AppShell initialSession={session}>
       <section className="panel">
         <ProtocolOverview protocol={protocol} />
+        <ProtocolExportPanel
+          protocol={protocol}
+          initialLatestExport={latestExport as any}
+        />
         <ProtocolEditor
           protocol={protocol}
           initialElements={elements}
@@ -120,6 +126,7 @@ export default async function ProtocolDetailPage({ params }: { params: { id: str
           availableAccounts={financeAccounts}
           initialFinanceTransactions={initialFinanceTransactions}
           initialPendingTodos={pendingTodos}
+          documentTemplates={documentTemplates}
           forceReadOnly={isRestricted}
           canViewFines={canViewFines}
         />

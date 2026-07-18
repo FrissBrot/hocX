@@ -13,12 +13,17 @@ import { DateInput } from "@/components/ui/date-input";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Modal } from "@/components/ui/modal";
 import { TagInput } from "@/components/ui/tag-input";
+import { ChartBlock, bumpStatsCharts } from "@/components/protocol/chart-block";
+import { CollaborationPresenceBar, LockBadge } from "@/components/protocol/collaboration-presence";
+import { useProtocolCollaboration } from "@/lib/hooks/use-protocol-collaboration";
 import { useTagConfig } from "@/lib/hooks/use-tag-config";
 import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { formatDate, formatDateRange } from "@/lib/utils/format";
+import { getCycleYear } from "@/lib/utils/cycle";
 import {
   AttendanceFine,
   AttendanceFineListItem,
+  DocumentTemplate,
   EventSummary,
   FinanceAccount,
   FinanceTransaction,
@@ -47,6 +52,7 @@ type ProtocolEditorProps = {
   availableAccounts: FinanceAccount[];
   initialFinanceTransactions: Record<number, FinanceTransaction[]>;
   initialPendingTodos?: TodoListItem[];
+  documentTemplates?: DocumentTemplate[];
   forceReadOnly?: boolean;
   canViewFines?: boolean;
 };
@@ -366,7 +372,8 @@ function embeddedBlockSummary(
   availableParticipants: ParticipantSummary[],
   availableEvents: EventSummary[],
   protocol: ProtocolSummary,
-  matrixColumn?: Record<string, any>
+  matrixColumn?: Record<string, any>,
+  availableTemplates?: import("@/types/api").TemplateSummary[]
 ) {
   const config = asObject(embeddedBlock.configuration_snapshot_json);
   const elementTypeId = Number(embeddedBlock.element_type_id ?? 0);
@@ -392,13 +399,22 @@ function embeddedBlockSummary(
     const tagFilters = String(config.event_tag_filter ?? "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
     const columnTagFilters = config.event_use_column_tag_filter === true
       ? String(matrixColumn?.event_tag_filter || matrixColumn?.title || "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean) : [];
+    const summaryTemplate = availableTemplates?.find((t) => t.id === protocol.template_id);
+    const summaryCycleYear = protocol.protocol_date && summaryTemplate?.cycle_config
+      ? getCycleYear(protocol.protocol_date, summaryTemplate.cycle_config.reset_month, summaryTemplate.cycle_config.reset_day)
+      : null;
     const matchingEvents = availableEvents.filter((event) => {
       const effectiveEndDate = event.event_end_date || event.event_date;
       const matchesDate = !protocol.protocol_date ? true : config.event_only_before_protocol_date === true ? effectiveEndDate < protocol.protocol_date : config.event_only_from_protocol_date === false ? true : effectiveEndDate >= protocol.protocol_date;
       const eventTag = (event.tag ?? "").toLowerCase();
       const matchesTag = (!tagFilters.length || tagFilters.some((t) => eventTag.includes(t))) &&
         (!columnTagFilters.length || columnTagFilters.some((t) => eventTag.includes(t)));
-      return matchesDate && matchesTag;
+      const matchesCycle = config.event_only_current_cycle !== true || summaryCycleYear === null
+        ? true
+        : (event.cycle_assignments ?? []).some(
+            (a) => a.cycle_config_id === summaryTemplate?.cycle_config_id && a.cycle_year === summaryCycleYear
+          );
+      return matchesDate && matchesTag && matchesCycle;
     });
     return matchingEvents.length ? `${matchingEvents.length} Termin${matchingEvents.length === 1 ? "" : "e"}` : "Keine Termine";
   }
@@ -438,6 +454,31 @@ function visibleBlockTitle(block: {
   return blockTitle || displayTitle || title || null;
 }
 
+function smartPopoverStyle(
+  rect: DOMRect,
+  minWidth: number,
+  align: "start" | "end" = "start",
+  estimatedHeight = 320,
+): React.CSSProperties {
+  const gap = 6;
+  const margin = 8;
+  const spaceBelow = window.innerHeight - rect.bottom - margin;
+  const spaceAbove = rect.top - margin;
+  const showAbove = spaceBelow < estimatedHeight && spaceAbove > spaceBelow;
+  return {
+    position: "fixed",
+    ...(showAbove
+      ? { bottom: window.innerHeight - rect.top + gap, maxHeight: spaceAbove }
+      : { top: rect.bottom + gap, maxHeight: spaceBelow }),
+    ...(align === "end"
+      ? { right: window.innerWidth - rect.right }
+      : { left: rect.left }),
+    minWidth: Math.max(rect.width, minWidth),
+    zIndex: 9999,
+    overflowY: "auto",
+  };
+}
+
 function TodoMiniMenu({
   label,
   compact = false,
@@ -457,15 +498,7 @@ function TodoMiniMenu({
     if (!open) return;
     if (triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
-      setPopoverStyle({
-        position: "fixed",
-        top: rect.bottom + 6,
-        ...(align === "end"
-          ? { right: window.innerWidth - rect.right }
-          : { left: rect.left }),
-        minWidth: Math.max(rect.width, 220),
-        zIndex: 9999,
-      });
+      setPopoverStyle(smartPopoverStyle(rect, 220, align));
     }
   }, [open, align]);
 
@@ -544,6 +577,8 @@ function MatrixEmbeddedBlockEditor({
   createEvent,
   updateEvent,
   deleteEvent,
+  currentCycleYear,
+  cycleConfigId,
 }: {
   embeddedBlock: MatrixEmbeddedBlock;
   protocol: ProtocolSummary;
@@ -556,6 +591,8 @@ function MatrixEmbeddedBlockEditor({
   createEvent: (forcedTag: string, draft: ProtocolEventDraft) => Promise<boolean>;
   updateEvent: (eventId: number, patch: Partial<EventSummary>) => Promise<boolean>;
   deleteEvent: (eventId: number) => Promise<void>;
+  currentCycleYear: number | null;
+  cycleConfigId: number | null;
 }) {
   const elementTypeId = Number(embeddedBlock.element_type_id ?? 0);
   const embeddedConfig = asObject(embeddedBlock.configuration_snapshot_json);
@@ -1124,7 +1161,12 @@ function MatrixEmbeddedBlockEditor({
         (!tagFilters.length || tagFilters.some((t) => eventTag.includes(t))) &&
         (!columnTagFilters.length || columnTagFilters.some((t) => eventTag.includes(t)));
       const matchesDate = !protocol.protocol_date ? true : embeddedConfig.event_only_before_protocol_date === true ? effectiveEndDate < protocol.protocol_date : embeddedConfig.event_only_from_protocol_date === false ? true : effectiveEndDate >= protocol.protocol_date;
-      return matchesTag && matchesDate;
+      const matchesCycle = embeddedConfig.event_only_current_cycle !== true || currentCycleYear === null
+        ? true
+        : (eventRow.cycle_assignments ?? []).some(
+            (a) => a.cycle_config_id === cycleConfigId && a.cycle_year === currentCycleYear
+          );
+      return matchesTag && matchesDate && matchesCycle;
     });
     const embeddedEventDraftValue = (eventRow: EventSummary) => ({
       ...eventRow,
@@ -1419,6 +1461,25 @@ function MatrixEmbeddedBlockEditor({
                     }))
                   }
                   onBlur={() => updateEmbeddedBlock((current) => current, true)}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" || event.shiftKey) return;
+                    event.preventDefault();
+                    if (item === "") {
+                      updateEmbeddedConfig((current) => ({
+                        ...current,
+                        bullet_items: bulletItems.filter((_, i) => i !== index),
+                      }), true);
+                    } else {
+                      const nextItems = [...bulletItems.slice(0, index + 1), "", ...bulletItems.slice(index + 1)];
+                      updateEmbeddedConfig((current) => ({ ...current, bullet_items: nextItems }), false);
+                      const el = event.currentTarget;
+                      window.setTimeout(() => {
+                        const container = el.closest(".todo-list");
+                        const textareas = container?.querySelectorAll<HTMLTextAreaElement>("textarea.todo-input");
+                        textareas?.[index + 1]?.focus();
+                      }, 50);
+                    }
+                  }}
                 />
               </div>
               <button
@@ -1561,6 +1622,15 @@ function MatrixEmbeddedBlockEditor({
   return <span className="muted">Dieser Zell-Blocktyp ist noch nicht verfügbar.</span>;
 }
 
+function ChartBlockRenderer({ blockId, config, editable, onSave }: {
+  blockId: number;
+  config: { chart_type?: string; cycle_key?: string };
+  editable: boolean;
+  onSave: (cfg: Record<string, unknown>) => void;
+}) {
+  return <ChartBlock blockId={blockId} config={config} editable={editable} onSave={onSave} />;
+}
+
 export function ProtocolEditor({
   protocol,
   initialElements,
@@ -1574,12 +1644,17 @@ export function ProtocolEditor({
   availableAccounts,
   initialFinanceTransactions,
   initialPendingTodos = [],
+  documentTemplates = [],
   forceReadOnly = false,
   canViewFines = true,
 }: ProtocolEditorProps) {
   const router = useRouter();
   const [elements, setElements] = useState(initialElements);
   const [events, setEvents] = useState(availableEvents);
+  const currentTemplate = availableTemplates.find((t) => t.id === protocol.template_id) ?? null;
+  const currentCycleYear: number | null = protocol.protocol_date && currentTemplate?.cycle_config
+    ? getCycleYear(protocol.protocol_date, currentTemplate.cycle_config.reset_month, currentTemplate.cycle_config.reset_day)
+    : null;
   const [listEntriesByDefinition, setListEntriesByDefinition] = useState<Record<number, StructuredListEntry[]>>(initialListEntries);
   const [todosByBlock, setTodosByBlock] = useState<Record<number, ProtocolTodo[]>>(initialTodos);
   const [pendingTodos, setPendingTodos] = useState<TodoListItem[]>(initialPendingTodos);
@@ -1587,6 +1662,8 @@ export function ProtocolEditor({
   const [financeTransactions, setFinanceTransactions] = useState<Record<number, FinanceTransaction[]>>(initialFinanceTransactions);
   const [protocolFines, setProtocolFines] = useState<AttendanceFine[]>([]);
   const [pendingFines, setPendingFines] = useState<AttendanceFineListItem[]>([]);
+  // Refresh chart blocks whenever fines change (add/delete)
+  useEffect(() => { bumpStatsCharts(); }, [protocolFines.length]);
   const [textDrafts, setTextDrafts] = useState<Record<number, string>>(
     Object.fromEntries(
       initialElements.flatMap((element) =>
@@ -1613,6 +1690,28 @@ export function ProtocolEditor({
   const [showSavedIndicator, setShowSavedIndicator] = useState(false);
   const savedIndicatorTimerRef = useRef<number | null>(null);
   const prevBlockStatusRef = useRef<Record<number, SaveState>>({});
+  const collab = useProtocolCollaboration(protocol.id);
+  const [showStatusChangeWarning, setShowStatusChangeWarning] = useState(false);
+
+  useEffect(
+    () =>
+      collab.onStatusChanged(({ status, display_name }) => {
+        setProtocolStatus(status);
+        showToast(`Status wurde von ${display_name} zu "${protocolStatusLabel(status)}" geändert.`);
+      }),
+    [collab.onStatusChanged, showToast]
+  );
+
+  useEffect(
+    () =>
+      collab.onFieldUpdate(({ field_key, patch }) => {
+        if (!field_key.startsWith("block-")) return;
+        const blockId = Number(field_key.slice("block-".length).split("-cell-")[0]);
+        if (!Number.isFinite(blockId) || !patch || typeof patch !== "object") return;
+        updateBlockInState(blockId, (block) => ({ ...block, ...(patch as Partial<typeof block>) }));
+      }),
+    [collab.onFieldUpdate]
+  );
 
   useEffect(() => {
     if (!canViewFines) return;
@@ -1668,35 +1767,9 @@ export function ProtocolEditor({
   };
 
 
-  const transitionStatus = async () => {
+  const performStatusTransition = async () => {
     const next = workflowMeta[protocolStatus]?.nextStatus;
     if (!next) return;
-
-    if (next === "abgeschlossen") {
-      const hasRealContent = (s: string | null | undefined) => /[\p{L}\p{N}]/u.test(s ?? "");
-      const missingComment = (f: { status: string; delete_comment: string | null }) =>
-        f.status === "deleted" && !hasRealContent(f.delete_comment);
-      const missing = [
-        ...protocolFines.filter(missingComment),
-        ...pendingFines.filter(missingComment),
-      ];
-      if (missing.length > 0) {
-        const fineTypeLabel = (t: string) => t === "late" ? "Verspätet" : "Unentschuldigt";
-        const names = missing.map((f) => `${f.participant_name_snapshot} (${fineTypeLabel(f.fine_type)})`).join(", ");
-        const firstId = missing[0].id;
-        showToast(`Fehlender Kommentar bei gelöschten Bussen: ${names} – klicken zum Hinspringen`, "error", {
-          onMessageClick: () => {
-            const el = document.getElementById(`fine-row-${firstId}`);
-            if (el) {
-              el.scrollIntoView({ behavior: "smooth", block: "center" });
-              el.classList.add("fine-row-highlight");
-              setTimeout(() => el.classList.remove("fine-row-highlight"), 1800);
-            }
-          },
-        });
-        return;
-      }
-    }
 
     setTransitioningStatus(true);
     try {
@@ -1705,6 +1778,7 @@ export function ProtocolEditor({
         body: JSON.stringify({ status: next }),
       });
       setProtocolStatus(next);
+      collab.sendStatusChanged(next);
       router.refresh();
       router.push("/protocols");
     } catch (err: unknown) {
@@ -1712,6 +1786,15 @@ export function ProtocolEditor({
     } finally {
       setTransitioningStatus(false);
     }
+  };
+
+  const transitionStatus = () => {
+    if (!workflowMeta[protocolStatus]?.nextStatus) return;
+    if (collab.hasOtherActiveEditors) {
+      setShowStatusChangeWarning(true);
+      return;
+    }
+    void performStatusTransition();
   };
   const timers = useRef<Record<number, number>>({});
   const shouldScrollToElementRef = useRef(false);
@@ -1830,7 +1913,7 @@ export function ProtocolEditor({
         const section = document.getElementById(`protocol-element-${selectedElementId}`);
         if (!section) return;
         const firstEditable = section.querySelector<HTMLElement>(
-          'textarea:not([readonly]), input:not([readonly]):not([type="file"])'
+          '[data-form-input], textarea:not([readonly]), input:not([readonly]):not([type="file"])'
         );
         firstEditable?.focus();
       }, 120);
@@ -1840,7 +1923,7 @@ export function ProtocolEditor({
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
-      const inFormField = target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
+      const inFormField = target && (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) || target.isContentEditable);
 
       // Ctrl+Alt+T → open session panel and focus todo input
       if (event.key === "t" && (event.ctrlKey || event.metaKey) && event.altKey) {
@@ -1983,6 +2066,7 @@ export function ProtocolEditor({
         configuration_snapshot_json: updated.configuration_snapshot_json,
       }));
       setStatus(blockId, "saved");
+      collab.sendFieldUpdate(`block-${blockId}`, { configuration_snapshot_json: updated.configuration_snapshot_json });
     } catch {
       setStatus(blockId, "error");
     }
@@ -2004,6 +2088,7 @@ export function ProtocolEditor({
         });
         updateBlockInState(protocolElementBlockId, (block) => ({ ...block, text_content: content }));
         setStatus(protocolElementBlockId, "saved");
+        collab.sendFieldUpdate(`block-${protocolElementBlockId}`, { text_content: content });
       } catch {
         setStatus(protocolElementBlockId, "error");
       }
@@ -2111,6 +2196,16 @@ export function ProtocolEditor({
       return false;
     }
     setStatus(protocolElementBlockId, "saving");
+    const cycleAssignments: { cycle_config_id: number; cycle_year: number }[] = [];
+    if (currentCycleYear !== null && currentTemplate?.cycle_config_id && currentTemplate.cycle_config) {
+      cycleAssignments.push({ cycle_config_id: currentTemplate.cycle_config_id, cycle_year: currentCycleYear });
+      const eventCycleYear = draft.event_date
+        ? getCycleYear(draft.event_date, currentTemplate.cycle_config.reset_month, currentTemplate.cycle_config.reset_day)
+        : null;
+      if (eventCycleYear !== null && eventCycleYear !== currentCycleYear) {
+        cycleAssignments.push({ cycle_config_id: currentTemplate.cycle_config_id, cycle_year: eventCycleYear });
+      }
+    }
     try {
       const created = await browserApiFetch<EventSummary>("/api/events", {
         method: "POST",
@@ -2121,6 +2216,7 @@ export function ProtocolEditor({
           title: draft.title,
           description: draft.description || null,
           participant_count: Math.max(0, Number(draft.participant_count || "0")),
+          cycle_assignments: cycleAssignments,
         }),
       });
       setEvents((current) => [...current, created]);
@@ -2331,7 +2427,31 @@ export function ProtocolEditor({
       <div className="status-row">
         <span className="pill">{protocol.protocol_number}</span>
         <span className="pill">{workflowMeta[protocolStatus]?.modeLabel ?? protocolStatusLabel(protocolStatus)}</span>
+        <CollaborationPresenceBar users={collab.otherPresence} connected={collab.connected} />
       </div>
+
+      <Modal
+        open={showStatusChangeWarning}
+        title="Andere Person bearbeitet gerade"
+        description="Mindestens eine andere Person bearbeitet dieses Protokoll gerade aktiv. Der Statuswechsel wird für alle sofort übernommen."
+        onClose={() => setShowStatusChangeWarning(false)}
+      >
+        <div className="modal-actions">
+          <button type="button" className="button-ghost" onClick={() => setShowStatusChangeWarning(false)}>
+            Abbrechen
+          </button>
+          <button
+            type="button"
+            className="button-primary"
+            onClick={() => {
+              setShowStatusChangeWarning(false);
+              void performStatusTransition();
+            }}
+          >
+            Trotzdem wechseln
+          </button>
+        </div>
+      </Modal>
 
       {showSavedIndicator && <div className="save-indicator">✓ Gespeichert</div>}
 
@@ -2356,6 +2476,7 @@ export function ProtocolEditor({
             >
               <button
                 type="button"
+                tabIndex={-1}
                 className={`editor-nav-item editor-nav-item-group${selectedElementId === element.id ? " editor-nav-item-active" : ""}`}
                 onClick={() => focusElement(element.id)}
                 title={element.section_name_snapshot}
@@ -2373,6 +2494,7 @@ export function ProtocolEditor({
         <article className="editor-panel" ref={panelRef}>
           {selectedElement ? (
             <FocusedElementEditor
+              collab={collab}
               element={selectedElement}
               elementIndex={selectedElementIndex}
               textDrafts={textDrafts}
@@ -2427,6 +2549,7 @@ export function ProtocolEditor({
               pendingTodos={pendingTodos}
               onPendingUpdate={(updated) => setPendingTodos((prev) => prev.map((t) => t.id === updated.id ? { ...t, ...updated } : t))}
               onPendingDone={(todoId) => setPendingTodos((prev) => prev.filter((t) => t.id !== todoId))}
+              documentTemplates={documentTemplates}
             />
           ) : (
             <div className="editor-panel-empty">
@@ -2440,13 +2563,6 @@ export function ProtocolEditor({
         </article>
       </div>
 
-      {/* Session notes — visible in post-processing mode */}
-      {protocolStatus === "durchgeführt" && sessionNotes && (
-        <div className="session-notes-inline">
-          <div className="session-notes-inline-label">Sitzungsnotizen</div>
-          <div className="session-notes-inline-text">{sessionNotes}</div>
-        </div>
-      )}
 
       <div className="editor-fixed-actions">
         {!isReadOnly && selectedElementIndex >= 0 && selectedElementIndex < visibleElements.length - 1 ? (
@@ -2456,6 +2572,17 @@ export function ProtocolEditor({
             onClick={() => {
               const nextElement = visibleElements[selectedElementIndex + 1];
               if (nextElement) focusElement(nextElement.id);
+            }}
+            onKeyDown={(e) => {
+              if (e.key !== "Tab") return;
+              const inputs = document.querySelectorAll<HTMLElement>("[data-form-input]");
+              if (!inputs.length) return;
+              e.preventDefault();
+              if (e.shiftKey) {
+                inputs[inputs.length - 1].focus();
+              } else {
+                inputs[0].focus();
+              }
             }}
           >
             Weiter →
@@ -2498,6 +2625,7 @@ export function ProtocolEditor({
 }
 
 function FocusedElementEditor({
+  collab,
   element,
   elementIndex,
   textDrafts,
@@ -2552,7 +2680,9 @@ function FocusedElementEditor({
   pendingTodos,
   onPendingUpdate,
   onPendingDone,
+  documentTemplates,
 }: {
+  collab: ReturnType<typeof useProtocolCollaboration>;
   element: ProtocolElement;
   elementIndex: number;
   textDrafts: Record<number, string>;
@@ -2607,24 +2737,51 @@ function FocusedElementEditor({
   pendingTodos: TodoListItem[];
   onPendingUpdate: (updated: Partial<TodoListItem> & { id: number }) => void;
   onPendingDone: (todoId: number) => void;
+  documentTemplates: DocumentTemplate[];
 }) {
   const sectionRef = useRef<HTMLElement | null>(null);
+  const didMountRef = useRef(false);
+
+  useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      return;
+    }
+    window.setTimeout(() => {
+      const firstEditable = sectionRef.current?.querySelector<HTMLElement>(
+        '[data-form-input], textarea:not([readonly]), input:not([readonly]):not([type="file"])'
+      );
+      firstEditable?.focus();
+    }, 50);
+  }, [element.id]);
+
   const [openBlockMenu, setOpenBlockMenu] = useState<number | null>(null);
   const blockMenuRef = useRef<HTMLDivElement | null>(null);
+  const bulletSkipBlurRef = useRef(false);
   const [showEventPicker, setShowEventPicker] = useState(false);
   const [eventPickerSearch, setEventPickerSearch] = useState("");
-  const [deleteFineModal, setDeleteFineModal] = useState<{ fineId: number; fromPending: boolean; comment: string } | null>(null);
+  const focusedTemplate = availableTemplates.find((t) => t.id === protocol.template_id) ?? null;
+
+  const currentCycleYear: number | null = protocol.protocol_date && focusedTemplate?.cycle_config
+    ? getCycleYear(protocol.protocol_date, focusedTemplate.cycle_config.reset_month, focusedTemplate.cycle_config.reset_day)
+    : null;
   const [addingEventBlock, setAddingEventBlock] = useState(false);
   const [multiParticipantPicker, setMultiParticipantPicker] = useState<{
-    kind: "form" | "matrix" | "embedded_form";
+    kind: "form" | "matrix" | "embedded_form" | "event_field";
     blockId: number;
     rowId: string;
     rowLabel: string;
     selectedIds: number[];
     columnId?: string;
     embeddedRowId?: string;
+    singleSelect?: boolean;
+    eventId?: number;
+    eventFieldName?: string;
   } | null>(null);
+  const [eventFieldDrafts, setEventFieldDrafts] = useState<Record<string, string>>({});
   const [multiParticipantSearch, setMultiParticipantSearch] = useState("");
+  const multiParticipantSearchRef = useRef<HTMLInputElement | null>(null);
+  const pickerTriggerRef = useRef<HTMLElement | null>(null);
   const [eventDrafts, setEventDrafts] = useState<Record<number, Partial<EventSummary>>>({});
   const [openNewEventRows, setOpenNewEventRows] = useState<Record<number, boolean>>({});
   const [creatingNewEventRows, setCreatingNewEventRows] = useState<Record<number, boolean>>({});
@@ -2702,6 +2859,7 @@ function FocusedElementEditor({
   }
 
   function openMultiParticipantPicker(blockId: number, rowIndex: number, row: Record<string, any>) {
+    pickerTriggerRef.current = document.activeElement as HTMLElement;
     setMultiParticipantSearch("");
     setMultiParticipantPicker({
       kind: "form",
@@ -2717,6 +2875,7 @@ function FocusedElementEditor({
     columnId: string,
     row: Record<string, any>
   ) {
+    pickerTriggerRef.current = document.activeElement as HTMLElement;
     const selectedIds = Array.isArray(row.participant_ids) ? row.participant_ids.map(Number) : [];
     setMultiParticipantSearch("");
     setMultiParticipantPicker({
@@ -2736,6 +2895,7 @@ function FocusedElementEditor({
     matrixRowLabel: string,
     embeddedRow: Record<string, any>
   ) {
+    pickerTriggerRef.current = document.activeElement as HTMLElement;
     setMultiParticipantSearch("");
     setMultiParticipantPicker({
       kind: "embedded_form",
@@ -2762,6 +2922,30 @@ function FocusedElementEditor({
     });
   }
 
+  function singleParticipantSummary(participantId: number | null | undefined): string {
+    if (!participantId) return "Teilnehmer waehlen";
+    const p = availableParticipants.find((entry) => entry.id === Number(participantId));
+    return p?.display_name ?? "Teilnehmer waehlen";
+  }
+
+  function selectSingleParticipant(participantId: number) {
+    if (!multiParticipantPicker?.singleSelect) return;
+    const { blockId, kind, rowId, columnId } = multiParticipantPicker;
+    const currentBlock = element.blocks.find((b) => b.id === blockId);
+    if (!currentBlock) return;
+    const config = asObject(currentBlock.configuration_snapshot_json);
+    if (kind === "form") {
+      const nextRows = [...((Array.isArray(config.rows) ? config.rows : []) as Array<Record<string, any>>)];
+      const targetIndex = nextRows.findIndex((r) => String(r.id ?? "") === rowId);
+      if (targetIndex === -1) return;
+      nextRows[targetIndex] = { ...nextRows[targetIndex], participant_id: participantId };
+      void saveBlockConfiguration(blockId, { ...config, rows: nextRows });
+    } else if (kind === "matrix" && columnId) {
+      updateMatrixCell(blockId, config, columnId, rowId, { participant_id: participantId }, true);
+    }
+    closeParticipantPicker();
+  }
+
   function multiParticipantSummary(row: Record<string, any>) {
     const selectedIds = Array.isArray(row.participant_ids) ? row.participant_ids.map(Number) : [];
     if (!selectedIds.length) {
@@ -2780,8 +2964,40 @@ function FocusedElementEditor({
     return `${selectedParticipants[0].display_name} + ${selectedParticipants.length - 1}`;
   }
 
+  function closeParticipantPicker() {
+    setMultiParticipantPicker(null);
+    setMultiParticipantSearch("");
+    setTimeout(() => pickerTriggerRef.current?.focus(), 0);
+  }
+
+  function handleFormInputKeyDown(e: React.KeyboardEvent<HTMLElement>) {
+    if (e.key === "Tab") {
+      const container = (e.currentTarget as HTMLElement).closest("[data-form-block-id]");
+      if (!container) return;
+      const inputs = Array.from(container.querySelectorAll<HTMLElement>("[data-form-input]"));
+      const idx = inputs.indexOf(e.currentTarget);
+      if (idx === -1) return;
+      const atLast = !e.shiftKey && idx === inputs.length - 1;
+      const atFirst = e.shiftKey && idx === 0;
+      if (atLast || atFirst) {
+        e.preventDefault();
+        document.querySelector<HTMLElement>(".editor-fixed-actions button")?.focus();
+      }
+    } else if (e.key === "Enter" && (e.currentTarget as HTMLElement).tagName === "SELECT") {
+      const el = e.currentTarget as HTMLElement;
+      setTimeout(() => { if (document.activeElement !== el) el.focus(); }, 10);
+    }
+  }
+
   function applyMultiParticipantSelection(currentBlockId: number, currentConfig: Record<string, unknown>) {
     if (!multiParticipantPicker || multiParticipantPicker.blockId !== currentBlockId) {
+      return;
+    }
+    if (multiParticipantPicker.kind === "event_field" && multiParticipantPicker.eventId && multiParticipantPicker.eventFieldName) {
+      void updateEventFromBlock(currentBlockId, multiParticipantPicker.eventId, {
+        [multiParticipantPicker.eventFieldName]: multiParticipantPicker.selectedIds,
+      } as Partial<EventSummary>);
+      closeParticipantPicker();
       return;
     }
     if (multiParticipantPicker.kind === "form") {
@@ -2855,8 +3071,7 @@ function FocusedElementEditor({
       };
       void saveBlockConfiguration(currentBlockId, { ...currentConfig, columns: nextColumns });
     }
-    setMultiParticipantPicker(null);
-    setMultiParticipantSearch("");
+    closeParticipantPicker();
   }
 
   function eventRowsForBlock(blockConfig: Record<string, any>) {
@@ -2866,7 +3081,12 @@ function FocusedElementEditor({
         const matchesTag = !tagFilters.length || tagFilters.some((t) => (eventRow.tag ?? "").toLowerCase().includes(t));
         const effectiveEndDate = eventRow.event_end_date || eventRow.event_date;
         const matchesDate = !protocol.protocol_date ? true : blockConfig.event_only_before_protocol_date === true ? effectiveEndDate < protocol.protocol_date : blockConfig.event_only_from_protocol_date === false ? true : effectiveEndDate >= protocol.protocol_date;
-        return matchesTag && matchesDate;
+        const matchesCycle = blockConfig.event_only_current_cycle !== true || currentCycleYear === null
+          ? true
+          : (eventRow.cycle_assignments ?? []).some(
+              (a) => a.cycle_config_id === focusedTemplate?.cycle_config_id && a.cycle_year === currentCycleYear
+            );
+        return matchesTag && matchesDate && matchesCycle;
       })
       .sort((left, right) => compareIsoDate(left.event_date, right.event_date));
   }
@@ -3397,9 +3617,21 @@ function FocusedElementEditor({
         {element.blocks.map((block) => {
           const blockTitle = visibleBlockTitle(block);
           const elementType = block.element_type_code ?? "unknown";
+          const elementTypeLabel: Record<string, string> = {
+            text: "Text", static_text: "Text", display: "Anzeige", form: "Formular",
+            todo: "Aufgaben", image: "Bild", bullet_list: "Aufzählung",
+            event_list: "Termine", attendance: "Anwesenheit", matrix: "Matrix",
+            session_date: "Nächster Hock", finance_balance: "Kontostand",
+            finance_transactions: "Transaktionen", fine_list: "Bussenliste",
+            chart: "Diagramm",
+          };
           const blockConfig = asObject(block.configuration_snapshot_json);
+          // Matrix blocks lock per-cell instead (see cellFieldKey below), so the whole-block
+          // lock is skipped there to avoid one cell's edit blocking every other cell.
+          const blockFieldKey = `block-${block.id}`;
+          const blockLockHolder = elementType !== "matrix" ? collab.isLockedByOther(blockFieldKey) : null;
           // Effective editability: forced open in geplant/durchgeführt, locked in abgeschlossen
-          const blockEditable = !isReadOnly && (forceEditable || block.is_editable_snapshot);
+          const blockEditable = !isReadOnly && !blockLockHolder && (forceEditable || block.is_editable_snapshot);
           const editableEventRows = elementType === "event_list" ? eventRowsForBlock(blockConfig) : [];
           const editableEventColumns = elementType === "event_list" ? eventColumnVisibility(blockConfig) : null;
           const forcedEventTag = elementType === "event_list" ? String(blockConfig.event_tag_filter ?? "").trim() : "";
@@ -3429,17 +3661,32 @@ function FocusedElementEditor({
           const isAutoEventBlock = blockConfig.repeat_source_type === "event" && blockConfig.repeat_source_id != null;
           const isHidden = !block.is_visible_snapshot;
           return (
-            <section className={`card editor-block-card${elementType === "event_list" ? " editor-block-card-event-list" : ""}${isHidden ? " editor-block-card-hidden" : ""}`} key={block.id}>
+            <section
+              className={`card editor-block-card${elementType === "event_list" ? " editor-block-card-event-list" : ""}${isHidden ? " editor-block-card-hidden" : ""}${blockLockHolder ? " editor-block-card-locked" : ""}`}
+              key={block.id}
+              onFocusCapture={elementType === "matrix" ? undefined : () => collab.lockField(blockFieldKey)}
+              onBlurCapture={
+                elementType === "matrix"
+                  ? undefined
+                  : (event) => {
+                      if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+                        collab.unlockField(blockFieldKey);
+                      }
+                    }
+              }
+            >
               <div className="editor-panel-header">
                 <div>
-                  <div className="eyebrow">{elementType}{isHidden ? " · ausgeblendet" : ""}</div>
+                  <div className="eyebrow">{elementTypeLabel[elementType] ?? elementType}{isHidden ? " · ausgeblendet" : ""}</div>
                   {blockTitle ? <h3>{blockTitle}</h3> : null}
                   {block.description_snapshot ? <p className="muted">{block.description_snapshot}</p> : null}
+                  {blockLockHolder ? <LockBadge holder={blockLockHolder} /> : null}
                 </div>
                 {isPrepareMode && isAutoEventBlock && (
                   <div className="block-menu-wrap" ref={openBlockMenu === block.id ? blockMenuRef : undefined}>
                     <button
                       type="button"
+                      tabIndex={-1}
                       className="btn-icon-sm block-menu-trigger"
                       title="Optionen"
                       onClick={() => setOpenBlockMenu((prev) => prev === block.id ? null : block.id)}
@@ -3525,10 +3772,10 @@ function FocusedElementEditor({
                             className={`todo-toggle${isDone ? " todo-toggle-done" : ""}`}
                             disabled={!blockEditable}
                             onClick={() =>
-                              blockEditable && updateTodo(block.id, todo.id, {
+                              blockEditable && void updateTodo(block.id, todo.id, {
                                 todo_status_id: isDone ? TODO_STATUS.open : TODO_STATUS.done,
                                 completed_at: isDone ? null : new Date().toISOString(),
-                              })
+                              }).then(bumpStatsCharts)
                             }
                             aria-label={isDone ? "Reopen todo" : "Mark todo done"}
                           >
@@ -3712,10 +3959,31 @@ function FocusedElementEditor({
                               setBlockConfigLocal(block.id, { ...blockConfig, bullet_items: nextItems });
                             }}
                             onBlur={() => {
+                              if (bulletSkipBlurRef.current) { bulletSkipBlurRef.current = false; return; }
                               void saveBlockConfiguration(block.id, {
                                 ...blockConfig,
                                 bullet_items: ((Array.isArray(blockConfig.bullet_items) ? blockConfig.bullet_items : []) ?? []) as string[],
                               });
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key !== "Enter" || event.shiftKey) return;
+                              event.preventDefault();
+                              bulletSkipBlurRef.current = true;
+                              const items = (Array.isArray(blockConfig.bullet_items) ? blockConfig.bullet_items : []) as string[];
+                              if (item === "") {
+                                const nextItems = items.filter((_, i) => i !== index);
+                                setBlockConfigLocal(block.id, { ...blockConfig, bullet_items: nextItems });
+                                void saveBlockConfiguration(block.id, { ...blockConfig, bullet_items: nextItems });
+                              } else {
+                                const nextItems = [...items.slice(0, index + 1), "", ...items.slice(index + 1)];
+                                setBlockConfigLocal(block.id, { ...blockConfig, bullet_items: nextItems });
+                                const el = event.currentTarget;
+                                window.setTimeout(() => {
+                                  const container = el.closest(".todo-list");
+                                  const textareas = container?.querySelectorAll<HTMLTextAreaElement>("textarea.todo-input");
+                                  textareas?.[index + 1]?.focus();
+                                }, 50);
+                              }
                             }}
                           />
                         </div>
@@ -3822,6 +4090,12 @@ function FocusedElementEditor({
                       </div>
                     );
                   }
+                  const linkedEvent = isAutoEventBlock
+                    ? availableEvents.find((e) => e.id === Number(blockConfig.repeat_source_id))
+                    : undefined;
+                  const configuredEventFields = isAutoEventBlock && Array.isArray(blockConfig.event_fields)
+                    ? (blockConfig.event_fields as Array<{ field: string; label: string }>)
+                    : [];
                   return (
                     <div className="grid">
                       {String(blockConfig.left_column_heading ?? "").trim() || String(blockConfig.value_column_heading ?? "").trim() ? (
@@ -3831,39 +4105,114 @@ function FocusedElementEditor({
                           <div />
                         </div>
                       ) : null}
-                      <div className="form-block-list">
+                      {linkedEvent && configuredEventFields.length > 0 && (
+                        <div className="form-block-list">
+                          {configuredEventFields.map((ef) => {
+                            const draftKey = `${block.id}-${ef.field}`;
+                            const isParticipantsField = ef.field.endsWith("_ids");
+                            const isDateField = ef.field === "event_date" || ef.field === "event_end_date";
+                            const isNumberField = ef.field === "participant_count";
+                            const currentIds: number[] = isParticipantsField
+                              ? ((linkedEvent as any)[ef.field] ?? []) as number[]
+                              : [];
+                            const participantSummary = isParticipantsField
+                              ? currentIds.length === 0
+                                ? "Auswählen…"
+                                : availableParticipants
+                                    .filter((p) => currentIds.includes(p.id))
+                                    .map((p) => p.display_name)
+                                    .join(", ") || `${currentIds.length} ausgewählt`
+                              : "";
+                            return (
+                              <div className="form-block-row" key={`${block.id}-ef-${ef.field}`} style={{ borderLeft: "2px solid var(--accent-soft)" }}>
+                                <div className="field-label-inline">{ef.label}</div>
+                                {isParticipantsField ? (
+                                  <button
+                                    type="button"
+                                    data-form-input
+                                    className="button-ghost form-participant-picker-button"
+                                    disabled={!blockEditable}
+                                    onClick={() => {
+                                      pickerTriggerRef.current = document.activeElement as HTMLElement;
+                                      setMultiParticipantSearch("");
+                                      setMultiParticipantPicker({
+                                        kind: "event_field",
+                                        blockId: block.id,
+                                        rowId: ef.field,
+                                        rowLabel: ef.label,
+                                        selectedIds: currentIds,
+                                        eventId: linkedEvent.id,
+                                        eventFieldName: ef.field,
+                                      });
+                                    }}
+                                  >
+                                    {participantSummary}
+                                  </button>
+                                ) : (
+                                  <input
+                                    data-form-input
+                                    type={isDateField ? "date" : isNumberField ? "number" : "text"}
+                                    disabled={!blockEditable}
+                                    value={eventFieldDrafts[draftKey] ?? ((linkedEvent as any)[ef.field] ?? "")}
+                                    onChange={(e) => setEventFieldDrafts((d) => ({ ...d, [draftKey]: e.target.value }))}
+                                    onBlur={(e) => {
+                                      const val = e.target.value;
+                                      setEventFieldDrafts((d) => { const next = { ...d }; delete next[draftKey]; return next; });
+                                      void updateEventFromBlock(block.id, linkedEvent.id, {
+                                        [ef.field]: isNumberField ? Number(val) : (val || null),
+                                      } as Partial<EventSummary>);
+                                    }}
+                                    style={{ background: "transparent" }}
+                                  />
+                                )}
+                                <div />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <div className="form-block-list" data-form-block-id={block.id}>
                         {((Array.isArray(blockConfig.rows) ? blockConfig.rows : []) as Array<Record<string, any>>).map((row, index) => {
                           const rowType = String(row.value_type ?? row.row_type ?? "text");
                           return (
                           <div className="form-block-row" key={`${block.id}-form-${index}`}>
                             <div className="field-label-inline">{row.label ?? `Feld ${index + 1}`}</div>
                             {rowType === "participant" ? (
-                              <select
-                                value={row.participant_id ?? ""}
-                                onChange={(event) => {
-                                  const nextRows = [...((Array.isArray(blockConfig.rows) ? blockConfig.rows : []) as Array<Record<string, any>>)];
-                                  nextRows[index] = { ...nextRows[index], participant_id: event.target.value ? Number(event.target.value) : null };
-                                  void saveBlockConfiguration(block.id, { ...blockConfig, rows: nextRows });
+                              <button
+                                type="button"
+                                data-form-input
+                                className="button-ghost form-participant-picker-button"
+                                onKeyDown={handleFormInputKeyDown}
+                                onClick={(e) => {
+                                  pickerTriggerRef.current = e.currentTarget;
+                                  setMultiParticipantSearch("");
+                                  setMultiParticipantPicker({
+                                    kind: "form",
+                                    blockId: block.id,
+                                    rowId: String(row.id ?? index),
+                                    rowLabel: String(row.label ?? `Feld ${index + 1}`),
+                                    selectedIds: row.participant_id ? [Number(row.participant_id)] : [],
+                                    singleSelect: true,
+                                  });
                                 }}
                               >
-                                <option value="">Teilnehmer wählen</option>
-                                {availableParticipants.map((participant) => (
-                                  <option key={participant.id} value={participant.id}>
-                                    {participant.display_name}
-                                  </option>
-                                ))}
-                              </select>
+                                {singleParticipantSummary(row.participant_id)}
+                              </button>
                             ) : rowType === "participants" ? (
                               <button
                                 type="button"
+                                data-form-input
                                 className="button-ghost form-participant-picker-button"
+                                onKeyDown={handleFormInputKeyDown}
                                 onClick={() => openMultiParticipantPicker(block.id, index, row)}
                               >
                                 {multiParticipantSummary(row)}
                               </button>
                             ) : rowType === "event" ? (
                               <select
+                                data-form-input
                                 value={row.event_id ?? ""}
+                                onKeyDown={handleFormInputKeyDown}
                                 onChange={(event) => {
                                   const nextRows = [...((Array.isArray(blockConfig.rows) ? blockConfig.rows : []) as Array<Record<string, any>>)];
                                   nextRows[index] = { ...nextRows[index], event_id: event.target.value ? Number(event.target.value) : null };
@@ -3880,9 +4229,11 @@ function FocusedElementEditor({
                             ) : (
                               <textarea
                                 rows={1}
+                                data-form-input
                                 className="todo-input"
                                 value={row.text_value ?? ""}
                                 onInput={(event) => autoResizeTodoField(event.currentTarget)}
+                                onKeyDown={handleFormInputKeyDown}
                                 onChange={(event) => {
                                   const nextRows = [...((Array.isArray(blockConfig.rows) ? blockConfig.rows : []) as Array<Record<string, any>>)];
                                   nextRows[index] = { ...nextRows[index], text_value: event.target.value };
@@ -3894,16 +4245,18 @@ function FocusedElementEditor({
                                 }}
                               />
                             )}
-                            <button
-                              type="button"
-                              className="button-inline button-danger todo-delete"
-                              onClick={() => {
-                                const nextRows = ((Array.isArray(blockConfig.rows) ? blockConfig.rows : []) as Array<Record<string, any>>).filter((_, rowIndex) => rowIndex !== index);
-                                void saveBlockConfiguration(block.id, { ...blockConfig, rows: nextRows });
-                              }}
-                            >
-                              Delete
-                            </button>
+                            {isPrepareMode && (
+                              <button
+                                type="button"
+                                className="button-inline button-danger todo-delete"
+                                onClick={() => {
+                                  const nextRows = ((Array.isArray(blockConfig.rows) ? blockConfig.rows : []) as Array<Record<string, any>>).filter((_, rowIndex) => rowIndex !== index);
+                                  void saveBlockConfiguration(block.id, { ...blockConfig, rows: nextRows });
+                                }}
+                              >
+                                Delete
+                              </button>
+                            )}
                           </div>
                         );})}
                       </div>
@@ -3995,7 +4348,9 @@ function FocusedElementEditor({
                                 const rowId = String(row.id ?? rowIndex);
                                 const value = isPlaceholder ? {} : matrixCellValue(column!, row, rowId);
                                 const embeddedBlock = isPlaceholder ? null : matrixEmbeddedBlockForRow(row, value);
-                                const cellEditable = !isPlaceholder && blockEditable && (forceEditable || matrixRowEditable(row));
+                                const cellFieldKey = `block-${block.id}-cell-${rowId}-${columnId ?? columnIndex}`;
+                                const cellLockHolder = isPlaceholder ? null : collab.isLockedByOther(cellFieldKey);
+                                const cellEditable = !isPlaceholder && blockEditable && !cellLockHolder && (forceEditable || matrixRowEditable(row));
                                 const autoEvents = (!isPlaceholder && !embeddedBlock && matrixRowType(row) === "events")
                                   ? matrixEventsForRow(row, column!) : [];
                                 return (
@@ -4003,8 +4358,21 @@ function FocusedElementEditor({
                                     <div className={`matrix-card-row-label${(!forceEditable && !matrixRowEditable(row)) ? " matrix-row-locked" : ""}`}>
                                       {row.label ?? `Zeile ${rowIndex + 1}`}
                                       {(!forceEditable && !matrixRowEditable(row)) ? <span className="matrix-lock-icon"> 🔒</span> : null}
+                                      {cellLockHolder ? <LockBadge holder={cellLockHolder} /> : null}
                                     </div>
-                                    <div className="matrix-card-row-cell">
+                                    <div
+                                      className="matrix-card-row-cell"
+                                      onFocusCapture={isPlaceholder ? undefined : () => collab.lockField(cellFieldKey)}
+                                      onBlurCapture={
+                                        isPlaceholder
+                                          ? undefined
+                                          : (event) => {
+                                              if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+                                                collab.unlockField(cellFieldKey);
+                                              }
+                                            }
+                                      }
+                                    >
                                       {isPlaceholder ? (
                                         <div className="matrix-table-placeholder" style={{ height: 40, borderRadius: 8 }} />
                                       ) : embeddedBlock ? (
@@ -4029,10 +4397,12 @@ function FocusedElementEditor({
                                               }, draft)}
                                             updateEvent={(eventId, patch) => updateEventFromBlock(block.id, eventId, patch)}
                                             deleteEvent={(eventId) => deleteEventFromBlock(block.id, eventId)}
+                                            currentCycleYear={currentCycleYear}
+                                            cycleConfigId={focusedTemplate?.cycle_config_id ?? null}
                                           />
                                           {cellEditable ? (
                                             <div className="matrix-row-summary muted">
-                                              {embeddedBlockSummary(embeddedBlock, availableParticipants, availableEvents, protocol, column!)}
+                                              {embeddedBlockSummary(embeddedBlock, availableParticipants, availableEvents, protocol, column!, availableTemplates)}
                                             </div>
                                           ) : null}
                                         </>
@@ -4057,14 +4427,25 @@ function FocusedElementEditor({
                                           {!cellEditable ? (
                                             <div className="matrix-static-value">{matrixValueSummary(row, value)}</div>
                                           ) : matrixRowType(row) === "participant" ? (
-                                            <select value={value.participant_id ?? ""}
-                                              onChange={(e) => updateMatrixCell(block.id, blockConfig, columnId!, rowId,
-                                                { participant_id: e.target.value ? Number(e.target.value) : null }, true)}>
-                                              <option value="">Teilnehmer waehlen</option>
-                                              {availableParticipants.map((p) => (
-                                                <option key={p.id} value={p.id}>{p.display_name}</option>
-                                              ))}
-                                            </select>
+                                            <button
+                                              type="button"
+                                              className="button-ghost form-participant-picker-button"
+                                              onClick={(e) => {
+                                                pickerTriggerRef.current = e.currentTarget;
+                                                setMultiParticipantSearch("");
+                                                setMultiParticipantPicker({
+                                                  kind: "matrix",
+                                                  blockId: block.id,
+                                                  rowId: rowId!,
+                                                  rowLabel: String(row.label ?? "Teilnehmer"),
+                                                  selectedIds: value.participant_id ? [Number(value.participant_id)] : [],
+                                                  columnId: columnId!,
+                                                  singleSelect: true,
+                                                });
+                                              }}
+                                            >
+                                              {singleParticipantSummary(value.participant_id)}
+                                            </button>
                                           ) : matrixRowType(row) === "participants" ? (
                                             <button type="button" className="button-ghost form-participant-picker-button"
                                               onClick={() => openMatrixParticipantPicker(block.id, columnId!, {
@@ -4414,42 +4795,44 @@ function FocusedElementEditor({
                   nextEntries.push({ participant_id: participant.id, participant_name: participant.display_name, status: newStatus });
                   await saveBlockConfiguration(block.id, { ...blockConfig, attendance_entries: nextEntries });
 
-                  if (!hasFineConfig) return;
+                  if (hasFineConfig) {
+                    const existingFine = protocolFines.find(
+                      (f) => f.participant_id === participant.id && (f.fine_type === "late" || f.fine_type === "absent") && f.status === "pending"
+                    );
 
-                  const existingFine = protocolFines.find(
-                    (f) => f.participant_id === participant.id && (f.fine_type === "late" || f.fine_type === "absent") && f.status === "pending"
-                  );
-
-                  if (newStatus === "late" && fineAmountLate > 0) {
-                    if (!existingFine || existingFine.fine_type !== "late") {
+                    if (newStatus === "late" && fineAmountLate > 0) {
+                      if (!existingFine || existingFine.fine_type !== "late") {
+                        if (existingFine) {
+                          await browserApiFetch(`/api/fines/${existingFine.id}`, { method: "DELETE" });
+                          setProtocolFines((prev) => prev.filter((f) => f.id !== existingFine.id));
+                        }
+                        const created = await browserApiFetch<AttendanceFine>("/api/fines", {
+                          method: "POST",
+                          body: JSON.stringify({ protocol_id: protocol.id, participant_id: participant.id, participant_name_snapshot: participant.display_name, fine_type: "late", amount: fineAmountLate, account_id: fineAccountId }),
+                        });
+                        if (created) setProtocolFines((prev) => [...prev.filter((f) => !(f.participant_id === participant.id && f.status === "pending")), created]);
+                      }
+                    } else if (newStatus === "absent" && fineAmountAbsent > 0) {
+                      if (!existingFine || existingFine.fine_type !== "absent") {
+                        if (existingFine) {
+                          await browserApiFetch(`/api/fines/${existingFine.id}`, { method: "DELETE" });
+                          setProtocolFines((prev) => prev.filter((f) => f.id !== existingFine.id));
+                        }
+                        const created = await browserApiFetch<AttendanceFine>("/api/fines", {
+                          method: "POST",
+                          body: JSON.stringify({ protocol_id: protocol.id, participant_id: participant.id, participant_name_snapshot: participant.display_name, fine_type: "absent", amount: fineAmountAbsent, account_id: fineAccountId }),
+                        });
+                        if (created) setProtocolFines((prev) => [...prev.filter((f) => !(f.participant_id === participant.id && f.status === "pending")), created]);
+                      }
+                    } else {
                       if (existingFine) {
                         await browserApiFetch(`/api/fines/${existingFine.id}`, { method: "DELETE" });
                         setProtocolFines((prev) => prev.filter((f) => f.id !== existingFine.id));
                       }
-                      const created = await browserApiFetch<AttendanceFine>("/api/fines", {
-                        method: "POST",
-                        body: JSON.stringify({ protocol_id: protocol.id, participant_id: participant.id, participant_name_snapshot: participant.display_name, fine_type: "late", amount: fineAmountLate, account_id: fineAccountId }),
-                      });
-                      if (created) setProtocolFines((prev) => [...prev.filter((f) => !(f.participant_id === participant.id && f.status === "pending")), created]);
-                    }
-                  } else if (newStatus === "absent" && fineAmountAbsent > 0) {
-                    if (!existingFine || existingFine.fine_type !== "absent") {
-                      if (existingFine) {
-                        await browserApiFetch(`/api/fines/${existingFine.id}`, { method: "DELETE" });
-                        setProtocolFines((prev) => prev.filter((f) => f.id !== existingFine.id));
-                      }
-                      const created = await browserApiFetch<AttendanceFine>("/api/fines", {
-                        method: "POST",
-                        body: JSON.stringify({ protocol_id: protocol.id, participant_id: participant.id, participant_name_snapshot: participant.display_name, fine_type: "absent", amount: fineAmountAbsent, account_id: fineAccountId }),
-                      });
-                      if (created) setProtocolFines((prev) => [...prev.filter((f) => !(f.participant_id === participant.id && f.status === "pending")), created]);
-                    }
-                  } else {
-                    if (existingFine) {
-                      await browserApiFetch(`/api/fines/${existingFine.id}`, { method: "DELETE" });
-                      setProtocolFines((prev) => prev.filter((f) => f.id !== existingFine.id));
                     }
                   }
+
+                  bumpStatsCharts();
                 }
 
                 const countByStatus = (s: string) => eligibleAttendanceParticipants.filter((p) => {
@@ -4504,37 +4887,57 @@ function FocusedElementEditor({
               })()}
 
               {elementType === "session_date" && (
-                <div className="two-col">
-                  <label className="field-stack">
-                    <span className="field-label">Nächste Sitzung</span>
+                <div className="session-date-block">
+                  <div className="session-date-main">
+                    <span className="session-date-label">Datum</span>
                     <DateInput
                       value={String(blockConfig.selected_date ?? "")}
                       readOnly={!blockEditable}
                       onChange={(value) => { if (blockEditable) patchBlockConfigValue(block.id, "selected_date", value || null, blockConfig); }}
                     />
-                  </label>
-                  <label className="field-stack">
-                    <span className="field-label">Template fuer naechstes Protokoll</span>
-                    <select
-                      value={String(blockConfig.followup_template_id ?? protocol.template_id ?? "")}
-                      onChange={(event) => {
-                        const nextTemplateId = Number(event.target.value);
-                        const normalizedValue =
-                          !nextTemplateId || nextTemplateId === protocol.template_id ? null : nextTemplateId;
-                        patchBlockConfigValue(block.id, "followup_template_id", normalizedValue, blockConfig);
-                      }}
-                    >
-                      <option value={protocol.template_id ?? ""}>Gleiches Template wie dieses Protokoll</option>
-                      {availableTemplates
-                        .filter((template) => template.id !== protocol.template_id && template.status !== "archived")
-                        .map((template) => (
-                          <option key={template.id} value={template.id}>
-                            {template.name}
-                          </option>
-                        ))}
-                    </select>
-                    <span className="field-help">Standardmaessig wird wieder dieses Template verwendet. Hier kannst du fuer das automatisch erzeugte Folgeprotokoll aber ein anderes waehlen.</span>
-                  </label>
+                  </div>
+                  {availableTemplates.filter((t) => t.status !== "archived").length > 1 && (() => {
+                    const activeFollowupId = blockConfig.followup_template_id
+                      ? Number(blockConfig.followup_template_id)
+                      : null;
+                    const selectedTemplate = activeFollowupId
+                      ? availableTemplates.find((t) => t.id === activeFollowupId)
+                      : null;
+                    const triggerLabel = selectedTemplate?.name ?? "Wie dieses Protokoll";
+                    const otherTemplates = availableTemplates.filter(
+                      (t) => t.id !== protocol.template_id && t.status !== "archived",
+                    );
+                    return (
+                      <div className="session-date-template">
+                        <span className="session-date-label">Folge-Template</span>
+                        <TodoMiniMenu label={triggerLabel} compact>
+                          {(close) => (
+                            <div className="mini-menu-section">
+                              <TodoMenuOption
+                                label="Wie dieses Protokoll"
+                                active={!activeFollowupId}
+                                onClick={() => {
+                                  patchBlockConfigValue(block.id, "followup_template_id", null, blockConfig);
+                                  close();
+                                }}
+                              />
+                              {otherTemplates.map((template) => (
+                                <TodoMenuOption
+                                  key={template.id}
+                                  label={template.name}
+                                  active={activeFollowupId === template.id}
+                                  onClick={() => {
+                                    patchBlockConfigValue(block.id, "followup_template_id", template.id, blockConfig);
+                                    close();
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </TodoMiniMenu>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -4617,10 +5020,8 @@ function FocusedElementEditor({
                           const account = fineAccount(fine.account_id);
                           const cur = account?.currency_label ?? fine.currency_label ?? "";
                           const isCollected = fine.status === "collected";
-                          const isDeleted = fine.status === "deleted";
-                          const isDone = isCollected || isDeleted;
                           return (
-                            <div key={fine.id} id={`fine-row-${fine.id}`} className={`fine-list-row${isDone ? " fine-collected" : ""}`}>
+                            <div key={fine.id} id={`fine-row-${fine.id}`} className={`fine-list-row${isCollected ? " fine-collected" : ""}`}>
                               <div>
                                 <span className="fine-participant">{fine.participant_name_snapshot}</span>
                                 <span className="fine-pending-origin" style={{ display: "block" }}>
@@ -4632,21 +5033,8 @@ function FocusedElementEditor({
                               <span className="fine-amount">{fine.amount.toFixed(2)} {cur}</span>
                               <span className="fine-status">
                                 {isCollected && <span className="todo-pending-resolved">Kassiert</span>}
-                                {isDeleted && (
-                                  <span className="fine-deleted-badge">
-                                    Gelöscht
-                                    {fine.delete_comment && <span className="fine-delete-comment"> · {fine.delete_comment}</span>}
-                                  </span>
-                                )}
                               </span>
-                              {isDeleted && !isReadOnly ? (
-                                <button
-                                  type="button"
-                                  className={`fine-action-btn fine-comment-btn${!fine.delete_comment ? " fine-comment-missing" : ""}`}
-                                  title={fine.delete_comment ? "Kommentar bearbeiten" : "Kommentar fehlt – hinzufügen"}
-                                  onClick={() => setDeleteFineModal({ fineId: fine.id, fromPending: true, comment: fine.delete_comment ?? "" })}
-                                >✎</button>
-                              ) : !isDone && !isReadOnly ? (
+                              {!isCollected && !isReadOnly ? (
                                 <button
                                   type="button"
                                   className="fine-action-btn fine-collect-btn"
@@ -4660,12 +5048,15 @@ function FocusedElementEditor({
                                   }}
                                 >✓</button>
                               ) : <span />}
-                              {!isDone && !isReadOnly ? (
+                              {!isCollected && !isReadOnly ? (
                                 <button
                                   type="button"
                                   className="fine-action-btn fine-delete-btn"
                                   title="Busse löschen"
-                                  onClick={() => setDeleteFineModal({ fineId: fine.id, fromPending: true, comment: "" })}
+                                  onClick={async () => {
+                                    await browserApiFetch(`/api/fines/${fine.id}/delete`, { method: "POST" });
+                                    setPendingFines((prev) => prev.filter((f) => f.id !== fine.id));
+                                  }}
                                 >✕</button>
                               ) : <span />}
                             </div>
@@ -4683,31 +5074,18 @@ function FocusedElementEditor({
                       const account = fineAccount(fine.account_id);
                       const cur = account?.currency_label ?? "";
                       const isCollected = fine.status === "collected";
-                      const isDeleted = fine.status === "deleted";
                       const isCollectedElsewhere = isCollected && !!fine.closed_in_protocol_id;
                       return (
-                        <div key={fine.id} id={`fine-row-${fine.id}`} className={`fine-list-row${isCollected || isDeleted ? " fine-collected" : ""}`}>
+                        <div key={fine.id} id={`fine-row-${fine.id}`} className={`fine-list-row${isCollected ? " fine-collected" : ""}`}>
                           <span className="fine-participant">{fine.participant_name_snapshot}</span>
                           <span className="fine-type-label">{fine.fine_type === "late" ? "Verspätet" : "Unentschuldigt"}</span>
                           <span className="fine-amount">{fine.amount.toFixed(2)} {cur}</span>
                           <span className="fine-status">
-                            {isDeleted ? (
-                              <span className="fine-deleted-badge">
-                                Gelöscht
-                                {fine.delete_comment && <span className="fine-delete-comment"> · {fine.delete_comment}</span>}
-                              </span>
-                            ) : isCollectedElsewhere ? (
+                            {isCollectedElsewhere ? (
                               <span className="todo-closed-elsewhere-badge">Später beglichen</span>
                             ) : isCollected ? "✓ Kassiert" : "Ausstehend"}
                           </span>
-                          {isDeleted && !isReadOnly ? (
-                            <button
-                              type="button"
-                              className={`fine-action-btn fine-comment-btn${!fine.delete_comment ? " fine-comment-missing" : ""}`}
-                              title={fine.delete_comment ? "Kommentar bearbeiten" : "Kommentar fehlt – hinzufügen"}
-                              onClick={() => setDeleteFineModal({ fineId: fine.id, fromPending: false, comment: fine.delete_comment ?? "" })}
-                            >✎</button>
-                          ) : !isCollected && !isDeleted && !isReadOnly ? (
+                          {!isCollected && !isReadOnly ? (
                             <button
                               type="button"
                               className="fine-action-btn fine-collect-btn"
@@ -4718,12 +5096,15 @@ function FocusedElementEditor({
                               }}
                             >✓</button>
                           ) : <span />}
-                          {!isCollected && !isDeleted && !isReadOnly ? (
+                          {!isCollected ? (
                             <button
                               type="button"
                               className="fine-action-btn fine-delete-btn"
                               title="Busse löschen"
-                              onClick={() => setDeleteFineModal({ fineId: fine.id, fromPending: false, comment: "" })}
+                              onClick={async () => {
+                                await browserApiFetch(`/api/fines/${fine.id}/delete`, { method: "POST" });
+                                setProtocolFines((prev) => prev.filter((f) => f.id !== fine.id));
+                              }}
                             >✕</button>
                           ) : <span />}
                         </div>
@@ -4731,78 +5112,18 @@ function FocusedElementEditor({
                     })}
                     </div>}
 
-                    {/* Delete-fine modal */}
-                    {deleteFineModal && (() => {
-                      const isEditComment = (() => {
-                        const own = protocolFines.find(f => f.id === deleteFineModal.fineId);
-                        if (own) return own.status === "deleted";
-                        const pending = pendingFines.find(f => f.id === deleteFineModal.fineId);
-                        return (pending?.status ?? "") === "deleted";
-                      })();
-                      const submitDelete = async () => {
-                        const comment = deleteFineModal.comment.trim() || null;
-                        if (isEditComment) {
-                          if (!comment) return;
-                          const updated = await browserApiFetch<AttendanceFine>(
-                            `/api/fines/${deleteFineModal.fineId}/delete-comment`,
-                            { method: "PATCH", body: JSON.stringify({ delete_comment: comment }) }
-                          );
-                          if (updated) {
-                            if (deleteFineModal.fromPending) {
-                              setPendingFines((prev) => prev.map((f) => f.id === updated.id ? { ...f, ...updated } : f));
-                            } else {
-                              setProtocolFines((prev) => prev.map((f) => f.id === updated.id ? updated : f));
-                            }
-                          }
-                        } else {
-                          const body: Record<string, unknown> = { delete_comment: comment };
-                          if (deleteFineModal.fromPending) body.closing_protocol_id = protocol.id;
-                          const updated = await browserApiFetch<AttendanceFine>(
-                            `/api/fines/${deleteFineModal.fineId}/delete`,
-                            { method: "POST", body: JSON.stringify(body) }
-                          );
-                          if (updated) {
-                            if (deleteFineModal.fromPending) {
-                              setPendingFines((prev) => prev.map((f) => f.id === updated.id ? { ...f, ...updated } : f));
-                            } else {
-                              setProtocolFines((prev) => prev.map((f) => f.id === updated.id ? updated : f));
-                            }
-                          }
-                        }
-                        setDeleteFineModal(null);
-                      };
-                      return (
-                        <Modal
-                          open
-                          title={isEditComment ? "Kommentar bearbeiten" : "Busse löschen"}
-                          description={isEditComment ? "Kommentar für die gelöschte Busse." : "Optionaler Kommentar – kann auch später noch ergänzt werden."}
-                          onClose={() => setDeleteFineModal(null)}
-                        >
-                          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                            <input
-                              type="text"
-                              className="input"
-                              placeholder="Grund für Löschung…"
-                              autoFocus
-                              value={deleteFineModal.comment}
-                              onChange={(e) => setDeleteFineModal((m) => m ? { ...m, comment: e.target.value } : m)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") { e.preventDefault(); void submitDelete(); }
-                              }}
-                            />
-                            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-                              <button type="button" className="button-ghost" onClick={() => setDeleteFineModal(null)}>Abbrechen</button>
-                              <button type="button" className={isEditComment ? "button-primary" : "button-danger"} onClick={submitDelete}>
-                                {isEditComment ? "Speichern" : "Löschen"}
-                              </button>
-                            </div>
-                          </div>
-                        </Modal>
-                      );
-                    })()}
                   </div>
                 );
               })()}
+
+              {elementType === "chart" && (
+                <ChartBlockRenderer
+                  blockId={block.id}
+                  config={blockConfig as { chart_type?: string; cycle_key?: string }}
+                  editable={blockEditable && protocol.status !== "durchgeführt"}
+                  onSave={(cfg) => void saveBlockConfiguration(block.id, cfg)}
+                />
+              )}
 
               {elementType === "image" && (
                 <div className="grid">
@@ -4856,9 +5177,9 @@ function FocusedElementEditor({
       dueEvents={[...availableEvents].sort((a, b) => a.event_date.localeCompare(b.event_date))}
       protocol={protocol}
       onUpdate={updateTodo}
+      onDelete={deleteTodo}
       onPendingUpdate={onPendingUpdate}
       onPendingDone={onPendingDone}
-      onQuickTodoCreated={onQuickTodoCreated}
     />
     <Modal
       open={showEventPicker}
@@ -4920,36 +5241,73 @@ function FocusedElementEditor({
     </Modal>
     <Modal
       open={Boolean(multiParticipantPicker)}
-      onClose={() => {
-        setMultiParticipantPicker(null);
-        setMultiParticipantSearch("");
-      }}
+      onClose={() => closeParticipantPicker()}
       title={multiParticipantPicker ? `Teilnehmer waehlen: ${multiParticipantPicker.rowLabel}` : "Teilnehmer waehlen"}
-      description="Suche nach Teilnehmern und markiere mehrere Eintraege mit Haken."
+      description={multiParticipantPicker?.singleSelect ? "Teilnehmer auswaehlen." : "Suche nach Teilnehmern und markiere mehrere Eintraege mit Haken."}
     >
       <div className="grid">
         <label className="field-stack">
           <span className="field-label">Suche</span>
           <input
+            ref={multiParticipantSearchRef}
             value={multiParticipantSearch}
             onChange={(event) => setMultiParticipantSearch(event.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                if (multiParticipantPicker?.singleSelect) {
+                  if (filteredParticipants.length === 1) selectSingleParticipant(filteredParticipants[0].id);
+                } else if (multiParticipantPicker) {
+                  const currentBlock = element.blocks.find((b) => b.id === multiParticipantPicker.blockId);
+                  if (currentBlock) {
+                    applyMultiParticipantSelection(currentBlock.id, asObject(currentBlock.configuration_snapshot_json));
+                  }
+                }
+              }
+            }}
             placeholder="Teilnehmer suchen"
             autoFocus
           />
         </label>
-        <div className="status-row">
-          <span className="pill">{multiParticipantPicker?.selectedIds.length ?? 0} ausgewaehlt</span>
-          <span className="pill">{filteredParticipants.length} sichtbar</span>
-        </div>
+        {!multiParticipantPicker?.singleSelect && (
+          <div className="status-row">
+            <span className="pill">{multiParticipantPicker?.selectedIds.length ?? 0} ausgewaehlt</span>
+            <span className="pill">{filteredParticipants.length} sichtbar</span>
+          </div>
+        )}
         <div className="selection-list">
           {filteredParticipants.map((participant) => {
             const checked = multiParticipantPicker?.selectedIds.includes(participant.id) ?? false;
+            const isSingle = Boolean(multiParticipantPicker?.singleSelect);
             return (
               <label key={participant.id} className={`selection-card selection-card-checkbox${checked ? " selection-card-active" : ""}`}>
                 <input
-                  type="checkbox"
+                  type={isSingle ? "radio" : "checkbox"}
                   checked={checked}
-                  onChange={() => toggleMultiParticipantSelection(participant.id)}
+                  onChange={() => {
+                    if (isSingle) {
+                      selectSingleParticipant(participant.id);
+                    } else {
+                      toggleMultiParticipantSelection(participant.id);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (isSingle) return;
+                    if (e.key === " ") {
+                      e.preventDefault();
+                      toggleMultiParticipantSelection(participant.id);
+                      multiParticipantSearchRef.current?.focus();
+                      multiParticipantSearchRef.current?.select();
+                    } else if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (multiParticipantPicker) {
+                        const currentBlock = element.blocks.find((b) => b.id === multiParticipantPicker.blockId);
+                        if (currentBlock) {
+                          applyMultiParticipantSelection(currentBlock.id, asObject(currentBlock.configuration_snapshot_json));
+                        }
+                      }
+                    }
+                  }}
                 />
                 <div>
                   <strong>{participant.display_name}</strong>
@@ -4961,22 +5319,24 @@ function FocusedElementEditor({
             );
           })}
         </div>
-        <div className="table-toolbar-actions table-actions-end">
-          <button
-            type="button"
-            className="button-inline"
-            onClick={() => {
-              if (multiParticipantPicker) {
-                const currentBlock = element.blocks.find((block) => block.id === multiParticipantPicker.blockId);
-                if (currentBlock) {
-                  applyMultiParticipantSelection(currentBlock.id, asObject(currentBlock.configuration_snapshot_json));
+        {!multiParticipantPicker?.singleSelect && (
+          <div className="table-toolbar-actions table-actions-end">
+            <button
+              type="button"
+              className="button-inline"
+              onClick={() => {
+                if (multiParticipantPicker) {
+                  const currentBlock = element.blocks.find((block) => block.id === multiParticipantPicker.blockId);
+                  if (currentBlock) {
+                    applyMultiParticipantSelection(currentBlock.id, asObject(currentBlock.configuration_snapshot_json));
+                  }
                 }
-              }
-            }}
-          >
-            Auswahl uebernehmen
-          </button>
-        </div>
+              }}
+            >
+              Auswahl uebernehmen
+            </button>
+          </div>
+        )}
       </div>
     </Modal>
     </>
@@ -4998,9 +5358,9 @@ function SessionTodosSection({
   dueEvents,
   protocol,
   onUpdate,
+  onDelete,
   onPendingUpdate,
   onPendingDone,
-  onQuickTodoCreated,
 }: {
   sectionTag: string;
   todos: ProtocolTodo[];
@@ -5010,15 +5370,10 @@ function SessionTodosSection({
   dueEvents: EventSummary[];
   protocol: ProtocolSummary;
   onUpdate: (blockId: number, todoId: number, patch: Partial<ProtocolTodo>) => Promise<void>;
+  onDelete: (blockId: number, todoId: number) => Promise<void>;
   onPendingUpdate: (updated: Partial<TodoListItem> & { id: number }) => void;
   onPendingDone: (todoId: number) => void;
-  onQuickTodoCreated: (blockId: number, todoId: number, elementId: number) => void | Promise<void>;
 }) {
-  const [newTask, setNewTask] = useState("");
-  const [newParticipantId, setNewParticipantId] = useState<number | null>(null);
-  const [newDue, setNewDue] = useState<DueDraft>({ type: "none" });
-  const [creating, setCreating] = useState(false);
-
   if (todos.length === 0 && pendingTodos.length === 0) return null;
   if (!sectionTag) return null;
 
@@ -5029,45 +5384,11 @@ function SessionTodosSection({
     return "Kein Enddatum";
   }
 
-  function newDueLabel() {
-    if (newDue.type === "none") return "Kein Enddatum";
-    if (newDue.type === "next_session") return "Nächste Sitzung";
-    if (newDue.type === "date") return newDue.date ? formatShortDate(newDue.date) : "Datum wählen";
-    if (newDue.type === "event") return newDue.eventTitle;
-    return "Kein Enddatum";
-  }
-
-  async function handleCreate() {
-    const task = newTask.trim();
-    if (!task) return;
-    setCreating(true);
-    try {
-      const result = await browserApiFetch<{ block_id: number; todo_id: number; element_id: number }>(
-        `/api/protocols/${protocol.id}/quick-todos`,
-        { method: "POST", body: JSON.stringify({ task, tag: sectionTag.toLowerCase() }) }
-      );
-      const patch: Record<string, unknown> = {};
-      if (newParticipantId) patch.assigned_participant_id = newParticipantId;
-      if (newDue.type === "date") { patch.due_date = newDue.date; patch.due_event_id = null; patch.due_marker = null; }
-      else if (newDue.type === "next_session") { patch.due_date = null; patch.due_event_id = null; patch.due_marker = "next_session"; }
-      else if (newDue.type === "event") { patch.due_date = null; patch.due_event_id = newDue.eventId; patch.due_marker = null; }
-      if (Object.keys(patch).length > 0) {
-        await browserApiFetch(`/api/protocol-todos/${result.todo_id}`, { method: "PATCH", body: JSON.stringify(patch) });
-      }
-      onQuickTodoCreated(result.block_id, result.todo_id, result.element_id);
-      setNewTask("");
-      setNewParticipantId(null);
-      setNewDue({ type: "none" });
-    } finally {
-      setCreating(false);
-    }
-  }
-
   return (
     <section className="card editor-block-card">
       <div className="editor-panel-header">
         <div>
-          <div className="eyebrow">Sitzungs-Todos</div>
+          <div className="eyebrow">Todos</div>
           <h3>{sectionTag}</h3>
         </div>
       </div>
@@ -5198,59 +5519,19 @@ function SessionTodosSection({
                   </div>
                 )}
               </div>
+              {!isReadOnly && !isLocked && (
+                <button
+                  type="button"
+                  className="button-inline button-danger todo-delete"
+                  onClick={() => void onDelete(todo.protocol_element_block_id, todo.id)}
+                >
+                  Delete
+                </button>
+              )}
             </article>
           );
         })}
       </div>
-      {!isReadOnly && (
-        <div className="todo-create todo-create-inline">
-          <input
-            value={newTask}
-            onChange={(e) => setNewTask(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") void handleCreate(); }}
-            placeholder="Neue Aufgabe…"
-          />
-          <div className="todo-inline-meta">
-            <TodoAssigneeMenu
-              label={participants.find((p) => p.id === newParticipantId)?.display_name ?? "Niemand"}
-              participants={participants}
-              activeId={newParticipantId}
-              onChange={(option) => setNewParticipantId(option.id)}
-            />
-            <TodoMiniMenu label={newDueLabel()} compact align="end">
-              {(closeMenu) => (
-                <>
-                  <div className="mini-menu-section">
-                    <TodoMenuOption label="Kein Enddatum" active={newDue.type === "none"}
-                      onClick={() => { setNewDue({ type: "none" }); closeMenu(); }} />
-                    <TodoMenuOption label="Freies Datum" active={newDue.type === "date"}
-                      onClick={() => { setNewDue({ type: "date", date: protocol.protocol_date ?? "" }); closeMenu(); }} />
-                    <TodoMenuOption label="Nächste Sitzung" active={newDue.type === "next_session"}
-                      onClick={() => { setNewDue({ type: "next_session" }); closeMenu(); }} />
-                  </div>
-                  {dueEvents.length > 0 && (
-                    <div className="mini-menu-section">
-                      <div className="mini-menu-section-title">Termine</div>
-                      {dueEvents.map((event) => (
-                        <TodoMenuOption key={event.id} label={event.title} subtle={formatDateRange(event.event_date, event.event_end_date ?? null)}
-                          active={newDue.type === "event" && (newDue as { eventId: number }).eventId === event.id}
-                          onClick={() => { setNewDue({ type: "event", eventId: event.id, eventTitle: event.title }); closeMenu(); }} />
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
-            </TodoMiniMenu>
-            {newDue.type === "date" && (
-              <DateInput value={(newDue as { date: string }).date} readOnly={false}
-                onChange={(value) => setNewDue({ type: "date", date: value ?? "" })} />
-            )}
-          </div>
-          <button type="button" disabled={creating || !newTask.trim()} onClick={() => void handleCreate()}>
-            + Todo
-          </button>
-        </div>
-      )}
     </section>
   );
 }

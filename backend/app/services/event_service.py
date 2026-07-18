@@ -7,8 +7,9 @@ from io import StringIO
 from sqlalchemy.orm import Session
 
 from app.models import Event
+from app.models.entities import EventCycle
 from app.repositories.event_repository import EventRepository
-from app.schemas.event import EventCreate, EventUpdate
+from app.schemas.event import CycleAssignment, EventCreate, EventUpdate
 
 
 class EventService:
@@ -34,23 +35,40 @@ class EventService:
             title=payload.title,
             description=payload.description,
             participant_count=payload.participant_count,
+            organizer_ids=payload.organizer_ids,
+            leadership_ids=payload.leadership_ids,
+            participant_ids=payload.participant_ids,
+            spezial1_ids=payload.spezial1_ids,
+            spezial2_ids=payload.spezial2_ids,
+            spezial3_ids=payload.spezial3_ids,
+            location=payload.location,
+            spezial_text1=payload.spezial_text1,
+            spezial_text2=payload.spezial_text2,
+            spezial_text3=payload.spezial_text3,
         )
-        return self.repository.create(db, event)
+        created = self.repository.create(db, event)
+        if payload.cycle_assignments:
+            self._set_cycle_assignments(db, created.id, payload.cycle_assignments)
+            db.refresh(created)
+        return created
 
     def update_event(self, db: Session, event_id: int, payload: EventUpdate) -> Event | None:
         event = self.repository.get(db, event_id)
         if event is None:
             return None
-        values = payload.model_dump(exclude_unset=True)
+        values = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if k != "cycle_assignments"}
         next_start = values.get("event_date", event.event_date)
         next_end = values.get("event_end_date", event.event_end_date)
         if next_end and next_end < next_start:
             raise ValueError("Event end date must be on or after the start date")
         if "participant_count" in values and values["participant_count"] is not None:
             values["participant_count"] = max(0, int(values["participant_count"]))
-        if not values:
-            return event
-        return self.repository.update(db, event, values)
+        if values:
+            event = self.repository.update(db, event, values)
+        if payload.cycle_assignments is not None:
+            self._set_cycle_assignments(db, event.id, payload.cycle_assignments)
+            db.refresh(event)
+        return event
 
     def delete_event(self, db: Session, event_id: int) -> bool:
         event = self.repository.get(db, event_id)
@@ -58,6 +76,12 @@ class EventService:
             return False
         self.repository.delete(db, event)
         return True
+
+    def _set_cycle_assignments(self, db: Session, event_id: int, assignments: list[CycleAssignment]) -> None:
+        db.query(EventCycle).filter(EventCycle.event_id == event_id).delete(synchronize_session=False)
+        for a in assignments:
+            db.add(EventCycle(event_id=event_id, cycle_config_id=a.cycle_config_id, cycle_year=a.cycle_year))
+        db.commit()
 
     def import_csv(self, db: Session, csv_text: str, *, tenant_id: int) -> list[Event]:
         normalized = csv_text.lstrip("\ufeff").strip()
@@ -133,6 +157,16 @@ class EventService:
         title: str,
         description: str | None,
         participant_count: int,
+        organizer_ids: list[int] | None = None,
+        leadership_ids: list[int] | None = None,
+        participant_ids: list[int] | None = None,
+        spezial1_ids: list[int] | None = None,
+        spezial2_ids: list[int] | None = None,
+        spezial3_ids: list[int] | None = None,
+        location: str | None = None,
+        spezial_text1: str | None = None,
+        spezial_text2: str | None = None,
+        spezial_text3: str | None = None,
     ) -> Event:
         if event_end_date and event_end_date < event_date:
             raise ValueError("Event end date must be on or after the start date")
@@ -146,6 +180,16 @@ class EventService:
             description=description,
             participant_count=max(0, int(participant_count)),
             group_id=None,
+            organizer_ids=organizer_ids or [],
+            leadership_ids=leadership_ids or [],
+            participant_ids=participant_ids or [],
+            spezial1_ids=spezial1_ids or [],
+            spezial2_ids=spezial2_ids or [],
+            spezial3_ids=spezial3_ids or [],
+            location=location,
+            spezial_text1=spezial_text1,
+            spezial_text2=spezial_text2,
+            spezial_text3=spezial_text3,
         )
 
     def _csv_value(self, row: dict[str, object], field: str) -> str:

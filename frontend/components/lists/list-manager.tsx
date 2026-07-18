@@ -1,13 +1,13 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { StructuredListTable } from "@/components/lists/structured-list-table";
-import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import {
+  DocumentTemplate,
   EventSummary,
   ParticipantSummary,
   StructuredListDefinition,
@@ -20,6 +20,7 @@ type ListManagerProps = {
   initialEntriesByList: Record<number, StructuredListEntry[]>;
   availableParticipants: ParticipantSummary[];
   availableEvents: EventSummary[];
+  documentTemplates?: DocumentTemplate[];
 };
 
 type ListDefinitionFormState = {
@@ -70,6 +71,7 @@ export function ListManager({
   initialEntriesByList,
   availableParticipants,
   availableEvents,
+  documentTemplates = [],
 }: ListManagerProps) {
   const showToast = useToast();
   const [lists, setLists] = useState(initialLists);
@@ -80,27 +82,146 @@ export function ListManager({
   const [editingListId, setEditingListId] = useState<number | null>(null);
   const [form, setForm] = useState(initialFormState);
 
-  const [sortKey, setSortKey] = useState<"name" | "is_active">("name");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  // Export modal state
+  const landscapeTemplates = documentTemplates.filter(
+    (t) => t.is_active && (t.configuration_json as { options?: { orientation?: string } })?.options?.orientation === "landscape"
+  );
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportTemplateId, setExportTemplateId] = useState<number | "">(landscapeTemplates[0]?.id ?? "");
+  const [exportListId, setExportListId] = useState<number | "">(initialLists[0]?.id ?? "");
+  const [exportGroupBy, setExportGroupBy] = useState<"" | "column_one" | "column_two">("");
+  const [exportSortBy, setExportSortBy] = useState<"" | "column_one" | "column_two">("");
+  const [exportSortDirection, setExportSortDirection] = useState<"asc" | "desc">("asc");
+  const [exportFilterColumn, setExportFilterColumn] = useState<"" | "column_one" | "column_two">("");
+  const [exportFilterParticipantId, setExportFilterParticipantId] = useState<number | "">("");
+  const [exportFilterEventId, setExportFilterEventId] = useState<number | "">("");
+  const [exportFilterText, setExportFilterText] = useState("");
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportUrl, setExportUrl] = useState<string | null>(null);
+  const [templateDropdownOpen, setTemplateDropdownOpen] = useState(false);
+  const templateDropdownRef = useRef<HTMLDivElement>(null);
+  const [listDropdownOpen, setListDropdownOpen] = useState(false);
+  const [listDropdownSearch, setListDropdownSearch] = useState("");
+  const listDropdownRef = useRef<HTMLDivElement>(null);
 
-  function toggleSort(key: typeof sortKey) {
-    setSortKey((cur) => {
-      if (cur === key) { setSortDirection((d) => d === "asc" ? "desc" : "asc"); return cur; }
-      setSortDirection("asc");
-      return key;
-    });
+  useEffect(() => {
+    if (!templateDropdownOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (templateDropdownRef.current && !templateDropdownRef.current.contains(e.target as Node)) {
+        setTemplateDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [templateDropdownOpen]);
+
+  useEffect(() => {
+    if (!listDropdownOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (listDropdownRef.current && !listDropdownRef.current.contains(e.target as Node)) {
+        setListDropdownOpen(false);
+        setListDropdownSearch("");
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [listDropdownOpen]);
+
+  const listDropdownFiltered = useMemo(() => {
+    if (!listDropdownSearch.trim()) return lists;
+    const q = listDropdownSearch.toLowerCase();
+    return lists.filter((l) => l.name.toLowerCase().includes(q));
+  }, [lists, listDropdownSearch]);
+
+  function toggleExportSort(col: "column_one" | "column_two") {
+    if (exportSortBy === col) {
+      setExportSortDirection((d) => d === "asc" ? "desc" : "asc");
+    } else {
+      setExportSortBy(col);
+      setExportSortDirection("asc");
+    }
+    clearExportUrl();
   }
+
+  const exportListDef = useMemo(
+    () => lists.find((l) => l.id === exportListId) ?? null,
+    [lists, exportListId]
+  );
+
+  const exportFilteredEntries = useMemo(() => {
+    if (!exportListId) return [];
+    const entries = entriesByList[exportListId as number] ?? [];
+    if (!exportFilterColumn || !exportListDef) return entries;
+    const valueType = exportFilterColumn === "column_one" ? exportListDef.column_one_value_type : exportListDef.column_two_value_type;
+    return entries.filter((entry) => {
+      const value = exportFilterColumn === "column_one" ? entry.column_one_value : entry.column_two_value;
+      if (valueType === "participant") {
+        if (!exportFilterParticipantId) return true;
+        return Number(value.participant_id) === exportFilterParticipantId;
+      }
+      if (valueType === "participants") {
+        if (!exportFilterParticipantId) return true;
+        const ids = Array.isArray(value.participant_ids) ? (value.participant_ids as unknown[]).map(Number) : [];
+        return ids.includes(exportFilterParticipantId as number);
+      }
+      if (valueType === "event") {
+        if (!exportFilterEventId) return true;
+        return Number(value.event_id) === exportFilterEventId;
+      }
+      if (!exportFilterText) return true;
+      return String(value.text_value ?? "").toLowerCase().includes(exportFilterText.toLowerCase());
+    });
+  }, [entriesByList, exportListId, exportFilterColumn, exportFilterParticipantId, exportFilterEventId, exportFilterText, exportListDef]);
+
+  function clearExportUrl() { setExportUrl(null); }
+
+  function triggerDownload(url: string) {
+    const a = document.createElement("a");
+    a.href = `${url}?download=1`;
+    a.target = "_blank";
+    a.rel = "noreferrer";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  async function handlePdfClick() {
+    if (exportBusy || !exportListId || !exportTemplateId) return;
+    if (exportUrl) { triggerDownload(exportUrl); return; }
+    setExportBusy(true);
+    try {
+      const result = await browserApiFetch<{ content_url?: string | null }>("/api/exports/lists", {
+        method: "POST",
+        body: JSON.stringify({
+          template_id: exportTemplateId,
+          list_definition_id: exportListId,
+          group_by: exportGroupBy,
+          sort_by: exportSortBy,
+          sort_direction: exportSortDirection,
+          filter_column: exportFilterColumn,
+          filter_participant_id: exportFilterParticipantId || null,
+          filter_event_id: exportFilterEventId || null,
+          filter_text: exportFilterText || null,
+        }),
+      });
+      const url = result.content_url ?? null;
+      setExportUrl(url);
+      if (url) triggerDownload(url);
+    } catch {
+      // keep accessible
+    } finally {
+      setExportBusy(false);
+    }
+  }
+
+  const [hoveredListId, setHoveredListId] = useState<number | null>(null);
 
   const filteredLists = useMemo(() => {
     const query = search.trim().toLowerCase();
-    const dir = sortDirection === "asc" ? 1 : -1;
     return lists
       .filter((definition) => !query || `${definition.name} ${definition.description ?? ""}`.toLowerCase().includes(query))
-      .sort((a, b) => {
-        if (sortKey === "is_active") return ((a.is_active ? 1 : 0) - (b.is_active ? 1 : 0)) * dir;
-        return a.name.localeCompare(b.name) * dir;
-      });
-  }, [lists, search, sortKey, sortDirection]);
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [lists, search]);
 
   const selectedList = useMemo(
     () => lists.find((definition) => definition.id === selectedListId) ?? null,
@@ -225,112 +346,338 @@ export function ListManager({
   }
 
   return (
-    <div className="grid">
-      <DataToolbar
-        title="Listen"
-        description="Globale Zweispalten-Listen, die du spaeter direkt an Tabellenbloecke koppeln kannst."
-        actions={
-          <button type="button" className="button-inline" onClick={openCreate}>
-            Neue Liste
-          </button>
-        }
-      />
+    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+      {/* Split layout: sidebar left, content right */}
+      <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 0, alignItems: "start" }}>
 
-      <article className="card">
-        <div className="two-col">
-          <label className="field-stack">
-            <span className="field-label">Suche</span>
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Listen durchsuchen" />
-          </label>
-          <div className="card">
-            <div className="eyebrow">Ueberblick</div>
-            <div className="status-row">
-              <span className="pill">{filteredLists.length} sichtbar</span>
-              <span className="pill">{lists.length} gesamt</span>
-              <span className="pill">{selectedList ? (entriesByList[selectedList.id] ?? []).length : 0} Eintraege</span>
-            </div>
+        {/* Left sidebar */}
+        <div style={{ borderRight: "1px solid var(--border)", paddingRight: 16, display: "flex", flexDirection: "column", minHeight: "calc(100vh - 120px)" }}>
+          {/* Search pinned at top */}
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Listen suchen…"
+            style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid var(--border)", backgroundColor: "transparent", color: "var(--text)", fontSize: "0.88rem", minHeight: 0, outline: "none", width: "100%", boxSizing: "border-box", marginBottom: 8 }}
+          />
+
+          {/* List items — scrollable, fills available height */}
+          <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 2 }}>
+            {filteredLists.length === 0 ? (
+              <span style={{ fontSize: "0.85rem", color: "var(--muted)", padding: "6px 4px", display: "block" }}>Keine Listen</span>
+            ) : filteredLists.map((definition) => {
+              const isSelected = selectedListId === definition.id;
+              const isHovered = hoveredListId === definition.id;
+              return (
+                <div
+                  key={definition.id}
+                  style={{ position: "relative" }}
+                  onMouseEnter={() => setHoveredListId(definition.id)}
+                  onMouseLeave={() => setHoveredListId(null)}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setSelectedListId(definition.id)}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      textAlign: "left",
+                      padding: "7px 10px",
+                      paddingRight: isHovered && !isSelected ? 58 : 10,
+                      borderRadius: 8,
+                      border: "none",
+                      background: isSelected ? "var(--accent)" : "none",
+                      color: isSelected ? "#fff" : "var(--text)",
+                      cursor: "pointer",
+                      minHeight: 0,
+                      fontSize: "0.9rem",
+                      fontWeight: isSelected ? 600 : 400,
+                    }}
+                  >
+                    {definition.name}
+                  </button>
+                  {isHovered && !isSelected && (
+                    <div style={{ position: "absolute", top: "50%", right: 2, transform: "translateY(-50%)", display: "flex", gap: 2 }}>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); openEdit(definition); }}
+                        title="Bearbeiten"
+                        style={{ padding: "3px 5px", background: "var(--panel-solid)", border: "1px solid var(--border)", borderRadius: 5, cursor: "pointer", color: "var(--text)", fontSize: "0.75rem", minHeight: 0, lineHeight: 1 }}
+                      >
+                        ✎
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); void deleteDefinition(definition.id); }}
+                        title="Löschen"
+                        style={{ padding: "3px 5px", background: "var(--panel-solid)", border: "1px solid var(--border)", borderRadius: 5, cursor: "pointer", color: "var(--danger)", fontSize: "0.75rem", minHeight: 0, lineHeight: 1 }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* New list button pinned at bottom */}
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={openCreate}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") openCreate(); }}
+            style={{ borderTop: "1px solid var(--border)", marginTop: 10, padding: "12px 10px 8px", color: "var(--accent)", cursor: "pointer", fontSize: "1rem", fontWeight: 600 }}
+          >
+            + Neue Liste
           </div>
         </div>
-      </article>
 
-      <DataTable
-        columns={[
-          { key: "name", label: "Liste", sortable: true, sortDirection: sortKey === "name" ? sortDirection : null, onSort: () => toggleSort("name") },
-          "Spalte 1",
-          "Spalte 2",
-          { key: "is_active", label: "Status", sortable: true, sortDirection: sortKey === "is_active" ? sortDirection : null, onSort: () => toggleSort("is_active") },
-          "Aktionen",
-        ]}
-        emptyMessage="Noch keine Listen angelegt."
-      >
-        {filteredLists.map((definition) => (
-          <tr
-            key={definition.id}
-            className={`table-row-clickable${selectedListId === definition.id ? " table-row-selected" : ""}`}
-            onClick={() => setSelectedListId(definition.id)}
-          >
-            <td>
-              <strong>{definition.name}</strong>
-              <div className="muted">{definition.description || "Keine Beschreibung"}</div>
-            </td>
-            <td>
-              {definition.column_one_title}
-              <div className="muted">{valueTypeLabel(definition.column_one_value_type)}</div>
-            </td>
-            <td>
-              {definition.column_two_title}
-              <div className="muted">{valueTypeLabel(definition.column_two_value_type)}</div>
-            </td>
-            <td><span className="pill">{definition.is_active ? "Aktiv" : "Inaktiv"}</span></td>
-            <td>
-              <div className="table-actions table-actions-start">
-                <button
-                  type="button"
-                  className="button-inline"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    openEdit(definition);
-                  }}
-                >
-                  Bearbeiten
-                </button>
-                <button
-                  type="button"
-                  className="button-inline button-danger"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void deleteDefinition(definition.id);
-                  }}
-                >
-                  Loeschen
-                </button>
+        {/* Right: content */}
+        <div style={{ paddingLeft: 28, minWidth: 0 }}>
+          {selectedList ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                <div>
+                  <h2 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700 }}>{selectedList.name}</h2>
+                  {selectedList.description && (
+                    <p style={{ margin: "3px 0 0", fontSize: "0.85rem", color: "var(--muted)" }}>{selectedList.description}</p>
+                  )}
+                </div>
+                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                  {landscapeTemplates.length > 0 && (
+                    <button type="button" className="button-inline button-ghost" onClick={() => { setExportListId(selectedListId ?? ""); setExportUrl(null); setExportModalOpen(true); }}>
+                      Export
+                    </button>
+                  )}
+                  <button type="button" className="button-inline button-ghost" onClick={() => openEdit(selectedList)}>
+                    Bearbeiten
+                  </button>
+                </div>
               </div>
-            </td>
-          </tr>
-        ))}
-      </DataTable>
+              <StructuredListTable
+                definition={selectedList}
+                entries={entriesByList[selectedList.id] ?? []}
+                availableParticipants={availableParticipants}
+                availableEvents={availableEvents}
+                fullWidth
+                onCreateEntry={(payload) => createEntry(selectedList.id, payload)}
+                onUpdateEntry={(entryId, payload) => updateEntry(selectedList.id, entryId, payload)}
+                onDeleteEntry={(entryId) => deleteEntry(selectedList.id, entryId)}
+              />
+            </div>
+          ) : (
+            <p style={{ color: "var(--muted)" }}>Wähle eine Liste aus oder erstelle eine neue.</p>
+          )}
+        </div>
+      </div>
 
-      {selectedList ? (
-        <article className="card grid">
-          <DataToolbar
-            title={selectedList.name}
-            description={selectedList.description || "Diese Liste ist direkt mit Tabellenbloecken verknuepfbar."}
-          />
-          <StructuredListTable
-            definition={selectedList}
-            entries={entriesByList[selectedList.id] ?? []}
-            availableParticipants={availableParticipants}
-            availableEvents={availableEvents}
-            onCreateEntry={(payload) => createEntry(selectedList.id, payload)}
-            onUpdateEntry={(entryId, payload) => updateEntry(selectedList.id, entryId, payload)}
-            onDeleteEntry={(entryId) => deleteEntry(selectedList.id, entryId)}
-          />
-        </article>
-      ) : (
-        <article className="card">
-          <p className="muted">Waehle zuerst eine Liste aus oder erstelle eine neue.</p>
-        </article>
-      )}
+      <Modal
+        open={exportModalOpen}
+        onClose={() => setExportModalOpen(false)}
+        title="Liste exportieren"
+        size="wide"
+      >
+        <div style={{ display: "flex", gap: 24, height: "min(640px, calc(100dvh - 200px))", minHeight: 0 }}>
+          {/* Left: options */}
+          <div style={{ width: 260, flexShrink: 0, display: "flex", flexDirection: "column", gap: 20, overflowY: "auto" }}>
+
+            {/* List dropdown with search */}
+            <div>
+              <div style={{ fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", marginBottom: 8 }}>Liste</div>
+              <div ref={listDropdownRef} style={{ position: "relative" }}>
+                <button
+                  type="button"
+                  onClick={() => { setListDropdownOpen((v) => !v); setListDropdownSearch(""); }}
+                  style={{ width: "100%", textAlign: "left", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", backgroundColor: "var(--surface)", color: "var(--text)", fontSize: "0.9rem", cursor: "pointer", minHeight: 0, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}
+                >
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {exportListDef?.name ?? "Liste wählen…"}
+                  </span>
+                  <span style={{ flexShrink: 0, opacity: 0.5 }}>▾</span>
+                </button>
+                {listDropdownOpen && (
+                  <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 70, backgroundColor: "var(--panel-solid)", border: "1px solid var(--border)", borderRadius: 6, boxShadow: "0 6px 20px rgba(0,0,0,0.2)", overflow: "hidden" }}>
+                    <div style={{ padding: "6px 8px", borderBottom: "1px solid var(--border)" }}>
+                      <input
+                        autoFocus
+                        type="text"
+                        placeholder="Suchen…"
+                        value={listDropdownSearch}
+                        onChange={(e) => setListDropdownSearch(e.target.value)}
+                        style={{ width: "100%", boxSizing: "border-box", padding: "4px 8px", borderRadius: 4, border: "1px solid var(--border)", backgroundColor: "var(--surface)", color: "var(--text)", fontSize: "0.88rem", minHeight: 0, outline: "none" }}
+                      />
+                    </div>
+                    <div style={{ maxHeight: 220, overflowY: "auto", padding: "4px 0" }}>
+                      {listDropdownFiltered.length === 0 ? (
+                        <div style={{ padding: "8px 12px", fontSize: "0.88rem", color: "var(--text-muted)" }}>Keine Listen gefunden</div>
+                      ) : listDropdownFiltered.map((l) => (
+                        <button
+                          key={l.id}
+                          type="button"
+                          onClick={() => { setExportListId(l.id); setExportFilterColumn(""); setExportFilterParticipantId(""); setExportFilterEventId(""); setExportFilterText(""); setExportGroupBy(""); setExportSortBy(""); clearExportUrl(); setListDropdownOpen(false); setListDropdownSearch(""); }}
+                          style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 12px", background: "none", border: "none", color: "var(--text)", cursor: "pointer", fontSize: "0.9rem", minHeight: 0, fontWeight: exportListId === l.id ? 700 : 400 }}
+                        >
+                          {l.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Group by */}
+            {exportListDef && (
+              <div>
+                <div style={{ fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", marginBottom: 8 }}>Gruppieren nach</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {(["", "column_one", "column_two"] as const).map((col) => (
+                    <button
+                      key={col}
+                      type="button"
+                      className={exportGroupBy === col ? "tag-filter-chip tag-filter-chip-active" : "tag-filter-chip"}
+                      style={{ width: "auto", minHeight: 0 }}
+                      onClick={() => { setExportGroupBy(col); clearExportUrl(); }}
+                    >
+                      {col === "" ? "Keine" : col === "column_one" ? exportListDef.column_one_title : exportListDef.column_two_title}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Filter */}
+            {exportListDef && (
+              <div>
+                <div style={{ fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", marginBottom: 8 }}>Filtern nach Spalte</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {(["", "column_one", "column_two"] as const).map((col) => (
+                    <button
+                      key={col}
+                      type="button"
+                      className={exportFilterColumn === col ? "tag-filter-chip tag-filter-chip-active" : "tag-filter-chip"}
+                      style={{ width: "auto", minHeight: 0 }}
+                      onClick={() => { setExportFilterColumn(col); setExportFilterParticipantId(""); setExportFilterEventId(""); setExportFilterText(""); clearExportUrl(); }}
+                    >
+                      {col === "" ? "Kein Filter" : col === "column_one" ? exportListDef.column_one_title : exportListDef.column_two_title}
+                    </button>
+                  ))}
+                </div>
+                {exportFilterColumn && (() => {
+                  const vtype = exportFilterColumn === "column_one" ? exportListDef.column_one_value_type : exportListDef.column_two_value_type;
+                  if (vtype === "participant" || vtype === "participants") {
+                    return (
+                      <select
+                        value={exportFilterParticipantId}
+                        onChange={(e) => { setExportFilterParticipantId(e.target.value ? Number(e.target.value) : ""); clearExportUrl(); }}
+                        style={{ marginTop: 8, padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border)", backgroundColor: "var(--panel-solid)", color: "var(--text)", fontSize: "0.9rem", width: "100%", boxSizing: "border-box", minHeight: 0 }}
+                      >
+                        <option value="">Alle</option>
+                        {availableParticipants.map((p) => <option key={p.id} value={p.id}>{p.display_name}</option>)}
+                      </select>
+                    );
+                  }
+                  if (vtype === "event") {
+                    return (
+                      <select
+                        value={exportFilterEventId}
+                        onChange={(e) => { setExportFilterEventId(e.target.value ? Number(e.target.value) : ""); clearExportUrl(); }}
+                        style={{ marginTop: 8, padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border)", backgroundColor: "var(--panel-solid)", color: "var(--text)", fontSize: "0.9rem", width: "100%", boxSizing: "border-box", minHeight: 0 }}
+                      >
+                        <option value="">Alle</option>
+                        {[...availableEvents].sort((a, b) => a.event_date.localeCompare(b.event_date)).map((e) => <option key={e.id} value={e.id}>{e.event_date} — {e.title}</option>)}
+                      </select>
+                    );
+                  }
+                  return (
+                    <input
+                      type="text"
+                      placeholder="Suchbegriff…"
+                      value={exportFilterText}
+                      onChange={(e) => { setExportFilterText(e.target.value); clearExportUrl(); }}
+                      style={{ marginTop: 8, padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border)", backgroundColor: "var(--panel-solid)", color: "var(--text)", fontSize: "0.9rem", width: "100%", boxSizing: "border-box", minHeight: 0, outline: "none" }}
+                    />
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* Action bar pinned to bottom */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: "auto", paddingTop: 8 }}>
+              <button
+                type="button"
+                className="pdf-icon-link pdf-icon-link-success"
+                style={{ minWidth: 56, textAlign: "center" }}
+                onClick={() => void handlePdfClick()}
+                disabled={!exportTemplateId || !exportListId}
+              >
+                {exportBusy ? "…" : exportUrl ? "PDF ↓" : "PDF"}
+              </button>
+              <button
+                type="button"
+                className="pdf-icon-link"
+                style={{ minWidth: 56, textAlign: "center", backgroundColor: "#a78bfa", color: "#fff", opacity: 0.5, cursor: "not-allowed" }}
+                disabled
+              >
+                MD
+              </button>
+              <div style={{ flex: 1 }} />
+              {landscapeTemplates.length > 1 && (
+                <div ref={templateDropdownRef} style={{ position: "relative" }}>
+                  <button
+                    type="button"
+                    onClick={() => setTemplateDropdownOpen((v) => !v)}
+                    style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid var(--border)", backgroundColor: "transparent", color: "var(--text)", fontSize: "0.85rem", cursor: "pointer", minHeight: 0, whiteSpace: "nowrap", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis" }}
+                  >
+                    {landscapeTemplates.find((t) => t.id === exportTemplateId)?.name ?? "Vorlage"} ▾
+                  </button>
+                  {templateDropdownOpen && (
+                    <div style={{ position: "absolute", right: 0, bottom: "calc(100% + 4px)", zIndex: 70, backgroundColor: "var(--panel-solid)", border: "1px solid var(--border)", borderRadius: 6, boxShadow: "0 6px 20px rgba(0,0,0,0.2)", padding: "4px 0", minWidth: 160 }}>
+                      {landscapeTemplates.map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => { setExportTemplateId(t.id); setTemplateDropdownOpen(false); clearExportUrl(); }}
+                          style={{ display: "block", width: "100%", textAlign: "left", padding: "6px 12px", background: "none", border: "none", color: "var(--text)", cursor: "pointer", fontSize: "0.9rem", minHeight: 0, fontWeight: exportTemplateId === t.id ? 700 : 400 }}
+                        >
+                          {t.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right: live preview */}
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflowY: "auto", borderLeft: "1px solid var(--border)", paddingLeft: 24 }}>
+            {exportListDef ? (
+              <>
+                <div style={{ fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", marginBottom: 12 }}>
+                  Vorschau · {exportFilteredEntries.length} Einträge
+                </div>
+                <StructuredListTable
+                  definition={exportListDef}
+                  entries={exportFilteredEntries}
+                  availableParticipants={availableParticipants}
+                  availableEvents={availableEvents}
+                  editable={false}
+                  groupByColumn={exportGroupBy}
+                  sortByColumn={exportSortBy}
+                  sortDirection={exportSortDirection}
+                  onHeaderSort={toggleExportSort}
+                  onCreateEntry={async () => false}
+                  onUpdateEntry={async () => false}
+                  onDeleteEntry={async () => {}}
+                />
+              </>
+            ) : (
+              <p className="muted">Wähle eine Liste aus.</p>
+            )}
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         open={modalOpen}

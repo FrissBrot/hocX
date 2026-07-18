@@ -13,8 +13,7 @@ class AccessService:
 
     def _is_restricted_reader(self, db: Session, user: CurrentUser) -> bool:
         return bool(
-            not user.is_superadmin
-            and user.current_role == "reader"
+            user.current_role == "reader"
             and user.current_tenant_id is not None
             and (
                 user.is_participant_account
@@ -23,7 +22,7 @@ class AccessService:
         )
 
     def can_read_template(self, db: Session, user: CurrentUser, template_id: int) -> bool:
-        if user.is_superadmin or user.current_role in {"admin", "writer"}:
+        if user.current_role in {"admin", "writer"}:
             return True
         if user.current_role != "reader" or user.current_tenant_id is None:
             return False
@@ -33,7 +32,7 @@ class AccessService:
         return template_id in template_ids
 
     def can_read_protocol(self, db: Session, user: CurrentUser, protocol_id: int) -> bool:
-        if user.is_superadmin or user.current_role in {"admin", "writer"}:
+        if user.current_role in {"admin", "writer"}:
             return True
         if user.current_role != "reader" or user.current_tenant_id is None:
             return False

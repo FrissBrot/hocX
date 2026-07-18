@@ -71,9 +71,10 @@ class DocumentTemplateService:
         return DocumentTemplateRead.model_validate(template) if template else None
 
     def create_document_template(self, db: Session, payload: DocumentTemplateCreate, *, tenant_id: int) -> DocumentTemplateRead:
+        code = payload.code or self._generate_template_code(db, tenant_id=tenant_id, name=payload.name)
         entity = DocumentTemplate(
             tenant_id=tenant_id,
-            code=payload.code,
+            code=code,
             name=payload.name,
             description=payload.description,
             filesystem_path="",
@@ -153,6 +154,20 @@ class DocumentTemplateService:
 
     def list_document_template_parts(self, db: Session, tenant_id: int) -> list[DocumentTemplatePartRead]:
         return [DocumentTemplatePartRead.model_validate(item) for item in self.part_repository.list(db, tenant_id)]
+
+    def _generate_template_code(self, db: Session, *, tenant_id: int, name: str, exclude_id: int | None = None) -> str:
+        base = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "vorlage"
+        existing_codes = {
+            t.code
+            for t in self.repository.list(db, tenant_id)
+            if t.id != exclude_id and t.code
+        }
+        if base not in existing_codes:
+            return base
+        suffix = 2
+        while f"{base}-{suffix}" in existing_codes:
+            suffix += 1
+        return f"{base}-{suffix}"
 
     def _generate_part_code(self, db: Session, *, tenant_id: int, name: str, part_type: str, version: int) -> str:
         base = re.sub(r"[^a-z0-9]+", "-", f"{part_type}-{name}".lower()).strip("-")
@@ -391,6 +406,7 @@ class DocumentTemplateService:
             return self._header_footer_from_presets(
                 presets.get("header", "standard"),
                 presets.get("footer", "standard"),
+                header_img_path=(image_paths or {}).get("header_image", ""),
             )
         if slot == "title_page":
             if is_combined:
@@ -481,10 +497,14 @@ class DocumentTemplateService:
 \\pagestyle{{fancy}}
 """
 
-    def _header_footer_from_presets(self, header: str, footer: str) -> str:
+    def _header_footer_from_presets(self, header: str, footer: str, header_img_path: str = "") -> str:
         if header == "none" and footer == "none":
             return "\\pagestyle{empty}\n"
         lines = ["\\pagestyle{fancy}", "\\fancyhf{}"]
+        has_logo = header in {"logo", "logo_bar", "logo_date"} and header_img_path
+        if has_logo:
+            lines.insert(0, "\\setlength{\\headheight}{1.2cm}")
+
         if header == "minimal":
             lines += [
                 "\\fancyhead[R]{\\color{hocxSecondary}\\small \\thepage}",
@@ -501,6 +521,31 @@ class DocumentTemplateService:
                 "\\fancyhead[R]{\\color{hocxPrimary}\\small \\HocxProtocolDate}",
                 "\\renewcommand{\\headrulewidth}{2pt}",
                 "\\renewcommand{\\headrule}{\\hbox to\\headwidth{\\color{hocxPrimary}\\leaders\\hrule height \\headrulewidth\\hfill}}",
+            ]
+        elif header == "logo" and header_img_path:
+            logo_tex = f"\\raisebox{{-.2\\height}}{{\\includegraphics[height=0.8cm,keepaspectratio]{{{header_img_path}}}}}"
+            lines += [
+                f"\\fancyhead[L]{{{logo_tex}}}",
+                "\\fancyhead[C]{\\color{hocxSecondary}\\small\\itshape \\HocxProtocolTitle}",
+                "\\fancyhead[R]{\\color{hocxSecondary}\\small \\HocxProtocolDate}",
+                "\\renewcommand{\\headrulewidth}{0.4pt}",
+            ]
+        elif header == "logo_bar" and header_img_path:
+            logo_tex = f"\\raisebox{{-.2\\height}}{{\\includegraphics[height=0.8cm,keepaspectratio]{{{header_img_path}}}}}"
+            lines += [
+                f"\\fancyhead[L]{{{logo_tex}}}",
+                "\\fancyhead[C]{\\color{hocxPrimary}\\small\\bfseries \\HocxProtocolTitle}",
+                "\\fancyhead[R]{\\color{hocxPrimary}\\small \\HocxProtocolDate\\quad\\textbar\\quad\\thepage}",
+                "\\renewcommand{\\headrulewidth}{2pt}",
+                "\\renewcommand{\\headrule}{\\hbox to\\headwidth{\\color{hocxPrimary}\\leaders\\hrule height \\headrulewidth\\hfill}}",
+            ]
+        elif header == "logo_date" and header_img_path:
+            logo_tex = f"\\raisebox{{-.2\\height}}{{\\includegraphics[height=0.8cm,keepaspectratio]{{{header_img_path}}}}}"
+            lines += [
+                f"\\fancyhead[L]{{{logo_tex}}}",
+                "\\fancyhead[C]{\\color{hocxSecondary}\\small \\HocxProtocolDate}",
+                "\\fancyhead[R]{\\color{hocxSecondary}\\small Seite~\\thepage}",
+                "\\renewcommand{\\headrulewidth}{0.4pt}",
             ]
         else:
             lines.append("\\renewcommand{\\headrulewidth}{0pt}")
@@ -522,6 +567,12 @@ class DocumentTemplateService:
             lines += [
                 "\\fancyfoot[L]{\\color{hocxSecondary}\\small \\HocxProtocolNumber}",
                 "\\fancyfoot[C]{\\color{hocxSecondary}\\small \\HocxProtocolVersion}",
+                "\\fancyfoot[R]{\\color{hocxSecondary}\\small Seite~\\thepage}",
+                "\\renewcommand{\\footrulewidth}{0.4pt}",
+            ]
+        elif footer == "date_page":
+            lines += [
+                "\\fancyfoot[L]{\\color{hocxSecondary}\\small \\HocxProtocolDate}",
                 "\\fancyfoot[R]{\\color{hocxSecondary}\\small Seite~\\thepage}",
                 "\\renewcommand{\\footrulewidth}{0.4pt}",
             ]
@@ -794,12 +845,15 @@ class DocumentTemplateService:
         font_size_value = font_size.replace("pt", "")
         baseline_size = str(int(font_size_value) + 2) if font_size_value.isdigit() else "13"
 
+        orientation = options.get("orientation", "portrait")
+        geometry_opts = "a4paper,landscape,margin=2cm" if orientation == "landscape" else "a4paper,margin=2.5cm"
+
         return f"""\\usepackage{{xcolor}}
 \\usepackage[utf8]{{inputenc}}
 \\usepackage{{graphicx}}
 \\usepackage{{float}}
 \\usepackage[hidelinks]{{hyperref}}
-\\usepackage[a4paper,margin=2.5cm]{{geometry}}
+\\usepackage[{geometry_opts}]{{geometry}}
 \\usepackage{{tikz}}
 \\usetikzlibrary{{calc}}
 \\usepackage{{tocloft}}

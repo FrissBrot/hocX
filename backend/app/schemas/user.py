@@ -11,6 +11,7 @@ class TenantRead(BaseModel):
     name: str
     profile_image_path: str | None = None
     profile_image_url: str | None = None
+    public_slug: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
     tag_config_json: dict[str, Any] = {}
@@ -28,6 +29,7 @@ class TenantMembershipRead(BaseModel):
     tenant_id: int
     tenant_name: str
     tenant_profile_image_path: str | None = None
+    tenant_profile_image_url: str | None = None
     role_code: str
     is_active: bool = True
 
@@ -49,7 +51,6 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     password: str = Field(min_length=8)
     memberships: list[TenantMembershipWrite] = Field(default_factory=list)
-    is_superadmin: bool = False
     login_enabled: bool = True
 
 
@@ -67,7 +68,6 @@ class UserUpdate(BaseModel):
     external_identity_json: dict[str, Any] | None = None
     default_tenant_id: int | None = None
     memberships: list[TenantMembershipWrite] | None = None
-    is_superadmin: bool | None = None
     login_enabled: bool | None = None
 
 
@@ -76,15 +76,9 @@ class UserSelfUpdate(BaseModel):
     default_tenant_id: int | None = None
 
 
-class UserMergeRequest(BaseModel):
-    source_user_id: int
-    target_user_id: int
-
-
 class UserRead(UserBase):
     id: int
     memberships: list[TenantMembershipRead] = Field(default_factory=list)
-    is_superadmin: bool = False
     login_enabled: bool = True
     is_participant_account: bool = False
     created_at: datetime
@@ -106,7 +100,7 @@ class SessionUserRead(BaseModel):
     display_name: str
     email: str
     preferred_language: str
-    is_superadmin: bool
+    default_tenant_id: int | None = None
 
 
 class SessionRead(BaseModel):
@@ -117,9 +111,6 @@ class SessionRead(BaseModel):
     available_tenants: list[TenantMembershipRead] = Field(default_factory=list)
 
 
-class TenantCreate(BaseModel):
-    name: str
-
-
 class TenantUpdate(BaseModel):
     name: str | None = None
+    public_slug: str | None = Field(default=None, pattern=r"^[a-z0-9-]+$")

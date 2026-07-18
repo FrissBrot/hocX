@@ -1,5 +1,6 @@
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -111,6 +112,8 @@ def delete_template(
     return {"message": "Template deleted"}
 
 
+
+
 @router.get("/templates/{template_id}/elements", response_model=list[TemplateElementRead])
 def list_template_elements(
     template_id: int,
@@ -178,6 +181,19 @@ def delete_template_element(
 def list_element_definitions(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     require_reader(user)
     return element_definition_service.list_element_definitions(db, tenant_id=user.current_tenant_id)
+
+
+@router.get("/element-definitions/{element_definition_id}", response_model=ElementDefinitionRead)
+def get_element_definition(
+    element_definition_id: int,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_reader(user)
+    definition = element_definition_service.get_element_definition(db, element_definition_id)
+    if definition is None or definition.tenant_id != user.current_tenant_id:
+        raise HTTPException(status_code=404, detail="Element definition not found")
+    return definition
 
 
 @router.post("/element-definitions", response_model=ElementDefinitionRead, status_code=status.HTTP_201_CREATED)

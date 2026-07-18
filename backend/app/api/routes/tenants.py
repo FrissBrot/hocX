@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user
-from app.schemas.user import TenantCreate, TenantRead, TenantUpdate
+from app.schemas.user import TenantRead, TenantUpdate
 from app.services.file_service import _safe_storage_path
 from app.services.tenant_service import TenantService
 
@@ -22,29 +22,19 @@ def list_tenants(
     return service.list_tenants(db, user)
 
 
-@router.post("/tenants", response_model=TenantRead, status_code=status.HTTP_201_CREATED)
-def create_tenant(
-    payload: TenantCreate,
-    db: Session = Depends(get_db),
-    user: CurrentUser = Depends(get_current_user),
-):
-    try:
-        return service.create_tenant(db, user, payload)
-    except SQLAlchemyError as exc:
-        db.rollback()
-        raise HTTPException(status_code=400, detail="Tenant could not be created") from exc
-
-
 @router.patch("/tenants/{tenant_id}", response_model=TenantRead)
 async def patch_tenant(
     tenant_id: int,
     name: str | None = Form(default=None),
+    public_slug: str | None = Form(default=None),
     profile_image: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     try:
-        tenant = await service.update_tenant(db, tenant_id, user, TenantUpdate(name=name), profile_image)
+        tenant = await service.update_tenant(
+            db, tenant_id, user, TenantUpdate(name=name, public_slug=public_slug), profile_image
+        )
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Tenant could not be updated") from exc

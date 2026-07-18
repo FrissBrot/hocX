@@ -1,11 +1,11 @@
 import { AppShell } from "@/components/ui/app-shell";
 import { TemplateEditor } from "@/components/template/template-builder";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
-import { DocumentTemplate, ElementDefinition, EventSummary, ParticipantSummary, StructuredListDefinition, TemplateElement, TemplateSummary } from "@/types/api";
+import { CycleConfigSummary, DocumentTemplate, ElementDefinition, EventSummary, ParticipantSummary, StructuredListDefinition, TemplateElement, TemplateSummary } from "@/types/api";
 
 export default async function TemplateDetailPage({ params }: { params: { id: string } }) {
   const session = await requireSession();
-  const [template, elements, definitions, events, participants, selectedParticipants, lists, documentTemplates] = await Promise.all([
+  const [template, elements, definitions, events, participants, selectedParticipants, lists, documentTemplates, cycleConfigs] = await Promise.all([
     backendFetchWithSession<TemplateSummary>(`/api/templates/${params.id}`),
     backendFetchWithSession<TemplateElement[]>(`/api/templates/${params.id}/elements`),
     backendFetchWithSession<ElementDefinition[]>("/api/element-definitions"),
@@ -14,6 +14,7 @@ export default async function TemplateDetailPage({ params }: { params: { id: str
     backendFetchWithSession<ParticipantSummary[]>(`/api/templates/${params.id}/participants`),
     backendFetchWithSession<StructuredListDefinition[]>("/api/lists"),
     backendFetchWithSession<DocumentTemplate[]>("/api/document-templates"),
+    backendFetchWithSession<CycleConfigSummary[]>("/api/cycle-configs"),
   ]);
 
   if (!template) {
@@ -43,6 +44,7 @@ export default async function TemplateDetailPage({ params }: { params: { id: str
           availableLists={lists ?? []}
           initialAssignedParticipants={selectedParticipants ?? []}
           availableDocumentTemplates={documentTemplates ?? []}
+          availableCycleConfigs={cycleConfigs ?? []}
         />
       </section>
     </AppShell>

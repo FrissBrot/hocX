@@ -13,7 +13,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models import AttendanceFine, Event, FinanceAccount, FinanceTransaction, ListDefinition, ListEntry, Participant, Protocol as ProtocolModel, ProtocolElement, ProtocolExportCache, StoredFile, Tenant
+from app.core.cycle_utils import get_cycle_year
+from app.models import AttendanceFine, DocumentTemplate, ElementType, Event, EventCycle, FinanceAccount, FinanceTransaction, ListDefinition, ListEntry, Participant, Protocol as ProtocolModel, ProtocolElement, ProtocolExportCache, StoredFile, Template, Tenant
 from app.repositories.export_repository import ExportRepository
 from app.schemas.protocol import ProtocolExportRead
 
@@ -163,6 +164,347 @@ class ExportService:
             status="generated",
         )
 
+    async def export_standalone_pdf(
+        self, db: Session, protocol_id: int, template_id: int, export_type: str, todo_filter: str = "all"
+    ) -> ProtocolExportRead:
+        protocol = self.repository.get_protocol(db, protocol_id)
+        if protocol is None:
+            raise ValueError("Protocol not found")
+
+        template = db.get(DocumentTemplate, template_id)
+        if template is None:
+            raise ValueError("Template not found")
+
+        template_path = Path(template.filesystem_path or "")
+        if not template_path.exists():
+            raise ValueError("Template not yet materialized — save the template first")
+
+        export_dir = (
+            Path(settings.export_root)
+            / f"protocol-{protocol_id}"
+            / f"{export_type}-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8]}"
+        )
+        export_dir.mkdir(parents=True, exist_ok=True)
+        template_copy_dir = export_dir / "template"
+        shutil.copytree(template_path, template_copy_dir)
+
+        template_fonts_dir = template_copy_dir / "fonts"
+        if template_fonts_dir.is_dir():
+            shutil.copytree(template_fonts_dir, export_dir / "fonts", dirs_exist_ok=True)
+            self._patch_theme_fontspec(template_copy_dir / "styles" / "theme.tex")
+
+        if export_type == "todos":
+            body_content = self._render_standalone_todo_body(db, protocol_id, export_dir, todo_filter)
+            section_title = "Offene Todos" if todo_filter == "open" else "Todo-Liste"
+            filename_suffix = "todos-offen" if todo_filter == "open" else "todos"
+        elif export_type == "events":
+            body_content = self._render_standalone_event_body(db, protocol, export_dir)
+            section_title = "Terminübersicht"
+            filename_suffix = "termine"
+        else:
+            raise ValueError(f"Unknown export type: {export_type}")
+
+        body_path = export_dir / "body.tex"
+        body_path.write_text(body_content, encoding="utf-8")
+
+        latex_source = self._build_standalone_main_tex(protocol, template_copy_dir, body_path, section_title)
+        main_tex_path = export_dir / "main.tex"
+        main_tex_path.write_text(latex_source, encoding="utf-8")
+
+        try:
+            await self._compile_pdf_async(main_tex_path)
+        except Exception:
+            shutil.rmtree(export_dir, ignore_errors=True)
+            raise
+
+        pdf_path = export_dir / "main.pdf"
+        base_name = re.sub(
+            r"[^A-Za-z0-9._ -]+", "-",
+            (protocol.title or protocol.protocol_number or f"protocol-{protocol_id}").strip()
+        ).strip(" .-_") or f"protocol-{protocol_id}"
+        filename = f"{base_name}-{filename_suffix}.pdf"
+
+        stored_file = self._store_generated_file(
+            db,
+            tenant_id=protocol.tenant_id,
+            source_path=pdf_path,
+            original_name=filename,
+            mime_type="application/pdf",
+        )
+        shutil.rmtree(export_dir, ignore_errors=True)
+
+        cache = self.repository.create_export_cache(
+            db,
+            ProtocolExportCache(
+                protocol_id=protocol.id,
+                export_format=f"pdf-{export_type}",
+                latex_source=body_content,
+                generated_file_id=stored_file.id,
+                generator_version=self.generator_version,
+            ),
+        )
+        db.commit()
+
+        return ProtocolExportRead(
+            protocol_id=protocol.id,
+            export_format=f"pdf-{export_type}",
+            generated_file_id=stored_file.id,
+            content_url=f"/api/stored-files/{stored_file.id}/content",
+            storage_path=stored_file.storage_path,
+            created_at=cache.created_at,
+            status="generated",
+        )
+
+    def _render_standalone_todo_body(self, db: Session, protocol_id: int, export_dir: Path, todo_filter: str = "all") -> str:
+        all_todos: list = []
+        for element in self.repository.list_protocol_elements(db, protocol_id):
+            for block in self.repository.list_protocol_element_blocks(db, element.id):
+                if block.element_type_id == 2:
+                    todos = self.repository.list_protocol_todos(db, block.id)
+                    all_todos.extend(todos)
+        if todo_filter == "open":
+            all_todos = [t for t in all_todos if (getattr(t, "todo_status_code", None) or "open") not in ("done", "cancelled")]
+        if not all_todos:
+            return "Keine Todos vorhanden."
+        return self._render_todo_rows_latex(all_todos)
+
+    def _render_standalone_event_body(self, db: Session, protocol, export_dir: Path) -> str:
+        config: dict = {
+            "event_only_from_protocol_date": False,
+            "event_show_date": True,
+            "event_show_tag": True,
+            "event_show_title": True,
+            "event_show_description": True,
+            "event_show_participant_count": False,
+            "event_gray_past": True,
+        }
+        return self._event_list_content(db, protocol=protocol, config=config)
+
+    async def export_global_pdf(
+        self, db: Session, tenant_id: int, template_id: int, export_type: str, todo_filter: str = "all",
+        tag_filters: list[str] | None = None, until_date: str | None = None,
+        participant_id: int | None = None, group_by_person: bool = False,
+        list_definition_id: int | None = None,
+        list_group_by: str = "", list_sort_by: str = "", list_sort_direction: str = "asc",
+        list_filter_column: str = "", list_filter_participant_id: int | None = None,
+        list_filter_event_id: int | None = None, list_filter_text: str | None = None,
+    ) -> ProtocolExportRead:
+        from types import SimpleNamespace
+        template = db.get(DocumentTemplate, template_id)
+        if template is None:
+            raise ValueError("Template not found")
+        template_path = Path(template.filesystem_path or "")
+        if not template_path.exists():
+            raise ValueError("Template not yet materialized — save the template first")
+
+        export_dir = (
+            Path(settings.export_root)
+            / f"tenant-{tenant_id}"
+            / f"global-{export_type}-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8]}"
+        )
+        export_dir.mkdir(parents=True, exist_ok=True)
+        template_copy_dir = export_dir / "template"
+        shutil.copytree(template_path, template_copy_dir)
+
+        template_fonts_dir = template_copy_dir / "fonts"
+        if template_fonts_dir.is_dir():
+            shutil.copytree(template_fonts_dir, export_dir / "fonts", dirs_exist_ok=True)
+            self._patch_theme_fontspec(template_copy_dir / "styles" / "theme.tex")
+
+        today = datetime.utcnow().date()
+        fake_protocol = SimpleNamespace(
+            protocol_number="",
+            title="",
+            protocol_date=today,
+            tenant_id=tenant_id,
+            template_id=None,
+        )
+
+        if export_type == "todos":
+            body_content = self._render_global_todo_body(
+                db, tenant_id, todo_filter,
+                participant_id=participant_id, group_by_person=group_by_person, until_date=until_date,
+            )
+            section_title = "Offene Todos" if todo_filter == "open" else "Todo-Übersicht"
+            filename_suffix = "todos-offen" if todo_filter == "open" else "todos"
+        elif export_type == "events":
+            body_content = self._render_global_event_body(db, fake_protocol, tag_filters=tag_filters or [], until_date=until_date)
+            section_title = "Terminübersicht"
+            filename_suffix = "termine"
+        elif export_type == "list":
+            from app.models.entities import ListDefinition as _ListDefinition
+            list_def = db.get(_ListDefinition, list_definition_id)
+            if list_def is None:
+                raise ValueError("List not found")
+            body_content = self._render_global_list_body(
+                db, list_definition_id=list_definition_id,
+                group_by=list_group_by, sort_by=list_sort_by, sort_direction=list_sort_direction,
+                filter_column=list_filter_column,
+                filter_participant_id=list_filter_participant_id,
+                filter_event_id=list_filter_event_id,
+                filter_text=list_filter_text,
+            )
+            section_title = list_def.name
+            filename_suffix = "liste"
+        else:
+            raise ValueError(f"Unknown export type: {export_type}")
+
+        body_path = export_dir / "body.tex"
+        body_path.write_text(body_content, encoding="utf-8")
+        latex_source = self._build_standalone_main_tex(fake_protocol, template_copy_dir, body_path, section_title)
+        main_tex_path = export_dir / "main.tex"
+        main_tex_path.write_text(latex_source, encoding="utf-8")
+
+        try:
+            await self._compile_pdf_async(main_tex_path)
+        except Exception:
+            shutil.rmtree(export_dir, ignore_errors=True)
+            raise
+
+        pdf_path = export_dir / "main.pdf"
+        filename = f"{filename_suffix}-{today.strftime('%Y%m%d')}.pdf"
+        stored_file = self._store_generated_file(
+            db, tenant_id=tenant_id, source_path=pdf_path,
+            original_name=filename, mime_type="application/pdf",
+        )
+        shutil.rmtree(export_dir, ignore_errors=True)
+        db.commit()
+        return ProtocolExportRead(
+            protocol_id=0,
+            export_format=f"pdf-global-{export_type}",
+            generated_file_id=stored_file.id,
+            content_url=f"/api/stored-files/{stored_file.id}/content",
+            storage_path=stored_file.storage_path,
+            created_at=datetime.utcnow(),
+            status="generated",
+        )
+
+    def _render_global_todo_body(
+        self, db: Session, tenant_id: int, todo_filter: str = "all",
+        participant_id: int | None = None, group_by_person: bool = False, until_date: str | None = None,
+    ) -> str:
+        from datetime import date
+        from app.repositories.protocol_todo_repository import ProtocolTodoRepository
+        repo = ProtocolTodoRepository()
+        rows = repo.list_for_tenant(db, tenant_id, skip=0, limit=10000)
+        if todo_filter == "open":
+            rows = [r for r in rows if (getattr(r, "todo_status_code", None) or "open") not in ("done", "cancelled")]
+        if participant_id is not None:
+            rows = [r for r in rows if getattr(r.ProtocolTodo, "assigned_participant_id", None) == participant_id]
+        if until_date:
+            cutoff = date.fromisoformat(until_date)
+            rows = [
+                r for r in rows
+                if getattr(r, "resolved_due_date", None) is None or r.resolved_due_date <= cutoff
+            ]
+        if not rows:
+            return "Keine Todos vorhanden."
+        if group_by_person:
+            return self._render_todo_rows_grouped(rows)
+        return self._render_todo_rows_latex(rows)
+
+    def _render_todo_rows_grouped(self, rows) -> str:
+        from itertools import groupby
+        parts = []
+        keyfn = lambda r: getattr(r, "assigned_participant_name", None) or "Ohne Zuweisung"
+        sorted_rows = sorted(rows, key=keyfn)
+        for person, group in groupby(sorted_rows, key=keyfn):
+            group_rows = list(group)
+            parts.append(f"\\subsection*{{{self._escape_latex(person)}}}")
+            parts.append(self._render_todo_rows_latex(group_rows))
+        return "\n".join(parts)
+
+    def _render_global_event_body(
+        self, db: Session, fake_protocol, tag_filters: list[str] | None = None, until_date: str | None = None
+    ) -> str:
+        from datetime import date, timedelta
+        config: dict = {
+            "event_only_from_protocol_date": False,
+            "event_show_date": True,
+            "event_show_tag": True,
+            "event_show_title": True,
+            "event_show_description": True,
+            "event_show_participant_count": False,
+            "event_gray_past": True,
+        }
+        if tag_filters:
+            config["event_tag_filter"] = ",".join(tag_filters)
+        if until_date:
+            until = date.fromisoformat(until_date)
+            fake_protocol.protocol_date = until + timedelta(days=1)
+            config["event_only_before_protocol_date"] = True
+        return self._event_list_content(db, protocol=fake_protocol, config=config)
+
+    def _render_global_list_body(
+        self, db: Session,
+        list_definition_id: int | None = None,
+        group_by: str = "", sort_by: str = "", sort_direction: str = "asc",
+        filter_column: str = "",
+        filter_participant_id: int | None = None,
+        filter_event_id: int | None = None,
+        filter_text: str | None = None,
+    ) -> str:
+        if not list_definition_id:
+            return "Keine Liste ausgewählt."
+        config: dict = {}
+        if group_by in {"column_one", "column_two"}:
+            config["linked_list_group_by"] = group_by
+        if sort_by in {"column_one", "column_two"}:
+            config["linked_list_sort_by"] = sort_by
+            config["linked_list_sort_direction"] = sort_direction
+        if filter_column in {"column_one", "column_two"}:
+            config["linked_list_filter_column"] = filter_column
+            if filter_participant_id:
+                config["linked_list_filter_participant_id"] = filter_participant_id
+            if filter_event_id:
+                config["linked_list_filter_event_id"] = filter_event_id
+            if filter_text:
+                config["linked_list_filter_text"] = filter_text
+        result = self._linked_list_content(db, list_definition_id, config)
+        return result or "Keine Einträge vorhanden."
+
+    def _build_standalone_main_tex(
+        self, protocol, template_copy_dir: Path, body_path: Path, section_title: str
+    ) -> str:
+        preamble = self._read_optional(template_copy_dir / "preamble.tex")
+        theme = self._read_optional(template_copy_dir / "styles" / "theme.tex")
+        macros = self._read_optional(template_copy_dir / "macros.tex")
+        header_footer = self._read_optional(template_copy_dir / "header_footer.tex")
+
+        uses_fontspec = "\\usepackage{fontspec}" in theme or "\\setmainfont" in theme
+        preamble = self._normalize_preamble_tex(preamble, strip_fontenc=uses_fontspec)
+        theme = self._normalize_theme_tex(theme)
+
+        protocol_number = self._escape_latex(protocol.protocol_number)
+        protocol_title = self._escape_latex(protocol.title or "")
+        protocol_date = self._escape_latex(
+            protocol.protocol_date.strftime("%d.%m.%Y") if protocol.protocol_date else ""
+        )
+        escaped_section = self._escape_latex(section_title)
+
+        return f"""\\documentclass{{article}}
+{theme}
+{preamble}
+{macros}
+\\newcommand{{\\HocxProtocolNumber}}{{{protocol_number}}}
+\\newcommand{{\\HocxProtocolTitle}}{{{protocol_title}}}
+\\newcommand{{\\HocxProtocolDate}}{{{protocol_date}}}
+\\newcommand{{\\HocxProtocolStatus}}{{}}
+\\newcommand{{\\HocxProtocolVersion}}{{}}
+\\makeatletter
+\\@ifpackageloaded{{microtype}}{{\\microtypesetup{{expansion=false}}}}{{}}
+\\makeatother
+\\setlength\\parindent{{0pt}}
+\\setlength\\parskip{{0.6em}}
+\\widowpenalty=10000
+\\clubpenalty=10000
+\\begin{{document}}
+{header_footer}
+\\section*{{{escaped_section}}}
+\\input{{{body_path.as_posix()}}}
+\\end{{document}}
+"""
+
     def _build_export_context(self, db: Session, protocol_id: int):
         protocol = self.repository.get_protocol(db, protocol_id)
         if protocol is None:
@@ -244,6 +586,8 @@ Status: {protocol_status}
 \\makeatother
 \\setlength\\parindent{{0pt}}
 \\setlength\\parskip{{0.6em}}
+\\widowpenalty=10000
+\\clubpenalty=10000
 \\begin{{document}}
 {header_footer}
 {title_page}
@@ -268,23 +612,35 @@ Status: {protocol_status}
             if self._trim_section_name(element.section_name_snapshot or "").lower() == "sitzungsnotizen":
                 continue
 
-            parts.append(f"\\section{{{self._escape_latex(element.section_name_snapshot)}}}")
+            section_header = f"\\section{{{self._escape_latex(element.section_name_snapshot)}}}"
+            visible_blocks = [
+                b for b in self.repository.list_protocol_element_blocks(db, element.id)
+                if b.export_visible_snapshot
+            ]
 
-            for block in self.repository.list_protocol_element_blocks(db, element.id):
-                if not block.export_visible_snapshot:
-                    continue
-
+            first = True
+            for block in visible_blocks:
                 block_heading = block.block_title_snapshot or block.display_title_snapshot or block.title_snapshot
-                parts.append(self._render_block(db, block, block_heading, export_dir, image_export_dir))
+                block_content = self._render_block(db, block, block_heading, export_dir, image_export_dir)
+                if first:
+                    # Keep section heading with first block so the title is never
+                    # left alone at the bottom of a page.
+                    parts.append(f"\\begin{{samepage}}\n{section_header}\n{block_content}\n\\end{{samepage}}")
+                    first = False
+                else:
+                    parts.append(f"\\begin{{samepage}}\n{block_content}\n\\end{{samepage}}")
+
+            if first:
+                # No visible blocks — emit the section header alone.
+                parts.append(section_header)
 
             # Dynamic session todos: todos tagged with the (trimmed, lowercased) section name.
-            # Skip "sitzungsnotizen" — those are internal session notes, not protocol content.
             section_tag = self._trim_section_name(element.section_name_snapshot or "").lower()
             if section_tag and section_tag != "sitzungsnotizen":
                 session_todos = self.repository.list_todos_by_tag(db, protocol_id, section_tag)
                 if session_todos:
-                    parts.append("\\subsection*{Sitzungs-Todos}")
-                    parts.append(self._render_todo_rows_latex(session_todos))
+                    todo_content = self._render_todo_rows_latex(session_todos)
+                    parts.append(f"\\begin{{samepage}}\n\\subsection*{{Sitzungs-Todos}}\n{todo_content}\n\\end{{samepage}}")
 
         return "\n".join(parts)
 
@@ -456,7 +812,47 @@ Status: {protocol_status}
             if protocol_element is None:
                 return "Keine Bussen."
             return self._fine_list_content(db, protocol_element.protocol_id)
+        # Chart block (element_type code="chart", id determined at runtime)
+        chart_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "chart"))
+        if chart_type_id and block.element_type_id == chart_type_id:
+            return self._chart_block_content(db, block, image_export_dir)
         return self._escape_latex(block.description_snapshot or "")
+
+    def _chart_block_content(self, db: Session, block, image_export_dir: Path) -> str:
+        from app.services.chart_service import generate_chart_png
+        config = block.configuration_snapshot_json or {}
+        chart_type = config.get("chart_type", "")
+        options = {k: v for k, v in config.items() if k != "chart_type"}
+        protocol_element = db.get(ProtocolElement, block.protocol_element_id)
+        if protocol_element is None:
+            return "Diagramm: Protokollelement nicht gefunden."
+        protocol = self.repository.get_protocol(db, protocol_element.protocol_id)
+        if protocol is None:
+            return "Diagramm: Protokoll nicht gefunden."
+        tenant_id = protocol.tenant_id
+        if not chart_type:
+            return "Diagramm: Kein Typ ausgewählt."
+        # Read primary/secondary colors from the protocol's document template
+        if protocol.document_template_id:
+            doc_tmpl = db.get(DocumentTemplate, protocol.document_template_id)
+            if doc_tmpl and doc_tmpl.configuration_json:
+                cfg = doc_tmpl.configuration_json
+                if "primary_color" in cfg and "primary_color" not in options:
+                    options["primary_color"] = "#" + str(cfg["primary_color"]).lstrip("#")
+                if "secondary_color" in cfg and "secondary_color" not in options:
+                    options["secondary_color"] = "#" + str(cfg["secondary_color"]).lstrip("#")
+        try:
+            png_bytes = generate_chart_png(db, tenant_id, chart_type, options)
+            img_path = image_export_dir / f"chart-{block.id}-{chart_type}.png"
+            img_path.write_bytes(png_bytes)
+            return "\n".join([
+                "\\begin{figure}[H]",
+                "\\centering",
+                f"\\includegraphics[width=0.92\\textwidth]{{{img_path.as_posix()}}}",
+                "\\end{figure}",
+            ])
+        except Exception as exc:
+            return self._escape_latex(f"Diagramm-Fehler: {exc}")
 
     def _fill_block_partial(self, block, template: str, heading: str, content: str) -> str:
         heading_markup = self._block_heading_markup(block, heading)
@@ -545,6 +941,7 @@ Status: {protocol_status}
         combined_extra_tag_filters = [t.strip() for t in str(extra_tag_filter or "").lower().split(",") if t.strip()]
         only_from_protocol_date = bool(config.get("event_only_from_protocol_date", True))
         only_before_protocol_date = bool(config.get("event_only_before_protocol_date", False))
+        only_current_cycle = bool(config.get("event_only_current_cycle", False))
         gray_past = bool(config.get("event_gray_past", True))
         show_tag_colors = bool(config.get("event_show_tag_colors", False))
         tag_config: dict = {}
@@ -558,6 +955,21 @@ Status: {protocol_status}
                 select(Event).where(Event.tenant_id == protocol.tenant_id).order_by(Event.event_date.asc(), Event.id.asc())
             )
         )
+        cycle_event_ids: set[int] | None = None
+        if only_current_cycle and protocol.protocol_date:
+            template = db.get(Template, protocol.template_id)
+            if template and template.cycle_config_id:
+                from app.models import CycleConfig
+                cycle_cfg = db.get(CycleConfig, template.cycle_config_id)
+                if cycle_cfg:
+                    cycle_year = get_cycle_year(protocol.protocol_date, cycle_cfg.reset_month, cycle_cfg.reset_day)
+                    cycle_rows = db.scalars(
+                        select(EventCycle.event_id).where(
+                            EventCycle.cycle_config_id == template.cycle_config_id,
+                            EventCycle.cycle_year == cycle_year,
+                        )
+                    ).all()
+                    cycle_event_ids = set(cycle_rows)
 
         column_specs: list[str] = []
         headers: list[str] = []
@@ -588,6 +1000,8 @@ Status: {protocol_status}
             if only_before_protocol_date and protocol.protocol_date and event_end_date >= protocol.protocol_date:
                 continue
             elif not only_before_protocol_date and only_from_protocol_date and protocol.protocol_date and event_end_date < protocol.protocol_date:
+                continue
+            if cycle_event_ids is not None and event.id not in cycle_event_ids:
                 continue
 
             cells: list[str] = []
@@ -644,7 +1058,7 @@ Status: {protocol_status}
         own_fines = db.scalars(
             select(AttendanceFine)
             .where(AttendanceFine.protocol_id == protocol_id)
-            .where(AttendanceFine.status.in_(["pending", "collected", "deleted"]))
+            .where(AttendanceFine.status.in_(["pending", "collected"]))
             .order_by(AttendanceFine.created_at.asc())
         ).all()
 
@@ -667,10 +1081,7 @@ Status: {protocol_status}
             account = db.get(FinanceAccount, fine.account_id)
             cur = account.currency_label if account else ""
             amount_str = f"{float(fine.amount):,.2f}".replace(",", "'")
-            if fine.status == "deleted":
-                comment_part = f" ({self._escape_latex(fine.delete_comment)})" if fine.delete_comment else ""
-                status_label = f"Gelöscht{comment_part}"
-            elif fine.status == "collected" and fine.closed_in_protocol_id is None:
+            if fine.status == "collected" and fine.closed_in_protocol_id is None:
                 status_label = "Kassiert"
             elif fine.status == "collected":
                 status_label = "Sp\\\"ater beglichen"
@@ -868,6 +1279,39 @@ Status: {protocol_status}
             return ""
 
         config = config if isinstance(config, dict) else {}
+
+        # Optional row filter
+        filter_column = str(config.get("linked_list_filter_column") or "").strip()
+        if filter_column in {"column_one", "column_two"}:
+            _, filter_value_type = self._linked_list_column_meta(definition, filter_column)
+            filter_participant_id = config.get("linked_list_filter_participant_id")
+            filter_event_id = config.get("linked_list_filter_event_id")
+            filter_text = str(config.get("linked_list_filter_text") or "").strip().lower()
+
+            def _entry_matches(entry: ListEntry) -> bool:
+                value = self._linked_list_entry_value(entry, filter_column)
+                if filter_value_type == "participant":
+                    if not filter_participant_id:
+                        return True
+                    return int(value.get("participant_id") or 0) == int(filter_participant_id)
+                if filter_value_type == "participants":
+                    if not filter_participant_id:
+                        return True
+                    ids = [int(x) for x in (value.get("participant_ids") or []) if x]
+                    return int(filter_participant_id) in ids
+                if filter_value_type == "event":
+                    if not filter_event_id:
+                        return True
+                    return int(value.get("event_id") or 0) == int(filter_event_id)
+                if not filter_text:
+                    return True
+                return filter_text in str(value.get("text_value") or "").lower()
+
+            entries = [e for e in entries if _entry_matches(e)]
+
+        if not entries:
+            return ""
+
         group_by = str(config.get("linked_list_group_by") or "").strip()
         if group_by not in {"column_one", "column_two"}:
             group_by = ""
@@ -1478,13 +1922,15 @@ Status: {protocol_status}
         return "".join(_MAP.get(c, c) for c in str(value))
 
     def _escape_latex_text(self, value: str) -> str:
-        """Escape LaTeX special chars except * and _ (handled by markdown parser)."""
+        """Escape LaTeX special chars. Underscores are also escaped here as a safety net
+        for any unpaired underscores that fall through the markdown italic parser."""
         _MAP = {
             "\\": "\\textbackslash{}",
             "&": "\\&",
             "%": "\\%",
             "$": "\\$",
             "#": "\\#",
+            "_": "\\_",
             "{": "\\{",
             "}": "\\}",
             "~": "\\textasciitilde{}",
@@ -1515,11 +1961,15 @@ Status: {protocol_status}
                     i = end + 1
                     continue
             if text[i] == "_":
-                end = text.find("_", i + 1)
-                if end != -1 and end > i + 1:
-                    parts.append(f"\\textit{{{self._inline_markdown_to_latex(text[i+1:end])}}}")
-                    i = end + 1
-                    continue
+                # Only treat as italic delimiter when preceded by whitespace (word boundary),
+                # so mid-word underscores in URLs/identifiers like sign_in are not matched.
+                prev_is_boundary = i == 0 or text[i - 1] in (" ", "\t", "\n")
+                if prev_is_boundary:
+                    end = text.find("_", i + 1)
+                    if end != -1 and end > i + 1:
+                        parts.append(f"\\textit{{{self._inline_markdown_to_latex(text[i+1:end])}}}")
+                        i = end + 1
+                        continue
             # Collect plain text up to next markdown marker
             j = i + 1
             while j < len(text) and text[j] not in ("*", "_", "\\"):
@@ -1538,7 +1988,7 @@ Status: {protocol_status}
 
         def flush_para() -> None:
             if pending:
-                result.append(" ".join(pending))
+                result.append("\n".join(pending))
                 pending.clear()
 
         def close_list() -> None:
@@ -1552,6 +2002,13 @@ Status: {protocol_status}
                 in_enumerate = False
 
         for line in lines:
+            # Tiptap encodes hard line breaks (Shift+Enter) as a trailing backslash.
+            # Strip it and emit a LaTeX \\ break so the line break is preserved in the PDF.
+            stripped = line.rstrip()
+            hard_break = stripped.endswith("\\")
+            if hard_break:
+                line = stripped[:-1]
+
             ul_m = re.match(r"^- (.+)", line)
             ol_m = re.match(r"^\d+\. (.+)", line)
             if ul_m:
@@ -1580,7 +2037,8 @@ Status: {protocol_status}
             else:
                 if in_itemize or in_enumerate:
                     close_list()
-                pending.append(self._inline_markdown_to_latex(line))
+                converted = self._inline_markdown_to_latex(line)
+                pending.append(converted + " \\\\" if hard_break else converted)
 
         close_list()
         flush_para()

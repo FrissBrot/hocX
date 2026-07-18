@@ -1893,7 +1893,6 @@ input[type="checkbox"] {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
-.selection-item,
 .selection-card {
   display: grid;
   gap: 10px;
@@ -1901,6 +1900,67 @@ input[type="checkbox"] {
   border-radius: 20px;
   border: 1px solid var(--border);
   background: color-mix(in srgb, var(--panel-solid) 90%, transparent 10%);
+}
+
+.tenant-tile {
+  padding: 0;
+  overflow: hidden;
+}
+
+.tenant-tile-active {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent 60%);
+}
+
+.tenant-tile-grid {
+  grid-template-columns: repeat(auto-fill, minmax(170px, 200px));
+}
+
+.tenant-tile-image {
+  width: 100%;
+  height: 100px;
+  box-sizing: border-box;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--accent) 18%, transparent 82%);
+  color: var(--text);
+  font-size: 1.8rem;
+  font-weight: 600;
+}
+
+.tenant-tile-image img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+.tenant-tile-body {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.tenant-tile-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tenant-tile-switch {
+  width: 100%;
+}
+
+.tenant-tile-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
 }
 
 .selection-card-checkbox {
@@ -2126,22 +2186,8 @@ input[type="checkbox"] {
   box-shadow: none;
 }
 
-.identity-button:hover,
-.selection-item:hover {
+.identity-button:hover {
   transform: translateY(0);
-  box-shadow: none;
-}
-
-.selection-item:hover {
-  background: color-mix(in srgb, var(--accent) 8%, var(--panel-solid) 92%);
-}
-
-.selection-item {
-  width: 100%;
-  min-width: 0;
-  min-height: 0;
-  background: color-mix(in srgb, var(--panel-solid) 90%, transparent 10%);
-  color: var(--text);
   box-shadow: none;
 }
 
@@ -4387,6 +4433,64 @@ input[type="checkbox"] {
 .editor-block-card-hidden {
   opacity: 0.45;
   border-style: dashed !important;
+}
+
+.editor-block-card-locked {
+  opacity: 0.75;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.collab-presence-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.collab-presence-offline {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.collab-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 600;
+  border: 2px solid var(--bg, #fff);
+  margin-left: -8px;
+}
+
+.collab-presence-bar .collab-avatar:first-child {
+  margin-left: 0;
+}
+
+.collab-lock-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid;
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.matrix-card-row-label .collab-lock-badge {
+  display: block;
+  margin-top: 2px;
 }
 
 .block-menu-wrap {

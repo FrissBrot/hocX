@@ -5,7 +5,7 @@ import { ProtocolSummary, TemplateSummary } from "@/types/api";
 
 export default async function ProtocolsPage() {
   const session = await requireSession();
-  const canWrite = session.user?.is_superadmin || ["admin", "writer"].includes(session.current_role ?? "");
+  const canWrite = ["admin", "writer"].includes(session.current_role ?? "");
 
   const [items, templates] = await Promise.all([
     backendFetchWithSession<ProtocolSummary[]>("/api/protocols"),

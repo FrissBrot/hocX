@@ -7,7 +7,7 @@ import { TenantSummary, UserSummary } from "@/types/api";
 
 export default async function UsersPage() {
   const session = await requireSession();
-  const canAdmin = session.user?.is_superadmin || session.current_role === "admin";
+  const canAdmin = session.current_role === "admin";
 
   if (!canAdmin) {
     redirect("/");
@@ -21,7 +21,7 @@ export default async function UsersPage() {
   return (
     <AppShell initialSession={session}>
       <section className="panel">
-        <UserManagement initialUsers={users ?? []} manageableTenants={tenants ?? []} session={session} />
+        <UserManagement initialUsers={users ?? []} manageableTenants={tenants ?? []} />
       </section>
     </AppShell>
   );

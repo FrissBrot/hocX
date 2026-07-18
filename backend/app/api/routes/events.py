@@ -9,10 +9,12 @@ from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
 from app.schemas.event import EventCreate, EventRead, EventUpdate
 from app.services.event_service import EventService
+from app.services.submission_service import SubmissionService
 from app.models.entities import Event
 
 router = APIRouter()
 service = EventService()
+submission_service = SubmissionService()
 
 
 @router.get("/events", response_model=list[EventRead])
@@ -34,10 +36,12 @@ def create_event(
 ):
     require_writer(user)
     try:
-        return service.create_event(db, payload, tenant_id=user.current_tenant_id)
+        created = service.create_event(db, payload, tenant_id=user.current_tenant_id)
     except (SQLAlchemyError, ValueError) as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Event could not be created") from exc
+    submission_service.sync_todos_for_event(db, created)
+    return created
 
 
 @router.post("/events/import-csv", response_model=list[EventRead], status_code=status.HTTP_201_CREATED)
@@ -73,6 +77,7 @@ def patch_event(
         raise HTTPException(status_code=400, detail="Event could not be updated") from exc
     if updated is None:
         raise HTTPException(status_code=404, detail="Event not found")
+    submission_service.sync_todos_for_event(db, updated)
     return updated
 
 

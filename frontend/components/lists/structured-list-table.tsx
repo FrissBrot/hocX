@@ -22,10 +22,12 @@ type StructuredListTableProps = {
   availableParticipants: ParticipantSummary[];
   availableEvents: EventSummary[];
   editable?: boolean;
+  fullWidth?: boolean;
   emptyMessage?: string;
   groupByColumn?: "" | StructuredListDisplayColumn;
   sortByColumn?: "" | StructuredListDisplayColumn;
   sortDirection?: "asc" | "desc";
+  onHeaderSort?: (column: "column_one" | "column_two") => void;
   onCreateEntry: (payload: {
     sort_index: number;
     column_one_value: StructuredListValue;
@@ -171,10 +173,12 @@ export function StructuredListTable({
   availableParticipants,
   availableEvents,
   editable = true,
+  fullWidth = false,
   emptyMessage = "Noch keine Eintraege.",
   groupByColumn = "",
   sortByColumn = "",
   sortDirection = "asc",
+  onHeaderSort,
   onCreateEntry,
   onUpdateEntry,
   onDeleteEntry,
@@ -540,12 +544,32 @@ export function StructuredListTable({
 
   return (
     <>
-      <div className="event-table-wrap">
-        <table className="data-table event-table event-table-compact structured-list-table">
+      <div className={`event-table-wrap${fullWidth ? " structured-list-table-flat" : ""}`} style={fullWidth ? { width: "100%" } : undefined}>
+        <table className="data-table event-table event-table-compact structured-list-table" style={fullWidth ? { width: "100%" } : undefined}>
           <thead>
             <tr>
-              <th>{definition.column_one_title}</th>
-              <th>{definition.column_two_title}</th>
+              <th
+                onClick={onHeaderSort ? () => onHeaderSort("column_one") : undefined}
+                style={onHeaderSort ? { cursor: "pointer", userSelect: "none" } : undefined}
+              >
+                {definition.column_one_title}
+                {onHeaderSort && (
+                  <span style={{ marginLeft: 4, opacity: sortByColumn === "column_one" ? 1 : 0.25, fontSize: "0.8em" }}>
+                    {sortByColumn === "column_one" ? (sortDirection === "asc" ? "↑" : "↓") : "↕"}
+                  </span>
+                )}
+              </th>
+              <th
+                onClick={onHeaderSort ? () => onHeaderSort("column_two") : undefined}
+                style={onHeaderSort ? { cursor: "pointer", userSelect: "none" } : undefined}
+              >
+                {definition.column_two_title}
+                {onHeaderSort && (
+                  <span style={{ marginLeft: 4, opacity: sortByColumn === "column_two" ? 1 : 0.25, fontSize: "0.8em" }}>
+                    {sortByColumn === "column_two" ? (sortDirection === "asc" ? "↑" : "↓") : "↕"}
+                  </span>
+                )}
+              </th>
               {editable ? (
                 <th className="event-column-actions" aria-label="Aktionen">
                   <button

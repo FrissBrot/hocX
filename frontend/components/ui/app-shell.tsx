@@ -11,6 +11,7 @@ import { buildNav, formatRoleLabel } from "@/components/ui/app-shell-nav";
 import { ToastProvider } from "@/contexts/toast-context";
 import { ProfileModal } from "@/components/ui/profile-modal";
 import { TenantSelectorModal } from "@/components/ui/tenant-selector-modal";
+import { TenantSettingsModal } from "@/components/ui/tenant-settings-modal";
 
 function readStoredThemePreference(): "light" | "dark" | "auto" {
   if (typeof window === "undefined") {
@@ -36,6 +37,7 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
   const compactFooterRef = useRef<HTMLDivElement | null>(null);
   const compactFooterPanelsRef = useRef<HTMLDivElement | null>(null);
   const compactFooterCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tenantPromptCheckedRef = useRef(false);
   const [themePreference, setThemePreference] = useState<"light" | "dark" | "auto">("auto");
   const [themeReady, setThemeReady] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -45,6 +47,9 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [session, setSession] = useState<SessionInfo | null>(initialSession);
   const [tenantModalOpen, setTenantModalOpen] = useState(false);
+  const [tenantSettingsModalOpen, setTenantSettingsModalOpen] = useState(false);
+  const [tenantSettingsTenantId, setTenantSettingsTenantId] = useState<number | null>(null);
+  const [tenantSettingsTenantName, setTenantSettingsTenantName] = useState("");
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [language, setLanguage] = useState("de");
   const [sessionStatus, setSessionStatus] = useState(initialSession?.authenticated ? "Ready" : "Loading workspace...");
@@ -74,13 +79,12 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
   }, [themePreference, themeReady]);
 
   useEffect(() => {
-    const initialGroups = Object.fromEntries(
-      navGroups.map((group) => [
-        group.title,
-        group.links.some((link) => pathname === link.href || pathname.startsWith(`${link.href}/`))
-      ])
+    const activeGroupTitle = navGroups.find((group) =>
+      group.links.some((link) => pathname === link.href || pathname.startsWith(`${link.href}/`))
+    )?.title;
+    setExpandedGroups(
+      Object.fromEntries(navGroups.map((group) => [group.title, group.title === activeGroupTitle]))
     );
-    setExpandedGroups((current) => ({ ...initialGroups, ...current }));
   }, [navGroups, pathname]);
 
   useEffect(() => {
@@ -190,6 +194,7 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
           return;
         }
         if (!current.authenticated) {
+          // Explicit "not logged in" from the server → redirect.
           router.replace("/login");
           return;
         }
@@ -197,8 +202,13 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
         setLanguage(current.user?.preferred_language ?? "de");
         setSessionStatus("Ready");
       } catch {
+        // Transient errors (network hiccup, backend 500, timeout) must NOT log
+        // the user out. The session endpoint always returns HTTP 200 — a throw
+        // here means a real infrastructure problem, not an expired session.
+        // If the user truly has no session the server-side requireSession() will
+        // have already redirected them before this component even mounts.
         if (!cancelled) {
-          router.replace("/login");
+          setSessionStatus("Ready");
         }
       }
     }
@@ -209,6 +219,20 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
     };
   }, [initialSession, router]);
 
+  useEffect(() => {
+    if (!session || tenantPromptCheckedRef.current) {
+      return;
+    }
+    tenantPromptCheckedRef.current = true;
+    const alreadyPrompted = window.sessionStorage.getItem("hocx-tenant-prompted");
+    const hasMultipleTenants = session.available_tenants.length > 1;
+    const hasNoDefault = session.user?.default_tenant_id == null;
+    if (hasMultipleTenants && hasNoDefault && !alreadyPrompted) {
+      window.sessionStorage.setItem("hocx-tenant-prompted", "1");
+      setTenantModalOpen(true);
+    }
+  }, [session]);
+
   const activeLabel = useMemo(() => {
     for (const group of navGroups) {
       for (const link of group.links) {
@@ -217,7 +241,7 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
         }
       }
     }
-    return "Workspace";
+    return "Dashboard";
   }, [navGroups, pathname]);
 
   const userFullName = [session?.user?.first_name, session?.user?.last_name].filter(Boolean).join(" ");
@@ -246,6 +270,29 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
     router.refresh();
   }
 
+  function openTenantSettings(membership: TenantMembership) {
+    setTenantSettingsTenantId(membership.tenant_id);
+    setTenantSettingsTenantName(membership.tenant_name);
+    setTenantModalOpen(false);
+    setTenantSettingsModalOpen(true);
+  }
+
+  async function setDefaultTenant(tenantId: number | null) {
+    // Optimistic update: the PATCH result already tells us the new value, no need
+    // to wait for a second round-trip (GET /api/auth/session) before the checkbox reacts.
+    setSession((current) => (current?.user ? { ...current, user: { ...current.user, default_tenant_id: tenantId } } : current));
+    try {
+      await browserApiFetch("/api/users/me", {
+        method: "PATCH",
+        body: JSON.stringify({ default_tenant_id: tenantId })
+      });
+    } catch {
+      // resync with the server if the update actually failed
+      const refreshed = await browserApiFetch<SessionInfo>("/api/auth/session");
+      setSession(refreshed);
+    }
+  }
+
   async function saveProfile() {
     await browserApiFetch("/api/users/me", {
       method: "PATCH",
@@ -261,6 +308,7 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
 
   async function logout() {
     await browserApiFetch("/api/auth/logout", { method: "POST" });
+    window.sessionStorage.removeItem("hocx-tenant-prompted");
     router.replace("/login");
   }
 
@@ -299,11 +347,11 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
           <div className="brand-lockup" ref={brandLockupRef}>
             <div className="brand-mark">hX</div>
             <div>
-              <div className="eyebrow">hocX workspace</div>
-              <h2 className="sidebar-title">Protocol Studio</h2>
+              <div className="eyebrow">hocX</div>
+              <h2 className="sidebar-title">Protokoll Studio</h2>
             </div>
           </div>
-          <p className="muted sidebar-copy" ref={sidebarCopyRef}>A focused workspace for tenants, protocols, templates and exports.</p>
+          <p className="muted sidebar-copy" ref={sidebarCopyRef}>Protokolle, Vorlagen, Termine und Exporte verwalten.</p>
           <nav className="sidebar-nav" ref={sidebarNavRef}>
             {navGroups.map((group) => (
               <div className="nav-group" key={group.title}>
@@ -311,10 +359,11 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
                   type="button"
                   className="nav-group-toggle"
                   onClick={() =>
-                    setExpandedGroups((current) => ({
-                      ...current,
-                      [group.title]: !current[group.title]
-                    }))
+                    setExpandedGroups((current) => {
+                      const isOpen = current[group.title];
+                      const allClosed = Object.fromEntries(navGroups.map((g) => [g.title, false]));
+                      return isOpen ? allClosed : { ...allClosed, [group.title]: true };
+                    })
                   }
                 >
                   <span className="nav-group-title">{group.title}</span>
@@ -488,6 +537,16 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
         onClose={() => setTenantModalOpen(false)}
         session={session}
         onSelect={(membership) => void switchTenant(membership)}
+        onOpenSettings={openTenantSettings}
+        onSetDefault={(tenantId) => void setDefaultTenant(tenantId)}
+      />
+
+      <TenantSettingsModal
+        open={tenantSettingsModalOpen}
+        onClose={() => setTenantSettingsModalOpen(false)}
+        tenantId={tenantSettingsTenantId}
+        tenantName={tenantSettingsTenantName}
+        onSaved={() => router.refresh()}
       />
 
       <ProfileModal
