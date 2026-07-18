@@ -46,6 +46,7 @@ type BlockFormState = {
   event_include_unlisted_past: boolean;
   event_only_from_protocol_date: boolean;
   event_only_before_protocol_date: boolean;
+  event_only_current_cycle: boolean;
   event_gray_past: boolean;
   event_allow_end_date: boolean;
   event_show_date: boolean;
@@ -70,6 +71,8 @@ type BlockFormState = {
   fine_account_id: string;
   fine_amount_late: string;
   fine_amount_absent: string;
+  chart_type: string;
+  chart_cycle_key: string;
   left_column_heading: string;
   value_column_heading: string;
   linked_list_id: string;
@@ -80,6 +83,7 @@ type BlockFormState = {
   export_visible: boolean;
   is_visible: boolean;
   sort_index: string;
+  event_fields: EventFieldConfig[];
   table_fields: Array<{
     id: string;
     label: string;
@@ -99,6 +103,38 @@ type BlockFormState = {
     event_tag_filter?: string;
   }>;
 };
+
+const ALL_EVENT_FIELDS = [
+  { field: "title", defaultLabel: "Titel", type: "text" },
+  { field: "description", defaultLabel: "Beschreibung", type: "text" },
+  { field: "event_date", defaultLabel: "Datum", type: "date" },
+  { field: "event_end_date", defaultLabel: "Enddatum", type: "date" },
+  { field: "tag", defaultLabel: "Tag", type: "text" },
+  { field: "participant_count", defaultLabel: "Teilnehmeranzahl", type: "number" },
+  { field: "organizer_ids", defaultLabel: "Organisatoren", type: "participants" },
+  { field: "leadership_ids", defaultLabel: "Leitungsteam", type: "participants" },
+  { field: "participant_ids", defaultLabel: "Teilnehmer", type: "participants" },
+  { field: "spezial1_ids", defaultLabel: "Spezial 1", type: "participants" },
+  { field: "spezial2_ids", defaultLabel: "Spezial 2", type: "participants" },
+  { field: "spezial3_ids", defaultLabel: "Spezial 3", type: "participants" },
+  { field: "location", defaultLabel: "Standort", type: "text" },
+  { field: "spezial_text1", defaultLabel: "Spezial Text 1", type: "text" },
+  { field: "spezial_text2", defaultLabel: "Spezial Text 2", type: "text" },
+  { field: "spezial_text3", defaultLabel: "Spezial Text 3", type: "text" },
+] as const;
+
+type EventFieldConfig = { field: string; label: string; enabled: boolean };
+
+function defaultEventFields(): EventFieldConfig[] {
+  return ALL_EVENT_FIELDS.map((f) => ({ field: f.field, label: f.defaultLabel, enabled: false }));
+}
+
+function mergeEventFields(saved: EventFieldConfig[]): EventFieldConfig[] {
+  return ALL_EVENT_FIELDS.map((def) => {
+    const existing = saved.find((s) => s.field === def.field);
+    return existing ?? { field: def.field, label: def.defaultLabel, enabled: false };
+  });
+}
 
 const initialDefinitionForm: DefinitionFormState = {
   title: "",
@@ -125,6 +161,7 @@ const initialBlockForm: BlockFormState = {
   event_include_unlisted_past: false,
   event_only_from_protocol_date: true,
   event_only_before_protocol_date: false,
+  event_only_current_cycle: false,
   event_gray_past: true,
   event_allow_end_date: false,
   event_show_date: true,
@@ -149,6 +186,8 @@ const initialBlockForm: BlockFormState = {
   fine_account_id: "",
   fine_amount_late: "",
   fine_amount_absent: "",
+  chart_type: "",
+  chart_cycle_key: "all",
   left_column_heading: "",
   value_column_heading: "",
   linked_list_id: "",
@@ -159,6 +198,7 @@ const initialBlockForm: BlockFormState = {
   export_visible: true,
   is_visible: true,
   sort_index: "10",
+  event_fields: defaultEventFields(),
   table_fields: [],
   matrix_columns: [],
 };
@@ -198,6 +238,7 @@ const elementTypeOptions = [
   { value: "12", label: "Kontostand", description: "Zeigt den aktuellen Kontostand eines Finanzkontos" },
   { value: "13", label: "Transaktionen", description: "Tabelle mit Transaktionen eines Finanzkontos" },
   { value: "14", label: "Bussenliste", description: "Liste der ausstehenden Bussen aus der Anwesenheitskontrolle" },
+  { value: "15", label: "Diagramm", description: "Statistik-Diagramm aus vordefinierten Daten (Anwesenheit, Finanzen, Bussen, Gruppen)" },
 ];
 
 const matrixEmbeddedBlockOptions = [
@@ -258,6 +299,7 @@ function blockKindForElementType(elementTypeId: string | number) {
     "11": "matrix",
     "12": "finance_balance",
     "13": "finance_transactions",
+    "15": "chart",
   };
   return mapping[String(elementTypeId)] ?? "text";
 }
@@ -322,6 +364,7 @@ function matrixEmbeddedBlockConfiguration(elementTypeId: string | number | null 
       event_tag_filter: "",
       event_only_from_protocol_date: true,
       event_only_before_protocol_date: false,
+      event_only_current_cycle: false,
       event_gray_past: true,
       event_allow_end_date: false,
       event_use_column_tag_filter: false,
@@ -379,6 +422,7 @@ function blockFormFromBlock(block: ElementDefinitionBlock): BlockFormState {
     event_include_unlisted_past: Boolean(block.configuration_json?.event_include_unlisted_past ?? false),
     event_only_from_protocol_date: Boolean(block.configuration_json?.event_only_from_protocol_date ?? true),
     event_only_before_protocol_date: Boolean(block.configuration_json?.event_only_before_protocol_date ?? false),
+    event_only_current_cycle: Boolean(block.configuration_json?.event_only_current_cycle ?? false),
     event_gray_past: Boolean(block.configuration_json?.event_gray_past ?? true),
     event_allow_end_date: Boolean(block.configuration_json?.event_allow_end_date ?? false),
     event_show_date: Boolean(block.configuration_json?.event_show_date ?? true),
@@ -417,6 +461,8 @@ function blockFormFromBlock(block: ElementDefinitionBlock): BlockFormState {
     fine_account_id: block.configuration_json?.fine_account_id != null ? String(block.configuration_json.fine_account_id) : "",
     fine_amount_late: block.configuration_json?.fine_amount_late != null ? String(block.configuration_json.fine_amount_late) : "",
     fine_amount_absent: block.configuration_json?.fine_amount_absent != null ? String(block.configuration_json.fine_amount_absent) : "",
+    chart_type: String(block.configuration_json?.chart_type ?? ""),
+    chart_cycle_key: String(block.configuration_json?.cycle_key ?? "all"),
     left_column_heading: String(block.configuration_json?.left_column_heading ?? ""),
     value_column_heading: String(block.configuration_json?.value_column_heading ?? ""),
     linked_list_id: block.configuration_json?.linked_list_id != null ? String(block.configuration_json?.linked_list_id) : "",
@@ -429,6 +475,11 @@ function blockFormFromBlock(block: ElementDefinitionBlock): BlockFormState {
         ? block.configuration_json.linked_list_sort_by
         : "",
     linked_list_sort_direction: block.configuration_json?.linked_list_sort_direction === "desc" ? "desc" : "asc",
+    event_fields: mergeEventFields(
+      Array.isArray(block.configuration_json?.event_fields)
+        ? (block.configuration_json.event_fields as EventFieldConfig[])
+        : []
+    ),
     is_editable: block.is_editable,
     export_visible: block.export_visible,
     is_visible: block.is_visible,
@@ -524,6 +575,7 @@ function blockPayload(form: BlockFormState): ElementDefinitionBlock {
       event_include_unlisted_past: form.event_include_unlisted_past,
       event_only_from_protocol_date: form.event_only_from_protocol_date,
       event_only_before_protocol_date: form.event_only_before_protocol_date,
+      event_only_current_cycle: form.event_only_current_cycle,
       event_gray_past: form.event_gray_past,
       event_allow_end_date: form.event_allow_end_date,
       event_show_date: form.event_show_date,
@@ -550,6 +602,8 @@ function blockPayload(form: BlockFormState): ElementDefinitionBlock {
       fine_account_id: form.fine_account_id ? Number(form.fine_account_id) : null,
       fine_amount_late: form.fine_amount_late ? parseFloat(form.fine_amount_late) : null,
       fine_amount_absent: form.fine_amount_absent ? parseFloat(form.fine_amount_absent) : null,
+      chart_type: form.chart_type || null,
+      cycle_key: form.chart_cycle_key || "all",
       left_column_heading: form.left_column_heading || null,
       value_column_heading: form.value_column_heading || null,
       linked_list_id:
@@ -560,6 +614,10 @@ function blockPayload(form: BlockFormState): ElementDefinitionBlock {
         form.element_type_id === "6" && form.linked_list_id && form.linked_list_sort_by ? form.linked_list_sort_by : null,
       linked_list_sort_direction:
         form.element_type_id === "6" && form.linked_list_id && form.linked_list_sort_by ? form.linked_list_sort_direction : null,
+      event_fields:
+        form.element_type_id === "6" && form.repeat_source === "event"
+          ? form.event_fields.filter((f) => f.enabled)
+          : null,
       rows:
         (String(form.element_type_id) === "11" || (String(form.element_type_id) === "6" && !form.linked_list_id))
           ? form.table_fields.map((field, index) => ({
@@ -1823,6 +1881,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 </label>
               <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.event_only_from_protocol_date} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_only_from_protocol_date: event.target.checked, event_only_before_protocol_date: false }))} />Nur Termine ab Protokolldatum anzeigen</label>
               <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.event_only_before_protocol_date} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_only_before_protocol_date: event.target.checked, event_only_from_protocol_date: false }))} />Nur Termine vor Protokolldatum anzeigen (Rückblick)</label>
+              <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.event_only_current_cycle} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_only_current_cycle: event.target.checked }))} />Nur Termine im aktuellen Zyklus dieses Protokolls anzeigen</label>
               <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.event_gray_past} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_gray_past: event.target.checked }))} />Vergangene Termine ausgegraut darstellen</label>
               <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.event_allow_end_date} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_allow_end_date: event.target.checked }))} />Mehrtägige Termine erlauben</label>
               </div>
@@ -1967,6 +2026,54 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 </div>
               ) : (
                 <>
+                {createBlockForm.repeat_source === "event" && (
+                  <div className="grid">
+                    <div className="eyebrow" style={{ marginBottom: 4 }}>Terminfelder</div>
+                    <p className="muted" style={{ fontSize: "0.85rem", margin: 0 }}>
+                      Diese Felder des Termins erscheinen als bearbeitbare Zeilen in der Tabelle und werden direkt im Termin gespeichert.
+                    </p>
+                    <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
+                      {createBlockForm.event_fields.map((entry) => {
+                        const def = ALL_EVENT_FIELDS.find((d) => d.field === entry.field);
+                        if (!def) return null;
+                        return (
+                          <div key={entry.field} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <label style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 160, cursor: "pointer" }}>
+                              <input
+                                type="checkbox"
+                                checked={entry.enabled}
+                                onChange={(e) =>
+                                  setCreateBlockForm((current) => ({
+                                    ...current,
+                                    event_fields: current.event_fields.map((f) =>
+                                      f.field === entry.field ? { ...f, enabled: e.target.checked } : f
+                                    ),
+                                  }))
+                                }
+                              />
+                              <span style={{ fontSize: "0.85rem" }}>{def.defaultLabel}</span>
+                            </label>
+                            {entry.enabled && (
+                              <input
+                                value={entry.label}
+                                placeholder={def.defaultLabel}
+                                style={{ flex: 1, minHeight: 0, padding: "4px 8px", fontSize: "0.85rem" }}
+                                onChange={(e) =>
+                                  setCreateBlockForm((current) => ({
+                                    ...current,
+                                    event_fields: current.event_fields.map((f) =>
+                                      f.field === entry.field ? { ...f, label: e.target.value } : f
+                                    ),
+                                  }))
+                                }
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 <div className="two-col">
                   <label className="field-stack">
                     <span className="field-label">Linke Spaltenueberschrift</span>
@@ -2080,6 +2187,32 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
               ) : (
                 <p className="muted">Noch keine Matrix angelegt. Oeffne den Designer und fuege zuerst Spalten und Zeilen hinzu.</p>
               )}
+            </SettingsSection>
+          ) : null}
+          {createBlockForm.element_type_id === "15" ? (
+            <SettingsSection
+              title="Diagramm"
+              description="Wähle das Statistik-Diagramm, das in diesem Block angezeigt werden soll."
+            >
+              <div className="three-col">
+                <label className="field-stack">
+                  <span className="field-label">Diagramm-Typ</span>
+                  <select
+                    value={createBlockForm.chart_type}
+                    onChange={(e) => setCreateBlockForm((c) => ({ ...c, chart_type: e.target.value }))}
+                  >
+                    <option value="">– Diagramm auswählen –</option>
+                    <option value="attendance_over_time">Anwesenheit über Zeit</option>
+                    <option value="attendance_by_participant">Anwesenheit pro Mitglied</option>
+                    <option value="finance_by_month">Finanzen pro Monat</option>
+                    <option value="fines_by_participant">Bussen pro Mitglied</option>
+                    <option value="fines_by_type">Bussen nach Typ</option>
+                    <option value="groups_sessions">Termine pro Gruppe</option>
+                    <option value="groups_avg">Ø Teilnehmer pro Gruppe</option>
+                    <option value="todos">Todos Übersicht</option>
+                  </select>
+                </label>
+              </div>
             </SettingsSection>
           ) : null}
           <SettingsSection
@@ -2373,6 +2506,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 </label>
                 <label className="checkbox-row"><input type="checkbox" checked={blockForm.event_only_from_protocol_date} onChange={(event) => setBlockForm((current) => ({ ...current, event_only_from_protocol_date: event.target.checked, event_only_before_protocol_date: false }))} />Nur Termine ab Protokolldatum anzeigen</label>
                 <label className="checkbox-row"><input type="checkbox" checked={blockForm.event_only_before_protocol_date} onChange={(event) => setBlockForm((current) => ({ ...current, event_only_before_protocol_date: event.target.checked, event_only_from_protocol_date: false }))} />Nur Termine vor Protokolldatum anzeigen (Rückblick)</label>
+                <label className="checkbox-row"><input type="checkbox" checked={blockForm.event_only_current_cycle} onChange={(event) => setBlockForm((current) => ({ ...current, event_only_current_cycle: event.target.checked }))} />Nur Termine im aktuellen Zyklus dieses Protokolls anzeigen</label>
                 <label className="checkbox-row"><input type="checkbox" checked={blockForm.event_gray_past} onChange={(event) => setBlockForm((current) => ({ ...current, event_gray_past: event.target.checked }))} />Vergangene Termine ausgegraut darstellen</label>
                 <label className="checkbox-row"><input type="checkbox" checked={blockForm.event_allow_end_date} onChange={(event) => setBlockForm((current) => ({ ...current, event_allow_end_date: event.target.checked }))} />Mehrtägige Termine erlauben</label>
                 </div>
@@ -2517,6 +2651,54 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                   </div>
                 ) : (
                   <>
+                    {blockForm.repeat_source === "event" && (
+                      <div className="grid">
+                        <div className="eyebrow" style={{ marginBottom: 4 }}>Terminfelder</div>
+                        <p className="muted" style={{ fontSize: "0.85rem", margin: 0 }}>
+                          Diese Felder des Termins erscheinen als bearbeitbare Zeilen in der Tabelle und werden direkt im Termin gespeichert.
+                        </p>
+                        <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
+                          {blockForm.event_fields.map((entry) => {
+                            const def = ALL_EVENT_FIELDS.find((d) => d.field === entry.field);
+                            if (!def) return null;
+                            return (
+                              <div key={entry.field} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                <label style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 160, cursor: "pointer" }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={entry.enabled}
+                                    onChange={(e) =>
+                                      setBlockForm((current) => ({
+                                        ...current,
+                                        event_fields: current.event_fields.map((f) =>
+                                          f.field === entry.field ? { ...f, enabled: e.target.checked } : f
+                                        ),
+                                      }))
+                                    }
+                                  />
+                                  <span style={{ fontSize: "0.85rem" }}>{def.defaultLabel}</span>
+                                </label>
+                                {entry.enabled && (
+                                  <input
+                                    value={entry.label}
+                                    placeholder={def.defaultLabel}
+                                    style={{ flex: 1, minHeight: 0, padding: "4px 8px", fontSize: "0.85rem" }}
+                                    onChange={(e) =>
+                                      setBlockForm((current) => ({
+                                        ...current,
+                                        event_fields: current.event_fields.map((f) =>
+                                          f.field === entry.field ? { ...f, label: e.target.value } : f
+                                        ),
+                                      }))
+                                    }
+                                  />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                     <div className="two-col">
                       <label className="field-stack">
                         <span className="field-label">Linke Spaltenueberschrift</span>
@@ -2638,6 +2820,32 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 ) : (
                   <p className="muted">Noch keine Matrix angelegt. Oeffne den Designer und fuege zuerst Spalten und Zeilen hinzu.</p>
                 )}
+              </SettingsSection>
+            ) : null}
+            {blockForm.element_type_id === "15" ? (
+              <SettingsSection
+                title="Diagramm"
+                description="Wähle das Statistik-Diagramm, das in diesem Block angezeigt werden soll."
+              >
+                <div className="three-col">
+                  <label className="field-stack">
+                    <span className="field-label">Diagramm-Typ</span>
+                    <select
+                      value={blockForm.chart_type}
+                      onChange={(e) => setBlockForm((c) => ({ ...c, chart_type: e.target.value }))}
+                    >
+                      <option value="">– Diagramm auswählen –</option>
+                      <option value="attendance_over_time">Anwesenheit über Zeit</option>
+                      <option value="attendance_by_participant">Anwesenheit pro Mitglied</option>
+                      <option value="finance_by_month">Finanzen pro Monat</option>
+                      <option value="fines_by_participant">Bussen pro Mitglied</option>
+                      <option value="fines_by_type">Bussen nach Typ</option>
+                      <option value="groups_sessions">Termine pro Gruppe</option>
+                      <option value="groups_avg">Ø Teilnehmer pro Gruppe</option>
+                      <option value="todos">Todos Übersicht</option>
+                    </select>
+                  </label>
+                </div>
               </SettingsSection>
             ) : null}
             <SettingsSection

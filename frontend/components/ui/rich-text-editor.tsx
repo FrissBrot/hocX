@@ -3,7 +3,8 @@
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
-import { useEffect } from "react";
+import { liftListItem } from "prosemirror-schema-list";
+import { useEffect, useRef } from "react";
 
 type RichTextEditorProps = {
   value: string;
@@ -13,6 +14,9 @@ type RichTextEditorProps = {
 };
 
 export function RichTextEditor({ value, onChange, readOnly = false, placeholder }: RichTextEditorProps) {
+  // Keep a stable ref so the handleKeyDown closure always sees the current editor
+  const editorRef = useRef<ReturnType<typeof useEditor>>(null);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -41,6 +45,44 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder 
       },
     },
   });
+
+  // Keep ref in sync
+  useEffect(() => { editorRef.current = editor; }, [editor]);
+
+  // Attach the list-exit handler as a native keydown listener on the editor DOM.
+  // This is the most reliable place — it runs before Tiptap's keymaps and
+  // always reads fresh editor state via the ref.
+  useEffect(() => {
+    const el = editor?.view?.dom;
+    if (!el) return;
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== "Enter" || e.shiftKey || e.ctrlKey || e.metaKey) return;
+      const currentEditor = editorRef.current;
+      if (!currentEditor) return;
+
+      const { state, view } = currentEditor;
+      const { $from } = state.selection;
+      const listItemType = state.schema.nodes.listItem;
+      if (!listItemType) return;
+
+      // Only act when cursor is in an empty list item
+      const isEmptyListItem =
+        $from.parent.content.size === 0 &&
+        $from.node(-1)?.type === listItemType;
+      if (!isEmptyListItem) return;
+
+      const lifted = liftListItem(listItemType)(state, view.dispatch);
+      if (lifted) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }
+    }
+
+    // useCapture=true so we run before Tiptap's own listener
+    el.addEventListener("keydown", onKeyDown, true);
+    return () => el.removeEventListener("keydown", onKeyDown, true);
+  }, [editor]);
 
   // Sync external value changes (e.g. initial load from server)
   useEffect(() => {

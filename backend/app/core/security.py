@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.db import get_db
-from app.models import AppUser, Role, Tenant, UserRole, UserTenantRole
+from app.models import AppUser, Role, Tenant, UserTenantRole
 
 
 PASSWORD_SCHEME = "pbkdf2_sha256"
@@ -38,8 +38,8 @@ class CurrentUser:
     display_name: str
     email: str
     preferred_language: str
-    is_superadmin: bool
     is_participant_account: bool
+    default_tenant_id: int | None
     current_tenant_id: int | None
     current_tenant_name: str | None
     current_tenant_profile_image_path: str | None
@@ -47,8 +47,6 @@ class CurrentUser:
     available_tenants: list[TenantMembership]
 
     def has_tenant_role(self, *allowed_roles: str) -> bool:
-        if self.is_superadmin:
-            return True
         return self.current_role in allowed_roles
 
 
@@ -135,43 +133,15 @@ def _load_memberships(db: Session, user_id: int) -> list[TenantMembership]:
 
 
 def build_current_user(db: Session, user: AppUser, selected_tenant_id: int | None) -> CurrentUser:
-    role_codes = list(
-        db.scalars(
-            select(Role.code)
-            .join(UserRole, UserRole.role_id == Role.id)
-            .where(UserRole.user_id == user.id)
-        )
-    )
-    is_superadmin = "superadmin" in role_codes
     memberships = _load_memberships(db, user.id)
-    if is_superadmin:
-        all_tenants = list(db.scalars(select(Tenant).order_by(Tenant.name.asc(), Tenant.id.asc())))
-        memberships = [
-            TenantMembership(
-                tenant_id=tenant.id,
-                tenant_name=tenant.name,
-                tenant_profile_image_path=tenant.profile_image_path,
-                role_code="admin",
-                is_active=True,
-            )
-            for tenant in all_tenants
-        ]
 
     current_membership = None
     if selected_tenant_id is not None:
         current_membership = next((membership for membership in memberships if membership.tenant_id == selected_tenant_id), None)
+    if current_membership is None and user.default_tenant_id is not None:
+        current_membership = next((membership for membership in memberships if membership.tenant_id == user.default_tenant_id), None)
     if current_membership is None and memberships:
         current_membership = memberships[0]
-    if current_membership is None and user.default_tenant_id is not None and is_superadmin:
-        tenant = db.get(Tenant, user.default_tenant_id)
-        if tenant is not None:
-            current_membership = TenantMembership(
-                tenant_id=tenant.id,
-                tenant_name=tenant.name,
-                tenant_profile_image_path=tenant.profile_image_path,
-                role_code="admin",
-                is_active=True,
-            )
 
     return CurrentUser(
         user_id=user.id,
@@ -180,12 +150,12 @@ def build_current_user(db: Session, user: AppUser, selected_tenant_id: int | Non
         display_name=user.display_name,
         email=user.email,
         preferred_language=user.preferred_language,
-        is_superadmin=is_superadmin,
         is_participant_account=(user.external_identity_json or {}).get("source") == "participant_auto",
+        default_tenant_id=user.default_tenant_id,
         current_tenant_id=current_membership.tenant_id if current_membership else user.default_tenant_id,
         current_tenant_name=current_membership.tenant_name if current_membership else None,
         current_tenant_profile_image_path=current_membership.tenant_profile_image_path if current_membership else None,
-        current_role="superadmin" if is_superadmin and current_membership is None else current_membership.role_code if current_membership else ("superadmin" if is_superadmin else None),
+        current_role=current_membership.role_code if current_membership else None,
         available_tenants=memberships,
     )
 
@@ -216,31 +186,25 @@ def get_current_user(user: CurrentUser | None = Depends(get_optional_current_use
 
 
 def require_reader(user: CurrentUser) -> CurrentUser:
-    if user.is_superadmin or user.current_role in {"reader", "kassier", "writer", "admin"}:
+    if user.current_role in {"reader", "kassier", "writer", "admin"}:
         return user
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Reader role required")
 
 
 def require_writer(user: CurrentUser) -> CurrentUser:
-    if user.is_superadmin or user.current_role in {"writer", "admin"}:
+    if user.current_role in {"writer", "admin"}:
         return user
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Writer role required")
 
 
 def require_finance_access(user: CurrentUser) -> CurrentUser:
-    """Kassier, Writer, Admin and Superadmin may access finance and fines."""
-    if user.is_superadmin or user.current_role in {"kassier", "writer", "admin"}:
+    """Kassier, Writer and Admin may access finance and fines."""
+    if user.current_role in {"kassier", "writer", "admin"}:
         return user
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Finance access required")
 
 
 def require_admin(user: CurrentUser) -> CurrentUser:
-    if user.is_superadmin or user.current_role == "admin":
+    if user.current_role == "admin":
         return user
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
-
-
-def require_superadmin(user: CurrentUser) -> CurrentUser:
-    if user.is_superadmin:
-        return user
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Superadmin role required")

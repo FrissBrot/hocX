@@ -14,6 +14,7 @@ from app.models import (
     ProtocolDisplaySnapshot,
     ProtocolElement,
     ProtocolElementBlock,
+    ProtocolImage,
     ProtocolTodo,
     ProtocolText,
     RenderType,
@@ -67,7 +68,7 @@ class ProtocolService:
 
     def _sequence_counts(self, db: Session, *, tenant_id: int, template_id: int, protocol_date: date, reset_month: int, reset_day: int) -> dict[str, int]:
         cycle_start, cycle_end = self._cycle_bounds(protocol_date, reset_month=reset_month, reset_day=reset_day)
-        # Single query with conditional aggregation replaces the previous 4–5 round-trips.
+        # Single query with conditional aggregation for per-template counts.
         row = db.execute(
             select(
                 func.count(Protocol.id).label("overall"),
@@ -87,11 +88,20 @@ class ProtocolService:
                 Protocol.template_id == template_id,
             )
         ).one()
+        # Cross-template cycle count: all protocols for this tenant within cycle bounds.
+        cycle_all = db.scalar(
+            select(func.count(Protocol.id)).where(
+                Protocol.tenant_id == tenant_id,
+                Protocol.protocol_date >= cycle_start,
+                Protocol.protocol_date <= cycle_end,
+            )
+        ) or 0
         return {
             "n": row.overall + 1,
             "n_year": row.yearly + 1,
             "n_month": row.monthly + 1,
             "n_cycle": row.cycle + 1,
+            "n_cycle_all": cycle_all + 1,
             "cycle_year_start": cycle_start.year,
             "cycle_year_end": cycle_end.year,
         }
@@ -105,6 +115,7 @@ class ProtocolService:
             "n_year",
             "n_month",
             "n_cycle",
+            "n_cycle_all",
             "date",
             "dd.mm.yyyy",
             "dd.mm.yy",
@@ -128,6 +139,7 @@ class ProtocolService:
             "{n_year}": str(counts["n_year"]),
             "{n_month}": str(counts["n_month"]),
             "{n_cycle}": str(counts["n_cycle"]),
+            "{n_cycle_all}": str(counts["n_cycle_all"]),
             "{date}": protocol_date.strftime("%d.%m.%Y"),
             "{dd.mm.yyyy}": protocol_date.strftime("%d.%m.%Y"),
             "{dd.mm.yy}": protocol_date.strftime("%d.%m.%y"),
@@ -544,6 +556,13 @@ class ProtocolService:
                     .order_by(ProtocolTodo.sort_index.asc(), ProtocolTodo.id.asc())
                 )
             )
+            images = list(
+                db.scalars(
+                    select(ProtocolImage)
+                    .where(ProtocolImage.protocol_element_block_id == block.id)
+                    .order_by(ProtocolImage.sort_index.asc(), ProtocolImage.id.asc())
+                )
+            )
             payloads[self._payload_key(
                 source_sort_index=source_sort_index,
                 repeat_source_type=repeat_source_type,
@@ -551,6 +570,7 @@ class ProtocolService:
             )] = {
                 "text_content": row.content,
                 "todos": todos,
+                "images": images,
             }
         return payloads
 
@@ -664,19 +684,30 @@ class ProtocolService:
 
         selected_document_template_id = template.document_template_id
         document_template = db.get(DocumentTemplate, selected_document_template_id) if selected_document_template_id else None
+        from app.models import CycleConfig
+        cycle_cfg = db.get(CycleConfig, template.cycle_config_id) if template.cycle_config_id else None
         counts = self._sequence_counts(
             db,
             tenant_id=tenant_id,
             template_id=template.id,
             protocol_date=payload.protocol_date,
-            reset_month=template.cycle_reset_month,
-            reset_day=template.cycle_reset_day,
+            reset_month=cycle_cfg.reset_month if cycle_cfg else 12,
+            reset_day=cycle_cfg.reset_day if cycle_cfg else 31,
         )
-        protocol_number = payload.protocol_number or self._format_pattern(
-            template.protocol_number_pattern,
-            counts=counts,
-            protocol_date=payload.protocol_date,
-        )
+        if payload.protocol_number:
+            protocol_number = payload.protocol_number
+        else:
+            protocol_number = None
+            for bump in range(100):
+                bumped = {**counts, "n": counts["n"] + bump, "n_year": counts["n_year"] + bump, "n_month": counts["n_month"] + bump, "n_cycle": counts["n_cycle"] + bump, "n_cycle_all": counts["n_cycle_all"] + bump}
+                candidate = self._format_pattern(template.protocol_number_pattern, counts=bumped, protocol_date=payload.protocol_date)
+                if not candidate:
+                    break
+                exists = db.scalar(select(Protocol.id).where(Protocol.tenant_id == tenant_id, Protocol.protocol_number == candidate))
+                if not exists:
+                    protocol_number = candidate
+                    counts = bumped
+                    break
         title = payload.title or self._format_pattern(
             template.title_pattern,
             counts=counts,
@@ -711,6 +742,7 @@ class ProtocolService:
         attendance_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "attendance"))
         session_date_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "session_date"))
         matrix_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "matrix"))
+        image_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "image"))
 
         template_rows = db.execute(
             select(TemplateElement, ElementDefinition)
@@ -852,6 +884,15 @@ class ProtocolService:
                             snapshot_json={},
                         )
                     )
+                elif block["element_type_id"] == image_type_id and carry_from_last_protocol:
+                    for prev_img in previous_payload.get("images", []):
+                        db.add(ProtocolImage(
+                            protocol_element_block_id=protocol_block.id,
+                            stored_file_id=prev_img.stored_file_id,
+                            sort_index=prev_img.sort_index,
+                            title=prev_img.title,
+                            caption=prev_img.caption,
+                        ))
                 elif block["element_type_id"] == bullet_list_type_id:
                     protocol_block.configuration_snapshot_json = {
                         **(protocol_block.configuration_snapshot_json or {}),

@@ -38,3 +38,7 @@ storage/document_template_snapshots/
 
 # Traefik TLS state
 infra/traefik/letsencrypt/acme.json
+
+# DB backups and abgabebox uploads — real user data, never committed
+backups/
+storage/abgabebox-uploads/*

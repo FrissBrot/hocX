@@ -9,6 +9,7 @@ import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { formatDateRange } from "@/lib/utils/format";
 import {
+  CycleConfigSummary,
   DocumentTemplate,
   ElementDefinition,
   EventSummary,
@@ -21,6 +22,7 @@ import {
 
 type TemplateBuilderProps = {
   initialTemplates: TemplateSummary[];
+  availableCycleConfigs: CycleConfigSummary[];
 };
 
 type TemplateEditorProps = {
@@ -32,6 +34,7 @@ type TemplateEditorProps = {
   availableLists: StructuredListDefinition[];
   initialAssignedParticipants: ParticipantSummary[];
   availableDocumentTemplates: DocumentTemplate[];
+  availableCycleConfigs: CycleConfigSummary[];
 };
 
 type TemplateCreateState = {
@@ -42,8 +45,7 @@ type TemplateCreateState = {
   protocol_number_pattern: string;
   title_pattern: string;
   auto_create_next_protocol: boolean;
-  cycle_reset_month: string;
-  cycle_reset_day: string;
+  cycle_config_id: string;
 };
 
 type TemplateItemForm = {
@@ -92,8 +94,7 @@ const initialTemplateCreate: TemplateCreateState = {
   protocol_number_pattern: "",
   title_pattern: "",
   auto_create_next_protocol: false,
-  cycle_reset_month: "7",
-  cycle_reset_day: "31"
+  cycle_config_id: "",
 };
 
 const initialTemplateItemForm: TemplateItemForm = {
@@ -303,7 +304,7 @@ function ResponsibilityLockIcon({ locked }: { locked: boolean }) {
   );
 }
 
-export function TemplateBuilder({ initialTemplates }: TemplateBuilderProps) {
+export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: TemplateBuilderProps) {
   const router = useRouter();
   const showToast = useToast();
   const [templates, setTemplates] = useState(initialTemplates);
@@ -332,8 +333,7 @@ export function TemplateBuilder({ initialTemplates }: TemplateBuilderProps) {
           protocol_number_pattern: form.protocol_number_pattern || null,
           title_pattern: form.title_pattern || null,
           auto_create_next_protocol: form.auto_create_next_protocol,
-          cycle_reset_month: Number(form.cycle_reset_month),
-          cycle_reset_day: Number(form.cycle_reset_day),
+          cycle_config_id: form.cycle_config_id ? Number(form.cycle_config_id) : null,
           version: 1,
           status: "active",
           created_by: null
@@ -397,16 +397,16 @@ export function TemplateBuilder({ initialTemplates }: TemplateBuilderProps) {
               <span className="field-help">The date token always uses the selected protocol date, not the current day.</span>
             </label>
           </div>
-          <div className="two-col">
-            <label className="field-stack">
-              <span className="field-label">Cycle reset month</span>
-              <input value={form.cycle_reset_month} onChange={(event) => setForm((current) => ({ ...current, cycle_reset_month: event.target.value }))} type="number" min={1} max={12} />
-            </label>
-            <label className="field-stack">
-              <span className="field-label">Cycle reset day</span>
-              <input value={form.cycle_reset_day} onChange={(event) => setForm((current) => ({ ...current, cycle_reset_day: event.target.value }))} type="number" min={1} max={31} />
-            </label>
-          </div>
+          <label className="field-stack">
+            <span className="field-label">Zyklus</span>
+            <select value={form.cycle_config_id} onChange={(event) => setForm((current) => ({ ...current, cycle_config_id: event.target.value }))}>
+              <option value="">Kein Zyklus</option>
+              {availableCycleConfigs.map((cc) => (
+                <option key={cc.id} value={cc.id}>{cc.name}</option>
+              ))}
+            </select>
+            <span className="field-help">Zyklen können unter Struktur → Zyklen verwaltet werden.</span>
+          </label>
           <label className="checkbox-row">
             <input
               type="checkbox"
@@ -473,6 +473,7 @@ export function TemplateEditor({
   availableLists,
   initialAssignedParticipants,
   availableDocumentTemplates,
+  availableCycleConfigs,
 }: TemplateEditorProps) {
   const router = useRouter();
   const showToast = useToast();
@@ -488,8 +489,7 @@ export function TemplateEditor({
     protocol_number_pattern: initialTemplate.protocol_number_pattern ?? "",
     title_pattern: initialTemplate.title_pattern ?? "",
     auto_create_next_protocol: Boolean(initialTemplate.auto_create_next_protocol),
-    cycle_reset_month: String(initialTemplate.cycle_reset_month ?? 7),
-    cycle_reset_day: String(initialTemplate.cycle_reset_day ?? 31),
+    cycle_config_id: initialTemplate.cycle_config_id ? String(initialTemplate.cycle_config_id) : "",
     document_template_id: initialTemplate.document_template_id ? String(initialTemplate.document_template_id) : "",
   });
   const [newItemForm, setNewItemForm] = useState<TemplateItemForm>({
@@ -970,8 +970,7 @@ export function TemplateEditor({
           protocol_number_pattern: templateMeta.protocol_number_pattern || null,
           title_pattern: templateMeta.title_pattern || null,
           auto_create_next_protocol: templateMeta.auto_create_next_protocol,
-          cycle_reset_month: Number(templateMeta.cycle_reset_month),
-          cycle_reset_day: Number(templateMeta.cycle_reset_day),
+          cycle_config_id: templateMeta.cycle_config_id ? Number(templateMeta.cycle_config_id) : null,
           document_template_id: templateMeta.document_template_id ? Number(templateMeta.document_template_id) : null,
         })
       });
@@ -1258,17 +1257,16 @@ export function TemplateEditor({
               <span className="field-help">Used automatically when a new protocol is created and the title field is left empty.</span>
             </label>
           </div>
-          <div className="two-col">
-            <label className="field-stack">
-              <span className="field-label">Cycle reset month</span>
-              <input value={templateMeta.cycle_reset_month} onChange={(event) => setTemplateMeta((current) => ({ ...current, cycle_reset_month: event.target.value }))} type="number" min={1} max={12} />
-            </label>
-            <label className="field-stack">
-              <span className="field-label">Cycle reset day</span>
-              <input value={templateMeta.cycle_reset_day} onChange={(event) => setTemplateMeta((current) => ({ ...current, cycle_reset_day: event.target.value }))} type="number" min={1} max={31} />
-              <span className="field-help">Example: 31.07 means the cycle resets after 31 July, so the next cycle starts on 01 August.</span>
-            </label>
-          </div>
+          <label className="field-stack">
+            <span className="field-label">Zyklus</span>
+            <select value={templateMeta.cycle_config_id} onChange={(event) => setTemplateMeta((current) => ({ ...current, cycle_config_id: event.target.value }))}>
+              <option value="">Kein Zyklus</option>
+              {availableCycleConfigs.map((cc) => (
+                <option key={cc.id} value={cc.id}>{cc.name}</option>
+              ))}
+            </select>
+            <span className="field-help">Zyklen können unter Struktur → Zyklen verwaltet werden.</span>
+          </label>
           <div className="two-col">
             <label className="field-stack">
               <span className="field-label">Naechste Sitzung</span>
@@ -1319,7 +1317,7 @@ export function TemplateEditor({
             <span>Naechstes Protokoll automatisch erstellen, sobald dieses Protokoll spaeter auf Abgeschlossen gesetzt wird.</span>
           </label>
           <div className="info-note">
-            Kurzinfo: [n] zaehlt alle Protokolle, [n_year] pro Kalenderjahr, [n_month] pro Monat und [n_cycle] im eigenen Zyklus. Du kannst frei kombinieren, z. B. Sitzung [mm].[n_month] oder Protokoll [n_cycle]/[cycle_yyyy_end].
+            Protokollnummer-Tokens: [n] alle, [n_year] pro Jahr, [n_month] pro Monat, [n_cycle] im Zyklus. Zyklusname-Tokens: [cy] = Startjahr, [cy_end] = Endjahr.
           </div>
           <div className="two-col">
             <label className="field-stack">

@@ -45,11 +45,11 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
   const [availableTemplates, setAvailableTemplates] = useState(templates);
   const [pdfBusyByProtocol, setPdfBusyByProtocol] = useState<Record<number, boolean>>({});
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
-  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top?: number; bottom?: number; right: number } | null>(null);
   const menuBtnRefs = useRef<Record<number, HTMLButtonElement | null>>({});
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const { sortKey, sortDirection, toggleSort, sortIndicator } = useTableSort<"id" | "protocol_number" | "title" | "status" | "protocol_date">("id", "desc");
+  const { sortKey, sortDirection, toggleSort, sortIndicator } = useTableSort<"id" | "protocol_number" | "title" | "status" | "protocol_date">("protocol_date", "desc");
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [form, setForm] = useState<ProtocolFormState>({
     template_id: templates[0] ? String(templates[0].id) : "",
@@ -176,10 +176,13 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
           )
         );
       }
-      showToast(`PDF ready for ${protocolNumber}`, "success");
-
       if (result.content_url) {
-        window.open(`${browserApiBaseUrl}${result.content_url}`, "_blank", "noopener,noreferrer");
+        const pdfUrl = `${browserApiBaseUrl}${result.content_url}`;
+        showToast(`PDF bereit – hier klicken zum Öffnen`, "success", {
+          onMessageClick: () => window.open(pdfUrl, "_blank", "noopener,noreferrer"),
+        });
+      } else {
+        showToast(`PDF ready for ${protocolNumber}`, "success");
       }
     } catch (error) {
       showToast(error instanceof Error ? error.message : "PDF export failed", "error");
@@ -340,7 +343,12 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
                             const btn = menuBtnRefs.current[protocol.id];
                             if (btn) {
                               const rect = btn.getBoundingClientRect();
-                              setMenuPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
+                              const spaceBelow = window.innerHeight - rect.bottom - 8;
+                              const spaceAbove = rect.top - 8;
+                              const showAbove = spaceBelow < 200 && spaceAbove > spaceBelow;
+                              setMenuPos(showAbove
+                                ? { bottom: window.innerHeight - rect.top + 6, right: window.innerWidth - rect.right }
+                                : { top: rect.bottom + 6, right: window.innerWidth - rect.right });
                             }
                             setOpenMenuId(protocol.id);
                           }
@@ -354,7 +362,13 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
                     <button
                       type="button"
                       className={`pdf-icon-link pdf-icon-link-success${pdfBusyByProtocol[protocol.id] ? " pdf-icon-disabled" : ""}`}
-                      onClick={() => void generateAndOpenPdf(protocol.id, protocol.protocol_number)}
+                      onClick={() => {
+                        if (protocol.latest_pdf_url) {
+                          window.open(`${browserApiBaseUrl}${protocol.latest_pdf_url}`, "_blank", "noopener,noreferrer");
+                        } else {
+                          void generateAndOpenPdf(protocol.id, protocol.protocol_number);
+                        }
+                      }}
                       aria-label={`PDF exportieren für ${protocol.protocol_number}`}
                       title="PDF exportieren"
                       disabled={pdfBusyByProtocol[protocol.id]}
@@ -384,7 +398,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
       {!readOnly && openMenuId !== null && menuPos !== null && typeof document !== "undefined" && createPortal(
         <div
           className="kebab-menu-dropdown"
-          style={{ position: "fixed", top: menuPos.top, right: menuPos.right }}
+          style={{ position: "fixed", top: menuPos.top, bottom: menuPos.bottom, right: menuPos.right }}
           onClick={(e) => e.stopPropagation()}
         >
           {(() => {
@@ -394,19 +408,32 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
             const canRevert = protocol.status !== "geplant";
             return (
               <>
-                {!isFinal && (
-                  <button
-                    type="button"
-                    className="kebab-menu-item"
-                    onClick={() => {
-                      setOpenMenuId(null);
+                <button
+                  type="button"
+                  className="kebab-menu-item"
+                  onClick={() => {
+                    setOpenMenuId(null);
+                    if (protocol.latest_pdf_url) {
+                      window.open(`${browserApiBaseUrl}${protocol.latest_pdf_url}`, "_blank", "noopener,noreferrer");
+                    } else {
                       void generateAndOpenPdf(protocol.id, protocol.protocol_number);
-                    }}
-                    disabled={pdfBusyByProtocol[protocol.id]}
-                  >
-                    {pdfBusyByProtocol[protocol.id] ? "Generiere…" : "PDF-Vorschau"}
-                  </button>
-                )}
+                    }
+                  }}
+                  disabled={pdfBusyByProtocol[protocol.id]}
+                >
+                  {pdfBusyByProtocol[protocol.id] ? "Generiere…" : "PDF"}
+                </button>
+                <button
+                  type="button"
+                  className="kebab-menu-item"
+                  onClick={() => {
+                    setOpenMenuId(null);
+                    void generateAndOpenPdf(protocol.id, protocol.protocol_number);
+                  }}
+                  disabled={pdfBusyByProtocol[protocol.id]}
+                >
+                  {pdfBusyByProtocol[protocol.id] ? "Generiere…" : "PDF neu generieren"}
+                </button>
                 {canRevert && (
                   <button
                     type="button"

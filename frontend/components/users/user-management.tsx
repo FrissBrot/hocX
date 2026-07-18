@@ -6,12 +6,11 @@ import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
-import { SessionInfo, TenantSummary, UserSummary } from "@/types/api";
+import { TenantSummary, UserSummary } from "@/types/api";
 
 type Props = {
   initialUsers: UserSummary[];
   manageableTenants: TenantSummary[];
-  session: SessionInfo;
 };
 
 type MembershipEntry = {
@@ -28,7 +27,6 @@ type UserFormState = {
   password: string;
   preferred_language: string;
   is_active: boolean;
-  is_superadmin: boolean;
   login_enabled: boolean;
   is_participant_account: boolean;
   memberships: MembershipEntry[];
@@ -36,13 +34,7 @@ type UserFormState = {
   selectedRoleCode: string;
 };
 
-function buildInitialMemberships(user: UserSummary, manageableTenants: TenantSummary[], canSuperadmin: boolean) {
-  if (canSuperadmin) {
-    return user.memberships.map((membership) => ({
-      tenant_id: membership.tenant_id,
-      role_code: membership.role_code
-    }));
-  }
+function buildInitialMemberships(user: UserSummary, manageableTenants: TenantSummary[]) {
   const manageableIds = new Set(manageableTenants.map((tenant) => tenant.id));
   return user.memberships
     .filter((membership) => manageableIds.has(membership.tenant_id))
@@ -61,7 +53,6 @@ function emptyUserForm(manageableTenants: TenantSummary[]): UserFormState {
     password: "",
     preferred_language: "de",
     is_active: true,
-    is_superadmin: false,
     login_enabled: true,
     is_participant_account: false,
     memberships: manageableTenants[0] ? [{ tenant_id: manageableTenants[0].id, role_code: "reader" }] : [],
@@ -70,19 +61,15 @@ function emptyUserForm(manageableTenants: TenantSummary[]): UserFormState {
   };
 }
 
-export function UserManagement({ initialUsers, manageableTenants, session }: Props) {
+export function UserManagement({ initialUsers, manageableTenants }: Props) {
   const showToast = useToast();
   const [users, setUsers] = useState(initialUsers);
   const [userTab, setUserTab] = useState<"active" | "nologin">("active");
   const [search, setSearch] = useState("");
   const [userModalOpen, setUserModalOpen] = useState(false);
-  const [mergeModalOpen, setMergeModalOpen] = useState(false);
-  const [mergeSourceUserId, setMergeSourceUserId] = useState<number | null>(null);
-  const [mergeTargetUserId, setMergeTargetUserId] = useState("");
   const [userForm, setUserForm] = useState<UserFormState>(() => emptyUserForm(manageableTenants));
   const [formError, setFormError] = useState<string | null>(null);
 
-  const canSuperadmin = !!session.user?.is_superadmin;
   const tenantNameById = useMemo(
     () => new Map(manageableTenants.map((tenant) => [tenant.id, tenant.name])),
     [manageableTenants]
@@ -109,7 +96,7 @@ export function UserManagement({ initialUsers, manageableTenants, session }: Pro
   }
 
   function openEditUser(user: UserSummary) {
-    const memberships = buildInitialMemberships(user, manageableTenants, canSuperadmin);
+    const memberships = buildInitialMemberships(user, manageableTenants);
     setUserForm({
       id: user.id,
       first_name: user.first_name,
@@ -119,7 +106,6 @@ export function UserManagement({ initialUsers, manageableTenants, session }: Pro
       password: "",
       preferred_language: user.preferred_language,
       is_active: user.is_active,
-      is_superadmin: user.is_superadmin,
       login_enabled: user.login_enabled,
       is_participant_account: user.is_participant_account,
       memberships,
@@ -128,13 +114,6 @@ export function UserManagement({ initialUsers, manageableTenants, session }: Pro
     });
     setFormError(null);
     setUserModalOpen(true);
-  }
-
-  function openMergeUser(user: UserSummary) {
-    setMergeSourceUserId(user.id);
-    const fallbackTarget = users.find((candidate) => candidate.id !== user.id);
-    setMergeTargetUserId(fallbackTarget ? String(fallbackTarget.id) : "");
-    setMergeModalOpen(true);
   }
 
   function upsertMembership() {
@@ -174,7 +153,6 @@ export function UserManagement({ initialUsers, manageableTenants, session }: Pro
         email: userForm.email,
         preferred_language: userForm.preferred_language,
         is_active: userForm.is_active,
-        is_superadmin: canSuperadmin ? userForm.is_superadmin : false,
         login_enabled: userForm.login_enabled,
         memberships: userForm.memberships.map((membership) => ({
           tenant_id: membership.tenant_id,
@@ -213,30 +191,6 @@ export function UserManagement({ initialUsers, manageableTenants, session }: Pro
       showToast("Benutzer gelöscht", "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Benutzer konnte nicht gelöscht werden", "error");
-    }
-  }
-
-  async function mergeUser() {
-    if (!mergeSourceUserId || !mergeTargetUserId) {
-      return;
-    }
-    try {
-      const merged = await browserApiFetch<UserSummary>("/api/users/merge", {
-        method: "POST",
-        body: JSON.stringify({
-          source_user_id: mergeSourceUserId,
-          target_user_id: Number(mergeTargetUserId)
-        })
-      });
-      setUsers((current) =>
-        current
-          .filter((user) => user.id !== mergeSourceUserId)
-          .map((user) => (user.id === merged.id ? merged : user))
-      );
-      setMergeModalOpen(false);
-      showToast("Benutzer zusammengeführt", "success");
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "Benutzer konnten nicht zusammengeführt werden", "error");
     }
   }
 
@@ -291,36 +245,22 @@ export function UserManagement({ initialUsers, manageableTenants, session }: Pro
           <tr key={user.id} className="table-row-clickable" onClick={() => openEditUser(user)}>
             <td>
               <strong>{user.display_name}</strong>
-              {user.is_superadmin ? <div className="muted">Superadmin</div> : null}
             </td>
             <td>{user.first_name} {user.last_name}</td>
             <td>{user.email}</td>
             <td>
               <div className="stack-tight">
-                {(canSuperadmin
-                  ? user.memberships
-                  : user.memberships.filter((membership) => tenantNameById.has(membership.tenant_id))
-                ).map((membership) => (
-                  <span key={`${user.id}-${membership.tenant_id}`} className="pill">
-                    {membership.tenant_name}: {membership.role_code}
-                  </span>
-                ))}
+                {user.memberships
+                  .filter((membership) => tenantNameById.has(membership.tenant_id))
+                  .map((membership) => (
+                    <span key={`${user.id}-${membership.tenant_id}`} className="pill">
+                      {membership.tenant_name}: {membership.role_code}
+                    </span>
+                  ))}
               </div>
             </td>
             <td>
               <div className="table-actions table-actions-start">
-                {canSuperadmin ? (
-                  <button
-                    type="button"
-                    className="button-inline"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      openMergeUser(user);
-                    }}
-                  >
-                    Merge
-                  </button>
-                ) : null}
                 <button
                   type="button"
                   className="button-inline button-danger"
@@ -397,13 +337,6 @@ export function UserManagement({ initialUsers, manageableTenants, session }: Pro
             ) : null}
           </div>
 
-          {canSuperadmin ? (
-            <label className="checkbox-line">
-              <input type="checkbox" checked={userForm.is_superadmin} onChange={(event) => setUserForm((current) => ({ ...current, is_superadmin: event.target.checked }))} />
-              Superadmin
-            </label>
-          ) : null}
-
           <div className="grid">
             <div className="field-label">Mandantenrollen</div>
             <div className="role-picker">
@@ -462,45 +395,6 @@ export function UserManagement({ initialUsers, manageableTenants, session }: Pro
             </button>
           </div>
         </form>
-      </Modal>
-
-      <Modal
-        open={mergeModalOpen}
-        onClose={() => setMergeModalOpen(false)}
-        title="Benutzer zusammenführen"
-        description="Nur für Superadmins: Der Quellbenutzer wird in den Zielbenutzer gemergt und danach gelöscht."
-      >
-        <div className="grid">
-          <label className="field-stack">
-            <span className="field-label">Quellbenutzer</span>
-            <input
-              value={users.find((user) => user.id === mergeSourceUserId)?.display_name ?? ""}
-              readOnly
-            />
-          </label>
-          <label className="field-stack">
-            <span className="field-label">Zielbenutzer</span>
-            <select value={mergeTargetUserId} onChange={(event) => setMergeTargetUserId(event.target.value)}>
-              {users
-                .filter((user) => user.id !== mergeSourceUserId)
-                .map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.display_name} ({user.email})
-                  </option>
-                ))}
-            </select>
-          </label>
-          <div className="modal-actions">
-            <button
-              type="button"
-              className="button-inline"
-              onClick={() => void mergeUser()}
-              disabled={!mergeTargetUserId}
-            >
-              Jetzt mergen
-            </button>
-          </div>
-        </div>
       </Modal>
     </div>
   );

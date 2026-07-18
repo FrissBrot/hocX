@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.schemas.cycle_config import CycleConfigRead
+
 
 class TemplateBase(BaseModel):
     name: str
@@ -18,8 +20,7 @@ class TemplateBase(BaseModel):
     protocol_number_pattern: str | None = None
     title_pattern: str | None = None
     auto_create_next_protocol: bool = False
-    cycle_reset_month: int = Field(default=12, ge=1, le=12)
-    cycle_reset_day: int = Field(default=31, ge=1, le=31)
+    cycle_config_id: int | None = None
 
 
 class TemplateCreate(TemplateBase):
@@ -38,13 +39,13 @@ class TemplateUpdate(BaseModel):
     protocol_number_pattern: str | None = None
     title_pattern: str | None = None
     auto_create_next_protocol: bool | None = None
-    cycle_reset_month: int | None = Field(default=None, ge=1, le=12)
-    cycle_reset_day: int | None = Field(default=None, ge=1, le=31)
+    cycle_config_id: int | None = None
 
 
 class TemplateRead(TemplateBase):
     id: int
     tenant_id: int
+    cycle_config: CycleConfigRead | None = None
     created_by: int | None = None
     created_at: datetime
     updated_at: datetime

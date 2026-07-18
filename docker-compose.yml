@@ -34,6 +34,15 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   backend:
     build:
       context: ./backend
@@ -51,8 +60,11 @@ services:
       ABGABEBOX_DB_PASSWORD: ${ABGABEBOX_DB_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
       CLAMAV_HOST: clamav
+      REDIS_URL: redis://redis:6379/0
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     volumes:
       - ./backend:/app

@@ -102,50 +102,17 @@ class FinesRepository:
         db.refresh(fine)
         return self._to_read(fine)
 
-    def delete_fine(self, db: Session, fine_id: int, tenant_id: int, delete_comment: str | None = None, closing_protocol_id: int | None = None) -> AttendanceFineRead | None:
-        """Soft-delete: marks fine as 'deleted' with optional comment."""
+    def delete_fine(self, db: Session, fine_id: int, tenant_id: int) -> bool:
+        """Hard-delete the fine."""
         fine = db.get(AttendanceFine, fine_id)
         if fine is None or fine.status == "collected":
-            return None
+            return False
         protocol = db.get(Protocol, fine.protocol_id)
         if protocol is None or protocol.tenant_id != tenant_id:
-            return None
-        fine.status = "deleted"
-        fine.delete_comment = delete_comment or None
-        if closing_protocol_id and closing_protocol_id != fine.protocol_id:
-            fine.closed_in_protocol_id = closing_protocol_id
+            return False
+        db.delete(fine)
         db.commit()
-        db.refresh(fine)
-        return self._to_read(fine)
-
-    def set_delete_comment(self, db: Session, fine_id: int, tenant_id: int, comment: str) -> AttendanceFineRead | None:
-        fine = db.get(AttendanceFine, fine_id)
-        if fine is None or fine.status != "deleted":
-            return None
-        protocol = db.get(Protocol, fine.protocol_id)
-        if protocol is None or protocol.tenant_id != tenant_id:
-            return None
-        fine.delete_comment = comment
-        db.commit()
-        db.refresh(fine)
-        return self._to_read(fine)
-
-    def _comment_has_content(self, comment: str | None) -> bool:
-        return bool(comment and any(c.isalnum() for c in comment))
-
-    def has_uncommented_deleted_fines(self, db: Session, protocol_id: int) -> bool:
-        """Returns True if any deleted fine associated with this protocol lacks a real comment."""
-        fines = db.scalars(
-            select(AttendanceFine)
-            .where(
-                or_(
-                    AttendanceFine.protocol_id == protocol_id,
-                    AttendanceFine.closed_in_protocol_id == protocol_id,
-                ),
-                AttendanceFine.status == "deleted",
-            )
-        ).all()
-        return any(not self._comment_has_content(f.delete_comment) for f in fines)
+        return True
 
     def collect_fine(self, db: Session, fine_id: int, tenant_id: int, collecting_protocol_id: int | None = None) -> AttendanceFineRead | None:
         fine = db.get(AttendanceFine, fine_id)
@@ -188,7 +155,6 @@ class FinesRepository:
             collected_at=fine.collected_at,
             collected_transaction_id=fine.collected_transaction_id,
             closed_in_protocol_id=fine.closed_in_protocol_id,
-            delete_comment=fine.delete_comment,
             created_at=fine.created_at,
         )
 
@@ -206,7 +172,6 @@ class FinesRepository:
             collected_at=fine.collected_at,
             collected_transaction_id=fine.collected_transaction_id,
             closed_in_protocol_id=fine.closed_in_protocol_id,
-            delete_comment=fine.delete_comment,
             created_at=fine.created_at,
             protocol_number=protocol_number,
             protocol_date=str(protocol_date) if protocol_date else None,

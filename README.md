@@ -110,7 +110,8 @@ docker compose exec db psql -U hocx -d hocx -c "SELECT * FROM role;"
 - The schema already contains OIDC preparation fields on `app_user`.
 - Local login is active for V1 and isolated behind `/api/auth/*`.
 - Users are systemwide, while `user_tenant_role` stores tenant-specific permissions.
-- Global `superadmin` remains separate from tenant roles.
+- Cross-tenant access lives exclusively in the separate platform-admin panel (see below) -
+  no customer/tenant user can ever see or manage more than the tenants they are a member of.
 - Protocols are treated as snapshots and should never be mutated by template changes.
 - Exports are designed to read protocol snapshot data only.
 
@@ -118,17 +119,27 @@ docker compose exec db psql -U hocx -d hocx -c "SELECT * FROM role;"
 
 Seed accounts for a fresh setup:
 
-- `superadmin@hocx.local` / `ChangeMe123!`
 - `admin@hocx.local` / `ChangeMe123!`
 - `writer@hocx.local` / `ChangeMe123!`
 - `reader@hocx.local` / `ChangeMe123!`
 
-Roles:
+Roles (all tenant-scoped via `user_tenant_role`):
 
-- `superadmin`: access to all tenants and all permission changes
 - `admin`: full access inside the currently selected tenant
 - `writer`: may work inside the protocol workspace, but not change structure
 - `reader`: may only view workspace data and trigger PDF export
+- `kassier`: reader access plus full finance and fines management
+
+## Platform-Admin Panel
+
+`/admin` is a separate operator area with its own login, its own `platform_admin` accounts
+table, and its own session cookie (`hocx_admin_session`) - entirely independent from the
+customer `app_user`/session system. It is the only place with an overview across all tenants
+and all users, and the only place tenants get created or two `app_user` accounts get merged.
+
+The first platform-admin account is bootstrapped from `INITIAL_ADMIN_EMAIL` /
+`INITIAL_ADMIN_PASSWORD` env vars on first startup (only when the `platform_admin` table is
+still empty); further admins are managed through the panel itself under `/admin/admins`.
 
 ## Public Access With Traefik
 

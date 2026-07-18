@@ -7,9 +7,10 @@ from sqlalchemy.orm import Session
 
 from fastapi import HTTPException, status
 
-from app.core.security import CurrentUser, hash_password, require_admin, require_superadmin
-from app.models import AppUser, Participant, Role, Tenant, UserTenantRole
+from app.core.security import CurrentUser, hash_password, require_admin
+from app.models import AppUser, Participant, UserTenantRole
 from app.services.access_service import AccessService
+from app.services.tenant_service import build_tenant_profile_image_url
 from app.repositories.user_repository import UserRepository
 from app.schemas.user import TenantMembershipRead, TenantMembershipWrite, UserCreate, UserRead, UserSelfUpdate, UserUpdate
 
@@ -36,6 +37,7 @@ class UserService:
                     tenant_id=tenant.id,
                     tenant_name=tenant.name,
                     tenant_profile_image_path=tenant.profile_image_path,
+                    tenant_profile_image_url=build_tenant_profile_image_url(tenant.id, tenant.profile_image_path),
                     role_code=role_map.get(membership.role_id, "reader"),
                     is_active=membership.is_active,
                 )
@@ -43,8 +45,6 @@ class UserService:
         return result
 
     def _admin_tenant_ids_for_actor(self, actor: CurrentUser) -> set[int]:
-        if actor.is_superadmin:
-            return {membership.tenant_id for membership in actor.available_tenants}
         return {
             membership.tenant_id
             for membership in actor.available_tenants
@@ -67,7 +67,6 @@ class UserService:
             external_identity_json=external_identity,
             default_tenant_id=user.default_tenant_id,
             memberships=self._memberships_for_user(db, user.id),
-            is_superadmin="superadmin" in self.repository.list_global_roles(db, user_id=user.id),
             login_enabled=external_identity.get("login_enabled") is not False,
             is_participant_account=external_identity.get("source") == "participant_auto",
             created_at=user.created_at,
@@ -78,7 +77,6 @@ class UserService:
         self,
         user: AppUser,
         memberships: list[TenantMembershipRead],
-        is_superadmin: bool,
     ) -> UserRead:
         external_identity = user.external_identity_json or {}
         return UserRead(
@@ -95,26 +93,24 @@ class UserService:
             external_identity_json=external_identity,
             default_tenant_id=user.default_tenant_id,
             memberships=memberships,
-            is_superadmin=is_superadmin,
             login_enabled=external_identity.get("login_enabled") is not False,
             is_participant_account=external_identity.get("source") == "participant_auto",
             created_at=user.created_at,
             updated_at=user.updated_at,
         )
 
-    def list_users(self, db: Session, actor: CurrentUser):
-        require_admin(actor)
+    def list_all_users(self, db: Session) -> list[UserRead]:
+        """Unscoped listing across every tenant - only for the platform-admin panel."""
         users = self.repository.list(db)
         if not users:
             return []
 
         user_ids = [u.id for u in users]
 
-        # Batch-load all required data in 4 queries total (was N*4 before)
+        # Batch-load all required data in 3 queries total (was N*4 before)
         all_memberships = self.repository.list_memberships_batch(db, user_ids=user_ids)
         role_map = {r.id: r.code for r in self.repository.list_roles(db)}
         tenant_map = {t.id: t for t in self.repository.list_tenants(db)}
-        superadmin_ids = set(self.repository.list_superadmin_user_ids(db))
 
         memberships_by_user: dict[int, list[TenantMembershipRead]] = {uid: [] for uid in user_ids}
         for m in all_memberships:
@@ -126,35 +122,31 @@ class UserService:
                     tenant_id=tenant.id,
                     tenant_name=tenant.name,
                     tenant_profile_image_path=tenant.profile_image_path,
+                    tenant_profile_image_url=build_tenant_profile_image_url(tenant.id, tenant.profile_image_path),
                     role_code=role_map.get(m.role_id, "reader"),
                     is_active=m.is_active,
                 )
             )
 
-        if not actor.is_superadmin:
-            allowed_ids = {
-                m.user_id
-                for m in self.repository.list_memberships(db, tenant_id=actor.current_tenant_id)
-                if m.is_active
-            }
-            users = [u for u in users if u.id in allowed_ids]
-
         return [
-            self._read_model_from_preloaded(
-                user,
-                memberships_by_user.get(user.id, []),
-                user.id in superadmin_ids,
-            )
+            self._read_model_from_preloaded(user, memberships_by_user.get(user.id, []))
             for user in users
         ]
+
+    def list_users(self, db: Session, actor: CurrentUser):
+        require_admin(actor)
+        allowed_ids = {
+            m.user_id
+            for m in self.repository.list_memberships(db, tenant_id=actor.current_tenant_id)
+            if m.is_active
+        }
+        return [user for user in self.list_all_users(db) if user.id in allowed_ids]
 
     def get_user(self, db: Session, user_id: int, actor: CurrentUser):
         require_admin(actor)
         user = self.repository.get(db, user_id)
         if user is None:
             return None
-        if actor.is_superadmin:
-            return self._read_model(db, user)
         tenant_user_ids = {
             membership.user_id
             for membership in self.repository.list_memberships(db, tenant_id=actor.current_tenant_id)
@@ -162,6 +154,13 @@ class UserService:
         }
         if user_id not in tenant_user_ids:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not manageable in current tenant")
+        return self._read_model(db, user)
+
+    def admin_get_user(self, db: Session, user_id: int) -> UserRead | None:
+        """Unscoped single-user lookup for the platform-admin panel."""
+        user = self.repository.get(db, user_id)
+        if user is None:
+            return None
         return self._read_model(db, user)
 
     def get_self(self, db: Session, actor: CurrentUser) -> UserRead:
@@ -177,23 +176,12 @@ class UserService:
     ) -> list[TenantMembershipWrite]:
         if memberships is None:
             return []
-        if actor.is_superadmin:
-            return memberships
         admin_tenant_ids = self._admin_tenant_ids_for_actor(actor)
-        allowed = [membership for membership in memberships if membership.tenant_id in admin_tenant_ids]
-        for membership in allowed:
-            if membership.role_code == "superadmin":
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Superadmin role is global only")
-        return allowed
+        return [membership for membership in memberships if membership.tenant_id in admin_tenant_ids]
 
-    def create_user(self, db: Session, payload: UserCreate, actor: CurrentUser):
-        require_admin(actor)
-        memberships = self._normalize_memberships(actor, payload.memberships)
-        if not actor.is_superadmin and not memberships and actor.current_tenant_id is not None:
-            memberships = [TenantMembershipWrite(tenant_id=actor.current_tenant_id, role_code="reader", is_active=True)]
-
-        user = AppUser(
-            default_tenant_id=payload.default_tenant_id or (memberships[0].tenant_id if memberships else actor.current_tenant_id),
+    def _new_app_user_from_payload(self, payload: UserCreate) -> AppUser:
+        return AppUser(
+            default_tenant_id=payload.default_tenant_id,
             first_name=payload.first_name,
             last_name=payload.last_name,
             display_name=payload.display_name,
@@ -209,16 +197,28 @@ class UserService:
                 "login_enabled": payload.login_enabled,
             },
         )
+
+    def create_user(self, db: Session, payload: UserCreate, actor: CurrentUser):
+        require_admin(actor)
+        memberships = self._normalize_memberships(actor, payload.memberships)
+        if not memberships and actor.current_tenant_id is not None:
+            memberships = [TenantMembershipWrite(tenant_id=actor.current_tenant_id, role_code="reader", is_active=True)]
+
+        user = self._new_app_user_from_payload(payload)
+        if user.default_tenant_id is None:
+            user.default_tenant_id = memberships[0].tenant_id if memberships else actor.current_tenant_id
         self.repository.create(db, user)
         self._apply_memberships(db, user.id, memberships, actor)
-        if actor.is_superadmin:
-            role_ids = self._role_id_by_code(db)
-            self.repository.set_global_superadmin(
-                db,
-                user_id=user.id,
-                enabled=payload.is_superadmin,
-                superadmin_role_id=role_ids["superadmin"],
-            )
+        db.commit()
+        return self._read_model(db, user)
+
+    def admin_create_user(self, db: Session, payload: UserCreate) -> UserRead:
+        """Unscoped user creation for the platform-admin panel - memberships can target any tenant."""
+        user = self._new_app_user_from_payload(payload)
+        if user.default_tenant_id is None and payload.memberships:
+            user.default_tenant_id = payload.memberships[0].tenant_id
+        self.repository.create(db, user)
+        self._apply_memberships(db, user.id, payload.memberships, None)
         db.commit()
         return self._read_model(db, user)
 
@@ -227,10 +227,12 @@ class UserService:
         db: Session,
         user_id: int,
         memberships: list[TenantMembershipWrite],
-        actor: CurrentUser,
+        actor: CurrentUser | None,
         *,
         merge_with_existing: bool = False,
     ) -> None:
+        """actor=None means the caller already established full authority over all tenants
+        involved (platform-admin routes, internal merges) - membership scoping is skipped."""
         role_ids = self._role_id_by_code(db)
         next_memberships: list[UserTenantRole]
 
@@ -258,14 +260,15 @@ class UserService:
                 for membership in memberships
             ]
 
-        if not actor.is_superadmin:
+        if actor is not None:
+            admin_tenant_ids = self._admin_tenant_ids_for_actor(actor)
             retained = [
                 membership
                 for membership in self.repository.list_memberships(db, user_id=user_id)
-                if membership.tenant_id not in self._admin_tenant_ids_for_actor(actor)
+                if membership.tenant_id not in admin_tenant_ids
             ]
             next_memberships = retained + [
-                membership for membership in next_memberships if membership.tenant_id in self._admin_tenant_ids_for_actor(actor)
+                membership for membership in next_memberships if membership.tenant_id in admin_tenant_ids
             ]
 
         self.repository.replace_memberships(db, user_id=user_id, memberships=next_memberships)
@@ -275,25 +278,39 @@ class UserService:
         user = self.repository.get(db, user_id)
         if user is None:
             return None
-        if not actor.is_superadmin:
-            manageable_ids = {
-                membership.user_id
-                for membership in self.repository.list_memberships(db, tenant_id=actor.current_tenant_id)
-                if membership.is_active
-            }
-            if user_id not in manageable_ids:
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not manageable in current tenant")
+        manageable_ids = {
+            membership.user_id
+            for membership in self.repository.list_memberships(db, tenant_id=actor.current_tenant_id)
+            if membership.is_active
+        }
+        if user_id not in manageable_ids:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not manageable in current tenant")
+        return self._update_user_core(db, user, payload, actor)
 
-        values = payload.model_dump(exclude_unset=True, exclude={"password", "memberships", "is_superadmin"})
+    def admin_update_user(self, db: Session, user_id: int, payload: UserUpdate) -> UserRead | None:
+        """Unscoped update for the platform-admin panel - no tenant-membership gate."""
+        user = self.repository.get(db, user_id)
+        if user is None:
+            return None
+        return self._update_user_core(db, user, payload, actor=None)
+
+    def _update_user_core(self, db: Session, user: AppUser, payload: UserUpdate, actor: CurrentUser | None):
+        previous_external = user.external_identity_json or {}
+        is_promoting_participant_login = (
+            bool(payload.login_enabled)
+            and previous_external.get("login_enabled") is False
+            and previous_external.get("source") == "participant_auto"
+        )
+
+        values = payload.model_dump(exclude_unset=True, exclude={"password", "memberships"})
         if payload.login_enabled is not None:
-            current_external = user.external_identity_json or {}
-            if payload.login_enabled and current_external.get("login_enabled") is False and not payload.password:
+            if payload.login_enabled and previous_external.get("login_enabled") is False and not payload.password:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Set a password to enable login for this account",
                 )
             values["external_identity_json"] = {
-                **current_external,
+                **previous_external,
                 "login_enabled": payload.login_enabled,
             }
         if payload.password:
@@ -308,35 +325,60 @@ class UserService:
             values.setdefault("session_revoke_at", datetime.now(UTC))
         if values:
             self.repository.update(db, user, values)
+
+        if is_promoting_participant_login:
+            user = self._link_or_promote_participant_login(db, user, previous_external)
+
         if payload.memberships is not None:
-            memberships = self._normalize_memberships(actor, payload.memberships)
-            self._apply_memberships(db, user_id, memberships, actor, merge_with_existing=False)
-        if actor.is_superadmin and payload.is_superadmin is not None:
-            role_ids = self._role_id_by_code(db)
-            self.repository.set_global_superadmin(
-                db,
-                user_id=user_id,
-                enabled=payload.is_superadmin,
-                superadmin_role_id=role_ids["superadmin"],
-            )
+            memberships = payload.memberships if actor is None else self._normalize_memberships(actor, payload.memberships)
+            self._apply_memberships(db, user.id, memberships, actor, merge_with_existing=False)
         db.commit()
         return self._read_model(db, user)
+
+    def _link_or_promote_participant_login(self, db: Session, user: AppUser, previous_external: dict) -> AppUser:
+        """When a participant shadow account's login gets enabled, adopt its real email.
+
+        If another AppUser already owns that email, merge the shadow account into it
+        (adding this tenant's membership there) instead of creating a duplicate identity -
+        the same person getting login access in a second tenant must stay one central user.
+        `user` already carries the just-applied password/login_enabled at this point.
+        """
+        real_email = previous_external.get("participant_email") or user.oidc_email
+        if not real_email or real_email == user.email:
+            return user
+
+        existing = self.repository.get_by_email(db, real_email)
+        if existing is None or existing.id == user.id:
+            return self.repository.update(db, user, {"email": real_email})
+
+        # capture the login state that was just written to the shadow user before it is
+        # deleted by the merge, then re-apply it onto the surviving target user
+        login_state = {
+            "password_hash": user.password_hash,
+            "session_revoke_at": user.session_revoke_at,
+        }
+        self.merge_users(db, source_user_id=user.id, target_user_id=existing.id)
+        target = self.repository.get(db, existing.id)
+        login_state["external_identity_json"] = {
+            **(target.external_identity_json or {}),
+            "login_enabled": True,
+        }
+        return self.repository.update(db, target, login_state)
 
     def delete_user(self, db: Session, user_id: int, actor: CurrentUser) -> bool:
         require_admin(actor)
         user = self.repository.get(db, user_id)
         if user is None:
             return False
-        if actor.user_id == user_id and not actor.is_superadmin:
+        if actor.user_id == user_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot delete your own admin account")
-        if not actor.is_superadmin:
-            manageable_ids = {
-                membership.user_id
-                for membership in self.repository.list_memberships(db, tenant_id=actor.current_tenant_id)
-                if membership.is_active
-            }
-            if user_id not in manageable_ids:
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not manageable in current tenant")
+        manageable_ids = {
+            membership.user_id
+            for membership in self.repository.list_memberships(db, tenant_id=actor.current_tenant_id)
+            if membership.is_active
+        }
+        if user_id not in manageable_ids:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not manageable in current tenant")
         self.repository.delete(db, user)
         db.commit()
         return True
@@ -351,8 +393,10 @@ class UserService:
             db.commit()
         return self._read_model(db, user)
 
-    def merge_users(self, db: Session, *, source_user_id: int, target_user_id: int, actor: CurrentUser) -> UserRead:
-        require_superadmin(actor)
+    def merge_users(self, db: Session, *, source_user_id: int, target_user_id: int) -> UserRead:
+        """Merges source into target: memberships, participant links and default tenant carry
+        over, source is deleted. Callers are responsible for authorization (platform-admin
+        route, or the internal participant-login auto-link in update_user)."""
         if source_user_id == target_user_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Source and target user must differ")
 
@@ -375,7 +419,6 @@ class UserService:
             )
 
         role_priority = {"reader": 1, "writer": 2, "admin": 3}
-        role_ids = self._role_id_by_code(db)
 
         merged_memberships: dict[int, TenantMembershipWrite] = {}
         for membership in self._memberships_for_user(db, target_user_id) + self._memberships_for_user(db, source_user_id):
@@ -397,19 +440,9 @@ class UserService:
             db,
             target_user_id,
             list(merged_memberships.values()),
-            actor,
+            None,
             merge_with_existing=False,
         )
-
-        source_is_superadmin = "superadmin" in self.repository.list_global_roles(db, user_id=source_user_id)
-        target_is_superadmin = "superadmin" in self.repository.list_global_roles(db, user_id=target_user_id)
-        if source_is_superadmin or target_is_superadmin:
-            self.repository.set_global_superadmin(
-                db,
-                user_id=target_user_id,
-                enabled=True,
-                superadmin_role_id=role_ids["superadmin"],
-            )
 
         target_default_tenant_id = target.default_tenant_id or source.default_tenant_id
         self.repository.update(

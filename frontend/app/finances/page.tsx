@@ -7,16 +7,16 @@ import { FinanceAccount } from "@/types/api";
 
 export default async function FinancesPage() {
   const session = await requireSession();
-  const hasFinance = session.user?.is_superadmin || ["admin", "writer", "kassier"].includes(session.current_role ?? "");
+  const hasFinance = ["admin", "writer", "kassier"].includes(session.current_role ?? "");
   if (!hasFinance) redirect("/");
 
   const accounts = await backendFetchWithSession<FinanceAccount[]>("/api/finance/accounts") ?? [];
 
   return (
     <AppShell initialSession={session}>
-      <div className="grid">
+      <section className="panel">
         <FinancesView initialAccounts={accounts} />
-      </div>
+      </section>
     </AppShell>
   );
 }

@@ -5,8 +5,6 @@ export type NavGroup = { title: string; links: NavLink[] };
 
 export function formatRoleLabel(role: string | null | undefined): string {
   switch (role) {
-    case "superadmin":
-      return "Superadmin";
     case "admin":
       return "Admin";
     case "writer":
@@ -21,8 +19,8 @@ export function formatRoleLabel(role: string | null | undefined): string {
 }
 
 export function buildNav(session: SessionInfo | null): NavGroup[] {
-  const role = session?.user?.is_superadmin ? "superadmin" : (session?.current_role ?? null);
-  const isAdmin = role === "superadmin" || role === "admin";
+  const role = session?.current_role ?? null;
+  const isAdmin = role === "admin";
   const isWriter = isAdmin || role === "writer";
   const hasFinance = isWriter || role === "kassier";
 
@@ -32,9 +30,10 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
     { href: "/todos", label: "Todos" },
     { href: "/fines", label: "Bussen" },
     ...(hasFinance ? [{ href: "/finances", label: "Finanzen" }] : []),
+    { href: "/statistics", label: "Statistiken" },
   ];
 
-  const groups: NavGroup[] = [{ title: "Workspace", links: workspaceLinks }];
+  const groups: NavGroup[] = [{ title: "Übersicht", links: workspaceLinks }];
 
   if (isWriter) {
     groups.push({
@@ -43,6 +42,7 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
         { href: "/lists", label: "Listen" },
         { href: "/participants", label: "Teilnehmer" },
         { href: "/events", label: "Termine" },
+        { href: "/submission-assignments", label: "Abgaben" },
       ],
     });
   }
@@ -52,16 +52,16 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
       {
         title: "Struktur",
         links: [
-          { href: "/templates", label: "Templates" },
-          { href: "/elements", label: "Elements" },
+          { href: "/templates", label: "Vorlagen" },
+          { href: "/elements", label: "Elemente" },
+          { href: "/cycles", label: "Zyklen" },
         ],
       },
       {
         title: "Administration",
         links: [
-          { href: "/users", label: "Users" },
-          { href: "/tenants", label: "Tenants" },
-          { href: "/settings", label: "Document Templates" },
+          { href: "/users", label: "Benutzer" },
+          { href: "/settings", label: "Dokument-Vorlagen" },
         ],
       }
     );

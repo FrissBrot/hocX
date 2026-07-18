@@ -7,7 +7,7 @@ import { EventSummary, ParticipantSummary, StructuredListDefinition, SubmissionA
 
 export default async function SubmissionAssignmentsPage() {
   const session = await requireSession();
-  const canWrite = session.user?.is_superadmin || session.current_role === "admin" || session.current_role === "writer";
+  const canWrite = session.current_role === "admin" || session.current_role === "writer";
 
   if (!canWrite) {
     redirect("/");

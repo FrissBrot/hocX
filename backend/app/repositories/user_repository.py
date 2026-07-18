@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import AppUser, Role, Tenant, UserRole, UserTenantRole
+from app.models import AppUser, Role, Tenant, UserTenantRole
 
 
 class UserRepository:
@@ -69,29 +69,3 @@ class UserRepository:
         )
         return list(db.scalars(statement))
 
-    def list_superadmin_user_ids(self, db: Session) -> list[int]:
-        statement = (
-            select(UserRole.user_id)
-            .join(Role, Role.id == UserRole.role_id)
-            .where(Role.code == "superadmin")
-        )
-        return list(db.scalars(statement))
-
-    def list_global_roles(self, db: Session, *, user_id: int) -> list[str]:
-        statement = (
-            select(Role.code)
-            .join(UserRole, UserRole.role_id == Role.id)
-            .where(UserRole.user_id == user_id)
-            .order_by(Role.code.asc())
-        )
-        return list(db.scalars(statement))
-
-    def set_global_superadmin(self, db: Session, *, user_id: int, enabled: bool, superadmin_role_id: int) -> None:
-        existing = db.scalar(
-            select(UserRole).where(UserRole.user_id == user_id, UserRole.role_id == superadmin_role_id)
-        )
-        if enabled and existing is None:
-            db.add(UserRole(user_id=user_id, role_id=superadmin_role_id))
-        if not enabled and existing is not None:
-            db.delete(existing)
-        db.flush()

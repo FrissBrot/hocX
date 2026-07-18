@@ -5,16 +5,16 @@ import { AttendanceFineListItem, FinanceAccount } from "@/types/api";
 
 export default async function FinesPage() {
   const session = await requireSession();
-  const hasFinance = session.user?.is_superadmin || ["admin", "writer", "kassier"].includes(session.current_role ?? "");
+  const hasFinance = ["admin", "writer", "kassier"].includes(session.current_role ?? "");
   const fines = await backendFetchWithSession<AttendanceFineListItem[]>("/api/fines") ?? [];
   const accounts = hasFinance ? (await backendFetchWithSession<FinanceAccount[]>("/api/finance/accounts") ?? []) : [];
   const isAdmin = hasFinance;
 
   return (
     <AppShell initialSession={session}>
-      <div className="grid">
+      <section className="panel">
         <FinesView initialFines={fines} accounts={accounts} isAdmin={isAdmin} />
-      </div>
+      </section>
     </AppShell>
   );
 }

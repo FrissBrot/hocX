@@ -1,16 +1,19 @@
 import { AppShell } from "@/components/ui/app-shell";
 import { TemplateBuilder } from "@/components/template/template-builder";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
-import { TemplateSummary } from "@/types/api";
+import { CycleConfigSummary, TemplateSummary } from "@/types/api";
 
 export default async function TemplatesPage() {
   const session = await requireSession();
-  const data = await backendFetchWithSession<TemplateSummary[]>("/api/templates");
+  const [data, cycleConfigs] = await Promise.all([
+    backendFetchWithSession<TemplateSummary[]>("/api/templates"),
+    backendFetchWithSession<CycleConfigSummary[]>("/api/cycle-configs"),
+  ]);
 
   return (
     <AppShell initialSession={session}>
       <section className="panel">
-        <TemplateBuilder initialTemplates={data ?? []} />
+        <TemplateBuilder initialTemplates={data ?? []} availableCycleConfigs={cycleConfigs ?? []} />
       </section>
     </AppShell>
   );
