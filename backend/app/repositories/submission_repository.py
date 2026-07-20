@@ -156,15 +156,23 @@ class SubmissionRepository:
         return result
 
     def count_submissions_summary(self, db: Session, *, assignment_id: int) -> dict:
-        """Count submitted elements and those in quarantine for an assignment."""
+        """Count submitted elements and those in quarantine for an assignment.
+
+        An element is identified by its (event_id, list_entry_id) pair - exactly one of the
+        two is set per row (ck_submission_upload_exactly_one_target), so COUNT(DISTINCT ...)
+        over both columns correctly counts distinct elements without colliding across the two
+        id spaces.
+        """
+        element_key = (SubmissionUpload.event_id, SubmissionUpload.list_entry_id)
+
         submitted_stmt = (
-            select(func.count(func.distinct(SubmissionUpload.element_ref)))
+            select(func.count(func.distinct(*element_key)))
             .where(SubmissionUpload.assignment_id == assignment_id)
         )
         submitted = db.scalar(submitted_stmt) or 0
 
         quarantine_stmt = (
-            select(func.count(func.distinct(SubmissionUpload.element_ref)))
+            select(func.count(func.distinct(*element_key)))
             .join(SubmissionUploadFile, SubmissionUploadFile.upload_id == SubmissionUpload.id)
             .join(StoredFile, StoredFile.id == SubmissionUploadFile.stored_file_id)
             .where(SubmissionUpload.assignment_id == assignment_id, StoredFile.scan_status == "pending")
@@ -172,7 +180,7 @@ class SubmissionRepository:
         quarantine = db.scalar(quarantine_stmt) or 0
 
         infected_stmt = (
-            select(func.count(func.distinct(SubmissionUpload.element_ref)))
+            select(func.count(func.distinct(*element_key)))
             .join(SubmissionUploadFile, SubmissionUploadFile.upload_id == SubmissionUpload.id)
             .join(StoredFile, StoredFile.id == SubmissionUploadFile.stored_file_id)
             .where(SubmissionUpload.assignment_id == assignment_id, StoredFile.scan_status == "infected")

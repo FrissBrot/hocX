@@ -82,6 +82,35 @@ class ProtocolTodoRepository:
         ).offset(skip).limit(limit)
         return db.execute(query).all()
 
+    def list_for_protocols_or_assigned(
+        self, db: Session, tenant_id: int, protocol_ids: list[int], user_id: int, skip: int = 0, limit: int = 100
+    ):
+        """Restricted-reader view: todos from protocols the user has access to, plus anything
+        directly assigned to them (covers standalone tenant todos with no protocol link)."""
+        linked_participant_subq = (
+            select(Participant.id)
+            .where(Participant.app_user_id == user_id, Participant.tenant_id == tenant_id)
+            .limit(1)
+            .scalar_subquery()
+        )
+        conditions = [
+            ProtocolTodo.assigned_user_id == user_id,
+            ProtocolTodo.assigned_participant_id == linked_participant_subq,
+        ]
+        if protocol_ids:
+            conditions.append(Protocol.id.in_(protocol_ids))
+        query, *_ = self._base_todo_query()
+        query = query.where(
+            or_(Protocol.tenant_id == tenant_id, ProtocolTodo.tenant_id == tenant_id)
+        ).where(
+            or_(*conditions)
+        ).order_by(
+            ProtocolTodo.todo_status_id.asc(),
+            Protocol.protocol_date.desc(),
+            ProtocolTodo.sort_index.asc(),
+        ).offset(skip).limit(limit)
+        return db.execute(query).all()
+
     def list_for_protocol_block(self, db: Session, protocol_element_block_id: int):
         query, *_ = self._base_todo_query()
         query = query.where(

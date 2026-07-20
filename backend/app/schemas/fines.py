@@ -32,6 +32,9 @@ class AttendanceFineRead(BaseModel):
     collected_at: datetime | None
     collected_transaction_id: int | None
     closed_in_protocol_id: int | None = None
+    collected_by_user_id: int | None = None
+    collected_by_display_name: str | None = None
+    can_reopen: bool = False
     created_at: datetime
 
 

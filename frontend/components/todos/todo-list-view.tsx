@@ -33,7 +33,6 @@ const PAGE_SIZE = 100;
 type Props = {
   allTodos: TodoListItem[] | null;
   myTodos: TodoListItem[];
-  canAdmin: boolean;
   canEdit?: boolean;
   todoBlocks?: TodoBlock[];
   participants?: ParticipantSummary[];
@@ -41,9 +40,9 @@ type Props = {
   events?: EventSummary[];
 };
 
-export function TodoListView({ allTodos, myTodos, canAdmin, canEdit = true, todoBlocks = [], participants = [], documentTemplates = [], events = [] }: Props) {
+export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [], participants = [], documentTemplates = [], events = [] }: Props) {
   const router = useRouter();
-  const [scope, setScope] = useState<"all" | "my">(canAdmin ? "all" : "my");
+  const [scope, setScope] = useState<"all" | "my">(allTodos !== null ? "all" : "my");
   const [statusFilter, setStatusFilter] = useState<"open" | "done" | "all">("open");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -166,6 +165,8 @@ export function TodoListView({ allTodos, myTodos, canAdmin, canEdit = true, todo
   const [createBlockId, setCreateBlockId] = useState<string>("");
   const [createTags, setCreateTags] = useState("");
   const [creating, setCreating] = useState(false);
+  const [editTodoId, setEditTodoId] = useState<number | null>(null);
+  const editingTodo = editTodoId != null ? [...todos.all, ...todos.my].find((t) => t.id === editTodoId) ?? null : null;
 
   const activeTodos = scope === "all" ? todos.all : todos.my;
   const hasMore = scope === "all" ? hasMoreAll : hasMoreMy;
@@ -349,10 +350,10 @@ export function TodoListView({ allTodos, myTodos, canAdmin, canEdit = true, todo
   );
 
   return (
-    <div className="grid">
+    <div className="grid todo-list-page">
       <div className="protocol-list-toolbar">
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {canAdmin && allTodos !== null && (
+          {allTodos !== null && (
             <div className="segment-control">
               <button type="button" className={`segment-button${scope === "all" ? " segment-button-active" : ""}`} onClick={() => setScope("all")}>Alle</button>
               <button type="button" className={`segment-button${scope === "my" ? " segment-button-active" : ""}`} onClick={() => setScope("my")}>Meine</button>
@@ -412,6 +413,7 @@ export function TodoListView({ allTodos, myTodos, canAdmin, canEdit = true, todo
       )}
 
       <DataTable
+        className="todo-table"
         columns={[
           "",
           { key: "task", label: "Aufgabe", sortable: true, sortDirection: sd("task"), onSort: () => toggleSort("task") },
@@ -428,7 +430,11 @@ export function TodoListView({ allTodos, myTodos, canAdmin, canEdit = true, todo
           const isDone = code === "done" || code === "cancelled";
           const tags = todo.tags ?? [];
           return (
-            <tr key={todo.id} className={isDone ? "table-row-done" : ""}>
+            <tr
+              key={todo.id}
+              className={`${isDone ? "table-row-done" : ""}${canEdit ? " todo-row-clickable" : ""}`}
+              onClick={() => canEdit && setEditTodoId(todo.id)}
+            >
               <td>
                 {(() => {
                   const isAuto = !!todo.submission_assignment_id;
@@ -439,7 +445,10 @@ export function TodoListView({ allTodos, myTodos, canAdmin, canEdit = true, todo
                       className={`todo-check${isDone ? " todo-check-done" : ""}${lockedClass}`}
                       title={isAuto ? "Wird automatisch durch Abgabe geschlossen" : !canEdit ? "" : isDone ? "Als offen markieren" : "Als erledigt markieren"}
                       disabled={busy[todo.id] || !canEdit || isAuto}
-                      onClick={() => (canEdit && !isAuto) && void cycleStatus(todo)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (canEdit && !isAuto) void cycleStatus(todo);
+                      }}
                     >
                       {isDone ? (
                         <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" strokeWidth="1.5"/><path d="M4.5 8.5l2.5 2.5 4.5-4.5" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -461,7 +470,10 @@ export function TodoListView({ allTodos, myTodos, canAdmin, canEdit = true, todo
                         key={tag}
                         type="button"
                         className={`tag-chip tag-chip-sm${tagFilter === tag ? " tag-chip-active" : ""}`}
-                        onClick={() => setTagFilter(tagFilter === tag ? null : tag)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setTagFilter(tagFilter === tag ? null : tag);
+                        }}
                       >
                         {tag}
                       </button>
@@ -473,13 +485,20 @@ export function TodoListView({ allTodos, myTodos, canAdmin, canEdit = true, todo
               </td>
               <td>
                 {todo.protocol_id ? (
-                  <button type="button" className="todo-protocol-link" onClick={() => router.push(`/protocols/${todo.protocol_id}`)}>
+                  <button
+                    type="button"
+                    className="todo-protocol-link"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      router.push(`/protocols/${todo.protocol_id}`);
+                    }}
+                  >
                     <span className="todo-protocol-num">{todo.protocol_number}</span>
                     {todo.protocol_title ? <span className="todo-protocol-title">{todo.protocol_title}</span> : null}
                     {todo.block_title ? <span className="todo-protocol-block">· {todo.block_title}</span> : null}
                   </button>
                 ) : todo.reference_link ? (
-                  <a href={todo.reference_link} target="_blank" rel="noreferrer" className="todo-protocol-link">
+                  <a href={todo.reference_link} target="_blank" rel="noreferrer" className="todo-protocol-link" onClick={(event) => event.stopPropagation()}>
                     <span className="todo-protocol-num">Abgabebox</span>
                     <span className="todo-protocol-block">↗</span>
                   </a>
@@ -488,35 +507,24 @@ export function TodoListView({ allTodos, myTodos, canAdmin, canEdit = true, todo
                 )}
               </td>
               <td>
-                {canEdit && participants.length > 0 ? (
-                  <TodoAssigneeMenu
-                    label={todo.assigned_participant_name ?? "—"}
-                    participants={participants}
-                    activeId={todo.assigned_participant_id}
-                    onChange={(option) => void updateTodoAssignee(todo.id, option.id, option.id ? option.display_name : null)}
-                  />
-                ) : (
-                  <span className={todo.assigned_participant_name ? "" : "muted"}>{todo.assigned_participant_name ?? "—"}</span>
-                )}
+                <span className={`todo-assignee-cell${todo.assigned_participant_name ? "" : " muted"}`}>
+                  {todo.assigned_participant_name ?? "—"}
+                </span>
               </td>
               <td>
-                {canEdit && todo.protocol_id ? (
-                  <TodoDueMenu
-                    todoId={todo.id}
-                    label={
-                      todo.resolved_due_label
-                        ? `${todo.resolved_due_label}${todo.resolved_due_date ? ` (${formatDate(todo.resolved_due_date)})` : ""}`
-                        : todo.resolved_due_date
-                        ? formatDate(todo.resolved_due_date)
-                        : "—"
-                    }
-                    onApply={(patch) => void updateTodoDue(todo.id, patch)}
-                  />
-                ) : (
-                  <span className={todo.resolved_due_date || todo.resolved_due_label ? (isOverdue(todo.resolved_due_date) && !isDone ? "todo-due-overdue" : "") : "muted"}>
-                    {todo.resolved_due_label ?? formatDate(todo.resolved_due_date) ?? "—"}
-                  </span>
-                )}
+                <span
+                  className={`todo-due-cell${
+                    todo.resolved_due_date || todo.resolved_due_label
+                      ? isOverdue(todo.resolved_due_date) && !isDone
+                        ? " todo-due-overdue"
+                        : ""
+                      : " muted"
+                  }`}
+                >
+                  {todo.resolved_due_label
+                    ? `${todo.resolved_due_label}${todo.resolved_due_date ? ` (${formatDate(todo.resolved_due_date)})` : ""}`
+                    : formatDate(todo.resolved_due_date) ?? "—"}
+                </span>
               </td>
               <td>
                 <span className={`pill pill-sm ${STATUS_CLASS[code] ?? ""}`}>
@@ -535,6 +543,47 @@ export function TodoListView({ allTodos, myTodos, canAdmin, canEdit = true, todo
           </button>
         </div>
       )}
+
+      <Modal
+        open={editingTodo !== null}
+        title="Todo bearbeiten"
+        description={editingTodo?.task}
+        onClose={() => setEditTodoId(null)}
+      >
+        {editingTodo && (
+          <div className="grid" style={{ gap: 20, minWidth: 320 }}>
+            <label className="field-stack">
+              <span className="field-label">Zugewiesen an</span>
+              {participants.length > 0 ? (
+                <TodoAssigneeMenu
+                  label={editingTodo.assigned_participant_name ?? "Niemand"}
+                  participants={participants}
+                  activeId={editingTodo.assigned_participant_id}
+                  onChange={(option) => void updateTodoAssignee(editingTodo.id, option.id, option.id ? option.display_name : null)}
+                />
+              ) : (
+                <span className="muted">Keine Teilnehmer verfügbar</span>
+              )}
+            </label>
+            {editingTodo.protocol_id ? (
+              <label className="field-stack">
+                <span className="field-label">Fällig</span>
+                <TodoDueMenu
+                  todoId={editingTodo.id}
+                  label={
+                    editingTodo.resolved_due_label
+                      ? `${editingTodo.resolved_due_label}${editingTodo.resolved_due_date ? ` (${formatDate(editingTodo.resolved_due_date)})` : ""}`
+                      : editingTodo.resolved_due_date
+                      ? formatDate(editingTodo.resolved_due_date)
+                      : "—"
+                  }
+                  onApply={(patch) => void updateTodoDue(editingTodo.id, patch)}
+                />
+              </label>
+            ) : null}
+          </div>
+        )}
+      </Modal>
 
       <Modal
         open={exportModalOpen}

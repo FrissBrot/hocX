@@ -145,6 +145,8 @@ async def upload(
             raise HTTPException(status_code=400, detail=f"Datei zu gross (max. {assignment['max_file_size_mb']} MB)")
         contents.append((content, upload_file.filename or "datei", upload_file.content_type))
 
+    _log("upload_received", f"{len(contents)} Datei(en) empfangen")
+
     def _slugify(text: str) -> str:
         text = text.lower()
         text = re.sub(r"[äÄ]", "ae", text); text = re.sub(r"[öÖ]", "oe", text)
@@ -178,6 +180,8 @@ async def upload(
             "_content": content,
         })
 
+    _log("quarantined", "In Quarantäne gespeichert, Scan wird gestartet")
+
     # Step 2: Scan every file via ClamAV stream.
     scan_results = [
         scanner.scan_bytes(f["_content"], host=settings.clamav_host, port=settings.clamav_port)
@@ -208,6 +212,9 @@ async def upload(
                 raise HTTPException(status_code=500, detail="Datei konnte nicht verschoben werden") from exc
         saved_files.append(file_info)
 
+    if overall_scan == "clean":
+        _log("moved_to_storage", "Aus Quarantäne in die Abgabe verschoben")
+
     # Step 5: Single DB transaction.
     try:
         repository.insert_full_upload(
@@ -226,5 +233,5 @@ async def upload(
         _log("scan_pending", "ClamAV nicht erreichbar – Datei in Quarantäne")
     else:
         _log("scan_clean")
-    _log("submitted")
+    _log("submitted", "Freigegeben")
     return UploadResult(ok=True, files_received=len(contents))

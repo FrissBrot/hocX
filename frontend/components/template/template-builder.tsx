@@ -1,6 +1,7 @@
 "use client";
 
-import { DragEvent, FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { DragEvent, FormEvent, KeyboardEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
@@ -17,6 +18,8 @@ import {
   StructuredListDefinition,
   StructuredListEntry,
   TemplateElement,
+  TemplateElementBehaviorField,
+  TemplateElementBlock,
   TemplateSummary,
 } from "@/types/api";
 
@@ -304,6 +307,120 @@ function ResponsibilityLockIcon({ locked }: { locked: boolean }) {
   );
 }
 
+function BehaviorEditableIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 20l1-4L15.5 5.5l3 3L8 19l-4 1z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M13.5 7 17 10.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function BehaviorSubtitleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 6h14M12 6v9" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M8 18h8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function BehaviorHistoryIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 12a8 8 0 1 1 2.6 5.9" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M4 17v-5h5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function BehaviorEyeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function BehaviorExportIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M14 3v5h5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+const BEHAVIOR_ICON_FIELDS: Array<{ field: TemplateElementBehaviorField; label: string; icon: ReactNode }> = [
+  { field: "is_editable", label: "Im Protokoll bearbeitbar", icon: <BehaviorEditableIcon /> },
+  { field: "title_as_subtitle", label: "Blocktitel im PDF als Untertitel rendern", icon: <BehaviorSubtitleIcon /> },
+  { field: "copy_from_last_protocol", label: "Daten aus letzter Sitzung übernehmen", icon: <BehaviorHistoryIcon /> },
+  { field: "is_visible", label: "Im Editor sichtbar", icon: <BehaviorEyeIcon /> },
+  { field: "export_visible", label: "Im Export sichtbar", icon: <BehaviorExportIcon /> },
+];
+
+const ELEMENT_TYPE_LABELS: Record<number, string> = {
+  1: "Text",
+  2: "Todo",
+  3: "Bild",
+  6: "Tabelle",
+  7: "Terminliste",
+  9: "Anwesenheit",
+  10: "Sitzungsdatum",
+  11: "Matrix",
+  12: "Kontostand",
+  13: "Transaktionen",
+  14: "Bussenliste",
+  15: "Diagramm",
+};
+
+function blockDisplayLabel(block: TemplateElementBlock): string {
+  const title = block.block_title?.trim() || block.title?.trim();
+  if (title) {
+    return title;
+  }
+  return ELEMENT_TYPE_LABELS[block.element_type_id] ?? `Block #${block.id}`;
+}
+
+function blockBehaviorValues(block: TemplateElementBlock): Record<TemplateElementBehaviorField, boolean> {
+  return {
+    is_editable: block.is_editable,
+    is_visible: block.is_visible,
+    export_visible: block.export_visible,
+    copy_from_last_protocol: Boolean(block.copy_from_last_protocol),
+    title_as_subtitle: block.title_as_subtitle,
+  };
+}
+
+function BehaviorIconRow({
+  values,
+  onToggle,
+}: {
+  values: Record<TemplateElementBehaviorField, boolean>;
+  onToggle: (field: TemplateElementBehaviorField) => void;
+}) {
+  return (
+    <div className="behavior-icon-row">
+      {BEHAVIOR_ICON_FIELDS.map(({ field, label, icon }) => {
+        const active = values[field];
+        return (
+          <button
+            key={field}
+            type="button"
+            className={`behavior-icon-button${active ? " behavior-icon-button-active" : ""}`}
+            title={label}
+            aria-pressed={active}
+            onClick={() => onToggle(field)}
+          >
+            {icon}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: TemplateBuilderProps) {
   const router = useRouter();
   const showToast = useToast();
@@ -311,6 +428,9 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
   const [form, setForm] = useState(initialTemplateCreate);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [search, setSearch] = useState("");
+  const [duplicateTarget, setDuplicateTarget] = useState<TemplateSummary | null>(null);
+  const [duplicateName, setDuplicateName] = useState("");
+  const [duplicateBusy, setDuplicateBusy] = useState(false);
 
   const filteredTemplates = useMemo(
     () =>
@@ -355,6 +475,30 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
       showToast(`Deleted template #${templateId}`, "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Template deletion failed", "error");
+    }
+  }
+
+  function openDuplicate(template: TemplateSummary) {
+    setDuplicateTarget(template);
+    setDuplicateName(`${template.name} (Kopie)`);
+  }
+
+  async function submitDuplicate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!duplicateTarget) return;
+    setDuplicateBusy(true);
+    try {
+      const created = await browserApiFetch<TemplateSummary>(`/api/templates/${duplicateTarget.id}/duplicate`, {
+        method: "POST",
+        body: JSON.stringify({ name: duplicateName }),
+      });
+      setTemplates((current) => [created, ...current]);
+      setDuplicateTarget(null);
+      showToast(`Vorlage "${created.name}" wurde erstellt`, "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Vorlage konnte nicht dupliziert werden", "error");
+    } finally {
+      setDuplicateBusy(false);
     }
   }
 
@@ -451,6 +595,16 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
             <td>{template.version}</td>
             <td>
               <div className="table-actions">
+                <button
+                  type="button"
+                  className="button-inline button-ghost"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openDuplicate(template);
+                  }}
+                >
+                  Duplizieren
+                </button>
                 <button type="button" className="button-inline button-danger" onClick={(event) => {
                   event.stopPropagation();
                   void deleteTemplate(template.id);
@@ -460,6 +614,25 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
           </tr>
         ))}
       </DataTable>
+
+      <Modal
+        open={duplicateTarget !== null}
+        onClose={() => setDuplicateTarget(null)}
+        title={duplicateTarget ? `"${duplicateTarget.name}" duplizieren` : "Vorlage duplizieren"}
+        description="Erstellt eine unabhängige Kopie mit allen Elementen, deren Einstellungen und den zugewiesenen Teilnehmenden."
+      >
+        <form className="grid" onSubmit={submitDuplicate}>
+          <label className="field-stack">
+            <span className="field-label">Name der neuen Vorlage</span>
+            <input value={duplicateName} onChange={(event) => setDuplicateName(event.target.value)} required />
+          </label>
+          <div className="table-toolbar-actions">
+            <button type="submit" className="button-inline" disabled={duplicateBusy}>
+              {duplicateBusy ? "Wird dupliziert…" : "Duplizieren"}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
@@ -497,10 +670,14 @@ export function TemplateEditor({
   });
   const [showCreateItem, setShowCreateItem] = useState(false);
   const [showParticipantModal, setShowParticipantModal] = useState(false);
+  const [participantPickerSearch, setParticipantPickerSearch] = useState("");
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showAutoAssignModal, setShowAutoAssignModal] = useState(false);
   const [showResponsibilityModalFor, setShowResponsibilityModalFor] = useState<number | null>(null);
   const [draggedTemplateElementId, setDraggedTemplateElementId] = useState<number | null>(null);
   const [activeTemplateDropIndex, setActiveTemplateDropIndex] = useState<number | null>(null);
   const [expandedTemplateDropIndex, setExpandedTemplateDropIndex] = useState<number | null>(null);
+  const [expandedBehaviorIds, setExpandedBehaviorIds] = useState<Set<number>>(new Set());
   const [positionDrafts, setPositionDrafts] = useState<Record<number, string>>({});
   const [responsibilityAutoListId, setResponsibilityAutoListId] = useState("");
   const [responsibilityNameMode, setResponsibilityNameMode] = useState<ResponsibleNameMode>(() => {
@@ -536,6 +713,23 @@ export function TemplateEditor({
     () => participantAssignments.filter((assignment) => assignment.exclude_from_attendance).length,
     [participantAssignments]
   );
+  const filteredPickerParticipants = useMemo(() => {
+    const query = participantPickerSearch.trim().toLowerCase();
+    if (!query) {
+      return availableParticipants;
+    }
+    return availableParticipants.filter((participant) => {
+      const haystack = [
+        participant.display_name,
+        participant.first_name ?? "",
+        participant.last_name ?? "",
+        participant.email ?? "",
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [availableParticipants, participantPickerSearch]);
   const eligibleResponsibleLists = useMemo(
     () =>
       availableLists
@@ -664,6 +858,36 @@ export function TemplateEditor({
     });
     setElements((current) => current.map((item) => (item.id === updated.id ? updated : item)));
     return updated;
+  }
+
+  async function updateBlockBehavior(
+    templateElementId: number,
+    scope: "element" | "block",
+    field: TemplateElementBehaviorField,
+    value: boolean,
+    blockId?: number
+  ) {
+    try {
+      const updated = await browserApiFetch<TemplateElement>(`/api/template-elements/${templateElementId}/behavior`, {
+        method: "PATCH",
+        body: JSON.stringify({ scope, block_id: blockId ?? null, [field]: value }),
+      });
+      setElements((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Einstellung konnte nicht gespeichert werden", "error");
+    }
+  }
+
+  function toggleBehaviorExpanded(templateElementId: number) {
+    setExpandedBehaviorIds((current) => {
+      const next = new Set(current);
+      if (next.has(templateElementId)) {
+        next.delete(templateElementId);
+      } else {
+        next.add(templateElementId);
+      }
+      return next;
+    });
   }
 
   async function saveElementResponsibility(
@@ -1028,31 +1252,45 @@ export function TemplateEditor({
   }
 
   async function persistTemplateOrder(nextOrdered: TemplateElement[], successMessage: string) {
+    const previousElements = elements;
+    const previousSortIndexById = new Map(previousElements.map((item) => [item.id, item.sort_index]));
+    const resequenced = resequenceTemplateElements(nextOrdered);
+    flushSync(() => {
+      setElements([...resequenced].sort((left, right) => left.sort_index - right.sort_index));
+    });
+    const changedItems = resequenced.filter((item) => previousSortIndexById.get(item.id) !== item.sort_index);
+    if (changedItems.length === 0) {
+      return true;
+    }
     try {
-      const resequenced = resequenceTemplateElements(nextOrdered);
-      const temporaryItems = resequenced.map((item, index) => ({
-        ...item,
-        sort_index: -1000 - index,
-      }));
-      for (const item of temporaryItems) {
-        await browserApiFetch<TemplateElement>(`/api/template-elements/${item.id}`, {
-          method: "PATCH",
-          body: JSON.stringify({ sort_index: item.sort_index })
-        });
-      }
-      const updatedItems: TemplateElement[] = [];
-      for (const item of resequenced) {
-        const updated = await browserApiFetch<TemplateElement>(`/api/template-elements/${item.id}`, {
-          method: "PATCH",
-          body: JSON.stringify({ sort_index: item.sort_index })
-        });
-        updatedItems.push(updated);
-      }
-      setElements(updatedItems.sort((left, right) => left.sort_index - right.sort_index));
+      await Promise.all(
+        changedItems.map((item, index) =>
+          browserApiFetch<TemplateElement>(`/api/template-elements/${item.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ sort_index: 1000000 + index })
+          })
+        )
+      );
+      const updatedItems = await Promise.all(
+        changedItems.map((item) =>
+          browserApiFetch<TemplateElement>(`/api/template-elements/${item.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ sort_index: item.sort_index })
+          })
+        )
+      );
+      setElements((current) => {
+        const byId = new Map(current.map((item) => [item.id, item]));
+        for (const updated of updatedItems) {
+          byId.set(updated.id, updated);
+        }
+        return Array.from(byId.values()).sort((left, right) => left.sort_index - right.sort_index);
+      });
       showToast(successMessage, "success");
       router.refresh();
       return true;
     } catch (error) {
+      setElements(previousElements);
       showToast(error instanceof Error ? error.message : "Template-Reihenfolge konnte nicht gespeichert werden", "error");
       return false;
     }
@@ -1234,8 +1472,28 @@ export function TemplateEditor({
 
   return (
     <div className="grid">
-      <article className="card">
-        <DataToolbar title="Template settings" description="General information about this template and the document layout it uses." />
+      <DataToolbar
+        title={template.name}
+        description="Ziehe Elemente in die gewünschte Reihenfolge."
+        actions={
+          <div className="table-toolbar-actions">
+            <button type="button" className="button-ghost button-inline" onClick={() => setShowSettingsModal(true)}>
+              Einstellungen
+            </button>
+            <button type="button" className="button-ghost button-inline" onClick={() => setShowParticipantModal(true)}>
+              Teilnehmer
+            </button>
+          </div>
+        }
+      />
+
+      <Modal
+        open={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        title="Vorlagen-Einstellungen"
+        description="Allgemeine Angaben zu dieser Vorlage und dem verwendeten Dokumentlayout."
+        size="wide"
+      >
         <form className="grid" onSubmit={saveTemplate}>
           <label className="field-stack">
             <span className="field-label">Template name</span>
@@ -1267,32 +1525,6 @@ export function TemplateEditor({
             </select>
             <span className="field-help">Zyklen können unter Struktur → Zyklen verwaltet werden.</span>
           </label>
-          <div className="two-col">
-            <label className="field-stack">
-              <span className="field-label">Naechste Sitzung</span>
-              <select value={templateMeta.next_event_id} onChange={(event) => setTemplateMeta((current) => ({ ...current, next_event_id: event.target.value }))}>
-                <option value="">Nicht gesetzt</option>
-                {availableEvents.map((event) => (
-                  <option key={event.id} value={event.id}>
-                    {formatDateRange(event.event_date, event.event_end_date)} - {event.title}
-                  </option>
-                ))}
-              </select>
-              <span className="field-help">Kann in Todos und spaeteren Blöcken als Marker verwendet werden.</span>
-            </label>
-            <label className="field-stack">
-              <span className="field-label">Letzte Sitzung</span>
-              <select value={templateMeta.last_event_id} onChange={(event) => setTemplateMeta((current) => ({ ...current, last_event_id: event.target.value }))}>
-                <option value="">Nicht gesetzt</option>
-                {availableEvents.map((event) => (
-                  <option key={event.id} value={event.id}>
-                    {formatDateRange(event.event_date, event.event_end_date)} - {event.title}
-                  </option>
-                ))}
-              </select>
-              <span className="field-help">Bleibt als Template-Kontext erhalten und ist nicht auf das heutige Datum bezogen.</span>
-            </label>
-          </div>
           <label className="field-stack">
             <span className="field-label">Todo-Termin-Tag</span>
             <select
@@ -1319,212 +1551,206 @@ export function TemplateEditor({
           <div className="info-note">
             Protokollnummer-Tokens: [n] alle, [n_year] pro Jahr, [n_month] pro Monat, [n_cycle] im Zyklus. Zyklusname-Tokens: [cy] = Startjahr, [cy_end] = Endjahr.
           </div>
-          <div className="two-col">
-            <label className="field-stack">
-              <span className="field-label">PDF-Layout</span>
-              <select
-                value={templateMeta.document_template_id}
-                onChange={(event) => setTemplateMeta((current) => ({ ...current, document_template_id: event.target.value }))}
-              >
-                <option value="">Kein Layout zugewiesen</option>
-                {availableDocumentTemplates.filter((dt) => dt.is_active).map((dt) => (
-                  <option key={dt.id} value={dt.id}>
-                    {dt.name}{dt.is_default ? " (Standard)" : ""}
-                  </option>
-                ))}
-              </select>
-              <span className="field-help">Wird beim PDF-Export verwendet. Kann in den Einstellungen → Dokumentlayouts konfiguriert werden.</span>
-            </label>
-            <label className="field-stack">
-              <span className="field-label">Template status</span>
-              <select value={templateMeta.status} onChange={(event) => setTemplateMeta((current) => ({ ...current, status: event.target.value }))}>
-                <option value="active">Active</option>
-                <option value="archived">Archived</option>
-              </select>
-            </label>
-          </div>
+          <label className="field-stack">
+            <span className="field-label">PDF-Layout</span>
+            <select
+              value={templateMeta.document_template_id}
+              onChange={(event) => setTemplateMeta((current) => ({ ...current, document_template_id: event.target.value }))}
+            >
+              <option value="">Kein Layout zugewiesen</option>
+              {availableDocumentTemplates.filter((dt) => dt.is_active).map((dt) => (
+                <option key={dt.id} value={dt.id}>
+                  {dt.name}{dt.is_default ? " (Standard)" : ""}
+                </option>
+              ))}
+            </select>
+            <span className="field-help">Wird beim PDF-Export verwendet. Kann in den Einstellungen → Dokumentlayouts konfiguriert werden.</span>
+          </label>
           <div className="table-toolbar-actions">
             <button type="submit" className="button-inline">Save template</button>
           </div>
         </form>
-      </article>
+      </Modal>
 
-      <article className="card">
-        <div className="eyebrow">How templates work now</div>
-        <p className="muted">Templates no longer build blocks themselves. They only choose ready-made elements from the Elements area and place them in order.</p>
-      </article>
+      <Modal
+        open={showParticipantModal}
+        onClose={() => setShowParticipantModal(false)}
+        title="Teilnehmer waehlen"
+        description="Mit Haken legst du fest, wer in diesem Template im Protokoll auswählbar ist. Für ausgewählte Teilnehmer kannst du sie hier direkt aus der Anwesenheitskontrolle entfernen."
+        size="fullscreen"
+      >
+        <div className="grid">
+          <label className="field-stack">
+            <span className="field-label">Suche</span>
+            <input
+              value={participantPickerSearch}
+              onChange={(event) => setParticipantPickerSearch(event.target.value)}
+              placeholder="Teilnehmer suchen"
+              autoFocus
+            />
+          </label>
+          <div className="status-row">
+            <span className="pill">{assignedParticipantIds.length} ausgewaehlt</span>
+            <span className="pill">{excludedAttendanceCount} ohne Anwesenheitskontrolle</span>
+            <span className="pill">{filteredPickerParticipants.length} sichtbar</span>
+          </div>
+          <div className="table-toolbar-actions">
+            <button
+              type="button"
+              className="button-ghost button-inline"
+              onClick={() =>
+                setParticipantAssignments((current) => {
+                  const currentAssignmentsById = new Map(current.map((assignment) => [assignment.participant_id, assignment]));
+                  return allParticipantIds.map((participantId) => ({
+                    participant_id: participantId,
+                    exclude_from_attendance: currentAssignmentsById.get(participantId)?.exclude_from_attendance ?? false,
+                  }));
+                })
+              }
+            >
+              Alle auswaehlen
+            </button>
+          </div>
+          <div className="selection-list">
+            {filteredPickerParticipants.map((participant) => {
+              const assignment = participantAssignmentsById.get(participant.id);
+              const checked = Boolean(assignment);
+              return (
+                <label key={participant.id} className={`selection-card selection-card-checkbox${checked ? " selection-card-active" : ""}`}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(event) =>
+                      setParticipantAssignments((current) =>
+                        event.target.checked
+                          ? current.some((entry) => entry.participant_id === participant.id)
+                            ? current
+                            : [...current, { participant_id: participant.id, exclude_from_attendance: false }]
+                          : current.filter((entry) => entry.participant_id !== participant.id)
+                      )
+                    }
+                  />
+                  <div>
+                    <strong>{participant.display_name}</strong>
+                    <div className="muted">
+                      {[participant.first_name, participant.last_name].filter(Boolean).join(" ") || participant.email || "Teilnehmer"}
+                    </div>
+                    {checked ? (
+                      <span className="checkbox-row" onClick={(event) => event.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={assignment?.exclude_from_attendance ?? false}
+                          onChange={(event) =>
+                            setParticipantAssignments((current) =>
+                              current.map((entry) =>
+                                entry.participant_id === participant.id
+                                  ? { ...entry, exclude_from_attendance: event.target.checked }
+                                  : entry
+                              )
+                            )
+                          }
+                        />
+                        <span>Aus Anwesenheitskontrolle entfernen</span>
+                      </span>
+                    ) : null}
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+          <div className="table-toolbar-actions table-actions-end">
+            <button type="button" className="button-inline" onClick={() => void saveTemplateParticipants(true)}>
+              Auswahl speichern
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       <article className="card">
         <DataToolbar
-          title="Teilnehmer im Template"
-          description="Nur diese Teilnehmer sind spaeter im Protokoll auswählbar. Pro Person kannst du zusaetzlich festlegen, ob sie in der Anwesenheitskontrolle erscheinen soll."
+          title="Elemente"
+          description="Templates only collect finished elements. Wiederholungen und Filter werden direkt in den Blöcken des Elements gepflegt."
           actions={
             <div className="table-toolbar-actions">
-              <button type="button" className="button-inline" onClick={() => setShowParticipantModal(true)}>
-                Teilnehmer waehlen
+              <button type="button" className="button-ghost button-inline" onClick={() => setShowAutoAssignModal(true)}>
+                Verantwortliche-Zuordnung
+              </button>
+              <button type="button" className="button-inline" onClick={() => setShowCreateItem((current) => !current)}>
+                {showCreateItem ? "Close create form" : "Add element"}
               </button>
             </div>
           }
         />
-        <div className="status-row">
-          <span className="pill">{assignedParticipantIds.length} ausgewaehlt</span>
-          <span className="pill">{excludedAttendanceCount} ohne Anwesenheitskontrolle</span>
-          <span className="pill">{availableParticipants.length} verfuegbar</span>
-        </div>
 
         <Modal
-          open={showParticipantModal}
-          onClose={() => setShowParticipantModal(false)}
-          title="Teilnehmer waehlen"
-          description="Mit Haken legst du fest, wer in diesem Template im Protokoll auswählbar ist. Für ausgewählte Teilnehmer kannst du sie hier direkt aus der Anwesenheitskontrolle entfernen."
-          size="fullscreen"
+          open={showAutoAssignModal}
+          onClose={() => setShowAutoAssignModal(false)}
+          title="Verantwortliche-Zuordnung"
+          description="Steuert, wie Verantwortliche hinter Elementtiteln angezeigt und automatisch aus einer Liste zugeordnet werden."
+          size="wide"
         >
           <div className="grid">
-            <div className="table-toolbar-actions">
-              <button
-                type="button"
-                className="button-ghost button-inline"
-                onClick={() =>
-                  setParticipantAssignments((current) => {
-                    const currentAssignmentsById = new Map(current.map((assignment) => [assignment.participant_id, assignment]));
-                    return allParticipantIds.map((participantId) => ({
-                      participant_id: participantId,
-                      exclude_from_attendance: currentAssignmentsById.get(participantId)?.exclude_from_attendance ?? false,
-                    }));
-                  })
-                }
-              >
-                Alle auswaehlen
-              </button>
+            <div className="three-col">
+              <label className="field-stack">
+                <span className="field-label">Namensanzeige</span>
+                <select
+                  value={responsibilityNameMode}
+                  onChange={(event) => void applyResponsibilityNameMode(event.target.value as ResponsibleNameMode)}
+                >
+                  <option value="display_name">Anzeigename</option>
+                  <option value="first_name">Vorname</option>
+                  <option value="last_name">Nachname</option>
+                </select>
+                <span className="field-help">Dieses Format wird für die Anzeige der Verantwortlichen hinter dem Elementtitel verwendet.</span>
+              </label>
+              <label className="field-stack">
+                <span className="field-label">Initiale Zuordnung aus Liste</span>
+                <select
+                  value={responsibilityAutoListId}
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+                    setResponsibilityAutoListId(nextValue);
+                    if (nextValue) {
+                      void autoAssignResponsiblesFromList(Number(nextValue));
+                    }
+                  }}
+                >
+                  <option value="">Keine Liste ausgewählt</option>
+                  {eligibleResponsibleLists.map((item) => (
+                    <option key={item.definition.id} value={item.definition.id}>
+                      {item.definition.name}
+                    </option>
+                  ))}
+                </select>
+                <span className="field-help">Es werden nur Listen mit genau einer Textspalte und einer Teilnehmer-Spalte angeboten.</span>
+              </label>
+              <div className="table-toolbar-actions align-end">
+                <button
+                  type="button"
+                  className="button-ghost button-inline"
+                  disabled={!responsibilityAutoListId}
+                  onClick={() => responsibilityAutoListId && void autoAssignResponsiblesFromList(Number(responsibilityAutoListId))}
+                >
+                  Erneut abgleichen
+                </button>
+              </div>
             </div>
-            <div className="selection-list">
-              {availableParticipants.map((participant) => {
-                const assignment = participantAssignmentsById.get(participant.id);
-                const checked = Boolean(assignment);
-                return (
-                  <div key={participant.id} className={`selection-card selection-card-checkbox${checked ? " selection-card-active" : ""}`}>
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={(event) =>
-                        setParticipantAssignments((current) =>
-                          event.target.checked
-                            ? current.some((entry) => entry.participant_id === participant.id)
-                              ? current
-                              : [...current, { participant_id: participant.id, exclude_from_attendance: false }]
-                            : current.filter((entry) => entry.participant_id !== participant.id)
-                        )
-                      }
-                    />
-                    <div className="grid">
-                      <strong>{participant.display_name}</strong>
-                      <div className="muted">
-                        {[participant.first_name, participant.last_name].filter(Boolean).join(" ") || participant.email || "Teilnehmer"}
-                      </div>
-                      {checked ? (
-                        <label className="checkbox-row">
-                          <input
-                            type="checkbox"
-                            checked={assignment?.exclude_from_attendance ?? false}
-                            onChange={(event) =>
-                              setParticipantAssignments((current) =>
-                                current.map((entry) =>
-                                  entry.participant_id === participant.id
-                                    ? { ...entry, exclude_from_attendance: event.target.checked }
-                                    : entry
-                                )
-                              )
-                            }
-                          />
-                          <span>Aus Anwesenheitskontrolle entfernen</span>
-                        </label>
-                      ) : null}
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="info-note">
+              Beim Listenabgleich wird der Freitext der Liste mit dem Elementtitel verglichen. Gefundene Teilnehmende werden einmalig übernommen. Mit dem Schloss fixierst du danach bei Bedarf die Verknüpfung auf eine konkrete Tabellenzeile.
             </div>
-            <div className="table-toolbar-actions table-actions-end">
-              <button type="button" className="button-inline" onClick={() => void saveTemplateParticipants(true)}>
-                Auswahl speichern
-              </button>
+            <div className="status-row">
+              <span className="pill">
+                {orderedElements.filter((item) => parseResponsibilityConfig(item.configuration_json).assignments.length > 0).length} mit Verantwortlichen
+              </span>
+              <span className="pill">{eligibleResponsibleLists.length} passende Listen</span>
+              {responsibilityAutoListId ? (
+                <span className="pill">
+                  Auto-Liste: {eligibleResponsibleLists.find((item) => String(item.definition.id) === responsibilityAutoListId)?.definition.name ?? responsibilityAutoListId}
+                </span>
+              ) : null}
             </div>
           </div>
         </Modal>
-      </article>
-
-      <article className="card">
-        <DataToolbar
-          title="Template elements"
-          description="Templates only collect finished elements. Wiederholungen und Filter werden direkt in den Blöcken des Elements gepflegt."
-          actions={
-            <button type="button" className="button-inline" onClick={() => setShowCreateItem((current) => !current)}>
-              {showCreateItem ? "Close create form" : "Add element"}
-            </button>
-          }
-        />
-
-        <div className="grid">
-          <div className="three-col">
-            <label className="field-stack">
-              <span className="field-label">Namensanzeige</span>
-              <select
-                value={responsibilityNameMode}
-                onChange={(event) => void applyResponsibilityNameMode(event.target.value as ResponsibleNameMode)}
-              >
-                <option value="display_name">Anzeigename</option>
-                <option value="first_name">Vorname</option>
-                <option value="last_name">Nachname</option>
-              </select>
-              <span className="field-help">Dieses Format wird für die Anzeige der Verantwortlichen hinter dem Elementtitel verwendet.</span>
-            </label>
-            <label className="field-stack">
-              <span className="field-label">Initiale Zuordnung aus Liste</span>
-              <select
-                value={responsibilityAutoListId}
-                onChange={(event) => {
-                  const nextValue = event.target.value;
-                  setResponsibilityAutoListId(nextValue);
-                  if (nextValue) {
-                    void autoAssignResponsiblesFromList(Number(nextValue));
-                  }
-                }}
-              >
-                <option value="">Keine Liste ausgewählt</option>
-                {eligibleResponsibleLists.map((item) => (
-                  <option key={item.definition.id} value={item.definition.id}>
-                    {item.definition.name}
-                  </option>
-                ))}
-              </select>
-              <span className="field-help">Es werden nur Listen mit genau einer Textspalte und einer Teilnehmer-Spalte angeboten.</span>
-            </label>
-            <div className="table-toolbar-actions align-end">
-              <button
-                type="button"
-                className="button-ghost button-inline"
-                disabled={!responsibilityAutoListId}
-                onClick={() => responsibilityAutoListId && void autoAssignResponsiblesFromList(Number(responsibilityAutoListId))}
-              >
-                Erneut abgleichen
-              </button>
-            </div>
-          </div>
-          <div className="info-note">
-            Beim Listenabgleich wird der Freitext der Liste mit dem Elementtitel verglichen. Gefundene Teilnehmende werden einmalig übernommen. Mit dem Schloss fixierst du danach bei Bedarf die Verknüpfung auf eine konkrete Tabellenzeile.
-          </div>
-          <div className="status-row">
-            <span className="pill">
-              {orderedElements.filter((item) => parseResponsibilityConfig(item.configuration_json).assignments.length > 0).length} mit Verantwortlichen
-            </span>
-            <span className="pill">{eligibleResponsibleLists.length} passende Listen</span>
-            {responsibilityAutoListId ? (
-              <span className="pill">
-                Auto-Liste: {eligibleResponsibleLists.find((item) => String(item.definition.id) === responsibilityAutoListId)?.definition.name ?? responsibilityAutoListId}
-              </span>
-            ) : null}
-          </div>
-        </div>
 
         <Modal
           open={showCreateItem}
@@ -1815,6 +2041,22 @@ export function TemplateEditor({
                         ) : null}
                       </div>
                       {item.description ? <span className="muted">{item.description}</span> : null}
+                      <div className="template-element-behavior-row">
+                        <BehaviorIconRow
+                          values={item.behavior}
+                          onToggle={(field) => void updateBlockBehavior(item.id, "element", field, !item.behavior[field])}
+                        />
+                        {item.blocks.length > 1 ? (
+                          <button
+                            type="button"
+                            className="button-ghost button-inline behavior-expand-toggle"
+                            onClick={() => toggleBehaviorExpanded(item.id)}
+                            aria-expanded={expandedBehaviorIds.has(item.id)}
+                          >
+                            {expandedBehaviorIds.has(item.id) ? "Blöcke einklappen" : `${item.blocks.length} Blöcke einzeln einstellen`}
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
 
@@ -1861,6 +2103,22 @@ export function TemplateEditor({
                     </button>
                   </div>
                 </div>
+
+                {expandedBehaviorIds.has(item.id) && item.blocks.length > 1 ? (
+                  <div className="template-element-behavior-expanded">
+                    {item.blocks.map((block) => (
+                      <div key={block.id} className="template-element-behavior-expanded-row">
+                        <span className="muted">{blockDisplayLabel(block)}</span>
+                        <BehaviorIconRow
+                          values={blockBehaviorValues(block)}
+                          onToggle={(field) =>
+                            void updateBlockBehavior(item.id, "block", field, !blockBehaviorValues(block)[field], block.id)
+                          }
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             );
           })}

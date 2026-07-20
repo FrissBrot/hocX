@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -65,3 +66,8 @@ class AdminTenantRead(BaseModel):
 class AdminUserMergeRequest(BaseModel):
     source_user_id: int
     target_user_id: int
+
+
+class TenantCloneRequest(BaseModel):
+    new_name: str
+    mode: Literal["structure", "full"] = "structure"

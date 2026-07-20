@@ -60,6 +60,12 @@ class ProtocolTodoService:
         rows = self.repository.list_for_user(db, tenant_id, user_id, skip=skip, limit=limit)
         return [self._row_to_list_item(row) for row in rows]
 
+    def list_todos_for_protocols_or_assigned(
+        self, db: Session, tenant_id: int, protocol_ids: list[int], user_id: int, skip: int = 0, limit: int = 100
+    ) -> list[TodoListItem]:
+        rows = self.repository.list_for_protocols_or_assigned(db, tenant_id, protocol_ids, user_id, skip=skip, limit=limit)
+        return [self._row_to_list_item(row) for row in rows]
+
     def list_pending_for_protocol(self, db: Session, protocol_id: int, template_id: int, protocol_date) -> list[TodoListItem]:
         rows = self.repository.list_pending_for_protocol(db, protocol_id, template_id, protocol_date)
         return [self._row_to_list_item(row) for row in rows]

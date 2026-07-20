@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
 from app.core.db import get_db, SessionLocal
-from app.schemas.protocol import ProtocolCreateFromTemplate, ProtocolRead, ProtocolTodoRead, ProtocolUpdate, QuickTodoCreate, TodoListItem
+from app.schemas.protocol import AttendanceExcusePayload, NextSessionRead, ProtocolCreateFromTemplate, ProtocolRead, ProtocolTodoRead, ProtocolUpdate, QuickTodoCreate, TodoListItem
 from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
 from app.services.export_service import ExportService
@@ -71,10 +71,11 @@ def list_protocols(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_reader(user)
-    # Reader and kassier may only see finalized protocols
-    if user.current_role in {"reader", "kassier"}:
+    # Unrestricted readers may only see finalized protocols; restricted readers are further
+    # scoped below via restrict_to_assigned. Kassier/writer/admin see everything, all statuses.
+    if user.current_role == "reader" and not access_service._is_restricted_reader(db, user):
         status_filter = "abgeschlossen"
-        q = None  # no search for restricted roles
+        q = None
     protocols = service.list_protocols(
         db,
         tenant_id=user.current_tenant_id,
@@ -104,6 +105,34 @@ def create_protocol_from_template(
         db.rollback()
         raise HTTPException(status_code=400, detail="Protocol could not be created") from exc
     return {"id": protocol_id}
+
+
+@router.get("/protocols/next-session", response_model=NextSessionRead)
+def get_next_session(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    require_reader(user)
+    return service.get_next_session_attendance(db, user.current_tenant_id)
+
+
+@router.post("/protocols/{protocol_id}/attendance/{participant_id}/excuse", response_model=dict[str, str])
+def excuse_participant(
+    protocol_id: int,
+    participant_id: int,
+    payload: AttendanceExcusePayload = AttendanceExcusePayload(),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_writer(user)
+    protocol = service.get_protocol(db, protocol_id)
+    if protocol is None or protocol.tenant_id != user.current_tenant_id:
+        raise HTTPException(status_code=404, detail="Protocol not found")
+    try:
+        updated = service.set_attendance_excused(db, protocol_id, participant_id, payload.excused)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Attendance status could not be updated") from exc
+    if not updated:
+        raise HTTPException(status_code=404, detail="No attendance entry found for this participant")
+    return {"message": "Participant excused" if payload.excused else "Participant marked unentschuldigt"}
 
 
 @router.get("/protocols/{protocol_id}", response_model=ProtocolRead)

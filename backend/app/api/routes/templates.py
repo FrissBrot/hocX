@@ -11,6 +11,8 @@ from app.schemas.template import (
     ElementDefinitionRead,
     ElementDefinitionUpdate,
     TemplateCreate,
+    TemplateDuplicateRequest,
+    TemplateElementBehaviorUpdate,
     TemplateElementCreate,
     TemplateElementRead,
     TemplateElementUpdate,
@@ -92,6 +94,27 @@ def patch_template(
     return template
 
 
+@router.post("/templates/{template_id}/duplicate", response_model=TemplateRead, status_code=status.HTTP_201_CREATED)
+def duplicate_template(
+    template_id: int,
+    payload: TemplateDuplicateRequest,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_admin(user)
+    existing = service.get_template(db, template_id)
+    if existing is None or existing.tenant_id != user.current_tenant_id:
+        raise HTTPException(status_code=404, detail="Template not found")
+    try:
+        duplicate = service.duplicate_template(db, template_id, new_name=payload.name, created_by=user.user_id)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Template could not be duplicated") from exc
+    if duplicate is None:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return duplicate
+
+
 @router.delete("/templates/{template_id}", response_model=dict[str, str])
 def delete_template(
     template_id: int,
@@ -159,6 +182,26 @@ def patch_template_element(
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Template element could not be updated") from exc
+    if template_element is None:
+        raise HTTPException(status_code=404, detail="Template element not found")
+    return template_element
+
+
+@router.patch("/template-elements/{template_element_id}/behavior", response_model=TemplateElementRead)
+def patch_template_element_behavior(
+    template_element_id: int,
+    payload: TemplateElementBehaviorUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_admin(user)
+    try:
+        template_element = template_element_service.update_block_behavior(db, template_element_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Behavior could not be updated") from exc
     if template_element is None:
         raise HTTPException(status_code=404, detail="Template element not found")
     return template_element

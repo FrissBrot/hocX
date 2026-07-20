@@ -18,7 +18,10 @@ import {
 } from "@/types/api";
 
 const LOG_STATUS_LABEL: Record<string, string> = {
-  submitted: "Abgegeben",
+  upload_received: "Datei empfangen",
+  quarantined: "In Quarantäne gespeichert",
+  moved_to_storage: "In Abgabe verschoben",
+  submitted: "Freigegeben",
   captcha_failed: "Bot-Check fehlgeschlagen",
   validation_failed: "Validierungsfehler",
   element_closed: "Element geschlossen",
@@ -32,6 +35,9 @@ const LOG_STATUS_LABEL: Record<string, string> = {
 };
 
 const LOG_STATUS_CLASS: Record<string, string> = {
+  upload_received: "",
+  quarantined: "pill-warning",
+  moved_to_storage: "pill-success",
   submitted: "pill-success",
   captcha_failed: "pill-warning",
   validation_failed: "pill-warning",
@@ -160,7 +166,7 @@ function statusClass(element: SubmissionElementStatusEntry): string {
 
 function SummaryBar({ summary }: { summary: AssignmentSummary | undefined }) {
   if (!summary) {
-    return <div style={{ height: 3, borderRadius: 2, background: "var(--border)", marginTop: 6 }} />;
+    return <div className="subm-summary-track" />;
   }
   const { submitted, quarantine, infected, total } = summary;
   const clean = Math.max(0, submitted);
@@ -172,14 +178,14 @@ function SummaryBar({ summary }: { summary: AssignmentSummary | undefined }) {
     const missingPct = Math.max(0, 100 - cleanPct - qPct - infPct);
     const label = `${clean + quarantine + infected}/${total}`;
     return (
-      <div style={{ marginTop: 6 }}>
-        <div style={{ height: 3, borderRadius: 2, background: "var(--border)", overflow: "hidden", display: "flex", gap: 1 }}>
-          {cleanPct > 0 && <div style={{ width: `${cleanPct}%`, background: "var(--success, #22c55e)", borderRadius: 2, flexShrink: 0 }} />}
-          {qPct > 0 && <div style={{ width: `${qPct}%`, background: "var(--warning, #f59e0b)", borderRadius: 2, flexShrink: 0 }} />}
-          {infPct > 0 && <div style={{ width: `${infPct}%`, background: "var(--danger, #ef4444)", borderRadius: 2, flexShrink: 0 }} />}
-          {missingPct > 0 && <div style={{ width: `${missingPct}%`, borderRadius: 2, flexShrink: 0 }} />}
+      <div className="subm-summary">
+        <div className="subm-summary-track">
+          {cleanPct > 0 && <div className="subm-summary-segment subm-summary-segment-clean" style={{ width: `${cleanPct}%` }} />}
+          {qPct > 0 && <div className="subm-summary-segment subm-summary-segment-quarantine" style={{ width: `${qPct}%` }} />}
+          {infPct > 0 && <div className="subm-summary-segment subm-summary-segment-infected" style={{ width: `${infPct}%` }} />}
+          {missingPct > 0 && <div className="subm-summary-segment" style={{ width: `${missingPct}%` }} />}
         </div>
-        <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: 3, display: "block" }}>
+        <span className="subm-summary-caption">
           {label} abgegeben
           {quarantine > 0 ? ` · ${quarantine} Quarantäne` : ""}
           {infected > 0 ? ` · ${infected} Schadware` : ""}
@@ -191,25 +197,71 @@ function SummaryBar({ summary }: { summary: AssignmentSummary | undefined }) {
   const total2 = clean + quarantine + infected;
   if (total2 === 0) {
     return (
-      <div style={{ marginTop: 6 }}>
-        <div style={{ height: 3, borderRadius: 2, background: "var(--border)" }} />
-        <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: 3, display: "block" }}>Noch keine Abgaben</span>
+      <div className="subm-summary">
+        <div className="subm-summary-track" />
+        <span className="subm-summary-caption">Noch keine Abgaben</span>
       </div>
     );
   }
   return (
-    <div style={{ marginTop: 6 }}>
-      <div style={{ height: 3, borderRadius: 2, background: "var(--border)", overflow: "hidden", display: "flex", gap: 1 }}>
-        {clean > 0 && <div style={{ flex: clean, background: "var(--success, #22c55e)", borderRadius: 2 }} />}
-        {quarantine > 0 && <div style={{ flex: quarantine, background: "var(--warning, #f59e0b)", borderRadius: 2 }} />}
-        {infected > 0 && <div style={{ flex: infected, background: "var(--danger, #ef4444)", borderRadius: 2 }} />}
+    <div className="subm-summary">
+      <div className="subm-summary-track">
+        {clean > 0 && <div className="subm-summary-segment subm-summary-segment-clean" style={{ flex: clean }} />}
+        {quarantine > 0 && <div className="subm-summary-segment subm-summary-segment-quarantine" style={{ flex: quarantine }} />}
+        {infected > 0 && <div className="subm-summary-segment subm-summary-segment-infected" style={{ flex: infected }} />}
       </div>
-      <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: 3, display: "block" }}>
+      <span className="subm-summary-caption">
         {total2} abgegeben
         {quarantine > 0 ? ` · ${quarantine} Quarantäne` : ""}
         {infected > 0 ? ` · ${infected} Schadware` : ""}
       </span>
     </div>
+  );
+}
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function DownloadIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" width="14" height="14">
+      <path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" width="14" height="14">
+      <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function FileIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" width="14" height="14">
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+      <path d="M14 3v5h5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function VerifiedIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" width="16" height="16">
+      <path
+        d="M12 2.5l2.2 1.2 2.5-.4 1.2 2.2 2.2 1.2-.4 2.5L21 12l-1.3 2.2.4 2.5-2.2 1.2-1.2 2.2-2.5-.4L12 21.5l-2.2-1.2-2.5.4-1.2-2.2-2.2-1.2.4-2.5L3 12l1.3-2.2-.4-2.5 2.2-1.2 1.2-2.2 2.5.4z"
+        fill="currentColor"
+        opacity="0.16"
+      />
+      <path d="M8.3 12.3l2.4 2.4L16 9.3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
@@ -226,10 +278,9 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
   const [elementsLoading, setElementsLoading] = useState(false);
   const [clamavStatus, setClamavStatus] = useState<"online" | "offline" | "unknown">("unknown");
   const [summaries, setSummaries] = useState<Record<number, AssignmentSummary>>({});
-  const [hoveredRow, setHoveredRow] = useState<string | null>(null);
   const [hoveredAssignmentId, setHoveredAssignmentId] = useState<number | null>(null);
   const rescanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [logModal, setLogModal] = useState<{ assignmentId: number; elementRef: string; label: string } | null>(null);
+  const [elementModal, setElementModal] = useState<SubmissionElementStatusEntry | null>(null);
   const [logEntries, setLogEntries] = useState<SubmissionUploadLogEntry[]>([]);
   const [logLoading, setLogLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -467,13 +518,31 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
     }
   }
 
-  async function openLog(assignmentId: number, elementRef: string, label: string) {
-    setLogModal({ assignmentId, elementRef, label });
+  async function downloadFile(url: string, filename: string) {
+    try {
+      const { browserApiBaseUrl } = await import("@/lib/api/client");
+      const absoluteUrl = url.startsWith("http") ? url : `${browserApiBaseUrl}${url}`;
+      const res = await fetch(absoluteUrl, { credentials: "include" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Download fehlgeschlagen", "error");
+    }
+  }
+
+  async function openElementModal(assignmentId: number, element: SubmissionElementStatusEntry) {
+    setElementModal(element);
     setLogEntries([]);
     setLogLoading(true);
     try {
       const data = await browserApiFetch<SubmissionUploadLogEntry[]>(
-        `/api/submission-assignments/${assignmentId}/upload-log?element_ref=${encodeURIComponent(elementRef)}`
+        `/api/submission-assignments/${assignmentId}/upload-log?element_ref=${encodeURIComponent(element.element_ref)}`
       );
       setLogEntries(data);
     } catch {
@@ -490,6 +559,7 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
         { method: "POST" }
       );
       setElements((current) => current.map((el) => (el.element_ref === elementRef ? updated : el)));
+      setElementModal((current) => (current?.element_ref === elementRef ? updated : current));
       showToast("Element wieder aufgeschaltet", "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Element konnte nicht wieder aufgeschaltet werden", "error");
@@ -500,112 +570,86 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
   const hasPendingFiles = elements.some((el) => el.files.some((f) => f.scan_status === "pending"));
 
   return (
-    <div className="grid">
+    <div className="grid subm-root">
       {/* Toolbar — always visible, including ClamAV status */}
       <DataToolbar
         title="Abgaben"
         description="Externe Abgaben ohne Anmeldung — gekoppelt an Termine oder eine Liste."
         actions={
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-              <span style={{
-                width: 7, height: 7, borderRadius: "50%", flexShrink: 0, display: "inline-block",
-                background: clamavStatus === "online" ? "var(--success, #22c55e)" : clamavStatus === "offline" ? "var(--danger, #ef4444)" : "var(--border)",
-              }} />
-              <span style={{ fontSize: "0.78rem", color: "var(--text-muted)", whiteSpace: "nowrap" }}>
-                ClamAV {clamavStatus === "online" ? "Online" : clamavStatus === "offline" ? "Offline" : "…"}
-              </span>
-            </div>
-            <button type="button" className="button-inline" onClick={openCreate}>
-              Neue Abgabe
+          <div className="subm-toolbar-actions">
+            <span className={`subm-clamav subm-clamav-${clamavStatus}`}>
+              <span className="subm-clamav-dot" />
+              ClamAV {clamavStatus === "online" ? "Online" : clamavStatus === "offline" ? "Offline" : "…"}
+            </span>
+            <button type="button" className="button-inline subm-new-button" onClick={openCreate}>
+              <PlusIcon /> Neue Abgabe
             </button>
           </div>
         }
       />
 
       {/* Split layout */}
-      <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 0, alignItems: "start" }}>
+      <div className="subm-layout">
 
         {/* Left sidebar — assignment list */}
-        <div style={{ borderRight: "1px solid var(--border)", paddingRight: 16, display: "flex", flexDirection: "column", minHeight: "calc(100vh - 180px)" }}>
+        <aside className="subm-sidebar">
           <input
+            className="subm-search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Abgaben suchen…"
-            style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid var(--border)", backgroundColor: "transparent", color: "var(--text)", fontSize: "0.88rem", minHeight: 0, outline: "none", width: "100%", boxSizing: "border-box", marginBottom: 8 }}
           />
 
-          <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 2 }}>
+          <div className="subm-sidebar-list">
             {filteredAssignments.length === 0 ? (
-              <span style={{ fontSize: "0.85rem", color: "var(--muted)", padding: "6px 4px", display: "block" }}>
+              <span className="subm-sidebar-empty">
                 {assignments.length === 0 ? "Noch keine Abgaben" : "Keine Treffer"}
               </span>
-            ) : filteredAssignments.map((assignment) => {
+            ) : filteredAssignments.map((assignment, index) => {
               const isSelected = selectedId === assignment.id;
               const isHovered = hoveredAssignmentId === assignment.id;
               return (
                 <div
                   key={assignment.id}
-                  style={{ position: "relative" }}
+                  className="subm-sidebar-item"
+                  style={{ animationDelay: `${Math.min(index, 12) * 28}ms` }}
                   onMouseEnter={() => setHoveredAssignmentId(assignment.id)}
                   onMouseLeave={() => setHoveredAssignmentId(null)}
                 >
                   <button
                     type="button"
                     onClick={() => void loadElements(assignment.id)}
-                    style={{
-                      display: "block",
-                      width: "100%",
-                      textAlign: "left",
-                      padding: "9px 10px",
-                      paddingRight: isHovered && !isSelected ? 64 : 10,
-                      paddingBottom: 6,
-                      borderRadius: 8,
-                      border: "none",
-                      background: isSelected ? "var(--accent)" : isHovered ? "color-mix(in srgb, var(--accent) 8%, transparent)" : "none",
-                      color: isSelected ? "#fff" : "var(--text)",
-                      cursor: "pointer",
-                      minHeight: 0,
-                      transition: "background 0.12s",
-                    }}
+                    className={`subm-sidebar-item-button${isSelected ? " subm-sidebar-item-active" : ""}${isHovered && !isSelected ? " subm-sidebar-item-hover-actions" : ""}`}
                   >
-                    <div style={{ fontSize: "0.9rem", fontWeight: isSelected ? 600 : 500, lineHeight: 1.3 }}>
+                    <div className="subm-sidebar-item-title">
                       {assignment.title}
                     </div>
-                    <div style={{ marginTop: 2, display: "flex", gap: 5, alignItems: "center" }}>
-                      <span style={{
-                        fontSize: "0.68rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em",
-                        color: isSelected ? "rgba(255,255,255,0.7)" : "var(--text-muted)",
-                      }}>
+                    <div className="subm-sidebar-item-meta">
+                      <span className="subm-sidebar-item-type">
                         {assignment.source_type === "events" ? "Termine" : "Liste"}
                       </span>
                       {!assignment.is_active && (
-                        <span style={{
-                          fontSize: "0.65rem", fontWeight: 600, textTransform: "uppercase",
-                          color: isSelected ? "rgba(255,255,255,0.6)" : "var(--text-muted)",
-                        }}>
-                          · Inaktiv
-                        </span>
+                        <span className="subm-sidebar-item-inactive">· Inaktiv</span>
                       )}
                     </div>
-                    <div style={{ opacity: isSelected ? 0.85 : 1 }}>
-                      <SummaryBar summary={summaries[assignment.id]} />
-                    </div>
+                    <SummaryBar summary={summaries[assignment.id]} />
                   </button>
 
                   {isHovered && !isSelected && (
-                    <div style={{ position: "absolute", top: "50%", right: 4, transform: "translateY(-50%)", display: "flex", gap: 2, zIndex: 1 }}>
+                    <div className="subm-sidebar-item-actions">
                       <button
                         type="button"
+                        className="subm-sidebar-icon-button"
                         onClick={(e) => { e.stopPropagation(); openEdit(assignment); }}
-                        style={{ padding: "3px 6px", background: "var(--panel-solid)", border: "1px solid var(--border)", borderRadius: 5, cursor: "pointer", color: "var(--text)", fontSize: "0.72rem", minHeight: 0, lineHeight: 1 }}
+                        aria-label="Bearbeiten"
                       >
                         ✎
                       </button>
                       <button
                         type="button"
+                        className="subm-sidebar-icon-button subm-sidebar-icon-button-danger"
                         onClick={(e) => { e.stopPropagation(); void deleteAssignment(assignment.id); }}
-                        style={{ padding: "3px 6px", background: "var(--panel-solid)", border: "1px solid var(--border)", borderRadius: 5, cursor: "pointer", color: "var(--danger)", fontSize: "0.72rem", minHeight: 0, lineHeight: 1 }}
+                        aria-label="Löschen"
                       >
                         ×
                       </button>
@@ -615,126 +659,102 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
               );
             })}
           </div>
-        </div>
+        </aside>
 
         {/* Right panel — elements */}
-        <div style={{ paddingLeft: 20, minWidth: 0 }}>
+        <section className="subm-panel">
           {selectedId === null ? (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 240, color: "var(--text-muted)", fontSize: "0.9rem" }}>
+            <div className="subm-panel-empty">
+              <div className="subm-panel-empty-icon">
+                <FileIcon />
+              </div>
               Abgabe auswählen
             </div>
           ) : (
-            <>
+            <div key={selectedId} className="subm-panel-content">
               {/* Panel header */}
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <span className="eyebrow" style={{ margin: 0 }}>{selectedAssignment?.title}</span>
-                    {hasPendingFiles && (
-                      <span className="pill pill-sm pill-warning" style={{ animation: "pulse 2s infinite" }}>
-                        Dateien in Quarantäne
-                      </span>
-                    )}
-                  </div>
+              <div className="subm-panel-header">
+                <div className="subm-panel-heading">
+                  <h2 className="subm-panel-title">{selectedAssignment?.title}</h2>
+                  {hasPendingFiles && (
+                    <span className="pill pill-sm pill-warning subm-pulse">
+                      Dateien in Quarantäne
+                    </span>
+                  )}
                 </div>
                 <button
                   type="button"
-                  className={`pdf-icon-link pdf-icon-link-success${zipLoading ? " pdf-icon-disabled" : ""}`}
+                  className="subm-zip-button"
                   onClick={() => void downloadZip(selectedId)}
                   disabled={zipLoading}
                   title="Alle geprüften Dateien als ZIP herunterladen"
-                  style={{ flexShrink: 0, width: "auto", minWidth: 56, minHeight: 0, padding: "0 14px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
                 >
-                  {zipLoading ? "…" : "ZIP"}
+                  <DownloadIcon /> {zipLoading ? "…" : "ZIP"}
                 </button>
               </div>
 
               {/* Elements table */}
               {elementsLoading ? (
-                <p className="muted">Lädt…</p>
+                <div className="subm-table-box subm-skeleton-box">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="subm-skeleton-row" style={{ animationDelay: `${i * 90}ms` }} />
+                  ))}
+                </div>
               ) : elements.length === 0 ? (
                 <p className="muted">Keine Elemente gefunden.</p>
               ) : (
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.88rem" }}>
+                <div className="subm-table-box">
+                  <table className="subm-table">
                     <thead>
                       <tr>
-                        {["Element", "Verantwortlich", "Fenster/Frist", "Status", "Dateien", "Aktion"].map((col) => (
-                          <th key={col} style={{ textAlign: "left", padding: "6px 10px", borderBottom: "2px solid var(--border)", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap" }}>
-                            {col}
-                          </th>
+                        {["Element", "Verantwortlich", "Fenster/Frist", "Status", "Dateien"].map((col) => (
+                          <th key={col}>{col}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {elements.map((element) => {
-                        const isHov = hoveredRow === element.element_ref;
+                      {elements.map((element, rowIndex) => {
+                        const responsibleName = element.responsible_participant_id
+                          ? (availableParticipants.find((p) => p.id === element.responsible_participant_id)?.display_name ?? `#${element.responsible_participant_id}`)
+                          : null;
                         return (
                           <tr
                             key={element.element_ref}
-                            onMouseEnter={() => setHoveredRow(element.element_ref)}
-                            onMouseLeave={() => setHoveredRow(null)}
-                            style={{ background: isHov ? "color-mix(in srgb, var(--accent, #6366f1) 5%, transparent)" : "transparent", transition: "background 0.1s" }}
+                            className="subm-table-row subm-table-row-clickable"
+                            style={{ animationDelay: `${Math.min(rowIndex, 14) * 25}ms` }}
+                            onClick={() => void openElementModal(selectedId, element)}
                           >
-                            <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--border)" }}>
-                              <strong style={{ fontWeight: 500 }}>{element.label}</strong>
+                            <td className="subm-element-title">{element.label}</td>
+                            <td>
+                              {responsibleName ? (
+                                <span className="subm-responsible">
+                                  <span className="subm-avatar">{initials(responsibleName)}</span>
+                                  {responsibleName}
+                                </span>
+                              ) : (
+                                <span className="subm-empty-cell">—</span>
+                              )}
                             </td>
-                            <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--border)", color: "var(--text-muted)", whiteSpace: "nowrap" }}>
-                              {element.responsible_participant_id
-                                ? (availableParticipants.find((p) => p.id === element.responsible_participant_id)?.display_name ?? `#${element.responsible_participant_id}`)
-                                : "—"}
-                            </td>
-                            <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--border)", color: "var(--text-muted)", whiteSpace: "nowrap", fontSize: "0.82rem" }}>
+                            <td className="subm-window-cell">
                               {element.window_start && element.window_end
                                 ? `${element.window_start} – ${element.window_end}`
                                 : element.window_end ?? "—"}
                             </td>
-                            <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" }}>
+                            <td className="subm-status-cell">
                               {statusClass(element) ? (
                                 <span className={`pill pill-sm ${statusClass(element)}`}>{statusLabel(element)}</span>
                               ) : (
-                                <span style={{ color: "var(--text-muted)", fontSize: "0.82rem" }}>{statusLabel(element)}</span>
+                                <span className="subm-empty-cell">{statusLabel(element)}</span>
                               )}
                             </td>
-                            <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--border)" }}>
-                              {element.files.length === 0
-                                ? <span style={{ color: "var(--text-muted)" }}>—</span>
-                                : element.files.map((file) => (
-                                    <div key={file.id} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                                      {file.scan_status === "clean" ? (
-                                        <a href={file.content_url} target="_blank" rel="noreferrer" style={{ fontSize: "0.85rem" }}>
-                                          {file.original_name}
-                                        </a>
-                                      ) : (
-                                        <span style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>{file.original_name}</span>
-                                      )}
-                                      <span className={`pill pill-sm ${SCAN_STATUS_CLASS[file.scan_status] ?? ""}`}>
-                                        {SCAN_STATUS_LABEL[file.scan_status] ?? file.scan_status}
-                                      </span>
-                                    </div>
-                                  ))}
-                            </td>
-                            <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" }}>
-                              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                                {element.status === "submitted" ? (
-                                  <button
-                                    type="button"
-                                    className="button-inline"
-                                    style={{ fontSize: "0.78rem", padding: "3px 9px" }}
-                                    onClick={() => void reopenElement(selectedId, element.element_ref)}
-                                  >
-                                    Wieder aufschalten
-                                  </button>
-                                ) : null}
-                                <button
-                                  type="button"
-                                  className="button-inline button-ghost"
-                                  style={{ fontSize: "0.78rem", padding: "3px 9px" }}
-                                  onClick={() => void openLog(selectedId, element.element_ref, element.label)}
-                                >
-                                  Log
-                                </button>
-                              </div>
+                            <td className="subm-status-cell">
+                              {element.files.length === 0 ? (
+                                <span className="subm-empty-cell">—</span>
+                              ) : (
+                                <span className="subm-file-count">
+                                  <FileIcon /> {element.files.length}
+                                </span>
+                              )}
                             </td>
                           </tr>
                         );
@@ -743,51 +763,126 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
                   </table>
                 </div>
               )}
-            </>
+            </div>
           )}
-        </div>
+        </section>
       </div>
 
-      {/* Upload-Log Modal */}
+      {/* Element detail popup — files + log combined */}
       <Modal
-        open={logModal !== null}
-        onClose={() => setLogModal(null)}
-        title={`Upload-Log — ${logModal?.label ?? ""}`}
+        open={elementModal !== null}
+        onClose={() => setElementModal(null)}
+        title={elementModal?.label ?? "Element"}
+        size="wide"
       >
-        <div style={{ minWidth: 480, maxWidth: 640 }}>
-          {logLoading ? (
-            <p className="muted">Lädt…</p>
-          ) : logEntries.length === 0 ? (
-            <p className="muted">Keine Einträge vorhanden.</p>
-          ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: "left", padding: "4px 8px", borderBottom: "1px solid var(--border)", color: "var(--text-muted)", fontWeight: 600 }}>Zeitpunkt</th>
-                  <th style={{ textAlign: "left", padding: "4px 8px", borderBottom: "1px solid var(--border)", color: "var(--text-muted)", fontWeight: 600 }}>Status</th>
-                  <th style={{ textAlign: "left", padding: "4px 8px", borderBottom: "1px solid var(--border)", color: "var(--text-muted)", fontWeight: 600 }}>Details</th>
-                </tr>
-              </thead>
-              <tbody>
-                {logEntries.map((entry) => (
-                  <tr key={entry.id}>
-                    <td style={{ padding: "6px 8px", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap", color: "var(--text-muted)" }}>
-                      {new Date(entry.created_at).toLocaleString("de-CH")}
-                    </td>
-                    <td style={{ padding: "6px 8px", borderBottom: "1px solid var(--border)" }}>
-                      <span className={`pill pill-sm ${LOG_STATUS_CLASS[entry.status] ?? ""}`}>
-                        {LOG_STATUS_LABEL[entry.status] ?? entry.status}
-                      </span>
-                    </td>
-                    <td style={{ padding: "6px 8px", borderBottom: "1px solid var(--border)", color: "var(--text-muted)" }}>
-                      {entry.error_message ?? "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+        {elementModal ? (
+          <div className="grid subm-element-modal">
+            <div className="status-row">
+              {statusClass(elementModal) ? (
+                <span className={`pill pill-sm ${statusClass(elementModal)}`}>{statusLabel(elementModal)}</span>
+              ) : (
+                <span className="pill pill-sm">{statusLabel(elementModal)}</span>
+              )}
+              {elementModal.window_start && elementModal.window_end ? (
+                <span className="subm-modal-meta">{elementModal.window_start} – {elementModal.window_end}</span>
+              ) : elementModal.window_end ? (
+                <span className="subm-modal-meta">Frist: {elementModal.window_end}</span>
+              ) : null}
+              {elementModal.responsible_participant_id ? (() => {
+                const name = availableParticipants.find((p) => p.id === elementModal.responsible_participant_id)?.display_name
+                  ?? `#${elementModal.responsible_participant_id}`;
+                return (
+                  <span className="subm-responsible">
+                    <span className="subm-avatar">{initials(name)}</span>
+                    {name}
+                  </span>
+                );
+              })() : null}
+            </div>
+
+            <div className="subm-modal-section">
+              <div className="subm-modal-section-title">Dateien</div>
+              {elementModal.files.length === 0 ? (
+                <p className="muted">Keine Dateien vorhanden.</p>
+              ) : (
+                <div className="subm-file-list subm-file-list-modal">
+                  {elementModal.files.map((file) => (
+                    <div key={file.id} className="subm-file-row">
+                      <span className="subm-file-icon"><FileIcon /></span>
+                      {file.scan_status === "clean" ? (
+                        <a href={file.content_url} target="_blank" rel="noreferrer" className="subm-file-link">
+                          {file.original_name}
+                        </a>
+                      ) : (
+                        <span className="subm-file-name-muted">{file.original_name}</span>
+                      )}
+                      {file.scan_status === "clean" ? (
+                        <>
+                          <span className="subm-verified" title="Geprüft">
+                            <VerifiedIcon />
+                          </span>
+                          <button
+                            type="button"
+                            className="subm-file-download-button"
+                            title="Datei herunterladen"
+                            onClick={() => void downloadFile(file.content_url, file.original_name)}
+                          >
+                            <DownloadIcon />
+                          </button>
+                        </>
+                      ) : (
+                        <span className={`pill pill-sm ${SCAN_STATUS_CLASS[file.scan_status] ?? ""}`}>
+                          {SCAN_STATUS_LABEL[file.scan_status] ?? file.scan_status}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {elementModal.status === "submitted" ? (
+              <div className="table-toolbar-actions">
+                <button
+                  type="button"
+                  className="button-ghost button-inline subm-reopen-button"
+                  onClick={() => selectedId && void reopenElement(selectedId, elementModal.element_ref)}
+                >
+                  Wieder aufschalten
+                </button>
+              </div>
+            ) : null}
+
+            <div className="subm-modal-section">
+              <div className="subm-modal-section-title">Log</div>
+              {logLoading ? (
+                <p className="muted">Lädt…</p>
+              ) : logEntries.length === 0 ? (
+                <p className="muted">Keine Einträge vorhanden.</p>
+              ) : (
+                <div className="subm-log-list">
+                  {logEntries.map((entry) => {
+                    const tone = (LOG_STATUS_CLASS[entry.status] ?? "").replace("pill-", "") || "neutral";
+                    return (
+                      <div key={entry.id} className={`subm-log-entry subm-log-entry-${tone}`}>
+                        <span className="subm-log-dot" />
+                        <div className="subm-log-body">
+                          <div className="subm-log-header">
+                            <span className={`pill pill-sm ${LOG_STATUS_CLASS[entry.status] ?? ""}`}>
+                              {LOG_STATUS_LABEL[entry.status] ?? entry.status}
+                            </span>
+                            <span className="subm-log-time">{new Date(entry.created_at).toLocaleString("de-CH")}</span>
+                          </div>
+                          {entry.error_message ? <div className="subm-log-detail">{entry.error_message}</div> : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : null}
       </Modal>
 
       {/* Create/Edit Modal */}

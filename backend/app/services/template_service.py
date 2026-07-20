@@ -1,6 +1,9 @@
+import copy
+
 from sqlalchemy.orm import Session
 
-from app.models import Participant, Template
+from app.models import Participant, Template, TemplateElement
+from app.repositories.template_element_repository import TemplateElementRepository
 from app.repositories.template_repository import TemplateRepository
 from app.schemas.participant import TemplateParticipantAssignmentRead
 from app.services.access_service import AccessService
@@ -9,8 +12,13 @@ from app.schemas.template import TemplateCreate, TemplateUpdate
 
 
 class TemplateService:
-    def __init__(self, repository: TemplateRepository | None = None) -> None:
+    def __init__(
+        self,
+        repository: TemplateRepository | None = None,
+        template_element_repository: TemplateElementRepository | None = None,
+    ) -> None:
         self.repository = repository or TemplateRepository()
+        self.template_element_repository = template_element_repository or TemplateElementRepository()
         self.access_service = AccessService()
         self.document_template_service = DocumentTemplateService()
 
@@ -74,6 +82,57 @@ class TemplateService:
             return False
         self.repository.delete(db, template)
         return True
+
+    def duplicate_template(self, db: Session, template_id: int, *, new_name: str, created_by: int | None) -> Template | None:
+        source = self.repository.get(db, template_id)
+        if source is None:
+            return None
+
+        duplicate = Template(
+            tenant_id=source.tenant_id,
+            document_template_id=source.document_template_id,
+            next_event_id=source.next_event_id,
+            last_event_id=source.last_event_id,
+            todo_due_event_tag=source.todo_due_event_tag,
+            name=new_name,
+            description=source.description,
+            protocol_number_pattern=source.protocol_number_pattern,
+            title_pattern=source.title_pattern,
+            auto_create_next_protocol=source.auto_create_next_protocol,
+            cycle_config_id=source.cycle_config_id,
+            version=1,
+            status=source.status,
+            created_by=created_by,
+        )
+        created = self.repository.create(db, duplicate)
+
+        # Elements stay within the same tenant, so element_definition_id and any participant/list
+        # references embedded in configuration_json (e.g. responsibility assignments) remain valid
+        # as-is - no remapping needed, unlike a cross-tenant clone.
+        for template_element, _definition in self.template_element_repository.list_for_template(db, template_id):
+            db.add(
+                TemplateElement(
+                    template_id=created.id,
+                    element_definition_id=template_element.element_definition_id,
+                    sort_index=template_element.sort_index,
+                    section_name=template_element.section_name,
+                    section_order=template_element.section_order,
+                    is_required=template_element.is_required,
+                    is_visible=template_element.is_visible,
+                    export_visible=template_element.export_visible,
+                    configuration_json=copy.deepcopy(template_element.configuration_json or {}),
+                )
+            )
+        db.commit()
+
+        assignments = [
+            (participant.id, exclude_from_attendance)
+            for participant, exclude_from_attendance in self.repository.list_participant_assignments(db, template_id)
+        ]
+        if assignments:
+            self.repository.replace_participants(db, created.id, assignments)
+
+        return created
 
     def _serialize_template_participants(self, rows: list[tuple[Participant, bool]]) -> list[dict[str, object]]:
         return [

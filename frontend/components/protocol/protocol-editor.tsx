@@ -18,7 +18,7 @@ import { CollaborationPresenceBar, LockBadge } from "@/components/protocol/colla
 import { useProtocolCollaboration } from "@/lib/hooks/use-protocol-collaboration";
 import { useTagConfig } from "@/lib/hooks/use-tag-config";
 import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
-import { formatDate, formatDateRange } from "@/lib/utils/format";
+import { formatDate, formatDateRange, formatDateTime } from "@/lib/utils/format";
 import { getCycleYear } from "@/lib/utils/cycle";
 import {
   AttendanceFine,
@@ -579,6 +579,7 @@ function MatrixEmbeddedBlockEditor({
   deleteEvent,
   currentCycleYear,
   cycleConfigId,
+  onEventContextMenu,
 }: {
   embeddedBlock: MatrixEmbeddedBlock;
   protocol: ProtocolSummary;
@@ -593,6 +594,7 @@ function MatrixEmbeddedBlockEditor({
   deleteEvent: (eventId: number) => Promise<void>;
   currentCycleYear: number | null;
   cycleConfigId: number | null;
+  onEventContextMenu: (nativeEvent: React.MouseEvent, eventRow: EventSummary) => void;
 }) {
   const elementTypeId = Number(embeddedBlock.element_type_id ?? 0);
   const embeddedConfig = asObject(embeddedBlock.configuration_snapshot_json);
@@ -620,6 +622,7 @@ function MatrixEmbeddedBlockEditor({
     showTitle: embeddedConfig.event_show_title !== false,
     showDescription: embeddedConfig.event_show_description !== false,
     showParticipantCount: embeddedConfig.event_show_participant_count === true,
+    showCancelled: embeddedConfig.event_show_cancelled === true,
   };
   if (
     !embeddedEventColumns.showDate &&
@@ -989,13 +992,23 @@ function MatrixEmbeddedBlockEditor({
             <div className="form-block-list">
               {rows.map((row, index) => {
                 const rowType = String(row.value_type ?? row.row_type ?? "text");
-                const rowValue =
+                const referencedEvent = rowType === "event" ? sortedEvents.find((entry) => entry.id === Number(row.event_id ?? 0)) : undefined;
+                const rowValue: ReactNode =
                   rowType === "participant"
                     ? participantNameById(row.participant_id)
                     : rowType === "participants"
                     ? embeddedParticipantSummary(row)
                     : rowType === "event"
-                    ? eventLabelById(row.event_id)
+                    ? referencedEvent
+                      ? (
+                        <span
+                          className={referencedEvent.is_cancelled ? "event-ref-cancelled" : undefined}
+                          onContextMenu={(nativeEvent) => onEventContextMenu(nativeEvent, referencedEvent)}
+                        >
+                          {eventLabelById(row.event_id)}
+                        </span>
+                      )
+                      : "—"
                     : String(row.text_value ?? "").trim() || "—";
                 return (
                   <div className="form-block-row" key={String(row.id ?? index)}>
@@ -1184,6 +1197,7 @@ function MatrixEmbeddedBlockEditor({
                   {embeddedEventColumns.showTitle ? <th>Titel</th> : null}
                   {embeddedEventColumns.showDescription ? <th>Beschreibung</th> : null}
                   {embeddedEventColumns.showParticipantCount ? <th className="event-column-count">TN</th> : null}
+                  {embeddedEventColumns.showCancelled ? <th>Abgesagt</th> : null}
                   {editable ? (
                     <th className="event-column-actions" aria-label="Aktionen">
                       <button
@@ -1282,6 +1296,7 @@ function MatrixEmbeddedBlockEditor({
                         />
                       </td>
                     ) : null}
+                    {embeddedEventColumns.showCancelled ? <td /> : null}
                     {editable ? (
                       <td>
                         <div className="event-row-actions">
@@ -1303,8 +1318,13 @@ function MatrixEmbeddedBlockEditor({
                   const effectiveEndDate = eventRow.event_end_date || eventRow.event_date;
                   const isPast = !!protocol.protocol_date && effectiveEndDate < protocol.protocol_date;
                   const editableEventRow = embeddedEventDraftValue(eventRow);
+                  const showCancelledStyle = embeddedEventColumns.showCancelled && eventRow.is_cancelled;
                   return (
-                    <tr key={eventRow.id} className={isPast && embeddedConfig.event_gray_past !== false ? "event-row-past" : ""}>
+                    <tr
+                      key={eventRow.id}
+                      className={`${isPast && embeddedConfig.event_gray_past !== false ? "event-row-past" : ""}${showCancelledStyle ? " event-row-cancelled" : ""}`}
+                      onContextMenu={(nativeEvent) => onEventContextMenu(nativeEvent, eventRow)}
+                    >
                       {embeddedEventColumns.showDate ? (
                         <td>
                           {editable ? (
@@ -1383,6 +1403,11 @@ function MatrixEmbeddedBlockEditor({
                           )}
                         </td>
                       ) : null}
+                      {embeddedEventColumns.showCancelled ? (
+                        <td>
+                          {eventRow.is_cancelled ? <span className="pill pill-error">Abgesagt</span> : <span className="muted">–</span>}
+                        </td>
+                      ) : null}
                       {editable ? (
                         <td>
                           <div className="event-row-actions">
@@ -1409,6 +1434,7 @@ function MatrixEmbeddedBlockEditor({
                         Number(embeddedEventColumns.showTitle) +
                         Number(embeddedEventColumns.showDescription) +
                         Number(embeddedEventColumns.showParticipantCount) +
+                        Number(embeddedEventColumns.showCancelled) +
                         Number(editable)
                       }
                     >
@@ -1651,6 +1677,32 @@ export function ProtocolEditor({
   const router = useRouter();
   const [elements, setElements] = useState(initialElements);
   const [events, setEvents] = useState(availableEvents);
+  const [eventContextMenu, setEventContextMenu] = useState<{ x: number; y: number; eventRow: EventSummary; blockId: number } | null>(null);
+
+  useEffect(() => {
+    if (!eventContextMenu) return;
+    function onPointerDown(nativeEvent: MouseEvent) {
+      const target = nativeEvent.target as Node;
+      if (!document.getElementById("event-context-menu-portal")?.contains(target)) {
+        setEventContextMenu(null);
+      }
+    }
+    function onKeyDown(nativeEvent: KeyboardEvent) {
+      if (nativeEvent.key === "Escape") setEventContextMenu(null);
+    }
+    function onScroll() {
+      setEventContextMenu(null);
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("scroll", onScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("scroll", onScroll, true);
+    };
+  }, [eventContextMenu]);
+
   const currentTemplate = availableTemplates.find((t) => t.id === protocol.template_id) ?? null;
   const currentCycleYear: number | null = protocol.protocol_date && currentTemplate?.cycle_config
     ? getCycleYear(protocol.protocol_date, currentTemplate.cycle_config.reset_month, currentTemplate.cycle_config.reset_day)
@@ -2261,6 +2313,19 @@ export function ProtocolEditor({
     }
   }
 
+  function openEventContextMenu(nativeEvent: React.MouseEvent, eventRow: EventSummary, protocolElementBlockId: number) {
+    nativeEvent.preventDefault();
+    nativeEvent.stopPropagation();
+    setEventContextMenu({ x: nativeEvent.clientX, y: nativeEvent.clientY, eventRow, blockId: protocolElementBlockId });
+  }
+
+  async function toggleEventCancelledFromContextMenu() {
+    if (!eventContextMenu) return;
+    const { eventRow, blockId } = eventContextMenu;
+    setEventContextMenu(null);
+    await updateEventFromBlock(blockId, eventRow.id, { is_cancelled: !eventRow.is_cancelled });
+  }
+
   async function createListEntryFromBlock(
     protocolElementBlockId: number,
     listDefinitionId: number,
@@ -2529,6 +2594,7 @@ export function ProtocolEditor({
               createEventFromBlock={createEventFromBlock}
               updateEventFromBlock={updateEventFromBlock}
               deleteEventFromBlock={deleteEventFromBlock}
+              onEventContextMenu={openEventContextMenu}
               uploadImage={uploadImage}
               deleteImage={deleteImage}
               listDefinitionsById={listDefinitionsById}
@@ -2620,6 +2686,19 @@ export function ProtocolEditor({
         />
       )}
 
+      {eventContextMenu && typeof document !== "undefined" && createPortal(
+        <div
+          id="event-context-menu-portal"
+          className="mini-menu-popover-portal"
+          style={smartPopoverStyle(new DOMRect(eventContextMenu.x, eventContextMenu.y, 0, 0), 220, "start", 80)}
+          role="menu"
+        >
+          <button type="button" className="mini-menu-option" onClick={() => void toggleEventCancelledFromContextMenu()}>
+            {eventContextMenu.eventRow.is_cancelled ? "Absage aufheben" : "Als abgesagt markieren"}
+          </button>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
@@ -2660,6 +2739,7 @@ function FocusedElementEditor({
   createEventFromBlock,
   updateEventFromBlock,
   deleteEventFromBlock,
+  onEventContextMenu,
   uploadImage,
   deleteImage,
   listDefinitionsById,
@@ -2717,6 +2797,7 @@ function FocusedElementEditor({
   createEventFromBlock: (protocolElementBlockId: number, blockConfig: Record<string, any>, draftOverride?: ProtocolEventDraft) => Promise<boolean>;
   updateEventFromBlock: (protocolElementBlockId: number, eventId: number, patch: Partial<EventSummary>) => Promise<boolean>;
   deleteEventFromBlock: (protocolElementBlockId: number, eventId: number) => Promise<void>;
+  onEventContextMenu: (nativeEvent: React.MouseEvent, eventRow: EventSummary, protocolElementBlockId: number) => void;
   uploadImage: (protocolElementBlockId: number) => Promise<void>;
   deleteImage: (protocolElementBlockId: number, imageId: number) => Promise<void>;
   listDefinitionsById: Map<number, StructuredListDefinition>;
@@ -3098,6 +3179,7 @@ function FocusedElementEditor({
       showTitle: blockConfig.event_show_title !== false,
       showDescription: blockConfig.event_show_description !== false,
       showParticipantCount: blockConfig.event_show_participant_count === true,
+      showCancelled: blockConfig.event_show_cancelled === true,
     };
     if (!columns.showDate && !columns.showTag && !columns.showTitle && !columns.showDescription && !columns.showParticipantCount) {
       columns.showTitle = true;
@@ -4399,6 +4481,7 @@ function FocusedElementEditor({
                                             deleteEvent={(eventId) => deleteEventFromBlock(block.id, eventId)}
                                             currentCycleYear={currentCycleYear}
                                             cycleConfigId={focusedTemplate?.cycle_config_id ?? null}
+                                            onEventContextMenu={(nativeEvent, eventRow) => onEventContextMenu(nativeEvent, eventRow, block.id)}
                                           />
                                           {cellEditable ? (
                                             <div className="matrix-row-summary muted">
@@ -4504,6 +4587,7 @@ function FocusedElementEditor({
                           {editableEventColumns?.showTitle ? <th>Titel</th> : null}
                           {editableEventColumns?.showDescription ? <th>Beschreibung</th> : null}
                           {editableEventColumns?.showParticipantCount ? <th className="event-column-count">TN</th> : null}
+                          {editableEventColumns?.showCancelled ? <th>Abgesagt</th> : null}
                           {blockEditable ? (
                             <th className="event-column-actions" aria-label="Aktionen">
                               <button
@@ -4599,6 +4683,7 @@ function FocusedElementEditor({
                                 />
                               </td>
                             ) : null}
+                            {editableEventColumns?.showCancelled ? <td /> : null}
                             {blockEditable ? (
                               <td>
                                 <div className="event-row-actions">
@@ -4621,11 +4706,13 @@ function FocusedElementEditor({
                             const effectiveEndDate = eventRow.event_end_date || eventRow.event_date;
                             const isPast = !!protocol.protocol_date && effectiveEndDate < protocol.protocol_date;
                             const editableEventRow = eventDraftValue(eventRow);
+                            const showCancelledStyle = editableEventColumns?.showCancelled && eventRow.is_cancelled;
                             return (
                               <tr
                                 key={eventRow.id}
-                                className={isPast && blockConfig.event_gray_past !== false ? "event-row-past" : ""}
+                                className={`${isPast && blockConfig.event_gray_past !== false ? "event-row-past" : ""}${showCancelledStyle ? " event-row-cancelled" : ""}`}
                                 data-upcoming={rowIndex === firstUpcomingIndex ? "true" : undefined}
+                                onContextMenu={(nativeEvent) => onEventContextMenu(nativeEvent, eventRow, block.id)}
                               >
                                 {editableEventColumns?.showDate ? (
                                   <td>
@@ -4753,6 +4840,11 @@ function FocusedElementEditor({
                                     )}
                                   </td>
                                 ) : null}
+                                {editableEventColumns?.showCancelled ? (
+                                  <td>
+                                    {eventRow.is_cancelled ? <span className="pill pill-error">Abgesagt</span> : <span className="muted">–</span>}
+                                  </td>
+                                ) : null}
                                 {blockEditable ? (
                                   <td>
                                     <div className="event-row-actions">
@@ -4772,7 +4864,7 @@ function FocusedElementEditor({
                           })
                         ) : !showNewEventRow ? (
                           <tr>
-                            <td colSpan={Number(editableEventColumns?.showDate) + Number(editableEventColumns?.showTag) + Number(editableEventColumns?.showTitle) + Number(editableEventColumns?.showDescription) + Number(editableEventColumns?.showParticipantCount) + Number(blockEditable)}>
+                            <td colSpan={Number(editableEventColumns?.showDate) + Number(editableEventColumns?.showTag) + Number(editableEventColumns?.showTitle) + Number(editableEventColumns?.showDescription) + Number(editableEventColumns?.showParticipantCount) + Number(editableEventColumns?.showCancelled) + Number(blockEditable)}>
                               <span className="muted">Keine passenden Termine.</span>
                             </td>
                           </tr>
@@ -5032,7 +5124,17 @@ function FocusedElementEditor({
                               <span className="fine-type-label">{fine.fine_type === "late" ? "Verspätet" : "Unentschuldigt"}</span>
                               <span className="fine-amount">{fine.amount.toFixed(2)} {cur}</span>
                               <span className="fine-status">
-                                {isCollected && <span className="todo-pending-resolved">Kassiert</span>}
+                                {isCollected && (
+                                  <>
+                                    <span className="todo-pending-resolved">Kassiert</span>
+                                    {fine.collected_at && (
+                                      <span className="fine-collected-note" style={{ display: "block" }}>
+                                        {formatDateTime(fine.collected_at)}
+                                        {fine.collected_by_display_name ? ` von ${fine.collected_by_display_name}` : ""}
+                                      </span>
+                                    )}
+                                  </>
+                                )}
                               </span>
                               {!isCollected && !isReadOnly ? (
                                 <button
@@ -5084,6 +5186,12 @@ function FocusedElementEditor({
                             {isCollectedElsewhere ? (
                               <span className="todo-closed-elsewhere-badge">Später beglichen</span>
                             ) : isCollected ? "✓ Kassiert" : "Ausstehend"}
+                            {isCollected && fine.collected_at && (
+                              <span className="fine-collected-note" style={{ display: "block" }}>
+                                {formatDateTime(fine.collected_at)}
+                                {fine.collected_by_display_name ? ` von ${fine.collected_by_display_name}` : ""}
+                              </span>
+                            )}
                           </span>
                           {!isCollected && !isReadOnly ? (
                             <button
@@ -5091,7 +5199,10 @@ function FocusedElementEditor({
                               className="fine-action-btn fine-collect-btn"
                               title="Busse kassieren"
                               onClick={async () => {
-                                const updated = await browserApiFetch<AttendanceFine>(`/api/fines/${fine.id}/collect`, { method: "POST" });
+                                const updated = await browserApiFetch<AttendanceFine>(
+                                  `/api/fines/${fine.id}/collect`,
+                                  { method: "POST", body: JSON.stringify({ collecting_protocol_id: protocol.id }) }
+                                );
                                 if (updated) setProtocolFines((prev) => prev.map((f) => f.id === updated.id ? updated : f));
                               }}
                             >✓</button>

@@ -20,6 +20,7 @@ frontend/package-lock.json
 storage/uploads/*
 storage/exports/*
 storage/generated/*
+storage/tenant_clones/*
 
 # Tenant-specific content: ignore all, but keep tenant-1 demo templates
 storage/document_template_parts/tenant-*/

@@ -1,6 +1,7 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
@@ -8,10 +9,60 @@ import { Modal } from "@/components/ui/modal";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useTableSort } from "@/lib/hooks/use-table-sort";
+import { getCycleYear } from "@/lib/utils/cycle";
 import { formatDate, formatDateRange } from "@/lib/utils/format";
-import { CycleAssignment, CycleInfo, DocumentTemplate, EventSummary, ParticipantSummary, TemplateSummary } from "@/types/api";
+import {
+  CycleAssignment,
+  CycleConfigSummary,
+  CycleInfo,
+  DocumentTemplate,
+  EventImportPreview,
+  EventSummary,
+  ParticipantSummary,
+  TemplateSummary,
+} from "@/types/api";
 
 const PAGE_SIZE = 100;
+
+type CsvTargetField = "event_date" | "event_end_date" | "tag" | "title" | "description" | "participant_count";
+
+const CSV_TARGET_FIELDS: { field: CsvTargetField; label: string; required?: boolean }[] = [
+  { field: "event_date", label: "Startdatum", required: true },
+  { field: "event_end_date", label: "Enddatum" },
+  { field: "tag", label: "Tag" },
+  { field: "title", label: "Titel", required: true },
+  { field: "description", label: "Beschreibung" },
+  { field: "participant_count", label: "Teilnehmerzahl" },
+];
+
+type OptionalColumnKey =
+  | "is_cancelled"
+  | "participant_count"
+  | "location"
+  | "organizer_ids"
+  | "leadership_ids"
+  | "participant_ids"
+  | "spezial1_ids"
+  | "spezial2_ids"
+  | "spezial3_ids"
+  | "spezial_text1"
+  | "spezial_text2"
+  | "spezial_text3";
+
+const OPTIONAL_COLUMNS: { key: OptionalColumnKey; label: string }[] = [
+  { key: "is_cancelled", label: "Abgesagt" },
+  { key: "participant_count", label: "Teilnehmerzahl" },
+  { key: "location", label: "Standort" },
+  { key: "organizer_ids", label: "Organisatoren" },
+  { key: "leadership_ids", label: "Leitungsteam" },
+  { key: "participant_ids", label: "Teilnehmer (Liste)" },
+  { key: "spezial1_ids", label: "Spezial 1" },
+  { key: "spezial2_ids", label: "Spezial 2" },
+  { key: "spezial3_ids", label: "Spezial 3" },
+  { key: "spezial_text1", label: "Spezial Text 1" },
+  { key: "spezial_text2", label: "Spezial Text 2" },
+  { key: "spezial_text3", label: "Spezial Text 3" },
+];
 
 type Props = {
   initialEvents: EventSummary[];
@@ -40,6 +91,7 @@ type EventFormState = {
   title: string;
   description: string;
   participant_count: string;
+  is_cancelled: boolean;
   cycle_assignments: CycleAssignment[];
   organizer_ids: number[];
   leadership_ids: number[];
@@ -61,6 +113,7 @@ function emptyForm(): EventFormState {
     title: "",
     description: "",
     participant_count: "0",
+    is_cancelled: false,
     cycle_assignments: [],
     organizer_ids: [],
     leadership_ids: [],
@@ -82,11 +135,14 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [search, setSearch] = useState("");
   const [tagFilter, setTagFilter] = useState("all");
+  const [showPast, setShowPast] = useState(true);
   const { sortKey, sortDirection, toggleSort, sortIndicator } = useTableSort<"event_date" | "title" | "tag" | "description" | "participant_count">("event_date");
-  const [showParticipantCount, setShowParticipantCount] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState<Set<OptionalColumnKey>>(new Set());
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<EventFormState>(emptyForm);
   const [todayIso, setTodayIso] = useState("0000-01-01");
+  const [cycleConfigs, setCycleConfigs] = useState<CycleConfigSummary[]>([]);
+  const [showAllPeriods, setShowAllPeriods] = useState(false);
   const [availableCycles, setAvailableCycles] = useState<FlatCycle[]>([]);
   const [cyclesLoading, setCyclesLoading] = useState(false);
   const cyclesLoadedRef = useRef(false);
@@ -94,6 +150,20 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
   const [pickerField, setPickerField] = useState<ParticipantPickerField | null>(null);
   const [pickerSelected, setPickerSelected] = useState<number[]>([]);
   const [pickerSearch, setPickerSearch] = useState("");
+
+  const [eventContextMenu, setEventContextMenu] = useState<{ x: number; y: number; event: EventSummary } | null>(null);
+
+  const [viewMenuOpen, setViewMenuOpen] = useState(false);
+  const [viewMenuStyle, setViewMenuStyle] = useState<React.CSSProperties>({});
+  const viewMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
+
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importColumnMap, setImportColumnMap] = useState<Partial<Record<CsvTargetField, string>>>({});
+  const [importPreview, setImportPreview] = useState<EventImportPreview | null>(null);
+  const [importPreviewLoading, setImportPreviewLoading] = useState(false);
+  const [importCommitting, setImportCommitting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
 
   const landscapeTemplates = documentTemplates.filter(
     (t) => t.is_active && (t.configuration_json as { options?: { orientation?: string } })?.options?.orientation === "landscape"
@@ -196,12 +266,84 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     setTodayIso(new Date().toISOString().slice(0, 10));
   }, []);
 
+  useEffect(() => {
+    browserApiFetch<CycleConfigSummary[]>("/api/cycle-configs")
+      .then((configs) => setCycleConfigs(configs ?? []))
+      .catch(() => setCycleConfigs([]));
+  }, []);
+
+  useEffect(() => {
+    if (!viewMenuOpen || !viewMenuTriggerRef.current) return;
+    const rect = viewMenuTriggerRef.current.getBoundingClientRect();
+    const gap = 6;
+    const margin = 8;
+    const estimatedHeight = 460;
+    const spaceBelow = window.innerHeight - rect.bottom - margin;
+    const spaceAbove = rect.top - margin;
+    const showAbove = spaceBelow < estimatedHeight && spaceAbove > spaceBelow;
+    setViewMenuStyle({
+      position: "fixed",
+      ...(showAbove
+        ? { bottom: window.innerHeight - rect.top + gap, maxHeight: spaceAbove }
+        : { top: rect.bottom + gap, maxHeight: spaceBelow }),
+      right: window.innerWidth - rect.right,
+      minWidth: Math.max(rect.width, 260),
+      zIndex: 9999,
+      overflowY: "auto",
+    });
+  }, [viewMenuOpen]);
+
+  useEffect(() => {
+    function onPointerDown(event: MouseEvent) {
+      const target = event.target as Node;
+      if (
+        !viewMenuTriggerRef.current?.contains(target) &&
+        !document.getElementById("event-view-menu-portal")?.contains(target)
+      ) {
+        setViewMenuOpen(false);
+      }
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setViewMenuOpen(false);
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!eventContextMenu) return;
+    function onPointerDown(event: MouseEvent) {
+      const target = event.target as Node;
+      if (!document.getElementById("event-context-menu-portal")?.contains(target)) {
+        setEventContextMenu(null);
+      }
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setEventContextMenu(null);
+    }
+    function onScroll() {
+      setEventContextMenu(null);
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("scroll", onScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("scroll", onScroll, true);
+    };
+  }, [eventContextMenu]);
+
   async function ensureCyclesLoaded() {
     if (cyclesLoadedRef.current) return;
     cyclesLoadedRef.current = true;
     setCyclesLoading(true);
     try {
-      const configs = await browserApiFetch<import("@/types/api").CycleConfigSummary[]>("/api/cycle-configs");
+      const configs = cycleConfigs.length > 0 ? cycleConfigs : await browserApiFetch<CycleConfigSummary[]>("/api/cycle-configs");
       const cycleGroups = await Promise.all(
         (configs ?? []).map((cfg) =>
           browserApiFetch<CycleInfo[]>(`/api/cycle-configs/${cfg.id}/cycles`).then((cycles) =>
@@ -228,16 +370,29 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
       ).sort((left, right) => left.localeCompare(right)),
     [events]
   );
+  function isInCurrentPeriod(event: EventSummary): boolean {
+    if (!event.cycle_assignments || event.cycle_assignments.length === 0 || cycleConfigs.length === 0) {
+      return true;
+    }
+    return event.cycle_assignments.some((assignment) => {
+      const config = cycleConfigs.find((c) => c.id === assignment.cycle_config_id);
+      if (!config) return true;
+      return assignment.cycle_year === getCycleYear(todayIso, config.reset_month, config.reset_day);
+    });
+  }
+
   const filteredEvents = useMemo(() => {
     const query = search.trim().toLowerCase();
-    const includePast = query.length > 0;
     return [...events]
       .filter((event) => {
-        if (!includePast) {
+        if (!showPast) {
           const effectiveEndDate = event.event_end_date || event.event_date;
           if (effectiveEndDate < todayIso) {
             return false;
           }
+        }
+        if (!showAllPeriods && !isInCurrentPeriod(event)) {
+          return false;
         }
         if (tagFilter !== "all" && (event.tag ?? "") !== tagFilter) {
           return false;
@@ -262,7 +417,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
         const rightValue = String(right[sortKey] ?? "").toLowerCase();
         return leftValue.localeCompare(rightValue) * direction;
       });
-  }, [events, search, sortDirection, sortKey, tagFilter, todayIso]);
+  }, [cycleConfigs, events, search, showAllPeriods, showPast, sortDirection, sortKey, tagFilter, todayIso]);
 
   function openCreate() {
     setForm(emptyForm());
@@ -279,6 +434,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
       title: event.title,
       description: event.description ?? "",
       participant_count: String(event.participant_count ?? 0),
+      is_cancelled: event.is_cancelled ?? false,
       cycle_assignments: event.cycle_assignments ?? [],
       organizer_ids: event.organizer_ids ?? [],
       leadership_ids: event.leadership_ids ?? [],
@@ -315,6 +471,32 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     return names.length ? names.join(", ") : `${ids.length} ausgewählt`;
   }
 
+  function formatParticipantNames(ids: number[] | null | undefined): ReactNode {
+    if (!ids || ids.length === 0) return <span className="muted">–</span>;
+    const names = ids
+      .map((id) => availableParticipants.find((p) => p.id === id)?.display_name)
+      .filter(Boolean);
+    return names.length ? names.join(", ") : <span className="muted">{ids.length} ausgewählt</span>;
+  }
+
+  const optionalColumnRenderers: Record<OptionalColumnKey, (item: EventSummary) => ReactNode> = {
+    is_cancelled: (item) =>
+      item.is_cancelled ? <span className="pill pill-error">Abgesagt</span> : <span className="muted">–</span>,
+    participant_count: (item) => item.participant_count ?? 0,
+    location: (item) => item.location || <span className="muted">–</span>,
+    organizer_ids: (item) => formatParticipantNames(item.organizer_ids),
+    leadership_ids: (item) => formatParticipantNames(item.leadership_ids),
+    participant_ids: (item) => formatParticipantNames(item.participant_ids),
+    spezial1_ids: (item) => formatParticipantNames(item.spezial1_ids),
+    spezial2_ids: (item) => formatParticipantNames(item.spezial2_ids),
+    spezial3_ids: (item) => formatParticipantNames(item.spezial3_ids),
+    spezial_text1: (item) => item.spezial_text1 || <span className="muted">–</span>,
+    spezial_text2: (item) => item.spezial_text2 || <span className="muted">–</span>,
+    spezial_text3: (item) => item.spezial_text3 || <span className="muted">–</span>,
+  };
+
+  const activeOptionalColumns = OPTIONAL_COLUMNS.filter((column) => visibleColumns.has(column.key));
+
   function toggleCycle(cycleConfigId: number, cycleYear: number) {
     setForm((current) => {
       const exists = current.cycle_assignments.some(
@@ -337,6 +519,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
         title: form.title,
         description: form.description || null,
         participant_count: Math.max(0, Number(form.participant_count || "0")),
+        is_cancelled: form.is_cancelled,
         cycle_assignments: form.cycle_assignments,
         organizer_ids: form.organizer_ids,
         leadership_ids: form.leadership_ids,
@@ -379,6 +562,26 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     }
   }
 
+  async function toggleCancelled(item: EventSummary) {
+    const nextValue = !item.is_cancelled;
+    setEvents((current) => current.map((event) => (event.id === item.id ? { ...event, is_cancelled: nextValue } : event)));
+    try {
+      await browserApiFetch<EventSummary>(`/api/events/${item.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_cancelled: nextValue }),
+      });
+    } catch (error) {
+      setEvents((current) => current.map((event) => (event.id === item.id ? { ...event, is_cancelled: item.is_cancelled } : event)));
+      showToast(error instanceof Error ? error.message : "Termin konnte nicht aktualisiert werden", "error");
+    }
+  }
+
+  function openEventContextMenu(nativeEvent: React.MouseEvent, item: EventSummary) {
+    nativeEvent.preventDefault();
+    nativeEvent.stopPropagation();
+    setEventContextMenu({ x: nativeEvent.clientX, y: nativeEvent.clientY, event: item });
+  }
+
   async function loadMore() {
     setIsLoadingMore(true);
     try {
@@ -392,24 +595,86 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     }
   }
 
-  async function importCsv(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
+  function toggleColumn(key: OptionalColumnKey) {
+    setVisibleColumns((current) => {
+      const next = new Set(current);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }
+
+  function openImportModal() {
+    setImportFile(null);
+    setImportPreview(null);
+    setImportColumnMap({});
+    setImportError(null);
+    setShowImportModal(true);
+  }
+
+  async function requestImportPreview(file: File, columnMap: Partial<Record<CsvTargetField, string>>) {
+    setImportPreviewLoading(true);
+    setImportError(null);
     try {
       const body = new FormData();
       body.append("file", file);
+      if (Object.keys(columnMap).length > 0) {
+        body.append("column_map", JSON.stringify(columnMap));
+      }
+      const preview = await browserApiFetch<EventImportPreview>("/api/events/import-csv/preview", {
+        method: "POST",
+        body,
+      });
+      setImportPreview(preview);
+      if (Object.keys(columnMap).length === 0) {
+        setImportColumnMap(preview.resolved_map as Partial<Record<CsvTargetField, string>>);
+      }
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : "Vorschau fehlgeschlagen");
+      setImportPreview(null);
+    } finally {
+      setImportPreviewLoading(false);
+    }
+  }
+
+  function handleImportFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setImportFile(file);
+    setImportColumnMap({});
+    setImportPreview(null);
+    void requestImportPreview(file, {});
+  }
+
+  function updateColumnMapping(field: CsvTargetField, header: string) {
+    if (!importFile) return;
+    const next = { ...importColumnMap, [field]: header };
+    setImportColumnMap(next);
+    void requestImportPreview(importFile, next);
+  }
+
+  async function confirmImport() {
+    if (!importFile || !importPreview) return;
+    setImportCommitting(true);
+    try {
+      const body = new FormData();
+      body.append("file", importFile);
+      body.append("column_map", JSON.stringify(importColumnMap));
       const imported = await browserApiFetch<EventSummary[]>("/api/events/import-csv", {
         method: "POST",
         body,
       });
       setEvents((current) => [...imported, ...current]);
       showToast(`${imported.length} Termine importiert`, "success");
+      setShowImportModal(false);
     } catch (error) {
       showToast(error instanceof Error ? error.message : "CSV-Import fehlgeschlagen", "error");
     } finally {
-      event.target.value = "";
+      setImportCommitting(false);
     }
   }
 
@@ -419,37 +684,68 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
         title="Termine"
         actions={
           <div className="table-toolbar-actions">
-            <label className="button-inline button-ghost participant-import-button">
-              CSV import
-              <input type="file" accept=".csv,text/csv" onChange={importCsv} hidden />
-            </label>
+            <button type="button" className="button-inline button-ghost" onClick={openImportModal}>
+              CSV Import
+            </button>
             {landscapeTemplates.length > 0 && (
               <button type="button" className="button-inline button-ghost" onClick={() => setExportModalOpen(true)}>
                 Export
               </button>
             )}
+            <div className="mini-menu mini-menu-compact mini-menu-end">
+              <button
+                ref={viewMenuTriggerRef}
+                type="button"
+                className={`mini-menu-trigger${viewMenuOpen ? " mini-menu-trigger-open" : ""}`}
+                onClick={() => setViewMenuOpen((value) => !value)}
+                aria-haspopup="menu"
+                aria-expanded={viewMenuOpen}
+              >
+                <span className="mini-menu-trigger-label">Ansicht</span>
+                <span className="mini-menu-trigger-icon">⌄</span>
+              </button>
+              {viewMenuOpen && typeof document !== "undefined" && createPortal(
+                <div id="event-view-menu-portal" className="mini-menu-popover-portal" style={viewMenuStyle} role="menu">
+                  <div className="mini-menu-section">
+                    <div className="mini-menu-section-title">Filter</div>
+                    <label className="mini-menu-option">
+                      <span>Vergangene Termine anzeigen</span>
+                      <input type="checkbox" checked={showPast} onChange={(event) => setShowPast(event.target.checked)} />
+                    </label>
+                    {cycleConfigs.length > 0 && (
+                      <label className="mini-menu-option">
+                        <span>Alle Zyklus-Perioden anzeigen</span>
+                        <input
+                          type="checkbox"
+                          checked={showAllPeriods}
+                          onChange={(event) => setShowAllPeriods(event.target.checked)}
+                        />
+                      </label>
+                    )}
+                  </div>
+                  <div className="mini-menu-section">
+                    <div className="mini-menu-section-title">Zusätzliche Spalten</div>
+                    {OPTIONAL_COLUMNS.map((column) => (
+                      <label key={column.key} className="mini-menu-option">
+                        <span>{column.label}</span>
+                        <input
+                          type="checkbox"
+                          checked={visibleColumns.has(column.key)}
+                          onChange={() => toggleColumn(column.key)}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </div>,
+                document.body
+              )}
+            </div>
             <button type="button" className="button-inline" onClick={openCreate}>
               Neuer Termin
             </button>
           </div>
         }
       />
-
-      <details className="card import-help-card">
-        <summary className="import-help-summary">
-          <span>CSV-Format für Termine anzeigen</span>
-          <span className="muted">Pflicht: Startdatum und Titel</span>
-        </summary>
-        <div className="import-help-body">
-          <p className="muted">
-            Unterstützte Spalten sind `Startdatum` oder `Datum`, optional `Enddatum`, `Tag`, `Titel`, `Beschreibung` und `Teilnehmerzahl`.
-            Als Trennzeichen gehen Komma, Semikolon oder Tab. Datumsformate: `YYYY-MM-DD`, `DD.MM.YYYY`, `DD/MM/YYYY`.
-          </p>
-          <pre>{`Startdatum;Enddatum;Tag;Titel;Beschreibung;Teilnehmerzahl
-2026-04-29;;Sitzung;Leiterrunde;Planung Sommerlager;8
-12.07.2026;18.07.2026;Lager;Sommerlager;;42`}</pre>
-        </div>
-      </details>
 
       <div className="segment-control">
         <button
@@ -471,23 +767,11 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
         ))}
       </div>
 
-      <label className="checkbox-row">
-        <input
-          type="checkbox"
-          checked={showParticipantCount}
-          onChange={(event) => setShowParticipantCount(event.target.checked)}
-        />
-        Teilnehmerzahl in der Übersicht anzeigen
-      </label>
-
       <article className="card">
         <div className="two-col">
           <label className="field-stack">
             <span className="field-label">Suche</span>
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Termine durchsuchen" />
-            <span className="field-help">
-              Ohne Suche werden vergangene Termine ausgeblendet. Sobald du suchst, werden alle Termine beruecksichtigt.
-            </span>
           </label>
           <div className="card">
             <div className="eyebrow">Überblick</div>
@@ -505,29 +789,36 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
           { key: "event_date", label: "Datum", sortable: true, sortDirection: sortIndicator("event_date"), onSort: () => toggleSort("event_date") },
           { key: "title", label: "Titel", sortable: true, sortDirection: sortIndicator("title"), onSort: () => toggleSort("title") },
           { key: "tag", label: "Tag", sortable: true, sortDirection: sortIndicator("tag"), onSort: () => toggleSort("tag") },
-          ...(showParticipantCount
-            ? [
-                {
-                  key: "participant_count",
-                  label: "Teilnehmer",
+          ...activeOptionalColumns.map((column) =>
+            column.key === "participant_count"
+              ? {
+                  key: column.key,
+                  label: column.label,
                   sortable: true,
                   sortDirection: sortIndicator("participant_count"),
                   onSort: () => toggleSort("participant_count"),
-                } as const,
-              ]
-            : []),
+                }
+              : { key: column.key, label: column.label }
+          ),
           { key: "description", label: "Beschreibung", sortable: true, sortDirection: sortIndicator("description"), onSort: () => toggleSort("description") },
           "Aktionen",
         ]}
       >
         {filteredEvents.map((item) => (
-          <tr key={item.id} className="table-row-clickable" onClick={() => openEdit(item)}>
+          <tr
+            key={item.id}
+            className={`table-row-clickable${visibleColumns.has("is_cancelled") && item.is_cancelled ? " table-row-cancelled" : ""}`}
+            onClick={() => openEdit(item)}
+            onContextMenu={(event) => openEventContextMenu(event, item)}
+          >
             <td>{formatDateRange(item.event_date, item.event_end_date)}</td>
             <td>
               <strong>{item.title}</strong>
             </td>
             <td>{item.tag ? <span className="pill">{item.tag}</span> : <span className="muted">Kein Tag</span>}</td>
-            {showParticipantCount ? <td>{item.participant_count ?? 0}</td> : null}
+            {activeOptionalColumns.map((column) => (
+              <td key={column.key}>{optionalColumnRenderers[column.key](item)}</td>
+            ))}
             <td>{item.description ?? <span className="muted">Keine Beschreibung</span>}</td>
             <td>
               <div className="table-actions table-actions-start">
@@ -554,6 +845,127 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
           </button>
         </div>
       )}
+
+      <Modal
+        open={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        title="Termine aus CSV importieren"
+        description="Ordne die Spalten deiner Datei den Termin-Feldern zu und prüfe die Vorschau, bevor du importierst."
+        size="wide"
+      >
+        <div className="grid" style={{ gap: "18px" }}>
+          {!importFile ? (
+            <label className="csv-import-dropzone" style={{ cursor: "pointer" }}>
+              <strong>CSV-Datei auswählen</strong>
+              <span className="muted">Pflichtspalten: Startdatum und Titel. Trennzeichen Komma, Semikolon oder Tab.</span>
+              <input type="file" accept=".csv,text/csv" onChange={handleImportFileChange} hidden />
+            </label>
+          ) : (
+            <div className="csv-import-file-row">
+              <span>
+                <strong>{importFile.name}</strong>
+                <span className="muted"> · {importPreview ? `${importPreview.rows.length} Zeile(n) erkannt` : "wird gelesen…"}</span>
+              </span>
+              <label className="button-inline button-ghost" style={{ width: "auto", minHeight: 0, padding: "6px 14px", cursor: "pointer" }}>
+                Andere Datei
+                <input type="file" accept=".csv,text/csv" onChange={handleImportFileChange} hidden />
+              </label>
+            </div>
+          )}
+
+          <details className="card import-help-card">
+            <summary className="import-help-summary">
+              <span>CSV-Format anzeigen</span>
+              <span className="muted">Pflicht: Startdatum und Titel</span>
+            </summary>
+            <div className="import-help-body">
+              <p className="muted">
+                Unterstützte Spalten sind z. B. `Startdatum` oder `Datum`, optional `Enddatum`, `Tag`, `Titel`, `Beschreibung` und `Teilnehmerzahl`.
+                Die Spaltennamen müssen nicht exakt passen – ordne sie unten einfach den passenden Termin-Feldern zu.
+              </p>
+              <pre>{`Startdatum;Enddatum;Tag;Titel;Beschreibung;Teilnehmerzahl
+2026-04-29;;Sitzung;Leiterrunde;Planung Sommerlager;8
+12.07.2026;18.07.2026;Lager;Sommerlager;;42`}</pre>
+            </div>
+          </details>
+
+          {importError && <p style={{ color: "var(--danger)" }}>{importError}</p>}
+
+          {importFile && importPreview && (
+            <>
+              <div className="csv-import-mapping-grid">
+                {CSV_TARGET_FIELDS.map((target) => (
+                  <label key={target.field} className="field-stack csv-import-mapping-field">
+                    <span className="field-label">
+                      {target.label}
+                      {target.required && <span className="csv-import-required">*</span>}
+                    </span>
+                    <select
+                      className={!importColumnMap[target.field] ? "mapping-unmapped" : undefined}
+                      value={importColumnMap[target.field] ?? ""}
+                      onChange={(event) => updateColumnMapping(target.field, event.target.value)}
+                    >
+                      <option value="">– nicht zuordnen –</option>
+                      {importPreview.detected_columns.map((column) => (
+                        <option key={column} value={column}>
+                          {column}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ))}
+              </div>
+
+              <div className="status-row">
+                <span className="pill pill-success">{importPreview.valid_count} gültig</span>
+                {importPreview.error_count > 0 && <span className="pill pill-error">{importPreview.error_count} mit Fehlern</span>}
+                <span className="pill">{importPreview.rows.length} Zeile(n) gesamt</span>
+                {importPreviewLoading && <span className="muted">Aktualisiere Vorschau…</span>}
+              </div>
+
+              <DataTable columns={["#", "Startdatum", "Enddatum", "Tag", "Titel", "Beschreibung", "Teilnehmer", "Status"]}>
+                {importPreview.rows.map((row) => (
+                  <tr key={row.row_number} className={row.error ? "table-row-error" : undefined}>
+                    <td>{row.row_number}</td>
+                    <td>{row.event_date ? formatDate(row.event_date) : <span className="muted">–</span>}</td>
+                    <td>{row.event_end_date ? formatDate(row.event_end_date) : <span className="muted">–</span>}</td>
+                    <td>{row.tag ? <span className="pill">{row.tag}</span> : <span className="muted">–</span>}</td>
+                    <td>{row.title ?? <span className="muted">–</span>}</td>
+                    <td>{row.description ?? <span className="muted">–</span>}</td>
+                    <td>{row.participant_count ?? <span className="muted">–</span>}</td>
+                    <td>
+                      {row.error ? (
+                        <span className="pill pill-error">{row.error}</span>
+                      ) : (
+                        <span className="pill pill-success">Gültig</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </DataTable>
+
+              <div className="table-actions" style={{ justifyContent: "flex-end" }}>
+                <button type="button" className="button-inline button-ghost" onClick={() => setShowImportModal(false)}>
+                  Abbrechen
+                </button>
+                <button
+                  type="button"
+                  className="button-inline"
+                  disabled={
+                    importCommitting ||
+                    importPreviewLoading ||
+                    importPreview.rows.length === 0 ||
+                    importPreview.error_count > 0
+                  }
+                  onClick={() => void confirmImport()}
+                >
+                  {importCommitting ? "Importiert…" : `${importPreview.valid_count} Termine importieren`}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </Modal>
 
       <Modal
         open={modalOpen}
@@ -601,6 +1013,14 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
               value={form.participant_count}
               onChange={(event) => setForm((current) => ({ ...current, participant_count: event.target.value }))}
             />
+          </label>
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={form.is_cancelled}
+              onChange={(event) => setForm((current) => ({ ...current, is_cancelled: event.target.checked }))}
+            />
+            Termin abgesagt
           </label>
           <label className="field-stack">
             <span className="field-label">Beschreibung</span>
@@ -904,6 +1324,27 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
 
         </div>
       </Modal>
+
+      {eventContextMenu && typeof document !== "undefined" && createPortal(
+        <div
+          id="event-context-menu-portal"
+          className="mini-menu-popover-portal"
+          style={{ position: "fixed", top: eventContextMenu.y, left: eventContextMenu.x, zIndex: 9999, minWidth: 220 }}
+          role="menu"
+        >
+          <button
+            type="button"
+            className="mini-menu-option"
+            onClick={() => {
+              void toggleCancelled(eventContextMenu.event);
+              setEventContextMenu(null);
+            }}
+          >
+            {eventContextMenu.event.is_cancelled ? "Absage aufheben" : "Als abgesagt markieren"}
+          </button>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

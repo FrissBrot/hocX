@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -40,6 +40,10 @@ class TemplateUpdate(BaseModel):
     title_pattern: str | None = None
     auto_create_next_protocol: bool | None = None
     cycle_config_id: int | None = None
+
+
+class TemplateDuplicateRequest(BaseModel):
+    name: str
 
 
 class TemplateRead(TemplateBase):
@@ -132,6 +136,8 @@ class TemplateElementBlockRead(BaseModel):
     allows_multiple_values: bool
     export_visible: bool
     is_visible: bool
+    title_as_subtitle: bool = True
+    copy_from_last_protocol: bool = False
     sort_index: int
     render_order: int | None = None
     latex_template: str | None = None
@@ -160,5 +166,16 @@ class TemplateElementRead(BaseModel):
     configuration_json: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
     blocks: list[TemplateElementBlockRead] = Field(default_factory=list)
+    behavior: dict[str, bool] = Field(default_factory=dict)
 
     model_config = {"from_attributes": True}
+
+
+class TemplateElementBehaviorUpdate(BaseModel):
+    scope: Literal["element", "block"]
+    block_id: int | None = None
+    is_editable: bool | None = None
+    is_visible: bool | None = None
+    export_visible: bool | None = None
+    copy_from_last_protocol: bool | None = None
+    title_as_subtitle: bool | None = None

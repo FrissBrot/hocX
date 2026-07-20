@@ -17,6 +17,7 @@ type DataTableProps = {
   columns: DataTableColumn[];
   children: ReactNode;
   emptyMessage?: string;
+  className?: string;
 };
 
 export function DataToolbar({
@@ -39,10 +40,10 @@ export function DataToolbar({
   );
 }
 
-export function DataTable({ columns, children, emptyMessage }: DataTableProps) {
+export function DataTable({ columns, children, emptyMessage, className }: DataTableProps) {
   return (
     <div className="table-shell">
-      <table className="data-table">
+      <table className={`data-table${className ? ` ${className}` : ""}`}>
         <thead>
           <tr>
             {columns.map((column) => (

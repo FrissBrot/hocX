@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+
 import { ProtocolEditor } from "@/components/protocol/protocol-editor";
 import { ProtocolOverview } from "@/components/protocol/protocol-builder";
 import { ProtocolExportPanel } from "@/components/protocol/protocol-export-panel";
@@ -26,15 +28,7 @@ export default async function ProtocolDetailPage({ params }: { params: { id: str
   const protocol = await backendFetchWithSession<ProtocolSummary>(`/api/protocols/${params.id}`);
 
   if (!protocol) {
-    return (
-      <AppShell initialSession={session}>
-        <section className="panel">
-          <div className="eyebrow">Protocol Detail</div>
-          <h1>Protocol not found</h1>
-          <p className="muted">The requested protocol could not be loaded from the backend.</p>
-        </section>
-      </AppShell>
-    );
+    redirect("/protocols");
   }
 
   const documentTemplates = (await backendFetchWithSession<DocumentTemplate[]>("/api/document-templates")) ?? [];

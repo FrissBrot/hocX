@@ -21,6 +21,11 @@ export function AdminTenantManagement({ initialTenants }: Props) {
   const [search, setSearch] = useState("");
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [settingsTenant, setSettingsTenant] = useState<AdminTenantSummary | null>(null);
+  const [cloneModalOpen, setCloneModalOpen] = useState(false);
+  const [cloneTenant, setCloneTenant] = useState<AdminTenantSummary | null>(null);
+  const [cloneName, setCloneName] = useState("");
+  const [cloneMode, setCloneMode] = useState<"structure" | "full">("structure");
+  const [cloneBusy, setCloneBusy] = useState(false);
 
   const visibleTenants = tenants.filter((tenant) =>
     !search.trim() || tenant.name.toLowerCase().includes(search.trim().toLowerCase())
@@ -50,6 +55,32 @@ export function AdminTenantManagement({ initialTenants }: Props) {
   function handleTenantSaved(updated: AdminTenantSummary) {
     setTenants((current) => current.map((tenant) => (tenant.id === updated.id ? updated : tenant)));
     setSettingsTenant(updated);
+  }
+
+  function openClone(tenant: AdminTenantSummary) {
+    setCloneTenant(tenant);
+    setCloneName(`${tenant.name} (Kopie)`);
+    setCloneMode("structure");
+    setCloneModalOpen(true);
+  }
+
+  async function submitClone(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!cloneTenant) return;
+    setCloneBusy(true);
+    try {
+      const cloned = await browserApiFetch<AdminTenantSummary>(`/api/admin/tenants/${cloneTenant.id}/clone`, {
+        method: "POST",
+        body: JSON.stringify({ new_name: cloneName, mode: cloneMode }),
+      });
+      setTenants((current) => [...current, cloned].sort((a, b) => a.name.localeCompare(b.name)));
+      setCloneModalOpen(false);
+      showToast("Mandant geklont", "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Mandant konnte nicht geklont werden", "error");
+    } finally {
+      setCloneBusy(false);
+    }
   }
 
   return (
@@ -103,6 +134,16 @@ export function AdminTenantManagement({ initialTenants }: Props) {
                 >
                   Einstellungen
                 </button>
+                <button
+                  type="button"
+                  className="button-inline button-ghost"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openClone(tenant);
+                  }}
+                >
+                  Klonen
+                </button>
               </div>
             </td>
           </tr>
@@ -129,6 +170,54 @@ export function AdminTenantManagement({ initialTenants }: Props) {
         tenant={settingsTenant}
         onSaved={handleTenantSaved}
       />
+
+      <Modal
+        open={cloneModalOpen}
+        onClose={() => setCloneModalOpen(false)}
+        title={cloneTenant ? `"${cloneTenant.name}" klonen` : "Mandant klonen"}
+        description="Legt einen neuen Mandanten an, der auf diesem hier basiert."
+      >
+        <form className="grid" onSubmit={submitClone}>
+          <label className="field-stack">
+            <span className="field-label">Name des neuen Mandanten</span>
+            <input value={cloneName} onChange={(event) => setCloneName(event.target.value)} required />
+          </label>
+          <div className="field-stack">
+            <span className="field-label">Umfang</span>
+            <label className="field-radio-option">
+              <input
+                type="radio"
+                name="clone-mode"
+                value="structure"
+                checked={cloneMode === "structure"}
+                onChange={() => setCloneMode("structure")}
+              />
+              <span>
+                <strong>Nur Struktur &amp; Konfiguration</strong>
+                <div className="muted">Vorlagen, Formularfelder, Dokumentvorlagen, Zyklen, Konten. Keine Teilnehmer, Termine, Protokolle oder Benutzer.</div>
+              </span>
+            </label>
+            <label className="field-radio-option">
+              <input
+                type="radio"
+                name="clone-mode"
+                value="full"
+                checked={cloneMode === "full"}
+                onChange={() => setCloneMode("full")}
+              />
+              <span>
+                <strong>Alles (vollständige Kopie)</strong>
+                <div className="muted">Zusätzlich Teilnehmer, Termine, Protokolle, Bussen, Todos, Abgaben und Benutzerzugriffe — z.B. für Tests.</div>
+              </span>
+            </label>
+          </div>
+          <div className="table-actions table-actions-start">
+            <button type="submit" className="button-inline" disabled={cloneBusy}>
+              {cloneBusy ? "Wird geklont…" : "Klonen"}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
