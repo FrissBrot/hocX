@@ -48,6 +48,22 @@ class ProtocolRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class NextSessionAttendanceEntry(BaseModel):
+    participant_id: int
+    participant_name: str
+    status: str
+
+
+class NextSessionRead(BaseModel):
+    protocol: ProtocolRead | None = None
+    attendance_block_id: int | None = None
+    entries: list[NextSessionAttendanceEntry] = Field(default_factory=list)
+
+
+class AttendanceExcusePayload(BaseModel):
+    excused: bool = True
+
+
 class ProtocolElementBlockRead(BaseModel):
     id: int
     protocol_element_id: int

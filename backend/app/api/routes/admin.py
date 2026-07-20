@@ -13,6 +13,7 @@ from app.schemas.admin import (
     PlatformAdminCreate,
     PlatformAdminRead,
     PlatformAdminUpdate,
+    TenantCloneRequest,
 )
 from app.schemas.oidc import OidcConfigRead, OidcConfigWrite
 from app.schemas.user import TenantUpdate, UserCreate, UserRead, UserUpdate
@@ -20,6 +21,7 @@ from app.services.admin_tenant_service import AdminTenantService
 from app.services.admin_user_service import AdminUserService, PlatformAdminService
 from app.services.file_service import _safe_storage_path
 from app.services.oidc_service import OidcService
+from app.services.tenant_clone_service import TenantCloneService
 
 router = APIRouter(dependencies=[Depends(get_current_admin)])
 
@@ -27,6 +29,7 @@ tenant_service = AdminTenantService()
 user_service = AdminUserService()
 admin_account_service = PlatformAdminService()
 oidc_service = OidcService()
+clone_service = TenantCloneService()
 
 
 @router.get("/tenants", response_model=list[AdminTenantRead])
@@ -67,6 +70,25 @@ async def update_tenant(
     if tenant is None:
         raise HTTPException(status_code=404, detail="Tenant not found")
     return tenant
+
+
+@router.post("/tenants/{tenant_id}/clone", response_model=AdminTenantRead, status_code=201)
+def clone_tenant(tenant_id: int, payload: TenantCloneRequest, db: Session = Depends(get_db)):
+    try:
+        if payload.mode == "full":
+            new_tenant = clone_service.clone_full(db, tenant_id, payload.new_name)
+        else:
+            new_tenant = clone_service.clone_structure(db, tenant_id, payload.new_name)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Tenant could not be cloned") from exc
+    result = tenant_service.get_tenant(db, new_tenant.id)
+    if result is None:
+        raise HTTPException(status_code=500, detail="Cloned tenant could not be reloaded")
+    return result
 
 
 @router.get("/tenants/{tenant_id}/oidc-config", response_model=OidcConfigRead)

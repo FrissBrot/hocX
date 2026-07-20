@@ -33,6 +33,16 @@ class ProtocolRepository:
     def get(self, db: Session, protocol_id: int) -> Protocol | None:
         return db.get(Protocol, protocol_id)
 
+    def next_open(self, db: Session, *, tenant_id: int) -> Protocol | None:
+        """The soonest-dated protocol that isn't finalized yet - the tenant's 'next session'."""
+        statement = (
+            select(Protocol)
+            .where(Protocol.tenant_id == tenant_id, Protocol.status != "abgeschlossen")
+            .order_by(Protocol.protocol_date.asc(), Protocol.id.asc())
+            .limit(1)
+        )
+        return db.scalar(statement)
+
     def next_template_sequence(self, db: Session, *, tenant_id: int, template_id: int) -> int:
         statement = select(func.count(Protocol.id)).where(
             Protocol.tenant_id == tenant_id,

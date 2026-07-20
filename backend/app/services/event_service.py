@@ -35,6 +35,7 @@ class EventService:
             title=payload.title,
             description=payload.description,
             participant_count=payload.participant_count,
+            is_cancelled=payload.is_cancelled,
             organizer_ids=payload.organizer_ids,
             leadership_ids=payload.leadership_ids,
             participant_ids=payload.participant_ids,
@@ -83,57 +84,60 @@ class EventService:
             db.add(EventCycle(event_id=event_id, cycle_config_id=a.cycle_config_id, cycle_year=a.cycle_year))
         db.commit()
 
-    def import_csv(self, db: Session, csv_text: str, *, tenant_id: int) -> list[Event]:
-        normalized = csv_text.lstrip("\ufeff").strip()
-        if not normalized:
+    _CSV_ALIASES = {
+        "event_date": ["event_date", "startdatum", "start_datum", "datum", "date", "startdate"],
+        "event_end_date": ["event_end_date", "enddatum", "end_datum", "endedatum", "enddate"],
+        "tag": ["tag", "kategorie", "kategorietag"],
+        "title": ["title", "titel", "name"],
+        "description": ["description", "beschreibung", "details", "notiz"],
+        "participant_count": ["participant_count", "teilnehmerzahl", "teilnehmer", "tn", "anzahl"],
+    }
+
+    def preview_csv(
+        self, db: Session, csv_text: str, *, column_map: dict[str, str] | None = None
+    ) -> dict:
+        reader = self._open_csv_reader(csv_text)
+        if reader is None:
+            return {"detected_columns": [], "resolved_map": {}, "rows": [], "valid_count": 0, "error_count": 0}
+        fieldnames = [name for name in reader.fieldnames if name is not None]
+        resolved_map = self._resolve_column_map(fieldnames, column_map)
+        rows = self._parse_csv_rows(reader, resolved_map)
+        error_count = sum(1 for row in rows if row["error"])
+        return {
+            "detected_columns": fieldnames,
+            "resolved_map": resolved_map,
+            "rows": rows,
+            "valid_count": len(rows) - error_count,
+            "error_count": error_count,
+        }
+
+    def import_csv(
+        self, db: Session, csv_text: str, *, tenant_id: int, column_map: dict[str, str] | None = None
+    ) -> list[Event]:
+        reader = self._open_csv_reader(csv_text)
+        if reader is None:
             return []
-
-        sample = normalized[:2048]
-        try:
-            dialect = csv.Sniffer().sniff(sample, delimiters=",;\t")
-        except csv.Error:
-            dialect = csv.excel
-
-        reader = csv.DictReader(StringIO(normalized), dialect=dialect)
-        if not reader.fieldnames:
-            raise ValueError("CSV headers missing")
+        fieldnames = [name for name in reader.fieldnames if name is not None]
+        resolved_map = self._resolve_column_map(fieldnames, column_map)
+        rows = self._parse_csv_rows(reader, resolved_map)
 
         category_id = self.repository.category_id_by_code(db, "other")
         if category_id is None:
             raise ValueError("Default event category missing")
 
         created: list[Event] = []
-        for row_number, row in enumerate(reader, start=2):
-            if not row or not any(str(value or "").strip() for value in row.values()):
-                continue
-
-            start_date_raw = self._csv_value(row, "event_date")
-            title = self._csv_value(row, "title")
-            if not start_date_raw and not title:
-                continue
-            if not start_date_raw:
-                raise ValueError(f"CSV row {row_number}: Startdatum fehlt")
-            if not title:
-                raise ValueError(f"CSV row {row_number}: Titel fehlt")
-
-            event_date = self._parse_csv_date(start_date_raw, row_number=row_number, field_label="Startdatum")
-            end_date_raw = self._csv_value(row, "event_end_date")
-            event_end_date = (
-                self._parse_csv_date(end_date_raw, row_number=row_number, field_label="Enddatum")
-                if end_date_raw
-                else None
-            )
-            participant_count = self._parse_participant_count(self._csv_value(row, "participant_count"), row_number=row_number)
-
+        for row in rows:
+            if row["error"]:
+                raise ValueError(row["error"])
             event = self._build_event_entity(
                 tenant_id=tenant_id,
                 category_id=category_id,
-                event_date=event_date,
-                event_end_date=event_end_date,
-                tag=self._csv_value(row, "tag") or None,
-                title=title,
-                description=self._csv_value(row, "description") or None,
-                participant_count=participant_count,
+                event_date=date.fromisoformat(row["event_date"]),
+                event_end_date=date.fromisoformat(row["event_end_date"]) if row["event_end_date"] else None,
+                tag=row["tag"],
+                title=row["title"],
+                description=row["description"],
+                participant_count=row["participant_count"],
             )
             db.add(event)
             created.append(event)
@@ -146,6 +150,101 @@ class EventService:
             db.refresh(event)
         return created
 
+    def _open_csv_reader(self, csv_text: str) -> csv.DictReader | None:
+        normalized = csv_text.lstrip("\ufeff").strip()
+        if not normalized:
+            return None
+
+        sample = normalized[:2048]
+        try:
+            dialect = csv.Sniffer().sniff(sample, delimiters=",;\t")
+        except csv.Error:
+            dialect = csv.excel
+
+        reader = csv.DictReader(StringIO(normalized), dialect=dialect)
+        if not reader.fieldnames:
+            raise ValueError("CSV headers missing")
+        return reader
+
+    def _resolve_column_map(self, fieldnames: list[str], explicit_map: dict[str, str] | None) -> dict[str, str]:
+        """Maps target field -> source CSV header. Explicit choices (incl. deliberately unmapped
+        fields, signalled by an empty string) always win; otherwise fall back to alias detection."""
+        normalized_fieldnames = {self._normalize_header(str(name)): str(name) for name in fieldnames}
+        resolved: dict[str, str] = {}
+        for field in self._CSV_ALIASES:
+            if explicit_map is not None:
+                chosen = explicit_map.get(field) or ""
+                if chosen and chosen in fieldnames:
+                    resolved[field] = chosen
+                continue
+            for alias in self._CSV_ALIASES[field]:
+                match = normalized_fieldnames.get(self._normalize_header(alias))
+                if match:
+                    resolved[field] = match
+                    break
+        return resolved
+
+    def _parse_csv_rows(self, reader: csv.DictReader, resolved_map: dict[str, str]) -> list[dict]:
+        results: list[dict] = []
+        for row_number, row in enumerate(reader, start=2):
+            if not row or not any(str(value or "").strip() for value in row.values()):
+                continue
+
+            normalized_row = {
+                self._normalize_header(str(key)): str(value or "").strip()
+                for key, value in row.items()
+                if key is not None
+            }
+
+            def value_for(field: str) -> str:
+                header = resolved_map.get(field)
+                return normalized_row.get(self._normalize_header(header), "") if header else ""
+
+            start_date_raw = value_for("event_date")
+            title = value_for("title")
+            if not start_date_raw and not title:
+                continue
+
+            entry = {
+                "row_number": row_number,
+                "event_date": None,
+                "event_end_date": None,
+                "tag": None,
+                "title": None,
+                "description": None,
+                "participant_count": None,
+                "error": None,
+            }
+            try:
+                if not start_date_raw:
+                    raise ValueError(f"CSV row {row_number}: Startdatum fehlt")
+                if not title:
+                    raise ValueError(f"CSV row {row_number}: Titel fehlt")
+                event_date = self._parse_csv_date(start_date_raw, row_number=row_number, field_label="Startdatum")
+                end_date_raw = value_for("event_end_date")
+                event_end_date = (
+                    self._parse_csv_date(end_date_raw, row_number=row_number, field_label="Enddatum")
+                    if end_date_raw
+                    else None
+                )
+                if event_end_date and event_end_date < event_date:
+                    raise ValueError(f"CSV row {row_number}: Enddatum liegt vor dem Startdatum")
+                participant_count = self._parse_participant_count(value_for("participant_count"), row_number=row_number)
+                entry.update(
+                    {
+                        "event_date": event_date.isoformat(),
+                        "event_end_date": event_end_date.isoformat() if event_end_date else None,
+                        "tag": value_for("tag") or None,
+                        "title": title,
+                        "description": value_for("description") or None,
+                        "participant_count": participant_count,
+                    }
+                )
+            except ValueError as exc:
+                entry["error"] = str(exc)
+            results.append(entry)
+        return results
+
     def _build_event_entity(
         self,
         *,
@@ -157,6 +256,7 @@ class EventService:
         title: str,
         description: str | None,
         participant_count: int,
+        is_cancelled: bool = False,
         organizer_ids: list[int] | None = None,
         leadership_ids: list[int] | None = None,
         participant_ids: list[int] | None = None,
@@ -179,6 +279,7 @@ class EventService:
             title=title,
             description=description,
             participant_count=max(0, int(participant_count)),
+            is_cancelled=is_cancelled,
             group_id=None,
             organizer_ids=organizer_ids or [],
             leadership_ids=leadership_ids or [],
@@ -191,26 +292,6 @@ class EventService:
             spezial_text2=spezial_text2,
             spezial_text3=spezial_text3,
         )
-
-    def _csv_value(self, row: dict[str, object], field: str) -> str:
-        aliases = {
-            "event_date": ["event_date", "startdatum", "start_datum", "datum", "date", "startdate"],
-            "event_end_date": ["event_end_date", "enddatum", "end_datum", "endedatum", "enddate"],
-            "tag": ["tag", "kategorie", "kategorietag"],
-            "title": ["title", "titel", "name"],
-            "description": ["description", "beschreibung", "details", "notiz"],
-            "participant_count": ["participant_count", "teilnehmerzahl", "teilnehmer", "tn", "anzahl"],
-        }
-        normalized_row = {
-            self._normalize_header(str(key)): str(value or "").strip()
-            for key, value in row.items()
-            if key is not None
-        }
-        for alias in aliases[field]:
-            value = normalized_row.get(self._normalize_header(alias))
-            if value is not None:
-                return value
-        return ""
 
     def _normalize_header(self, value: str) -> str:
         return (

@@ -1,13 +1,15 @@
+import json
+
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from sqlalchemy import update
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
 
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
-from app.schemas.event import EventCreate, EventRead, EventUpdate
+from app.schemas.event import EventCreate, EventImportPreview, EventRead, EventUpdate
 from app.services.event_service import EventService
 from app.services.submission_service import SubmissionService
 from app.models.entities import Event
@@ -44,16 +46,44 @@ def create_event(
     return created
 
 
-@router.post("/events/import-csv", response_model=list[EventRead], status_code=status.HTTP_201_CREATED)
-async def import_events_csv(
+def _parse_column_map(column_map: str) -> dict[str, str] | None:
+    if not column_map:
+        return None
+    try:
+        parsed = json.loads(column_map)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="column_map ist kein gueltiges JSON") from exc
+    if not isinstance(parsed, dict):
+        raise HTTPException(status_code=400, detail="column_map muss ein Objekt sein")
+    return {str(key): str(value) for key, value in parsed.items()}
+
+
+@router.post("/events/import-csv/preview", response_model=EventImportPreview)
+async def preview_events_csv(
     file: UploadFile = File(...),
+    column_map: str = Form(default=""),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
     try:
         content = (await file.read()).decode("utf-8-sig")
-        return service.import_csv(db, content, tenant_id=user.current_tenant_id)
+        return service.preview_csv(db, content, column_map=_parse_column_map(column_map))
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc) if isinstance(exc, ValueError) else "CSV preview failed") from exc
+
+
+@router.post("/events/import-csv", response_model=list[EventRead], status_code=status.HTTP_201_CREATED)
+async def import_events_csv(
+    file: UploadFile = File(...),
+    column_map: str = Form(default=""),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_writer(user)
+    try:
+        content = (await file.read()).decode("utf-8-sig")
+        return service.import_csv(db, content, tenant_id=user.current_tenant_id, column_map=_parse_column_map(column_map))
     except (SQLAlchemyError, UnicodeDecodeError, ValueError) as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc) if isinstance(exc, ValueError) else "CSV import failed") from exc

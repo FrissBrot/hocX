@@ -195,6 +195,7 @@ class Event(Base, TimestampMixin, UpdatedAtMixin):
     title: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     participant_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    is_cancelled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     group_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("group_entity.id", ondelete="SET NULL"))
     organizer_ids: Mapped[list[int] | None] = mapped_column(JSONB)
     leadership_ids: Mapped[list[int] | None] = mapped_column(JSONB)
@@ -709,6 +710,7 @@ class AttendanceFine(Base, TimestampMixin):
         Index("idx_attendance_fine_protocol", "protocol_id"),
         Index("idx_attendance_fine_participant", "participant_id"),
         Index("idx_attendance_fine_account", "account_id"),
+        Index("idx_attendance_fine_collected_by", "collected_by_user_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -722,6 +724,7 @@ class AttendanceFine(Base, TimestampMixin):
     collected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     collected_transaction_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("finance_transaction.id", ondelete="SET NULL"))
     closed_in_protocol_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="SET NULL"))
+    collected_by_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
 
 
 class SubmissionAssignment(Base, TimestampMixin, UpdatedAtMixin):

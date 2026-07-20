@@ -2,7 +2,8 @@ from sqlalchemy.orm import Session
 
 from app.models import ElementDefinition, TemplateElement
 from app.repositories.template_element_repository import TemplateElementRepository
-from app.schemas.template import TemplateElementCreate, TemplateElementRead, TemplateElementUpdate
+from app.schemas.template import TemplateElementBehaviorUpdate, TemplateElementCreate, TemplateElementRead, TemplateElementUpdate
+from app.services.block_behavior import BEHAVIOR_FIELDS, resolve_block_behavior, resolve_element_wide_behavior
 
 
 class TemplateElementService:
@@ -12,6 +13,8 @@ class TemplateElementService:
     def _read_model(self, row) -> TemplateElementRead:
         template_element, definition = row
         config = definition.configuration_json or {}
+        template_element_config = template_element.configuration_json or {}
+        raw_blocks = sorted(config.get("blocks", []), key=lambda entry: (entry.get("sort_index", 0), entry.get("id", 0)))
         blocks = [
             {
                 "id": block["id"],
@@ -21,20 +24,17 @@ class TemplateElementService:
                 "description": block.get("description"),
                 "block_title": block.get("block_title"),
                 "default_content": block.get("default_content"),
-                "copy_from_last_protocol": block.get("copy_from_last_protocol", False),
                 "element_type_id": block["element_type_id"],
                 "render_type_id": block["render_type_id"],
-                "is_editable": block.get("is_editable", True),
                 "allows_multiple_values": block.get("allows_multiple_values", False),
-                "export_visible": block.get("export_visible", True),
-                "is_visible": block.get("is_visible", True),
                 "sort_index": block["sort_index"],
                 "render_order": block.get("render_order"),
                 "latex_template": block.get("latex_template"),
                 "configuration_json": block.get("configuration_json", {}),
                 "created_at": template_element.created_at,
+                **resolve_block_behavior(template_element_config, block),
             }
-            for block in sorted(config.get("blocks", []), key=lambda entry: (entry.get("sort_index", 0), entry.get("id", 0)))
+            for block in raw_blocks
         ]
         return TemplateElementRead(
             id=template_element.id,
@@ -43,9 +43,10 @@ class TemplateElementService:
             sort_index=template_element.sort_index,
             title=definition.title,
             description=definition.description,
-            configuration_json=template_element.configuration_json or {},
+            configuration_json=template_element_config,
             created_at=template_element.created_at,
             blocks=blocks,
+            behavior=resolve_element_wide_behavior(template_element_config, raw_blocks),
         )
 
     def list_template_elements(self, db: Session, template_id: int) -> list[TemplateElementRead]:
@@ -94,3 +95,32 @@ class TemplateElementService:
             return False
         self.repository.delete(db, entity)
         return True
+
+    def update_block_behavior(self, db: Session, template_element_id: int, payload: TemplateElementBehaviorUpdate):
+        entity = self.repository.get(db, template_element_id)
+        if entity is None:
+            return None
+        values = {
+            field: value
+            for field, value in payload.model_dump(exclude={"scope", "block_id"}, exclude_unset=True).items()
+            if field in BEHAVIOR_FIELDS
+        }
+        if not values:
+            return self.get_template_element(db, template_element_id)
+
+        config = dict(entity.configuration_json or {})
+        if payload.scope == "element":
+            overrides = dict(config.get("block_behavior_overrides") or {})
+            overrides.update(values)
+            config["block_behavior_overrides"] = overrides
+        else:
+            if payload.block_id is None:
+                raise ValueError("block_id is required when scope is 'block'")
+            per_block = dict(config.get("block_overrides") or {})
+            block_entry = dict(per_block.get(str(payload.block_id), {}))
+            block_entry.update(values)
+            per_block[str(payload.block_id)] = block_entry
+            config["block_overrides"] = per_block
+
+        self.repository.update(db, entity, {"configuration_json": config})
+        return self.get_template_element(db, template_element_id)

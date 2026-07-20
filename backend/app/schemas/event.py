@@ -19,6 +19,7 @@ class EventBase(BaseModel):
     title: str
     description: str | None = None
     participant_count: int = 0
+    is_cancelled: bool = False
     organizer_ids: list[int] | None = None
     leadership_ids: list[int] | None = None
     participant_ids: list[int] | None = None
@@ -42,6 +43,7 @@ class EventUpdate(BaseModel):
     title: str | None = None
     description: str | None = None
     participant_count: int | None = None
+    is_cancelled: bool | None = None
     organizer_ids: list[int] | None = None
     leadership_ids: list[int] | None = None
     participant_ids: list[int] | None = None
@@ -64,3 +66,25 @@ class EventRead(EventBase):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+CSV_IMPORT_FIELDS = ("event_date", "event_end_date", "tag", "title", "description", "participant_count")
+
+
+class EventImportPreviewRow(BaseModel):
+    row_number: int
+    event_date: str | None = None
+    event_end_date: str | None = None
+    tag: str | None = None
+    title: str | None = None
+    description: str | None = None
+    participant_count: int | None = None
+    error: str | None = None
+
+
+class EventImportPreview(BaseModel):
+    detected_columns: list[str]
+    resolved_map: dict[str, str]
+    rows: list[EventImportPreviewRow]
+    valid_count: int
+    error_count: int

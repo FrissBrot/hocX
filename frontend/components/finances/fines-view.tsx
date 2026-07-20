@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { DataTable } from "@/components/ui/data-table";
 import { browserApiFetch } from "@/lib/api/client";
-import { formatDate } from "@/lib/utils/format";
+import { formatDate, formatDateTime } from "@/lib/utils/format";
 import { AttendanceFineListItem, FinanceAccount } from "@/types/api";
 
 const FINE_TYPE_LABEL: Record<string, string> = {
@@ -85,6 +85,16 @@ export function FinesView({ initialFines, accounts, isAdmin }: Props) {
     setFines((prev) => prev.filter((f) => f.id !== fine.id));
   }
 
+  async function reopenFine(fine: AttendanceFineListItem) {
+    setBusy((b) => ({ ...b, [fine.id]: true }));
+    try {
+      const updated = await browserApiFetch<AttendanceFineListItem>(`/api/fines/${fine.id}/reopen`, { method: "POST" });
+      if (updated) setFines((prev) => prev.map((f) => f.id === updated.id ? { ...f, ...updated } : f));
+    } finally {
+      setBusy((b) => ({ ...b, [fine.id]: false }));
+    }
+  }
+
   const sd = (key: SortKey) => (sortKey === key ? sortDirection : null);
 
   return (
@@ -157,6 +167,12 @@ export function FinesView({ initialFines, accounts, isAdmin }: Props) {
                 <span className={`pill pill-sm ${isCollected ? "todo-status-done" : "todo-status-open"}`}>
                   {isCollected ? "Kassiert" : "Ausstehend"}
                 </span>
+                {isCollected && fine.collected_at ? (
+                  <div className="muted" style={{ fontSize: "0.78rem", marginTop: 2 }}>
+                    {formatDateTime(fine.collected_at)}
+                    {fine.collected_by_display_name ? ` von ${fine.collected_by_display_name}` : ""}
+                  </div>
+                ) : null}
               </td>
               {isAdmin && (
                 <td>
@@ -164,6 +180,11 @@ export function FinesView({ initialFines, accounts, isAdmin }: Props) {
                     {!isCollected && (
                       <button type="button" className="button-inline button-danger" onClick={() => void deleteFine(fine)}>
                         Löschen
+                      </button>
+                    )}
+                    {isCollected && fine.can_reopen && (
+                      <button type="button" className="button-inline button-ghost" disabled={busy[fine.id]} onClick={() => void reopenFine(fine)}>
+                        Rückgängig
                       </button>
                     )}
                   </div>

@@ -224,6 +224,7 @@ export type EventSummary = {
   title: string;
   description: string | null;
   participant_count: number;
+  is_cancelled: boolean;
   organizer_ids: number[] | null;
   leadership_ids: number[] | null;
   participant_ids: number[] | null;
@@ -237,6 +238,25 @@ export type EventSummary = {
   cycle_assignments: CycleAssignment[];
   created_at: string;
   updated_at: string;
+};
+
+export type EventImportPreviewRow = {
+  row_number: number;
+  event_date: string | null;
+  event_end_date: string | null;
+  tag: string | null;
+  title: string | null;
+  description: string | null;
+  participant_count: number | null;
+  error: string | null;
+};
+
+export type EventImportPreview = {
+  detected_columns: string[];
+  resolved_map: Record<string, string>;
+  rows: EventImportPreviewRow[];
+  valid_count: number;
+  error_count: number;
 };
 
 export type StructuredListValueType = "text" | "participant" | "participants" | "event";
@@ -285,6 +305,18 @@ export type ProtocolSummary = {
   created_at?: string;
   updated_at?: string;
   latest_pdf_url?: string | null;
+};
+
+export type NextSessionAttendanceEntry = {
+  participant_id: number;
+  participant_name: string;
+  status: string;
+};
+
+export type NextSessionInfo = {
+  protocol: ProtocolSummary | null;
+  attendance_block_id: number | null;
+  entries: NextSessionAttendanceEntry[];
 };
 
 export type DocumentTemplatePart = {
@@ -354,19 +386,22 @@ export type TemplateElementBlock = {
   description: string | null;
   block_title: string | null;
   default_content: string | null;
-  copy_from_last_protocol?: boolean;
+  copy_from_last_protocol: boolean;
   element_type_id: number;
   render_type_id: number;
   is_editable: boolean;
   allows_multiple_values: boolean;
   export_visible: boolean;
   is_visible: boolean;
+  title_as_subtitle: boolean;
   sort_index: number;
   render_order: number | null;
   latex_template: string | null;
   configuration_json: Record<string, unknown>;
   created_at: string;
 };
+
+export type TemplateElementBehaviorField = "is_editable" | "is_visible" | "export_visible" | "copy_from_last_protocol" | "title_as_subtitle";
 
 export type TemplateElement = {
   id: number;
@@ -378,6 +413,7 @@ export type TemplateElement = {
   configuration_json: Record<string, unknown>;
   created_at: string;
   blocks: TemplateElementBlock[];
+  behavior: Record<TemplateElementBehaviorField, boolean>;
 };
 
 export type ProtocolTodo = {
@@ -504,6 +540,9 @@ export type AttendanceFine = {
   collected_at: string | null;
   collected_transaction_id: number | null;
   closed_in_protocol_id: number | null;
+  collected_by_user_id: number | null;
+  collected_by_display_name: string | null;
+  can_reopen: boolean;
   created_at: string;
 };
 

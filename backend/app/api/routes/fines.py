@@ -14,9 +14,11 @@ from app.schemas.fines import (
     AttendanceFineRead,
     CollectFinePayload,
 )
+from app.services.access_service import AccessService
 
 router = APIRouter()
 repo = FinesRepository()
+access_service = AccessService()
 
 
 @router.get("/fines", response_model=list[AttendanceFineListItem])
@@ -24,15 +26,13 @@ def list_fines(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    """Finance roles (kassier/writer/admin) see all fines; reader sees only their own."""
+    """Every role sees all fines in the tenant, except restricted readers (participant-linked
+    or otherwise scoped accounts) who only see fines from protocols they have access to."""
     require_reader(user)
-    has_finance = user.current_role in {"kassier", "writer", "admin"}
-    if has_finance:
-        return repo.list_fines_for_tenant(db, user.current_tenant_id)
-    participant_id = repo.get_participant_id_for_user(db, user.current_tenant_id, user.user_id)
-    if participant_id is None:
-        return []
-    return repo.list_fines_for_participant(db, user.current_tenant_id, participant_id)
+    if access_service._is_restricted_reader(db, user):
+        protocol_ids = access_service.repository.list_protocol_ids(db, user_id=user.user_id, tenant_id=user.current_tenant_id)
+        return repo.list_fines_for_protocols(db, user.current_tenant_id, protocol_ids)
+    return repo.list_fines_for_tenant(db, user.current_tenant_id)
 
 
 @router.get("/protocols/{protocol_id}/pending-fines", response_model=list[AttendanceFineListItem])
@@ -110,10 +110,30 @@ def collect_fine(
 ):
     require_finance_access(user)
     try:
-        result = repo.collect_fine(db, fine_id, user.current_tenant_id, payload.collecting_protocol_id)
+        result = repo.collect_fine(db, fine_id, user.current_tenant_id, user.user_id, payload.collecting_protocol_id)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Fine could not be collected") from exc
     if result is None:
         raise HTTPException(status_code=404, detail="Fine not found or already collected")
+    return result
+
+
+@router.post("/fines/{fine_id}/reopen", response_model=AttendanceFineRead)
+def reopen_fine(
+    fine_id: int,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_finance_access(user)
+    try:
+        result = repo.reopen_fine(db, fine_id, user.current_tenant_id)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Fine could not be reopened") from exc
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Fine not found, not collected, or already finalized in its protocol",
+        )
     return result

@@ -4,6 +4,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import (
+    AttendanceFine,
     DocumentTemplate,
     ElementDefinition,
     ElementType,
@@ -25,8 +26,9 @@ from app.models import (
 )
 from app.services.document_template_service import DocumentTemplateService
 from app.services.access_service import AccessService
+from app.services.block_behavior import resolve_block_behavior
 from app.repositories.protocol_repository import ProtocolRepository
-from app.schemas.protocol import ProtocolCreateFromTemplate, ProtocolUpdate
+from app.schemas.protocol import NextSessionAttendanceEntry, NextSessionRead, ProtocolCreateFromTemplate, ProtocolUpdate
 
 
 class ProtocolService:
@@ -54,6 +56,101 @@ class ProtocolService:
 
     def get_protocol(self, db: Session, protocol_id: int):
         return self.repository.get(db, protocol_id)
+
+    def _attendance_type_id(self, db: Session) -> int | None:
+        return db.scalar(select(ElementType.id).where(ElementType.code == "attendance"))
+
+    def get_next_session_attendance(self, db: Session, tenant_id: int) -> NextSessionRead:
+        """The tenant's next open protocol plus its attendance list, if it has one - used by
+        the dashboard's quick-excuse tile."""
+        protocol = self.repository.next_open(db, tenant_id=tenant_id)
+        if protocol is None:
+            return NextSessionRead(protocol=None, attendance_block_id=None, entries=[])
+
+        attendance_type_id = self._attendance_type_id(db)
+        block = None
+        if attendance_type_id is not None:
+            block = db.scalar(
+                select(ProtocolElementBlock)
+                .join(ProtocolElement, ProtocolElement.id == ProtocolElementBlock.protocol_element_id)
+                .where(
+                    ProtocolElement.protocol_id == protocol.id,
+                    ProtocolElementBlock.element_type_id == attendance_type_id,
+                )
+                .order_by(ProtocolElement.sort_index.asc(), ProtocolElementBlock.sort_index.asc())
+                .limit(1)
+            )
+
+        entries: list[NextSessionAttendanceEntry] = []
+        if block is not None:
+            for entry in (block.configuration_snapshot_json or {}).get("attendance_entries", []):
+                if entry.get("participant_id") is None:
+                    continue
+                entries.append(
+                    NextSessionAttendanceEntry(
+                        participant_id=entry["participant_id"],
+                        participant_name=entry.get("participant_name") or "",
+                        status=entry.get("status") or "absent",
+                    )
+                )
+            entries.sort(key=lambda e: e.participant_name.lower())
+
+        return NextSessionRead(protocol=protocol, attendance_block_id=block.id if block else None, entries=entries)
+
+    def set_attendance_excused(self, db: Session, protocol_id: int, participant_id: int, excused: bool) -> bool:
+        """Toggles a participant between excused and unentschuldigt (absent) in every attendance
+        block of this protocol. Marking someone excused also clears any pending fine for them
+        there - mirrors the protocol editor's attendance behavior (excused never carries a fine).
+        Toggling back to unentschuldigt does not recreate a fine; that still requires the
+        protocol editor's attendance block, which knows the configured fine amounts."""
+        attendance_type_id = self._attendance_type_id(db)
+        if attendance_type_id is None:
+            return False
+        blocks = list(
+            db.scalars(
+                select(ProtocolElementBlock)
+                .join(ProtocolElement, ProtocolElement.id == ProtocolElementBlock.protocol_element_id)
+                .where(
+                    ProtocolElement.protocol_id == protocol_id,
+                    ProtocolElementBlock.element_type_id == attendance_type_id,
+                )
+            )
+        )
+        target_status = "excused" if excused else "absent"
+        found = False
+        for block in blocks:
+            config = block.configuration_snapshot_json or {}
+            changed = False
+            new_entries = []
+            for entry in config.get("attendance_entries", []):
+                if entry.get("participant_id") == participant_id:
+                    # Build a fresh dict rather than mutating in place: SQLAlchemy compares the
+                    # new JSONB value against the old one to decide whether to emit an UPDATE,
+                    # and an in-place mutation would make both sides look identical, so the
+                    # change would silently be dropped.
+                    new_entries.append({**entry, "status": target_status})
+                    changed = True
+                    found = True
+                else:
+                    new_entries.append(entry)
+            if changed:
+                block.configuration_snapshot_json = {**config, "attendance_entries": new_entries}
+                db.add(block)
+        if not found:
+            return False
+
+        if excused:
+            pending_fine = db.scalar(
+                select(AttendanceFine).where(
+                    AttendanceFine.protocol_id == protocol_id,
+                    AttendanceFine.participant_id == participant_id,
+                    AttendanceFine.status == "pending",
+                )
+            )
+            if pending_fine is not None:
+                db.delete(pending_fine)
+        db.commit()
+        return True
 
     def _cycle_bounds(self, protocol_date: date, *, reset_month: int, reset_day: int) -> tuple[date, date]:
         cutoff_this_year = date(protocol_date.year, reset_month, reset_day)
@@ -809,7 +906,8 @@ class ProtocolService:
 
             for block, repeat_context, resolved_sort_index in generated_blocks:
                 block_config = dict(block.get("configuration_json") or {})
-                carry_from_last_protocol = bool(block.get("copy_from_last_protocol", False))
+                behavior = resolve_block_behavior(template_element.configuration_json, block)
+                carry_from_last_protocol = bool(behavior["copy_from_last_protocol"])
                 repeat_source_type = str(repeat_context.get("source_type") or "") if repeat_context else ""
                 repeat_source_id_raw = repeat_context.get("source_id") if repeat_context else None
                 try:
@@ -836,16 +934,17 @@ class ProtocolService:
                     display_title_snapshot=self._render_context_text(block.get("title"), repeat_context),
                     description_snapshot=self._render_context_text(block.get("description"), repeat_context),
                     block_title_snapshot=self._render_context_text(block.get("block_title"), repeat_context),
-                    is_editable_snapshot=block.get("is_editable", True),
+                    is_editable_snapshot=behavior["is_editable"],
                     allows_multiple_values_snapshot=block.get("allows_multiple_values", False),
                     sort_index=resolved_sort_index,
                     render_order=resolved_sort_index,
                     is_required_snapshot=False,
-                    is_visible_snapshot=block.get("is_visible", True),
-                    export_visible_snapshot=block.get("export_visible", True),
+                    is_visible_snapshot=behavior["is_visible"],
+                    export_visible_snapshot=behavior["export_visible"],
                     latex_template_snapshot=block.get("latex_template"),
                     configuration_snapshot_json={
                         **block_config,
+                        "title_as_subtitle": behavior["title_as_subtitle"],
                         "default_content": self._render_context_text(block.get("default_content"), repeat_context),
                         "copy_from_last_protocol": carry_from_last_protocol,
                         "left_column_heading": block_config.get("left_column_heading") or legacy_repeat_config.get("left_column_heading"),
@@ -1350,6 +1449,7 @@ class ProtocolService:
         next_sort_index = int(max_sort) + 10
 
         block_config = dict(event_block_template.get("configuration_json") or {})
+        behavior = resolve_block_behavior(template_element.configuration_json, event_block_template)
 
         text_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "text"))
         static_text_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "static_text"))
@@ -1366,18 +1466,19 @@ class ProtocolService:
             display_title_snapshot=self._render_context_text(event_block_template.get("title"), repeat_context),
             description_snapshot=self._render_context_text(event_block_template.get("description"), repeat_context),
             block_title_snapshot=self._render_context_text(event_block_template.get("block_title"), repeat_context),
-            is_editable_snapshot=event_block_template.get("is_editable", True),
+            is_editable_snapshot=behavior["is_editable"],
             allows_multiple_values_snapshot=event_block_template.get("allows_multiple_values", False),
             sort_index=next_sort_index,
             render_order=next_sort_index,
             is_required_snapshot=False,
-            is_visible_snapshot=True,
-            export_visible_snapshot=True,
+            is_visible_snapshot=behavior["is_visible"],
+            export_visible_snapshot=behavior["export_visible"],
             latex_template_snapshot=event_block_template.get("latex_template"),
             configuration_snapshot_json={
                 **block_config,
+                "title_as_subtitle": behavior["title_as_subtitle"],
                 "default_content": rendered_default_content,
-                "copy_from_last_protocol": bool(event_block_template.get("copy_from_last_protocol", False)),
+                "copy_from_last_protocol": bool(behavior["copy_from_last_protocol"]),
                 "left_column_heading": block_config.get("left_column_heading") or legacy_repeat_config.get("left_column_heading"),
                 "value_column_heading": block_config.get("value_column_heading") or legacy_repeat_config.get("value_column_heading"),
                 "repeat_context": (repeat_context.get("tokens") or {}),

@@ -55,12 +55,14 @@ def list_all_todos(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    """All todos for the tenant (admin) or only the user's assigned todos (non-admin)."""
+    """Every role sees all tenant todos, except restricted readers (participant-linked or
+    otherwise scoped accounts) who only see todos from protocols they have access to, plus
+    anything directly assigned to them."""
     require_reader(user)
-    can_admin = user.current_role == "admin"
-    if can_admin:
-        return service.list_todos_for_tenant(db, user.current_tenant_id, skip=skip, limit=limit)
-    return service.list_todos_for_user(db, user.current_tenant_id, user.user_id, skip=skip, limit=limit)
+    if access_service._is_restricted_reader(db, user):
+        protocol_ids = access_service.repository.list_protocol_ids(db, user_id=user.user_id, tenant_id=user.current_tenant_id)
+        return service.list_todos_for_protocols_or_assigned(db, user.current_tenant_id, protocol_ids, user.user_id, skip=skip, limit=limit)
+    return service.list_todos_for_tenant(db, user.current_tenant_id, skip=skip, limit=limit)
 
 
 @router.get("/todos/my", response_model=list[TodoListItem])

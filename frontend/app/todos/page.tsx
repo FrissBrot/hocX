@@ -5,16 +5,17 @@ import { DocumentTemplate, EventSummary, ParticipantSummary, TodoBlock, TodoList
 
 export default async function TodosPage() {
   const session = await requireSession();
-  const canAdmin = ["admin", "writer"].includes(session.current_role ?? "");
-  const canEdit = canAdmin;
+  const canEdit = ["admin", "writer"].includes(session.current_role ?? "");
 
+  // Every role sees all tenant todos now (backend scopes restricted readers server-side);
+  // participant/event lookups are only needed for the writer/admin edit & assignment UI.
   const [allTodos, myTodos, todoBlocks, participants, documentTemplates, events] = await Promise.all([
-    canAdmin ? backendFetchWithSession<TodoListItem[]>("/api/todos") : Promise.resolve(null),
+    backendFetchWithSession<TodoListItem[]>("/api/todos"),
     backendFetchWithSession<TodoListItem[]>("/api/todos/my"),
     backendFetchWithSession<TodoBlock[]>("/api/todos/blocks"),
-    canAdmin ? backendFetchWithSession<ParticipantSummary[]>("/api/participants?limit=500") : Promise.resolve([]),
+    canEdit ? backendFetchWithSession<ParticipantSummary[]>("/api/participants?limit=500") : Promise.resolve([]),
     backendFetchWithSession<DocumentTemplate[]>("/api/document-templates"),
-    canAdmin ? backendFetchWithSession<EventSummary[]>("/api/events") : Promise.resolve([]),
+    canEdit ? backendFetchWithSession<EventSummary[]>("/api/events") : Promise.resolve([]),
   ]);
 
   return (
@@ -23,7 +24,6 @@ export default async function TodosPage() {
         <TodoListView
           allTodos={allTodos ?? null}
           myTodos={myTodos ?? []}
-          canAdmin={canAdmin}
           canEdit={canEdit}
           todoBlocks={todoBlocks ?? []}
           participants={participants ?? []}

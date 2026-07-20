@@ -22,7 +22,7 @@ class AccessService:
         )
 
     def can_read_template(self, db: Session, user: CurrentUser, template_id: int) -> bool:
-        if user.current_role in {"admin", "writer"}:
+        if user.current_role in {"admin", "writer", "kassier"}:
             return True
         if user.current_role != "reader" or user.current_tenant_id is None:
             return False
@@ -32,7 +32,7 @@ class AccessService:
         return template_id in template_ids
 
     def can_read_protocol(self, db: Session, user: CurrentUser, protocol_id: int) -> bool:
-        if user.current_role in {"admin", "writer"}:
+        if user.current_role in {"admin", "writer", "kassier"}:
             return True
         if user.current_role != "reader" or user.current_tenant_id is None:
             return False

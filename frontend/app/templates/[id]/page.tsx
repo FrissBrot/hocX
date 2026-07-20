@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+
 import { AppShell } from "@/components/ui/app-shell";
 import { TemplateEditor } from "@/components/template/template-builder";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
@@ -18,15 +20,7 @@ export default async function TemplateDetailPage({ params }: { params: { id: str
   ]);
 
   if (!template) {
-    return (
-      <AppShell initialSession={session}>
-        <section className="panel">
-          <div className="eyebrow">Template Detail</div>
-          <h1>Template not found</h1>
-          <p className="muted">The requested template could not be loaded from the backend.</p>
-        </section>
-      </AppShell>
-    );
+    redirect("/templates");
   }
 
   return (
