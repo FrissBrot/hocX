@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { DataTable } from "@/components/ui/data-table";
+import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { TagInput } from "@/components/ui/tag-input";
 import { TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
 import { TodoDueMenu, DuePatch } from "@/components/todos/todo-due-menu";
@@ -350,40 +350,59 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
   );
 
   return (
-    <div className="grid todo-list-page">
-      <div className="protocol-list-toolbar">
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {allTodos !== null && (
-            <div className="segment-control">
-              <button type="button" className={`segment-button${scope === "all" ? " segment-button-active" : ""}`} onClick={() => setScope("all")}>Alle</button>
-              <button type="button" className={`segment-button${scope === "my" ? " segment-button-active" : ""}`} onClick={() => setScope("my")}>Meine</button>
-            </div>
-          )}
-          <div className="segment-control">
-            <button type="button" className={`segment-button${statusFilter === "open" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("open")}>
-              Offen {counts.open > 0 ? <span className="todo-count-badge">{counts.open}</span> : null}
-            </button>
-            <button type="button" className={`segment-button${statusFilter === "done" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("done")}>
-              Erledigt {counts.done > 0 ? <span className="todo-count-badge">{counts.done}</span> : null}
-            </button>
-            <button type="button" className={`segment-button${statusFilter === "all" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("all")}>Alle</button>
+    <div className="grid">
+      <DataToolbar
+        title="Todos"
+        description="Alle offenen und erledigten Todos dieses Mandanten."
+        actions={
+          <div className="table-toolbar-actions">
+            {landscapeTemplates.length > 0 && (
+              <button type="button" className="button-inline button-ghost" onClick={() => setExportModalOpen(true)}>
+                Export
+              </button>
+            )}
+            {canEdit && (
+              <button type="button" className="button-inline" onClick={() => setShowCreate((v) => !v)}>
+                {showCreate ? "Abbrechen" : "+ Todo"}
+              </button>
+            )}
           </div>
-        </div>
-        <div className="protocol-list-toolbar-right">
-          <input className="protocol-search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Suchen…" />
-          <span className="muted protocol-count">{filtered.length} / {activeTodos.length}</span>
-          {landscapeTemplates.length > 0 && (
-            <button type="button" className="button-inline button-ghost" onClick={() => setExportModalOpen(true)}>
-              Export
-            </button>
-          )}
-          {canEdit && (
-            <button type="button" className="button-inline" onClick={() => setShowCreate((v) => !v)}>
-              {showCreate ? "Abbrechen" : "+ Todo"}
-            </button>
-          )}
+        }
+      />
+
+      <div className="table-toolbar-actions">
+        {allTodos !== null && (
+          <div className="segment-control">
+            <button type="button" className={`segment-button${scope === "all" ? " segment-button-active" : ""}`} onClick={() => setScope("all")}>Alle</button>
+            <button type="button" className={`segment-button${scope === "my" ? " segment-button-active" : ""}`} onClick={() => setScope("my")}>Meine</button>
+          </div>
+        )}
+        <div className="segment-control">
+          <button type="button" className={`segment-button${statusFilter === "open" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("open")}>
+            Offen {counts.open > 0 ? <span className="todo-count-badge">{counts.open}</span> : null}
+          </button>
+          <button type="button" className={`segment-button${statusFilter === "done" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("done")}>
+            Erledigt {counts.done > 0 ? <span className="todo-count-badge">{counts.done}</span> : null}
+          </button>
+          <button type="button" className={`segment-button${statusFilter === "all" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("all")}>Alle</button>
         </div>
       </div>
+
+      <article className="card">
+        <div className="two-col">
+          <label className="field-stack">
+            <span className="field-label">Suche</span>
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Todos durchsuchen" />
+          </label>
+          <div className="card">
+            <div className="eyebrow">Überblick</div>
+            <div className="status-row">
+              <span className="pill">{filtered.length} sichtbar</span>
+              <span className="pill">{activeTodos.length} gesamt</span>
+            </div>
+          </div>
+        </div>
+      </article>
 
       {showCreate && (
         <div className="todo-create-panel">
@@ -413,7 +432,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
       )}
 
       <DataTable
-        className="todo-table"
+        className="data-table-lg"
         columns={[
           "",
           { key: "task", label: "Aufgabe", sortable: true, sortDirection: sd("task"), onSort: () => toggleSort("task") },
@@ -432,7 +451,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
           return (
             <tr
               key={todo.id}
-              className={`${isDone ? "table-row-done" : ""}${canEdit ? " todo-row-clickable" : ""}`}
+              className={`${isDone ? "table-row-done" : ""}${canEdit ? " table-row-clickable" : ""}`}
               onClick={() => canEdit && setEditTodoId(todo.id)}
             >
               <td>
@@ -594,7 +613,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
 
           {/* Status filter */}
           <div>
-            <div style={{ fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", marginBottom: 8 }}>Status</div>
+            <div className="field-label" style={{ marginBottom: 8 }}>Status</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {(["open", "all"] as const).map((f) => (
                 <button
@@ -612,7 +631,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
 
           {/* Person filter */}
           <div>
-            <div style={{ fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", marginBottom: 8 }}>Person</div>
+            <div className="field-label" style={{ marginBottom: 8 }}>Person</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {(["all", "filter", "group"] as const).map((mode) => (
                 <button
@@ -629,20 +648,11 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
             {exportPersonMode === "filter" && (
               <div style={{ marginTop: 10, position: "relative" }}>
                 <input
+                  className="input"
                   type="text"
                   placeholder="Person suchen…"
                   value={participantSearch}
                   onChange={(e) => { setParticipantSearch(e.target.value); if (!e.target.value) setExportParticipantId(""); }}
-                  style={{
-                    width: "100%", boxSizing: "border-box",
-                    padding: "6px 10px", borderRadius: 6,
-                    border: "1px solid var(--border)",
-                    backgroundColor: "var(--surface)",
-                    color: "var(--text)",
-                    fontSize: "0.9rem",
-                    minHeight: 0,
-                    outline: "none",
-                  }}
                 />
                 {participantSuggestions.length > 0 && (
                   <div style={{
@@ -682,7 +692,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
 
           {/* Date filter */}
           <div>
-            <div style={{ fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", marginBottom: 8 }}>Zeitraum</div>
+            <div className="field-label" style={{ marginBottom: 8 }}>Zeitraum</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {(["all", "next-hock", "until-event", "custom-date"] as const).map((mode) => (
                 <button
@@ -697,7 +707,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
               ))}
             </div>
             {exportDateMode === "next-hock" && (
-              <div style={{ marginTop: 8, fontSize: "0.85rem", color: "var(--text-muted)" }}>
+              <div className="muted" style={{ marginTop: 8, fontSize: "0.85rem" }}>
                 {nextHockEvent
                   ? `Bis ${nextHockEvent.title ?? "Termin"} (${formatDate(nextHockEvent.event_date)})`
                   : "Kein passender Hock gefunden"}
@@ -706,18 +716,9 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
             {exportDateMode === "until-event" && (
               <div style={{ marginTop: 8 }}>
                 <select
+                  className="input"
                   value={exportUntilEventId}
                   onChange={(e) => { setExportUntilEventId(Number(e.target.value)); setExportUrl(null); }}
-                  style={{
-                    padding: "6px 10px", borderRadius: 6,
-                    border: "1px solid var(--border)",
-                    backgroundColor: "var(--panel-solid)",
-                    color: "var(--text)",
-                    fontSize: "0.9rem",
-                    width: "100%",
-                    boxSizing: "border-box",
-                    minHeight: 0,
-                  }}
                 >
                   <option value="">Termin wählen…</option>
                   {sortedEvents.map((e) => (
@@ -731,19 +732,10 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
             {exportDateMode === "custom-date" && (
               <div style={{ marginTop: 8 }}>
                 <input
+                  className="input"
                   type="date"
                   value={exportCustomDate}
                   onChange={(e) => { setExportCustomDate(e.target.value); setExportUrl(null); }}
-                  style={{
-                    padding: "6px 10px", borderRadius: 6,
-                    border: "1px solid var(--border)",
-                    backgroundColor: "var(--panel-solid)",
-                    color: "var(--text)",
-                    fontSize: "0.9rem",
-                    minHeight: 0,
-                    width: "100%",
-                    boxSizing: "border-box",
-                  }}
                 />
               </div>
             )}

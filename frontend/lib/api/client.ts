@@ -1,5 +1,8 @@
 const internalApiUrl = process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-const publicApiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// Browser-seitige Aufrufe laufen immer same-origin (relative Pfade), damit sie auf jeder
+// Domain (Hauptdomain oder Mandanten-Custom-Domain) automatisch gegen die richtige Origin
+// gehen und das dort gescopte Session-Cookie mitgeschickt wird.
+const publicApiUrl = "";
 export const browserApiBaseUrl = publicApiUrl;
 
 export async function backendFetch<T>(path: string, init?: RequestInit): Promise<T | null> {

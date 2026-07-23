@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { DataToolbar } from "@/components/ui/data-table";
 import { browserApiFetch } from "@/lib/api/client";
 import { CycleConfigSummary } from "@/types/api";
 import { formatCycleName } from "@/lib/utils/cycle";
@@ -53,7 +54,7 @@ function CycleForm({
 }) {
   return (
     <form onSubmit={(e) => void onSubmit(e)}>
-      <div className="grid" style={{ gap: "14px" }}>
+      <div className="grid">
         <label className="field-stack">
           <span className="field-label">Name</span>
           <input
@@ -123,7 +124,7 @@ function CycleForm({
               Abbrechen
             </button>
           )}
-          <button type="submit" className="button-primary" disabled={saving}>
+          <button type="submit" className="button-inline" disabled={saving}>
             {saving ? "Wird gespeichert…" : submitLabel}
           </button>
         </div>
@@ -228,44 +229,30 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
   }
 
   return (
-    <div style={{ display: "grid", gap: "24px" }}>
-      {/* Page header */}
-      <div className="table-toolbar">
-        <div>
-          <h1 style={{ margin: 0, fontSize: "1.6rem", letterSpacing: "-0.03em" }}>Zyklen</h1>
-          <p className="muted" style={{ margin: "4px 0 0", fontSize: "0.94rem" }}>
-            Zyklus-Definitionen verwalten und Protokoll-Templates zuordnen.
-          </p>
-        </div>
-        {!showCreate && editId === null && (
-          <button
-            className="button-primary"
-            onClick={() => {
-              setShowCreate(true);
-              setCreateError(null);
-            }}
-          >
-            + Neuer Zyklus
-          </button>
-        )}
-      </div>
+    <div className="grid">
+      <DataToolbar
+        title="Zyklen"
+        description="Zyklus-Definitionen verwalten und Protokoll-Templates zuordnen."
+        actions={
+          !showCreate && editId === null ? (
+            <button
+              type="button"
+              className="button-inline"
+              onClick={() => {
+                setShowCreate(true);
+                setCreateError(null);
+              }}
+            >
+              + Neuer Zyklus
+            </button>
+          ) : undefined
+        }
+      />
 
       {/* Create form */}
       {showCreate && (
         <div className="card">
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: "12px",
-              marginBottom: "18px",
-              paddingBottom: "14px",
-              borderBottom: "1px solid var(--border)",
-            }}
-          >
-            <strong style={{ fontSize: "1rem" }}>Neuer Zyklus</strong>
-          </div>
+          <div className="eyebrow">Neuer Zyklus</div>
           <CycleForm
             form={createForm}
             setForm={setCreateForm}
@@ -303,18 +290,7 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
             <div key={cfg.id} className="responsibility-card">
               {editId === cfg.id ? (
                 <>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: "12px",
-                      paddingBottom: "14px",
-                      borderBottom: "1px solid var(--border)",
-                    }}
-                  >
-                    <strong style={{ fontSize: "0.95rem" }}>Zyklus bearbeiten</strong>
-                  </div>
+                  <div className="eyebrow">Zyklus bearbeiten</div>
                   <CycleForm
                     form={editForm}
                     setForm={setEditForm}
@@ -370,7 +346,7 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
                       Bearbeiten
                     </button>
                     <button
-                      className="button-icon button-icon-danger"
+                      className="button-ghost button-icon button-icon-danger"
                       title="Löschen"
                       onClick={() => void handleDelete(cfg.id)}
                     >

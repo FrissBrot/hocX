@@ -1,4 +1,4 @@
-import os
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.core.redis_client import close_redis_pool
 from app.core.security import hash_password
 from app.models import ElementType, PlatformAdmin, Role, Tenant
+from app.services import domain_health_check_service, traefik_config_service
 from app.services.document_template_service import DocumentTemplateService
 from app.services.file_service import FileService
 
@@ -55,6 +56,21 @@ def ensure_platform_admin_bootstrap() -> None:
             )
         )
         db.commit()
+
+
+def ensure_startup_seed_data() -> None:
+    """Runs the idempotent startup seed functions under an advisory lock so that a
+    fresh database being seeded by multiple concurrent uvicorn workers (--workers 2)
+    can't race on the same check-then-insert (e.g. two workers both seeing an empty
+    platform_admin table and both trying to insert the bootstrap admin)."""
+    with SessionLocal() as db:
+        db.execute(text("SELECT pg_advisory_lock(202600004)"))
+        try:
+            ensure_roles()
+            ensure_platform_admin_bootstrap()
+            ensure_lookup_values()
+        finally:
+            db.execute(text("SELECT pg_advisory_unlock(202600004)"))
 
 
 def ensure_lookup_values() -> None:
@@ -319,15 +335,37 @@ def ensure_default_document_templates() -> None:
             db.execute(text("SELECT pg_advisory_unlock(202600002)"))
 
 
+def ensure_traefik_dynamic_config() -> None:
+    with SessionLocal() as db:
+        traefik_config_service.regenerate(db)
+
+
+async def domain_health_check_loop() -> None:
+    """Re-checks active custom domains on an interval. Runs in every uvicorn worker (there's no
+    single-instance process in this deployment), so each tick is guarded by a Postgres advisory
+    lock - only the worker that acquires it does the check, the other(s) skip that tick."""
+    interval_seconds = settings.domain_health_check_interval_minutes * 60
+    while True:
+        with SessionLocal() as db:
+            acquired = db.execute(text("SELECT pg_try_advisory_lock(202600003)")).scalar()
+            if acquired:
+                try:
+                    domain_health_check_service.run_health_check(db)
+                finally:
+                    db.execute(text("SELECT pg_advisory_unlock(202600003)"))
+        await asyncio.sleep(interval_seconds)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     FileService().ensure_storage()
     ensure_runtime_columns()
-    ensure_roles()
-    ensure_platform_admin_bootstrap()
-    ensure_lookup_values()
+    ensure_startup_seed_data()
     ensure_default_document_templates()
+    ensure_traefik_dynamic_config()
+    health_check_task = asyncio.create_task(domain_health_check_loop())
     yield
+    health_check_task.cancel()
     await close_redis_pool()
 
 
@@ -338,7 +376,7 @@ app.add_middleware(
     allow_origins=[o for o in [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
-        f"https://{os.getenv('TRAEFIK_DOMAIN')}" if os.getenv('TRAEFIK_DOMAIN') else None,
+        f"https://{settings.traefik_domain}" if settings.traefik_domain else None,
     ] if o],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],

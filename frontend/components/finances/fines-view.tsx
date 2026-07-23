@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { DataTable } from "@/components/ui/data-table";
+import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { browserApiFetch } from "@/lib/api/client";
 import { formatDate, formatDateTime } from "@/lib/utils/format";
 import { AttendanceFineListItem, FinanceAccount } from "@/types/api";
@@ -99,25 +99,38 @@ export function FinesView({ initialFines, accounts, isAdmin }: Props) {
 
   return (
     <div className="grid">
-      <div className="protocol-list-toolbar">
-        <div className="segment-control">
-          <button type="button" className={`segment-button${statusFilter === "pending" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("pending")}>
-            Ausstehend {counts.pending > 0 ? <span className="todo-count-badge">{counts.pending}</span> : null}
-          </button>
-          <button type="button" className={`segment-button${statusFilter === "collected" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("collected")}>
-            Kassiert {counts.collected > 0 ? <span className="todo-count-badge">{counts.collected}</span> : null}
-          </button>
-          <button type="button" className={`segment-button${statusFilter === "all" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("all")}>
-            Alle
-          </button>
-        </div>
-        <div className="protocol-list-toolbar-right">
-          <input className="protocol-search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Suchen…" />
-          <span className="muted protocol-count">{filtered.length} / {fines.length}</span>
-        </div>
+      <DataToolbar title="Bussen" description="Alle Verspätungs- und Absenzbussen dieses Mandanten." />
+
+      <div className="segment-control">
+        <button type="button" className={`segment-button${statusFilter === "pending" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("pending")}>
+          Ausstehend {counts.pending > 0 ? <span className="todo-count-badge">{counts.pending}</span> : null}
+        </button>
+        <button type="button" className={`segment-button${statusFilter === "collected" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("collected")}>
+          Kassiert {counts.collected > 0 ? <span className="todo-count-badge">{counts.collected}</span> : null}
+        </button>
+        <button type="button" className={`segment-button${statusFilter === "all" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("all")}>
+          Alle
+        </button>
       </div>
 
+      <article className="card">
+        <div className="two-col">
+          <label className="field-stack">
+            <span className="field-label">Suche</span>
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Bussen durchsuchen" />
+          </label>
+          <div className="card">
+            <div className="eyebrow">Überblick</div>
+            <div className="status-row">
+              <span className="pill">{filtered.length} sichtbar</span>
+              <span className="pill">{fines.length} gesamt</span>
+            </div>
+          </div>
+        </div>
+      </article>
+
       <DataTable
+        className="data-table-lg"
         columns={[
           ...(isAdmin ? [{ key: "collect", label: "" }] : []),
           { key: "participant_name_snapshot", label: "Teilnehmer", sortable: true, sortDirection: sd("participant_name_snapshot"), onSort: () => toggleSort("participant_name_snapshot") },
@@ -168,7 +181,7 @@ export function FinesView({ initialFines, accounts, isAdmin }: Props) {
                   {isCollected ? "Kassiert" : "Ausstehend"}
                 </span>
                 {isCollected && fine.collected_at ? (
-                  <div className="muted" style={{ fontSize: "0.78rem", marginTop: 2 }}>
+                  <div className="muted fines-collected-note">
                     {formatDateTime(fine.collected_at)}
                     {fine.collected_by_display_name ? ` von ${fine.collected_by_display_name}` : ""}
                   </div>

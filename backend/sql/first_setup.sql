@@ -259,14 +259,6 @@ CREATE TABLE user_template_access (
     PRIMARY KEY (user_id, template_id)
 );
 
-CREATE TABLE user_protocol_access (
-    user_id BIGINT NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
-    tenant_id BIGINT NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
-    protocol_id BIGINT NOT NULL REFERENCES protocol(id) ON DELETE CASCADE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (user_id, protocol_id)
-);
-
 CREATE TABLE element_definition (
     id BIGSERIAL PRIMARY KEY,
     tenant_id BIGINT NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
@@ -333,6 +325,14 @@ CREATE TABLE protocol (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CHECK (status IN ('geplant', 'vorbereitet', 'durchgeführt', 'abgeschlossen')),
     UNIQUE (tenant_id, protocol_number)
+);
+
+CREATE TABLE user_protocol_access (
+    user_id BIGINT NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    tenant_id BIGINT NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+    protocol_id BIGINT NOT NULL REFERENCES protocol(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, protocol_id)
 );
 
 CREATE TABLE protocol_element (

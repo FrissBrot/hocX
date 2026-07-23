@@ -7,6 +7,7 @@ from app.core.admin_security import CurrentAdmin, get_current_admin
 from app.core.config import settings
 from app.core.db import get_db
 from app.schemas.admin import (
+    AdminDomainRead,
     AdminTenantCreate,
     AdminTenantRead,
     AdminUserMergeRequest,
@@ -17,6 +18,7 @@ from app.schemas.admin import (
 )
 from app.schemas.oidc import OidcConfigRead, OidcConfigWrite
 from app.schemas.user import TenantUpdate, UserCreate, UserRead, UserUpdate
+from app.services.admin_domain_service import AdminDomainService
 from app.services.admin_tenant_service import AdminTenantService
 from app.services.admin_user_service import AdminUserService, PlatformAdminService
 from app.services.file_service import _safe_storage_path
@@ -30,11 +32,17 @@ user_service = AdminUserService()
 admin_account_service = PlatformAdminService()
 oidc_service = OidcService()
 clone_service = TenantCloneService()
+domain_service = AdminDomainService()
 
 
 @router.get("/tenants", response_model=list[AdminTenantRead])
 def list_tenants(db: Session = Depends(get_db)):
     return tenant_service.list_tenants(db)
+
+
+@router.get("/domains", response_model=list[AdminDomainRead])
+def list_domains(db: Session = Depends(get_db)):
+    return domain_service.list_domains(db)
 
 
 @router.post("/tenants", response_model=AdminTenantRead, status_code=201)

@@ -682,6 +682,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     <div className="grid">
       <DataToolbar
         title="Termine"
+        description="Alle Termine dieses Mandanten."
         actions={
           <div className="table-toolbar-actions">
             <button type="button" className="button-inline button-ghost" onClick={openImportModal}>

@@ -346,62 +346,45 @@ export function ListManager({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-      {/* Split layout: sidebar left, content right */}
-      <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 0, alignItems: "start" }}>
+    <div className="grid">
+      <div className="list-manager-layout">
 
         {/* Left sidebar */}
-        <div style={{ borderRight: "1px solid var(--border)", paddingRight: 16, display: "flex", flexDirection: "column", minHeight: "calc(100vh - 120px)" }}>
-          {/* Search pinned at top */}
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Listen suchen…"
-            style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid var(--border)", backgroundColor: "transparent", color: "var(--text)", fontSize: "0.88rem", minHeight: 0, outline: "none", width: "100%", boxSizing: "border-box", marginBottom: 8 }}
-          />
+        <div className="list-manager-sidebar">
+          <label className="field-stack" style={{ marginBottom: 8 }}>
+            <span className="field-label">Suche</span>
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Listen suchen…" />
+          </label>
 
           {/* List items — scrollable, fills available height */}
-          <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 2 }}>
+          <div className="list-manager-items">
             {filteredLists.length === 0 ? (
-              <span style={{ fontSize: "0.85rem", color: "var(--muted)", padding: "6px 4px", display: "block" }}>Keine Listen</span>
+              <span className="muted" style={{ fontSize: "0.85rem", padding: "6px 4px", display: "block" }}>Keine Listen</span>
             ) : filteredLists.map((definition) => {
               const isSelected = selectedListId === definition.id;
               const isHovered = hoveredListId === definition.id;
               return (
                 <div
                   key={definition.id}
-                  style={{ position: "relative" }}
+                  className="list-manager-item-wrap"
                   onMouseEnter={() => setHoveredListId(definition.id)}
                   onMouseLeave={() => setHoveredListId(null)}
                 >
                   <button
                     type="button"
                     onClick={() => setSelectedListId(definition.id)}
-                    style={{
-                      display: "block",
-                      width: "100%",
-                      textAlign: "left",
-                      padding: "7px 10px",
-                      paddingRight: isHovered && !isSelected ? 58 : 10,
-                      borderRadius: 8,
-                      border: "none",
-                      background: isSelected ? "var(--accent)" : "none",
-                      color: isSelected ? "#fff" : "var(--text)",
-                      cursor: "pointer",
-                      minHeight: 0,
-                      fontSize: "0.9rem",
-                      fontWeight: isSelected ? 600 : 400,
-                    }}
+                    className={`list-manager-item-button${isSelected ? " list-manager-item-button-active" : ""}`}
+                    style={{ paddingRight: isHovered && !isSelected ? 58 : 10 }}
                   >
                     {definition.name}
                   </button>
                   {isHovered && !isSelected && (
-                    <div style={{ position: "absolute", top: "50%", right: 2, transform: "translateY(-50%)", display: "flex", gap: 2 }}>
+                    <div className="list-manager-item-actions">
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); openEdit(definition); }}
                         title="Bearbeiten"
-                        style={{ padding: "3px 5px", background: "var(--panel-solid)", border: "1px solid var(--border)", borderRadius: 5, cursor: "pointer", color: "var(--text)", fontSize: "0.75rem", minHeight: 0, lineHeight: 1 }}
+                        className="list-manager-item-action"
                       >
                         ✎
                       </button>
@@ -409,7 +392,7 @@ export function ListManager({
                         type="button"
                         onClick={(e) => { e.stopPropagation(); void deleteDefinition(definition.id); }}
                         title="Löschen"
-                        style={{ padding: "3px 5px", background: "var(--panel-solid)", border: "1px solid var(--border)", borderRadius: 5, cursor: "pointer", color: "var(--danger)", fontSize: "0.75rem", minHeight: 0, lineHeight: 1 }}
+                        className="list-manager-item-action list-manager-item-action-danger"
                       >
                         ✕
                       </button>
@@ -421,29 +404,23 @@ export function ListManager({
           </div>
 
           {/* New list button pinned at bottom */}
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={openCreate}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") openCreate(); }}
-            style={{ borderTop: "1px solid var(--border)", marginTop: 10, padding: "12px 10px 8px", color: "var(--accent)", cursor: "pointer", fontSize: "1rem", fontWeight: 600 }}
-          >
+          <button type="button" className="domain-add-trigger" onClick={openCreate} style={{ marginTop: 10 }}>
             + Neue Liste
-          </div>
+          </button>
         </div>
 
         {/* Right: content */}
-        <div style={{ paddingLeft: 28, minWidth: 0 }}>
+        <div className="list-manager-content">
           {selectedList ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div className="grid">
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
                 <div>
-                  <h2 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700 }}>{selectedList.name}</h2>
+                  <h2 className="list-manager-title">{selectedList.name}</h2>
                   {selectedList.description && (
-                    <p style={{ margin: "3px 0 0", fontSize: "0.85rem", color: "var(--muted)" }}>{selectedList.description}</p>
+                    <p className="muted" style={{ margin: "3px 0 0", fontSize: "0.85rem" }}>{selectedList.description}</p>
                   )}
                 </div>
-                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                <div className="table-toolbar-actions">
                   {landscapeTemplates.length > 0 && (
                     <button type="button" className="button-inline button-ghost" onClick={() => { setExportListId(selectedListId ?? ""); setExportUrl(null); setExportModalOpen(true); }}>
                       Export
@@ -466,7 +443,7 @@ export function ListManager({
               />
             </div>
           ) : (
-            <p style={{ color: "var(--muted)" }}>Wähle eine Liste aus oder erstelle eine neue.</p>
+            <p className="muted">Wähle eine Liste aus oder erstelle eine neue.</p>
           )}
         </div>
       </div>
@@ -483,7 +460,7 @@ export function ListManager({
 
             {/* List dropdown with search */}
             <div>
-              <div style={{ fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", marginBottom: 8 }}>Liste</div>
+              <div className="field-label" style={{ marginBottom: 8 }}>Liste</div>
               <div ref={listDropdownRef} style={{ position: "relative" }}>
                 <button
                   type="button"
@@ -509,7 +486,7 @@ export function ListManager({
                     </div>
                     <div style={{ maxHeight: 220, overflowY: "auto", padding: "4px 0" }}>
                       {listDropdownFiltered.length === 0 ? (
-                        <div style={{ padding: "8px 12px", fontSize: "0.88rem", color: "var(--text-muted)" }}>Keine Listen gefunden</div>
+                        <div className="muted" style={{ padding: "8px 12px", fontSize: "0.88rem" }}>Keine Listen gefunden</div>
                       ) : listDropdownFiltered.map((l) => (
                         <button
                           key={l.id}
@@ -529,7 +506,7 @@ export function ListManager({
             {/* Group by */}
             {exportListDef && (
               <div>
-                <div style={{ fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", marginBottom: 8 }}>Gruppieren nach</div>
+                <div className="field-label" style={{ marginBottom: 8 }}>Gruppieren nach</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                   {(["", "column_one", "column_two"] as const).map((col) => (
                     <button
@@ -549,7 +526,7 @@ export function ListManager({
             {/* Filter */}
             {exportListDef && (
               <div>
-                <div style={{ fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", marginBottom: 8 }}>Filtern nach Spalte</div>
+                <div className="field-label" style={{ marginBottom: 8 }}>Filtern nach Spalte</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                   {(["", "column_one", "column_two"] as const).map((col) => (
                     <button
@@ -568,9 +545,10 @@ export function ListManager({
                   if (vtype === "participant" || vtype === "participants") {
                     return (
                       <select
+                        className="input"
                         value={exportFilterParticipantId}
                         onChange={(e) => { setExportFilterParticipantId(e.target.value ? Number(e.target.value) : ""); clearExportUrl(); }}
-                        style={{ marginTop: 8, padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border)", backgroundColor: "var(--panel-solid)", color: "var(--text)", fontSize: "0.9rem", width: "100%", boxSizing: "border-box", minHeight: 0 }}
+                        style={{ marginTop: 8 }}
                       >
                         <option value="">Alle</option>
                         {availableParticipants.map((p) => <option key={p.id} value={p.id}>{p.display_name}</option>)}
@@ -580,9 +558,10 @@ export function ListManager({
                   if (vtype === "event") {
                     return (
                       <select
+                        className="input"
                         value={exportFilterEventId}
                         onChange={(e) => { setExportFilterEventId(e.target.value ? Number(e.target.value) : ""); clearExportUrl(); }}
-                        style={{ marginTop: 8, padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border)", backgroundColor: "var(--panel-solid)", color: "var(--text)", fontSize: "0.9rem", width: "100%", boxSizing: "border-box", minHeight: 0 }}
+                        style={{ marginTop: 8 }}
                       >
                         <option value="">Alle</option>
                         {[...availableEvents].sort((a, b) => a.event_date.localeCompare(b.event_date)).map((e) => <option key={e.id} value={e.id}>{e.event_date} — {e.title}</option>)}
@@ -591,11 +570,12 @@ export function ListManager({
                   }
                   return (
                     <input
+                      className="input"
                       type="text"
                       placeholder="Suchbegriff…"
                       value={exportFilterText}
                       onChange={(e) => { setExportFilterText(e.target.value); clearExportUrl(); }}
-                      style={{ marginTop: 8, padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border)", backgroundColor: "var(--panel-solid)", color: "var(--text)", fontSize: "0.9rem", width: "100%", boxSizing: "border-box", minHeight: 0, outline: "none" }}
+                      style={{ marginTop: 8 }}
                     />
                   );
                 })()}
@@ -654,7 +634,7 @@ export function ListManager({
           <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflowY: "auto", borderLeft: "1px solid var(--border)", paddingLeft: 24 }}>
             {exportListDef ? (
               <>
-                <div style={{ fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", marginBottom: 12 }}>
+                <div className="field-label" style={{ marginBottom: 12 }}>
                   Vorschau · {exportFilteredEntries.length} Einträge
                 </div>
                 <StructuredListTable

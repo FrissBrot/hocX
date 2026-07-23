@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
+import { attemptBridgeRedirect } from "@/lib/bridge-redirect";
 import { browserApiFetch } from "@/lib/api/client";
 import { SessionInfo, TenantMembership } from "@/types/api";
 
@@ -11,7 +12,18 @@ import { buildNav, formatRoleLabel } from "@/components/ui/app-shell-nav";
 import { ToastProvider } from "@/contexts/toast-context";
 import { ProfileModal } from "@/components/ui/profile-modal";
 import { TenantSelectorModal } from "@/components/ui/tenant-selector-modal";
-import { TenantSettingsModal } from "@/components/ui/tenant-settings-modal";
+
+// Login rendert nie auf einer Mandanten-Custom-Domain — von dort muss eine volle Navigation
+// (nicht SPA-Routing) zur Hauptdomain erfolgen, sonst gäbe es dort keine Login-Seite zu zeigen.
+function redirectToLogin(router: ReturnType<typeof useRouter>): void {
+  const mainDomain = process.env.NEXT_PUBLIC_MAIN_APP_DOMAIN;
+  if (mainDomain && window.location.hostname !== mainDomain) {
+    // `from` laesst die Login-Seite den Mandanten anhand der Domain automatisch waehlen.
+    window.location.href = `https://${mainDomain}/login?from=${encodeURIComponent(window.location.hostname)}`;
+    return;
+  }
+  router.replace("/login");
+}
 
 function readStoredThemePreference(): "light" | "dark" | "auto" {
   if (typeof window === "undefined") {
@@ -47,9 +59,6 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [session, setSession] = useState<SessionInfo | null>(initialSession);
   const [tenantModalOpen, setTenantModalOpen] = useState(false);
-  const [tenantSettingsModalOpen, setTenantSettingsModalOpen] = useState(false);
-  const [tenantSettingsTenantId, setTenantSettingsTenantId] = useState<number | null>(null);
-  const [tenantSettingsTenantName, setTenantSettingsTenantName] = useState("");
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [language, setLanguage] = useState("de");
   const [sessionStatus, setSessionStatus] = useState(initialSession?.authenticated ? "Ready" : "Loading workspace...");
@@ -195,7 +204,10 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
         }
         if (!current.authenticated) {
           // Explicit "not logged in" from the server → redirect.
-          router.replace("/login");
+          redirectToLogin(router);
+          return;
+        }
+        if (current.bridge_redirect_url && attemptBridgeRedirect(current.bridge_redirect_url)) {
           return;
         }
         setSession(current);
@@ -224,10 +236,14 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
       return;
     }
     tenantPromptCheckedRef.current = true;
+    // Auf einer Mandanten-Custom-Domain ist der Mandant durch die Domain bereits festgelegt -
+    // dort macht ein "welcher Mandant?"-Popup keinen Sinn, nur auf der Hauptdomain zeigen.
+    const mainDomain = process.env.NEXT_PUBLIC_MAIN_APP_DOMAIN;
+    const isMainDomain = !mainDomain || window.location.hostname === mainDomain;
     const alreadyPrompted = window.sessionStorage.getItem("hocx-tenant-prompted");
     const hasMultipleTenants = session.available_tenants.length > 1;
     const hasNoDefault = session.user?.default_tenant_id == null;
-    if (hasMultipleTenants && hasNoDefault && !alreadyPrompted) {
+    if (isMainDomain && hasMultipleTenants && hasNoDefault && !alreadyPrompted) {
       window.sessionStorage.setItem("hocx-tenant-prompted", "1");
       setTenantModalOpen(true);
     }
@@ -265,16 +281,20 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
   }
 
   async function switchTenant(membership: TenantMembership) {
-    await browserApiFetch(`/api/auth/select-tenant/${membership.tenant_id}`, { method: "POST" });
+    const result = await browserApiFetch<SessionInfo>(`/api/auth/select-tenant/${membership.tenant_id}`, { method: "POST" });
     setTenantModalOpen(false);
-    router.refresh();
+    if (result.bridge_redirect_url && attemptBridgeRedirect(result.bridge_redirect_url)) {
+      return;
+    }
+    // Hard reload, not router.refresh() - a soft refresh only re-fetches server data, it doesn't
+    // reliably reset every client component's own state for the new tenant context, which is
+    // why the switch sometimes only visibly "took" after an extra click/navigation.
+    window.location.reload();
   }
 
   function openTenantSettings(membership: TenantMembership) {
-    setTenantSettingsTenantId(membership.tenant_id);
-    setTenantSettingsTenantName(membership.tenant_name);
     setTenantModalOpen(false);
-    setTenantSettingsModalOpen(true);
+    router.push(`/tenant-settings?tenantId=${membership.tenant_id}`);
   }
 
   async function setDefaultTenant(tenantId: number | null) {
@@ -309,7 +329,7 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
   async function logout() {
     await browserApiFetch("/api/auth/logout", { method: "POST" });
     window.sessionStorage.removeItem("hocx-tenant-prompted");
-    router.replace("/login");
+    redirectToLogin(router);
   }
 
   return (
@@ -539,14 +559,6 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
         onSelect={(membership) => void switchTenant(membership)}
         onOpenSettings={openTenantSettings}
         onSetDefault={(tenantId) => void setDefaultTenant(tenantId)}
-      />
-
-      <TenantSettingsModal
-        open={tenantSettingsModalOpen}
-        onClose={() => setTenantSettingsModalOpen(false)}
-        tenantId={tenantSettingsTenantId}
-        tenantName={tenantSettingsTenantName}
-        onSaved={() => router.refresh()}
       />
 
       <ProfileModal

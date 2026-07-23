@@ -8,7 +8,7 @@ import os
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from fastapi import Cookie, Depends, HTTPException, Request, status
+from fastapi import Cookie, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -88,6 +88,22 @@ def create_session_token(user_id: int, tenant_id: int | None) -> str:
         separators=(",", ":"),
     ).encode("utf-8")
     return _sign_payload(payload)
+
+
+def issue_session_cookie(response: Response, user_id: int, tenant_id: int | None) -> None:
+    """Mints a fresh session token and sets it as a host-only cookie on the response - shared by
+    login, select-tenant, OIDC callback and the cross-domain login bridge so all four stay
+    consistent."""
+    token = create_session_token(user_id, tenant_id)
+    response.set_cookie(
+        key=settings.auth_session_cookie,
+        value=token,
+        httponly=True,
+        secure=settings.auth_secure_cookies,
+        samesite="lax",
+        max_age=settings.auth_session_ttl_hours * 3600,
+        path="/",
+    )
 
 
 def parse_session_token(token: str | None) -> dict | None:

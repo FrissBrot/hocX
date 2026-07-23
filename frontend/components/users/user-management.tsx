@@ -269,7 +269,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
                     void deleteUser(user.id);
                   }}
                 >
-                  Delete
+                  Löschen
                 </button>
               </div>
             </td>

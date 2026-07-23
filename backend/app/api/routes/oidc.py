@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import CurrentUser, get_current_user, require_admin
+from app.core.security import CurrentUser, get_current_user, issue_session_cookie, require_admin
 from app.schemas.oidc import OidcConfigPublic, OidcConfigRead, OidcConfigWrite
 from app.services.oidc_service import OidcService
 
@@ -35,15 +35,15 @@ def callback(
     code: str,
     state: str,
     request: Request,
-    response: Response,
     db: Session = Depends(get_db),
 ):
     """Handle OIDC provider callback, set session cookie, redirect to frontend."""
     base = str(request.base_url).rstrip("/")
-    redirect_to = service.handle_callback(db, code, state, base, response)
-    # Redirect to frontend — strip /api prefix from base if needed
-    frontend_url = redirect_to if redirect_to.startswith("http") else redirect_to
-    return RedirectResponse(url=frontend_url, status_code=302)
+    redirect_to, user_id, tenant_id = service.handle_callback(db, code, state, base, request_host=request.url.hostname)
+    # Cookie must be set directly on the returned Response - see handle_callback's docstring.
+    redirect = RedirectResponse(url=redirect_to, status_code=302)
+    issue_session_cookie(redirect, user_id, tenant_id)
+    return redirect
 
 
 # ── Admin config management ───────────────────────────────────────────────────

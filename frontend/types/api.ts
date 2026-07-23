@@ -14,6 +14,7 @@ export type SessionInfo = {
   current_tenant: TenantSummary | null;
   current_role: string | null;
   available_tenants: TenantMembership[];
+  bridge_redirect_url: string | null;
 };
 
 export type TenantSummary = {
@@ -24,6 +25,21 @@ export type TenantSummary = {
   public_slug: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+};
+
+export type TenantDomainPurpose = "app" | "abgabebox";
+
+export type TenantDomain = {
+  id: number;
+  purpose: TenantDomainPurpose;
+  domain: string;
+  status: "pending" | "active";
+  verification_token: string;
+  challenge_record_name: string;
+  target_host: string | null;
+  verified_at: string | null;
+  is_healthy: boolean;
+  last_checked_at: string | null;
 };
 
 export type SubmissionSourceType = "events" | "list";
@@ -146,6 +162,19 @@ export type AdminTenantSummary = {
   public_slug: string | null;
   participant_count: number;
   user_count: number;
+  created_at: string;
+};
+
+export type AdminDomainSummary = {
+  id: number;
+  tenant_id: number;
+  tenant_name: string;
+  purpose: TenantDomainPurpose;
+  domain: string;
+  status: "pending" | "active";
+  is_healthy: boolean;
+  last_checked_at: string | null;
+  verified_at: string | null;
   created_at: string;
 };
 

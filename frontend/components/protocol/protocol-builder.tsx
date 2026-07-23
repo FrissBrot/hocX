@@ -217,24 +217,41 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
 
   return (
     <div className="grid">
-      <div className="protocol-list-toolbar">
-        <div className="segment-control">
-          <button type="button" className={`segment-button${statusFilter === "all" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("all")}>Alle</button>
-          <button type="button" className={`segment-button${statusFilter === "geplant" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("geplant")}>Geplant</button>
-          <button type="button" className={`segment-button${statusFilter === "vorbereitet" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("vorbereitet")}>Vorbereitet</button>
-          <button type="button" className={`segment-button${statusFilter === "durchgeführt" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("durchgeführt")}>Durchgeführt</button>
-          <button type="button" className={`segment-button${statusFilter === "abgeschlossen" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("abgeschlossen")}>Abgeschlossen</button>
-        </div>
-        <div className="protocol-list-toolbar-right">
-          <input className="protocol-search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Suchen…" />
-          <span className="muted protocol-count">{sortedProtocols.length} / {protocols.length}</span>
-          {!readOnly && (
+      <DataToolbar
+        title="Protokolle"
+        description="Alle Protokolle dieses Mandanten."
+        actions={
+          !readOnly ? (
             <button type="button" className="button-inline" onClick={() => setShowCreateForm((c) => !c)}>
               {showCreateForm ? "Abbrechen" : "+ Protokoll"}
             </button>
-          )}
-        </div>
+          ) : undefined
+        }
+      />
+
+      <div className="segment-control">
+        <button type="button" className={`segment-button${statusFilter === "all" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("all")}>Alle</button>
+        <button type="button" className={`segment-button${statusFilter === "geplant" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("geplant")}>Geplant</button>
+        <button type="button" className={`segment-button${statusFilter === "vorbereitet" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("vorbereitet")}>Vorbereitet</button>
+        <button type="button" className={`segment-button${statusFilter === "durchgeführt" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("durchgeführt")}>Durchgeführt</button>
+        <button type="button" className={`segment-button${statusFilter === "abgeschlossen" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("abgeschlossen")}>Abgeschlossen</button>
       </div>
+
+      <article className="card">
+        <div className="two-col">
+          <label className="field-stack">
+            <span className="field-label">Suche</span>
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Protokolle durchsuchen" />
+          </label>
+          <div className="card">
+            <div className="eyebrow">Überblick</div>
+            <div className="status-row">
+              <span className="pill">{sortedProtocols.length} sichtbar</span>
+              <span className="pill">{protocols.length} gesamt</span>
+            </div>
+          </div>
+        </div>
+      </article>
 
       <Modal
         open={showCreateForm}
@@ -332,7 +349,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
                     <div className="kebab-menu-wrapper">
                       <button
                         type="button"
-                        className="kebab-menu-btn"
+                        className="button-ghost button-icon"
                         title="Weitere Aktionen"
                         ref={(el) => { menuBtnRefs.current[protocol.id] = el; }}
                         onClick={() => {
