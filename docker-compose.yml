@@ -128,7 +128,8 @@ services:
       - ./frontend:/app
       - /app/node_modules
       - /app/.next
-    command: sh -c "npm run build && npm start"
+      - ./.git:/app/.git:ro
+    command: sh -c "export HOCX_VERSION=dev-$(git -C /app rev-parse --short HEAD 2>/dev/null || echo unknown) && npm run build && npm start"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.hocx-frontend.rule=Host(`${TRAEFIK_DOMAIN}`)"
@@ -204,7 +205,6 @@ services:
       NEXT_PUBLIC_ABGABEBOX_API_URL: https://${TRAEFIK_ABGABEBOX_DOMAIN}
       INTERNAL_ABGABEBOX_API_URL: http://abgabebox-backend:8000
       NEXT_PUBLIC_FRIENDLY_CAPTCHA_SITEKEY: ${FRIENDLY_CAPTCHA_SITEKEY}
-      NEXT_PUBLIC_DEFAULT_TENANT_SLUG: ${NEXT_PUBLIC_DEFAULT_TENANT_SLUG}
     depends_on:
       - abgabebox-backend
     volumes:
