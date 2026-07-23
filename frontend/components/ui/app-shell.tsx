@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 
 import { attemptBridgeRedirect } from "@/lib/bridge-redirect";
 import { browserApiFetch } from "@/lib/api/client";
+import { getRuntimeConfig } from "@/lib/runtime-config";
 import { SessionInfo, TenantMembership } from "@/types/api";
 
 import { buildNav, formatRoleLabel } from "@/components/ui/app-shell-nav";
@@ -16,7 +17,7 @@ import { TenantSelectorModal } from "@/components/ui/tenant-selector-modal";
 // Login rendert nie auf einer Mandanten-Custom-Domain — von dort muss eine volle Navigation
 // (nicht SPA-Routing) zur Hauptdomain erfolgen, sonst gäbe es dort keine Login-Seite zu zeigen.
 function redirectToLogin(router: ReturnType<typeof useRouter>): void {
-  const mainDomain = process.env.NEXT_PUBLIC_MAIN_APP_DOMAIN;
+  const mainDomain = getRuntimeConfig().mainAppDomain;
   if (mainDomain && window.location.hostname !== mainDomain) {
     // `from` laesst die Login-Seite den Mandanten anhand der Domain automatisch waehlen.
     window.location.href = `https://${mainDomain}/login?from=${encodeURIComponent(window.location.hostname)}`;
@@ -238,7 +239,7 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
     tenantPromptCheckedRef.current = true;
     // Auf einer Mandanten-Custom-Domain ist der Mandant durch die Domain bereits festgelegt -
     // dort macht ein "welcher Mandant?"-Popup keinen Sinn, nur auf der Hauptdomain zeigen.
-    const mainDomain = process.env.NEXT_PUBLIC_MAIN_APP_DOMAIN;
+    const mainDomain = getRuntimeConfig().mainAppDomain;
     const isMainDomain = !mainDomain || window.location.hostname === mainDomain;
     const alreadyPrompted = window.sessionStorage.getItem("hocx-tenant-prompted");
     const hasMultipleTenants = session.available_tenants.length > 1;

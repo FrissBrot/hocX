@@ -24,7 +24,7 @@ export async function requireSession(): Promise<SessionInfo> {
   if (!session?.authenticated) {
     // Login rendert nie auf einer Mandanten-Custom-Domain — von dort muss serverseitig zur
     // Hauptdomain umgeleitet werden, sonst gäbe es dort keine Login-Seite zu zeigen.
-    const mainDomain = process.env.NEXT_PUBLIC_MAIN_APP_DOMAIN;
+    const mainDomain = process.env.TRAEFIK_DOMAIN;
     const host = (await headers()).get("host");
     if (mainDomain && host && host !== mainDomain) {
       // `from` lässt die Login-Seite den Mandanten anhand der Domain automatisch waehlen,
