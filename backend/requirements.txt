@@ -9,4 +9,6 @@ python-multipart==0.0.20
 pyclamd==0.4.0
 redis==5.2.1
 matplotlib==3.10.1
+dnspython==2.7.0
+PyYAML==6.0.3
 

@@ -2,18 +2,17 @@
 
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 
-import { Modal } from "@/components/ui/modal";
+import { DomainWizardModal } from "@/components/ui/domain-wizard-modal";
+import { DataTable } from "@/components/ui/data-table";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
-import { OidcConfigRead, OidcConfigWrite, TenantSummary } from "@/types/api";
+import { OidcConfigRead, OidcConfigWrite, TenantDomain, TenantSummary } from "@/types/api";
 
 type Props = {
-  open: boolean;
-  onClose: () => void;
-  tenantId: number | null;
-  tenantName: string;
-  onSaved?: (tenant: TenantSummary) => void;
+  initialTenant: TenantSummary;
 };
+
+type Tab = "general" | "credentials" | "domains";
 
 type TenantFormState = {
   name: string;
@@ -21,8 +20,6 @@ type TenantFormState = {
   profileImage: File | null;
   profileImageUrl: string | null;
 };
-
-const emptyTenantForm: TenantFormState = { name: "", publicSlug: "", profileImage: null, profileImageUrl: null };
 
 const defaultOidcForm: OidcConfigWrite = {
   enabled: false,
@@ -33,34 +30,32 @@ const defaultOidcForm: OidcConfigWrite = {
   scopes: "openid email profile",
 };
 
-export function TenantSettingsModal({ open, onClose, tenantId, tenantName, onSaved }: Props) {
+export function TenantSettingsManager({ initialTenant }: Props) {
   const showToast = useToast();
-  const [tenantForm, setTenantForm] = useState<TenantFormState>(emptyTenantForm);
+  const tenantId = initialTenant.id;
+
+  const [activeTab, setActiveTab] = useState<Tab>("general");
+  const [tenantName, setTenantName] = useState(initialTenant.name);
+
+  const [tenantForm, setTenantForm] = useState<TenantFormState>({
+    name: initialTenant.name,
+    publicSlug: initialTenant.public_slug ?? "",
+    profileImage: null,
+    profileImageUrl: initialTenant.profile_image_url,
+  });
+
   const [oidcForm, setOidcForm] = useState<OidcConfigWrite>(defaultOidcForm);
   const [oidcLoading, setOidcLoading] = useState(false);
 
+  const [domains, setDomains] = useState<TenantDomain[]>([]);
+  const [domainBusyId, setDomainBusyId] = useState<number | null>(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardDomain, setWizardDomain] = useState<TenantDomain | null>(null);
+
   useEffect(() => {
-    if (!open || !tenantId) {
-      return;
-    }
-    setTenantForm(emptyTenantForm);
-    setOidcForm(defaultOidcForm);
+    void loadDomains();
 
     (async () => {
-      try {
-        const tenants = await browserApiFetch<TenantSummary[]>("/api/tenants");
-        const tenant = tenants.find((item) => item.id === tenantId);
-        if (tenant) {
-          setTenantForm({
-            name: tenant.name,
-            publicSlug: tenant.public_slug ?? "",
-            profileImage: null,
-            profileImageUrl: tenant.profile_image_url
-          });
-        }
-      } catch {
-        // keep empty defaults
-      }
       try {
         const cfg = await browserApiFetch<OidcConfigRead>(`/api/tenants/${tenantId}/oidc-config`);
         setOidcForm({
@@ -75,11 +70,11 @@ export function TenantSettingsModal({ open, onClose, tenantId, tenantName, onSav
         // no config yet — defaults are fine
       }
     })();
-  }, [open, tenantId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenantId]);
 
   async function submitTenant(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!tenantId) return;
     try {
       const formData = new FormData();
       formData.append("name", tenantForm.name);
@@ -94,8 +89,8 @@ export function TenantSettingsModal({ open, onClose, tenantId, tenantName, onSav
         body: formData
       });
       setTenantForm((current) => ({ ...current, profileImage: null, profileImageUrl: updated.profile_image_url }));
+      setTenantName(updated.name);
       showToast("Mandant gespeichert", "success");
-      onSaved?.(updated);
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Mandant konnte nicht gespeichert werden", "error");
     }
@@ -103,14 +98,13 @@ export function TenantSettingsModal({ open, onClose, tenantId, tenantName, onSav
 
   async function submitOidc(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!tenantId) return;
     setOidcLoading(true);
     try {
       await browserApiFetch<OidcConfigRead>(`/api/tenants/${tenantId}/oidc-config`, {
         method: "PUT",
         body: JSON.stringify(oidcForm)
       });
-      showToast("OIDC-Konfiguration gespeichert", "success");
+      showToast("Zugangsdaten gespeichert", "success");
       setOidcForm((f) => ({ ...f, client_secret: "" }));
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Fehler beim Speichern", "error");
@@ -119,15 +113,57 @@ export function TenantSettingsModal({ open, onClose, tenantId, tenantName, onSav
     }
   }
 
+  async function loadDomains() {
+    try {
+      const rows = await browserApiFetch<TenantDomain[]>(`/api/tenants/${tenantId}/domains`);
+      setDomains(rows);
+    } catch {
+      // keine Domains bzw. Fehler beim Laden — leere Liste anzeigen
+    }
+  }
+
+  function openWizardForNewDomain() {
+    setWizardDomain(null);
+    setWizardOpen(true);
+  }
+
+  function openWizardToResume(domain: TenantDomain) {
+    setWizardDomain(domain);
+    setWizardOpen(true);
+  }
+
+  async function deleteDomain(domainId: number) {
+    setDomainBusyId(domainId);
+    try {
+      await browserApiFetch<{ message: string }>(`/api/tenants/${tenantId}/domains/${domainId}`, { method: "DELETE" });
+      await loadDomains();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Domain konnte nicht entfernt werden", "error");
+    } finally {
+      setDomainBusyId(null);
+    }
+  }
+
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={`Mandant-Einstellungen – ${tenantName}`}
-      description="Stammdaten und OpenID-Connect-Anmeldung für diesen Mandanten verwalten."
-      size="wide"
-    >
-      <div className="grid">
+    <div className="section-stack">
+      <div className="page-header">
+        <h1 className="page-title">Mandant-Einstellungen – {tenantName}</h1>
+        <p className="page-description">Stammdaten, Zugangsdaten und Domains für diesen Mandanten verwalten.</p>
+      </div>
+
+      <div className="segment-control">
+        <button type="button" className={`segment-button${activeTab === "general" ? " segment-button-active" : ""}`} onClick={() => setActiveTab("general")}>
+          Allgemein
+        </button>
+        <button type="button" className={`segment-button${activeTab === "credentials" ? " segment-button-active" : ""}`} onClick={() => setActiveTab("credentials")}>
+          Zugangsdaten
+        </button>
+        <button type="button" className={`segment-button${activeTab === "domains" ? " segment-button-active" : ""}`} onClick={() => setActiveTab("domains")}>
+          Domains {domains.some((d) => d.status === "pending") ? "·" : ""}
+        </button>
+      </div>
+
+      {activeTab === "general" && (
         <section className="card">
           <div className="eyebrow">Stammdaten</div>
           <form className="grid" onSubmit={submitTenant}>
@@ -169,9 +205,12 @@ export function TenantSettingsModal({ open, onClose, tenantId, tenantName, onSav
             </div>
           </form>
         </section>
+      )}
 
+      {activeTab === "credentials" && (
         <section className="card">
-          <div className="eyebrow">OIDC</div>
+          <div className="eyebrow">Zugangsdaten · OpenID Connect</div>
+          <p className="muted">Externe Anmeldung (SSO) für Mitglieder dieses Mandanten konfigurieren.</p>
           <form className="grid" onSubmit={submitOidc}>
             <div className="two-col">
               <label className="field-stack">
@@ -244,7 +283,68 @@ export function TenantSettingsModal({ open, onClose, tenantId, tenantName, onSav
             </div>
           </form>
         </section>
-      </div>
-    </Modal>
+      )}
+
+      {activeTab === "domains" && (
+        <section className="card">
+          <div className="eyebrow">Domains</div>
+          <p className="muted">
+            Eigene Domain für die hocX-App und/oder die Abgabebox. hocx.tweber.ch bzw. die
+            Standard-Abgabebox-Domain bleiben zusätzlich immer erreichbar.
+          </p>
+
+          {domains.length > 0 && (
+            <DataTable columns={["Zweck", "Domain", "Status", ""]}>
+              {domains.map((d) => (
+                <tr key={d.id}>
+                  <td>{d.purpose === "app" ? "hocX-App" : "Abgabebox"}</td>
+                  <td className="domain-row-domain">{d.domain}</td>
+                  <td>
+                    {d.status === "pending" ? (
+                      <span className="pill">Ausstehend</span>
+                    ) : d.is_healthy ? (
+                      <span className="pill pill-success">Aktiv</span>
+                    ) : (
+                      <span className="pill pill-error" title="Domain zeigt bei der letzten Prüfung nicht mehr auf hocX — DNS-Einträge prüfen">
+                        Nicht erreichbar
+                      </span>
+                    )}
+                  </td>
+                  <td>
+                    <div className="table-actions">
+                      {d.status === "pending" && (
+                        <button type="button" className="button-inline" onClick={() => openWizardToResume(d)}>
+                          Einrichten
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="button-inline button-danger"
+                        disabled={domainBusyId === d.id}
+                        onClick={() => deleteDomain(d.id)}
+                      >
+                        {domainBusyId === d.id ? "…" : "Entfernen"}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </DataTable>
+          )}
+
+          <button type="button" className="domain-add-trigger" onClick={openWizardForNewDomain}>
+            + Domain hinzufügen
+          </button>
+        </section>
+      )}
+
+      <DomainWizardModal
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        tenantId={tenantId}
+        domain={wizardDomain}
+        onChanged={loadDomains}
+      />
+    </div>
   );
 }

@@ -93,6 +93,12 @@ class LoginRequest(BaseModel):
     tenant_id: int | None = None
 
 
+class TenantByDomainRead(BaseModel):
+    tenant_id: int
+    tenant_name: str
+    profile_image_url: str | None = None
+
+
 class SessionUserRead(BaseModel):
     id: int
     first_name: str
@@ -109,8 +115,29 @@ class SessionRead(BaseModel):
     current_tenant: TenantRead | None = None
     current_role: str | None = None
     available_tenants: list[TenantMembershipRead] = Field(default_factory=list)
+    bridge_redirect_url: str | None = None
 
 
 class TenantUpdate(BaseModel):
     name: str | None = None
     public_slug: str | None = Field(default=None, pattern=r"^[a-z0-9-]+$")
+
+
+class TenantDomainCreate(BaseModel):
+    purpose: str = Field(pattern=r"^(app|abgabebox)$")
+    domain: str = Field(min_length=1, max_length=253)
+
+
+class TenantDomainRead(BaseModel):
+    id: int
+    purpose: str
+    domain: str
+    status: str
+    verification_token: str
+    challenge_record_name: str
+    target_host: str | None = None
+    verified_at: datetime | None = None
+    is_healthy: bool = True
+    last_checked_at: datetime | None = None
+
+    model_config = {"from_attributes": True}

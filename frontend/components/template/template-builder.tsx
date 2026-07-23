@@ -505,11 +505,11 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
   return (
     <div className="grid">
       <DataToolbar
-        title="Templates"
-        description="Templates are slim containers: they select finished elements and decide order only."
+        title="Vorlagen"
+        description="Vorlagen sind schlanke Container: sie wählen fertige Elemente aus und legen nur deren Reihenfolge fest."
         actions={
           <button type="button" className="button-inline" onClick={() => setShowCreateForm((current) => !current)}>
-            {showCreateForm ? "Close create form" : "New template"}
+            {showCreateForm ? "Abbrechen" : "+ Vorlage"}
           </button>
         }
       />
@@ -517,28 +517,28 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
       <Modal
         open={showCreateForm}
         onClose={() => setShowCreateForm(false)}
-        title="Create template"
-        description="Create a fresh template shell, then assign reusable elements to it."
+        title="Vorlage erstellen"
+        description="Legt eine neue leere Vorlage an, der anschliessend wiederverwendbare Elemente zugewiesen werden."
       >
         <form className="grid" onSubmit={createTemplate}>
           <label className="field-stack">
-            <span className="field-label">Template name</span>
-            <input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="Template name" required />
+            <span className="field-label">Vorlagenname</span>
+            <input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="Vorlagenname" required />
           </label>
           <label className="field-stack">
-            <span className="field-label">Description</span>
-            <textarea rows={4} value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} placeholder="Description" />
+            <span className="field-label">Beschreibung</span>
+            <textarea rows={4} value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} placeholder="Beschreibung" />
           </label>
           <div className="two-col">
             <label className="field-stack">
-              <span className="field-label">Protocol number pattern</span>
-              <input value={form.protocol_number_pattern} onChange={(event) => setForm((current) => ({ ...current, protocol_number_pattern: event.target.value }))} placeholder="e.g. Sitzung {n}" />
+              <span className="field-label">Protokollnummer-Muster</span>
+              <input value={form.protocol_number_pattern} onChange={(event) => setForm((current) => ({ ...current, protocol_number_pattern: event.target.value }))} placeholder="z.B. Sitzung {n}" />
               <span className="field-help">Beispiele: Sitzung [n], Sitzung [mm].[n_month], J[yy]-[n_year], V[n_cycle]. Eckige und geschweifte Klammern funktionieren beide.</span>
             </label>
             <label className="field-stack">
-              <span className="field-label">Title pattern</span>
-              <input value={form.title_pattern} onChange={(event) => setForm((current) => ({ ...current, title_pattern: event.target.value }))} placeholder="e.g. Sitzung {n} - {date:DD.MM.YYYY}" />
-              <span className="field-help">The date token always uses the selected protocol date, not the current day.</span>
+              <span className="field-label">Titel-Muster</span>
+              <input value={form.title_pattern} onChange={(event) => setForm((current) => ({ ...current, title_pattern: event.target.value }))} placeholder="z.B. Sitzung {n} - {date:DD.MM.YYYY}" />
+              <span className="field-help">Das Datums-Token verwendet immer das gewählte Protokolldatum, nicht den heutigen Tag.</span>
             </label>
           </div>
           <label className="field-stack">
@@ -563,7 +563,7 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
             Tokens: {"{n}"} = alle Protokolle, {"{n_year}"} = in diesem Jahr, {"{n_month}"} = in diesem Monat, {"{n_cycle}"} = im eigenen Zyklus. Datums-Tokens: {"{date}"}, {"{date:DD.MM.YYYY}"}, {"{dd}"}, {"{mm}"}, {"{yyyy}"}.
           </div>
           <div className="table-toolbar-actions">
-            <button type="submit" className="button-inline">Create template</button>
+            <button type="submit" className="button-inline">Vorlage erstellen</button>
           </div>
         </form>
       </Modal>
@@ -571,27 +571,27 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
       <article className="card">
         <div className="two-col">
           <label className="field-stack">
-            <span className="field-label">Search</span>
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search templates" />
+            <span className="field-label">Suche</span>
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Vorlagen durchsuchen" />
           </label>
           <div className="card">
-            <div className="eyebrow">Overview</div>
+            <div className="eyebrow">Überblick</div>
             <div className="status-row">
-              <span className="pill">{filteredTemplates.length} visible</span>
-              <span className="pill">{templates.length} total</span>
+              <span className="pill">{filteredTemplates.length} sichtbar</span>
+              <span className="pill">{templates.length} gesamt</span>
             </div>
           </div>
         </div>
       </article>
 
-      <DataTable columns={["Template", "Description", "Version", "Actions"]}>
+      <DataTable columns={["Vorlage", "Beschreibung", "Version", "Aktionen"]}>
         {filteredTemplates.map((template) => (
           <tr key={template.id} className="table-row-clickable" onClick={() => router.push(`/templates/${template.id}`)}>
             <td>
               <strong>{template.name}</strong>
               <div className="muted">{template.status === "archived" ? "Archiviert" : "Aktiv"}</div>
             </td>
-            <td>{template.description ?? "No description"}</td>
+            <td>{template.description ?? "Keine Beschreibung"}</td>
             <td>{template.version}</td>
             <td>
               <div className="table-actions">
@@ -608,7 +608,7 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
                 <button type="button" className="button-inline button-danger" onClick={(event) => {
                   event.stopPropagation();
                   void deleteTemplate(template.id);
-                }}>Delete</button>
+                }}>Löschen</button>
               </div>
             </td>
           </tr>

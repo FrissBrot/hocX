@@ -58,6 +58,26 @@ class TenantOidcConfig(Base, TimestampMixin, UpdatedAtMixin):
     scopes: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'openid email profile'"))
 
 
+class TenantDomain(Base, TimestampMixin):
+    __tablename__ = "tenant_domain"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "purpose", name="uq_tenant_domain_tenant_purpose"),
+        UniqueConstraint("domain", name="uq_tenant_domain_domain"),
+        CheckConstraint("purpose IN ('app', 'abgabebox')", name="ck_tenant_domain_purpose"),
+        CheckConstraint("status IN ('pending', 'active')", name="ck_tenant_domain_status"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    purpose: Mapped[str] = mapped_column(Text, nullable=False)
+    domain: Mapped[str] = mapped_column(Text, nullable=False)
+    verification_token: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'pending'"))
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    is_healthy: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class Role(Base):
     __tablename__ = "role"
 

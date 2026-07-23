@@ -334,28 +334,16 @@ export function ParticipantManager({ initialParticipants, templates }: Participa
         description={`${csvPreview?.rows.length ?? 0} Einträge erkannt. Nur Vorname, Nachname, Übername und E-Mail werden importiert.`}
       >
         <div className="grid">
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.88rem" }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: "left", padding: "6px 10px", borderBottom: "1px solid var(--border-strong)" }}>Anzeigename</th>
-                  <th style={{ textAlign: "left", padding: "6px 10px", borderBottom: "1px solid var(--border-strong)" }}>Vorname</th>
-                  <th style={{ textAlign: "left", padding: "6px 10px", borderBottom: "1px solid var(--border-strong)" }}>Nachname</th>
-                  <th style={{ textAlign: "left", padding: "6px 10px", borderBottom: "1px solid var(--border-strong)" }}>E-Mail</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(csvPreview?.rows ?? []).map((row, i) => (
-                  <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
-                    <td style={{ padding: "6px 10px" }}><strong>{row.display_name}</strong></td>
-                    <td style={{ padding: "6px 10px" }}>{row.first_name ?? <span className="muted">—</span>}</td>
-                    <td style={{ padding: "6px 10px" }}>{row.last_name ?? <span className="muted">—</span>}</td>
-                    <td style={{ padding: "6px 10px" }}>{row.email ?? <span className="muted">—</span>}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable columns={["Anzeigename", "Vorname", "Nachname", "E-Mail"]}>
+            {(csvPreview?.rows ?? []).map((row, i) => (
+              <tr key={i}>
+                <td><strong>{row.display_name}</strong></td>
+                <td>{row.first_name ?? <span className="muted">—</span>}</td>
+                <td>{row.last_name ?? <span className="muted">—</span>}</td>
+                <td>{row.email ?? <span className="muted">—</span>}</td>
+              </tr>
+            ))}
+          </DataTable>
           <div className="table-toolbar-actions">
             <button type="button" className="button-inline button-ghost" onClick={() => setCsvPreview(null)}>Abbrechen</button>
             <button type="button" className="button-inline" onClick={() => void confirmCsvImport()} disabled={importing}>
@@ -375,16 +363,16 @@ export function ParticipantManager({ initialParticipants, templates }: Participa
         {importResult && (
           <div className="grid">
             <div className="status-row">
-              <span className="pill" style={{ background: "var(--success)", color: "#fff" }}>
+              <span className="pill pill-success">
                 {importResult.imported.length} importiert
               </span>
               {importResult.duplicates.length > 0 && (
-                <span className="pill" style={{ background: "var(--warning)", color: "#fff" }}>
+                <span className="pill pill-warning">
                   {importResult.duplicates.length} Duplikate übersprungen
                 </span>
               )}
               {importResult.errors.length > 0 && (
-                <span className="pill" style={{ background: "var(--danger)", color: "#fff" }}>
+                <span className="pill pill-error">
                   {importResult.errors.length} Fehler
                 </span>
               )}

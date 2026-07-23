@@ -9,13 +9,13 @@ import urllib.parse
 import urllib.request
 from datetime import UTC, datetime, timedelta
 
-from fastapi import HTTPException, Response, status
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.security import build_current_user, create_session_token
 from app.models import AppUser, TenantOidcConfig
 from app.schemas.oidc import OidcConfigPublic, OidcConfigRead, OidcConfigWrite
+from app.services import domain_bridge_service
 from app.services.auth_service import AuthService
 
 
@@ -139,7 +139,13 @@ class OidcService:
         })
         return f"{auth_endpoint}?{params}"
 
-    def handle_callback(self, db: Session, code: str, state: str, redirect_base: str, response: Response) -> str:
+    def handle_callback(
+        self, db: Session, code: str, state: str, redirect_base: str, request_host: str | None = None
+    ) -> tuple[str, int, int]:
+        """Returns (redirect_target, user_id, tenant_id). Deliberately does not set the session
+        cookie itself - the caller must do that on the actual Response object it returns, since
+        FastAPI silently drops Set-Cookie headers set on an injected Response dependency the
+        moment the route returns a *different* Response instance (like a RedirectResponse)."""
         state_data = _verify_state(state)
         tenant_id: int = int(state_data["t"])
         redirect_to: str = state_data.get("r", "/")
@@ -213,15 +219,5 @@ class OidcService:
         if not user.is_active:
             raise HTTPException(status_code=403, detail="Account deaktiviert")
 
-        current_user = build_current_user(db, user, tenant_id)
-        token = create_session_token(user.id, tenant_id)
-        response.set_cookie(
-            key=settings.auth_session_cookie,
-            value=token,
-            httponly=True,
-            secure=settings.auth_secure_cookies,
-            samesite="lax",
-            max_age=settings.auth_session_ttl_hours * 3600,
-            path="/",
-        )
-        return redirect_to
+        bridge_redirect_url = domain_bridge_service.resolve_bridge_redirect(db, request_host, user.id, tenant_id)
+        return bridge_redirect_url or redirect_to, user.id, tenant_id

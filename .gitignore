@@ -40,6 +40,9 @@ storage/document_template_snapshots/
 # Traefik TLS state
 infra/traefik/letsencrypt/acme.json
 
+# Generated per-tenant Traefik router config (traefik_config_service.py)
+infra/traefik/dynamic/tenant-domains.yml
+
 # DB backups and abgabebox uploads — real user data, never committed
 backups/
 storage/abgabebox-uploads/*

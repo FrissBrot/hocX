@@ -2,8 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { browserApiBaseUrl } from "@/lib/api/client";
-
 export type CollaboratorInfo = {
   user_id: number;
   display_name: string;
@@ -27,7 +25,10 @@ const RECONNECT_BASE_DELAY_MS = 1_000;
 const RECONNECT_MAX_DELAY_MS = 15_000;
 
 function wsUrlForProtocol(protocolId: number): string {
-  return `${browserApiBaseUrl.replace(/^http/, "ws")}/api/ws/protocols/${protocolId}`;
+  // Same-origin: WS-Scheme + aktueller Host, damit das auf jeder Domain (Haupt- oder
+  // Mandanten-Custom-Domain) automatisch gegen die richtige Origin geht.
+  const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
+  return `${wsScheme}://${window.location.host}/api/ws/protocols/${protocolId}`;
 }
 
 /**

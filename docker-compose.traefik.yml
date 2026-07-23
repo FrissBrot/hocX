@@ -1,0 +1,21 @@
+services:
+  traefik:
+    image: traefik:v3.1
+    restart: unless-stopped
+    depends_on:
+      - frontend
+      - backend
+    env_file:
+      - .env
+    environment:
+      TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL: ${ACME_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./infra/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./infra/traefik/letsencrypt:/letsencrypt
+      - ./infra/traefik/dynamic:/etc/traefik/dynamic:ro
+    command:
+      - --configFile=/etc/traefik/traefik.yml

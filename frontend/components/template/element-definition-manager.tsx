@@ -1497,9 +1497,19 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
 
       <article className="card">
         <div className="two-col">
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Elemente durchsuchen" />
-          <div className="info-note">Fixe Inhalte legst du hier am besten als nicht editierbare Blöcke an. Im Protokoll erscheinen sie später automatisch schreibgeschützt.</div>
+          <label className="field-stack">
+            <span className="field-label">Suche</span>
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Elemente durchsuchen" />
+          </label>
+          <div className="card">
+            <div className="eyebrow">Überblick</div>
+            <div className="status-row">
+              <span className="pill">{filteredDefinitions.length} sichtbar</span>
+              <span className="pill">{definitions.length} gesamt</span>
+            </div>
+          </div>
         </div>
+        <div className="info-note">Fixe Inhalte legst du hier am besten als nicht editierbare Blöcke an. Im Protokoll erscheinen sie später automatisch schreibgeschützt.</div>
       </article>
 
       <DataTable columns={["Element", "Blöcke", "Aktionen"]}>

@@ -684,7 +684,7 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
                 </div>
                 <button
                   type="button"
-                  className="subm-zip-button"
+                  className="button-inline subm-zip-button"
                   onClick={() => void downloadZip(selectedId)}
                   disabled={zipLoading}
                   title="Alle geprüften Dateien als ZIP herunterladen"

@@ -50,8 +50,8 @@ export function getElement(tenantSlug: string, assignmentSlug: string, elementRe
   );
 }
 
-// Browser-seitig (Upload-Formular) wird die oeffentliche Domain direkt angesprochen.
+// Browser-seitig (Upload-Formular) wird immer same-origin (relativer Pfad) angesprochen, damit
+// das auf jeder Domain (Standard- oder Mandanten-Custom-Domain) automatisch korrekt aufgeloest wird.
 export function publicApiUrl(path: string): string {
-  const base = process.env.NEXT_PUBLIC_ABGABEBOX_API_URL ?? "";
-  return `${base}${path}`;
+  return path;
 }

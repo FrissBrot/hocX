@@ -1,0 +1,151 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    image: ghcr.io/${GHCR_NAMESPACE}/hocx-backend:${HOCX_VERSION}
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      PYTHONPATH: /app
+      STORAGE_ROOT: /app/storage
+      LATEX_TEMPLATE_ROOT: /app/storage/latex_templates
+      EXPORT_ROOT: /app/storage/exports
+      UPLOAD_ROOT: /app/storage/uploads
+      ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
+      ABGABEBOX_DB_PASSWORD: ${ABGABEBOX_DB_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      CLAMAV_HOST: clamav
+      REDIS_URL: redis://redis:6379/0
+      TRAEFIK_DYNAMIC_CONFIG_DIR: /app/traefik_dynamic
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./storage:/app/storage
+      - ./storage/abgabebox-uploads:/app/abgabebox-storage
+      - ./infra/traefik/dynamic:/app/traefik_dynamic
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.rule=Host(`${TRAEFIK_DOMAIN}`) && (PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`))"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.entrypoints=websecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.priority=100"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.service=${ROUTER_PREFIX:-hocx}-backend"
+      - "traefik.http.services.${ROUTER_PREFIX:-hocx}-backend.loadbalancer.server.port=8000"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-auth.rule=Host(`${TRAEFIK_DOMAIN}`) && Path(`/api/auth/login`) && Method(`POST`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-auth.entrypoints=websecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-auth.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-auth.priority=200"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-auth.service=${ROUTER_PREFIX:-hocx}-auth"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-auth.middlewares=${ROUTER_PREFIX:-hocx}-auth-ratelimit"
+      - "traefik.http.services.${ROUTER_PREFIX:-hocx}-auth.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-auth-ratelimit.ratelimit.average=10"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-auth-ratelimit.ratelimit.burst=5"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-auth-ratelimit.ratelimit.period=1m"
+
+  frontend:
+    image: ghcr.io/${GHCR_NAMESPACE}/hocx-frontend:${HOCX_VERSION}
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      INTERNAL_API_URL: ${INTERNAL_API_URL}
+      NEXT_PUBLIC_MAIN_APP_DOMAIN: ${TRAEFIK_DOMAIN}
+    depends_on:
+      - backend
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.rule=Host(`${TRAEFIK_DOMAIN}`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.entrypoints=websecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.priority=10"
+      - "traefik.http.services.${ROUTER_PREFIX:-hocx}-frontend.loadbalancer.server.port=3000"
+
+  abgabebox-backend:
+    image: ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-backend:${HOCX_VERSION}
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      ABGABEBOX_DATABASE_URL: ${ABGABEBOX_DATABASE_URL}
+      ABGABEBOX_STORAGE_ROOT: /app/storage
+      ABGABEBOX_CORS_ORIGIN: https://${TRAEFIK_ABGABEBOX_DOMAIN}
+      FRIENDLY_CAPTCHA_SITEKEY: ${FRIENDLY_CAPTCHA_SITEKEY}
+      FRIENDLY_CAPTCHA_API_KEY: ${FRIENDLY_CAPTCHA_API_KEY}
+      CLAMAV_HOST: clamav
+    depends_on:
+      db:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    volumes:
+      - ./storage/abgabebox-uploads:/app/storage
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.entrypoints=websecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.priority=100"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.service=${ROUTER_PREFIX:-hocx}-abgabebox-backend"
+      - "traefik.http.services.${ROUTER_PREFIX:-hocx}-abgabebox-backend.loadbalancer.server.port=8000"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-upload.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && PathPrefix(`/api/public`) && Method(`POST`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-upload.entrypoints=websecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-upload.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-upload.priority=200"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-upload.service=${ROUTER_PREFIX:-hocx}-abgabebox-backend"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-upload.middlewares=${ROUTER_PREFIX:-hocx}-abgabebox-upload-ratelimit"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-ratelimit.ratelimit.average=5"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-ratelimit.ratelimit.burst=3"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-ratelimit.ratelimit.period=1m"
+
+  abgabebox-frontend:
+    image: ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-frontend:${HOCX_VERSION}
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NEXT_PUBLIC_ABGABEBOX_API_URL: https://${TRAEFIK_ABGABEBOX_DOMAIN}
+      INTERNAL_ABGABEBOX_API_URL: http://abgabebox-backend:8000
+      NEXT_PUBLIC_FRIENDLY_CAPTCHA_SITEKEY: ${FRIENDLY_CAPTCHA_SITEKEY}
+      NEXT_PUBLIC_DEFAULT_TENANT_SLUG: ${NEXT_PUBLIC_DEFAULT_TENANT_SLUG}
+    depends_on:
+      - abgabebox-backend
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.entrypoints=websecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.priority=10"
+      - "traefik.http.services.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.loadbalancer.server.port=3000"
+
+volumes:
+  postgres_data:

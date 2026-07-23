@@ -63,6 +63,21 @@ class AdminTenantRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class AdminDomainRead(BaseModel):
+    id: int
+    tenant_id: int
+    tenant_name: str
+    purpose: str
+    domain: str
+    status: str
+    is_healthy: bool
+    last_checked_at: datetime | None = None
+    verified_at: datetime | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class AdminUserMergeRequest(BaseModel):
     source_user_id: int
     target_user_id: int

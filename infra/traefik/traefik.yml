@@ -16,11 +16,16 @@ providers:
   docker:
     endpoint: "unix:///var/run/docker.sock"
     exposedByDefault: false
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
 
 certificatesResolvers:
   letsencrypt:
     acme:
-      email: "${ACME_EMAIL}"
+      # E-Mail kommt aus der TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL
+      # Env-Variable (siehe docker-compose.yml) - Traefik ersetzt "${...}" hier NICHT,
+      # das ist reine YAML-Syntax ohne Substitution.
       storage: /letsencrypt/acme.json
       httpChallenge:
         entryPoint: web

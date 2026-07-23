@@ -5,6 +5,10 @@ services:
     depends_on:
       - frontend
       - backend
+    env_file:
+      - .env
+    environment:
+      TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL: ${ACME_EMAIL}
     ports:
       - "80:80"
       - "443:443"
@@ -12,6 +16,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./infra/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
       - ./infra/traefik/letsencrypt:/letsencrypt
+      # Vom backend generierte Router pro Mandanten-Custom-Domain (siehe traefik_config_service.py)
+      - ./infra/traefik/dynamic:/etc/traefik/dynamic:ro
     command:
       - --configFile=/etc/traefik/traefik.yml
 
@@ -61,6 +67,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       CLAMAV_HOST: clamav
       REDIS_URL: redis://redis:6379/0
+      TRAEFIK_DYNAMIC_CONFIG_DIR: /app/traefik_dynamic
     depends_on:
       db:
         condition: service_healthy
@@ -75,6 +82,8 @@ services:
       # eigentliche Isolationsgrenze ist die restricted DB-Rolle des abgabebox-backend,
       # nicht dieser Mount.
       - ./storage/abgabebox-uploads:/app/abgabebox-storage
+      # Generiert die Router fuer Mandanten-Custom-Domains, gemeinsam mit Traefik (ro-Mount oben)
+      - ./infra/traefik/dynamic:/app/traefik_dynamic
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"
     labels:
       - "traefik.enable=true"
@@ -85,8 +94,13 @@ services:
       - "traefik.http.routers.hocx-backend.priority=100"
       - "traefik.http.routers.hocx-backend.service=hocx-backend"
       - "traefik.http.services.hocx-backend.loadbalancer.server.port=8000"
-      # Dedicated router for auth endpoints with rate limiting
-      - "traefik.http.routers.hocx-auth.rule=Host(`${TRAEFIK_DOMAIN}`) && PathPrefix(`/api/auth`)"
+      # Dedicated router for the login endpoint specifically, with rate limiting - narrowly
+      # scoped to just POST /api/auth/login (not all of /api/auth/*), since /api/auth/session
+      # and /api/auth/tenant-by-domain are read-only, non-brute-forceable, and get polled on
+      # every page load/navigation; sharing the login rate-limit budget with them meant a normal
+      # user browsing the app or reloading the login page could exhaust it and see broken
+      # tenant-branding lookups or spurious "logged out" states.
+      - "traefik.http.routers.hocx-auth.rule=Host(`${TRAEFIK_DOMAIN}`) && Path(`/api/auth/login`) && Method(`POST`)"
       - "traefik.http.routers.hocx-auth.entrypoints=websecure"
       - "traefik.http.routers.hocx-auth.tls.certresolver=letsencrypt"
       - "traefik.http.routers.hocx-auth.priority=200"
@@ -101,12 +115,14 @@ services:
   frontend:
     build:
       context: ./frontend
+      target: deps
     restart: unless-stopped
     env_file:
       - .env
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
       INTERNAL_API_URL: ${INTERNAL_API_URL}
+      NEXT_PUBLIC_MAIN_APP_DOMAIN: ${TRAEFIK_DOMAIN}
     depends_on:
       - backend
     volumes:
@@ -181,6 +197,7 @@ services:
   abgabebox-frontend:
     build:
       context: ./abgabebox-frontend
+      target: deps
     restart: unless-stopped
     env_file:
       - .env

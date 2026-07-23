@@ -1,0 +1,15 @@
+services:
+  clamav:
+    image: clamav/clamav:latest
+    restart: unless-stopped
+    volumes:
+      - clamav_db:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 60s
+      timeout: 30s
+      start_period: 300s
+      retries: 5
+
+volumes:
+  clamav_db:

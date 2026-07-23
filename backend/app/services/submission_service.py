@@ -8,7 +8,7 @@ from pathlib import Path
 
 from app.core.config import settings
 from app import scanner
-from app.models import Event, Participant, ProtocolTodo, SubmissionAssignment, SubmissionUpload
+from app.models import Event, Participant, ProtocolTodo, SubmissionAssignment, SubmissionUpload, TenantDomain
 from app.repositories.submission_repository import SubmissionRepository
 from app.schemas.submission import (
     SubmissionAssignmentCreate,
@@ -19,6 +19,18 @@ from app.schemas.submission import (
     SubmissionUploadLogEntry,
 )
 from app.services.file_service import _safe_storage_path
+
+
+def _abgabebox_base_url(db: Session, tenant_id: int) -> str:
+    """Prefers the tenant's own verified Abgabebox domain, falls back to the shared default."""
+    domain_row = (
+        db.query(TenantDomain)
+        .filter(TenantDomain.tenant_id == tenant_id, TenantDomain.purpose == "abgabebox", TenantDomain.status == "active")
+        .one_or_none()
+    )
+    if domain_row is not None:
+        return f"https://{domain_row.domain}"
+    return settings.abgabebox_base_url
 
 
 def _move_from_quarantine(quarantine_rel_path: str, storage_root: str) -> str:
@@ -310,13 +322,14 @@ class SubmissionService:
 
         created = 0
         updated = 0
+        base_url = _abgabebox_base_url(db, assignment.tenant_id)
 
         for raw in raw_elements:
             participant_id = raw.get("responsible_participant_id")
             if not participant_id:
                 continue
             element_ref = _element_ref(event_id=raw["event_id"], list_entry_id=raw["list_entry_id"])
-            url = f"{settings.abgabebox_base_url}/{tenant_slug}/{assignment.public_slug}/{element_ref}"
+            url = f"{base_url}/{tenant_slug}/{assignment.public_slug}/{element_ref}"
             task = f"{assignment.title}: {raw['label']}"
             due_date = raw.get("window_end")
 

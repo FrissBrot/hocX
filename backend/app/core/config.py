@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     upload_root: str = "/app/storage/uploads"
     abgabebox_storage_root: str = "/app/abgabebox-storage"
     abgabebox_base_url: str = "https://upload.tweber.ch"
+    traefik_domain: str | None = None
+    traefik_abgabebox_domain: str | None = None
+    traefik_dynamic_config_dir: str = "/app/traefik_dynamic"
+    domain_health_check_interval_minutes: int = 30
     auth_secret: str = "hocx-local-dev-secret"
     auth_session_cookie: str = "hocx_session"
     auth_session_ttl_hours: int = 72
