@@ -122,7 +122,6 @@ services:
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
       INTERNAL_API_URL: ${INTERNAL_API_URL}
-      NEXT_PUBLIC_MAIN_APP_DOMAIN: ${TRAEFIK_DOMAIN}
     depends_on:
       - backend
     volumes:
