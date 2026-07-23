@@ -14,7 +14,6 @@ build/
 coverage/
 *.log
 frontend/tsconfig.tsbuildinfo
-frontend/package-lock.json
 
 # Runtime storage — may contain personal/tenant data
 storage/uploads/*
