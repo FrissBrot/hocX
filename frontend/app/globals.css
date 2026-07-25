@@ -800,6 +800,55 @@ button:disabled {
   color: var(--danger);
 }
 
+.action-menu-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.action-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 140;
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  min-width: 170px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel-solid) 96%, transparent 4%);
+  box-shadow: var(--shadow-soft);
+}
+
+.action-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.86rem;
+  cursor: pointer;
+  box-shadow: none;
+  min-height: 0;
+}
+
+.action-menu-item:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent 90%);
+  color: var(--accent);
+}
+
+.action-menu-item-danger {
+  color: var(--danger);
+}
+
+.action-menu-item-danger:hover {
+  background: color-mix(in srgb, var(--danger) 10%, transparent 90%);
+  color: var(--danger);
+}
+
 input[type="checkbox"],
 input[type="radio"] {
   width: auto;

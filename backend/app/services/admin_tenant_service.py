@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from fastapi import UploadFile
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from app.models import Participant, Tenant, UserTenantRole
+from app.models import Participant, Protocol, SubmissionAssignment, Template, Tenant, UserTenantRole
 from app.schemas.admin import AdminTenantCreate, AdminTenantRead
 from app.schemas.user import TenantUpdate
 from app.services.document_template_service import DocumentTemplateService
@@ -84,3 +84,33 @@ class AdminTenantService:
         db.commit()
         db.refresh(tenant)
         return self._read_model(db, tenant)
+
+    def delete_tenant(self, db: Session, tenant_id: int) -> bool:
+        """Deletes a tenant and everything under it.
+
+        Plain `DELETE FROM tenant` would fail: several tenant-scoped tables have an
+        `ondelete="RESTRICT"` FK into another tenant-scoped table that Postgres may not have
+        gotten around to cascading away yet within the same statement - e.g. protocol_image
+        RESTRICTs into stored_file, but both cascade from tenant independently, and Postgres
+        doesn't guarantee it resolves the longer chain (tenant->protocol->...->protocol_image)
+        before the shorter one (tenant->stored_file). Deleting these three tables explicitly
+        first (each cascading its own dependents in one self-contained statement) clears every
+        such RESTRICT before the final tenant delete ever touches its cascade targets:
+        - protocol: takes protocol_element/_block/_image/_text/... and attendance_fine with it,
+          clearing protocol_image's restrict into stored_file and protocol's own restricts into
+          template/document_template.
+        - submission_assignment: takes submission_upload/_file with it, clearing
+          submission_upload_file's restrict into stored_file and its own restrict into
+          list_definition.
+        - template: takes template_element/_block with it, clearing their restrict into
+          element_definition, and its own restrict into document_template.
+        """
+        tenant = db.get(Tenant, tenant_id)
+        if tenant is None:
+            return False
+        db.execute(delete(Protocol).where(Protocol.tenant_id == tenant_id))
+        db.execute(delete(SubmissionAssignment).where(SubmissionAssignment.tenant_id == tenant_id))
+        db.execute(delete(Template).where(Template.tenant_id == tenant_id))
+        db.delete(tenant)
+        db.commit()
+        return True

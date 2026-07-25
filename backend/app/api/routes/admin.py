@@ -114,6 +114,17 @@ async def update_tenant(
     return tenant
 
 
+@router.delete("/tenants/{tenant_id}", status_code=204)
+def delete_tenant(tenant_id: int, db: Session = Depends(get_db)):
+    try:
+        deleted = tenant_service.delete_tenant(db, tenant_id)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Tenant could not be deleted") from exc
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+
 @router.post("/tenants/{tenant_id}/clone", response_model=AdminTenantRead, status_code=201)
 def clone_tenant(tenant_id: int, payload: TenantCloneRequest, db: Session = Depends(get_db)):
     try:
