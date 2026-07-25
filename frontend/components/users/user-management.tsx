@@ -69,6 +69,11 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [userForm, setUserForm] = useState<UserFormState>(() => emptyUserForm(manageableTenants));
   const [formError, setFormError] = useState<string | null>(null);
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const [loginModalUser, setLoginModalUser] = useState<UserSummary | null>(null);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   const tenantNameById = useMemo(
     () => new Map(manageableTenants.map((tenant) => [tenant.id, tenant.name])),
@@ -114,6 +119,40 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
     });
     setFormError(null);
     setUserModalOpen(true);
+  }
+
+  function openEnableLogin(user: UserSummary) {
+    setLoginModalUser(user);
+    setLoginEmail(user.oidc_email ?? "");
+    setLoginPassword("");
+    setLoginError(null);
+    setLoginModalOpen(true);
+  }
+
+  async function submitEnableLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!loginModalUser) {
+      return;
+    }
+    setLoginError(null);
+    try {
+      const updated = await browserApiFetch<UserSummary>(`/api/users/${loginModalUser.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ email: loginEmail, password: loginPassword, login_enabled: true })
+      });
+      // Enabling login can merge this participant's shadow account into an already-existing
+      // user with the same real email (see backend _link_or_promote_participant_login) - the
+      // id we PATCHed might no longer exist, and `updated` might collide with an entry already
+      // in the list, so replace both possibilities rather than just swapping the old id in place.
+      setUsers((current) => {
+        const withoutOldAndTarget = current.filter((user) => user.id !== loginModalUser.id && user.id !== updated.id);
+        return [updated, ...withoutOldAndTarget];
+      });
+      setLoginModalOpen(false);
+      showToast("Login aktiviert", "success");
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : "Login konnte nicht aktiviert werden");
+    }
   }
 
   function upsertMembership() {
@@ -219,7 +258,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
           className={`segment-button${userTab === "nologin" ? " segment-button-active" : ""}`}
           onClick={() => setUserTab("nologin")}
         >
-          Ohne Login ({usersWithoutLogin.length})
+          Teilnehmer ({usersWithoutLogin.length})
         </button>
       </div>
 
@@ -227,7 +266,11 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
         <div className="two-col">
           <label className="field-stack">
             <span className="field-label">Suche</span>
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Benutzer durchsuchen" />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder={userTab === "active" ? "Benutzer durchsuchen" : "Teilnehmer durchsuchen"}
+            />
           </label>
           <div className="card">
             <div className="eyebrow">Überblick</div>
@@ -240,42 +283,73 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
         </div>
       </article>
 
-      <DataTable columns={["Anzeigename", "Name", "E-Mail", "Rollen", "Aktionen"]}>
-        {visibleUsers.map((user) => (
-          <tr key={user.id} className="table-row-clickable" onClick={() => openEditUser(user)}>
-            <td>
-              <strong>{user.display_name}</strong>
-            </td>
-            <td>{user.first_name} {user.last_name}</td>
-            <td>{user.email}</td>
-            <td>
-              <div className="stack-tight">
-                {user.memberships
-                  .filter((membership) => tenantNameById.has(membership.tenant_id))
-                  .map((membership) => (
-                    <span key={`${user.id}-${membership.tenant_id}`} className="pill">
-                      {membership.tenant_name}: {membership.role_code}
-                    </span>
-                  ))}
-              </div>
-            </td>
-            <td>
-              <div className="table-actions table-actions-start">
-                <button
-                  type="button"
-                  className="button-inline button-danger"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void deleteUser(user.id);
-                  }}
-                >
-                  Löschen
-                </button>
-              </div>
-            </td>
-          </tr>
-        ))}
-      </DataTable>
+      {userTab === "active" ? (
+        <DataTable columns={["Anzeigename", "Name", "E-Mail", "Rollen", "Aktionen"]}>
+          {visibleUsers.map((user) => (
+            <tr key={user.id} className="table-row-clickable" onClick={() => openEditUser(user)}>
+              <td>
+                <strong>{user.display_name}</strong>
+              </td>
+              <td>{user.first_name} {user.last_name}</td>
+              <td>{user.email}</td>
+              <td>
+                <div className="stack-tight">
+                  {user.memberships
+                    .filter((membership) => tenantNameById.has(membership.tenant_id))
+                    .map((membership) => (
+                      <span key={`${user.id}-${membership.tenant_id}`} className="pill">
+                        {membership.tenant_name}: {membership.role_code}
+                      </span>
+                    ))}
+                </div>
+              </td>
+              <td>
+                <div className="table-actions table-actions-start">
+                  <button
+                    type="button"
+                    className="button-inline button-danger"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void deleteUser(user.id);
+                    }}
+                  >
+                    Löschen
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </DataTable>
+      ) : (
+        <DataTable columns={["Name", "E-Mail (Teilnehmer)", "Rollen", "Aktionen"]}>
+          {visibleUsers.map((user) => (
+            <tr key={user.id}>
+              <td>
+                <strong>{user.display_name}</strong>
+              </td>
+              <td>{user.oidc_email ?? <span className="muted">–</span>}</td>
+              <td>
+                <div className="stack-tight">
+                  {user.memberships
+                    .filter((membership) => tenantNameById.has(membership.tenant_id))
+                    .map((membership) => (
+                      <span key={`${user.id}-${membership.tenant_id}`} className="pill">
+                        {membership.tenant_name}: {membership.role_code}
+                      </span>
+                    ))}
+                </div>
+              </td>
+              <td>
+                <div className="table-actions table-actions-start">
+                  <button type="button" className="button-inline" onClick={() => openEnableLogin(user)}>
+                    Login aktivieren
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </DataTable>
+      )}
 
       <Modal
         open={userModalOpen}
@@ -392,6 +466,38 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
           <div className="table-actions table-actions-start">
             <button type="submit" className="button-inline">
               Speichern
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={loginModalOpen}
+        onClose={() => setLoginModalOpen(false)}
+        title={`Login aktivieren${loginModalUser ? ` für ${loginModalUser.display_name}` : ""}`}
+        description="Vergib E-Mail und Passwort, damit sich dieser Teilnehmer einloggen kann. Er bleibt weiterhin als Teilnehmer verknüpft."
+      >
+        <form className="grid" onSubmit={submitEnableLogin}>
+          <label className="field-stack">
+            <span className="field-label">E-Mail</span>
+            <input type="email" value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} required />
+          </label>
+          <label className="field-stack">
+            <span className="field-label">Passwort</span>
+            <input
+              type="password"
+              value={loginPassword}
+              onChange={(event) => setLoginPassword(event.target.value)}
+              required
+              minLength={8}
+            />
+          </label>
+
+          {loginError && <div className="form-error-banner">{loginError}</div>}
+
+          <div className="table-actions table-actions-start">
+            <button type="submit" className="button-inline">
+              Login aktivieren
             </button>
           </div>
         </form>

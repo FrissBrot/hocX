@@ -170,6 +170,7 @@ class TenantImportService:
         self._import_event_cycles(event_map, cycle_config_map)
         list_definition_map = self._import_simple(ListDefinition, self._t("list_definition"), "list_definition", {"tenant_id": new_tenant.id})
         list_entry_map = self._import_list_entries(list_definition_map, participant_map, event_map)
+        finance_account_map = self._import_simple(FinanceAccount, self._t("finance_account"), "finance_account", {"tenant_id": new_tenant.id})
         template_map, template_element_map, template_element_block_map = self._import_templates(
             new_tenant.id,
             document_template_map=document_template_map,
@@ -179,9 +180,9 @@ class TenantImportService:
             participant_map=participant_map,
             list_definition_map=list_definition_map,
             list_entry_map=list_entry_map,
+            finance_account_map=finance_account_map,
         )
         self._import_template_participants(template_map, participant_map)
-        finance_account_map = self._import_simple(FinanceAccount, self._t("finance_account"), "finance_account", {"tenant_id": new_tenant.id})
         submission_assignment_map = self._import_submission_assignments(new_tenant.id, list_definition_map)
         submission_upload_map = self._import_submission_uploads(submission_assignment_map, event_map, list_entry_map)
         self._import_submission_upload_logs(submission_assignment_map)
@@ -190,7 +191,8 @@ class TenantImportService:
         protocol_map = self._import_protocols(new_tenant.id, template_map, document_template_map, event_map)
         protocol_element_map = self._import_protocol_elements(protocol_map, template_element_map)
         protocol_element_block_map = self._import_protocol_element_blocks(
-            protocol_element_map, template_element_block_map, element_definition_map, participant_map
+            protocol_element_map, template_element_block_map, element_definition_map, participant_map,
+            event_map=event_map, list_definition_map=list_definition_map, finance_account_map=finance_account_map,
         )
         self._import_protocol_texts(protocol_element_block_map)
         self._import_protocol_display_snapshots(protocol_element_block_map)
@@ -365,7 +367,7 @@ class TenantImportService:
 
     def _import_templates(
         self, new_tenant_id: int, *, document_template_map, cycle_config_map, element_definition_map,
-        event_map, participant_map, list_definition_map, list_entry_map,
+        event_map, participant_map, list_definition_map, list_entry_map, finance_account_map,
     ) -> tuple[dict[int, int], dict[int, int], dict[int, int]]:
         template_map: dict[int, int] = {}
         for row in self._t("template"):
@@ -408,6 +410,10 @@ class TenantImportService:
             new_row = build_row(TemplateElementBlock, row, {
                 "template_element_id": new_template_element_id,
                 "element_definition_id": element_definition_map.get(row["element_definition_id"], row["element_definition_id"]),
+                "configuration_override_json": remap_block_configuration(
+                    row.get("configuration_override_json"), participant_map=participant_map,
+                    event_map=event_map, list_definition_map=list_definition_map, finance_account_map=finance_account_map,
+                ),
             })
             self.db.add(new_row)
             self.db.flush()
@@ -533,7 +539,10 @@ class TenantImportService:
         self.db.commit()
         return id_map
 
-    def _import_protocol_element_blocks(self, protocol_element_map, template_element_block_map, element_definition_map, participant_map) -> dict[int, int]:
+    def _import_protocol_element_blocks(
+        self, protocol_element_map, template_element_block_map, element_definition_map, participant_map,
+        *, event_map, list_definition_map, finance_account_map,
+    ) -> dict[int, int]:
         id_map: dict[int, int] = {}
         for row in self._t("protocol_element_block"):
             data = self._resolve_row("protocol_element_block", row)
@@ -544,7 +553,10 @@ class TenantImportService:
                 "protocol_element_id": new_protocol_element_id,
                 "template_element_block_id": template_element_block_map.get(data["template_element_block_id"]) if data.get("template_element_block_id") else None,
                 "element_definition_id": element_definition_map.get(data["element_definition_id"]) if data.get("element_definition_id") else None,
-                "configuration_snapshot_json": remap_block_configuration(data.get("configuration_snapshot_json"), participant_map),
+                "configuration_snapshot_json": remap_block_configuration(
+                    data.get("configuration_snapshot_json"), participant_map=participant_map,
+                    event_map=event_map, list_definition_map=list_definition_map, finance_account_map=finance_account_map,
+                ),
             })
             self.db.add(new_row)
             self.db.flush()
