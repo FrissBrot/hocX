@@ -13,6 +13,7 @@ const navLinks = [
   { href: "/admin/tenants", label: "Mandanten" },
   { href: "/admin/users", label: "Benutzer" },
   { href: "/admin/domains", label: "Domains" },
+  { href: "/admin/error-logs", label: "Fehlerprotokoll" },
   { href: "/admin/admins", label: "Admin-Accounts" },
 ];
 

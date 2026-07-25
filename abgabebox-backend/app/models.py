@@ -132,3 +132,21 @@ stored_file_table = Table(
     Column("checksum_sha256", Text),
     Column("scan_status", Text),
 )
+
+# system_error_log: nur INSERT-Grant, absichtlich KEIN SELECT - siehe Migration 0039.
+# Fehler dieses Service landen hier nur zur Sichtung im Platform-Admin-Panel, dieser
+# restricted Service kann/darf sie nie selbst wieder auslesen.
+system_error_log_table = Table(
+    "system_error_log",
+    metadata,
+    Column("id", BigInteger, primary_key=True),
+    Column("source", Text),
+    Column("tenant_id", BigInteger),
+    Column("actor_email", Text),
+    Column("request_method", Text),
+    Column("request_path", Text),
+    Column("status_code", Integer),
+    Column("error_type", Text),
+    Column("error_message", Text),
+    Column("traceback", Text),
+)

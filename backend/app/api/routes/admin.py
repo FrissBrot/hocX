@@ -20,12 +20,15 @@ from app.schemas.admin import (
     PlatformAdminCreate,
     PlatformAdminRead,
     PlatformAdminUpdate,
+    SystemErrorLogFilterOptions,
+    SystemErrorLogPage,
     TenantCloneRequest,
     TenantImportResult,
 )
 from app.schemas.oidc import OidcConfigRead, OidcConfigWrite
 from app.schemas.user import TenantUpdate, UserCreate, UserRead, UserUpdate
 from app.services.admin_domain_service import AdminDomainService
+from app.services.admin_error_log_service import AdminErrorLogService
 from app.services.admin_tenant_service import AdminTenantService
 from app.services.admin_user_service import AdminUserService, PlatformAdminService
 from app.services.file_service import _safe_storage_path
@@ -42,6 +45,7 @@ admin_account_service = PlatformAdminService()
 oidc_service = OidcService()
 clone_service = TenantCloneService()
 domain_service = AdminDomainService()
+error_log_service = AdminErrorLogService()
 export_service = TenantExportService()
 import_service = TenantImportService()
 
@@ -54,6 +58,25 @@ def list_tenants(db: Session = Depends(get_db)):
 @router.get("/domains", response_model=list[AdminDomainRead])
 def list_domains(db: Session = Depends(get_db)):
     return domain_service.list_domains(db)
+
+
+@router.get("/error-logs", response_model=SystemErrorLogPage)
+def list_error_logs(
+    tenant_id: int | None = None,
+    error_type: str | None = None,
+    source: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    return error_log_service.list_errors(
+        db, tenant_id=tenant_id, error_type=error_type, source=source, limit=min(limit, 200), offset=offset
+    )
+
+
+@router.get("/error-logs/filter-options", response_model=SystemErrorLogFilterOptions)
+def error_log_filter_options(db: Session = Depends(get_db)):
+    return error_log_service.filter_options(db)
 
 
 @router.post("/tenants", response_model=AdminTenantRead, status_code=201)

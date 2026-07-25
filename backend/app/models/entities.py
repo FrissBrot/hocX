@@ -842,3 +842,29 @@ class SubmissionUploadLog(Base):
     error_message: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
 
+
+class SystemErrorLog(Base):
+    """App-wide captured backend errors - visible only in the platform-admin panel, never
+    surfaced to a customer/public request (see the global exception handlers in
+    backend/app/main.py and abgabebox-backend/app/main.py, and app/core/error_log.py)."""
+
+    __tablename__ = "system_error_log"
+    __table_args__ = (
+        CheckConstraint("source IN ('backend', 'abgabebox-backend')", name="ck_system_error_log_source"),
+        Index("idx_system_error_log_created", "created_at"),
+        Index("idx_system_error_log_tenant", "tenant_id", "created_at"),
+        Index("idx_system_error_log_type", "error_type", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    source: Mapped[str] = mapped_column(Text, nullable=False)
+    tenant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="SET NULL"))
+    actor_email: Mapped[str | None] = mapped_column(Text)
+    request_method: Mapped[str | None] = mapped_column(Text)
+    request_path: Mapped[str | None] = mapped_column(Text)
+    status_code: Mapped[int | None] = mapped_column(Integer)
+    error_type: Mapped[str] = mapped_column(Text, nullable=False)
+    error_message: Mapped[str] = mapped_column(Text, nullable=False)
+    traceback: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+

@@ -178,6 +178,31 @@ export type AdminDomainSummary = {
   created_at: string;
 };
 
+export type SystemErrorLogEntry = {
+  id: number;
+  source: string;
+  tenant_id: number | null;
+  tenant_name: string | null;
+  actor_email: string | null;
+  request_method: string | null;
+  request_path: string | null;
+  status_code: number | null;
+  error_type: string;
+  error_message: string;
+  traceback: string | null;
+  created_at: string;
+};
+
+export type SystemErrorLogPage = {
+  items: SystemErrorLogEntry[];
+  total: number;
+};
+
+export type SystemErrorLogFilterOptions = {
+  error_types: string[];
+  sources: string[];
+};
+
 export type PlatformAdminSummary = {
   id: number;
   email: string;
