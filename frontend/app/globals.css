@@ -114,17 +114,14 @@ pre {
   align-items: start;
 }
 
-/* Backdrop blur only on outermost shell surfaces — never nest it.
-   will-change promotes each to its own compositor layer so hover/transition
-   repaints inside them don't force the (expensive) blur to be recomputed. */
-.sidebar,
-.panel,
-.modal-shell,
-.topbar {
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  will-change: backdrop-filter;
-}
+/* backdrop-filter used to be applied here (sidebar/panel/modal-shell/topbar) but got
+   removed: modal-shell is a DOM child of modal-backdrop, which also blurs (see below) -
+   despite the comment above this rule explicitly warning against nesting it, that's
+   exactly what was happening on every modal open. backdrop-filter compositing is also a
+   well-known perf sink on Linux/Chromium in particular (frequently falls back to slow
+   software compositing), and being paint/composite cost rather than JS, it never shows
+   up in a JS profiler - reported as general input/hover sluggishness across the whole
+   admin panel that got worse the more modals were opened in a session. */
 
 .sidebar {
   display: flex;
@@ -2032,10 +2029,7 @@ input[type="radio"] {
   justify-content: center;
   padding: clamp(16px, 2.5vw, 28px);
   background: rgba(5, 10, 20, 0.78);
-  backdrop-filter: blur(6px) saturate(0.86);
-  -webkit-backdrop-filter: blur(6px) saturate(0.86);
   isolation: isolate;
-  will-change: backdrop-filter;
 }
 
 .modal-shell {
@@ -6792,8 +6786,6 @@ input[type="radio"] {
   inset: 0;
   z-index: 9000;
   background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
   justify-content: center;
