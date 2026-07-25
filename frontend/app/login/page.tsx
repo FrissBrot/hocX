@@ -107,8 +107,11 @@ export default function LoginPage() {
       if (session.bridge_redirect_url && attemptBridgeRedirect(session.bridge_redirect_url)) {
         return;
       }
+      // Nur replace(), kein zusätzliches refresh() - beide lösen sonst nahezu gleichzeitig
+      // eine Server-Neuladen für die Zielroute aus, was zu einem kurzen Hin-und-Her zwischen
+      // /login und / führte (spürbar als Login-Loop, da staleTimes.dynamic=0 ohnehin schon
+      // jede Navigation frisch vom Server lädt - refresh() ist hier redundant).
       router.replace("/");
-      router.refresh();
     } catch (error) {
       setStatusMsg(error instanceof Error ? error.message : "Login fehlgeschlagen");
     } finally {
