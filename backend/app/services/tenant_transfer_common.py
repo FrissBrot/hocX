@@ -45,6 +45,7 @@ LOOKUP_COLUMNS: dict[str, dict[str, type]] = {
 }
 
 USER_ID_COLUMNS: dict[str, list[str]] = {
+    "participant": ["app_user_id"],
     "template": ["created_by"],
     "protocol": ["created_by"],
     "stored_file": ["created_by"],
