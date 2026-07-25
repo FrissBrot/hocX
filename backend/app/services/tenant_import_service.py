@@ -72,6 +72,7 @@ from app.services.tenant_transfer_common import (
     build_row,
     remap_block_configuration,
     remap_document_template_config,
+    remap_element_definition_config,
     remap_list_value,
     remap_template_element_config,
 )
@@ -163,7 +164,6 @@ class TenantImportService:
         self._import_simple(Leader, self._t("leader"), "leader", {"tenant_id": new_tenant.id})
         participant_map = self._import_simple(Participant, self._t("participant"), "participant", {"tenant_id": new_tenant.id})
         cycle_config_map = self._import_simple(CycleConfig, self._t("cycle_config"), "cycle_config", {"tenant_id": new_tenant.id})
-        element_definition_map = self._import_element_definitions(new_tenant.id)
         part_map = self._import_document_template_parts(new_tenant.id)
         document_template_map = self._import_document_templates(new_tenant.id, part_map)
         event_map = self._import_events(new_tenant.id, group_map, participant_map)
@@ -171,6 +171,10 @@ class TenantImportService:
         list_definition_map = self._import_simple(ListDefinition, self._t("list_definition"), "list_definition", {"tenant_id": new_tenant.id})
         list_entry_map = self._import_list_entries(list_definition_map, participant_map, event_map)
         finance_account_map = self._import_simple(FinanceAccount, self._t("finance_account"), "finance_account", {"tenant_id": new_tenant.id})
+        element_definition_map = self._import_element_definitions(
+            new_tenant.id, participant_map=participant_map, event_map=event_map,
+            list_definition_map=list_definition_map, finance_account_map=finance_account_map,
+        )
         template_map, template_element_map, template_element_block_map = self._import_templates(
             new_tenant.id,
             document_template_map=document_template_map,
@@ -265,8 +269,24 @@ class TenantImportService:
 
     # ── structure tables with extra remapping ────────────────────────────
 
-    def _import_element_definitions(self, new_tenant_id: int) -> dict[int, int]:
-        return self._import_simple(ElementDefinition, self._t("element_definition"), "element_definition", {"tenant_id": new_tenant_id})
+    def _import_element_definitions(
+        self, new_tenant_id: int, *, participant_map, event_map, list_definition_map, finance_account_map,
+    ) -> dict[int, int]:
+        id_map: dict[int, int] = {}
+        for row in self._t("element_definition"):
+            data = self._resolve_row("element_definition", row)
+            new_row = build_row(ElementDefinition, data, {
+                "tenant_id": new_tenant_id,
+                "configuration_json": remap_element_definition_config(
+                    data.get("configuration_json"), participant_map=participant_map, event_map=event_map,
+                    list_definition_map=list_definition_map, finance_account_map=finance_account_map,
+                ),
+            })
+            self.db.add(new_row)
+            self.db.flush()
+            id_map[row["id"]] = new_row.id
+        self.db.commit()
+        return id_map
 
     def _import_document_template_parts(self, new_tenant_id: int) -> dict[int, int]:
         id_map: dict[int, int] = {}
