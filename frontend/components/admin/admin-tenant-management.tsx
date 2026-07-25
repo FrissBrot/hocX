@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 
 import { AdminTenantSettingsModal } from "@/components/admin/admin-tenant-settings-modal";
+import { ActionMenu } from "@/components/ui/action-menu";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
 import { browserApiFetch } from "@/lib/api/client";
@@ -107,6 +108,21 @@ export function AdminTenantManagement({ initialTenants }: Props) {
     setExportModalOpen(false);
   }
 
+  async function deleteTenant(tenant: AdminTenantSummary) {
+    const confirmed = window.confirm(
+      `"${tenant.name}" wirklich unwiderruflich löschen?\n\n` +
+        `${tenant.participant_count} Teilnehmer, ${tenant.user_count} Benutzerzugriffe und alle Protokolle, Termine und Dateien dieses Mandanten gehen dabei verloren. Das kann nicht rückgängig gemacht werden.`
+    );
+    if (!confirmed) return;
+    try {
+      await browserApiFetch(`/api/admin/tenants/${tenant.id}`, { method: "DELETE" });
+      setTenants((current) => current.filter((t) => t.id !== tenant.id));
+      showToast("Mandant gelöscht", "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Mandant konnte nicht gelöscht werden", "error");
+    }
+  }
+
   function openImport() {
     setImportName("");
     setImportFile(null);
@@ -185,38 +201,14 @@ export function AdminTenantManagement({ initialTenants }: Props) {
             <td>{tenant.user_count}</td>
             <td>{new Date(tenant.created_at).toLocaleDateString("de-CH")}</td>
             <td>
-              <div className="table-actions table-actions-start">
-                <button
-                  type="button"
-                  className="button-inline"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    openSettings(tenant);
-                  }}
-                >
-                  Einstellungen
-                </button>
-                <button
-                  type="button"
-                  className="button-inline button-ghost"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    openClone(tenant);
-                  }}
-                >
-                  Klonen
-                </button>
-                <button
-                  type="button"
-                  className="button-inline button-ghost"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    openExport(tenant);
-                  }}
-                >
-                  Exportieren
-                </button>
-              </div>
+              <ActionMenu
+                items={[
+                  { label: "Einstellungen", onClick: () => openSettings(tenant) },
+                  { label: "Klonen", onClick: () => openClone(tenant) },
+                  { label: "Exportieren", onClick: () => openExport(tenant) },
+                  { label: "Löschen", onClick: () => deleteTenant(tenant), danger: true },
+                ]}
+              />
             </td>
           </tr>
         ))}
