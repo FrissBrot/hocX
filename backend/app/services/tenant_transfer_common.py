@@ -346,3 +346,38 @@ def remap_block_configuration(
         config["columns"] = new_columns
 
     return config
+
+
+def remap_element_definition_config(
+    config: dict | None,
+    *,
+    participant_map: dict[int, int],
+    event_map: dict[int, int],
+    list_definition_map: dict[int, int],
+    finance_account_map: dict[int, int],
+) -> dict:
+    """element_definition.configuration_json is `{"blocks": [...]}`, where each block carries
+    its own nested `configuration_json` (same shape remap_block_configuration already handles -
+    linked_list_id, fine_account_id, rows[], columns[].row_values, ...). This is the ACTUAL
+    source of a block's list/participant/event/finance-account links (not
+    template_element_block, which exists but isn't where the block designer UI writes to) - it
+    was previously copied through verbatim on both clone and import, leaving every "linked list"
+    pointed at the source tenant's list_definition id."""
+    config = copy.deepcopy(config or {})
+    blocks = config.get("blocks")
+    if not isinstance(blocks, list):
+        return config
+    new_blocks = []
+    for block in blocks:
+        if not isinstance(block, dict):
+            new_blocks.append(block)
+            continue
+        new_block = dict(block)
+        new_block["configuration_json"] = remap_block_configuration(
+            block.get("configuration_json"),
+            participant_map=participant_map, event_map=event_map,
+            list_definition_map=list_definition_map, finance_account_map=finance_account_map,
+        )
+        new_blocks.append(new_block)
+    config["blocks"] = new_blocks
+    return config

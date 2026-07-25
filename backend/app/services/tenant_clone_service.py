@@ -52,6 +52,7 @@ from app.services.file_service import _safe_storage_path
 from app.services.tenant_transfer_common import (
     remap_block_configuration,
     remap_document_template_config,
+    remap_element_definition_config,
     remap_list_value,
     remap_template_element_config,
 )
@@ -127,10 +128,13 @@ class TenantCloneService:
         self._partial_tenant_id = new_tenant.id
         self._clone_oidc_config(db, source.id, new_tenant.id)
         cycle_config_map = self._clone_cycle_configs(db, source.id, new_tenant.id)
-        element_definition_map = self._clone_element_definitions(db, source.id, new_tenant.id)
         part_map = self._clone_document_template_parts(db, source.id, new_tenant.id)
         document_template_map = self._clone_document_templates(db, source.id, new_tenant.id, part_map)
         finance_account_map = self._clone_finance_accounts(db, source.id, new_tenant.id)
+        element_definition_map = self._clone_element_definitions(
+            db, source.id, new_tenant.id,
+            participant_map={}, event_map={}, list_definition_map={}, finance_account_map=finance_account_map,
+        )
         self._clone_templates(
             db, source.id, new_tenant.id,
             document_template_map=document_template_map,
@@ -157,7 +161,6 @@ class TenantCloneService:
         self._clone_leaders(db, source.id, new_tenant.id)
         participant_map = self._clone_participants(db, source.id, new_tenant.id)
         cycle_config_map = self._clone_cycle_configs(db, source.id, new_tenant.id)
-        element_definition_map = self._clone_element_definitions(db, source.id, new_tenant.id)
         part_map = self._clone_document_template_parts(db, source.id, new_tenant.id)
         document_template_map = self._clone_document_templates(db, source.id, new_tenant.id, part_map)
         event_map = self._clone_events(db, source.id, new_tenant.id, group_map=group_map, participant_map=participant_map)
@@ -167,6 +170,11 @@ class TenantCloneService:
             db, list_definition_map=list_definition_map, participant_map=participant_map, event_map=event_map
         )
         finance_account_map = self._clone_finance_accounts(db, source.id, new_tenant.id)
+        element_definition_map = self._clone_element_definitions(
+            db, source.id, new_tenant.id,
+            participant_map=participant_map, event_map=event_map,
+            list_definition_map=list_definition_map, finance_account_map=finance_account_map,
+        )
         template_map, template_element_map, template_element_block_map = self._clone_templates(
             db, source.id, new_tenant.id,
             document_template_map=document_template_map,
@@ -302,11 +310,21 @@ class TenantCloneService:
         db.commit()
         return id_map
 
-    def _clone_element_definitions(self, db: Session, source_tenant_id: int, new_tenant_id: int) -> dict[int, int]:
+    def _clone_element_definitions(
+        self, db: Session, source_tenant_id: int, new_tenant_id: int,
+        *, participant_map: dict[int, int], event_map: dict[int, int],
+        list_definition_map: dict[int, int], finance_account_map: dict[int, int],
+    ) -> dict[int, int]:
         rows = db.scalars(select(ElementDefinition).where(ElementDefinition.tenant_id == source_tenant_id)).all()
         id_map: dict[int, int] = {}
         for row in rows:
-            new_row = _copy_row(row, {"tenant_id": new_tenant_id})
+            new_row = _copy_row(row, {
+                "tenant_id": new_tenant_id,
+                "configuration_json": remap_element_definition_config(
+                    row.configuration_json, participant_map=participant_map, event_map=event_map,
+                    list_definition_map=list_definition_map, finance_account_map=finance_account_map,
+                ),
+            })
             db.add(new_row)
             db.flush()
             id_map[row.id] = new_row.id
