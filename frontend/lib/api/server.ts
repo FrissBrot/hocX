@@ -21,7 +21,17 @@ export async function backendFetchWithSession<T>(path: string): Promise<T | null
 
 export async function requireSession(): Promise<SessionInfo> {
   const session = await backendFetchWithSession<SessionInfo>("/api/auth/session");
-  if (!session?.authenticated) {
+  if (session === null) {
+    // backendFetch() konnte das Backend gar nicht erreichen (Netzwerkfehler/Timeout, auch nach
+    // eigenem Retry) - das ist NICHT dasselbe wie "nicht eingeloggt" und darf niemals zu /login
+    // umleiten: der Browser hat die Session oft schon selbst als gültig geprüft und würde auf
+    // /login sofort wieder zurück hierher springen (siehe middleware.ts für den Haupt-Fix des
+    // eigentlichen Login-Loops - hier geht es nur um den verbleibenden Ambiguitäts-Fall). Ein
+    // regulärer Error lässt stattdessen die error.tsx-Boundary greifen, die KEINE automatische
+    // Weiterleitung auslöst.
+    throw new Error("Sitzungsprüfung fehlgeschlagen (Backend nicht erreichbar)");
+  }
+  if (!session.authenticated) {
     // Login rendert nie auf einer Mandanten-Custom-Domain — von dort muss serverseitig zur
     // Hauptdomain umgeleitet werden, sonst gäbe es dort keine Login-Seite zu zeigen.
     const mainDomain = process.env.TRAEFIK_DOMAIN;
