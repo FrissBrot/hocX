@@ -38,7 +38,7 @@ def _app_routers(domain: str, domain_id: int) -> dict:
             "entryPoints": ["websecure"],
             "service": "hocx-auth@docker",
             "priority": 200,
-            "middlewares": ["auth-ratelimit@docker"],
+            "middlewares": ["hocx-auth-ratelimit@docker"],
             "tls": {"certResolver": "letsencrypt"},
         },
     }
@@ -50,23 +50,23 @@ def _abgabebox_routers(domain: str, domain_id: int) -> dict:
         f"{base}-frontend": {
             "rule": f"Host(`{domain}`)",
             "entryPoints": ["websecure"],
-            "service": "abgabebox-frontend@docker",
+            "service": "hocx-abgabebox-frontend@docker",
             "priority": 10,
             "tls": {"certResolver": "letsencrypt"},
         },
         f"{base}-backend": {
             "rule": f"Host(`{domain}`) && PathPrefix(`/api`)",
             "entryPoints": ["websecure"],
-            "service": "abgabebox-backend@docker",
+            "service": "hocx-abgabebox-backend@docker",
             "priority": 100,
             "tls": {"certResolver": "letsencrypt"},
         },
         f"{base}-upload": {
             "rule": f"Host(`{domain}`) && PathPrefix(`/api/public`) && Method(`POST`)",
             "entryPoints": ["websecure"],
-            "service": "abgabebox-backend@docker",
+            "service": "hocx-abgabebox-backend@docker",
             "priority": 200,
-            "middlewares": ["abgabebox-upload-ratelimit@docker"],
+            "middlewares": ["hocx-abgabebox-upload-ratelimit@docker"],
             "tls": {"certResolver": "letsencrypt"},
         },
     }
