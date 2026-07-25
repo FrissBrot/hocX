@@ -34,8 +34,11 @@ export default function AdminLoginPage() {
         method: "POST",
         body: JSON.stringify({ email, password }),
       });
+      // Nur replace(), kein zusätzliches refresh() - beide lösen sonst nahezu gleichzeitig
+      // eine Server-Neuladen für die Zielroute aus, was zu einem kurzen Hin-und-Her zwischen
+      // /admin/login und /admin führte (spürbar als Login-Loop, da staleTimes.dynamic=0 ohnehin
+      // schon jede Navigation frisch vom Server lädt - refresh() ist hier redundant).
       router.replace("/admin");
-      router.refresh();
     } catch (error) {
       setStatusMsg(error instanceof Error ? error.message : "Login fehlgeschlagen");
     } finally {
