@@ -19,6 +19,7 @@ from app.models import (
     submission_upload_file_table,
     submission_upload_log_table,
     submission_upload_table,
+    system_error_log_table,
     tenant_table,
 )
 
@@ -228,3 +229,30 @@ def insert_full_upload(
 
     db.commit()
     return upload_id
+
+
+def insert_error_log(
+    db: Session,
+    *,
+    tenant_id: int | None,
+    request_method: str | None,
+    request_path: str | None,
+    status_code: int | None,
+    error_type: str,
+    error_message: str,
+    traceback: str | None,
+) -> None:
+    db.execute(
+        insert(system_error_log_table).values(
+            source="abgabebox-backend",
+            tenant_id=tenant_id,
+            actor_email=None,
+            request_method=request_method,
+            request_path=request_path,
+            status_code=status_code,
+            error_type=error_type,
+            error_message=error_message[:4000],
+            traceback=(traceback or "")[:20000] or None,
+        )
+    )
+    db.commit()

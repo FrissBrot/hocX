@@ -243,9 +243,12 @@ def create_quick_todo(
             tag=payload.tag,
             created_by=user.user_id,
         )
-    except (ValueError, SQLAlchemyError) as exc:
+    except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Todo could not be created") from exc
     return {
         "block_id": block.id,
         "todo_id": todo.id,

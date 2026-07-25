@@ -97,11 +97,34 @@ class TenantCloneService:
     # ── public entry points ──────────────────────────────────────────────
 
     def clone_structure(self, db: Session, source_tenant_id: int, new_name: str) -> Tenant:
+        return self._run_with_partial_cleanup(db, self._clone_structure_impl, source_tenant_id, new_name)
+
+    def clone_full(self, db: Session, source_tenant_id: int, new_name: str) -> Tenant:
+        return self._run_with_partial_cleanup(db, self._clone_full_impl, source_tenant_id, new_name)
+
+    def _run_with_partial_cleanup(self, db: Session, impl, source_tenant_id: int, new_name: str) -> Tenant:
+        """Both clone modes commit progressively (one table at a time) rather than as one big
+        transaction - a failure partway through would otherwise leave a broken, half-cloned
+        tenant sitting in the tenant list instead of a clean failure. `impl` is expected to set
+        `self._partial_tenant_id` as soon as the new tenant row exists, so this can tear
+        everything written so far back down (cascade) before the error propagates."""
+        self._partial_tenant_id: int | None = None
+        try:
+            return impl(db, source_tenant_id, new_name)
+        except Exception:
+            db.rollback()
+            if self._partial_tenant_id is not None:
+                db.query(Tenant).filter(Tenant.id == self._partial_tenant_id).delete()
+                db.commit()
+            raise
+
+    def _clone_structure_impl(self, db: Session, source_tenant_id: int, new_name: str) -> Tenant:
         source = db.get(Tenant, source_tenant_id)
         if source is None:
             raise ValueError("Source tenant not found")
 
         new_tenant = self._clone_tenant_base(db, source, new_name)
+        self._partial_tenant_id = new_tenant.id
         self._clone_oidc_config(db, source.id, new_tenant.id)
         cycle_config_map = self._clone_cycle_configs(db, source.id, new_tenant.id)
         element_definition_map = self._clone_element_definitions(db, source.id, new_tenant.id)
@@ -121,12 +144,13 @@ class TenantCloneService:
         self._clone_finance_accounts(db, source.id, new_tenant.id)
         return new_tenant
 
-    def clone_full(self, db: Session, source_tenant_id: int, new_name: str) -> Tenant:
+    def _clone_full_impl(self, db: Session, source_tenant_id: int, new_name: str) -> Tenant:
         source = db.get(Tenant, source_tenant_id)
         if source is None:
             raise ValueError("Source tenant not found")
 
         new_tenant = self._clone_tenant_base(db, source, new_name)
+        self._partial_tenant_id = new_tenant.id
         self._clone_oidc_config(db, source.id, new_tenant.id)
         group_map = self._clone_group_entities(db, source.id, new_tenant.id)
         self._clone_leaders(db, source.id, new_tenant.id)

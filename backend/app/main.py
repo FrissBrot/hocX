@@ -1,13 +1,16 @@
 import asyncio
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 
 from app.api.routes import admin, admin_auth, auth, collaboration_ws, cycle_configs, document_templates, events, exports, files, finance, fines, lists, oidc, participants, protocol_elements, protocols, statistics, submission_assignments, tag_config, templates, tenants, todos, users
 from app.core.db import SessionLocal
 from app.core.config import settings
+from app.core.error_log import best_effort_actor_from_request, record_system_error
 from app.core.redis_client import close_redis_pool
 from app.core.security import hash_password
 from app.models import ElementType, PlatformAdmin, Role, Tenant
@@ -382,6 +385,41 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Cookie", "Authorization"],
 )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Safety net for every exception a route didn't already catch itself - guarantees no
+    raw error text (SQL, stack traces, internal paths) ever reaches a customer response.
+    FastAPI's own HTTPException/RequestValidationError handlers are more specific and take
+    precedence, so normal curated 4xx responses are unaffected by this."""
+    db = SessionLocal()
+    try:
+        tenant_id, actor_email = best_effort_actor_from_request(db, request)
+        record_system_error(db, exc=exc, request=request, tenant_id=tenant_id, actor_email=actor_email, status_code=500)
+    finally:
+        db.close()
+    return JSONResponse(status_code=500, content={"detail": "Ein interner Fehler ist aufgetreten."})
+
+
+@app.exception_handler(HTTPException)
+async def logged_http_exception_handler(request: Request, exc: HTTPException):
+    """Every route in this codebase follows the same convention: catch an unexpected
+    exception, `raise HTTPException(..., detail="<curated message>") from exc`. That already
+    keeps raw error text out of the response - but none of those ~80 call sites persist the
+    original exception anywhere. Rather than threading `record_system_error` through each of
+    them individually, this hooks the one place they all funnel through: if an HTTPException
+    carries a chained cause that isn't a ValueError (this codebase's convention for expected,
+    already-safe-to-show validation messages), it's an unexpected error worth recording. The
+    response itself is untouched - delegates to FastAPI's default handler unchanged."""
+    if exc.status_code >= 400 and exc.__cause__ is not None and not isinstance(exc.__cause__, ValueError):
+        db = SessionLocal()
+        try:
+            tenant_id, actor_email = best_effort_actor_from_request(db, request)
+            record_system_error(db, exc=exc.__cause__, request=request, tenant_id=tenant_id, actor_email=actor_email, status_code=exc.status_code)
+        finally:
+            db.close()
+    return await http_exception_handler(request, exc)
 
 
 @app.get("/api/health")

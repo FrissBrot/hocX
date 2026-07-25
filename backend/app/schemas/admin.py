@@ -91,3 +91,30 @@ class TenantCloneRequest(BaseModel):
 class TenantImportResult(BaseModel):
     tenant: AdminTenantRead
     warnings: list[str] = []
+
+
+class SystemErrorLogRead(BaseModel):
+    id: int
+    source: str
+    tenant_id: int | None = None
+    tenant_name: str | None = None
+    actor_email: str | None = None
+    request_method: str | None = None
+    request_path: str | None = None
+    status_code: int | None = None
+    error_type: str
+    error_message: str
+    traceback: str | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class SystemErrorLogPage(BaseModel):
+    items: list[SystemErrorLogRead]
+    total: int
+
+
+class SystemErrorLogFilterOptions(BaseModel):
+    error_types: list[str]
+    sources: list[str]

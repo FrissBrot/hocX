@@ -1,10 +1,11 @@
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from app.core.db import get_db
+from app.core.error_log import record_system_error
 from app.core.security import CurrentUser, get_current_user, require_admin, require_reader
 from app.schemas.protocol import ProtocolExportRead
 from app.services.access_service import AccessService
@@ -13,6 +14,8 @@ from app.services.export_service import ExportService
 router = APIRouter()
 service = ExportService()
 access_service = AccessService()
+
+_EXPORT_FAILED_MESSAGE = "Export fehlgeschlagen. Bitte später erneut versuchen."
 
 
 class StandaloneExportRequest(BaseModel):
@@ -49,6 +52,7 @@ class GlobalListExportRequest(BaseModel):
 @router.post("/protocols/{protocol_id}/exports/latex", response_model=ProtocolExportRead)
 def export_latex(
     protocol_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -59,12 +63,14 @@ def export_latex(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except (SQLAlchemyError, RuntimeError) as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        record_system_error(db, exc=exc, request=request, tenant_id=user.current_tenant_id, actor_email=user.email, status_code=400)
+        raise HTTPException(status_code=400, detail=_EXPORT_FAILED_MESSAGE) from exc
 
 
 @router.post("/protocols/{protocol_id}/exports/pdf", response_model=ProtocolExportRead)
 async def export_pdf(
     protocol_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -76,7 +82,8 @@ async def export_pdf(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except (SQLAlchemyError, RuntimeError) as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        record_system_error(db, exc=exc, request=request, tenant_id=user.current_tenant_id, actor_email=user.email, status_code=400)
+        raise HTTPException(status_code=400, detail=_EXPORT_FAILED_MESSAGE) from exc
 
 
 @router.get("/protocols/{protocol_id}/exports/latest", response_model=ProtocolExportRead)
@@ -94,6 +101,7 @@ def latest_export(
 async def export_todo_list(
     protocol_id: int,
     body: StandaloneExportRequest,
+    request: Request,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -105,13 +113,15 @@ async def export_todo_list(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except (SQLAlchemyError, RuntimeError) as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        record_system_error(db, exc=exc, request=request, tenant_id=user.current_tenant_id, actor_email=user.email, status_code=400)
+        raise HTTPException(status_code=400, detail=_EXPORT_FAILED_MESSAGE) from exc
 
 
 @router.post("/protocols/{protocol_id}/exports/event-list", response_model=ProtocolExportRead)
 async def export_event_list(
     protocol_id: int,
     body: StandaloneExportRequest,
+    request: Request,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -123,12 +133,14 @@ async def export_event_list(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except (SQLAlchemyError, RuntimeError) as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        record_system_error(db, exc=exc, request=request, tenant_id=user.current_tenant_id, actor_email=user.email, status_code=400)
+        raise HTTPException(status_code=400, detail=_EXPORT_FAILED_MESSAGE) from exc
 
 
 @router.post("/exports/todos", response_model=ProtocolExportRead)
 async def export_global_todos(
     body: GlobalTodoExportRequest,
+    request: Request,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -143,12 +155,14 @@ async def export_global_todos(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except (SQLAlchemyError, RuntimeError) as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        record_system_error(db, exc=exc, request=request, tenant_id=user.current_tenant_id, actor_email=user.email, status_code=400)
+        raise HTTPException(status_code=400, detail=_EXPORT_FAILED_MESSAGE) from exc
 
 
 @router.post("/exports/lists", response_model=ProtocolExportRead)
 async def export_global_list(
     body: GlobalListExportRequest,
+    request: Request,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -169,12 +183,14 @@ async def export_global_list(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except (SQLAlchemyError, RuntimeError) as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        record_system_error(db, exc=exc, request=request, tenant_id=user.current_tenant_id, actor_email=user.email, status_code=400)
+        raise HTTPException(status_code=400, detail=_EXPORT_FAILED_MESSAGE) from exc
 
 
 @router.post("/exports/events", response_model=ProtocolExportRead)
 async def export_global_events(
     body: GlobalEventExportRequest,
+    request: Request,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -188,4 +204,5 @@ async def export_global_events(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except (SQLAlchemyError, RuntimeError) as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        record_system_error(db, exc=exc, request=request, tenant_id=user.current_tenant_id, actor_email=user.email, status_code=400)
+        raise HTTPException(status_code=400, detail=_EXPORT_FAILED_MESSAGE) from exc

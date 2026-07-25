@@ -101,8 +101,21 @@ class TenantImportService:
             self.lookup_cache = LookupCodeCache(db)
             self.user_cache = UserEmailCache(db)
             self.warnings: list[str] = []
+            self._created_tenant_id: int | None = None
 
-            new_tenant = self._run(new_name)
+            try:
+                new_tenant = self._run(new_name)
+            except Exception:
+                # The pipeline below commits progressively (one table at a time, matching
+                # TenantCloneService's style) rather than as one big transaction - a failure
+                # partway through would otherwise leave a broken, half-imported tenant sitting
+                # in the tenant list instead of a clean "import failed". Tear it down (cascade
+                # deletes every row written so far) before the error propagates.
+                db.rollback()
+                if self._created_tenant_id is not None:
+                    db.query(Tenant).filter(Tenant.id == self._created_tenant_id).delete()
+                    db.commit()
+                raise
             return new_tenant, self.warnings
 
     def _t(self, name: str) -> list[dict[str, Any]]:
@@ -142,6 +155,7 @@ class TenantImportService:
 
     def _run(self, new_name: str) -> Tenant:
         new_tenant = self._import_tenant_base(new_name)
+        self._created_tenant_id = new_tenant.id
         self._import_oidc(new_tenant.id)
         group_map = self._import_simple(GroupEntity, self._t("group_entity"), "group_entity", {"tenant_id": new_tenant.id})
         self._import_simple(Leader, self._t("leader"), "leader", {"tenant_id": new_tenant.id})
