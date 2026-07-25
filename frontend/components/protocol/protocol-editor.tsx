@@ -1848,6 +1848,14 @@ export function ProtocolEditor({
     }
     void performStatusTransition();
   };
+
+  // Nur verlassen, ohne den Workflow-Status zu ändern - im Unterschied zu transitionStatus()
+  // (Ctrl+Enter sprang bisher am Ende der Punkte in transitionStatus(), was versehentlich eine
+  // Sitzung/das Protokoll abschliessen konnte, nur weil man einmal zu oft Ctrl+Enter gedrückt
+  // hat).
+  const closeProtocol = () => {
+    router.push("/protocols");
+  };
   const timers = useRef<Record<number, number>>({});
   const shouldScrollToElementRef = useRef(false);
   const navRef = useRef<HTMLElement | null>(null);
@@ -2011,9 +2019,9 @@ export function ProtocolEditor({
         if (nextIndex < visibleElements.length) {
           event.preventDefault();
           focusElement(visibleElements[nextIndex].id);
-        } else if (workflowMeta[protocolStatus]?.ctaLabel) {
+        } else if (!isReadOnly) {
           event.preventDefault();
-          void transitionStatus();
+          closeProtocol();
         }
         return;
       }
@@ -2632,36 +2640,48 @@ export function ProtocolEditor({
 
       <div className="editor-fixed-actions">
         {!isReadOnly && selectedElementIndex >= 0 && selectedElementIndex < visibleElements.length - 1 ? (
-          <button
-            type="button"
-            className="button-inline"
-            onClick={() => {
-              const nextElement = visibleElements[selectedElementIndex + 1];
-              if (nextElement) focusElement(nextElement.id);
-            }}
-            onKeyDown={(e) => {
-              if (e.key !== "Tab") return;
-              const inputs = document.querySelectorAll<HTMLElement>("[data-form-input]");
-              if (!inputs.length) return;
-              e.preventDefault();
-              if (e.shiftKey) {
-                inputs[inputs.length - 1].focus();
-              } else {
-                inputs[0].focus();
-              }
-            }}
-          >
-            Weiter →
-          </button>
+          <>
+            <button type="button" className="button-ghost editor-fixed-actions-close" onClick={closeProtocol}>
+              Schliessen
+            </button>
+            <button
+              type="button"
+              className="button-primary"
+              data-editor-primary-action
+              onClick={() => {
+                const nextElement = visibleElements[selectedElementIndex + 1];
+                if (nextElement) focusElement(nextElement.id);
+              }}
+              onKeyDown={(e) => {
+                if (e.key !== "Tab") return;
+                const inputs = document.querySelectorAll<HTMLElement>("[data-form-input]");
+                if (!inputs.length) return;
+                e.preventDefault();
+                if (e.shiftKey) {
+                  inputs[inputs.length - 1].focus();
+                } else {
+                  inputs[0].focus();
+                }
+              }}
+            >
+              Weiter →
+            </button>
+          </>
         ) : !isReadOnly && workflowMeta[protocolStatus]?.ctaLabel ? (
-          <button
-            type="button"
-            className="button-primary"
-            disabled={transitioningStatus}
-            onClick={transitionStatus}
-          >
-            {transitioningStatus ? "…" : workflowMeta[protocolStatus]?.ctaLabel}
-          </button>
+          <>
+            <button type="button" className="button-ghost editor-fixed-actions-close" onClick={closeProtocol}>
+              Schliessen
+            </button>
+            <button
+              type="button"
+              className="button-primary"
+              data-editor-primary-action
+              disabled={transitioningStatus}
+              onClick={transitionStatus}
+            >
+              {transitioningStatus ? "…" : workflowMeta[protocolStatus]?.ctaLabel}
+            </button>
+          </>
         ) : (
           <a href="/protocols" className="button-inline">← Zurück zu den Protokollen</a>
         )}
@@ -3062,7 +3082,7 @@ function FocusedElementEditor({
       const atFirst = e.shiftKey && idx === 0;
       if (atLast || atFirst) {
         e.preventDefault();
-        document.querySelector<HTMLElement>(".editor-fixed-actions button")?.focus();
+        document.querySelector<HTMLElement>(".editor-fixed-actions [data-editor-primary-action]")?.focus();
       }
     } else if (e.key === "Enter" && (e.currentTarget as HTMLElement).tagName === "SELECT") {
       const el = e.currentTarget as HTMLElement;
