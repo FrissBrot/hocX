@@ -93,6 +93,19 @@ class TenantImportResult(BaseModel):
     warnings: list[str] = []
 
 
+class AdminTenantUserRead(BaseModel):
+    user_id: int
+    email: str
+    display_name: str
+    role_code: str
+    login_enabled: bool
+    is_active: bool
+
+
+class AdminTenantUserGrant(BaseModel):
+    role_code: str
+
+
 class SystemErrorLogRead(BaseModel):
     id: int
     source: str

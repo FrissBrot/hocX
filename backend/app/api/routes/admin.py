@@ -16,6 +16,8 @@ from app.schemas.admin import (
     AdminDomainRead,
     AdminTenantCreate,
     AdminTenantRead,
+    AdminTenantUserGrant,
+    AdminTenantUserRead,
     AdminUserMergeRequest,
     PlatformAdminCreate,
     PlatformAdminRead,
@@ -30,6 +32,7 @@ from app.schemas.user import TenantUpdate, UserCreate, UserRead, UserUpdate
 from app.services.admin_domain_service import AdminDomainService
 from app.services.admin_error_log_service import AdminErrorLogService
 from app.services.admin_tenant_service import AdminTenantService
+from app.services.admin_tenant_user_service import AdminTenantUserService
 from app.services.admin_user_service import AdminUserService, PlatformAdminService
 from app.services.file_service import _safe_storage_path
 from app.services.oidc_service import OidcService
@@ -40,6 +43,7 @@ from app.services.tenant_import_service import TenantImportService
 router = APIRouter(dependencies=[Depends(get_current_admin)])
 
 tenant_service = AdminTenantService()
+tenant_user_service = AdminTenantUserService()
 user_service = AdminUserService()
 admin_account_service = PlatformAdminService()
 oidc_service = OidcService()
@@ -186,6 +190,22 @@ async def import_tenant(
     if result is None:
         raise HTTPException(status_code=500, detail="Imported tenant could not be reloaded")
     return TenantImportResult(tenant=result, warnings=warnings)
+
+
+@router.get("/tenants/{tenant_id}/users", response_model=list[AdminTenantUserRead])
+def list_tenant_users(tenant_id: int, db: Session = Depends(get_db)):
+    return tenant_user_service.list_users(db, tenant_id)
+
+
+@router.put("/tenants/{tenant_id}/users/{user_id}", response_model=AdminTenantUserRead)
+def grant_tenant_user_role(tenant_id: int, user_id: int, payload: AdminTenantUserGrant, db: Session = Depends(get_db)):
+    return tenant_user_service.grant_or_update_role(db, tenant_id, user_id, payload.role_code)
+
+
+@router.delete("/tenants/{tenant_id}/users/{user_id}", status_code=204)
+def remove_tenant_user(tenant_id: int, user_id: int, db: Session = Depends(get_db)):
+    if not tenant_user_service.remove_user(db, tenant_id, user_id):
+        raise HTTPException(status_code=404, detail="Membership not found")
 
 
 @router.get("/tenants/{tenant_id}/oidc-config", response_model=OidcConfigRead)

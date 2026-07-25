@@ -149,6 +149,15 @@ export type UserSummary = {
   updated_at: string;
 };
 
+export type AdminTenantUser = {
+  user_id: number;
+  email: string;
+  display_name: string;
+  role_code: string;
+  login_enabled: boolean;
+  is_active: boolean;
+};
+
 export type AdminSessionInfo = {
   authenticated: boolean;
   admin: { id: number; email: string; display_name: string } | null;

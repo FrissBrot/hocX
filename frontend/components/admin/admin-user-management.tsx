@@ -2,8 +2,10 @@
 
 import { FormEvent, useMemo, useState } from "react";
 
+import { ROLE_OPTIONS } from "@/components/admin/admin-tenant-settings-modal";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
+import { Tabs } from "@/components/ui/tabs";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { AdminTenantSummary, UserSummary } from "@/types/api";
@@ -30,8 +32,8 @@ type UserFormState = {
   login_enabled: boolean;
   is_participant_account: boolean;
   memberships: MembershipEntry[];
-  selectedTenantId: string;
-  selectedRoleCode: string;
+  addTenantId: string;
+  addRoleCode: string;
 };
 
 function emptyUserForm(allTenants: AdminTenantSummary[]): UserFormState {
@@ -46,8 +48,8 @@ function emptyUserForm(allTenants: AdminTenantSummary[]): UserFormState {
     login_enabled: true,
     is_participant_account: false,
     memberships: [],
-    selectedTenantId: allTenants[0] ? String(allTenants[0].id) : "",
-    selectedRoleCode: "reader"
+    addTenantId: allTenants[0] ? String(allTenants[0].id) : "",
+    addRoleCode: "reader"
   };
 }
 
@@ -89,6 +91,7 @@ export function AdminUserManagement({ initialUsers, allTenants }: Props) {
   }
 
   function openEditUser(user: UserSummary) {
+    const remainingTenants = allTenants.filter((t) => !user.memberships.some((m) => m.tenant_id === t.id));
     setUserForm({
       id: user.id,
       first_name: user.first_name,
@@ -101,29 +104,31 @@ export function AdminUserManagement({ initialUsers, allTenants }: Props) {
       login_enabled: user.login_enabled,
       is_participant_account: user.is_participant_account,
       memberships: user.memberships.map((membership) => ({ tenant_id: membership.tenant_id, role_code: membership.role_code })),
-      selectedTenantId: allTenants[0] ? String(allTenants[0].id) : "",
-      selectedRoleCode: "reader"
+      addTenantId: remainingTenants[0] ? String(remainingTenants[0].id) : "",
+      addRoleCode: "reader"
     });
     setFormError(null);
     setUserModalOpen(true);
   }
 
-  function upsertMembership() {
-    if (!userForm.selectedTenantId) {
-      return;
-    }
-    const tenantId = Number(userForm.selectedTenantId);
-    setUserForm((current) => {
-      const nextMemberships = current.memberships.some((membership) => membership.tenant_id === tenantId)
-        ? current.memberships.map((membership) =>
-            membership.tenant_id === tenantId ? { tenant_id: tenantId, role_code: current.selectedRoleCode } : membership
-          )
-        : [...current.memberships, { tenant_id: tenantId, role_code: current.selectedRoleCode }];
-      return {
-        ...current,
-        memberships: nextMemberships.sort((left, right) => left.tenant_id - right.tenant_id)
-      };
-    });
+  function changeMembershipRole(tenantId: number, roleCode: string) {
+    setUserForm((current) => ({
+      ...current,
+      memberships: current.memberships.map((membership) =>
+        membership.tenant_id === tenantId ? { ...membership, role_code: roleCode } : membership
+      )
+    }));
+  }
+
+  function addMembership() {
+    if (!userForm.addTenantId) return;
+    const tenantId = Number(userForm.addTenantId);
+    setUserForm((current) => ({
+      ...current,
+      memberships: [...current.memberships, { tenant_id: tenantId, role_code: current.addRoleCode }].sort(
+        (a, b) => a.tenant_id - b.tenant_id
+      )
+    }));
   }
 
   function removeMembership(tenantId: number) {
@@ -132,6 +137,8 @@ export function AdminUserManagement({ initialUsers, allTenants }: Props) {
       memberships: current.memberships.filter((membership) => membership.tenant_id !== tenantId)
     }));
   }
+
+  const remainingTenantsToAdd = allTenants.filter((t) => !userForm.memberships.some((m) => m.tenant_id === t.id));
 
   async function submitUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -260,109 +267,147 @@ export function AdminUserManagement({ initialUsers, allTenants }: Props) {
         open={userModalOpen}
         onClose={() => setUserModalOpen(false)}
         title={userForm.id ? "Benutzer bearbeiten" : "Benutzer erstellen"}
-        description="Kontodaten pflegen und Mandantenrollen über beliebige Mandanten hinweg zuweisen."
+        description=""
         size="wide"
       >
-        <form className="grid" onSubmit={submitUser}>
-          <div className="three-col">
-            <label className="field-stack">
-              <span className="field-label">Vorname</span>
-              <input value={userForm.first_name} onChange={(event) => setUserForm((current) => ({ ...current, first_name: event.target.value }))} required />
-            </label>
-            <label className="field-stack">
-              <span className="field-label">Nachname</span>
-              <input value={userForm.last_name} onChange={(event) => setUserForm((current) => ({ ...current, last_name: event.target.value }))} required />
-            </label>
-            <label className="field-stack">
-              <span className="field-label">Anzeigename</span>
-              <input value={userForm.display_name} onChange={(event) => setUserForm((current) => ({ ...current, display_name: event.target.value }))} required />
-            </label>
-          </div>
-
-          <div className="three-col">
-            <label className="field-stack">
-              <span className="field-label">E-Mail</span>
-              <input value={userForm.email} onChange={(event) => setUserForm((current) => ({ ...current, email: event.target.value }))} required />
-            </label>
-            <label className="field-stack">
-              <span className="field-label">{userForm.id ? "Neues Passwort" : "Passwort"}</span>
-              <input type="password" value={userForm.password} onChange={(event) => setUserForm((current) => ({ ...current, password: event.target.value }))} required={!userForm.id} minLength={8} />
-            </label>
-            <label className="field-stack">
-              <span className="field-label">Sprache</span>
-              <select value={userForm.preferred_language} onChange={(event) => setUserForm((current) => ({ ...current, preferred_language: event.target.value }))}>
-                <option value="de">Deutsch</option>
-                <option value="en">English</option>
-                <option value="fr">Français</option>
-                <option value="it">Italiano</option>
-              </select>
-            </label>
-            <label className="checkbox-line">
-              <input type="checkbox" checked={userForm.is_active} onChange={(event) => setUserForm((current) => ({ ...current, is_active: event.target.checked }))} />
-              Aktiv
-            </label>
-          </div>
-
-          <div className="two-col">
-            <label className="checkbox-line">
-              <input type="checkbox" checked={userForm.login_enabled} onChange={(event) => setUserForm((current) => ({ ...current, login_enabled: event.target.checked }))} />
-              Login aktivieren
-            </label>
-            {userForm.is_participant_account ? (
-              <div className="info-note">
-                Dieses Konto wurde automatisch aus einem Teilnehmer erstellt. Für den ersten Login bitte Login aktivieren
-                und ein neues Passwort setzen.
-              </div>
-            ) : null}
-          </div>
-
-          <div className="grid">
-            <div className="field-label">Mandantenrollen</div>
-            <div className="role-picker">
-              <label className="field-stack">
-                <span className="field-label">Mandant</span>
-                <select value={userForm.selectedTenantId} onChange={(event) => setUserForm((current) => ({ ...current, selectedTenantId: event.target.value }))}>
-                  {allTenants.map((tenant) => (
-                    <option key={tenant.id} value={tenant.id}>
-                      {tenant.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field-stack">
-                <span className="field-label">Rolle</span>
-                <select value={userForm.selectedRoleCode} onChange={(event) => setUserForm((current) => ({ ...current, selectedRoleCode: event.target.value }))}>
-                  <option value="reader">Reader</option>
-                  <option value="kassier">Kassier</option>
-                  <option value="writer">Writer</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </label>
-              <div className="role-picker-action">
-                <button type="button" className="button-inline" onClick={upsertMembership} disabled={!userForm.selectedTenantId}>
-                  Rolle zuweisen
-                </button>
-              </div>
-            </div>
-
-            <div className="selection-list">
-              {userForm.memberships.length === 0 ? (
-                <div className="selection-card muted">Noch keine Mandantenrollen zugewiesen.</div>
-              ) : (
-                userForm.memberships.map((membership) => (
-                  <div key={membership.tenant_id} className="selection-card membership-row">
-                    <div>
-                      <strong>{tenantNameById.get(membership.tenant_id) ?? `Tenant #${membership.tenant_id}`}</strong>
-                      <div className="muted">{membership.role_code}</div>
+        <form className="grid" onSubmit={submitUser} id="user-form">
+          <Tabs
+            tabs={[
+              {
+                id: "konto",
+                label: "Konto",
+                content: (
+                  <div className="grid">
+                    <div className="three-col">
+                      <label className="field-stack">
+                        <span className="field-label">Vorname</span>
+                        <input value={userForm.first_name} onChange={(event) => setUserForm((current) => ({ ...current, first_name: event.target.value }))} required />
+                      </label>
+                      <label className="field-stack">
+                        <span className="field-label">Nachname</span>
+                        <input value={userForm.last_name} onChange={(event) => setUserForm((current) => ({ ...current, last_name: event.target.value }))} required />
+                      </label>
+                      <label className="field-stack">
+                        <span className="field-label">Anzeigename</span>
+                        <input value={userForm.display_name} onChange={(event) => setUserForm((current) => ({ ...current, display_name: event.target.value }))} required />
+                      </label>
                     </div>
-                    <button type="button" className="button-inline button-danger" onClick={() => removeMembership(membership.tenant_id)}>
-                      Entfernen
-                    </button>
+
+                    <div className="three-col">
+                      <label className="field-stack">
+                        <span className="field-label">E-Mail</span>
+                        <input value={userForm.email} onChange={(event) => setUserForm((current) => ({ ...current, email: event.target.value }))} required />
+                      </label>
+                      <label className="field-stack">
+                        <span className="field-label">{userForm.id ? "Neues Passwort" : "Passwort"}</span>
+                        <input type="password" value={userForm.password} onChange={(event) => setUserForm((current) => ({ ...current, password: event.target.value }))} required={!userForm.id} minLength={8} />
+                      </label>
+                      <label className="field-stack">
+                        <span className="field-label">Sprache</span>
+                        <select value={userForm.preferred_language} onChange={(event) => setUserForm((current) => ({ ...current, preferred_language: event.target.value }))}>
+                          <option value="de">Deutsch</option>
+                          <option value="en">English</option>
+                          <option value="fr">Français</option>
+                          <option value="it">Italiano</option>
+                        </select>
+                      </label>
+                      <label className="checkbox-line">
+                        <input type="checkbox" checked={userForm.is_active} onChange={(event) => setUserForm((current) => ({ ...current, is_active: event.target.checked }))} />
+                        Aktiv
+                      </label>
+                    </div>
+
+                    <div className="two-col">
+                      <label className="checkbox-line">
+                        <input type="checkbox" checked={userForm.login_enabled} onChange={(event) => setUserForm((current) => ({ ...current, login_enabled: event.target.checked }))} />
+                        Login aktivieren
+                      </label>
+                      {userForm.is_participant_account ? (
+                        <div className="info-note">
+                          Dieses Konto wurde automatisch aus einem Teilnehmer erstellt. Für den ersten Login bitte Login aktivieren
+                          und ein neues Passwort setzen.
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
-                ))
-              )}
-            </div>
-          </div>
+                )
+              },
+              {
+                id: "rollen",
+                label: `Mandantenrollen (${userForm.memberships.length})`,
+                content: (
+                  <div className="grid">
+                    <div className="table-shell">
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>Mandant</th>
+                            <th>Rolle</th>
+                            <th>Aktion</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {userForm.memberships.map((membership) => (
+                            <tr key={membership.tenant_id}>
+                              <td>{tenantNameById.get(membership.tenant_id) ?? `Tenant #${membership.tenant_id}`}</td>
+                              <td>
+                                <select value={membership.role_code} onChange={(event) => changeMembershipRole(membership.tenant_id, event.target.value)}>
+                                  {ROLE_OPTIONS.map((r) => (
+                                    <option key={r.code} value={r.code}>
+                                      {r.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td>
+                                <button type="button" className="button-inline button-ghost" onClick={() => removeMembership(membership.tenant_id)}>
+                                  Entfernen
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {userForm.memberships.length === 0 && <div className="table-empty muted">Noch keine Mandantenrollen zugewiesen.</div>}
+                    </div>
+
+                    {remainingTenantsToAdd.length > 0 && (
+                      <div className="card">
+                        <div className="eyebrow">Mandant hinzufügen</div>
+                        <div className="role-picker">
+                          <label className="field-stack">
+                            <span className="field-label">Mandant</span>
+                            <select value={userForm.addTenantId} onChange={(event) => setUserForm((current) => ({ ...current, addTenantId: event.target.value }))}>
+                              {remainingTenantsToAdd.map((tenant) => (
+                                <option key={tenant.id} value={tenant.id}>
+                                  {tenant.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="field-stack">
+                            <span className="field-label">Rolle</span>
+                            <select value={userForm.addRoleCode} onChange={(event) => setUserForm((current) => ({ ...current, addRoleCode: event.target.value }))}>
+                              {ROLE_OPTIONS.map((r) => (
+                                <option key={r.code} value={r.code}>
+                                  {r.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <div className="role-picker-action">
+                            <button type="button" className="button-inline" onClick={addMembership}>
+                              Hinzufügen
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              }
+            ]}
+          />
 
           {formError && <div className="form-error-banner">{formError}</div>}
 
