@@ -1,7 +1,13 @@
+import os
+import tempfile
+from pathlib import Path
+from typing import Literal
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
+from starlette.background import BackgroundTask
 
 from app.core.admin_security import CurrentAdmin, get_current_admin
 from app.core.config import settings
@@ -15,6 +21,7 @@ from app.schemas.admin import (
     PlatformAdminRead,
     PlatformAdminUpdate,
     TenantCloneRequest,
+    TenantImportResult,
 )
 from app.schemas.oidc import OidcConfigRead, OidcConfigWrite
 from app.schemas.user import TenantUpdate, UserCreate, UserRead, UserUpdate
@@ -24,6 +31,8 @@ from app.services.admin_user_service import AdminUserService, PlatformAdminServi
 from app.services.file_service import _safe_storage_path
 from app.services.oidc_service import OidcService
 from app.services.tenant_clone_service import TenantCloneService
+from app.services.tenant_export_service import TenantExportService
+from app.services.tenant_import_service import TenantImportService
 
 router = APIRouter(dependencies=[Depends(get_current_admin)])
 
@@ -33,6 +42,8 @@ admin_account_service = PlatformAdminService()
 oidc_service = OidcService()
 clone_service = TenantCloneService()
 domain_service = AdminDomainService()
+export_service = TenantExportService()
+import_service = TenantImportService()
 
 
 @router.get("/tenants", response_model=list[AdminTenantRead])
@@ -97,6 +108,50 @@ def clone_tenant(tenant_id: int, payload: TenantCloneRequest, db: Session = Depe
     if result is None:
         raise HTTPException(status_code=500, detail="Cloned tenant could not be reloaded")
     return result
+
+
+@router.get("/tenants/{tenant_id}/export")
+def export_tenant(
+    tenant_id: int,
+    scope: Literal["structure", "structure_lists", "full", "full_abgabebox"] = "structure",
+    db: Session = Depends(get_db),
+):
+    try:
+        zip_path, filename = export_service.export(db, tenant_id, scope)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return FileResponse(
+        zip_path,
+        filename=filename,
+        media_type="application/zip",
+        background=BackgroundTask(lambda: zip_path.unlink(missing_ok=True)),
+    )
+
+
+@router.post("/tenants/import", response_model=TenantImportResult, status_code=201)
+async def import_tenant(
+    new_name: str = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    with tempfile.NamedTemporaryFile(prefix="hocx-import-upload-", suffix=".zip", delete=False) as tmp:
+        tmp_path = Path(tmp.name)
+        content = await file.read()
+        tmp.write(content)
+    try:
+        new_tenant, warnings = import_service.import_zip(db, tmp_path, new_name)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Tenant could not be imported") from exc
+    finally:
+        os.unlink(tmp_path)
+    result = tenant_service.get_tenant(db, new_tenant.id)
+    if result is None:
+        raise HTTPException(status_code=500, detail="Imported tenant could not be reloaded")
+    return TenantImportResult(tenant=result, warnings=warnings)
 
 
 @router.get("/tenants/{tenant_id}/oidc-config", response_model=OidcConfigRead)

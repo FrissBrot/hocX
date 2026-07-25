@@ -26,6 +26,13 @@ export function AdminTenantManagement({ initialTenants }: Props) {
   const [cloneName, setCloneName] = useState("");
   const [cloneMode, setCloneMode] = useState<"structure" | "full">("structure");
   const [cloneBusy, setCloneBusy] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportTenant, setExportTenant] = useState<AdminTenantSummary | null>(null);
+  const [exportScope, setExportScope] = useState<"structure" | "structure_lists" | "full" | "full_abgabebox">("structure");
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importName, setImportName] = useState("");
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importBusy, setImportBusy] = useState(false);
 
   const visibleTenants = tenants.filter((tenant) =>
     !search.trim() || tenant.name.toLowerCase().includes(search.trim().toLowerCase())
@@ -83,15 +90,70 @@ export function AdminTenantManagement({ initialTenants }: Props) {
     }
   }
 
+  function openExport(tenant: AdminTenantSummary) {
+    setExportTenant(tenant);
+    setExportScope("structure");
+    setExportModalOpen(true);
+  }
+
+  function submitExport(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!exportTenant) return;
+    const a = document.createElement("a");
+    a.href = `/api/admin/tenants/${exportTenant.id}/export?scope=${exportScope}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setExportModalOpen(false);
+  }
+
+  function openImport() {
+    setImportName("");
+    setImportFile(null);
+    setImportModalOpen(true);
+  }
+
+  async function submitImport(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!importFile) return;
+    setImportBusy(true);
+    try {
+      const formData = new FormData();
+      formData.append("new_name", importName);
+      formData.append("file", importFile);
+      const result = await browserApiFetch<{ tenant: AdminTenantSummary; warnings: string[] }>(
+        "/api/admin/tenants/import",
+        { method: "POST", body: formData }
+      );
+      setTenants((current) => [...current, result.tenant].sort((a, b) => a.name.localeCompare(b.name)));
+      setImportModalOpen(false);
+      if (result.warnings.length > 0) {
+        showToast(`Mandant importiert mit ${result.warnings.length} Hinweis(en) - siehe Konsole`, "success");
+        console.warn("Import-Hinweise:", result.warnings);
+      } else {
+        showToast("Mandant importiert", "success");
+      }
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Mandant konnte nicht importiert werden", "error");
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
   return (
     <div className="grid">
       <DataToolbar
         title="Mandanten"
         description="Alle Mandanten im System. Neue Mandanten werden hier zentral angelegt."
         actions={
-          <button type="button" className="button-inline" onClick={() => setModalOpen(true)}>
-            Neuer Mandant
-          </button>
+          <>
+            <button type="button" className="button-inline button-ghost" onClick={openImport}>
+              Mandant importieren
+            </button>
+            <button type="button" className="button-inline" onClick={() => setModalOpen(true)}>
+              Neuer Mandant
+            </button>
+          </>
         }
       />
 
@@ -143,6 +205,16 @@ export function AdminTenantManagement({ initialTenants }: Props) {
                   }}
                 >
                   Klonen
+                </button>
+                <button
+                  type="button"
+                  className="button-inline button-ghost"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openExport(tenant);
+                  }}
+                >
+                  Exportieren
                 </button>
               </div>
             </td>
@@ -214,6 +286,104 @@ export function AdminTenantManagement({ initialTenants }: Props) {
           <div className="table-actions table-actions-start">
             <button type="submit" className="button-inline" disabled={cloneBusy}>
               {cloneBusy ? "Wird geklont…" : "Klonen"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={exportModalOpen}
+        onClose={() => setExportModalOpen(false)}
+        title={exportTenant ? `"${exportTenant.name}" exportieren` : "Mandant exportieren"}
+        description="Erstellt eine ZIP-Datei zum Herunterladen, die später im Adminpanel wieder als neuer Mandant importiert werden kann."
+      >
+        <form className="grid" onSubmit={submitExport}>
+          <div className="field-stack">
+            <span className="field-label">Umfang</span>
+            <label className="field-radio-option">
+              <input
+                type="radio"
+                name="export-scope"
+                value="structure"
+                checked={exportScope === "structure"}
+                onChange={() => setExportScope("structure")}
+              />
+              <span>
+                <strong>Nur Struktur</strong>
+                <div className="muted">Zyklen, Formularfelder, Dokumentvorlagen, Listen (nur Definition, ohne Inhalt), Konten und Benutzerrollen.</div>
+              </span>
+            </label>
+            <label className="field-radio-option">
+              <input
+                type="radio"
+                name="export-scope"
+                value="structure_lists"
+                checked={exportScope === "structure_lists"}
+                onChange={() => setExportScope("structure_lists")}
+              />
+              <span>
+                <strong>Struktur + Listeninhalt</strong>
+                <div className="muted">Wie oben, zusätzlich die Einträge in den Listen. Ohne Teilnehmer/Termine - Listeneinträge, die auf einen Teilnehmer oder Termin verweisen, werden dabei ohne diesen Verweis übernommen.</div>
+              </span>
+            </label>
+            <label className="field-radio-option">
+              <input
+                type="radio"
+                name="export-scope"
+                value="full"
+                checked={exportScope === "full"}
+                onChange={() => setExportScope("full")}
+              />
+              <span>
+                <strong>Struktur + alle Protokolle</strong>
+                <div className="muted">Zusätzlich Teilnehmer, Termine, Protokolle, Bussen und Todos. Ohne Abgabebox.</div>
+              </span>
+            </label>
+            <label className="field-radio-option">
+              <input
+                type="radio"
+                name="export-scope"
+                value="full_abgabebox"
+                checked={exportScope === "full_abgabebox"}
+                onChange={() => setExportScope("full_abgabebox")}
+              />
+              <span>
+                <strong>Alles inklusive Abgabebox</strong>
+                <div className="muted">Wie oben, zusätzlich Abgabebox-Konfiguration und hochgeladene Dateien.</div>
+              </span>
+            </label>
+          </div>
+          <div className="table-actions table-actions-start">
+            <button type="submit" className="button-inline">
+              Exportieren
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        title="Mandant importieren"
+        description="Legt anhand einer zuvor exportierten ZIP-Datei einen neuen Mandanten an."
+      >
+        <form className="grid" onSubmit={submitImport}>
+          <label className="field-stack">
+            <span className="field-label">Name des neuen Mandanten</span>
+            <input value={importName} onChange={(event) => setImportName(event.target.value)} required />
+          </label>
+          <label className="field-stack">
+            <span className="field-label">Export-Datei (.zip)</span>
+            <input
+              type="file"
+              accept=".zip"
+              onChange={(event) => setImportFile(event.target.files?.[0] ?? null)}
+              required
+            />
+          </label>
+          <div className="table-actions table-actions-start">
+            <button type="submit" className="button-inline" disabled={importBusy || !importFile}>
+              {importBusy ? "Wird importiert…" : "Importieren"}
             </button>
           </div>
         </form>

@@ -86,3 +86,8 @@ class AdminUserMergeRequest(BaseModel):
 class TenantCloneRequest(BaseModel):
     new_name: str
     mode: Literal["structure", "full"] = "structure"
+
+
+class TenantImportResult(BaseModel):
+    tenant: AdminTenantRead
+    warnings: list[str] = []
