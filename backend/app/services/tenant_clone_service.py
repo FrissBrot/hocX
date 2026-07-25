@@ -49,6 +49,12 @@ from app.models import (
 )
 from app.services.document_template_service import DocumentTemplateService
 from app.services.file_service import _safe_storage_path
+from app.services.tenant_transfer_common import (
+    remap_block_configuration,
+    remap_document_template_config,
+    remap_list_value,
+    remap_template_element_config,
+)
 
 _ALWAYS_EXCLUDE = {"id", "created_at", "updated_at"}
 
@@ -292,21 +298,6 @@ class TenantCloneService:
         db.commit()
         return id_map
 
-    def _remap_document_template_config(self, config: dict | None, part_map: dict[int, int]) -> dict:
-        config = copy.deepcopy(config or {})
-        slots = config.get("slots")
-        if isinstance(slots, dict):
-            config["slots"] = {k: part_map.get(v, v) for k, v in slots.items()}
-        theme = config.get("theme")
-        if isinstance(theme, dict):
-            font_parts = theme.get("font_parts")
-            if isinstance(font_parts, dict):
-                theme["font_parts"] = {k: part_map.get(v, v) for k, v in font_parts.items()}
-        title_assets = config.get("title_assets")
-        if isinstance(title_assets, dict):
-            config["title_assets"] = {k: part_map.get(v, v) for k, v in title_assets.items()}
-        return config
-
     def _clone_document_templates(
         self, db: Session, source_tenant_id: int, new_tenant_id: int, part_map: dict[int, int]
     ) -> dict[int, int]:
@@ -316,7 +307,7 @@ class TenantCloneService:
             new_row = _copy_row(row, {
                 "tenant_id": new_tenant_id,
                 "filesystem_path": "",
-                "configuration_json": self._remap_document_template_config(row.configuration_json, part_map),
+                "configuration_json": remap_document_template_config(row.configuration_json, part_map),
             })
             db.add(new_row)
             db.flush()
@@ -351,44 +342,6 @@ class TenantCloneService:
             id_map[row.id] = new_row.id
         db.commit()
         return id_map
-
-    def _remap_template_element_config(
-        self,
-        config: dict | None,
-        *,
-        participant_map: dict[int, int],
-        list_definition_map: dict[int, int],
-        list_entry_map: dict[int, int],
-    ) -> dict:
-        config = copy.deepcopy(config or {})
-        responsibility = config.get("responsibility")
-        if not isinstance(responsibility, dict) or not isinstance(responsibility.get("assignments"), list):
-            return config
-        new_assignments = []
-        for assignment in responsibility["assignments"]:
-            if not isinstance(assignment, dict):
-                continue
-            new_participant_id = participant_map.get(assignment.get("participant_id"))
-            if new_participant_id is None:
-                # The participant this assignment pointed at doesn't exist in the new tenant
-                # (e.g. structure-only clone, or the participant wasn't cloned) - drop it rather
-                # than keep a dangling reference to an id from the source tenant.
-                continue
-            new_assignment = {**assignment, "participant_id": new_participant_id}
-            list_definition_id = assignment.get("list_definition_id")
-            list_entry_id = assignment.get("list_entry_id")
-            if list_definition_id and list_entry_id:
-                new_list_definition_id = list_definition_map.get(list_definition_id)
-                new_list_entry_id = list_entry_map.get(list_entry_id)
-                if new_list_definition_id is None or new_list_entry_id is None:
-                    new_assignment["list_definition_id"] = None
-                    new_assignment["list_entry_id"] = None
-                    new_assignment["locked"] = False
-                else:
-                    new_assignment["list_definition_id"] = new_list_definition_id
-                    new_assignment["list_entry_id"] = new_list_entry_id
-            new_assignments.append(new_assignment)
-        return {**config, "responsibility": {**responsibility, "assignments": new_assignments}}
 
     def _clone_templates(
         self,
@@ -426,7 +379,7 @@ class TenantCloneService:
                 new_row = _copy_row(row, {
                     "template_id": template_map[row.template_id],
                     "element_definition_id": element_definition_map.get(row.element_definition_id, row.element_definition_id),
-                    "configuration_json": self._remap_template_element_config(
+                    "configuration_json": remap_template_element_config(
                         row.configuration_json,
                         participant_map=participant_map,
                         list_definition_map=list_definition_map,
@@ -541,18 +494,6 @@ class TenantCloneService:
             ))
         db.commit()
 
-    def _remap_list_value(
-        self, value_type: str | None, raw: dict | None, participant_map: dict[int, int], event_map: dict[int, int]
-    ) -> dict:
-        value = copy.deepcopy(raw or {})
-        if value_type == "participant" and "participant_id" in value:
-            value["participant_id"] = participant_map.get(value["participant_id"], value["participant_id"])
-        elif value_type == "participants" and isinstance(value.get("participant_ids"), list):
-            value["participant_ids"] = [participant_map.get(i, i) for i in value["participant_ids"]]
-        elif value_type == "event" and "event_id" in value:
-            value["event_id"] = event_map.get(value["event_id"], value["event_id"])
-        return value
-
     def _clone_list_entries(
         self, db: Session, *, list_definition_map: dict[int, int], participant_map: dict[int, int], event_map: dict[int, int]
     ) -> dict[int, int]:
@@ -568,10 +509,10 @@ class TenantCloneService:
             definition = new_definitions.get(new_definition_id)
             new_row = _copy_row(row, {
                 "list_definition_id": new_definition_id,
-                "column_one_value_json": self._remap_list_value(
+                "column_one_value_json": remap_list_value(
                     definition.column_one_value_type if definition else None, row.column_one_value_json, participant_map, event_map
                 ),
-                "column_two_value_json": self._remap_list_value(
+                "column_two_value_json": remap_list_value(
                     definition.column_two_value_type if definition else None, row.column_two_value_json, participant_map, event_map
                 ),
             })
@@ -718,21 +659,6 @@ class TenantCloneService:
         db.commit()
         return id_map
 
-    def _remap_block_configuration(self, config: dict | None, participant_map: dict[int, int]) -> dict:
-        config = config or {}
-        entries = config.get("attendance_entries")
-        if not isinstance(entries, list):
-            return copy.deepcopy(config)
-        new_entries = []
-        for entry in entries:
-            new_entry = dict(entry)
-            participant_id = new_entry.get("participant_id")
-            if participant_id in participant_map:
-                new_entry["participant_id"] = participant_map[participant_id]
-            new_entries.append(new_entry)
-        rest = {k: copy.deepcopy(v) for k, v in config.items() if k != "attendance_entries"}
-        return {**rest, "attendance_entries": new_entries}
-
     def _clone_protocol_element_blocks(
         self,
         db: Session,
@@ -756,7 +682,7 @@ class TenantCloneService:
                 "protocol_element_id": new_protocol_element_id,
                 "template_element_block_id": template_element_block_map.get(row.template_element_block_id) if row.template_element_block_id else None,
                 "element_definition_id": element_definition_map.get(row.element_definition_id) if row.element_definition_id else None,
-                "configuration_snapshot_json": self._remap_block_configuration(row.configuration_snapshot_json, participant_map),
+                "configuration_snapshot_json": remap_block_configuration(row.configuration_snapshot_json, participant_map),
             })
             db.add(new_row)
             db.flush()
