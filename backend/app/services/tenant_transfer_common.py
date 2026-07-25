@@ -93,13 +93,15 @@ def coerce_value(column: Any, raw: Any) -> Any:
 def build_row(model: type, data: dict[str, Any], overrides: dict[str, Any] | None = None) -> Any:
     """Builds a new, unattached ORM instance from an exported row dict.
 
-    `id` is always dropped (the DB assigns a fresh one); `created_at`/`updated_at` are kept
-    as-is so imported historical data keeps its real timestamps instead of getting "now".
+    `id` is always dropped (the DB assigns a fresh one); so is any DB-computed column (e.g.
+    app_user.name is `GENERATED ALWAYS AS (display_name)` - Postgres rejects an explicit
+    value for it). `created_at`/`updated_at` are kept as-is so imported historical data
+    keeps its real timestamps instead of getting "now".
     """
     mapper = sa_inspect(model)
     values: dict[str, Any] = {}
     for column in mapper.columns:
-        if column.key == "id":
+        if column.key == "id" or column.computed is not None:
             continue
         if column.key in data:
             values[column.key] = coerce_value(column, data[column.key])
@@ -142,20 +144,40 @@ class LookupCodeCache:
 
 
 class UserEmailCache:
-    """Resolves app_user ids <-> emails, caching one query per set of ids/emails looked up."""
+    """Resolves app_user ids <-> emails, caching one query per set of ids/emails looked up.
+
+    Export also uses this to track *which* app_user ids got referenced anywhere in the
+    export (every USER_ID_COLUMNS lookup goes through `email_for`) - `referenced_ids()`
+    is then used to bundle the actual AppUser rows (see TenantExportService), so an
+    imported tenant's users can log in on the target immediately instead of the import
+    only ever linking to an account that has to already exist there.
+    """
 
     def __init__(self, db: Session) -> None:
         self.db = db
         self._email_by_id: dict[int, str] = {}
         self._id_by_email: dict[str, int | None] = {}
+        self._referenced_ids: set[int] = set()
 
     def email_for(self, user_id: int | None) -> str | None:
         if user_id is None:
             return None
+        self._referenced_ids.add(user_id)
         if user_id not in self._email_by_id:
             user = self.db.get(AppUser, user_id)
             self._email_by_id[user_id] = user.email if user is not None else None
         return self._email_by_id[user_id]
+
+    def referenced_ids(self) -> set[int]:
+        return set(self._referenced_ids)
+
+    def set_id(self, email: str, user_id: int) -> None:
+        """Used on import right after creating a brand new account (see
+        TenantImportService._import_app_users) - without this, the `id_for` call that was
+        used to check "does this email already exist" would have already cached the answer
+        as None, and every later lookup for that email would keep returning None forever
+        even though the account exists now."""
+        self._id_by_email[email] = user_id
 
     def id_for(self, email: str | None) -> int | None:
         if email is None:

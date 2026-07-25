@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models import (
+    AppUser,
     AttendanceFine,
     CycleConfig,
     DocumentTemplate,
@@ -156,6 +157,7 @@ class TenantImportService:
     def _run(self, new_name: str) -> Tenant:
         new_tenant = self._import_tenant_base(new_name)
         self._created_tenant_id = new_tenant.id
+        self._import_app_users(new_tenant.id, self.tables.get("tenant", {}).get("id"))
         self._import_oidc(new_tenant.id)
         group_map = self._import_simple(GroupEntity, self._t("group_entity"), "group_entity", {"tenant_id": new_tenant.id})
         self._import_simple(Leader, self._t("leader"), "leader", {"tenant_id": new_tenant.id})
@@ -216,6 +218,27 @@ class TenantImportService:
             self.db.commit()
             self.db.refresh(new_tenant)
         return new_tenant
+
+    def _import_app_users(self, new_tenant_id: int, old_tenant_id: int | None) -> None:
+        """Creates a login-capable account (password_hash included) for every exported user
+        who doesn't already have one on this installation, matched by email - without this,
+        every USER_ID_COLUMNS reference below would resolve to nobody (or, before this
+        existed, silently link to a same-email account that was never actually created here,
+        so the imported tenant's users had no way to log in on the target at all). An account
+        that already exists by email is left completely untouched, including its password -
+        only a brand new account gets the source's password_hash."""
+        for row in self._t("app_user"):
+            email = row.get("email")
+            if self.user_cache.id_for(email) is not None:
+                continue
+            old_default_tenant_id = row.get("default_tenant_id")
+            new_user = build_row(AppUser, row, {
+                "default_tenant_id": new_tenant_id if old_default_tenant_id is not None and old_default_tenant_id == old_tenant_id else None,
+            })
+            self.db.add(new_user)
+            self.db.flush()
+            self.user_cache.set_id(email, new_user.id)
+        self.db.commit()
 
     def _import_oidc(self, new_tenant_id: int) -> None:
         rows = self._t("tenant_oidc_config")
