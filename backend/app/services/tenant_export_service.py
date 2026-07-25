@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models import (
+    AppUser,
     AttendanceFine,
     CycleConfig,
     DocumentTemplate,
@@ -97,6 +98,16 @@ class TenantExportService:
             self._export_list_entries(db, tables)
         if scope in ("full", "full_abgabebox"):
             self._export_full(db, tenant_id, tables, include_abgabebox=scope == "full_abgabebox")
+
+        # Bundled last, once every USER_ID_COLUMNS lookup above has recorded which app_user
+        # ids actually got referenced - includes password_hash so the target can create a
+        # working login for anyone who doesn't already have an account there (see
+        # TenantImportService._import_app_users). Deliberately not scoped by tenant_id (that
+        # column doesn't exist on app_user - it's a systemwide table), just by "was this user
+        # referenced anywhere in what we just exported".
+        referenced_user_ids = self._user_cache.referenced_ids()
+        users = db.query(AppUser).filter(AppUser.id.in_(referenced_user_ids)).all() if referenced_user_ids else []
+        tables["app_user"] = [row_to_dict(u) for u in users]
 
         manifest = {
             "format_version": FORMAT_VERSION,
