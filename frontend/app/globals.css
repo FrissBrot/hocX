@@ -2996,7 +2996,23 @@ input[type="radio"] {
   position: fixed;
   bottom: 28px;
   right: 28px;
+  left: 28px;
   z-index: 200;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  pointer-events: none;
+}
+
+.editor-fixed-actions > * {
+  pointer-events: auto;
+}
+
+.editor-fixed-actions-close {
+  background: var(--panel);
+  box-shadow: var(--shadow);
 }
 
 .editor-nav-section-dragging {
