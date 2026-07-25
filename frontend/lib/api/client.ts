@@ -6,22 +6,32 @@ const publicApiUrl = "";
 export const browserApiBaseUrl = publicApiUrl;
 
 export async function backendFetch<T>(path: string, init?: RequestInit): Promise<T | null> {
-  try {
-    const response = await fetch(`${internalApiUrl}${path}`, {
-      ...init,
-      cache: "no-store"
-    });
+  // Ein einzelner Retry bei einem echten Netzwerkfehler (nicht bei einer regulären HTTP-
+  // Fehlerantwort): Node's fetch-Verbindungspool zum Backend-Container reused Sockets, die das
+  // Backend zeitgleich schon als idle geschlossen haben kann ("ECONNRESET"/"socket hang up") -
+  // das war die Ursache eines Login-Loops, weil requireSession() ein fehlgeschlagenes
+  // Session-Fetch bisher wie "nicht eingeloggt" behandelt hat. Ein Retry mit frischer Verbindung
+  // behebt diese Klasse von Fehlern zuverlässig, ohne echte Auth-Fehler zu verschleiern.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const response = await fetch(`${internalApiUrl}${path}`, {
+        ...init,
+        cache: "no-store"
+      });
 
-    if (!response.ok) {
-      console.error(`[backendFetch] ${init?.method ?? "GET"} ${path} → HTTP ${response.status}`);
+      if (!response.ok) {
+        console.error(`[backendFetch] ${init?.method ?? "GET"} ${path} → HTTP ${response.status}`);
+        return null;
+      }
+
+      return (await response.json()) as T;
+    } catch (err) {
+      if (attempt === 0) continue;
+      console.error(`[backendFetch] ${init?.method ?? "GET"} ${path} → network error:`, err);
       return null;
     }
-
-    return (await response.json()) as T;
-  } catch (err) {
-    console.error(`[backendFetch] ${init?.method ?? "GET"} ${path} → network error:`, err);
-    return null;
   }
+  return null;
 }
 
 export async function browserApiFetch<T>(path: string, init?: RequestInit): Promise<T> {
