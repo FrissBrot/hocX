@@ -269,17 +269,80 @@ def remap_list_value(
     return value
 
 
-def remap_block_configuration(config: dict | None, participant_map: dict[int, int]) -> dict:
-    config = config or {}
+def remap_block_configuration(
+    config: dict | None,
+    *,
+    participant_map: dict[int, int],
+    event_map: dict[int, int],
+    list_definition_map: dict[int, int],
+    finance_account_map: dict[int, int],
+) -> dict:
+    """Remaps every participant/event/list/finance-account id embedded in a block's
+    configuration. Shape is shared between template_element_block.configuration_json (the
+    per-template defaults, incl. the template_participant_id/template_event_id placeholders
+    used by "auto" mode) and protocol_element_block.configuration_snapshot_json (the frozen
+    per-protocol copy) - both go through here. Unresolvable ids are dropped rather than left
+    pointing at a row from the source tenant/instance."""
+    config = copy.deepcopy(config or {})
+
+    def remap_value(value: dict) -> dict:
+        value = dict(value)
+        if "participant_id" in value:
+            value["participant_id"] = participant_map.get(value["participant_id"])
+        if isinstance(value.get("participant_ids"), list):
+            value["participant_ids"] = [participant_map[i] for i in value["participant_ids"] if i in participant_map]
+        if "event_id" in value:
+            value["event_id"] = event_map.get(value["event_id"])
+        return value
+
+    if config.get("linked_list_id") is not None:
+        config["linked_list_id"] = list_definition_map.get(config["linked_list_id"])
+    if config.get("fine_account_id") is not None:
+        config["fine_account_id"] = finance_account_map.get(config["fine_account_id"])
+    if config.get("finance_account_id") is not None:
+        config["finance_account_id"] = finance_account_map.get(config["finance_account_id"])
+
     entries = config.get("attendance_entries")
-    if not isinstance(entries, list):
-        return copy.deepcopy(config)
-    new_entries = []
-    for entry in entries:
-        new_entry = dict(entry)
-        participant_id = new_entry.get("participant_id")
-        if participant_id in participant_map:
-            new_entry["participant_id"] = participant_map[participant_id]
-        new_entries.append(new_entry)
-    rest = {k: copy.deepcopy(v) for k, v in config.items() if k != "attendance_entries"}
-    return {**rest, "attendance_entries": new_entries}
+    if isinstance(entries, list):
+        config["attendance_entries"] = [
+            {**entry, "participant_id": participant_map.get(entry.get("participant_id"))} if isinstance(entry, dict) else entry
+            for entry in entries
+        ]
+
+    rows = config.get("rows")
+    if isinstance(rows, list):
+        new_rows = []
+        for row in rows:
+            if not isinstance(row, dict):
+                new_rows.append(row)
+                continue
+            new_row = remap_value(row)
+            if "template_participant_id" in new_row:
+                new_row["template_participant_id"] = participant_map.get(new_row["template_participant_id"])
+            if isinstance(new_row.get("template_participant_ids"), list):
+                new_row["template_participant_ids"] = [
+                    participant_map[i] for i in new_row["template_participant_ids"] if i in participant_map
+                ]
+            if "template_event_id" in new_row:
+                new_row["template_event_id"] = event_map.get(new_row["template_event_id"])
+            new_rows.append(new_row)
+        config["rows"] = new_rows
+
+    columns = config.get("columns")
+    if isinstance(columns, list):
+        new_columns = []
+        for column in columns:
+            if not isinstance(column, dict):
+                new_columns.append(column)
+                continue
+            new_column = dict(column)
+            row_values = new_column.get("row_values")
+            if isinstance(row_values, dict):
+                new_column["row_values"] = {
+                    row_id: (remap_value(value) if isinstance(value, dict) else value)
+                    for row_id, value in row_values.items()
+                }
+            new_columns.append(new_column)
+        config["columns"] = new_columns
+
+    return config

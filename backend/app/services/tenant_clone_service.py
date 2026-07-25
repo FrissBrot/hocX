@@ -130,6 +130,7 @@ class TenantCloneService:
         element_definition_map = self._clone_element_definitions(db, source.id, new_tenant.id)
         part_map = self._clone_document_template_parts(db, source.id, new_tenant.id)
         document_template_map = self._clone_document_templates(db, source.id, new_tenant.id, part_map)
+        finance_account_map = self._clone_finance_accounts(db, source.id, new_tenant.id)
         self._clone_templates(
             db, source.id, new_tenant.id,
             document_template_map=document_template_map,
@@ -139,9 +140,9 @@ class TenantCloneService:
             participant_map={},
             list_definition_map={},
             list_entry_map={},
+            finance_account_map=finance_account_map,
         )
         self._clone_list_definitions(db, source.id, new_tenant.id)
-        self._clone_finance_accounts(db, source.id, new_tenant.id)
         return new_tenant
 
     def _clone_full_impl(self, db: Session, source_tenant_id: int, new_name: str) -> Tenant:
@@ -165,6 +166,7 @@ class TenantCloneService:
         list_entry_map = self._clone_list_entries(
             db, list_definition_map=list_definition_map, participant_map=participant_map, event_map=event_map
         )
+        finance_account_map = self._clone_finance_accounts(db, source.id, new_tenant.id)
         template_map, template_element_map, template_element_block_map = self._clone_templates(
             db, source.id, new_tenant.id,
             document_template_map=document_template_map,
@@ -174,6 +176,7 @@ class TenantCloneService:
             participant_map=participant_map,
             list_definition_map=list_definition_map,
             list_entry_map=list_entry_map,
+            finance_account_map=finance_account_map,
         )
         self._clone_template_participants(db, template_map=template_map, participant_map=participant_map)
         submission_assignment_map = self._clone_submission_assignments(
@@ -183,7 +186,6 @@ class TenantCloneService:
             db, submission_assignment_map=submission_assignment_map, event_map=event_map, list_entry_map=list_entry_map
         )
         self._clone_submission_upload_logs(db, submission_assignment_map=submission_assignment_map)
-        finance_account_map = self._clone_finance_accounts(db, source.id, new_tenant.id)
         stored_file_map = self._clone_stored_files(db, source.id, new_tenant.id)
         self._clone_submission_upload_files(db, submission_upload_map=submission_upload_map, stored_file_map=stored_file_map)
         protocol_map = self._clone_protocols(
@@ -196,6 +198,9 @@ class TenantCloneService:
             template_element_block_map=template_element_block_map,
             element_definition_map=element_definition_map,
             participant_map=participant_map,
+            event_map=event_map,
+            list_definition_map=list_definition_map,
+            finance_account_map=finance_account_map,
         )
         self._clone_protocol_texts(db, protocol_element_block_map=protocol_element_block_map)
         self._clone_protocol_display_snapshots(db, protocol_element_block_map=protocol_element_block_map)
@@ -380,6 +385,7 @@ class TenantCloneService:
         participant_map: dict[int, int],
         list_definition_map: dict[int, int],
         list_entry_map: dict[int, int],
+        finance_account_map: dict[int, int],
     ) -> tuple[dict[int, int], dict[int, int], dict[int, int]]:
         templates = db.scalars(select(Template).where(Template.tenant_id == source_tenant_id)).all()
         template_map: dict[int, int] = {}
@@ -424,6 +430,13 @@ class TenantCloneService:
                 new_row = _copy_row(row, {
                     "template_element_id": template_element_map[row.template_element_id],
                     "element_definition_id": element_definition_map.get(row.element_definition_id, row.element_definition_id),
+                    "configuration_override_json": remap_block_configuration(
+                        row.configuration_override_json,
+                        participant_map=participant_map,
+                        event_map=event_map,
+                        list_definition_map=list_definition_map,
+                        finance_account_map=finance_account_map,
+                    ),
                 })
                 db.add(new_row)
                 db.flush()
@@ -691,6 +704,9 @@ class TenantCloneService:
         template_element_block_map: dict[int, int],
         element_definition_map: dict[int, int],
         participant_map: dict[int, int],
+        event_map: dict[int, int],
+        list_definition_map: dict[int, int],
+        finance_account_map: dict[int, int],
     ) -> dict[int, int]:
         if not protocol_element_map:
             return {}
@@ -706,7 +722,10 @@ class TenantCloneService:
                 "protocol_element_id": new_protocol_element_id,
                 "template_element_block_id": template_element_block_map.get(row.template_element_block_id) if row.template_element_block_id else None,
                 "element_definition_id": element_definition_map.get(row.element_definition_id) if row.element_definition_id else None,
-                "configuration_snapshot_json": remap_block_configuration(row.configuration_snapshot_json, participant_map),
+                "configuration_snapshot_json": remap_block_configuration(
+                    row.configuration_snapshot_json, participant_map=participant_map,
+                    event_map=event_map, list_definition_map=list_definition_map, finance_account_map=finance_account_map,
+                ),
             })
             db.add(new_row)
             db.flush()
