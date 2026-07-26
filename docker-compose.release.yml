@@ -140,7 +140,7 @@ services:
       - .env
     environment:
       NEXT_PUBLIC_ABGABEBOX_API_URL: https://${TRAEFIK_ABGABEBOX_DOMAIN}
-      INTERNAL_ABGABEBOX_API_URL: http://abgabebox-backend:8000
+      INTERNAL_ABGABEBOX_API_URL: https://${TRAEFIK_ABGABEBOX_DOMAIN}
       NEXT_PUBLIC_FRIENDLY_CAPTCHA_SITEKEY: ${FRIENDLY_CAPTCHA_SITEKEY}
     depends_on:
       - abgabebox-backend

@@ -8,9 +8,10 @@ const COLORS = 4;
 export default async function AssignmentElementsPage({
   params,
 }: {
-  params: { tenantSlug: string; assignmentSlug: string };
+  params: Promise<{ tenantSlug: string; assignmentSlug: string }>;
 }) {
-  const elements = await listElements(params.tenantSlug, params.assignmentSlug);
+  const { tenantSlug, assignmentSlug } = await params;
+  const elements = await listElements(tenantSlug, assignmentSlug);
   if (elements === null) {
     notFound();
   }
@@ -31,7 +32,7 @@ export default async function AssignmentElementsPage({
             <Link
               key={element.element_ref}
               className={`card card-link card-colored-${c}`}
-              href={`/${params.tenantSlug}/${params.assignmentSlug}/${element.element_ref}`}
+              href={`/${tenantSlug}/${assignmentSlug}/${element.element_ref}`}
             >
               <div className="card-title">
                 <span className={`card-dot card-dot-${c}`} />
@@ -48,7 +49,7 @@ export default async function AssignmentElementsPage({
         })
       )}
 
-      <Link href={`/${params.tenantSlug}`} className="back-btn">
+      <Link href={`/${tenantSlug}`} className="back-btn">
         ← Zurück zur Übersicht
       </Link>
     </div>

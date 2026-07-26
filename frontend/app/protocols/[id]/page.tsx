@@ -20,11 +20,12 @@ import {
   TodoListItem,
 } from "@/types/api";
 
-export default async function ProtocolDetailPage({ params }: { params: { id: string } }) {
+export default async function ProtocolDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const session = await requireSession();
   const isRestricted = ["reader", "kassier"].includes(session.current_role ?? "");
   const canViewFines = ["kassier", "writer", "admin"].includes(session.current_role ?? "");
-  const protocol = await backendFetchWithSession<ProtocolSummary>(`/api/protocols/${params.id}`);
+  const protocol = await backendFetchWithSession<ProtocolSummary>(`/api/protocols/${id}`);
 
   if (!protocol) {
     redirect("/protocols");
@@ -34,7 +35,7 @@ export default async function ProtocolDetailPage({ params }: { params: { id: str
   const templates = (await backendFetchWithSession<TemplateSummary[]>("/api/templates")) ?? [];
   const events = (await backendFetchWithSession<EventSummary[]>("/api/events")) ?? [];
   const lists = (await backendFetchWithSession<StructuredListDefinition[]>("/api/lists")) ?? [];
-  const elements = (await backendFetchWithSession<ProtocolElement[]>(`/api/protocols/${params.id}/elements`)) ?? [];
+  const elements = (await backendFetchWithSession<ProtocolElement[]>(`/api/protocols/${id}/elements`)) ?? [];
   const participants =
     (await backendFetchWithSession<ParticipantSummary[]>(`/api/templates/${protocol.template_id}/participants`)) ?? [];
   const linkedListIds = Array.from(
@@ -77,7 +78,7 @@ export default async function ProtocolDetailPage({ params }: { params: { id: str
   );
   const initialImages = Object.fromEntries(imageLists.map((item) => [item.protocolElementBlockId, item.images]));
 
-  const pendingTodos = (await backendFetchWithSession<TodoListItem[]>(`/api/protocols/${params.id}/pending-todos`)) ?? [];
+  const pendingTodos = (await backendFetchWithSession<TodoListItem[]>(`/api/protocols/${id}/pending-todos`)) ?? [];
 
   const financeAccounts = (await backendFetchWithSession<FinanceAccount[]>("/api/finance/accounts")) ?? [];
   // Pre-load transactions for finance blocks
