@@ -155,6 +155,18 @@ class SubmissionRepository:
             result.append((row.StoredFile, element_ref))
         return result
 
+    def list_assignment_ids_with_pending_files(self, db: Session) -> list[int]:
+        """Used by the periodic rescan job (main.py) - previously ClamAV-fail-open uploads only
+        ever got rescanned if an admin happened to click the manual rescan button."""
+        statement = (
+            select(SubmissionUpload.assignment_id)
+            .join(SubmissionUploadFile, SubmissionUploadFile.upload_id == SubmissionUpload.id)
+            .join(StoredFile, StoredFile.id == SubmissionUploadFile.stored_file_id)
+            .where(StoredFile.scan_status == "pending")
+            .distinct()
+        )
+        return [row[0] for row in db.execute(statement)]
+
     def count_submissions_summary(self, db: Session, *, assignment_id: int) -> dict:
         """Count submitted elements and those in quarantine for an assignment.
 

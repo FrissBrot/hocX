@@ -58,7 +58,6 @@ from app.models import (
     TemplateElementBlock,
     TemplateParticipant,
     Tenant,
-    TenantOidcConfig,
     UserProtocolAccess,
     UserTemplateAccess,
     UserTenantRole,
@@ -159,7 +158,6 @@ class TenantImportService:
         new_tenant = self._import_tenant_base(new_name)
         self._created_tenant_id = new_tenant.id
         self._import_app_users(new_tenant.id, self.tables.get("tenant", {}).get("id"))
-        self._import_oidc(new_tenant.id)
         group_map = self._import_simple(GroupEntity, self._t("group_entity"), "group_entity", {"tenant_id": new_tenant.id})
         self._import_simple(Leader, self._t("leader"), "leader", {"tenant_id": new_tenant.id})
         participant_map = self._import_simple(Participant, self._t("participant"), "participant", {"tenant_id": new_tenant.id})
@@ -244,14 +242,6 @@ class TenantImportService:
             self.db.add(new_user)
             self.db.flush()
             self.user_cache.set_id(email, new_user.id)
-        self.db.commit()
-
-    def _import_oidc(self, new_tenant_id: int) -> None:
-        rows = self._t("tenant_oidc_config")
-        if not rows:
-            return
-        data = self._resolve_row("tenant_oidc_config", rows[0])
-        self.db.add(build_row(TenantOidcConfig, data, {"tenant_id": new_tenant_id}))
         self.db.commit()
 
     # ── generic single-tenant-scoped table import ────────────────────────

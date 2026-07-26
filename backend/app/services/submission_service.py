@@ -386,6 +386,19 @@ class SubmissionService:
                 results["still_pending"] += 1
         return results
 
+    def rescan_all_pending(self, db: Session) -> dict:
+        """Periodic sweep (see main.py's abgabebox_rescan_loop) so files that were stuck
+        `pending` because ClamAV was briefly unreachable at upload time get picked up
+        automatically instead of staying invisible until an admin clicks the manual per-
+        assignment rescan button."""
+        assignment_ids = self.repository.list_assignment_ids_with_pending_files(db)
+        totals = {"assignments": len(assignment_ids), "scanned": 0, "clean": 0, "infected": 0, "still_pending": 0}
+        for assignment_id in assignment_ids:
+            result = self.rescan_pending(db, assignment_id)
+            for key in ("scanned", "clean", "infected", "still_pending"):
+                totals[key] += result[key]
+        return totals
+
     def get_stored_file_for_upload(self, db: Session, *, upload_id: int, stored_file_id: int):
         upload = self.repository.get_upload(db, upload_id)
         if upload is None:

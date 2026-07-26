@@ -123,7 +123,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
 
   function openEnableLogin(user: UserSummary) {
     setLoginModalUser(user);
-    setLoginEmail(user.oidc_email ?? "");
+    setLoginEmail(user.email ?? "");
     setLoginPassword("");
     setLoginError(null);
     setLoginModalOpen(true);
@@ -327,7 +327,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
               <td>
                 <strong>{user.display_name}</strong>
               </td>
-              <td>{user.oidc_email ?? <span className="muted">–</span>}</td>
+              <td>{user.email ?? <span className="muted">–</span>}</td>
               <td>
                 <div className="stack-tight">
                   {user.memberships

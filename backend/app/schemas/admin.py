@@ -25,13 +25,13 @@ class AdminSessionRead(BaseModel):
 class PlatformAdminCreate(BaseModel):
     email: str
     display_name: str
-    password: str = Field(min_length=8)
+    password: str = Field(min_length=12)
     is_active: bool = True
 
 
 class PlatformAdminUpdate(BaseModel):
     display_name: str | None = None
-    password: str | None = Field(default=None, min_length=8)
+    password: str | None = Field(default=None, min_length=12)
     is_active: bool | None = None
 
 

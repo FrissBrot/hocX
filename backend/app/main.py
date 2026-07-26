@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 
-from app.api.routes import admin, admin_auth, auth, collaboration_ws, cycle_configs, document_templates, events, exports, files, finance, fines, lists, oidc, participants, protocol_elements, protocols, statistics, submission_assignments, tag_config, templates, tenants, todos, users
+from app.api.routes import admin, admin_auth, auth, collaboration_ws, cycle_configs, document_templates, events, exports, files, finance, fines, lists, participants, protocol_elements, protocols, statistics, submission_assignments, tag_config, templates, tenants, todos, users
 from app.core.db import SessionLocal
 from app.core.config import settings
 from app.core.error_log import best_effort_actor_from_request, record_system_error
@@ -15,6 +15,7 @@ from app.core.redis_client import close_redis_pool
 from app.core.security import hash_password
 from app.models import ElementType, PlatformAdmin, Role, Tenant
 from app.services import domain_health_check_service, traefik_config_service
+from app.services.submission_service import SubmissionService
 from app.services.document_template_service import DocumentTemplateService
 from app.services.file_service import FileService
 
@@ -114,218 +115,6 @@ def ensure_runtime_columns() -> None:
     pass
 
 
-def _legacy_ensure_runtime_columns_DO_NOT_USE() -> None:
-    """Kept for reference only — replaced by Alembic migration 0007_runtime_columns."""
-    with SessionLocal() as db:
-        # Advisory lock prevents concurrent worker startup races (e.g. multi-process gunicorn)
-        db.execute(text("SELECT pg_advisory_lock(202600001)"))
-        db.execute(
-            text(
-                """
-                CREATE OR REPLACE FUNCTION set_updated_at()
-                RETURNS TRIGGER AS $$
-                BEGIN
-                    NEW.updated_at = NOW();
-                    RETURN NEW;
-                END;
-                $$ LANGUAGE plpgsql
-                """
-            )
-        )
-        db.execute(text("ALTER TABLE template_element ADD COLUMN IF NOT EXISTS configuration_json JSONB NOT NULL DEFAULT '{}'::jsonb"))
-        db.execute(text("CREATE INDEX IF NOT EXISTS idx_template_element_configuration_gin ON template_element USING GIN (configuration_json)"))
-        db.execute(text("ALTER TABLE template ADD COLUMN IF NOT EXISTS auto_create_next_protocol BOOLEAN NOT NULL DEFAULT FALSE"))
-        db.execute(text("ALTER TABLE template ADD COLUMN IF NOT EXISTS todo_due_event_tag TEXT"))
-        db.execute(text("ALTER TABLE template_participant ADD COLUMN IF NOT EXISTS exclude_from_attendance BOOLEAN NOT NULL DEFAULT FALSE"))
-        db.execute(text("ALTER TABLE event ADD COLUMN IF NOT EXISTS event_end_date DATE"))
-        db.execute(text("ALTER TABLE event ADD COLUMN IF NOT EXISTS participant_count INTEGER NOT NULL DEFAULT 0"))
-        db.execute(
-            text(
-                """
-                CREATE TABLE IF NOT EXISTS list_definition (
-                    id BIGSERIAL PRIMARY KEY,
-                    tenant_id BIGINT NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
-                    name TEXT NOT NULL,
-                    description TEXT,
-                    column_one_title TEXT NOT NULL,
-                    column_one_value_type TEXT NOT NULL CHECK (column_one_value_type IN ('text', 'participant', 'participants', 'event')),
-                    column_two_title TEXT NOT NULL,
-                    column_two_value_type TEXT NOT NULL CHECK (column_two_value_type IN ('text', 'participant', 'participants', 'event')),
-                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                    CONSTRAINT uq_list_definition_tenant_name UNIQUE (tenant_id, name)
-                )
-                """
-            )
-        )
-        db.execute(text("CREATE INDEX IF NOT EXISTS idx_list_definition_tenant_active ON list_definition (tenant_id, is_active)"))
-        db.execute(
-            text(
-                """
-                CREATE TABLE IF NOT EXISTS list_entry (
-                    id BIGSERIAL PRIMARY KEY,
-                    list_definition_id BIGINT NOT NULL REFERENCES list_definition(id) ON DELETE CASCADE,
-                    sort_index INTEGER NOT NULL DEFAULT 0,
-                    column_one_value_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-                    column_two_value_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                )
-                """
-            )
-        )
-        db.execute(text("CREATE INDEX IF NOT EXISTS idx_list_entry_definition_sort ON list_entry (list_definition_id, sort_index)"))
-        db.execute(
-            text(
-                """
-                DO $$
-                BEGIN
-                    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_list_definition_updated_at') THEN
-                        CREATE TRIGGER trg_list_definition_updated_at
-                        BEFORE UPDATE ON list_definition
-                        FOR EACH ROW
-                        EXECUTE FUNCTION set_updated_at();
-                    END IF;
-                END
-                $$;
-                """
-            )
-        )
-        db.execute(
-            text(
-                """
-                DO $$
-                BEGIN
-                    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_list_entry_updated_at') THEN
-                        CREATE TRIGGER trg_list_entry_updated_at
-                        BEFORE UPDATE ON list_entry
-                        FOR EACH ROW
-                        EXECUTE FUNCTION set_updated_at();
-                    END IF;
-                END
-                $$;
-                """
-            )
-        )
-        db.execute(
-            text(
-                """
-                CREATE TABLE IF NOT EXISTS finance_account (
-                    id BIGSERIAL PRIMARY KEY,
-                    tenant_id BIGINT NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
-                    name TEXT NOT NULL,
-                    currency_label TEXT NOT NULL DEFAULT 'CHF',
-                    description TEXT,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                )
-                """
-            )
-        )
-        db.execute(text("CREATE INDEX IF NOT EXISTS idx_finance_account_tenant ON finance_account (tenant_id)"))
-        db.execute(
-            text(
-                """
-                CREATE TABLE IF NOT EXISTS finance_transaction (
-                    id BIGSERIAL PRIMARY KEY,
-                    account_id BIGINT NOT NULL REFERENCES finance_account(id) ON DELETE CASCADE,
-                    amount NUMERIC(15,2) NOT NULL,
-                    description TEXT NOT NULL,
-                    transaction_date DATE NOT NULL,
-                    protocol_id BIGINT REFERENCES protocol(id) ON DELETE SET NULL,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                )
-                """
-            )
-        )
-        db.execute(text("CREATE INDEX IF NOT EXISTS idx_finance_transaction_account ON finance_transaction (account_id, transaction_date)"))
-        db.execute(
-            text(
-                """
-                DO $$
-                BEGIN
-                    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_finance_account_updated_at') THEN
-                        CREATE TRIGGER trg_finance_account_updated_at
-                        BEFORE UPDATE ON finance_account
-                        FOR EACH ROW
-                        EXECUTE FUNCTION set_updated_at();
-                    END IF;
-                END
-                $$;
-                """
-            )
-        )
-        db.execute(
-            text(
-                """
-                CREATE TABLE IF NOT EXISTS attendance_fine (
-                    id BIGSERIAL PRIMARY KEY,
-                    protocol_id BIGINT NOT NULL REFERENCES protocol(id) ON DELETE CASCADE,
-                    participant_id BIGINT REFERENCES participant(id) ON DELETE SET NULL,
-                    participant_name_snapshot TEXT NOT NULL,
-                    fine_type TEXT NOT NULL CHECK (fine_type IN ('late', 'absent')),
-                    amount NUMERIC(15,2) NOT NULL,
-                    account_id BIGINT NOT NULL REFERENCES finance_account(id) ON DELETE CASCADE,
-                    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'collected')),
-                    collected_at TIMESTAMPTZ,
-                    collected_transaction_id BIGINT REFERENCES finance_transaction(id) ON DELETE SET NULL,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                )
-                """
-            )
-        )
-        db.execute(text("CREATE INDEX IF NOT EXISTS idx_attendance_fine_protocol ON attendance_fine (protocol_id)"))
-        db.execute(text("CREATE INDEX IF NOT EXISTS idx_attendance_fine_participant ON attendance_fine (participant_id)"))
-        db.execute(text("CREATE INDEX IF NOT EXISTS idx_attendance_fine_account ON attendance_fine (account_id)"))
-        db.execute(text("ALTER TABLE protocol_todo ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]'::jsonb"))
-        db.execute(text("""
-            CREATE TABLE IF NOT EXISTS tenant_oidc_config (
-                id BIGSERIAL PRIMARY KEY,
-                tenant_id BIGINT NOT NULL UNIQUE REFERENCES tenant(id) ON DELETE CASCADE,
-                enabled BOOLEAN NOT NULL DEFAULT FALSE,
-                auto_redirect BOOLEAN NOT NULL DEFAULT FALSE,
-                issuer_url TEXT NOT NULL DEFAULT '',
-                client_id TEXT NOT NULL DEFAULT '',
-                client_secret TEXT NOT NULL DEFAULT '',
-                scopes TEXT NOT NULL DEFAULT 'openid email profile',
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            )
-        """))
-        db.execute(text("ALTER TABLE protocol_todo ADD COLUMN IF NOT EXISTS tenant_id BIGINT REFERENCES tenant(id) ON DELETE CASCADE"))
-        db.execute(text("ALTER TABLE protocol_todo ALTER COLUMN protocol_element_block_id DROP NOT NULL"))
-        db.execute(text("""
-            UPDATE protocol_todo pt
-            SET tenant_id = pr.tenant_id
-            FROM protocol_element_block peb
-            JOIN protocol_element pe ON pe.id = peb.protocol_element_id
-            JOIN protocol pr ON pr.id = pe.protocol_id
-            WHERE pt.protocol_element_block_id = peb.id AND pt.tenant_id IS NULL
-        """))
-        db.execute(text("CREATE INDEX IF NOT EXISTS idx_protocol_todo_tenant ON protocol_todo (tenant_id)"))
-        db.execute(text("CREATE INDEX IF NOT EXISTS idx_attendance_fine_account_status ON attendance_fine (account_id, status)"))
-        db.execute(text("""
-            CREATE TABLE IF NOT EXISTS audit_log (
-                id BIGSERIAL PRIMARY KEY,
-                tenant_id BIGINT REFERENCES tenant(id) ON DELETE SET NULL,
-                actor_user_id BIGINT REFERENCES app_user(id) ON DELETE SET NULL,
-                actor_email TEXT,
-                action TEXT NOT NULL,
-                entity_type TEXT,
-                entity_id BIGINT,
-                details_json JSONB NOT NULL DEFAULT '{}',
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            )
-        """))
-        db.execute(text("CREATE INDEX IF NOT EXISTS idx_audit_log_tenant ON audit_log (tenant_id, created_at DESC)"))
-        db.execute(text("CREATE INDEX IF NOT EXISTS idx_audit_log_actor ON audit_log (actor_user_id, created_at DESC)"))
-        db.execute(text("CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log (entity_type, entity_id)"))
-        db.execute(text("ALTER TABLE protocol_todo ADD COLUMN IF NOT EXISTS closed_in_protocol_id BIGINT REFERENCES protocol(id) ON DELETE SET NULL"))
-        db.commit()
-        db.execute(text("SELECT pg_advisory_unlock(202600001)"))
-
-
 def ensure_default_document_templates() -> None:
     service = DocumentTemplateService()
     with SessionLocal() as db:
@@ -359,6 +148,23 @@ async def domain_health_check_loop() -> None:
         await asyncio.sleep(interval_seconds)
 
 
+async def abgabebox_rescan_loop() -> None:
+    """Periodic sweep for submission_upload files stuck in scan_status='pending' (ClamAV was
+    unreachable at upload time - see abgabebox-backend/app/scanner.py's fail-open comment).
+    Same every-worker-but-advisory-locked pattern as domain_health_check_loop above."""
+    interval_seconds = settings.abgabebox_rescan_interval_minutes * 60
+    submission_service = SubmissionService()
+    while True:
+        with SessionLocal() as db:
+            acquired = db.execute(text("SELECT pg_try_advisory_lock(202600005)")).scalar()
+            if acquired:
+                try:
+                    submission_service.rescan_all_pending(db)
+                finally:
+                    db.execute(text("SELECT pg_advisory_unlock(202600005)"))
+        await asyncio.sleep(interval_seconds)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     FileService().ensure_storage()
@@ -367,8 +173,10 @@ async def lifespan(_: FastAPI):
     ensure_default_document_templates()
     ensure_traefik_dynamic_config()
     health_check_task = asyncio.create_task(domain_health_check_loop())
+    rescan_task = asyncio.create_task(abgabebox_rescan_loop())
     yield
     health_check_task.cancel()
+    rescan_task.cancel()
     await close_redis_pool()
 
 
@@ -430,7 +238,6 @@ def health() -> dict[str, str]:
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(admin_auth.router, prefix="/api/admin/auth", tags=["admin-auth"])
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
-app.include_router(oidc.router, prefix="/api", tags=["oidc"])
 app.include_router(tenants.router, prefix="/api", tags=["tenants"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(document_templates.router, prefix="/api", tags=["document-templates"])

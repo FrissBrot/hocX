@@ -7,6 +7,22 @@ from uuid import uuid4
 from app.config import settings
 
 
+def tenant_storage_bytes(tenant_id: int) -> int:
+    """Sum of everything currently on disk for this tenant, quarantine included (it still
+    occupies real space while a scan is pending/stuck)."""
+    total = 0
+    for root in (
+        Path(settings.storage_root) / f"tenant-{tenant_id}",
+        Path(settings.storage_root) / "quarantine" / f"tenant-{tenant_id}",
+    ):
+        if not root.exists():
+            continue
+        for path in root.rglob("*"):
+            if path.is_file():
+                total += path.stat().st_size
+    return total
+
+
 def save_file(content: bytes, *, tenant_id: int, assignment_id: int, suffix: str) -> tuple[str, str]:
     """Save file to regular storage. Returns (relative_path, checksum_sha256)."""
     storage_dir = Path(settings.storage_root) / f"tenant-{tenant_id}" / f"assignment-{assignment_id}"

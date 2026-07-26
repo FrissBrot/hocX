@@ -516,11 +516,15 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
                     {todo.protocol_title ? <span className="todo-protocol-title">{todo.protocol_title}</span> : null}
                     {todo.block_title ? <span className="todo-protocol-block">· {todo.block_title}</span> : null}
                   </button>
-                ) : todo.reference_link ? (
+                ) : todo.reference_link && /^https?:\/\//i.test(todo.reference_link) ? (
                   <a href={todo.reference_link} target="_blank" rel="noreferrer" className="todo-protocol-link" onClick={(event) => event.stopPropagation()}>
                     <span className="todo-protocol-num">Abgabebox</span>
                     <span className="todo-protocol-block">↗</span>
                   </a>
+                ) : todo.reference_link ? (
+                  <span className="todo-protocol-link">
+                    <span className="todo-protocol-num">Abgabebox</span>
+                  </span>
                 ) : (
                   <span className="muted">—</span>
                 )}

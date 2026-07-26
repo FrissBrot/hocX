@@ -15,6 +15,7 @@ const navLinks = [
   { href: "/admin/domains", label: "Domains" },
   { href: "/admin/error-logs", label: "Fehlerprotokoll" },
   { href: "/admin/admins", label: "Admin-Accounts" },
+  { href: "/admin/sso", label: "SSO" },
 ];
 
 export function AdminShell({ children, session }: { children: ReactNode; session: AdminSessionInfo }) {

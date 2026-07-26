@@ -61,9 +61,6 @@ class UserService:
             email=user.email,
             preferred_language=user.preferred_language,
             is_active=user.is_active,
-            oidc_subject=user.oidc_subject,
-            oidc_issuer=user.oidc_issuer,
-            oidc_email=user.oidc_email,
             external_identity_json=external_identity,
             default_tenant_id=user.default_tenant_id,
             memberships=self._memberships_for_user(db, user.id),
@@ -87,9 +84,6 @@ class UserService:
             email=user.email,
             preferred_language=user.preferred_language,
             is_active=user.is_active,
-            oidc_subject=user.oidc_subject,
-            oidc_issuer=user.oidc_issuer,
-            oidc_email=user.oidc_email,
             external_identity_json=external_identity,
             default_tenant_id=user.default_tenant_id,
             memberships=memberships,
@@ -189,9 +183,6 @@ class UserService:
             password_hash=hash_password(payload.password),
             preferred_language=payload.preferred_language,
             is_active=payload.is_active,
-            oidc_subject=payload.oidc_subject,
-            oidc_issuer=payload.oidc_issuer,
-            oidc_email=payload.oidc_email,
             external_identity_json={
                 **(payload.external_identity_json or {}),
                 "login_enabled": payload.login_enabled,
@@ -343,7 +334,7 @@ class UserService:
         the same person getting login access in a second tenant must stay one central user.
         `user` already carries the just-applied password/login_enabled at this point.
         """
-        real_email = previous_external.get("participant_email") or user.oidc_email
+        real_email = previous_external.get("participant_email")
         if not real_email or real_email == user.email:
             return user
 

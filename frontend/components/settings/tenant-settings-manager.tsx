@@ -6,28 +6,19 @@ import { DomainWizardModal } from "@/components/ui/domain-wizard-modal";
 import { DataTable } from "@/components/ui/data-table";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
-import { OidcConfigRead, OidcConfigWrite, TenantDomain, TenantSummary } from "@/types/api";
+import { TenantDomain, TenantSummary } from "@/types/api";
 
 type Props = {
   initialTenant: TenantSummary;
 };
 
-type Tab = "general" | "credentials" | "domains";
+type Tab = "general" | "domains";
 
 type TenantFormState = {
   name: string;
   publicSlug: string;
   profileImage: File | null;
   profileImageUrl: string | null;
-};
-
-const defaultOidcForm: OidcConfigWrite = {
-  enabled: false,
-  auto_redirect: false,
-  issuer_url: "",
-  client_id: "",
-  client_secret: "",
-  scopes: "openid email profile",
 };
 
 export function TenantSettingsManager({ initialTenant }: Props) {
@@ -44,9 +35,6 @@ export function TenantSettingsManager({ initialTenant }: Props) {
     profileImageUrl: initialTenant.profile_image_url,
   });
 
-  const [oidcForm, setOidcForm] = useState<OidcConfigWrite>(defaultOidcForm);
-  const [oidcLoading, setOidcLoading] = useState(false);
-
   const [domains, setDomains] = useState<TenantDomain[]>([]);
   const [domainBusyId, setDomainBusyId] = useState<number | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -54,22 +42,6 @@ export function TenantSettingsManager({ initialTenant }: Props) {
 
   useEffect(() => {
     void loadDomains();
-
-    (async () => {
-      try {
-        const cfg = await browserApiFetch<OidcConfigRead>(`/api/tenants/${tenantId}/oidc-config`);
-        setOidcForm({
-          enabled: cfg.enabled,
-          auto_redirect: cfg.auto_redirect,
-          issuer_url: cfg.issuer_url,
-          client_id: cfg.client_id,
-          client_secret: "",
-          scopes: cfg.scopes
-        });
-      } catch {
-        // no config yet — defaults are fine
-      }
-    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId]);
 
@@ -93,23 +65,6 @@ export function TenantSettingsManager({ initialTenant }: Props) {
       showToast("Mandant gespeichert", "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Mandant konnte nicht gespeichert werden", "error");
-    }
-  }
-
-  async function submitOidc(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setOidcLoading(true);
-    try {
-      await browserApiFetch<OidcConfigRead>(`/api/tenants/${tenantId}/oidc-config`, {
-        method: "PUT",
-        body: JSON.stringify(oidcForm)
-      });
-      showToast("Zugangsdaten gespeichert", "success");
-      setOidcForm((f) => ({ ...f, client_secret: "" }));
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "Fehler beim Speichern", "error");
-    } finally {
-      setOidcLoading(false);
     }
   }
 
@@ -148,15 +103,12 @@ export function TenantSettingsManager({ initialTenant }: Props) {
     <div className="section-stack">
       <div className="page-header">
         <h1 className="page-title">Mandant-Einstellungen – {tenantName}</h1>
-        <p className="page-description">Stammdaten, Zugangsdaten und Domains für diesen Mandanten verwalten.</p>
+        <p className="page-description">Stammdaten und Domains für diesen Mandanten verwalten.</p>
       </div>
 
       <div className="segment-control">
         <button type="button" className={`segment-button${activeTab === "general" ? " segment-button-active" : ""}`} onClick={() => setActiveTab("general")}>
           Allgemein
-        </button>
-        <button type="button" className={`segment-button${activeTab === "credentials" ? " segment-button-active" : ""}`} onClick={() => setActiveTab("credentials")}>
-          Zugangsdaten
         </button>
         <button type="button" className={`segment-button${activeTab === "domains" ? " segment-button-active" : ""}`} onClick={() => setActiveTab("domains")}>
           Domains {domains.some((d) => d.status === "pending") ? "·" : ""}
@@ -201,84 +153,6 @@ export function TenantSettingsManager({ initialTenant }: Props) {
             <div className="table-actions table-actions-start">
               <button type="submit" className="button-inline">
                 Speichern
-              </button>
-            </div>
-          </form>
-        </section>
-      )}
-
-      {activeTab === "credentials" && (
-        <section className="card">
-          <div className="eyebrow">Zugangsdaten · OpenID Connect</div>
-          <p className="muted">Externe Anmeldung (SSO) für Mitglieder dieses Mandanten konfigurieren.</p>
-          <form className="grid" onSubmit={submitOidc}>
-            <div className="two-col">
-              <label className="field-stack">
-                <span className="field-label">OIDC aktiviert</span>
-                <select value={oidcForm.enabled ? "1" : "0"} onChange={(e) => setOidcForm((f) => ({ ...f, enabled: e.target.value === "1" }))}>
-                  <option value="0">Nein</option>
-                  <option value="1">Ja</option>
-                </select>
-              </label>
-              <label className="field-stack">
-                <span className="field-label">Auto-Redirect (Nicht-Admins)</span>
-                <select
-                  value={oidcForm.auto_redirect ? "1" : "0"}
-                  onChange={(e) => setOidcForm((f) => ({ ...f, auto_redirect: e.target.value === "1" }))}
-                  disabled={!oidcForm.enabled}
-                >
-                  <option value="0">Nein</option>
-                  <option value="1">Ja</option>
-                </select>
-              </label>
-            </div>
-
-            <label className="field-stack">
-              <span className="field-label">Issuer URL</span>
-              <input
-                value={oidcForm.issuer_url}
-                onChange={(e) => setOidcForm((f) => ({ ...f, issuer_url: e.target.value }))}
-                placeholder="https://accounts.example.com"
-                disabled={!oidcForm.enabled}
-              />
-            </label>
-
-            <div className="two-col">
-              <label className="field-stack">
-                <span className="field-label">Client ID</span>
-                <input
-                  value={oidcForm.client_id}
-                  onChange={(e) => setOidcForm((f) => ({ ...f, client_id: e.target.value }))}
-                  placeholder="my-app"
-                  disabled={!oidcForm.enabled}
-                />
-              </label>
-              <label className="field-stack">
-                <span className="field-label">Client Secret</span>
-                <input
-                  type="password"
-                  value={oidcForm.client_secret}
-                  onChange={(e) => setOidcForm((f) => ({ ...f, client_secret: e.target.value }))}
-                  placeholder="Leer lassen = unverändert"
-                  autoComplete="new-password"
-                  disabled={!oidcForm.enabled}
-                />
-              </label>
-            </div>
-
-            <label className="field-stack">
-              <span className="field-label">Scopes</span>
-              <input
-                value={oidcForm.scopes}
-                onChange={(e) => setOidcForm((f) => ({ ...f, scopes: e.target.value }))}
-                placeholder="openid email profile"
-                disabled={!oidcForm.enabled}
-              />
-            </label>
-
-            <div className="table-actions table-actions-start">
-              <button type="submit" className="button-inline" disabled={oidcLoading}>
-                {oidcLoading ? "…" : "Speichern"}
               </button>
             </div>
           </form>

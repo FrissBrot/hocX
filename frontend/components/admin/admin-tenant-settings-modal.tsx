@@ -6,7 +6,7 @@ import { Modal } from "@/components/ui/modal";
 import { Tabs } from "@/components/ui/tabs";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
-import { AdminTenantSummary, AdminTenantUser, OidcConfigRead, OidcConfigWrite, UserSummary } from "@/types/api";
+import { AdminTenantSummary, AdminTenantUser, UserSummary } from "@/types/api";
 
 type Props = {
   open: boolean;
@@ -24,15 +24,6 @@ type TenantFormState = {
 
 const emptyTenantForm: TenantFormState = { name: "", publicSlug: "", profileImage: null, profileImageUrl: null };
 
-const defaultOidcForm: OidcConfigWrite = {
-  enabled: false,
-  auto_redirect: false,
-  issuer_url: "",
-  client_id: "",
-  client_secret: "",
-  scopes: "openid email profile"
-};
-
 export const ROLE_OPTIONS: { code: string; label: string }[] = [
   { code: "reader", label: "Reader" },
   { code: "kassier", label: "Kassier" },
@@ -43,8 +34,6 @@ export const ROLE_OPTIONS: { code: string; label: string }[] = [
 export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Props) {
   const showToast = useToast();
   const [tenantForm, setTenantForm] = useState<TenantFormState>(emptyTenantForm);
-  const [oidcForm, setOidcForm] = useState<OidcConfigWrite>(defaultOidcForm);
-  const [oidcLoading, setOidcLoading] = useState(false);
 
   const [tenantUsers, setTenantUsers] = useState<AdminTenantUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
@@ -63,23 +52,6 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
       profileImage: null,
       profileImageUrl: tenant.profile_image_url
     });
-    setOidcForm(defaultOidcForm);
-
-    (async () => {
-      try {
-        const cfg = await browserApiFetch<OidcConfigRead>(`/api/admin/tenants/${tenant.id}/oidc-config`);
-        setOidcForm({
-          enabled: cfg.enabled,
-          auto_redirect: cfg.auto_redirect,
-          issuer_url: cfg.issuer_url,
-          client_id: cfg.client_id,
-          client_secret: "",
-          scopes: cfg.scopes
-        });
-      } catch {
-        // no config yet — defaults are fine
-      }
-    })();
 
     void loadTenantUsers(tenant.id);
     browserApiFetch<UserSummary[]>("/api/admin/users").then(setAllUsers).catch(() => setAllUsers([]));
@@ -118,24 +90,6 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
       onSaved(updated);
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Mandant konnte nicht gespeichert werden", "error");
-    }
-  }
-
-  async function submitOidc(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!tenant) return;
-    setOidcLoading(true);
-    try {
-      await browserApiFetch<OidcConfigRead>(`/api/admin/tenants/${tenant.id}/oidc-config`, {
-        method: "PUT",
-        body: JSON.stringify(oidcForm)
-      });
-      showToast("OIDC-Konfiguration gespeichert", "success");
-      setOidcForm((f) => ({ ...f, client_secret: "" }));
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "Fehler beim Speichern", "error");
-    } finally {
-      setOidcLoading(false);
     }
   }
 
@@ -318,83 +272,6 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                   </form>
                 </div>
               </div>
-            )
-          },
-          {
-            id: "oidc",
-            label: "OIDC",
-            content: (
-              <form className="grid" onSubmit={submitOidc}>
-                <div className="two-col">
-                  <label className="field-stack">
-                    <span className="field-label">OIDC aktiviert</span>
-                    <select value={oidcForm.enabled ? "1" : "0"} onChange={(e) => setOidcForm((f) => ({ ...f, enabled: e.target.value === "1" }))}>
-                      <option value="0">Nein</option>
-                      <option value="1">Ja</option>
-                    </select>
-                  </label>
-                  <label className="field-stack">
-                    <span className="field-label">Auto-Redirect (Nicht-Admins)</span>
-                    <select
-                      value={oidcForm.auto_redirect ? "1" : "0"}
-                      onChange={(e) => setOidcForm((f) => ({ ...f, auto_redirect: e.target.value === "1" }))}
-                      disabled={!oidcForm.enabled}
-                    >
-                      <option value="0">Nein</option>
-                      <option value="1">Ja</option>
-                    </select>
-                  </label>
-                </div>
-
-                <label className="field-stack">
-                  <span className="field-label">Issuer URL</span>
-                  <input
-                    value={oidcForm.issuer_url}
-                    onChange={(e) => setOidcForm((f) => ({ ...f, issuer_url: e.target.value }))}
-                    placeholder="https://accounts.example.com"
-                    disabled={!oidcForm.enabled}
-                  />
-                </label>
-
-                <div className="two-col">
-                  <label className="field-stack">
-                    <span className="field-label">Client ID</span>
-                    <input
-                      value={oidcForm.client_id}
-                      onChange={(e) => setOidcForm((f) => ({ ...f, client_id: e.target.value }))}
-                      placeholder="my-app"
-                      disabled={!oidcForm.enabled}
-                    />
-                  </label>
-                  <label className="field-stack">
-                    <span className="field-label">Client Secret</span>
-                    <input
-                      type="password"
-                      value={oidcForm.client_secret}
-                      onChange={(e) => setOidcForm((f) => ({ ...f, client_secret: e.target.value }))}
-                      placeholder="Leer lassen = unverändert"
-                      autoComplete="new-password"
-                      disabled={!oidcForm.enabled}
-                    />
-                  </label>
-                </div>
-
-                <label className="field-stack">
-                  <span className="field-label">Scopes</span>
-                  <input
-                    value={oidcForm.scopes}
-                    onChange={(e) => setOidcForm((f) => ({ ...f, scopes: e.target.value }))}
-                    placeholder="openid email profile"
-                    disabled={!oidcForm.enabled}
-                  />
-                </label>
-
-                <div className="table-actions table-actions-start">
-                  <button type="submit" className="button-inline" disabled={oidcLoading}>
-                    {oidcLoading ? "…" : "Speichern"}
-                  </button>
-                </div>
-              </form>
             )
           }
         ]}

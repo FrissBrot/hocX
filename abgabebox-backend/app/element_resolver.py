@@ -15,19 +15,42 @@ from sqlalchemy.orm import Session
 from app import repository
 
 
+def _participant_initials(participant: dict) -> str:
+    """Initialen statt vollem Namen.
+
+    Der Endpunkt, der diese Labels ausliefert, ist oeffentlich und
+    unauthentifiziert (GET /public/{tenant_slug}/assignments/{assignment_slug}/elements)
+    - Tenant- und Assignment-Slug koennen erraten oder anderweitig bekannt werden.
+    Damit dabei keine vollen Klarnamen von Vereinsmitgliedern (PII) preisgegeben
+    werden, wird hier bewusst nur eine grobe, nicht eindeutig re-identifizierbare
+    Kennung ("M.S.") zurueckgegeben statt des display_name.
+    """
+    first = (participant.get("first_name") or "").strip()
+    last = (participant.get("last_name") or "").strip()
+    if first and last:
+        return f"{first[0].upper()}.{last[0].upper()}."
+    display = (participant.get("display_name") or "").strip()
+    parts = display.split()
+    if len(parts) >= 2:
+        return f"{parts[0][0].upper()}.{parts[-1][0].upper()}."
+    if display:
+        return f"{display[0].upper()}."
+    return "—"
+
+
 def _value_label(value_type: str, value_json: dict, *, participants_by_id: dict[int, dict]) -> str:
     if value_type == "text":
         return str(value_json.get("text_value") or "—")
     if value_type == "participant":
         participant = participants_by_id.get(int(value_json.get("participant_id") or 0))
-        return participant["display_name"] if participant else "—"
+        return _participant_initials(participant) if participant else "—"
     if value_type == "participants":
-        names = [
-            participants_by_id[int(pid)]["display_name"]
+        initials = [
+            _participant_initials(participants_by_id[int(pid)])
             for pid in value_json.get("participant_ids", [])
             if int(pid) in participants_by_id
         ]
-        return ", ".join(names) if names else "—"
+        return ", ".join(initials) if initials else "—"
     # 'event' value type in a list entry: kein Event-SELECT auf Namensebene noetig,
     # die Abgabebox zeigt hier nur die Termin-ID (kein Datenverlust, aber unauffaellig -
     # in der Praxis werden Listen-Abgaben kaum auf Termin-Spalten verweisen).

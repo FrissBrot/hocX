@@ -27,7 +27,7 @@ from app.schemas.admin import (
     TenantCloneRequest,
     TenantImportResult,
 )
-from app.schemas.oidc import OidcConfigRead, OidcConfigWrite
+from app.schemas.oidc import PlatformOidcConfigRead, PlatformOidcConfigWrite
 from app.schemas.user import TenantUpdate, UserCreate, UserRead, UserUpdate
 from app.services.admin_domain_service import AdminDomainService
 from app.services.admin_error_log_service import AdminErrorLogService
@@ -35,7 +35,7 @@ from app.services.admin_tenant_service import AdminTenantService
 from app.services.admin_tenant_user_service import AdminTenantUserService
 from app.services.admin_user_service import AdminUserService, PlatformAdminService
 from app.services.file_service import _safe_storage_path
-from app.services.oidc_service import OidcService
+from app.services.platform_oidc_service import PlatformOidcService
 from app.services.tenant_clone_service import TenantCloneService
 from app.services.tenant_export_service import TenantExportService
 from app.services.tenant_import_service import TenantImportService
@@ -46,7 +46,7 @@ tenant_service = AdminTenantService()
 tenant_user_service = AdminTenantUserService()
 user_service = AdminUserService()
 admin_account_service = PlatformAdminService()
-oidc_service = OidcService()
+oidc_service = PlatformOidcService()
 clone_service = TenantCloneService()
 domain_service = AdminDomainService()
 error_log_service = AdminErrorLogService()
@@ -208,17 +208,14 @@ def remove_tenant_user(tenant_id: int, user_id: int, db: Session = Depends(get_d
         raise HTTPException(status_code=404, detail="Membership not found")
 
 
-@router.get("/tenants/{tenant_id}/oidc-config", response_model=OidcConfigRead)
-def get_tenant_oidc_config(tenant_id: int, db: Session = Depends(get_db)):
-    cfg = oidc_service.get_config(db, tenant_id)
-    if cfg is None:
-        return OidcConfigRead(tenant_id=tenant_id, enabled=False, auto_redirect=False, issuer_url="", client_id="", scopes="openid email profile")
-    return cfg
+@router.get("/oidc-config", response_model=PlatformOidcConfigRead)
+def get_platform_oidc_config(db: Session = Depends(get_db)):
+    return oidc_service.get_config(db)
 
 
-@router.put("/tenants/{tenant_id}/oidc-config", response_model=OidcConfigRead)
-def update_tenant_oidc_config(tenant_id: int, payload: OidcConfigWrite, db: Session = Depends(get_db)):
-    return oidc_service.upsert_config(db, tenant_id, payload)
+@router.put("/oidc-config", response_model=PlatformOidcConfigRead)
+def update_platform_oidc_config(payload: PlatformOidcConfigWrite, db: Session = Depends(get_db)):
+    return oidc_service.upsert_config(db, payload)
 
 
 @router.get("/tenants/{tenant_id}/profile-image")

@@ -12,7 +12,7 @@ from app.captcha import verify_captcha
 from app.config import settings
 from app.db import get_db
 from app.schemas import AssignmentDetailPublic, AssignmentPublic, ElementPublic, UploadResult
-from app.storage import move_from_quarantine, save_to_quarantine
+from app.storage import move_from_quarantine, save_to_quarantine, tenant_storage_bytes
 
 router = APIRouter()
 
@@ -195,6 +195,12 @@ async def upload(
         contents.append((content, upload_file.filename or "datei", _EXTENSION_MIME_MAP.get(suffix, "application/octet-stream")))
 
     _log("upload_received", f"{len(contents)} Datei(en) empfangen")
+
+    incoming_bytes = sum(len(content) for content, _, _ in contents)
+    quota_bytes = settings.tenant_storage_quota_mb * 1024 * 1024
+    if tenant_storage_bytes(tenant["id"]) + incoming_bytes > quota_bytes:
+        _log("validation_failed", f"Speicherlimit des Mandanten erreicht (max. {settings.tenant_storage_quota_mb} MB)")
+        raise HTTPException(status_code=400, detail="Speicherlimit erreicht - bitte den Verein kontaktieren")
 
     def _slugify(text: str) -> str:
         text = text.lower()

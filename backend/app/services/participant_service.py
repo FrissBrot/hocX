@@ -40,9 +40,6 @@ class ParticipantService:
             password_hash=hash_password(secret),
             preferred_language="de",
             is_active=participant.is_active,
-            oidc_subject=None,
-            oidc_issuer=None,
-            oidc_email=participant.email,
             external_identity_json={
                 "source": "participant_auto",
                 "login_enabled": False,
@@ -99,7 +96,6 @@ class ParticipantService:
                 "display_name": participant.display_name,
                 "name": participant.display_name,
                 "is_active": participant.is_active,
-                "oidc_email": participant.email,
                 "external_identity_json": {
                     **(user.external_identity_json or {}),
                     "source": "participant_auto",
