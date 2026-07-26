@@ -8,9 +8,10 @@ from pydantic import BaseModel
 
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
 from app.core.db import get_db, SessionLocal
-from app.schemas.protocol import AttendanceExcusePayload, NextSessionRead, ProtocolCreateFromTemplate, ProtocolRead, ProtocolTodoRead, ProtocolUpdate, QuickTodoCreate, TodoListItem
+from app.schemas.protocol import AttendanceExcusePayload, NextSessionRead, ProtocolCreateFromTemplate, ProtocolCycleEventsRead, ProtocolRead, ProtocolTodoRead, ProtocolUpdate, QuickTodoCreate, TodoListItem
 from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
+from app.services.event_service import EventService
 from app.services.export_service import ExportService
 from app.services.protocol_service import ProtocolService
 from app.services.protocol_todo_service import ProtocolTodoService
@@ -21,6 +22,7 @@ service = ProtocolService()
 todo_service = ProtocolTodoService()
 access_service = AccessService()
 audit = AuditService()
+event_service = EventService()
 
 
 async def _generate_pdf_background(protocol_id: int) -> None:
@@ -221,6 +223,32 @@ def get_pending_todos(
         template_id=protocol.template_id,
         protocol_date=protocol.protocol_date,
     )
+
+
+@router.get("/protocols/{protocol_id}/cycle-events", response_model=ProtocolCycleEventsRead)
+def get_cycle_events(
+    protocol_id: int,
+    scope: str = Query("current", pattern="^(current|all)$"),
+    search: str = Query(""),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(200, ge=1, le=500),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Termin-Pool für die Planungsmodus-Popups (Terminübersicht, Checkbox-Auswahl).
+
+    scope=current: nur Termine des aktuellen Zyklus des Protokolls (Template-CycleConfig
+    + protocol_date). Fällt auf alle Termine zurück (cycle=null), wenn kein Zyklus
+    konfiguriert ist. scope=all: alle Termine des Mandanten, unabhängig vom Zyklus.
+    """
+    require_reader(user)
+    protocol = service.get_protocol(db, protocol_id)
+    if protocol is None or protocol.tenant_id != user.current_tenant_id:
+        raise HTTPException(status_code=404, detail="Protocol not found")
+    items, total, cycle = event_service.list_for_protocol_cycle(
+        db, protocol=protocol, scope=scope, search=search, skip=skip, limit=limit
+    )
+    return ProtocolCycleEventsRead(items=items, total=total, cycle=cycle)
 
 
 @router.post("/protocols/{protocol_id}/quick-todos", response_model=dict, status_code=status.HTTP_201_CREATED)

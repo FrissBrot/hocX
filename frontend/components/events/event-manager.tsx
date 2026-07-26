@@ -6,9 +6,11 @@ import { createPortal } from "react-dom";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
+import { EventDetailForm } from "@/components/protocol/planning/event-detail-form";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useTableSort } from "@/lib/hooks/use-table-sort";
+import { useTagConfig } from "@/lib/hooks/use-tag-config";
 import { getCycleYear } from "@/lib/utils/cycle";
 import { formatDate, formatDateRange } from "@/lib/utils/format";
 import {
@@ -141,6 +143,8 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<EventFormState>(emptyForm);
   const [todayIso, setTodayIso] = useState("0000-01-01");
+  const [detailEvent, setDetailEvent] = useState<EventSummary | null>(null);
+  const { tagConfig, updateTagColor, renameTag } = useTagConfig();
   const [cycleConfigs, setCycleConfigs] = useState<CycleConfigSummary[]>([]);
   const [showAllPeriods, setShowAllPeriods] = useState(false);
   const [availableCycles, setAvailableCycles] = useState<FlatCycle[]>([]);
@@ -425,30 +429,21 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     setModalOpen(true);
   }
 
-  function openEdit(event: EventSummary) {
-    setForm({
-      id: event.id,
-      event_date: event.event_date,
-      event_end_date: event.event_end_date ?? "",
-      tag: event.tag ?? "",
-      title: event.title,
-      description: event.description ?? "",
-      participant_count: String(event.participant_count ?? 0),
-      is_cancelled: event.is_cancelled ?? false,
-      cycle_assignments: event.cycle_assignments ?? [],
-      organizer_ids: event.organizer_ids ?? [],
-      leadership_ids: event.leadership_ids ?? [],
-      participant_ids: event.participant_ids ?? [],
-      spezial1_ids: event.spezial1_ids ?? [],
-      spezial2_ids: event.spezial2_ids ?? [],
-      spezial3_ids: event.spezial3_ids ?? [],
-      location: event.location ?? "",
-      spezial_text1: event.spezial_text1 ?? "",
-      spezial_text2: event.spezial_text2 ?? "",
-      spezial_text3: event.spezial_text3 ?? "",
-    });
-    void ensureCyclesLoaded();
-    setModalOpen(true);
+  async function updateEventDetail(eventId: number, patch: Partial<EventSummary>) {
+    const previous = events.find((event) => event.id === eventId) ?? null;
+    setEvents((current) => current.map((event) => (event.id === eventId ? { ...event, ...patch } : event)));
+    try {
+      const updated = await browserApiFetch<EventSummary>(`/api/events/${eventId}`, {
+        method: "PATCH",
+        body: JSON.stringify(patch),
+      });
+      setEvents((current) => current.map((event) => (event.id === eventId ? updated : event)));
+    } catch (error) {
+      if (previous) {
+        setEvents((current) => current.map((event) => (event.id === eventId ? previous : event)));
+      }
+      showToast(error instanceof Error ? error.message : "Termin konnte nicht aktualisiert werden", "error");
+    }
   }
 
   function openParticipantPicker(field: ParticipantPickerField) {
@@ -809,7 +804,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
           <tr
             key={item.id}
             className={`table-row-clickable${visibleColumns.has("is_cancelled") && item.is_cancelled ? " table-row-cancelled" : ""}`}
-            onClick={() => openEdit(item)}
+            onClick={() => setDetailEvent(item)}
             onContextMenu={(event) => openEventContextMenu(event, item)}
           >
             <td>{formatDateRange(item.event_date, item.event_end_date)}</td>
@@ -1094,6 +1089,30 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
           </div>
           <button type="submit">{form.id ? "Termin speichern" : "Termin erstellen"}</button>
         </form>
+      </Modal>
+
+      <Modal
+        open={Boolean(detailEvent)}
+        onClose={() => setDetailEvent(null)}
+        title={detailEvent?.title || "Termin"}
+        description={detailEvent ? formatDateRange(detailEvent.event_date, detailEvent.event_end_date) : undefined}
+        size="wide"
+      >
+        {detailEvent ? (
+          <EventDetailForm
+            event={detailEvent}
+            allowEndDate
+            availableParticipants={availableParticipants}
+            knownEventTags={knownTags}
+            tagConfig={tagConfig}
+            onTagColorChange={updateTagColor}
+            onTagRename={renameTag}
+            onUpdate={(patch) => {
+              setDetailEvent((current) => (current ? { ...current, ...patch } : current));
+              return updateEventDetail(detailEvent.id, patch);
+            }}
+          />
+        ) : null}
       </Modal>
 
       <Modal

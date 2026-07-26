@@ -4,6 +4,8 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
+from app.schemas.event import EventRead
+
 
 class ProtocolCreateFromTemplate(BaseModel):
     template_id: int
@@ -58,6 +60,18 @@ class NextSessionRead(BaseModel):
     protocol: ProtocolRead | None = None
     attendance_block_id: int | None = None
     entries: list[NextSessionAttendanceEntry] = Field(default_factory=list)
+
+
+class ProtocolCycleInfo(BaseModel):
+    cycle_config_id: int
+    cycle_year: int
+    label: str
+
+
+class ProtocolCycleEventsRead(BaseModel):
+    items: list[EventRead]
+    total: int
+    cycle: ProtocolCycleInfo | None = None
 
 
 class AttendanceExcusePayload(BaseModel):
