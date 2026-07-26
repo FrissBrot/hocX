@@ -683,6 +683,7 @@ input[type="number"] {
   padding: 0;
   display: grid;
   place-items: center;
+  border-radius: 50%;
 }
 
 .date-input-picker svg {
@@ -760,6 +761,23 @@ button:disabled {
   min-width: 0;
   background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 85%, black 15%), var(--accent));
   color: #fff;
+  font-weight: 600;
+}
+
+.button-toggle {
+  width: auto;
+  min-width: 0;
+  min-height: 0;
+  padding: 6px 14px;
+  line-height: 1.5;
+  background: transparent;
+  border: 1.5px solid var(--border-strong, var(--border));
+}
+
+.button-toggle-active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--text);
   font-weight: 600;
 }
 
@@ -2080,6 +2098,17 @@ input[type="radio"] {
   overflow-y: auto;
   min-height: 0;
   padding-right: 4px;
+}
+
+/* Plain inputs use a background close to --panel-solid, which is also the modal's own
+   background — inside a modal that leaves almost no contrast (looks like an unstyled
+   "gray box"). Give form fields inside modals a background against --bg instead so the
+   border/field is actually visible. */
+.modal-content input:not([type="checkbox"]):not([type="radio"]),
+.modal-content textarea,
+.modal-content select,
+.modal-content .date-input-field {
+  background: var(--bg);
 }
 
 .tabs {
@@ -3610,6 +3639,43 @@ input[type="radio"] {
   table-layout: auto;
 }
 
+.event-overview-modal .event-overview-table-wrap {
+  max-height: 60vh;
+}
+
+.event-overview-modal .event-table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.event-overview-modal .event-table td {
+  overflow: hidden;
+}
+
+.event-overview-modal .event-field-date {
+  width: 100%;
+  min-width: 0;
+}
+
+.event-overview-modal .event-date-fields-range {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.event-overview-modal .event-field-title,
+.event-overview-modal .event-field-description,
+.event-overview-modal input[type="text"] {
+  width: 100%;
+  min-width: 0;
+}
+
+.event-overview-add-panel {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 12px;
+}
+
 .event-table-compact th {
   padding: 8px 10px;
   white-space: nowrap;
@@ -4559,6 +4625,168 @@ input[type="radio"] {
   background: color-mix(in srgb, var(--accent) 10%, transparent 90%);
 }
 
+.participant-check-card-disabled {
+  opacity: 0.55;
+}
+
+.checkbox-candidate-modal .participant-check-card {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.event-detail-form .tabs-panel {
+  min-height: 460px;
+  align-content: start;
+}
+
+.event-detail-role-picker {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--panel-solid) 94%, transparent 6%);
+}
+
+.candidate-group {
+  margin-top: 20px;
+}
+
+.candidate-group-divider {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.candidate-group-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.candidate-group-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent 84%);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.checkbox-candidate-modal-top-actions {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 4px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.candidate-card {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1.5px solid var(--border);
+  background: color-mix(in srgb, var(--panel-solid) 90%, transparent 10%);
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.12s ease;
+}
+
+.candidate-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border) 55%);
+}
+
+.candidate-card:active {
+  transform: scale(0.98);
+}
+
+@keyframes candidateCardPop {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.035);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.candidate-card-checked {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent 88%);
+  animation: candidateCardPop 0.3s ease;
+}
+
+.candidate-card-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.candidate-card-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: -6px -6px 0;
+}
+
+.candidate-card-body {
+  padding-right: 22px;
+}
+
+.candidate-card-pick {
+  text-align: left;
+  align-items: stretch;
+}
+
+.candidate-card-pick-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 16%, transparent 84%);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.candidate-card-pick:hover .candidate-card-pick-icon {
+  background: var(--accent);
+  color: #fff;
+}
+
+.candidate-card-check {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 1.05rem;
+  opacity: 0;
+  transform: scale(0.4) rotate(-10deg);
+  transition: opacity 0.2s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.candidate-card-checked .candidate-card-check {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
+}
+
 .participant-import-button {
   display: inline-flex;
   align-items: center;
@@ -4982,6 +5210,71 @@ input[type="radio"] {
 
 .editor-block-card-locked {
   opacity: 0.75;
+}
+
+.editor-block-card-auto-generated {
+  border: 2px solid var(--danger) !important;
+  border-radius: 16px;
+  position: relative;
+}
+
+/* Consecutive auto-generated cards (e.g. one text block per Termin) should read as ONE
+   bordered group, not one border per block: merge shared edges and remove the gap between
+   them, keeping a single border only around the whole run. */
+.editor-block-card-auto-generated + .editor-block-card-auto-generated {
+  margin-top: -18px;
+  padding-top: 16px;
+  border-top: none !important;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.editor-block-card-auto-generated:has(+ .editor-block-card-auto-generated) {
+  border-bottom: none !important;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.editor-block-auto-generated-label {
+  position: absolute;
+  top: -10px;
+  left: 20px;
+  background: var(--panel-solid);
+  padding: 0 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--danger);
+  border-radius: 4px;
+  z-index: 1;
+}
+
+.editor-block-auto-generated-icon {
+  position: absolute;
+  top: -18px;
+  right: 16px;
+  background: var(--panel-solid);
+  border-radius: 12px;
+  padding: 2px;
+  z-index: 1;
+}
+
+.editor-planning-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.editor-block-empty-placeholder-auto {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  border: 2px dashed var(--danger);
+  border-radius: 16px;
+  color: var(--muted);
 }
 
 .modal-actions {

@@ -12,11 +12,17 @@ import { DataToolbar } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Modal } from "@/components/ui/modal";
+import { StructuredListEditModal } from "@/components/protocol/planning/structured-list-edit-modal";
+import { EventOverviewModal } from "@/components/protocol/planning/event-overview-modal";
+import { CheckboxCandidateModal, CandidateItem } from "@/components/protocol/planning/checkbox-candidate-modal";
+import { EventDetailForm } from "@/components/protocol/planning/event-detail-form";
+import { PlanningIconTrigger } from "@/components/protocol/planning/planning-icon-trigger";
+import { fetchCycleEvents } from "@/lib/api/cycle-events";
 import { TagInput } from "@/components/ui/tag-input";
 import { ChartBlock, bumpStatsCharts } from "@/components/protocol/chart-block";
 import { CollaborationPresenceBar, LockBadge } from "@/components/protocol/collaboration-presence";
 import { useProtocolCollaboration } from "@/lib/hooks/use-protocol-collaboration";
-import { useTagConfig } from "@/lib/hooks/use-tag-config";
+import { useTagConfig, TagConfig } from "@/lib/hooks/use-tag-config";
 import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { formatDate, formatDateRange, formatDateTime } from "@/lib/utils/format";
 import { getCycleYear } from "@/lib/utils/cycle";
@@ -580,6 +586,11 @@ function MatrixEmbeddedBlockEditor({
   currentCycleYear,
   cycleConfigId,
   onEventContextMenu,
+  isPlanningMode,
+  knownEventTags,
+  tagConfig,
+  onTagColorChange,
+  onTagRename,
 }: {
   embeddedBlock: MatrixEmbeddedBlock;
   protocol: ProtocolSummary;
@@ -589,12 +600,17 @@ function MatrixEmbeddedBlockEditor({
   editable?: boolean;
   updateEmbeddedBlock: (updater: (current: MatrixEmbeddedBlock) => MatrixEmbeddedBlock, persist?: boolean) => void;
   openMultiParticipantPicker: (row: Record<string, any>) => void;
-  createEvent: (forcedTag: string, draft: ProtocolEventDraft) => Promise<boolean>;
+  createEvent: (forcedTag: string, draft: ProtocolEventDraft) => Promise<EventSummary | null>;
   updateEvent: (eventId: number, patch: Partial<EventSummary>) => Promise<boolean>;
   deleteEvent: (eventId: number) => Promise<void>;
   currentCycleYear: number | null;
   cycleConfigId: number | null;
   onEventContextMenu: (nativeEvent: React.MouseEvent, eventRow: EventSummary) => void;
+  isPlanningMode: boolean;
+  knownEventTags: string[];
+  tagConfig: TagConfig;
+  onTagColorChange: (tag: string, color: string) => Promise<void>;
+  onTagRename: (oldTag: string, newTag: string) => Promise<void>;
 }) {
   const elementTypeId = Number(embeddedBlock.element_type_id ?? 0);
   const embeddedConfig = asObject(embeddedBlock.configuration_snapshot_json);
@@ -614,6 +630,7 @@ function MatrixEmbeddedBlockEditor({
   );
   const [showNewEmbeddedEventRow, setShowNewEmbeddedEventRow] = useState(false);
   const [creatingEmbeddedEvent, setCreatingEmbeddedEvent] = useState(false);
+  const [showEmbeddedEventOverview, setShowEmbeddedEventOverview] = useState(false);
   const newEmbeddedEventCreateTimer = useRef<number | null>(null);
   const allowEmbeddedEndDate = embeddedConfig.event_allow_end_date === true;
   const embeddedEventColumns = {
@@ -1185,6 +1202,87 @@ function MatrixEmbeddedBlockEditor({
       ...eventRow,
       ...(embeddedEventDrafts[eventRow.id] ?? {}),
     });
+
+    if (isPlanningMode) {
+      return (
+        <div className={embeddedBlockClassName}>
+          {matchingEvents.length === 0 ? (
+            <div className="editor-block-empty-placeholder-auto">
+              <span>Keine Elemente angezeigt.</span>
+              <PlanningIconTrigger
+                title="Terminübersicht öffnen"
+                icon="🗓"
+                onClick={() => setShowEmbeddedEventOverview(true)}
+              />
+            </div>
+          ) : (
+            <>
+              <div className="editor-planning-toolbar">
+                <PlanningIconTrigger
+                  title="Terminübersicht öffnen"
+                  icon="🗓"
+                  onClick={() => setShowEmbeddedEventOverview(true)}
+                />
+              </div>
+              <div className="event-table-wrap">
+                <table className="data-table event-table event-table-compact">
+                  <thead>
+                    <tr>
+                      {embeddedEventColumns.showDate ? <th>Dat.</th> : null}
+                      {embeddedEventColumns.showTag ? <th>Tag</th> : null}
+                      {embeddedEventColumns.showTitle ? <th>Titel</th> : null}
+                      {embeddedEventColumns.showDescription ? <th>Beschreibung</th> : null}
+                      {embeddedEventColumns.showParticipantCount ? <th className="event-column-count">TN</th> : null}
+                      {embeddedEventColumns.showCancelled ? <th>Abgesagt</th> : null}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {matchingEvents.map((eventRow) => {
+                      const isPast = !!protocol.protocol_date &&
+                        (eventRow.event_end_date || eventRow.event_date) < protocol.protocol_date;
+                      const showCancelledStyle = embeddedEventColumns.showCancelled && eventRow.is_cancelled;
+                      return (
+                        <tr
+                          key={eventRow.id}
+                          className={`${isPast && embeddedConfig.event_gray_past !== false ? "event-row-past" : ""}${showCancelledStyle ? " event-row-cancelled" : ""}`}
+                        >
+                          {embeddedEventColumns.showDate ? <td>{formatDateRange(eventRow.event_date, eventRow.event_end_date)}</td> : null}
+                          {embeddedEventColumns.showTag ? <td>{eventRow.tag || "—"}</td> : null}
+                          {embeddedEventColumns.showTitle ? <td>{eventRow.title}</td> : null}
+                          {embeddedEventColumns.showDescription ? <td>{eventRow.description || "—"}</td> : null}
+                          {embeddedEventColumns.showParticipantCount ? <td className="event-column-count">{eventRow.participant_count ?? 0}</td> : null}
+                          {embeddedEventColumns.showCancelled ? (
+                            <td>{eventRow.is_cancelled ? <span className="pill pill-error">Abgesagt</span> : <span className="muted">–</span>}</td>
+                          ) : null}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+          <EventOverviewModal
+            open={showEmbeddedEventOverview}
+            onClose={() => setShowEmbeddedEventOverview(false)}
+            protocolId={protocol.id}
+            forcedTag={forcedEmbeddedTag}
+            allowEndDate={allowEmbeddedEndDate}
+            protocolDate={protocol.protocol_date ?? null}
+            visibleEvents={matchingEvents}
+            availableParticipants={availableParticipants}
+            knownEventTags={knownEventTags}
+            tagConfig={tagConfig}
+            onTagColorChange={onTagColorChange}
+            onTagRename={onTagRename}
+            onCreateEvent={(draft) => createEvent(forcedEmbeddedTag, draft)}
+            onUpdateEvent={(eventId, patch) => updateEvent(eventId, patch)}
+            onDeleteEvent={(eventId) => deleteEvent(eventId)}
+          />
+        </div>
+      );
+    }
+
     return (
       <div className={embeddedBlockClassName}>
         {matchingEvents.length || editable || showNewEmbeddedEventRow ? (
@@ -1810,6 +1908,9 @@ export function ProtocolEditor({
   const forceEditable = !forceReadOnly && (protocolStatus === "geplant" || protocolStatus === "durchgeführt");
   const isReadOnly = forceReadOnly || protocolStatus === "abgeschlossen";
   const isPrepareMode = (protocolStatus === "geplant" || protocolStatus === "durchgeführt") && !forceReadOnly;
+  // Narrower than isPrepareMode: only "geplant" gets the new icon/popup-driven planning UI.
+  // "durchgeführt" keeps the existing inline editing behavior untouched.
+  const isPlanningMode = !forceReadOnly && protocolStatus === "geplant";
 
   const workflowMeta: Record<string, { modeLabel: string; ctaLabel: string; nextStatus: string }> = {
     geplant:       { modeLabel: "Vorbereitungsmodus",   ctaLabel: "Vorbereitung abschliessen", nextStatus: "vorbereitet" },
@@ -2247,13 +2348,13 @@ export function ProtocolEditor({
     }
   }
 
-  async function createEventFromBlock(protocolElementBlockId: number, blockConfig: Record<string, any>, draftOverride?: ProtocolEventDraft) {
+  async function createEventFromBlock(protocolElementBlockId: number, blockConfig: Record<string, any>, draftOverride?: ProtocolEventDraft): Promise<EventSummary | null> {
     const configuredTag = String(blockConfig.event_tag_filter ?? "").trim();
     const allowEndDate = blockConfig.event_allow_end_date === true;
     const draft = draftOverride ?? newEventDrafts[protocolElementBlockId] ?? createProtocolEventDraft(protocol.protocol_date, configuredTag);
     if (!draft.event_date.trim() || !draft.title.trim()) {
       setStatus(protocolElementBlockId, "error");
-      return false;
+      return null;
     }
     setStatus(protocolElementBlockId, "saving");
     const cycleAssignments: { cycle_config_id: number; cycle_year: number }[] = [];
@@ -2287,10 +2388,10 @@ export function ProtocolEditor({
         }));
       }
       setStatus(protocolElementBlockId, "saved");
-      return true;
+      return created;
     } catch {
       setStatus(protocolElementBlockId, "error");
-      return false;
+      return null;
     }
   }
 
@@ -2615,6 +2716,7 @@ export function ProtocolEditor({
               newTodoTags={newTodoTags}
               setNewTodoTags={setNewTodoTags}
               isPrepareMode={isPrepareMode}
+              isPlanningMode={isPlanningMode}
               hideEventBlock={hideEventBlock}
               unhideEventBlock={unhideEventBlock}
               removeEventBlock={removeEventBlock}
@@ -2772,6 +2874,7 @@ function FocusedElementEditor({
   newTodoTags,
   setNewTodoTags,
   isPrepareMode,
+  isPlanningMode,
   hideEventBlock,
   unhideEventBlock,
   removeEventBlock,
@@ -2814,7 +2917,7 @@ function FocusedElementEditor({
   addTodo: (protocolElementBlockId: number) => Promise<void>;
   updateTodo: (protocolElementBlockId: number, todoId: number, patch: Partial<ProtocolTodo>) => Promise<void>;
   deleteTodo: (protocolElementBlockId: number, todoId: number) => Promise<void>;
-  createEventFromBlock: (protocolElementBlockId: number, blockConfig: Record<string, any>, draftOverride?: ProtocolEventDraft) => Promise<boolean>;
+  createEventFromBlock: (protocolElementBlockId: number, blockConfig: Record<string, any>, draftOverride?: ProtocolEventDraft) => Promise<EventSummary | null>;
   updateEventFromBlock: (protocolElementBlockId: number, eventId: number, patch: Partial<EventSummary>) => Promise<boolean>;
   deleteEventFromBlock: (protocolElementBlockId: number, eventId: number) => Promise<void>;
   onEventContextMenu: (nativeEvent: React.MouseEvent, eventRow: EventSummary, protocolElementBlockId: number) => void;
@@ -2830,6 +2933,7 @@ function FocusedElementEditor({
   newTodoTags: Record<number, string>;
   setNewTodoTags: Dispatch<SetStateAction<Record<number, string>>>;
   isPrepareMode: boolean;
+  isPlanningMode: boolean;
   hideEventBlock: (blockId: number) => Promise<void>;
   unhideEventBlock: (blockId: number) => Promise<void>;
   removeEventBlock: (blockId: number) => Promise<void>;
@@ -2859,8 +2963,22 @@ function FocusedElementEditor({
   const [openBlockMenu, setOpenBlockMenu] = useState<number | null>(null);
   const blockMenuRef = useRef<HTMLDivElement | null>(null);
   const bulletSkipBlurRef = useRef(false);
+  // Planning-mode ("geplant") popups: which block's edit/overview modal is currently open.
+  const [listEditModalBlockId, setListEditModalBlockId] = useState<number | null>(null);
+  const [eventOverviewBlockId, setEventOverviewBlockId] = useState<number | null>(null);
+  const [matrixPickerBlockId, setMatrixPickerBlockId] = useState<number | null>(null);
   const [showEventPicker, setShowEventPicker] = useState(false);
   const [eventPickerSearch, setEventPickerSearch] = useState("");
+  // Planning-mode ("geplant") consolidated checkbox popup for "Termine pro Element".
+  const [showEventBlockPicker, setShowEventBlockPicker] = useState(false);
+  const [eventBlockScope, setEventBlockScope] = useState<"current" | "all">("current");
+  const [eventBlockCandidates, setEventBlockCandidates] = useState<EventSummary[]>([]);
+  const [eventBlockCandidatesLoading, setEventBlockCandidatesLoading] = useState(false);
+  const [showEventBlockCreateForm, setShowEventBlockCreateForm] = useState(false);
+  const [eventBlockNewDraft, setEventBlockNewDraft] = useState<ProtocolEventDraft>(() =>
+    createProtocolEventDraft(protocol.protocol_date)
+  );
+  const [creatingEventBlockNew, setCreatingEventBlockNew] = useState(false);
   const focusedTemplate = availableTemplates.find((t) => t.id === protocol.template_id) ?? null;
 
   const currentCycleYear: number | null = protocol.protocol_date && focusedTemplate?.cycle_config
@@ -2891,6 +3009,26 @@ function FocusedElementEditor({
     [availableEvents]
   );
   const { tagConfig, updateTagColor, renameTag } = useTagConfig();
+
+  const [eventBlockCandidatesRefreshKey, setEventBlockCandidatesRefreshKey] = useState(0);
+  function refreshEventBlockCandidates() {
+    setEventBlockCandidatesRefreshKey((k) => k + 1);
+  }
+  useEffect(() => {
+    if (!showEventBlockPicker) return;
+    let cancelled = false;
+    setEventBlockCandidatesLoading(true);
+    fetchCycleEvents(protocol.id, { scope: eventBlockScope, limit: 500 })
+      .then((result) => {
+        if (!cancelled) setEventBlockCandidates(result.items);
+      })
+      .finally(() => {
+        if (!cancelled) setEventBlockCandidatesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showEventBlockPicker, eventBlockScope, protocol.id, eventBlockCandidatesRefreshKey]);
   const eventAutosaveTimers = useRef<Record<number, number>>({});
   const newEventCreateTimers = useRef<Record<number, number>>({});
   const upcomingEvents = useMemo(
@@ -3556,123 +3694,207 @@ function FocusedElementEditor({
     return `matrix-column-${maxValue + 1}`;
   }
 
-  function generateMatrixColumns(blockId: number, blockConfig: Record<string, any>) {
-    // Support both new auto_source object and old matrix_column_source* fields
+  // auto_source_field: new schema; source_field_*: old schema
+  function matrixSourceFieldForRow(source: string, row: Record<string, any>): string {
+    if (row.auto_source_field) return String(row.auto_source_field);
+    if (source === "participants") return String(row.source_field_participant ?? "");
+    if (source === "events") return String(row.source_field_event ?? "");
+    if (source === "list") return String(row.source_field_list ?? "");
+    return "";
+  }
+
+  function matrixRowCellValue(row: Record<string, any>, textValue: string): Record<string, unknown> {
+    const rowType = matrixRowType(row);
+    if (!textValue && rowType === "participant") return {};
+    if (!textValue && rowType === "event") return {};
+    return textValue ? { text_value: textValue } : {};
+  }
+
+  function buildMatrixColumnForParticipant(rows: Array<Record<string, any>>, participant: ParticipantSummary) {
+    const row_values: Record<string, Record<string, unknown>> = {};
+    rows.forEach((row) => {
+      const rowId = String(row.id ?? row.sort_index ?? rows.indexOf(row));
+      const sourceField = matrixSourceFieldForRow("participants", row);
+      const rowType = matrixRowType(row);
+      if (sourceField) {
+        let text = "";
+        if (sourceField === "display_name") text = participant.display_name;
+        else if (sourceField === "first_name") text = String((participant as any).first_name ?? "");
+        else if (sourceField === "last_name") text = String((participant as any).last_name ?? "");
+        else if (sourceField === "email") text = String((participant as any).email ?? "");
+        row_values[rowId] = matrixRowCellValue(row, text);
+      } else if (rowType === "participant") {
+        row_values[rowId] = { participant_id: participant.id };
+      } else if (rowType === "participants") {
+        row_values[rowId] = { participant_ids: [participant.id] };
+      }
+    });
+    return { id: `gen-p-${participant.id}`, title: participant.display_name, row_values };
+  }
+
+  function buildMatrixColumnForEvent(rows: Array<Record<string, any>>, event: EventSummary) {
+    const row_values: Record<string, Record<string, unknown>> = {};
+    rows.forEach((row) => {
+      const rowId = String(row.id ?? row.sort_index ?? rows.indexOf(row));
+      const sourceField = matrixSourceFieldForRow("events", row);
+      const rowType = matrixRowType(row);
+      if (sourceField) {
+        let text = "";
+        if (sourceField === "title") text = event.title;
+        else if (sourceField === "event_date") text = formatDate(event.event_date);
+        else if (sourceField === "tag") text = String(event.tag ?? "");
+        else if (sourceField === "participant_count") text = String((event as any).participant_count ?? "");
+        row_values[rowId] = matrixRowCellValue(row, text);
+      } else if (rowType === "event") {
+        row_values[rowId] = { event_id: event.id };
+      }
+    });
+    return { id: `gen-e-${event.id}`, title: event.title, row_values };
+  }
+
+  function buildMatrixColumnForListEntry(rows: Array<Record<string, any>>, entry: StructuredListEntry) {
+    const titleText =
+      String((entry.column_one_value as any)?.text_value ?? "").trim() ||
+      String((entry.column_two_value as any)?.text_value ?? "").trim() ||
+      `Eintrag ${entry.id}`;
+    const row_values: Record<string, Record<string, unknown>> = {};
+    rows.forEach((row) => {
+      const rowId = String(row.id ?? row.sort_index ?? rows.indexOf(row));
+      const sourceField = matrixSourceFieldForRow("list", row);
+      if (!sourceField) return;
+      const colVal: Record<string, unknown> =
+        sourceField === "column_one" ? (entry.column_one_value as Record<string, unknown>) ?? {} :
+        sourceField === "column_two" ? (entry.column_two_value as Record<string, unknown>) ?? {} : {};
+      const rowType = matrixRowType(row);
+      // Participant(s) values from list entry
+      if (Array.isArray(colVal.participant_ids)) {
+        const ids = colVal.participant_ids as number[];
+        if (rowType === "participants") row_values[rowId] = { participant_ids: ids };
+        else if (rowType === "participant") row_values[rowId] = ids.length ? { participant_id: ids[0] } : {};
+      } else if (colVal.participant_id != null) {
+        const id = colVal.participant_id as number;
+        if (rowType === "participants") row_values[rowId] = { participant_ids: [id] };
+        else row_values[rowId] = { participant_id: id };
+      } else if (colVal.event_id != null) {
+        row_values[rowId] = { event_id: colVal.event_id };
+      } else {
+        // Text value
+        row_values[rowId] = matrixRowCellValue(row, String(colVal.text_value ?? "").trim());
+      }
+    });
+    return { id: `gen-l-${entry.id}`, title: titleText, row_values };
+  }
+
+  function matrixAutoSourceInfo(blockConfig: Record<string, any>) {
     const autoSrc = blockConfig.auto_source;
     const source = String(
       (autoSrc && typeof autoSrc === "object" ? autoSrc.type : null) ?? blockConfig.matrix_column_source ?? ""
     );
+    const eventTagFilter = String(
+      (autoSrc && typeof autoSrc === "object" ? autoSrc.event_tag_filter : null) ??
+      blockConfig.matrix_column_source_event_tag ?? ""
+    ).trim().toLowerCase();
+    const listId = Number(
+      (autoSrc && typeof autoSrc === "object" ? autoSrc.list_id : null) ??
+      blockConfig.matrix_column_source_list_id ?? 0
+    );
+    return { source, eventTagFilter, listId };
+  }
+
+  function generateMatrixColumns(blockId: number, blockConfig: Record<string, any>) {
+    const { source, eventTagFilter, listId } = matrixAutoSourceInfo(blockConfig);
     const rows = matrixRows(blockConfig);
-
-    function rowCellValue(row: Record<string, any>, textValue: string): Record<string, unknown> {
-      const rowType = matrixRowType(row);
-      if (!textValue && rowType === "participant") return {};
-      if (!textValue && rowType === "event") return {};
-      return textValue ? { text_value: textValue } : {};
-    }
-
-    // auto_source_field: new schema; source_field_*: old schema
-    function getSourceField(row: Record<string, any>): string {
-      if (row.auto_source_field) return String(row.auto_source_field);
-      if (source === "participants") return String(row.source_field_participant ?? "");
-      if (source === "events") return String(row.source_field_event ?? "");
-      if (source === "list") return String(row.source_field_list ?? "");
-      return "";
-    }
 
     let nextColumns: Array<Record<string, any>> = [];
 
     if (source === "participants") {
-      nextColumns = availableParticipants.map((participant) => {
-        const row_values: Record<string, Record<string, unknown>> = {};
-        rows.forEach((row) => {
-          const rowId = String(row.id ?? row.sort_index ?? rows.indexOf(row));
-          const sourceField = getSourceField(row);
-          const rowType = matrixRowType(row);
-          if (sourceField) {
-            let text = "";
-            if (sourceField === "display_name") text = participant.display_name;
-            else if (sourceField === "first_name") text = String(participant.first_name ?? "");
-            else if (sourceField === "last_name") text = String(participant.last_name ?? "");
-            else if (sourceField === "email") text = String(participant.email ?? "");
-            row_values[rowId] = rowCellValue(row, text);
-          } else if (rowType === "participant") {
-            row_values[rowId] = { participant_id: participant.id };
-          } else if (rowType === "participants") {
-            row_values[rowId] = { participant_ids: [participant.id] };
-          }
-        });
-        return { id: `gen-p-${participant.id}`, title: participant.display_name, row_values };
-      });
+      nextColumns = availableParticipants.map((participant) => buildMatrixColumnForParticipant(rows, participant));
     } else if (source === "events") {
-      const tagFilter = String(
-        (autoSrc && typeof autoSrc === "object" ? autoSrc.event_tag_filter : null) ??
-        blockConfig.matrix_column_source_event_tag ?? ""
-      ).trim().toLowerCase();
-      const filtered = tagFilter
-        ? availableEvents.filter((e) => String(e.tag ?? "").toLowerCase() === tagFilter)
+      const filtered = eventTagFilter
+        ? availableEvents.filter((e) => String(e.tag ?? "").toLowerCase() === eventTagFilter)
         : availableEvents;
-      nextColumns = filtered.map((event) => {
-        const row_values: Record<string, Record<string, unknown>> = {};
-        rows.forEach((row) => {
-          const rowId = String(row.id ?? row.sort_index ?? rows.indexOf(row));
-          const sourceField = getSourceField(row);
-          const rowType = matrixRowType(row);
-          if (sourceField) {
-            let text = "";
-            if (sourceField === "title") text = event.title;
-            else if (sourceField === "event_date") text = formatDate(event.event_date);
-            else if (sourceField === "tag") text = String(event.tag ?? "");
-            else if (sourceField === "participant_count") text = String((event as any).participant_count ?? "");
-            row_values[rowId] = rowCellValue(row, text);
-          } else if (rowType === "event") {
-            row_values[rowId] = { event_id: event.id };
-          }
-        });
-        return { id: `gen-e-${event.id}`, title: event.title, row_values };
-      });
+      nextColumns = filtered.map((event) => buildMatrixColumnForEvent(rows, event));
     } else if (source === "list") {
-      const listDefId = Number(
-        (autoSrc && typeof autoSrc === "object" ? autoSrc.list_id : null) ??
-        blockConfig.matrix_column_source_list_id ?? 0
-      );
-      const entries = listDefId ? (listEntriesByDefinition[listDefId] ?? []) : [];
-      nextColumns = entries.map((entry) => {
-        const titleText =
-          String((entry.column_one_value as any)?.text_value ?? "").trim() ||
-          String((entry.column_two_value as any)?.text_value ?? "").trim() ||
-          `Eintrag ${entry.id}`;
-        const row_values: Record<string, Record<string, unknown>> = {};
-        rows.forEach((row) => {
-          const rowId = String(row.id ?? row.sort_index ?? rows.indexOf(row));
-          const sourceField = getSourceField(row);
-          if (!sourceField) return;
-          const colVal: Record<string, unknown> =
-            sourceField === "column_one" ? (entry.column_one_value as Record<string, unknown>) ?? {} :
-            sourceField === "column_two" ? (entry.column_two_value as Record<string, unknown>) ?? {} : {};
-          const rowType = matrixRowType(row);
-          // Participant(s) values from list entry
-          if (Array.isArray(colVal.participant_ids)) {
-            const ids = colVal.participant_ids as number[];
-            if (rowType === "participants") row_values[rowId] = { participant_ids: ids };
-            else if (rowType === "participant") row_values[rowId] = ids.length ? { participant_id: ids[0] } : {};
-          } else if (colVal.participant_id != null) {
-            const id = colVal.participant_id as number;
-            if (rowType === "participants") row_values[rowId] = { participant_ids: [id] };
-            else row_values[rowId] = { participant_id: id };
-          } else if (colVal.event_id != null) {
-            row_values[rowId] = { event_id: colVal.event_id };
-          } else {
-            // Text value
-            row_values[rowId] = rowCellValue(row, String(colVal.text_value ?? "").trim());
-          }
-        });
-        return { id: `gen-l-${entry.id}`, title: titleText, row_values };
-      });
+      const entries = listId ? (listEntriesByDefinition[listId] ?? []) : [];
+      nextColumns = entries.map((entry) => buildMatrixColumnForListEntry(rows, entry));
     }
 
     if (!nextColumns.length) return;
     saveMatrixColumns(blockId, blockConfig, nextColumns);
+  }
+
+  // Non-destructive counterpart to generateMatrixColumns for planning mode: toggling a
+  // candidate on/off only adds a column or flips its `hidden` flag, never overwrites or
+  // drops existing (possibly manually edited) columns like the bulk "Generieren" button does.
+  function matrixCandidateItems(blockConfig: Record<string, any>): CandidateItem[] {
+    const { source, eventTagFilter, listId } = matrixAutoSourceInfo(blockConfig);
+    const columns = matrixColumns(blockConfig);
+    const columnById = new Map(columns.map((c) => [String(c.id ?? ""), c]));
+
+    function toItem(id: string, label: string, sublabel?: string): CandidateItem {
+      const existing = columnById.get(id);
+      return {
+        id,
+        label,
+        sublabel,
+        checked: Boolean(existing) && !existing!.hidden,
+      };
+    }
+
+    if (source === "participants") {
+      return availableParticipants.map((p) => toItem(`gen-p-${p.id}`, p.display_name));
+    }
+    if (source === "events") {
+      const filtered = eventTagFilter
+        ? availableEvents.filter((e) => String(e.tag ?? "").toLowerCase() === eventTagFilter)
+        : availableEvents;
+      return filtered
+        .sort((a, b) => a.event_date.localeCompare(b.event_date))
+        .map((e) => toItem(`gen-e-${e.id}`, e.title, `${formatDate(e.event_date)}${e.tag ? ` · ${e.tag}` : ""}`));
+    }
+    if (source === "list") {
+      const entries = listId ? (listEntriesByDefinition[listId] ?? []) : [];
+      return entries.map((entry) => {
+        const titleText =
+          String((entry.column_one_value as any)?.text_value ?? "").trim() ||
+          String((entry.column_two_value as any)?.text_value ?? "").trim() ||
+          `Eintrag ${entry.id}`;
+        return toItem(`gen-l-${entry.id}`, titleText);
+      });
+    }
+    return [];
+  }
+
+  function toggleMatrixColumn(blockId: number, blockConfig: Record<string, any>, candidateId: string, nextChecked: boolean) {
+    const { source } = matrixAutoSourceInfo(blockConfig);
+    const columns = matrixColumns(blockConfig);
+    const existing = columns.find((c) => String(c.id ?? "") === candidateId);
+
+    if (existing) {
+      saveMatrixColumns(
+        blockId,
+        blockConfig,
+        columns.map((c) => (String(c.id ?? "") === candidateId ? { ...c, hidden: !nextChecked } : c))
+      );
+      return;
+    }
+    if (!nextChecked) return; // nothing to hide, no existing column
+    const rows = matrixRows(blockConfig);
+    let newColumn: Record<string, any> | null = null;
+    if (source === "participants") {
+      const participant = availableParticipants.find((p) => `gen-p-${p.id}` === candidateId);
+      if (participant) newColumn = buildMatrixColumnForParticipant(rows, participant);
+    } else if (source === "events") {
+      const event = availableEvents.find((e) => `gen-e-${e.id}` === candidateId);
+      if (event) newColumn = buildMatrixColumnForEvent(rows, event);
+    } else if (source === "list") {
+      const { listId } = matrixAutoSourceInfo(blockConfig);
+      const entries = listId ? (listEntriesByDefinition[listId] ?? []) : [];
+      const entry = entries.find((e) => `gen-l-${e.id}` === candidateId);
+      if (entry) newColumn = buildMatrixColumnForListEntry(rows, entry);
+    }
+    if (!newColumn) return;
+    saveMatrixColumns(blockId, blockConfig, [...columns, newColumn]);
   }
 
   useEffect(() => {
@@ -3714,9 +3936,20 @@ function FocusedElementEditor({
       </div>
       <div className="element-block-stack">
         {element.blocks.length === 0 && element.show_when_empty && (
-          <div className="element-block-empty-hint">Keine Termine in diesem Zeitraum.</div>
+          isPlanningMode ? (
+            <div className="editor-block-empty-placeholder-auto">
+              <span>Keine Elemente angezeigt.</span>
+              <PlanningIconTrigger
+                title="Termine auswählen"
+                icon="☑"
+                onClick={() => setShowEventBlockPicker(true)}
+              />
+            </div>
+          ) : (
+            <div className="element-block-empty-hint">Keine Termine in diesem Zeitraum.</div>
+          )
         )}
-        {element.blocks.map((block) => {
+        {element.blocks.map((block, blockIndex) => {
           const blockTitle = visibleBlockTitle(block);
           const elementType = block.element_type_code ?? "unknown";
           const elementTypeLabel: Record<string, string> = {
@@ -3734,6 +3967,9 @@ function FocusedElementEditor({
           const blockLockHolder = elementType !== "matrix" ? collab.isLockedByOther(blockFieldKey) : null;
           // Effective editability: forced open in geplant/durchgeführt, locked in abgeschlossen
           const blockEditable = !isReadOnly && !blockLockHolder && (forceEditable || block.is_editable_snapshot);
+          // In planning mode ("geplant"), the Terminliste is read-only inline; adding/
+          // editing/deleting Termine moves into the Terminübersicht popup.
+          const eventListInlineEditable = blockEditable && !isPlanningMode;
           const editableEventRows = elementType === "event_list" ? eventRowsForBlock(blockConfig) : [];
           const editableEventColumns = elementType === "event_list" ? eventColumnVisibility(blockConfig) : null;
           const forcedEventTag = elementType === "event_list" ? String(blockConfig.event_tag_filter ?? "").trim() : "";
@@ -3752,6 +3988,12 @@ function FocusedElementEditor({
           const creatingNewEventRow = elementType === "event_list" ? creatingNewEventRows[block.id] === true : false;
           const allowMatrixColumnManagement =
             elementType === "matrix" ? blockEditable && (blockConfig.allow_column_management === true || blockConfig.matrix_allow_column_management === true) : false;
+          const matrixAutoSourceType = elementType === "matrix" ? matrixAutoSourceInfo(blockConfig).source : "";
+          // Planning mode ("geplant") replaces the inline column toolbar/"Generieren" for
+          // auto-sourced matrices with the checkbox popup; manual matrices and "durchgeführt"
+          // keep the existing inline management untouched.
+          const matrixPlanningManageable = isPlanningMode && allowMatrixColumnManagement && Boolean(matrixAutoSourceType);
+          const matrixInlineColumnManagement = allowMatrixColumnManagement && !matrixPlanningManageable;
           const todoDueTagFilters = elementType === "todo"
             ? String(blockConfig.todo_due_tag_filter ?? "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean)
             : [];
@@ -3762,9 +4004,14 @@ function FocusedElementEditor({
             : [];
           const isAutoEventBlock = blockConfig.repeat_source_type === "event" && blockConfig.repeat_source_id != null;
           const isHidden = !block.is_visible_snapshot;
+          const previousBlock = blockIndex > 0 ? element.blocks[blockIndex - 1] : null;
+          const isFirstInAutoGroup =
+            isPlanningMode &&
+            isAutoEventBlock &&
+            (!previousBlock || asObject(previousBlock.configuration_snapshot_json).repeat_source_type !== "event");
           return (
             <section
-              className={`card editor-block-card${elementType === "event_list" ? " editor-block-card-event-list" : ""}${isHidden ? " editor-block-card-hidden" : ""}${blockLockHolder ? " editor-block-card-locked" : ""}`}
+              className={`card editor-block-card${elementType === "event_list" ? " editor-block-card-event-list" : ""}${isHidden ? " editor-block-card-hidden" : ""}${blockLockHolder ? " editor-block-card-locked" : ""}${(isPlanningMode && isAutoEventBlock) || matrixPlanningManageable ? " editor-block-card-auto-generated" : ""}`}
               key={block.id}
               onFocusCapture={elementType === "matrix" ? undefined : () => collab.lockField(blockFieldKey)}
               onBlurCapture={
@@ -3777,6 +4024,18 @@ function FocusedElementEditor({
                     }
               }
             >
+              {isFirstInAutoGroup ? (
+                <>
+                  <span className="editor-block-auto-generated-label">Wiederholt sich pro Termin</span>
+                  <div className="editor-block-auto-generated-icon">
+                    <PlanningIconTrigger
+                      title="Termine auswählen"
+                      icon="☑"
+                      onClick={() => setShowEventBlockPicker(true)}
+                    />
+                  </div>
+                </>
+              ) : null}
               <div className="editor-panel-header">
                 <div>
                   <div className="eyebrow">{elementTypeLabel[elementType] ?? elementType}{isHidden ? " · ausgeblendet" : ""}</div>
@@ -3784,7 +4043,7 @@ function FocusedElementEditor({
                   {block.description_snapshot ? <p className="muted">{block.description_snapshot}</p> : null}
                   {blockLockHolder ? <LockBadge holder={blockLockHolder} /> : null}
                 </div>
-                {isPrepareMode && isAutoEventBlock && (
+                {isPrepareMode && !isPlanningMode && isAutoEventBlock && (
                   <div className="block-menu-wrap" ref={openBlockMenu === block.id ? blockMenuRef : undefined}>
                     <button
                       type="button"
@@ -4139,6 +4398,46 @@ function FocusedElementEditor({
                       { value: "column_one", label: linkedListDefinition.column_one_title },
                       { value: "column_two", label: linkedListDefinition.column_two_title },
                     ];
+                    if (isPlanningMode) {
+                      return (
+                        <div className="grid">
+                          <div className="editor-planning-toolbar">
+                            <PlanningIconTrigger title="Liste bearbeiten" onClick={() => setListEditModalBlockId(block.id)} />
+                          </div>
+                          <StructuredListTable
+                            definition={linkedListDefinition}
+                            entries={listEntriesByDefinition[linkedListId] ?? []}
+                            availableParticipants={availableParticipants}
+                            availableEvents={availableEvents}
+                            editable={false}
+                            emptyMessage="Noch keine Eintraege in dieser Liste."
+                            groupByColumn={linkedListGroupBy}
+                            sortByColumn={linkedListSortBy}
+                            sortDirection={linkedListSortDirection}
+                            onCreateEntry={() => Promise.resolve(false)}
+                            onUpdateEntry={() => Promise.resolve(false)}
+                            onDeleteEntry={() => Promise.resolve()}
+                          />
+                          <StructuredListEditModal
+                            open={listEditModalBlockId === block.id}
+                            onClose={() => setListEditModalBlockId(null)}
+                            definition={linkedListDefinition}
+                            entries={listEntriesByDefinition[linkedListId] ?? []}
+                            availableParticipants={availableParticipants}
+                            availableEvents={availableEvents}
+                            groupByColumn={linkedListGroupBy}
+                            sortByColumn={linkedListSortBy}
+                            sortDirection={linkedListSortDirection}
+                            onChangeGroupBy={(value) => void saveBlockConfiguration(block.id, { ...blockConfig, linked_list_group_by: value || null })}
+                            onChangeSortBy={(value) => void saveBlockConfiguration(block.id, { ...blockConfig, linked_list_sort_by: value || null, linked_list_sort_direction: value ? linkedListSortDirection : "asc" })}
+                            onChangeSortDirection={(value) => void saveBlockConfiguration(block.id, { ...blockConfig, linked_list_sort_direction: value })}
+                            onCreateEntry={(payload) => createListEntryFromBlock(block.id, linkedListId, payload)}
+                            onUpdateEntry={(entryId, payload) => updateListEntryFromBlock(block.id, linkedListId, entryId, payload)}
+                            onDeleteEntry={(entryId) => deleteListEntryFromBlock(block.id, linkedListId, entryId)}
+                          />
+                        </div>
+                      );
+                    }
                     return (
                       <div className="grid">
                         <div className="list-block-config-bar">
@@ -4347,7 +4646,7 @@ function FocusedElementEditor({
                                 }}
                               />
                             )}
-                            {isPrepareMode && (
+                            {isPrepareMode && !isPlanningMode && (
                               <button
                                 type="button"
                                 className="button-inline button-danger todo-delete"
@@ -4369,7 +4668,15 @@ function FocusedElementEditor({
 
               {elementType === "matrix" && (
                 <div className="grid">
-                  {allowMatrixColumnManagement ? (
+                  {matrixPlanningManageable ? (
+                    <div className="editor-planning-toolbar">
+                      <PlanningIconTrigger
+                        title="Spalten auswählen"
+                        icon="☑"
+                        onClick={() => setMatrixPickerBlockId(block.id)}
+                      />
+                    </div>
+                  ) : matrixInlineColumnManagement ? (
                     <div className="matrix-block-toolbar">
                       <button
                         type="button"
@@ -4406,8 +4713,20 @@ function FocusedElementEditor({
                   ) : null}
                   {/* Wrapping card layout: one card per column, rows stacked inside */}
                   {(() => {
-                    const cols = matrixColumns(blockConfig);
+                    const cols = matrixColumns(blockConfig).filter((c) => !c?.hidden);
                     const rows = matrixRows(blockConfig);
+                    if (matrixPlanningManageable && cols.length === 0) {
+                      return (
+                        <div className="editor-block-empty-placeholder-auto">
+                          <span>Keine Elemente angezeigt.</span>
+                          <PlanningIconTrigger
+                            title="Spalten auswählen"
+                            icon="☑"
+                            onClick={() => setMatrixPickerBlockId(block.id)}
+                          />
+                        </div>
+                      );
+                    }
                     const displayCols = cols.length ? cols : [null, null, null]; // 3 placeholders
                     return (
                       <div className="matrix-cards">
@@ -4421,7 +4740,7 @@ function FocusedElementEditor({
                               <div className="matrix-card-header">
                                 {isPlaceholder ? (
                                   <span className="muted">Spalte {columnIndex + 1}</span>
-                                ) : allowMatrixColumnManagement ? (
+                                ) : matrixInlineColumnManagement ? (
                                   <>
                                     <input
                                       className="matrix-col-title-input"
@@ -4502,6 +4821,11 @@ function FocusedElementEditor({
                                             currentCycleYear={currentCycleYear}
                                             cycleConfigId={focusedTemplate?.cycle_config_id ?? null}
                                             onEventContextMenu={(nativeEvent, eventRow) => onEventContextMenu(nativeEvent, eventRow, block.id)}
+                                            isPlanningMode={isPlanningMode}
+                                            knownEventTags={knownEventTags}
+                                            tagConfig={tagConfig}
+                                            onTagColorChange={updateTagColor}
+                                            onTagRename={renameTag}
                                           />
                                           {cellEditable ? (
                                             <div className="matrix-row-summary muted">
@@ -4593,11 +4917,30 @@ function FocusedElementEditor({
                       </div>
                     );
                   })()}
+                  {matrixPlanningManageable && (
+                    <CheckboxCandidateModal
+                      open={matrixPickerBlockId === block.id}
+                      onClose={() => setMatrixPickerBlockId(null)}
+                      title="Spalten auswählen"
+                      description="Spalten dieser Matrix an-/abwählen. Werte bleiben beim Abwählen erhalten."
+                      items={matrixCandidateItems(blockConfig)}
+                      onToggle={(item, nextChecked) => toggleMatrixColumn(block.id, blockConfig, item.id, nextChecked)}
+                    />
+                  )}
                 </div>
               )}
 
               {elementType === "event_list" && (
                 <div className="grid event-list-grid">
+                  {isPlanningMode && (
+                    <div className="editor-planning-toolbar">
+                      <PlanningIconTrigger
+                        title="Terminübersicht öffnen"
+                        icon="🗓"
+                        onClick={() => setEventOverviewBlockId(block.id)}
+                      />
+                    </div>
+                  )}
                   <div className={`event-table-wrap${hasPastEvents ? " event-table-wrap-scrollable" : ""}`}>
                     <table className="data-table event-table event-table-compact">
                       <thead>
@@ -4608,7 +4951,7 @@ function FocusedElementEditor({
                           {editableEventColumns?.showDescription ? <th>Beschreibung</th> : null}
                           {editableEventColumns?.showParticipantCount ? <th className="event-column-count">TN</th> : null}
                           {editableEventColumns?.showCancelled ? <th>Abgesagt</th> : null}
-                          {blockEditable ? (
+                          {eventListInlineEditable ? (
                             <th className="event-column-actions" aria-label="Aktionen">
                               <button
                                 type="button"
@@ -4630,7 +4973,7 @@ function FocusedElementEditor({
                         </tr>
                       </thead>
                       <tbody>
-                        {blockEditable && showNewEventRow && newEventDraft ? (
+                        {eventListInlineEditable && showNewEventRow && newEventDraft ? (
                           <tr className="event-row-new">
                             {editableEventColumns?.showDate ? (
                               <td>
@@ -4704,7 +5047,7 @@ function FocusedElementEditor({
                               </td>
                             ) : null}
                             {editableEventColumns?.showCancelled ? <td /> : null}
-                            {blockEditable ? (
+                            {eventListInlineEditable ? (
                               <td>
                                 <div className="event-row-actions">
                                   <button
@@ -4736,7 +5079,7 @@ function FocusedElementEditor({
                               >
                                 {editableEventColumns?.showDate ? (
                                   <td>
-                                    {blockEditable ? (
+                                    {eventListInlineEditable ? (
                                       <div className={`event-date-fields${allowEventEndDate ? " event-date-fields-range" : ""}`}>
                                         <DateInput
                                           className="event-field-date"
@@ -4768,7 +5111,7 @@ function FocusedElementEditor({
                                 ) : null}
                                 {editableEventColumns?.showTag ? (
                                   <td>
-                                    {blockEditable ? (
+                                    {eventListInlineEditable ? (
                                       <TagInput
                                         value={editableEventRow.tag ?? forcedEventTag ?? ""}
                                         onChange={(v) =>
@@ -4803,7 +5146,7 @@ function FocusedElementEditor({
                                 ) : null}
                                 {editableEventColumns?.showTitle ? (
                                   <td>
-                                    {blockEditable ? (
+                                    {eventListInlineEditable ? (
                                       <input
                                         className="event-field-title"
                                         value={editableEventRow.title}
@@ -4821,7 +5164,7 @@ function FocusedElementEditor({
                                 ) : null}
                                 {editableEventColumns?.showDescription ? (
                                   <td>
-                                    {blockEditable ? (
+                                    {eventListInlineEditable ? (
                                       <input
                                         className="event-field-description"
                                         value={editableEventRow.description ?? ""}
@@ -4839,7 +5182,7 @@ function FocusedElementEditor({
                                 ) : null}
                                 {editableEventColumns?.showParticipantCount ? (
                                   <td className="event-column-count">
-                                    {blockEditable ? (
+                                    {eventListInlineEditable ? (
                                       <input
                                         type="number"
                                         className="event-field-count"
@@ -4865,7 +5208,7 @@ function FocusedElementEditor({
                                     {eventRow.is_cancelled ? <span className="pill pill-error">Abgesagt</span> : <span className="muted">–</span>}
                                   </td>
                                 ) : null}
-                                {blockEditable ? (
+                                {eventListInlineEditable ? (
                                   <td>
                                     <div className="event-row-actions">
                                       <button
@@ -4884,7 +5227,7 @@ function FocusedElementEditor({
                           })
                         ) : !showNewEventRow ? (
                           <tr>
-                            <td colSpan={Number(editableEventColumns?.showDate) + Number(editableEventColumns?.showTag) + Number(editableEventColumns?.showTitle) + Number(editableEventColumns?.showDescription) + Number(editableEventColumns?.showParticipantCount) + Number(editableEventColumns?.showCancelled) + Number(blockEditable)}>
+                            <td colSpan={Number(editableEventColumns?.showDate) + Number(editableEventColumns?.showTag) + Number(editableEventColumns?.showTitle) + Number(editableEventColumns?.showDescription) + Number(editableEventColumns?.showParticipantCount) + Number(editableEventColumns?.showCancelled) + Number(eventListInlineEditable)}>
                               <span className="muted">Keine passenden Termine.</span>
                             </td>
                           </tr>
@@ -4892,6 +5235,25 @@ function FocusedElementEditor({
                       </tbody>
                     </table>
                   </div>
+                  {isPlanningMode && (
+                    <EventOverviewModal
+                      open={eventOverviewBlockId === block.id}
+                      onClose={() => setEventOverviewBlockId(null)}
+                      protocolId={protocol.id}
+                      forcedTag={forcedEventTag}
+                      allowEndDate={allowEventEndDate}
+                      protocolDate={protocol.protocol_date ?? null}
+                      visibleEvents={editableEventRows}
+                      availableParticipants={availableParticipants}
+                      knownEventTags={knownEventTags}
+                      tagConfig={tagConfig}
+                      onTagColorChange={updateTagColor}
+                      onTagRename={renameTag}
+                      onCreateEvent={(draft) => createEventFromBlock(block.id, blockConfig, draft)}
+                      onUpdateEvent={(eventId, patch) => updateEventFromBlock(block.id, eventId, patch)}
+                      onDeleteEvent={(eventId) => deleteEventFromBlock(block.id, eventId)}
+                    />
+                  )}
                 </div>
               )}
 
@@ -5286,7 +5648,9 @@ function FocusedElementEditor({
             </section>
           );
         })}
-        {isPrepareMode && (element.blocks.some((b) => asObject(b.configuration_snapshot_json).repeat_source_type === "event") || (element.show_when_empty && element.blocks.length === 0)) && (
+        {/* Planning-mode ("geplant"): the "Termine auswählen" trigger now lives in the top-right
+            notch of the red border itself (see isFirstInAutoGroup above), not as a separate row. */}
+        {!isPlanningMode && isPrepareMode && (element.blocks.some((b) => asObject(b.configuration_snapshot_json).repeat_source_type === "event") || (element.show_when_empty && element.blocks.length === 0)) && (
           <div className="add-event-block-row">
             <button
               type="button"
@@ -5370,6 +5734,185 @@ function FocusedElementEditor({
         );
       })()}
     </Modal>
+    {isPlanningMode && (() => {
+      const referenceBlock = element.blocks.find((b) => asObject(b.configuration_snapshot_json).repeat_source_type === "event");
+      const referenceConfig = referenceBlock ? asObject(referenceBlock.configuration_snapshot_json) : {};
+      const tagFilters = String(referenceConfig.event_tag_filter ?? "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
+      const usedEventIds = new Set(
+        element.blocks
+          .map((b) => asObject(b.configuration_snapshot_json).repeat_source_id)
+          .filter((id) => id != null)
+          .map(Number)
+      );
+      const existingItems: CandidateItem[] = element.blocks
+        .filter((b) => asObject(b.configuration_snapshot_json).repeat_source_type === "event")
+        .map((b) => {
+          const config = asObject(b.configuration_snapshot_json);
+          const eventId = Number(config.repeat_source_id);
+          const evt = availableEvents.find((e) => e.id === eventId);
+          return {
+            id: `block-${b.id}`,
+            label: String(config.repeat_source_label ?? evt?.title ?? `Termin ${eventId}`),
+            sublabel: evt ? `${formatDate(evt.event_date)}${evt.tag ? ` · ${evt.tag}` : ""}` : undefined,
+            checked: b.is_visible_snapshot,
+            groupLabel: "Bereits vorhanden",
+          };
+        });
+      function toCandidateItem(evt: EventSummary, groupLabel: string): CandidateItem {
+        return {
+          id: `event-${evt.id}`,
+          label: evt.title,
+          sublabel: `${formatDate(evt.event_date)}${evt.tag ? ` · ${evt.tag}` : ""}`,
+          checked: false,
+          groupLabel,
+        };
+      }
+      const availableCandidates = eventBlockCandidates
+        .filter((evt) => !usedEventIds.has(evt.id))
+        .sort((a, b) => a.event_date.localeCompare(b.event_date));
+      const matchingCandidates = tagFilters.length
+        ? availableCandidates.filter((evt) => tagFilters.some((t) => (evt.tag ?? "").toLowerCase().includes(t)))
+        : availableCandidates;
+      const otherCandidates = tagFilters.length
+        ? availableCandidates.filter((evt) => !tagFilters.some((t) => (evt.tag ?? "").toLowerCase().includes(t)))
+        : [];
+      const candidateItems: CandidateItem[] = [
+        ...matchingCandidates.map((evt) => toCandidateItem(evt, "Passend zum Filter")),
+        ...otherCandidates.map((evt) => toCandidateItem(evt, "Weitere Termine")),
+      ];
+      function findCandidateEvent(item: CandidateItem): EventSummary | undefined {
+        if (item.id.startsWith("block-")) {
+          const b = element.blocks.find((blk) => `block-${blk.id}` === item.id);
+          const eventId = b ? Number(asObject(b.configuration_snapshot_json).repeat_source_id) : NaN;
+          return availableEvents.find((e) => e.id === eventId);
+        }
+        const eventId = Number(item.id.slice("event-".length));
+        return eventBlockCandidates.find((e) => e.id === eventId);
+      }
+      // Unchecking a "Bereits vorhanden" Termin removes its block outright (not just hides it) so
+      // it visibly leaves this group and becomes an available candidate again — hiding it here left
+      // a confusing unchecked "ghost" entry stuck in "Bereits vorhanden". Note: this deletes the
+      // block's own content (e.g. typed text) — re-checking creates a fresh block, it does not
+      // restore prior text.
+      async function handleToggle(item: CandidateItem, nextChecked: boolean) {
+        if (item.id.startsWith("block-")) {
+          const blockId = Number(item.id.slice("block-".length));
+          if (nextChecked) await unhideEventBlock(blockId);
+          else await removeEventBlock(blockId);
+        } else if (item.id.startsWith("event-") && nextChecked) {
+          const eventId = Number(item.id.slice("event-".length));
+          await addEventBlockToElement(element.id, eventId);
+        }
+      }
+      async function handleCreateNew() {
+        if (!eventBlockNewDraft.event_date.trim() || !eventBlockNewDraft.title.trim()) return;
+        setCreatingEventBlockNew(true);
+        const created = await createEventFromBlock(referenceBlock?.id ?? 0, referenceConfig, eventBlockNewDraft);
+        if (created) {
+          await addEventBlockToElement(element.id, created.id);
+          setEventBlockNewDraft(createProtocolEventDraft(protocol.protocol_date, String(referenceConfig.event_tag_filter ?? "").trim()));
+          setShowEventBlockCreateForm(false);
+        }
+        setCreatingEventBlockNew(false);
+      }
+      const forcedTagForNew = String(referenceConfig.event_tag_filter ?? "").trim();
+      return (
+        <CheckboxCandidateModal
+          open={showEventBlockPicker}
+          onClose={() => setShowEventBlockPicker(false)}
+          title="Termine auswählen"
+          description="Auf einen Termin klicken, um ihn an-/abzuwählen. Passend zum Filter stehen oben, weitere Termine unten."
+          items={[...existingItems, ...candidateItems]}
+          loading={eventBlockCandidatesLoading}
+          onToggle={handleToggle}
+          renderEditForm={(item) => {
+            const evt = findCandidateEvent(item);
+            if (!evt) return null;
+            return (
+              <EventDetailForm
+                event={evt}
+                allowEndDate={referenceConfig.event_allow_end_date === true}
+                availableParticipants={availableParticipants}
+                knownEventTags={knownEventTags}
+                tagConfig={tagConfig}
+                onTagColorChange={updateTagColor}
+                onTagRename={renameTag}
+                onUpdate={(patch) =>
+                  updateEventFromBlock(referenceBlock?.id ?? 0, evt.id, patch).then(refreshEventBlockCandidates)
+                }
+              />
+            );
+          }}
+          topActions={
+            <div style={{ display: "grid", gap: 12, width: "100%" }}>
+              <div className="list-block-config-bar">
+                <button
+                  type="button"
+                  className={`button-toggle${eventBlockScope === "current" ? " button-toggle-active" : ""}`}
+                  onClick={() => setEventBlockScope("current")}
+                >
+                  Aktueller Zyklus
+                </button>
+                <button
+                  type="button"
+                  className={`button-toggle${eventBlockScope === "all" ? " button-toggle-active" : ""}`}
+                  onClick={() => setEventBlockScope("all")}
+                >
+                  Alle Termine
+                </button>
+              </div>
+              {showEventBlockCreateForm ? (
+                <div className="event-row-new grid" style={{ gap: 8 }}>
+                  <div className="event-date-fields">
+                    <DateInput
+                      className="event-field-date"
+                      value={eventBlockNewDraft.event_date}
+                      disabled={creatingEventBlockNew}
+                      onChange={(value) => setEventBlockNewDraft((d) => ({ ...d, event_date: value }))}
+                    />
+                  </div>
+                  <TagInput
+                    value={forcedTagForNew || eventBlockNewDraft.tag}
+                    onChange={(v) => setEventBlockNewDraft((d) => ({ ...d, tag: v }))}
+                    suggestions={knownEventTags}
+                    placeholder="Tag"
+                    multi={false}
+                    readOnly={Boolean(forcedTagForNew) || creatingEventBlockNew}
+                    tagConfig={tagConfig}
+                    onTagColorChange={updateTagColor}
+                    onTagRename={renameTag}
+                  />
+                  <input
+                    className="input event-field-title"
+                    value={eventBlockNewDraft.title}
+                    disabled={creatingEventBlockNew}
+                    onChange={(e) => setEventBlockNewDraft((d) => ({ ...d, title: e.target.value }))}
+                    placeholder="Titel"
+                  />
+                  <div className="modal-actions">
+                    <button type="button" className="button-ghost" disabled={creatingEventBlockNew} onClick={() => setShowEventBlockCreateForm(false)}>
+                      Abbrechen
+                    </button>
+                    <button type="button" className="button-primary" disabled={creatingEventBlockNew} onClick={() => void handleCreateNew()}>
+                      {creatingEventBlockNew ? "…" : "Termin anlegen"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="button-inline"
+                  style={{ justifySelf: "start" }}
+                  onClick={() => setShowEventBlockCreateForm(true)}
+                >
+                  + Neuer Termin
+                </button>
+              )}
+            </div>
+          }
+        />
+      );
+    })()}
     <Modal
       open={Boolean(multiParticipantPicker)}
       onClose={() => closeParticipantPicker()}

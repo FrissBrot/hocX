@@ -6,10 +6,13 @@ from io import StringIO
 
 from sqlalchemy.orm import Session
 
-from app.models import Event
+from app.core.cycle_utils import format_cycle_name
+from app.models import Event, Protocol
 from app.models.entities import EventCycle
 from app.repositories.event_repository import EventRepository
 from app.schemas.event import CycleAssignment, EventCreate, EventUpdate
+from app.schemas.protocol import ProtocolCycleInfo
+from app.services.event_cycle_service import list_cycle_event_ids, resolve_protocol_cycle
 
 
 class EventService:
@@ -18,6 +21,40 @@ class EventService:
 
     def list_events(self, db: Session, *, tenant_id: int, skip: int = 0, limit: int = 100) -> list[Event]:
         return self.repository.list(db, tenant_id=tenant_id, skip=skip, limit=limit)
+
+    def list_for_protocol_cycle(
+        self,
+        db: Session,
+        *,
+        protocol: Protocol,
+        scope: str = "current",
+        search: str = "",
+        skip: int = 0,
+        limit: int = 200,
+    ) -> tuple[list[Event], int, ProtocolCycleInfo | None]:
+        """Event pool for the planning-mode "Terminübersicht"/candidate popups.
+
+        scope="current" restricts to the protocol's resolved cycle (template's
+        CycleConfig + protocol_date); falls back to the full tenant event list
+        (cycle=None in the result) if the template has no cycle configured, so
+        the popup is never silently empty. scope="all" ignores cycles entirely.
+        """
+        event_ids: set[int] | None = None
+        cycle_info: ProtocolCycleInfo | None = None
+        if scope == "current":
+            resolved = resolve_protocol_cycle(db, protocol)
+            if resolved:
+                cycle_cfg, cycle_year = resolved
+                event_ids = list_cycle_event_ids(db, cycle_cfg.id, cycle_year)
+                cycle_info = ProtocolCycleInfo(
+                    cycle_config_id=cycle_cfg.id,
+                    cycle_year=cycle_year,
+                    label=format_cycle_name(cycle_cfg.name_pattern, cycle_year),
+                )
+        items, total = self.repository.list_filtered(
+            db, tenant_id=protocol.tenant_id, event_ids=event_ids, search=search, skip=skip, limit=limit
+        )
+        return items, total, cycle_info
 
     def get_event(self, db: Session, event_id: int) -> Event | None:
         return self.repository.get(db, event_id)

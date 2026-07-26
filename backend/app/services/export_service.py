@@ -13,9 +13,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.cycle_utils import get_cycle_year
-from app.models import AttendanceFine, DocumentTemplate, ElementType, Event, EventCycle, FinanceAccount, FinanceTransaction, ListDefinition, ListEntry, Participant, Protocol as ProtocolModel, ProtocolElement, ProtocolExportCache, StoredFile, Template, Tenant
+from app.models import AttendanceFine, DocumentTemplate, ElementType, Event, FinanceAccount, FinanceTransaction, ListDefinition, ListEntry, Participant, Protocol as ProtocolModel, ProtocolElement, ProtocolExportCache, StoredFile, Tenant
 from app.repositories.export_repository import ExportRepository
+from app.services.event_cycle_service import list_cycle_event_ids, resolve_protocol_cycle
 from app.schemas.protocol import ProtocolExportRead
 
 
@@ -956,20 +956,11 @@ Status: {protocol_status}
             )
         )
         cycle_event_ids: set[int] | None = None
-        if only_current_cycle and protocol.protocol_date:
-            template = db.get(Template, protocol.template_id)
-            if template and template.cycle_config_id:
-                from app.models import CycleConfig
-                cycle_cfg = db.get(CycleConfig, template.cycle_config_id)
-                if cycle_cfg:
-                    cycle_year = get_cycle_year(protocol.protocol_date, cycle_cfg.reset_month, cycle_cfg.reset_day)
-                    cycle_rows = db.scalars(
-                        select(EventCycle.event_id).where(
-                            EventCycle.cycle_config_id == template.cycle_config_id,
-                            EventCycle.cycle_year == cycle_year,
-                        )
-                    ).all()
-                    cycle_event_ids = set(cycle_rows)
+        if only_current_cycle:
+            resolved_cycle = resolve_protocol_cycle(db, protocol)
+            if resolved_cycle:
+                cycle_cfg, cycle_year = resolved_cycle
+                cycle_event_ids = list_cycle_event_ids(db, cycle_cfg.id, cycle_year)
 
         column_specs: list[str] = []
         headers: list[str] = []
@@ -1425,7 +1416,7 @@ Status: {protocol_status}
             (config.get("rows") or []),
             key=lambda entry: (entry.get("sort_index", 0), str(entry.get("id", ""))),
         )
-        columns = config.get("columns") or []
+        columns = [c for c in (config.get("columns") or []) if not c.get("hidden")]
         if not rows or not columns:
             return ""
 
