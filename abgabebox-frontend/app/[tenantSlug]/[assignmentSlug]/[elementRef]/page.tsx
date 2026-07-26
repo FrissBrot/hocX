@@ -7,11 +7,12 @@ import { getAssignmentDetail, getElement } from "@/lib/api";
 export default async function ElementUploadPage({
   params,
 }: {
-  params: { tenantSlug: string; assignmentSlug: string; elementRef: string };
+  params: Promise<{ tenantSlug: string; assignmentSlug: string; elementRef: string }>;
 }) {
+  const { tenantSlug, assignmentSlug, elementRef } = await params;
   const [assignment, element] = await Promise.all([
-    getAssignmentDetail(params.tenantSlug, params.assignmentSlug),
-    getElement(params.tenantSlug, params.assignmentSlug, params.elementRef),
+    getAssignmentDetail(tenantSlug, assignmentSlug),
+    getElement(tenantSlug, assignmentSlug, elementRef),
   ]);
 
   if (assignment === null || element === null) {
@@ -26,16 +27,16 @@ export default async function ElementUploadPage({
       <p className="muted">{assignment.title}</p>
 
       <UploadForm
-        tenantSlug={params.tenantSlug}
-        assignmentSlug={params.assignmentSlug}
-        elementRef={params.elementRef}
+        tenantSlug={tenantSlug}
+        assignmentSlug={assignmentSlug}
+        elementRef={elementRef}
         allowedFileTypes={assignment.allowed_file_types}
         maxFiles={assignment.max_files_per_element}
         maxFileSizeMb={assignment.max_file_size_mb}
         sitekey={sitekey}
       />
 
-      <Link href={`/${params.tenantSlug}/${params.assignmentSlug}`} className="back-btn">
+      <Link href={`/${tenantSlug}/${assignmentSlug}`} className="back-btn">
         ← Zurück zur Übersicht
       </Link>
     </div>

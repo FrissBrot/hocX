@@ -215,7 +215,13 @@ services:
       - .env
     environment:
       NEXT_PUBLIC_ABGABEBOX_API_URL: https://${TRAEFIK_ABGABEBOX_DOMAIN}
-      INTERNAL_ABGABEBOX_API_URL: http://abgabebox-backend:8000
+      # Nicht direkt auf den Container (siehe INTERNAL_API_URL im Haupt-hocX-Frontend fuer die
+      # ausfuehrliche Begruendung: uvicorn liefert unter echter Nebenlaeufigkeit bei direkten,
+      # neuen Verbindungen nachweislich gelegentlich die falsche Antwort - reproduzierbar mit
+      # parallelen Requests, nie ueber Traefik). Live am 2026-07-27 auch fuer die Abgabebox
+      # reproduziert (8 von 20 parallelen Requests gegen /api/public/.../assignments kamen mit
+      # falschem 404 zurueck) - hier war der Fix von damals nie nachgezogen worden.
+      INTERNAL_ABGABEBOX_API_URL: https://${TRAEFIK_ABGABEBOX_DOMAIN}
       NEXT_PUBLIC_FRIENDLY_CAPTCHA_SITEKEY: ${FRIENDLY_CAPTCHA_SITEKEY}
     depends_on:
       - abgabebox-backend

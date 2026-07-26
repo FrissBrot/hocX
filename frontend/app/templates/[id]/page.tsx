@@ -5,15 +5,16 @@ import { TemplateEditor } from "@/components/template/template-builder";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { CycleConfigSummary, DocumentTemplate, ElementDefinition, EventSummary, ParticipantSummary, StructuredListDefinition, TemplateElement, TemplateSummary } from "@/types/api";
 
-export default async function TemplateDetailPage({ params }: { params: { id: string } }) {
+export default async function TemplateDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const session = await requireSession();
   const [template, elements, definitions, events, participants, selectedParticipants, lists, documentTemplates, cycleConfigs] = await Promise.all([
-    backendFetchWithSession<TemplateSummary>(`/api/templates/${params.id}`),
-    backendFetchWithSession<TemplateElement[]>(`/api/templates/${params.id}/elements`),
+    backendFetchWithSession<TemplateSummary>(`/api/templates/${id}`),
+    backendFetchWithSession<TemplateElement[]>(`/api/templates/${id}/elements`),
     backendFetchWithSession<ElementDefinition[]>("/api/element-definitions"),
     backendFetchWithSession<EventSummary[]>("/api/events"),
     backendFetchWithSession<ParticipantSummary[]>("/api/participants"),
-    backendFetchWithSession<ParticipantSummary[]>(`/api/templates/${params.id}/participants`),
+    backendFetchWithSession<ParticipantSummary[]>(`/api/templates/${id}/participants`),
     backendFetchWithSession<StructuredListDefinition[]>("/api/lists"),
     backendFetchWithSession<DocumentTemplate[]>("/api/document-templates"),
     backendFetchWithSession<CycleConfigSummary[]>("/api/cycle-configs"),

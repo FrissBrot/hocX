@@ -5,8 +5,9 @@ import { listAssignments } from "@/lib/api";
 
 const COLORS = 4;
 
-export default async function TenantAssignmentsPage({ params }: { params: { tenantSlug: string } }) {
-  const assignments = await listAssignments(params.tenantSlug);
+export default async function TenantAssignmentsPage({ params }: { params: Promise<{ tenantSlug: string }> }) {
+  const { tenantSlug } = await params;
+  const assignments = await listAssignments(tenantSlug);
   if (assignments === null) {
     notFound();
   }
@@ -27,7 +28,7 @@ export default async function TenantAssignmentsPage({ params }: { params: { tena
             <Link
               key={assignment.public_slug}
               className={`card card-link card-colored-${c}`}
-              href={`/${params.tenantSlug}/${assignment.public_slug}`}
+              href={`/${tenantSlug}/${assignment.public_slug}`}
             >
               <div className="card-title">
                 <span className={`card-dot card-dot-${c}`} />
