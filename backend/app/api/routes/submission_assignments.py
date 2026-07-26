@@ -148,12 +148,20 @@ def get_submission_file_content(
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Datei fehlt im Dateisystem")
     mime = stored_file.mime_type or "application/octet-stream"
-    is_pdf = mime.lower() == "application/pdf" or stored_file.original_name.lower().endswith(".pdf")
+    # SECURITY: only ever trust the stored mime_type, never the filename - abgabebox uploads now
+    # derive mime_type server-side from verified file content (see _EXTENSION_MIME_MAP in
+    # abgabebox-backend/app/routes/public.py), so this is safe to rely on. Everything that isn't
+    # a verified PDF is forced to "attachment" + nosniff so a browser never renders it inline,
+    # regardless of what mime_type ends up being.
+    is_pdf = mime.lower() == "application/pdf"
     disposition = "inline" if is_pdf else "attachment"
     return FileResponse(
         path=file_path,
         media_type=mime,
-        headers={"Content-Disposition": f'{disposition}; filename="{stored_file.original_name}"'},
+        headers={
+            "Content-Disposition": f'{disposition}; filename="{stored_file.original_name}"',
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 

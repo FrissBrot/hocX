@@ -23,7 +23,10 @@ class AccessService:
 
     def can_read_template(self, db: Session, user: CurrentUser, template_id: int) -> bool:
         if user.current_role in {"admin", "writer", "kassier"}:
-            return True
+            # Privileged roles still only get full access within their OWN tenant - this used
+            # to return True unconditionally, which let e.g. any writer read/write any other
+            # tenant's templates by just knowing/guessing the id.
+            return self.repository.tenant_id_for_template(db, template_id=template_id) == user.current_tenant_id
         if user.current_role != "reader" or user.current_tenant_id is None:
             return False
         if not self._is_restricted_reader(db, user):
@@ -33,7 +36,8 @@ class AccessService:
 
     def can_read_protocol(self, db: Session, user: CurrentUser, protocol_id: int) -> bool:
         if user.current_role in {"admin", "writer", "kassier"}:
-            return True
+            # See can_read_template above - same cross-tenant gap, same fix.
+            return self.repository.tenant_id_for_protocol(db, protocol_id=protocol_id) == user.current_tenant_id
         if user.current_role != "reader" or user.current_tenant_id is None:
             return False
         if not self._is_restricted_reader(db, user):
@@ -48,6 +52,12 @@ class AccessService:
     def ensure_can_read_protocol(self, db: Session, user: CurrentUser, protocol_id: int) -> None:
         if not self.can_read_protocol(db, user, protocol_id):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Protocol not assigned to current reader")
+
+    def ensure_can_read_protocol_element(self, db: Session, user: CurrentUser, protocol_element_id: int) -> None:
+        protocol_id = self.repository.protocol_id_for_element(db, protocol_element_id=protocol_element_id)
+        if protocol_id is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Protocol element not found")
+        self.ensure_can_read_protocol(db, user, protocol_id)
 
     def ensure_can_read_protocol_block(self, db: Session, user: CurrentUser, protocol_element_block_id: int) -> None:
         protocol_id = self.repository.protocol_id_for_block(db, protocol_element_block_id=protocol_element_block_id)

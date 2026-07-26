@@ -31,7 +31,9 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      # Nur an localhost gebunden (z.B. fuer SSH-Tunnel-Debugging) - vorher an
+      # 0.0.0.0 gebunden und damit ohne Firewall direkt aus dem Internet erreichbar.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -111,6 +113,16 @@ services:
       - "traefik.http.middlewares.auth-ratelimit.ratelimit.average=10"
       - "traefik.http.middlewares.auth-ratelimit.ratelimit.burst=5"
       - "traefik.http.middlewares.auth-ratelimit.ratelimit.period=1m"
+      # Dedicated router for the platform-admin login, same rationale/pattern as hocx-auth
+      # above - was previously falling through to the generic hocx-backend router with no
+      # rate limiting at all, leaving the highest-privilege account unprotected from bruteforce.
+      - "traefik.http.routers.hocx-admin-auth.rule=Host(`${TRAEFIK_DOMAIN}`) && Path(`/api/admin/auth/login`) && Method(`POST`)"
+      - "traefik.http.routers.hocx-admin-auth.entrypoints=websecure"
+      - "traefik.http.routers.hocx-admin-auth.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.hocx-admin-auth.priority=200"
+      - "traefik.http.routers.hocx-admin-auth.service=hocx-admin-auth"
+      - "traefik.http.routers.hocx-admin-auth.middlewares=auth-ratelimit"
+      - "traefik.http.services.hocx-admin-auth.loadbalancer.server.port=8000"
 
   frontend:
     build:
