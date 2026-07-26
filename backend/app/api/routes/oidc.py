@@ -55,6 +55,8 @@ def get_oidc_config(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_admin(user)
+    if tenant_id != user.current_tenant_id:
+        raise HTTPException(status_code=403, detail="Tenant not accessible")
     cfg = service.get_config(db, tenant_id)
     if cfg is None:
         return OidcConfigRead(tenant_id=tenant_id, enabled=False, auto_redirect=False, issuer_url="", client_id="", scopes="openid email profile")
@@ -69,4 +71,6 @@ def upsert_oidc_config(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_admin(user)
+    if tenant_id != user.current_tenant_id:
+        raise HTTPException(status_code=403, detail="Tenant not accessible")
     return service.upsert_config(db, tenant_id, payload)

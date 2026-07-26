@@ -13,7 +13,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models import AppUser, TenantOidcConfig
+from app.models import AppUser, Role, TenantOidcConfig, UserTenantRole
 from app.schemas.oidc import OidcConfigPublic, OidcConfigRead, OidcConfigWrite
 from app.services import domain_bridge_service
 from app.services.auth_service import AuthService
@@ -188,7 +188,31 @@ class OidcService:
         ).one_or_none()
 
         if user is None and email:
-            user = db.query(AppUser).filter(AppUser.email == email).one_or_none()
+            candidate = db.query(AppUser).filter(AppUser.email == email).one_or_none()
+            if candidate is not None:
+                # SECURITY: only auto-link an existing account when it is already an active,
+                # non-admin member of THIS tenant. Without this, any tenant admin could stand
+                # up an OIDC config pointing at an IdP they control and, just by knowing an
+                # arbitrary existing user's email, log in as that person (in this tenant or,
+                # before the tenant_id check on the config routes, in ANY tenant) without ever
+                # knowing their password - a full account takeover. "Admins always use local
+                # login" was already the stated intent below; this enforces it.
+                membership = (
+                    db.query(UserTenantRole, Role)
+                    .join(Role, Role.id == UserTenantRole.role_id)
+                    .filter(
+                        UserTenantRole.user_id == candidate.id,
+                        UserTenantRole.tenant_id == tenant_id,
+                        UserTenantRole.is_active.is_(True),
+                    )
+                    .first()
+                )
+                if membership is None or membership[1].code == "admin":
+                    raise HTTPException(
+                        status_code=403,
+                        detail="This account can't be linked via OIDC - log in with your password instead.",
+                    )
+                user = candidate
 
         if user is None:
             # Auto-provision

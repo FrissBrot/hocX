@@ -74,6 +74,7 @@ def patch_protocol_element(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
+    access_service.ensure_can_read_protocol_element(db, user, protocol_element_id)
     try:
         protocol_element = service.update_protocol_element(db, protocol_element_id, payload)
     except SQLAlchemyError as exc:
@@ -103,6 +104,7 @@ def patch_protocol_element_block(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
+    access_service.ensure_can_read_protocol_block(db, user, protocol_element_block_id)
     try:
         protocol_element_block = service.update_protocol_element_block(db, protocol_element_block_id, payload)
     except SQLAlchemyError as exc:
@@ -120,6 +122,7 @@ def delete_protocol_element_block(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
+    access_service.ensure_can_read_protocol_block(db, user, protocol_element_block_id)
     try:
         found = service.delete_protocol_element_block(db, protocol_element_block_id)
     except SQLAlchemyError as exc:
@@ -137,6 +140,7 @@ def create_protocol_element_block_from_event(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
+    access_service.ensure_can_read_protocol_element(db, user, protocol_element_id)
     try:
         protocol_block = protocol_service.add_event_block_to_element(
             db,
@@ -159,6 +163,7 @@ def put_protocol_text(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
+    access_service.ensure_can_read_protocol_block(db, user, protocol_element_block_id)
     try:
         result = autosave_service.save_text_block(db, protocol_element_block_id, payload.content)
     except SQLAlchemyError as exc:

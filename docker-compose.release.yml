@@ -70,6 +70,13 @@ services:
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-auth-ratelimit.ratelimit.average=10"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-auth-ratelimit.ratelimit.burst=5"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-auth-ratelimit.ratelimit.period=1m"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.rule=Host(`${TRAEFIK_DOMAIN}`) && Path(`/api/admin/auth/login`) && Method(`POST`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.entrypoints=websecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.priority=200"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.service=${ROUTER_PREFIX:-hocx}-admin-auth"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.middlewares=${ROUTER_PREFIX:-hocx}-auth-ratelimit"
+      - "traefik.http.services.${ROUTER_PREFIX:-hocx}-admin-auth.loadbalancer.server.port=8000"
 
   frontend:
     image: ghcr.io/${GHCR_NAMESPACE}/hocx-frontend:${HOCX_VERSION}

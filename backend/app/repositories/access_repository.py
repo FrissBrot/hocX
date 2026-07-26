@@ -11,6 +11,7 @@ from app.models import (
     ProtocolExportCache,
     ProtocolImage,
     ProtocolTodo,
+    Template,
     TemplateParticipant,
     UserProtocolAccess,
     UserTemplateAccess,
@@ -125,6 +126,15 @@ class AccessRepository:
             if user_id not in existing:
                 db.add(UserProtocolAccess(user_id=user_id, tenant_id=tenant_id, protocol_id=protocol_id))
         db.flush()
+
+    def tenant_id_for_protocol(self, db: Session, *, protocol_id: int) -> int | None:
+        return db.scalar(select(Protocol.tenant_id).where(Protocol.id == protocol_id))
+
+    def tenant_id_for_template(self, db: Session, *, template_id: int) -> int | None:
+        return db.scalar(select(Template.tenant_id).where(Template.id == template_id))
+
+    def protocol_id_for_element(self, db: Session, *, protocol_element_id: int) -> int | None:
+        return db.scalar(select(ProtocolElement.protocol_id).where(ProtocolElement.id == protocol_element_id))
 
     def protocol_id_for_block(self, db: Session, *, protocol_element_block_id: int) -> int | None:
         statement = (

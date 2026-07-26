@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
-from app.models.entities import AppUser, AttendanceFine, FinanceAccount, FinanceTransaction, Protocol
+from app.models.entities import AppUser, AttendanceFine, FinanceAccount, FinanceTransaction, Participant, Protocol
 from app.repositories.protocol_repository import ProtocolRepository
 from app.schemas.fines import AttendanceFineCreate, AttendanceFineListItem, AttendanceFineRead
 
@@ -51,13 +51,13 @@ class FinesRepository:
         ).all()
         return [self._to_list_item(row) for row in rows]
 
-    def list_pending_fines_for_protocol(self, db: Session, protocol_id: int) -> list[AttendanceFineListItem]:
+    def list_pending_fines_for_protocol(self, db: Session, protocol_id: int, tenant_id: int) -> list[AttendanceFineListItem]:
         """Fines from other protocols relevant to this protocol:
         - Still-pending fines from earlier protocols
         - Fines from any other protocol that were collected or deleted here (closed_in_protocol_id)
         """
         current = db.get(Protocol, protocol_id)
-        if not current:
+        if not current or current.tenant_id != tenant_id:
             return []
         earlier_condition = or_(
             Protocol.protocol_date < current.protocol_date,
@@ -77,9 +77,11 @@ class FinesRepository:
         ).all()
         return [self._to_list_item(row) for row in rows]
 
-    def list_fines_for_protocol(self, db: Session, protocol_id: int) -> list[AttendanceFineRead]:
+    def list_fines_for_protocol(self, db: Session, protocol_id: int, tenant_id: int) -> list[AttendanceFineRead]:
         rows = db.execute(
-            self._base_query().where(AttendanceFine.protocol_id == protocol_id).order_by(AttendanceFine.created_at.asc())
+            self._base_query()
+            .where(AttendanceFine.protocol_id == protocol_id, Protocol.tenant_id == tenant_id)
+            .order_by(AttendanceFine.created_at.asc())
         ).all()
         return [self._to_read(row) for row in rows]
 
@@ -95,7 +97,19 @@ class FinesRepository:
             q = q.where(AttendanceFine.participant_id == participant_id)
         return db.scalar(q)
 
-    def create_fine(self, db: Session, payload: AttendanceFineCreate) -> AttendanceFineRead:
+    def create_fine(self, db: Session, payload: AttendanceFineCreate, tenant_id: int) -> AttendanceFineRead | None:
+        """Returns None if protocol/account/participant don't all belong to tenant_id - the
+        caller (route) turns that into a 404, matching the other tenant-scoped mutations here."""
+        protocol = db.get(Protocol, payload.protocol_id)
+        if protocol is None or protocol.tenant_id != tenant_id:
+            return None
+        account = db.get(FinanceAccount, payload.account_id)
+        if account is None or account.tenant_id != tenant_id:
+            return None
+        if payload.participant_id is not None:
+            participant = db.get(Participant, payload.participant_id)
+            if participant is None or participant.tenant_id != tenant_id:
+                return None
         fine = AttendanceFine(
             protocol_id=payload.protocol_id,
             participant_id=payload.participant_id,

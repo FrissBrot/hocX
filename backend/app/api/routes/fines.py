@@ -42,7 +42,7 @@ def list_pending_fines(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_finance_access(user)
-    return repo.list_pending_fines_for_protocol(db, protocol_id)
+    return repo.list_pending_fines_for_protocol(db, protocol_id, user.current_tenant_id)
 
 
 @router.get("/protocols/{protocol_id}/fines", response_model=list[AttendanceFineRead])
@@ -52,7 +52,7 @@ def list_protocol_fines(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_finance_access(user)
-    return repo.list_fines_for_protocol(db, protocol_id)
+    return repo.list_fines_for_protocol(db, protocol_id, user.current_tenant_id)
 
 
 @router.post("/fines", response_model=AttendanceFineRead, status_code=status.HTTP_201_CREATED)
@@ -63,10 +63,13 @@ def create_fine(
 ):
     require_finance_access(user)
     try:
-        return repo.create_fine(db, payload)
+        result = repo.create_fine(db, payload, user.current_tenant_id)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Fine could not be created") from exc
+    if result is None:
+        raise HTTPException(status_code=404, detail="Protocol, account or participant not found")
+    return result
 
 
 @router.post("/fines/{fine_id}/delete", status_code=status.HTTP_204_NO_CONTENT)

@@ -351,19 +351,23 @@ class UserService:
         if existing is None or existing.id == user.id:
             return self.repository.update(db, user, {"email": real_email})
 
-        # capture the login state that was just written to the shadow user before it is
-        # deleted by the merge, then re-apply it onto the surviving target user
-        login_state = {
-            "password_hash": user.password_hash,
-            "session_revoke_at": user.session_revoke_at,
-        }
+        # SECURITY: `real_email` is whatever email the tenant admin typed in when creating the
+        # participant record - it is never verified to belong to the person setting it. Do NOT
+        # carry the shadow account's password_hash/session_revoke_at over onto the pre-existing
+        # target account here: that would let any tenant admin silently overwrite an unrelated
+        # user's password (in ANY tenant) just by creating a participant with that user's email
+        # and enabling login with a password of the admin's choosing - full account takeover
+        # without ever knowing the victim's real password. The merge below only adds this
+        # tenant's membership to the target; the target keeps its own existing credentials, and
+        # if it never had a usable password before, it still needs one set through a channel
+        # the account owner actually controls (e.g. an admin in a tenant they already access).
         self.merge_users(db, source_user_id=user.id, target_user_id=existing.id)
         target = self.repository.get(db, existing.id)
-        login_state["external_identity_json"] = {
-            **(target.external_identity_json or {}),
-            "login_enabled": True,
-        }
-        return self.repository.update(db, target, login_state)
+        return self.repository.update(
+            db,
+            target,
+            {"external_identity_json": {**(target.external_identity_json or {}), "login_enabled": True}},
+        )
 
     def delete_user(self, db: Session, user_id: int, actor: CurrentUser) -> bool:
         require_admin(actor)

@@ -18,6 +18,51 @@ router = APIRouter()
 
 NOT_FOUND = HTTPException(status_code=404, detail="Nicht gefunden")
 
+# SECURITY: the client-sent Content-Type header (upload_file.content_type) is fully attacker
+# controlled and must never be trusted or stored - a file named "x.pdf" with real HTML/JS
+# content and a forged Content-Type used to be served back with Content-Disposition: inline
+# and that forged type, letting a browser render it as HTML in the hocX backend's origin
+# (stored XSS, since this upload endpoint has no login at all). Instead: (1) verify the actual
+# file bytes match the extension's real magic number before accepting the upload at all, and
+# (2) always derive the stored mime_type from this fixed, server-controlled map - never from
+# the client - so downstream consumers (see get_submission_file_content in the main backend)
+# can trust stored_file.mime_type completely.
+_EXTENSION_MIME_MAP = {
+    "pdf": "application/pdf",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "png": "image/png",
+    "gif": "image/gif",
+    "webp": "image/webp",
+    "doc": "application/msword",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "xls": "application/vnd.ms-excel",
+    "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "ppt": "application/vnd.ms-powerpoint",
+    "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+}
+_OLE_SIGNATURE = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"  # legacy .doc/.xls/.ppt (Compound File Binary)
+_ZIP_SIGNATURE = b"PK\x03\x04"  # modern .docx/.xlsx/.pptx (all just zip containers)
+
+
+def _content_matches_extension(content: bytes, extension: str) -> bool:
+    head = content[:16]
+    if extension == "pdf":
+        return head.startswith(b"%PDF-")
+    if extension in ("jpg", "jpeg"):
+        return head.startswith(b"\xff\xd8\xff")
+    if extension == "png":
+        return head.startswith(b"\x89PNG\r\n\x1a\n")
+    if extension == "gif":
+        return head.startswith((b"GIF87a", b"GIF89a"))
+    if extension == "webp":
+        return head.startswith(b"RIFF") and content[8:12] == b"WEBP"
+    if extension in ("docx", "xlsx", "pptx"):
+        return head.startswith(_ZIP_SIGNATURE)
+    if extension in ("doc", "xls", "ppt"):
+        return head.startswith(_OLE_SIGNATURE)
+    return False
+
 
 def _get_tenant_or_404(db: Session, tenant_slug: str) -> dict:
     tenant = repository.get_tenant_by_slug(db, public_slug=tenant_slug)
@@ -143,7 +188,11 @@ async def upload(
         if len(content) > max_bytes:
             _log("validation_failed", f"Datei zu gross: {upload_file.filename} ({len(content) // 1024} KB, max. {assignment['max_file_size_mb']} MB)")
             raise HTTPException(status_code=400, detail=f"Datei zu gross (max. {assignment['max_file_size_mb']} MB)")
-        contents.append((content, upload_file.filename or "datei", upload_file.content_type))
+        if not _content_matches_extension(content, suffix):
+            _log("validation_failed", f"Dateiinhalt passt nicht zur Endung: .{suffix}")
+            raise HTTPException(status_code=400, detail=f"Dateiinhalt passt nicht zur angegebenen Endung '.{suffix}'")
+        # Server-derived mime type, never the client-sent Content-Type header - see comment above.
+        contents.append((content, upload_file.filename or "datei", _EXTENSION_MIME_MAP.get(suffix, "application/octet-stream")))
 
     _log("upload_received", f"{len(contents)} Datei(en) empfangen")
 

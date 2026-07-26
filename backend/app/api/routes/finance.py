@@ -109,7 +109,7 @@ def update_transaction(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_finance_access(user)
-    result = repo.update_transaction(db, tx_id, payload)
+    result = repo.update_transaction(db, tx_id, user.current_tenant_id, payload)
     if result is None:
         raise HTTPException(status_code=404, detail="Transaction not found")
     return result
@@ -122,6 +122,6 @@ def delete_transaction(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_finance_access(user)
-    if not repo.delete_transaction(db, tx_id):
+    if not repo.delete_transaction(db, tx_id, user.current_tenant_id):
         raise HTTPException(status_code=404, detail="Transaction not found")
     return {"message": "Transaction deleted"}

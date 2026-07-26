@@ -172,6 +172,7 @@ def patch_todo(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
+    access_service.ensure_can_read_todo(db, user, todo_id)
     try:
         todo = service.update_todo(db, todo_id, payload)
     except (SQLAlchemyError, ValueError) as exc:
@@ -190,6 +191,7 @@ def delete_todo(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
+    access_service.ensure_can_read_todo(db, user, todo_id)
     try:
         deleted = service.delete_todo(db, todo_id)
     except SQLAlchemyError as exc:

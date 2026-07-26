@@ -155,6 +155,13 @@ class FinanceRepository:
     def get_transaction(self, db: Session, tx_id: int) -> FinanceTransaction | None:
         return db.scalar(select(FinanceTransaction).where(FinanceTransaction.id == tx_id))
 
+    def _get_transaction_scoped(self, db: Session, tx_id: int, tenant_id: int) -> FinanceTransaction | None:
+        return db.scalar(
+            select(FinanceTransaction)
+            .join(FinanceAccount, FinanceAccount.id == FinanceTransaction.account_id)
+            .where(FinanceTransaction.id == tx_id, FinanceAccount.tenant_id == tenant_id)
+        )
+
     def create_transaction(self, db: Session, account_id: int, payload: FinanceTransactionCreate) -> FinanceTransactionRead:
         tx = FinanceTransaction(
             account_id=account_id,
@@ -168,8 +175,8 @@ class FinanceRepository:
         db.refresh(tx)
         return self._tx_read(tx)
 
-    def update_transaction(self, db: Session, tx_id: int, payload: FinanceTransactionUpdate) -> FinanceTransactionRead | None:
-        tx = db.scalar(select(FinanceTransaction).where(FinanceTransaction.id == tx_id))
+    def update_transaction(self, db: Session, tx_id: int, tenant_id: int, payload: FinanceTransactionUpdate) -> FinanceTransactionRead | None:
+        tx = self._get_transaction_scoped(db, tx_id, tenant_id)
         if tx is None:
             return None
         if payload.amount is not None:
@@ -182,8 +189,8 @@ class FinanceRepository:
         db.refresh(tx)
         return self._tx_read(tx)
 
-    def delete_transaction(self, db: Session, tx_id: int) -> bool:
-        tx = db.scalar(select(FinanceTransaction).where(FinanceTransaction.id == tx_id))
+    def delete_transaction(self, db: Session, tx_id: int, tenant_id: int) -> bool:
+        tx = self._get_transaction_scoped(db, tx_id, tenant_id)
         if tx is None:
             return False
         db.delete(tx)
