@@ -7,7 +7,7 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from fastapi import Cookie, Depends, HTTPException, Request, status
+from fastapi import Cookie, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -43,6 +43,21 @@ def create_admin_session_token(admin_id: int) -> str:
         separators=(",", ":"),
     ).encode("utf-8")
     return _sign_payload(payload)
+
+
+def issue_admin_session_cookie(response: Response, admin_id: int) -> None:
+    """Mints a fresh admin session token and sets it as a host-only cookie - shared by password
+    login and the SSO callback so both stay consistent."""
+    token = create_admin_session_token(admin_id)
+    response.set_cookie(
+        key=settings.admin_session_cookie,
+        value=token,
+        httponly=True,
+        secure=settings.auth_secure_cookies,
+        samesite="lax",
+        max_age=settings.admin_session_ttl_hours * 3600,
+        path="/",
+    )
 
 
 def parse_admin_session_token(token: str | None) -> dict | None:

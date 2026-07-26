@@ -1,20 +1,17 @@
 from pydantic import BaseModel
 
 
-class OidcConfigPublic(BaseModel):
-    """Returned to unauthenticated clients — no secrets."""
-    tenant_id: int
+class PlatformOidcConfigPublic(BaseModel):
+    """Returned to unauthenticated clients on the admin login page - no secrets."""
     enabled: bool
-    auto_redirect: bool
     issuer_url: str
 
     model_config = {"from_attributes": True}
 
 
-class OidcConfigRead(BaseModel):
-    tenant_id: int
+class PlatformOidcConfigRead(BaseModel):
+    """Returned to an already-authenticated platform admin - still no client_secret."""
     enabled: bool
-    auto_redirect: bool
     issuer_url: str
     client_id: str
     scopes: str
@@ -22,9 +19,8 @@ class OidcConfigRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class OidcConfigWrite(BaseModel):
+class PlatformOidcConfigWrite(BaseModel):
     enabled: bool = False
-    auto_redirect: bool = False
     issuer_url: str = ""
     client_id: str = ""
     client_secret: str = ""

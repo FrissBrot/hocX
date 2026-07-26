@@ -64,3 +64,94 @@ jobs:
       - name: Build
         working-directory: ${{ matrix.app }}
         run: npm run build
+
+  # Non-blocking vulnerability check for Python and Node dependencies.
+  # The repo currently carries known, not-yet-fixed high-severity findings
+  # (Next.js, python-multipart, starlette - tracked separately for a fix),
+  # so this job must never fail the PR check. Instead every step uses
+  # continue-on-error and writes its findings to the job summary, so new
+  # vulnerabilities stay visible without turning every PR red.
+  dependency-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      # Audit backend Python dependencies. continue-on-error: true because
+      # known high-severity findings (starlette, python-multipart) already
+      # exist and are tracked/fixed separately - this must warn, not block.
+      - name: Audit backend/requirements.txt (pip-audit)
+        continue-on-error: true
+        run: |
+          echo "## pip-audit: backend/requirements.txt" >> "$GITHUB_STEP_SUMMARY"
+          pip-audit -r backend/requirements.txt -f markdown >> "$GITHUB_STEP_SUMMARY" || true
+
+      # Audit abgabebox-backend Python dependencies, same non-blocking policy.
+      - name: Audit abgabebox-backend/requirements.txt (pip-audit)
+        continue-on-error: true
+        run: |
+          echo "## pip-audit: abgabebox-backend/requirements.txt" >> "$GITHUB_STEP_SUMMARY"
+          pip-audit -r abgabebox-backend/requirements.txt -f markdown >> "$GITHUB_STEP_SUMMARY" || true
+
+      # Audit frontend Node dependencies. Known high-severity Next.js finding
+      # is tracked separately, so this warns via the summary instead of
+      # failing the build.
+      - name: Audit frontend (npm audit)
+        continue-on-error: true
+        working-directory: frontend
+        run: |
+          echo "## npm audit: frontend" >> "$GITHUB_STEP_SUMMARY"
+          npm audit --audit-level=high || true
+          npm audit --audit-level=high --json > audit-result.json || true
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat audit-result.json >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      # Audit abgabebox-frontend Node dependencies, same non-blocking policy.
+      - name: Audit abgabebox-frontend (npm audit)
+        continue-on-error: true
+        working-directory: abgabebox-frontend
+        run: |
+          echo "## npm audit: abgabebox-frontend" >> "$GITHUB_STEP_SUMMARY"
+          npm audit --audit-level=high || true
+          npm audit --audit-level=high --json > audit-result.json || true
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat audit-result.json >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+  # Scans the PR diff for accidentally committed secrets. Unlike
+  # dependency-audit this job is a hard gate (no continue-on-error): a newly
+  # committed secret must block the merge, not just warn.
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      # gitleaks needs both the base and head commit of the PR to diff
+      # against, so fetch-depth: 0 is required here (unlike the other jobs,
+      # which only need the checked-out tree).
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # gitleaks/gitleaks-action: free, no license/API key needed for the
+      # standard (non-Organization) usage in a private repo - it runs the
+      # open-source gitleaks scanner locally in the runner. Scoped to the
+      # PR's own commit range via GITLEAKS_CONFIG defaults (base/head from
+      # the pull_request event), not the full repo history.
+      - name: Run gitleaks secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

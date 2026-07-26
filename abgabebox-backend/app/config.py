@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     cors_allow_origin: str = Field(default="https://abgabe.example.com", validation_alias="ABGABEBOX_CORS_ORIGIN")
     clamav_host: str = Field(default="clamav", validation_alias="CLAMAV_HOST")
     clamav_port: int = Field(default=3310, validation_alias="CLAMAV_PORT")
+    # Total disk space (quarantine + accepted files combined) a single tenant's abgabebox may
+    # consume. The restricted DB role this service runs as has no SELECT on stored_file (see
+    # 0020_abgabebox.py), so a DB-side SUM(file_size_bytes) isn't available here - the quota is
+    # enforced by walking the tenant's storage directory instead.
+    tenant_storage_quota_mb: int = Field(default=2048, validation_alias="ABGABEBOX_TENANT_STORAGE_QUOTA_MB")
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

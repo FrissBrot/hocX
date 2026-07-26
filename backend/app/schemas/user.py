@@ -41,15 +41,12 @@ class UserBase(BaseModel):
     email: str
     preferred_language: str = "de"
     is_active: bool = True
-    oidc_subject: str | None = None
-    oidc_issuer: str | None = None
-    oidc_email: str | None = None
     external_identity_json: dict[str, Any] = Field(default_factory=dict)
     default_tenant_id: int | None = None
 
 
 class UserCreate(UserBase):
-    password: str = Field(min_length=8)
+    password: str = Field(min_length=12)
     memberships: list[TenantMembershipWrite] = Field(default_factory=list)
     login_enabled: bool = True
 
@@ -61,10 +58,7 @@ class UserUpdate(BaseModel):
     email: str | None = None
     preferred_language: str | None = None
     is_active: bool | None = None
-    password: str | None = Field(default=None, min_length=8)
-    oidc_subject: str | None = None
-    oidc_issuer: str | None = None
-    oidc_email: str | None = None
+    password: str | None = Field(default=None, min_length=12)
     external_identity_json: dict[str, Any] | None = None
     default_tenant_id: int | None = None
     memberships: list[TenantMembershipWrite] | None = None

@@ -42,7 +42,6 @@ from app.models import (
     TemplateElementBlock,
     TemplateParticipant,
     Tenant,
-    TenantOidcConfig,
     UserProtocolAccess,
     UserTemplateAccess,
     UserTenantRole,
@@ -126,7 +125,6 @@ class TenantCloneService:
 
         new_tenant = self._clone_tenant_base(db, source, new_name)
         self._partial_tenant_id = new_tenant.id
-        self._clone_oidc_config(db, source.id, new_tenant.id)
         cycle_config_map = self._clone_cycle_configs(db, source.id, new_tenant.id)
         part_map = self._clone_document_template_parts(db, source.id, new_tenant.id)
         document_template_map = self._clone_document_templates(db, source.id, new_tenant.id, part_map)
@@ -156,7 +154,6 @@ class TenantCloneService:
 
         new_tenant = self._clone_tenant_base(db, source, new_name)
         self._partial_tenant_id = new_tenant.id
-        self._clone_oidc_config(db, source.id, new_tenant.id)
         group_map = self._clone_group_entities(db, source.id, new_tenant.id)
         self._clone_leaders(db, source.id, new_tenant.id)
         participant_map = self._clone_participants(db, source.id, new_tenant.id)
@@ -291,13 +288,6 @@ class TenantCloneService:
         return str(target_path.relative_to(Path(settings.storage_root).resolve()))
 
     # ── structure/config tables ─────────────────────────────────────────
-
-    def _clone_oidc_config(self, db: Session, source_tenant_id: int, new_tenant_id: int) -> None:
-        source = db.scalar(select(TenantOidcConfig).where(TenantOidcConfig.tenant_id == source_tenant_id))
-        if source is None:
-            return
-        db.add(_copy_row(source, {"tenant_id": new_tenant_id}))
-        db.commit()
 
     def _clone_cycle_configs(self, db: Session, source_tenant_id: int, new_tenant_id: int) -> dict[int, int]:
         rows = db.scalars(select(CycleConfig).where(CycleConfig.tenant_id == source_tenant_id)).all()

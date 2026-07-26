@@ -59,7 +59,6 @@ from app.models import (
     TemplateElementBlock,
     TemplateParticipant,
     Tenant,
-    TenantOidcConfig,
     UserProtocolAccess,
     UserTemplateAccess,
     UserTenantRole,
@@ -156,10 +155,6 @@ class TenantExportService:
     # ── structure scope ──────────────────────────────────────────────────
 
     def _export_structure(self, db: Session, tenant_id: int, tables: dict[str, Any]) -> None:
-        tables["tenant_oidc_config"] = self._rows(
-            db.scalars(select(TenantOidcConfig).where(TenantOidcConfig.tenant_id == tenant_id)).all(),
-            "tenant_oidc_config",
-        )
         tables["cycle_config"] = self._rows(
             db.scalars(select(CycleConfig).where(CycleConfig.tenant_id == tenant_id)).all(), "cycle_config"
         )

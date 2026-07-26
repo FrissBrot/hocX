@@ -3,13 +3,14 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { browserApiFetch } from "@/lib/api/client";
-import { AdminSessionInfo } from "@/types/api";
+import { browserApiFetch, browserApiBaseUrl } from "@/lib/api/client";
+import { AdminSessionInfo, PlatformOidcConfigPublic } from "@/types/api";
 
 export default function AdminLoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [oidcConfig, setOidcConfig] = useState<PlatformOidcConfigPublic | null>(null);
   const [statusMsg, setStatusMsg] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -24,6 +25,22 @@ export default function AdminLoginPage() {
     }
     void checkSession();
   }, [router]);
+
+  useEffect(() => {
+    async function loadOidc() {
+      try {
+        const cfg = await browserApiFetch<PlatformOidcConfigPublic>("/api/admin/auth/oidc/public-config");
+        setOidcConfig(cfg ?? null);
+      } catch {
+        setOidcConfig(null);
+      }
+    }
+    void loadOidc();
+  }, []);
+
+  function loginWithOidc() {
+    window.location.href = `${browserApiBaseUrl}/api/admin/auth/oidc/authorize?redirect_to=/admin`;
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -51,6 +68,15 @@ export default function AdminLoginPage() {
       <section className="login-panel">
         <div className="eyebrow">hocX Platform-Admin</div>
         <h1>Admin-Anmeldung</h1>
+
+        {oidcConfig?.enabled && (
+          <div className="login-sso">
+            <button type="button" className="button-inline oidc-button" onClick={loginWithOidc}>
+              Mit {new URL(oidcConfig.issuer_url).hostname} anmelden
+            </button>
+            <div className="login-divider"><span>oder</span></div>
+          </div>
+        )}
 
         <form className="grid" onSubmit={submit}>
           <label className="field-stack">

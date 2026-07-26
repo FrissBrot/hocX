@@ -4,16 +4,9 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { attemptBridgeRedirect } from "@/lib/bridge-redirect";
-import { browserApiFetch, browserApiBaseUrl } from "@/lib/api/client";
+import { browserApiFetch } from "@/lib/api/client";
 import { getRuntimeConfig } from "@/lib/runtime-config";
 import { SessionInfo } from "@/types/api";
-
-type OidcPublicConfig = {
-  tenant_id: number;
-  enabled: boolean;
-  auto_redirect: boolean;
-  issuer_url: string;
-};
 
 type ResolvedTenant = { tenant_id: number; tenant_name: string; profile_image_url: string | null };
 
@@ -22,7 +15,6 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [resolvedTenant, setResolvedTenant] = useState<ResolvedTenant | null>(null);
-  const [oidcConfig, setOidcConfig] = useState<OidcPublicConfig | null>(null);
   const [statusMsg, setStatusMsg] = useState("");
   const [loading, setLoading] = useState(false);
   // Leer bis nach dem Mount (nicht direkt aus getRuntimeConfig() in der JSX gelesen), sonst
@@ -80,20 +72,6 @@ export default function LoginPage() {
     void init();
   }, [router]);
 
-  // Load OIDC config for the auto-resolved tenant, if any
-  useEffect(() => {
-    if (!resolvedTenant) { setOidcConfig(null); return; }
-    async function loadOidc() {
-      try {
-        const cfg = await browserApiFetch<OidcPublicConfig>(`/api/auth/oidc/public-config/${resolvedTenant!.tenant_id}`);
-        setOidcConfig(cfg ?? null);
-      } catch {
-        setOidcConfig(null);
-      }
-    }
-    void loadOidc();
-  }, [resolvedTenant]);
-
   async function submitLocal(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
@@ -119,10 +97,6 @@ export default function LoginPage() {
     }
   }
 
-  function loginWithOidc() {
-    window.location.href = `${browserApiBaseUrl}/api/auth/oidc/authorize?tenant_id=${resolvedTenant?.tenant_id}&redirect_to=/`;
-  }
-
   return (
     <main className="login-frame">
       <section className="login-panel">
@@ -142,15 +116,6 @@ export default function LoginPage() {
           <h1>Anmelden bei hocX</h1>
           {resolvedTenant && <p className="login-subtitle">für {resolvedTenant.tenant_name}</p>}
         </div>
-
-        {oidcConfig?.enabled && (
-          <div className="login-sso">
-            <button type="button" className="button-inline oidc-button" onClick={loginWithOidc}>
-              Mit {new URL(oidcConfig.issuer_url).hostname} anmelden
-            </button>
-            <div className="login-divider"><span>oder</span></div>
-          </div>
-        )}
 
         <form className="login-form" onSubmit={submitLocal}>
           <label className="field-stack">

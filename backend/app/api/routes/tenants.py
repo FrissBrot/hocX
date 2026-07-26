@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.db import get_db
+from app.core.rate_limit import enforce_rate_limit
 from app.core.security import CurrentUser, get_current_user
 from app.models import Tenant
 from app.schemas.user import TenantDomainCreate, TenantDomainRead, TenantRead, TenantUpdate
@@ -73,6 +74,10 @@ def create_tenant_domain(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
+    # Each create/verify/delete triggers a full Traefik dynamic-config rewrite + reload (and
+    # verify can trigger a Let's-Encrypt certificate request) - cap how often a tenant can do
+    # that instead of leaving it fully unbounded.
+    enforce_rate_limit(f"tenant-domain-mutation:{tenant_id}", limit=5, period_seconds=3600)
     return service.create_domain(db, tenant_id, user, payload)
 
 
@@ -83,6 +88,7 @@ def verify_tenant_domain(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
+    enforce_rate_limit(f"tenant-domain-mutation:{tenant_id}", limit=5, period_seconds=3600)
     return service.verify_domain(db, tenant_id, user, domain_id)
 
 
@@ -93,5 +99,6 @@ def delete_tenant_domain(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
+    enforce_rate_limit(f"tenant-domain-mutation:{tenant_id}", limit=5, period_seconds=3600)
     service.delete_domain(db, tenant_id, user, domain_id)
     return {"message": "Domain removed"}

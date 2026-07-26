@@ -23,6 +23,27 @@ ALLOWED_IMAGE_MIME_TYPES = {
 }
 
 
+# SECURITY: the client-sent Content-Type header (file.content_type) is fully attacker
+# controlled and must never be trusted on its own - a file with a forged image mime type
+# could smuggle arbitrary content into storage. Check the actual file signature (magic
+# bytes) against the claimed mime type before persisting anything.
+def _content_matches_mime(content: bytes, mime: str) -> bool:
+    head = content[:16]
+    if mime == "image/jpeg":
+        return head.startswith(b"\xff\xd8\xff")
+    if mime == "image/png":
+        return head.startswith(b"\x89PNG\r\n\x1a\n")
+    if mime == "image/gif":
+        return head.startswith((b"GIF87a", b"GIF89a"))
+    if mime == "image/webp":
+        return head.startswith(b"RIFF") and content[8:12] == b"WEBP"
+    if mime == "image/bmp":
+        return head.startswith(b"BM")
+    if mime == "image/tiff":
+        return head.startswith(b"II*\x00") or head.startswith(b"MM\x00*")
+    return False
+
+
 def _safe_storage_path(storage_root: str, relative_path: str) -> Path:
     root = Path(storage_root).resolve()
     full = (root / relative_path).resolve()
@@ -84,6 +105,8 @@ class FileService:
         content = await file.read()
         if len(content) > MAX_UPLOAD_BYTES:
             raise HTTPException(status_code=413, detail=f"File too large. Maximum size is {MAX_UPLOAD_BYTES // 1024 // 1024} MB")
+        if not _content_matches_mime(content, mime):
+            raise HTTPException(status_code=400, detail="Dateiinhalt passt nicht zum angegebenen Bildformat")
 
         suffix = Path(file.filename or "").suffix.lower() or ".bin"
         tenant_id = self._resolve_tenant_id(db, protocol_element_block.id)

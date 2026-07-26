@@ -2,9 +2,22 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.event import EventRead
+
+
+def _validate_reference_link(value: str | None) -> str | None:
+    """Erlaubt nur leere Werte oder Links mit http(s):// als Schema.
+
+    Verhindert Stored XSS ueber z.B. javascript:-URIs, die sonst als
+    href in <a>-Tags im Frontend landen wuerden.
+    """
+    if value is None or value == "":
+        return value
+    if not value.lower().startswith(("http://", "https://")):
+        raise ValueError("reference_link muss mit http:// oder https:// beginnen")
+    return value
 
 
 class ProtocolCreateFromTemplate(BaseModel):
@@ -171,6 +184,8 @@ class ProtocolTodoCreate(BaseModel):
     tags: list[str] = []
     created_by: int | None = None
 
+    _validate_reference_link = field_validator("reference_link")(_validate_reference_link)
+
 
 class ProtocolTodoUpdate(BaseModel):
     task: str | None = None
@@ -184,6 +199,8 @@ class ProtocolTodoUpdate(BaseModel):
     reference_link: str | None = None
     tags: list[str] | None = None
     closed_in_protocol_id: int | None = None
+
+    _validate_reference_link = field_validator("reference_link")(_validate_reference_link)
 
 
 class ProtocolTodoRead(BaseModel):
@@ -210,6 +227,8 @@ class ProtocolTodoRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     closed_in_protocol_id: int | None = None
+
+    _validate_reference_link_read = field_validator("reference_link")(_validate_reference_link)
 
 
 class TodoListItem(ProtocolTodoRead):

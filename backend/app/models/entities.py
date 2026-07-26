@@ -45,13 +45,16 @@ class Tenant(Base, TimestampMixin):
     public_slug: Mapped[str | None] = mapped_column(Text, unique=True)
 
 
-class TenantOidcConfig(Base, TimestampMixin, UpdatedAtMixin):
-    __tablename__ = "tenant_oidc_config"
+class PlatformOidcConfig(Base, TimestampMixin, UpdatedAtMixin):
+    """Single global SSO provider config for the platform-admin panel only - tenants/customers
+    have no OIDC option at all (see security audit 2026-07-26 for why the old per-tenant
+    tenant_oidc_config was removed). There is always at most one meaningful row; the service
+    layer enforces that, not the schema."""
+
+    __tablename__ = "platform_oidc_config"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False, unique=True)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
-    auto_redirect: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
     issuer_url: Mapped[str] = mapped_column(Text, nullable=False)
     client_id: Mapped[str] = mapped_column(Text, nullable=False)
     client_secret: Mapped[str] = mapped_column(Text, nullable=False)
@@ -90,10 +93,8 @@ class AppUser(Base, TimestampMixin, UpdatedAtMixin):
     __tablename__ = "app_user"
     __table_args__ = (
         UniqueConstraint("email", name="uq_app_user_email"),
-        UniqueConstraint("oidc_issuer", "oidc_subject", name="uq_app_user_oidc"),
         Index("idx_app_user_default_tenant", "default_tenant_id"),
         Index("idx_app_user_email", "email"),
-        Index("idx_app_user_oidc", "oidc_issuer", "oidc_subject"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -107,9 +108,6 @@ class AppUser(Base, TimestampMixin, UpdatedAtMixin):
     preferred_language: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'de'"))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
     session_revoke_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    oidc_subject: Mapped[str | None] = mapped_column(Text)
-    oidc_issuer: Mapped[str | None] = mapped_column(Text)
-    oidc_email: Mapped[str | None] = mapped_column(Text)
     external_identity_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
 
 
@@ -117,7 +115,10 @@ class PlatformAdmin(Base, TimestampMixin, UpdatedAtMixin):
     """Betreiber-Account fürs zentrale Admin-Panel. Komplett getrennt vom Kunden-`AppUser`-System."""
 
     __tablename__ = "platform_admin"
-    __table_args__ = (UniqueConstraint("email", name="uq_platform_admin_email"),)
+    __table_args__ = (
+        UniqueConstraint("email", name="uq_platform_admin_email"),
+        UniqueConstraint("oidc_issuer", "oidc_subject", name="uq_platform_admin_oidc"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     email: Mapped[str] = mapped_column(Text, nullable=False)
@@ -125,6 +126,8 @@ class PlatformAdmin(Base, TimestampMixin, UpdatedAtMixin):
     display_name: Mapped[str] = mapped_column(Text, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
     session_revoke_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    oidc_subject: Mapped[str | None] = mapped_column(Text)
+    oidc_issuer: Mapped[str | None] = mapped_column(Text)
 
 
 class UserRole(Base):

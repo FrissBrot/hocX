@@ -18,7 +18,7 @@ from app.models import AppUser, Role, Tenant, UserTenantRole
 
 
 PASSWORD_SCHEME = "pbkdf2_sha256"
-PASSWORD_ITERATIONS = 390000
+PASSWORD_ITERATIONS = 600000
 
 
 @dataclass
@@ -92,8 +92,8 @@ def create_session_token(user_id: int, tenant_id: int | None) -> str:
 
 def issue_session_cookie(response: Response, user_id: int, tenant_id: int | None) -> None:
     """Mints a fresh session token and sets it as a host-only cookie on the response - shared by
-    login, select-tenant, OIDC callback and the cross-domain login bridge so all four stay
-    consistent."""
+    login, select-tenant and the cross-domain login bridge so all three stay consistent. (OIDC
+    is admin-panel-only now - see platform_oidc_service.py / issue_admin_session_cookie.)"""
     token = create_session_token(user_id, tenant_id)
     response.set_cookie(
         key=settings.auth_session_cookie,

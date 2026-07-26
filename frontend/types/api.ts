@@ -102,23 +102,9 @@ export type SubmissionElementStatusEntry = {
   responsible_participant_id: number | null;
 };
 
-export type OidcConfigRead = {
-  tenant_id: number;
-  enabled: boolean;
-  auto_redirect: boolean;
-  issuer_url: string;
-  client_id: string;
-  scopes: string;
-};
-
-export type OidcConfigWrite = {
-  enabled: boolean;
-  auto_redirect: boolean;
-  issuer_url: string;
-  client_id: string;
-  client_secret: string;
-  scopes: string;
-};
+export type PlatformOidcConfigPublic = { enabled: boolean; issuer_url: string };
+export type PlatformOidcConfigRead = { enabled: boolean; issuer_url: string; client_id: string; scopes: string };
+export type PlatformOidcConfigWrite = { enabled: boolean; issuer_url: string; client_id: string; client_secret: string; scopes: string };
 
 export type TenantMembership = {
   tenant_id: number;
@@ -137,9 +123,6 @@ export type UserSummary = {
   email: string;
   preferred_language: string;
   is_active: boolean;
-  oidc_subject: string | null;
-  oidc_issuer: string | null;
-  oidc_email: string | null;
   external_identity_json: Record<string, unknown>;
   default_tenant_id: number | null;
   memberships: TenantMembership[];

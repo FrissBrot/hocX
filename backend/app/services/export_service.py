@@ -660,8 +660,10 @@ Status: {protocol_status}
 
     def _resolve_partial_path(self, export_dir: Path, block) -> Path | None:
         if block.latex_template_snapshot:
-            candidate = export_dir / "template" / block.latex_template_snapshot
-            if candidate.exists():
+            template_root = (export_dir / "template").resolve()
+            candidate = (template_root / block.latex_template_snapshot).resolve()
+            is_contained = candidate == template_root or str(candidate).startswith(str(template_root) + "/")
+            if is_contained and candidate.exists():
                 return candidate
 
         default_name = {

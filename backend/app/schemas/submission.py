@@ -21,8 +21,8 @@ class SubmissionAssignmentBase(BaseModel):
     list_definition_id: int | None = None
     deadline: date | None = None
     allowed_file_types: list[str] = Field(default_factory=list)
-    max_files_per_element: int = Field(default=5, ge=1)
-    max_file_size_mb: int = Field(default=20, ge=1)
+    max_files_per_element: int = Field(default=5, ge=1, le=20)
+    max_file_size_mb: int = Field(default=20, ge=1, le=100)
     is_active: bool = True
     responsible_participant_source: str | None = None
 
@@ -42,8 +42,8 @@ class SubmissionAssignmentUpdate(BaseModel):
     list_definition_id: int | None = None
     deadline: date | None = None
     allowed_file_types: list[str] | None = None
-    max_files_per_element: int | None = Field(default=None, ge=1)
-    max_file_size_mb: int | None = Field(default=None, ge=1)
+    max_files_per_element: int | None = Field(default=None, ge=1, le=20)
+    max_file_size_mb: int | None = Field(default=None, ge=1, le=100)
     is_active: bool | None = None
     responsible_participant_source: str | None = None
 
