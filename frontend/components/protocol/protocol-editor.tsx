@@ -1932,6 +1932,17 @@ export function ProtocolEditor({
       });
       setProtocolStatus(next);
       collab.sendStatusChanged(next);
+      // Reset the remembered scroll position so reopening the protocol later starts at the
+      // top again, instead of jumping back to wherever the status-transition button was
+      // (typically the last point).
+      const firstElementId = visibleElements[0]?.id;
+      if (firstElementId) {
+        if (elementSaveTimerRef.current) window.clearTimeout(elementSaveTimerRef.current);
+        await browserApiFetch(`/api/protocols/${protocol.id}/scroll-position`, {
+          method: "PUT",
+          body: JSON.stringify({ element_id: firstElementId }),
+        }).catch(() => {});
+      }
       router.refresh();
       router.push("/protocols");
     } catch (err: unknown) {

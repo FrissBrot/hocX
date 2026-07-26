@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 
 import { ProtocolEditor } from "@/components/protocol/protocol-editor";
 import { ProtocolOverview } from "@/components/protocol/protocol-builder";
-import { ProtocolExportPanel } from "@/components/protocol/protocol-export-panel";
 import { AppShell } from "@/components/ui/app-shell";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import {
@@ -79,7 +78,6 @@ export default async function ProtocolDetailPage({ params }: { params: { id: str
   const initialImages = Object.fromEntries(imageLists.map((item) => [item.protocolElementBlockId, item.images]));
 
   const pendingTodos = (await backendFetchWithSession<TodoListItem[]>(`/api/protocols/${params.id}/pending-todos`)) ?? [];
-  const latestExport = (await backendFetchWithSession(`/api/protocols/${params.id}/exports/latest`)) ?? { protocol_id: Number(params.id), export_format: "none", status: "missing" };
 
   const financeAccounts = (await backendFetchWithSession<FinanceAccount[]>("/api/finance/accounts")) ?? [];
   // Pre-load transactions for finance blocks
@@ -103,10 +101,6 @@ export default async function ProtocolDetailPage({ params }: { params: { id: str
     <AppShell initialSession={session}>
       <section className="panel">
         <ProtocolOverview protocol={protocol} />
-        <ProtocolExportPanel
-          protocol={protocol}
-          initialLatestExport={latestExport as any}
-        />
         <ProtocolEditor
           protocol={protocol}
           initialElements={elements}
