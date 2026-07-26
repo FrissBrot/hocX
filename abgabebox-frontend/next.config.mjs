@@ -3,8 +3,15 @@
 // data-worker-src ebenfalls self-hosted unter public/friendly-challenge.worker.min.js -> keine
 // Ausnahme in script-src/worker-src noetig), das Widget loest die Proof-of-Work-Challenge aber per
 // XHR/fetch gegen den data-puzzle-endpoint https://api.friendlycaptcha.com/api/v1/puzzle - ohne
-// diese Ausnahme wuerde jeder Upload-Versuch am blockierten Captcha scheitern. Keine Inline-Scripts
-// in dieser App (siehe app/layout.tsx) -> script-src bleibt strikt ohne 'unsafe-inline'.
+// diese Ausnahme wuerde jeder Upload-Versuch am blockierten Captcha scheitern.
+//
+// script-src braucht 'unsafe-inline': per echtem Playwright-Browser-Test (nicht nur `npm run
+// build`) festgestellt, dass der App Router auf dynamischen Seiten (z.B. /[tenantSlug]) selbst
+// mehrere inline <script>-Tags fuer den RSC-Hydration-Payload einbettet (self.__next_f.push...),
+// unabhaengig vom eigenen App-Code. Ohne 'unsafe-inline' wurden diese von der CSP geblockt und
+// die Seite hydratisierte nie (kein Fehler im Server-Log, nur eine tote Seite im Browser) - der
+// urspruengliche Build-only-Test hatte das nicht erkannt. Ein Nonce-basierter Ansatz waere die
+// sauberere Loesung, ist hier aber (wie in frontend/next.config.mjs) bewusst zurueckgestellt.
 const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -14,7 +21,7 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self'",
+      "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
       "font-src 'self'",

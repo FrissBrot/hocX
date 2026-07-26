@@ -15,7 +15,7 @@ type Props = {
   sitekey: string;
   onSolved: (solution: string) => void;
   onExpired?: () => void;
-  widgetRef?: React.RefObject<HTMLDivElement>;
+  widgetRef?: React.RefObject<HTMLDivElement | null>;
 };
 
 export function CaptchaWidget({ sitekey, onSolved, onExpired, widgetRef }: Props) {
