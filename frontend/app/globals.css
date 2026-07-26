@@ -102,10 +102,6 @@ pre {
   padding: 20px;
 }
 
-.edge-sidebar-trigger {
-  display: none;
-}
-
 .shell {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
@@ -5039,6 +5035,9 @@ input[type="radio"] {
     height: auto;
     transform: translateX(calc(-100% - 24px));
     transition: transform 180ms ease;
+    /* Overlays protocol content while open — the usual translucent --panel background
+       let the page underneath show through, making it hard to read. Solid here only. */
+    background: var(--panel-solid);
   }
 
   .app-frame-writing .sidebar-writing.sidebar-open {
@@ -5051,36 +5050,6 @@ input[type="radio"] {
 
   .app-frame-writing .mobile-nav-toggle {
     display: inline-flex;
-  }
-
-  .app-frame-writing .edge-sidebar-trigger {
-    position: fixed;
-    inset: 0 auto 0 0;
-    z-index: 140;
-    display: flex;
-    width: 18px;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    border: 0;
-    border-radius: 0;
-    background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 16%, transparent 84%), transparent);
-    box-shadow: none;
-    opacity: 0.9;
-  }
-
-  .app-frame-writing .edge-sidebar-trigger span {
-    display: block;
-    width: 10px;
-    height: 2px;
-    border-radius: 999px;
-    background: var(--text);
-  }
-
-  .edge-sidebar-trigger-hidden {
-    opacity: 0;
-    pointer-events: none;
   }
 
   .app-frame-writing .editor-shell {
@@ -5122,8 +5091,17 @@ input[type="radio"] {
   }
 
   .app-frame-writing .editor-nav-item {
+    position: relative;
     white-space: nowrap;
+    padding: 7px 8px;
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  .app-frame-writing .editor-shell:has(.editor-nav:hover) .editor-nav-item {
     padding: 7px 8px 7px 10px;
+    grid-template-columns: 22px 1fr;
+    justify-items: initial;
   }
 
   .app-frame-writing .editor-nav-index {
@@ -5135,12 +5113,19 @@ input[type="radio"] {
   .app-frame-writing .editor-nav-label,
   .app-frame-writing .editor-nav-subtitle {
     opacity: 0;
+    /* Taken out of grid flow while collapsed — otherwise their (invisible but still laid
+       out) text wraps inside the ~6px leftover column and inflates the row height, pushing
+       the index circles apart with huge gaps. */
+    position: absolute;
+    pointer-events: none;
     transition: opacity 0.12s ease;
   }
 
   .app-frame-writing .editor-shell:has(.editor-nav:hover) .editor-nav-label,
   .app-frame-writing .editor-shell:has(.editor-nav:hover) .editor-nav-subtitle {
     opacity: 1;
+    position: static;
+    pointer-events: auto;
   }
 }
 

@@ -54,7 +54,6 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
   const [themePreference, setThemePreference] = useState<"light" | "dark" | "auto">("auto");
   const [themeReady, setThemeReady] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [edgeSidebarOpen, setEdgeSidebarOpen] = useState(false);
   const [compactFooterEnabled, setCompactFooterEnabled] = useState(false);
   const [compactFooterOpen, setCompactFooterOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
@@ -336,32 +335,15 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
   return (
     <ToastProvider>
     <main className={`app-frame${isProtocolWriting ? " app-frame-writing" : ""}`}>
-      {isProtocolWriting ? (
-        <button
-          type="button"
-          className={`edge-sidebar-trigger${mobileNavOpen || edgeSidebarOpen ? " edge-sidebar-trigger-hidden" : ""}`}
-          aria-label="Open sidebar"
-          onMouseEnter={() => setEdgeSidebarOpen(true)}
-          onFocus={() => setEdgeSidebarOpen(true)}
-          onClick={() => setMobileNavOpen(true)}
-        >
-          <span />
-          <span />
-          <span />
-        </button>
-      ) : null}
       <div className="shell">
         <aside
           ref={sidebarRef}
-          className={`sidebar${mobileNavOpen || edgeSidebarOpen ? " sidebar-open" : ""}${isProtocolWriting ? " sidebar-writing" : ""}`}
-          onMouseEnter={() => {
-            if (isProtocolWriting) {
-              setEdgeSidebarOpen(true);
-            }
-          }}
+          className={`sidebar${mobileNavOpen ? " sidebar-open" : ""}${isProtocolWriting ? " sidebar-writing" : ""}`}
           onMouseLeave={() => {
-            if (isProtocolWriting && !mobileNavOpen) {
-              setEdgeSidebarOpen(false);
+            // Opens only via the ☰ button next to the page title, never on hover — but once
+            // open, moving the mouse away from it during protocol writing closes it again.
+            if (isProtocolWriting && mobileNavOpen) {
+              setMobileNavOpen(false);
             }
           }}
         >
@@ -399,10 +381,7 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
                           href={link.href as any}
                           key={link.href}
                           className={isActive ? "nav-link nav-link-active" : "nav-link"}
-                          onClick={() => {
-                            setMobileNavOpen(false);
-                            setEdgeSidebarOpen(false);
-                          }}
+                          onClick={() => setMobileNavOpen(false)}
                         >
                           {link.label}
                         </Link>
