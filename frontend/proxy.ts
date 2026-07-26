@@ -44,7 +44,7 @@ async function isAuthenticated(cookie: string, sessionPath: string): Promise<boo
   }
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isAdmin = pathname.startsWith("/admin");
   const sessionPath = isAdmin ? "/api/admin/auth/session" : "/api/auth/session";

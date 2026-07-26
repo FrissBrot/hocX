@@ -1,7 +1,7 @@
 // CSP script-src erlaubt 'unsafe-inline': app/layout.tsx rendert zwei Inline-<script>-Tags
 // (Runtime-Config __HOCX_CONFIG__ + Theme-Vorab-Anwendung vor dem ersten Paint, um FOUC zu
 // vermeiden) ueber dangerouslySetInnerHTML, die auf JEDER Seite laufen muessen - auch auf
-// /login und /admin/login, die middleware.ts bewusst vom Matcher ausschliesst (siehe dortiger
+// /login und /admin/login, die proxy.ts (ehemals middleware.ts) bewusst vom Matcher ausschliesst (siehe dortiger
 // Kommentar zum Login-Loop-Fix). Ein Nonce-Ansatz wuerde daher entweder den Matcher erweitern
 // und die Auth-Redirect-Logik dort um Pfad-Ausnahmen ergaenzen (Risiko einer Regression in
 // genau dem Login-Loop-Fix), oder die CSP komplett aus next.config.mjs in die Middleware
@@ -34,8 +34,8 @@ const securityHeaders = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
+  typedRoutes: true,
   experimental: {
-    typedRoutes: true,
     staleTimes: {
       dynamic: 0,
     },

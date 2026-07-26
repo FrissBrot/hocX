@@ -25,7 +25,7 @@ export async function requireSession(): Promise<SessionInfo> {
     // backendFetch() konnte das Backend gar nicht erreichen (Netzwerkfehler/Timeout, auch nach
     // eigenem Retry) - das ist NICHT dasselbe wie "nicht eingeloggt" und darf niemals zu /login
     // umleiten: der Browser hat die Session oft schon selbst als gültig geprüft und würde auf
-    // /login sofort wieder zurück hierher springen (siehe middleware.ts für den Haupt-Fix des
+    // /login sofort wieder zurück hierher springen (siehe proxy.ts (ehemals middleware.ts) für den Haupt-Fix des
     // eigentlichen Login-Loops - hier geht es nur um den verbleibenden Ambiguitäts-Fall). Ein
     // regulärer Error lässt stattdessen die error.tsx-Boundary greifen, die KEINE automatische
     // Weiterleitung auslöst.
