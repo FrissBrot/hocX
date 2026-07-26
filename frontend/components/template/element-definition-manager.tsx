@@ -5,6 +5,7 @@ import { FormEvent, Fragment, ReactNode, useEffect, useMemo, useState } from "re
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { TagInput } from "@/components/ui/tag-input";
 import { useToast } from "@/contexts/toast-context";
 import { useTagConfig } from "@/lib/hooks/use-tag-config";
@@ -1720,10 +1721,9 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
             </label>
             <label className="field-stack">
               <span className="field-label">Standard- oder Fixinhalt</span>
-              <textarea
-                rows={6}
+              <RichTextEditor
                 value={createBlockForm.default_content}
-                onChange={(event) => setCreateBlockForm((current) => ({ ...current, default_content: event.target.value }))}
+                onChange={(md) => setCreateBlockForm((current) => ({ ...current, default_content: md }))}
                 placeholder="Wird für statische Texte als fixer Inhalt und sonst als Startinhalt genutzt"
               />
               <span className="field-help">Für statische Textblöcke ist dies der feste Inhalt, für normale Textblöcke der Startwert.</span>
@@ -2335,10 +2335,9 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
               </label>
               <label className="field-stack">
                 <span className="field-label">Standard- oder Fixinhalt</span>
-                <textarea
-                  rows={6}
+                <RichTextEditor
                   value={blockForm.default_content}
-                  onChange={(event) => setBlockForm((current) => ({ ...current, default_content: event.target.value }))}
+                  onChange={(md) => setBlockForm((current) => ({ ...current, default_content: md }))}
                 />
               </label>
             </SettingsSection>
