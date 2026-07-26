@@ -5533,7 +5533,7 @@ function FocusedElementEditor({
                 <ChartBlockRenderer
                   blockId={block.id}
                   config={blockConfig as { chart_type?: string; cycle_key?: string }}
-                  editable={blockEditable && protocol.status !== "durchgeführt"}
+                  editable={false}
                   onSave={(cfg) => void saveBlockConfiguration(block.id, cfg)}
                 />
               )}
