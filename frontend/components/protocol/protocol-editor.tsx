@@ -1907,10 +1907,10 @@ export function ProtocolEditor({
   // Editing mode derived from status and role
   const forceEditable = !forceReadOnly && (protocolStatus === "geplant" || protocolStatus === "durchgeführt");
   const isReadOnly = forceReadOnly || protocolStatus === "abgeschlossen";
-  const isPrepareMode = (protocolStatus === "geplant" || protocolStatus === "durchgeführt") && !forceReadOnly;
-  // Narrower than isPrepareMode: only "geplant" gets the new icon/popup-driven planning UI.
-  // "durchgeführt" keeps the existing inline editing behavior untouched.
-  const isPlanningMode = !forceReadOnly && protocolStatus === "geplant";
+  // The icon/popup-driven planning UI (Tabelle-aus-Liste, Terminlisten, Termine-pro-Element,
+  // Matrix-Auto-Spalten) is available in every status except "abgeschlossen", where isReadOnly
+  // already blocks all editing.
+  const isPlanningMode = !isReadOnly;
 
   const workflowMeta: Record<string, { modeLabel: string; ctaLabel: string; nextStatus: string }> = {
     geplant:       { modeLabel: "Vorbereitungsmodus",   ctaLabel: "Vorbereitung abschliessen", nextStatus: "vorbereitet" },
@@ -2001,12 +2001,12 @@ export function ProtocolEditor({
         .map((element) => ({
           ...element,
           blocks: [...element.blocks]
-            .filter((block) => (isPrepareMode || block.is_visible_snapshot) && block.element_type_code !== "display")
+            .filter((block) => (isPlanningMode || block.is_visible_snapshot) && block.element_type_code !== "display")
             .sort((left, right) => left.sort_index - right.sort_index)
         }))
         .filter((element) => element.blocks.length > 0 || element.show_when_empty)
         .sort((left, right) => left.sort_index - right.sort_index),
-    [elements, isPrepareMode]
+    [elements, isPlanningMode]
   );
 
   const selectedElement = useMemo(
@@ -2502,22 +2502,6 @@ export function ProtocolEditor({
     }
   }
 
-  async function hideEventBlock(blockId: number) {
-    const block = elements.flatMap((e) => e.blocks).find((b) => b.id === blockId);
-    if (!block) return;
-    const newConfig = { ...(block.configuration_snapshot_json ?? {}), manually_hidden: true };
-    updateBlockInState(blockId, (b) => ({ ...b, is_visible_snapshot: false, configuration_snapshot_json: newConfig }));
-    try {
-      await browserApiFetch(`/api/protocol-element-blocks/${blockId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ is_visible_snapshot: false, configuration_snapshot_json: newConfig }),
-      });
-    } catch {
-      // revert on error
-      updateBlockInState(blockId, (b) => ({ ...b, is_visible_snapshot: true, configuration_snapshot_json: block.configuration_snapshot_json }));
-    }
-  }
-
   async function unhideEventBlock(blockId: number) {
     const block = elements.flatMap((e) => e.blocks).find((b) => b.id === blockId);
     if (!block) return;
@@ -2715,9 +2699,7 @@ export function ProtocolEditor({
               setTodoTagFilter={setTodoTagFilter}
               newTodoTags={newTodoTags}
               setNewTodoTags={setNewTodoTags}
-              isPrepareMode={isPrepareMode}
               isPlanningMode={isPlanningMode}
-              hideEventBlock={hideEventBlock}
               unhideEventBlock={unhideEventBlock}
               removeEventBlock={removeEventBlock}
               addEventBlockToElement={addEventBlockToElement}
@@ -2873,9 +2855,7 @@ function FocusedElementEditor({
   setTodoTagFilter,
   newTodoTags,
   setNewTodoTags,
-  isPrepareMode,
   isPlanningMode,
-  hideEventBlock,
   unhideEventBlock,
   removeEventBlock,
   addEventBlockToElement,
@@ -2932,9 +2912,7 @@ function FocusedElementEditor({
   setTodoTagFilter: Dispatch<SetStateAction<Record<number, string | null>>>;
   newTodoTags: Record<number, string>;
   setNewTodoTags: Dispatch<SetStateAction<Record<number, string>>>;
-  isPrepareMode: boolean;
   isPlanningMode: boolean;
-  hideEventBlock: (blockId: number) => Promise<void>;
   unhideEventBlock: (blockId: number) => Promise<void>;
   removeEventBlock: (blockId: number) => Promise<void>;
   addEventBlockToElement: (elementId: number, eventId: number) => Promise<ProtocolElement["blocks"][number] | null>;
@@ -2960,16 +2938,12 @@ function FocusedElementEditor({
     }, 50);
   }, [element.id]);
 
-  const [openBlockMenu, setOpenBlockMenu] = useState<number | null>(null);
-  const blockMenuRef = useRef<HTMLDivElement | null>(null);
   const bulletSkipBlurRef = useRef(false);
   // Planning-mode ("geplant") popups: which block's edit/overview modal is currently open.
   const [listEditModalBlockId, setListEditModalBlockId] = useState<number | null>(null);
   const [eventOverviewBlockId, setEventOverviewBlockId] = useState<number | null>(null);
   const [matrixPickerBlockId, setMatrixPickerBlockId] = useState<number | null>(null);
-  const [showEventPicker, setShowEventPicker] = useState(false);
-  const [eventPickerSearch, setEventPickerSearch] = useState("");
-  // Planning-mode ("geplant") consolidated checkbox popup for "Termine pro Element".
+  // Planning-mode consolidated checkbox popup for "Termine pro Element".
   const [showEventBlockPicker, setShowEventBlockPicker] = useState(false);
   const [eventBlockScope, setEventBlockScope] = useState<"current" | "all">("current");
   const [eventBlockCandidates, setEventBlockCandidates] = useState<EventSummary[]>([]);
@@ -2984,7 +2958,6 @@ function FocusedElementEditor({
   const currentCycleYear: number | null = protocol.protocol_date && focusedTemplate?.cycle_config
     ? getCycleYear(protocol.protocol_date, focusedTemplate.cycle_config.reset_month, focusedTemplate.cycle_config.reset_day)
     : null;
-  const [addingEventBlock, setAddingEventBlock] = useState(false);
   const [multiParticipantPicker, setMultiParticipantPicker] = useState<{
     kind: "form" | "matrix" | "embedded_form" | "event_field";
     blockId: number;
@@ -3898,17 +3871,6 @@ function FocusedElementEditor({
   }
 
   useEffect(() => {
-    if (!openBlockMenu) return;
-    function handleDocClick(e: MouseEvent) {
-      if (blockMenuRef.current && !blockMenuRef.current.contains(e.target as Node)) {
-        setOpenBlockMenu(null);
-      }
-    }
-    document.addEventListener("mousedown", handleDocClick);
-    return () => document.removeEventListener("mousedown", handleDocClick);
-  }, [openBlockMenu]);
-
-  useEffect(() => {
     const fields = sectionRef.current?.querySelectorAll<HTMLTextAreaElement>(".todo-main-compact .todo-input") ?? [];
     fields.forEach((field) => autoResizeTodoField(field));
   }, [element.id, todosByBlock]);
@@ -4043,47 +4005,6 @@ function FocusedElementEditor({
                   {block.description_snapshot ? <p className="muted">{block.description_snapshot}</p> : null}
                   {blockLockHolder ? <LockBadge holder={blockLockHolder} /> : null}
                 </div>
-                {isPrepareMode && !isPlanningMode && isAutoEventBlock && (
-                  <div className="block-menu-wrap" ref={openBlockMenu === block.id ? blockMenuRef : undefined}>
-                    <button
-                      type="button"
-                      tabIndex={-1}
-                      className="btn-icon-sm block-menu-trigger"
-                      title="Optionen"
-                      onClick={() => setOpenBlockMenu((prev) => prev === block.id ? null : block.id)}
-                    >
-                      ⋮
-                    </button>
-                    {openBlockMenu === block.id && (
-                      <div className="block-menu-dropdown">
-                        {isHidden ? (
-                          <button
-                            type="button"
-                            className="block-menu-item"
-                            onClick={() => { setOpenBlockMenu(null); void unhideEventBlock(block.id); }}
-                          >
-                            Einblenden
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className="block-menu-item"
-                            onClick={() => { setOpenBlockMenu(null); void hideEventBlock(block.id); }}
-                          >
-                            Ausblenden
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          className="block-menu-item block-menu-item-danger"
-                          onClick={() => { setOpenBlockMenu(null); void removeEventBlock(block.id); }}
-                        >
-                          Entfernen
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
 
               {(elementType === "text" || elementType === "static_text") && (
@@ -4645,18 +4566,6 @@ function FocusedElementEditor({
                                   void saveBlockConfiguration(block.id, { ...blockConfig, rows: nextRows });
                                 }}
                               />
-                            )}
-                            {isPrepareMode && !isPlanningMode && (
-                              <button
-                                type="button"
-                                className="button-inline button-danger todo-delete"
-                                onClick={() => {
-                                  const nextRows = ((Array.isArray(blockConfig.rows) ? blockConfig.rows : []) as Array<Record<string, any>>).filter((_, rowIndex) => rowIndex !== index);
-                                  void saveBlockConfiguration(block.id, { ...blockConfig, rows: nextRows });
-                                }}
-                              >
-                                Delete
-                              </button>
                             )}
                           </div>
                         );})}
@@ -5648,19 +5557,8 @@ function FocusedElementEditor({
             </section>
           );
         })}
-        {/* Planning-mode ("geplant"): the "Termine auswählen" trigger now lives in the top-right
-            notch of the red border itself (see isFirstInAutoGroup above), not as a separate row. */}
-        {!isPlanningMode && isPrepareMode && (element.blocks.some((b) => asObject(b.configuration_snapshot_json).repeat_source_type === "event") || (element.show_when_empty && element.blocks.length === 0)) && (
-          <div className="add-event-block-row">
-            <button
-              type="button"
-              className="button-inline"
-              onClick={() => { setEventPickerSearch(""); setShowEventPicker(true); }}
-            >
-              + Termin hinzufügen
-            </button>
-          </div>
-        )}
+        {/* The "Termine auswählen" trigger lives in the top-right notch of the red border
+            itself (see isFirstInAutoGroup above), not as a separate row. */}
       </div>
     </section>
     <SessionTodosSection
@@ -5676,64 +5574,6 @@ function FocusedElementEditor({
       onPendingUpdate={onPendingUpdate}
       onPendingDone={onPendingDone}
     />
-    <Modal
-      open={showEventPicker}
-      onClose={() => setShowEventPicker(false)}
-      title="Termin hinzufügen"
-      description="Wähle einen Termin, der als Block hinzugefügt werden soll."
-    >
-      {(() => {
-        const existingEventIds = new Set(
-          element.blocks
-            .map((b) => asObject(b.configuration_snapshot_json).repeat_source_id)
-            .filter((id) => id != null)
-            .map(Number)
-        );
-        const query = eventPickerSearch.trim().toLowerCase();
-        const filteredEvents = availableEvents.filter((e) => {
-          if (existingEventIds.has(e.id)) return false;
-          if (!query) return true;
-          return (e.title ?? "").toLowerCase().includes(query) || (e.tag ?? "").toLowerCase().includes(query);
-        }).sort((a, b) => a.event_date.localeCompare(b.event_date));
-        return (
-          <div className="grid">
-            <label className="field-stack">
-              <span className="field-label">Suche</span>
-              <input
-                value={eventPickerSearch}
-                onChange={(e) => setEventPickerSearch(e.target.value)}
-                placeholder="Termin suchen…"
-                autoFocus
-              />
-            </label>
-            <div className="selection-list">
-              {filteredEvents.length === 0 && (
-                <p className="muted">Keine Termine gefunden.</p>
-              )}
-              {filteredEvents.map((evt) => (
-                <button
-                  key={evt.id}
-                  type="button"
-                  className="selection-card"
-                  disabled={addingEventBlock}
-                  onClick={async () => {
-                    setAddingEventBlock(true);
-                    await addEventBlockToElement(element.id, evt.id);
-                    setAddingEventBlock(false);
-                    setShowEventPicker(false);
-                  }}
-                >
-                  <div>
-                    <strong>{evt.title ?? `Termin ${evt.id}`}</strong>
-                    <div className="muted">{formatDate(evt.event_date)}{evt.tag ? ` · ${evt.tag}` : ""}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
-    </Modal>
     {isPlanningMode && (() => {
       const referenceBlock = element.blocks.find((b) => asObject(b.configuration_snapshot_json).repeat_source_type === "event");
       const referenceConfig = referenceBlock ? asObject(referenceBlock.configuration_snapshot_json) : {};
