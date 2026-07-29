@@ -27,6 +27,7 @@ from app.models import (
 from app.services.document_template_service import DocumentTemplateService
 from app.services.access_service import AccessService
 from app.services.block_behavior import resolve_block_behavior
+from app.services.responsible_label_service import resolve_display_section_title, resolve_responsible_label
 from app.repositories.protocol_repository import ProtocolRepository
 from app.schemas.protocol import NextSessionAttendanceEntry, NextSessionRead, ProtocolCreateFromTemplate, ProtocolUpdate
 
@@ -312,6 +313,13 @@ class ProtocolService:
         for token, replacement in context_tokens.items():
             rendered = rendered.replace(token, replacement)
         return rendered
+
+    def _with_cycle_tokens(self, context: dict[str, object] | None, cycle_tokens: dict[str, str]) -> dict[str, object] | None:
+        if not cycle_tokens:
+            return context
+        merged = dict(context) if context else {}
+        merged["tokens"] = {**cycle_tokens, **(merged.get("tokens") or {})}
+        return merged
 
     def _coerce_optional_int(self, value) -> int | None:
         if value in (None, ""):
@@ -791,6 +799,13 @@ class ProtocolService:
             reset_month=cycle_cfg.reset_month if cycle_cfg else 12,
             reset_day=cycle_cfg.reset_day if cycle_cfg else 31,
         )
+        cycle_tokens: dict[str, str] = {}
+        if cycle_cfg is not None:
+            cycle_tokens = {
+                "{cycle_name}": cycle_cfg.name,
+                "{cycle_year_start}": str(counts["cycle_year_start"]),
+                "{cycle_year_end}": str(counts["cycle_year_end"]),
+            }
         if payload.protocol_number:
             protocol_number = payload.protocol_number
         else:
@@ -852,7 +867,13 @@ class ProtocolService:
         for template_element, definition in template_rows:
             legacy_repeat_config = template_element.configuration_json or {}
             responsible_label = self._template_element_responsible_label(db, legacy_repeat_config)
-            section_title = f"{definition.title} ({responsible_label})" if responsible_label else definition.title
+            element_title = self._render_context_text(definition.title, {"tokens": cycle_tokens}) if cycle_tokens else definition.title
+            section_title = f"{element_title} ({responsible_label})" if responsible_label else element_title
+            responsibility_config = legacy_repeat_config.get("responsibility")
+            responsibility_config = responsibility_config if isinstance(responsibility_config, dict) else {}
+            responsible_assignments = responsibility_config.get("assignments")
+            responsible_assignments = responsible_assignments if isinstance(responsible_assignments, list) else None
+            responsible_name_display_mode = str(responsibility_config.get("name_display_mode") or "display_name")
             definition_blocks = sorted(
                 (definition.configuration_json or {}).get("blocks", []),
                 key=lambda entry: (entry.get("sort_index", 0), entry.get("id", 0)),
@@ -873,7 +894,7 @@ class ProtocolService:
                 if not repeat_contexts:
                     continue
                 for repeat_context in repeat_contexts:
-                    generated_blocks.append((block, repeat_context, next_block_sort_index))
+                    generated_blocks.append((block, self._with_cycle_tokens(repeat_context, cycle_tokens), next_block_sort_index))
                     next_block_sort_index += 10
             show_when_empty = bool((definition.configuration_json or {}).get("show_when_empty", False))
             if not generated_blocks and not show_when_empty:
@@ -896,6 +917,9 @@ class ProtocolService:
                 template_element_id=template_element.id,
                 sort_index=visible_element_index * 10,
                 section_name_snapshot=section_title,
+                element_title_snapshot=element_title,
+                responsible_assignments_snapshot=responsible_assignments,
+                responsible_name_display_mode=responsible_name_display_mode,
                 section_order_snapshot=visible_element_index * 10,
                 is_required_snapshot=False,
                 is_visible_snapshot=True,
@@ -1009,13 +1033,20 @@ class ProtocolService:
                         else [
                             {
                                 "id": row.get("id"),
-                                "label": self._render_context_text(row.get("label") or row.get("title") or "Feld", repeat_context) or "Feld",
+                                "label": (
+                                    self._render_context_text(row.get("label") or "", repeat_context) or ""
+                                    if row_value_type == "list_entry"
+                                    else self._render_context_text(row.get("label") or row.get("title") or "Feld", repeat_context) or "Feld"
+                                ),
                                 "value_type": row_value_type,
                                 "sort_index": row.get("sort_index"),
                                 "text_value": self._render_context_text(row.get("template_value") or "", repeat_context) or "" if row_value_type == "text" else "",
                                 "participant_id": self._coerce_optional_int(row.get("template_participant_id")) if row_value_type == "participant" else None,
                                 "participant_ids": self._coerce_int_list(row.get("template_participant_ids")) if row_value_type == "participants" else [],
                                 "event_id": self._coerce_optional_int(row.get("template_event_id")) if row_value_type == "event" else None,
+                                "linked_list_id": self._coerce_optional_int((row.get("row_config") or {}).get("linked_list_id")) if row_value_type == "list_entry" else None,
+                                "linked_list_entry_id": self._coerce_optional_int((row.get("row_config") or {}).get("linked_list_entry_id")) if row_value_type == "list_entry" else None,
+                                "list_fixed_column": (row.get("row_config") or {}).get("list_fixed_column") if row_value_type == "list_entry" else None,
                             }
                             for row in _form_raw_rows
                             # New schema uses row_type; old schema uses value_type
@@ -1342,6 +1373,30 @@ class ProtocolService:
             db.add(refreshed_template)
             db.commit()
 
+    def _freeze_responsible_titles(self, db: Session, protocol_id: int) -> None:
+        """Called right when a protocol transitions to abgeschlossen: resolves each
+        list-linked responsible name one last time and bakes it into section_name_snapshot
+        for good, so it keeps showing what the user last saw instead of reverting to the
+        stale value from protocol-creation time."""
+        elements = db.scalars(
+            select(ProtocolElement).where(
+                ProtocolElement.protocol_id == protocol_id,
+                ProtocolElement.responsible_assignments_snapshot.is_not(None),
+            )
+        ).all()
+        changed = False
+        for element in elements:
+            if not element.element_title_snapshot:
+                continue
+            label = resolve_responsible_label(
+                db, element.responsible_assignments_snapshot, element.responsible_name_display_mode, live=True
+            )
+            element.section_name_snapshot = f"{element.element_title_snapshot} ({label})" if label else element.element_title_snapshot
+            db.add(element)
+            changed = True
+        if changed:
+            db.commit()
+
     def update_protocol(self, db: Session, protocol_id: int, payload: ProtocolUpdate):
         protocol = self.repository.get(db, protocol_id)
         if protocol is None:
@@ -1355,6 +1410,7 @@ class ProtocolService:
             return protocol
         updated = self.repository.update(db, protocol, values)
         if previous_status != "abgeschlossen" and updated.status == "abgeschlossen":
+            self._freeze_responsible_titles(db, protocol_id)
             self._maybe_auto_create_next_protocol(db, updated)
             updated = self.repository.get(db, protocol_id) or updated
         if "document_template_id" in payload.model_fields_set:

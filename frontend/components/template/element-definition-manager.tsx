@@ -335,7 +335,7 @@ function inferAllowsMultipleValues(elementTypeId: string | number) {
 }
 
 function valueTypeChoices(elementTypeId: string) {
-  const choices: Array<{ value: "text" | "participant" | "participants" | "event" | "events"; label: string }> = [
+  const choices: Array<{ value: "text" | "participant" | "participants" | "event" | "events" | "list_entry"; label: string }> = [
     { value: "text", label: "Freier Text" },
     { value: "participant", label: "Ein Teilnehmer" },
     { value: "participants", label: "Mehrere Teilnehmer" },
@@ -344,10 +344,13 @@ function valueTypeChoices(elementTypeId: string) {
   if (elementTypeId === "11") {
     choices.push({ value: "events", label: "Mehrere Termine (automatisch)" });
   }
+  if (elementTypeId === "6") {
+    choices.push({ value: "list_entry", label: "Zeile aus Liste" });
+  }
   return choices;
 }
 
-function valueTypeLabel(valueType: "text" | "participant" | "participants" | "event" | "events") {
+function valueTypeLabel(valueType: "text" | "participant" | "participants" | "event" | "events" | "list_entry") {
   switch (valueType) {
     case "participant":
       return "Ein Teilnehmer";
@@ -357,6 +360,8 @@ function valueTypeLabel(valueType: "text" | "participant" | "participants" | "ev
       return "Ein Termin";
     case "events":
       return "Mehrere Termine";
+    case "list_entry":
+      return "Zeile aus Liste";
     default:
       return "Freier Text";
   }
@@ -846,10 +851,14 @@ export function ElementDefinitionManager({
   const [matrixDesignerMode, setMatrixDesignerMode] = useState<"create" | "edit" | null>(null);
   const [selectedMatrixRowId, setSelectedMatrixRowId] = useState<string | null>(null);
   const [selectedMatrixColumnId, setSelectedMatrixColumnId] = useState<string | null>(null);
+  const [tableDesignerMode, setTableDesignerMode] = useState<"create" | "edit" | null>(null);
+  const [selectedTableRowId, setSelectedTableRowId] = useState<string | null>(null);
+  const [draggedTableRowId, setDraggedTableRowId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [draggedBlockId, setDraggedBlockId] = useState<number | null>(null);
   const [matrixPreviewColumns, setMatrixPreviewColumns] = useState<Array<{ id: string; title: string }> | null>(null);
   const [matrixPreviewLoading, setMatrixPreviewLoading] = useState(false);
+  const [listEntryOptionsByListId, setListEntryOptionsByListId] = useState<Record<number, StructuredListEntry[]>>({});
   const participantOptions = Array.isArray(availableParticipants) ? availableParticipants : [];
   const eventOptions = Array.isArray(availableEvents) ? availableEvents : [];
   const listOptions = Array.isArray(availableLists) ? availableLists : [];
@@ -886,6 +895,20 @@ export function ElementDefinitionManager({
   useEffect(() => {
     setMatrixPreviewColumns(null);
   }, [matrixSourceKey]);
+
+  // Pre-load entries for lists already referenced by "Zeile aus Liste" rows, so the
+  // entry-picker shows the currently selected entry when re-opening a saved block.
+  const referencedListEntryListIds = [...createBlockForm.table_fields, ...blockForm.table_fields]
+    .filter((field) => field.row_type === "list_entry")
+    .map((field) => Number((field.row_config as Record<string, unknown> | undefined)?.linked_list_id ?? 0))
+    .filter((id) => id > 0);
+  const referencedListEntryListIdsKey = [...new Set(referencedListEntryListIds)].sort((a, b) => a - b).join(",");
+  useEffect(() => {
+    for (const listId of referencedListEntryListIdsKey.split(",").filter(Boolean).map(Number)) {
+      void ensureListEntriesLoaded(listId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [referencedListEntryListIdsKey]);
 
   async function loadMatrixPreview() {
     if (!matrixDesignerForm) return;
@@ -933,6 +956,10 @@ export function ElementDefinitionManager({
     : {};
   const selectedMatrixColumn =
     matrixDesignerColumns.find((column) => column.id === selectedMatrixColumnId) ?? matrixDesignerColumns[0] ?? null;
+  const tableDesignerForm = tableDesignerMode === "create" ? createBlockForm : tableDesignerMode === "edit" ? blockForm : null;
+  const tableDesignerRows = tableDesignerForm?.table_fields ?? [];
+  const selectedTableRow =
+    tableDesignerRows.find((row) => row.id === selectedTableRowId) ?? tableDesignerRows[0] ?? null;
   const createLinkedList = useMemo(
     () => listOptions.find((entry) => entry.id === Number(createBlockForm.linked_list_id || 0)) ?? null,
     [createBlockForm.linked_list_id, listOptions]
@@ -950,6 +977,71 @@ export function ElementDefinitionManager({
     if (matrixDesignerMode === "edit") {
       setBlockForm(updater);
     }
+  }
+
+  async function ensureListEntriesLoaded(listId: number) {
+    if (!listId || listEntryOptionsByListId[listId]) {
+      return;
+    }
+    const entries = await browserApiFetch<StructuredListEntry[]>(`/api/lists/${listId}/entries`);
+    setListEntryOptionsByListId((current) => ({ ...current, [listId]: entries ?? [] }));
+  }
+
+  function describeListValue(value: Record<string, unknown> | null | undefined, valueType: string): string {
+    if (!value) {
+      return "";
+    }
+    if (valueType === "participant") {
+      const id = Number(value.participant_id ?? 0);
+      return participantOptions.find((participant) => participant.id === id)?.display_name ?? "";
+    }
+    if (valueType === "participants") {
+      const ids = Array.isArray(value.participant_ids) ? (value.participant_ids as unknown[]).map(Number) : [];
+      return participantOptions
+        .filter((participant) => ids.includes(participant.id))
+        .map((participant) => participant.display_name)
+        .join(", ");
+    }
+    if (valueType === "event") {
+      const id = Number(value.event_id ?? 0);
+      const eventRow = sortedAvailableEvents.find((entry) => entry.id === id);
+      return eventRow ? `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}` : "";
+    }
+    return String(value.text_value ?? "").trim();
+  }
+
+  function describeListEntry(entry: StructuredListEntry, definition: StructuredListDefinition): string {
+    const colOne = describeListValue(entry.column_one_value as Record<string, unknown>, definition.column_one_value_type);
+    const colTwo = describeListValue(entry.column_two_value as Record<string, unknown>, definition.column_two_value_type);
+    return [colOne, colTwo].filter(Boolean).join(" – ") || `Eintrag ${entry.id}`;
+  }
+
+  function tableRowPreviewValue(field: BlockFormState["table_fields"][number]): string {
+    if (field.row_type === "participant") {
+      const participant = participantOptions.find((entry) => entry.id === Number(field.template_participant_id || 0));
+      return participant?.display_name ?? "—";
+    }
+    if (field.row_type === "participants") {
+      const ids = (field.template_participant_ids ?? []).map(Number);
+      const names = participantOptions.filter((entry) => ids.includes(entry.id)).map((entry) => entry.display_name);
+      return names.length ? names.join(", ") : "—";
+    }
+    if (field.row_type === "event") {
+      const eventRow = sortedAvailableEvents.find((entry) => entry.id === Number(field.template_event_id || 0));
+      return eventRow ? `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}` : "—";
+    }
+    if (field.row_type === "list_entry") {
+      const rowConfig = (field.row_config && typeof field.row_config === "object" ? field.row_config : {}) as Record<string, unknown>;
+      const listId = Number(rowConfig.linked_list_id ?? 0);
+      const entryId = Number(rowConfig.linked_list_entry_id ?? 0);
+      const listDefinition = listOptions.find((entry) => entry.id === listId);
+      const listEntry = listId ? (listEntryOptionsByListId[listId] ?? []).find((entry) => entry.id === entryId) : undefined;
+      if (!listDefinition || !listEntry) {
+        return "Kein Eintrag gewählt";
+      }
+      return `${listDefinition.name}: ${describeListEntry(listEntry, listDefinition)}`;
+    }
+    return field.template_value?.trim() || "—";
   }
 
   function updateSelectedMatrixRowConfig(patch: Record<string, unknown>) {
@@ -1041,6 +1133,70 @@ export function ElementDefinitionManager({
 
     if (field.row_type === "events") {
       return <p className="muted">Automatische Terminzeilen arbeiten mit Filtern, nicht mit einem festen Initialwert.</p>;
+    }
+
+    if (field.row_type === "list_entry") {
+      const rowConfig = (field.row_config && typeof field.row_config === "object" ? field.row_config : {}) as Record<string, unknown>;
+      const selectedListId = Number(rowConfig.linked_list_id ?? 0) || 0;
+      const selectedListDefinition = listOptions.find((entry) => entry.id === selectedListId) ?? null;
+      const entryOptions = selectedListId ? listEntryOptionsByListId[selectedListId] ?? [] : [];
+      const fixedColumn = rowConfig.list_fixed_column === "column_two" ? "column_two" : "column_one";
+      return (
+        <div className="field-stack">
+          <label className="field-stack">
+            <span className="field-label">Verknuepfte Liste</span>
+            <select
+              value={selectedListId || ""}
+              onChange={(event) => {
+                const nextListId = event.target.value ? Number(event.target.value) : 0;
+                if (nextListId) {
+                  void ensureListEntriesLoaded(nextListId);
+                }
+                applyPatch({ row_config: { ...rowConfig, linked_list_id: nextListId || null, linked_list_entry_id: null } });
+              }}
+            >
+              <option value="">Liste wählen</option>
+              {listOptions.map((listDefinition) => (
+                <option key={`list-entry-list-${listDefinition.id}`} value={listDefinition.id}>
+                  {listDefinition.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {selectedListId ? (
+            <>
+              <label className="field-stack">
+                <span className="field-label">Listeneintrag</span>
+                <select
+                  value={Number(rowConfig.linked_list_entry_id ?? 0) || ""}
+                  onChange={(event) =>
+                    applyPatch({
+                      row_config: { ...rowConfig, linked_list_entry_id: event.target.value ? Number(event.target.value) : null },
+                    })
+                  }
+                >
+                  <option value="">Eintrag wählen</option>
+                  {entryOptions.map((entry) => (
+                    <option key={`list-entry-entry-${entry.id}`} value={entry.id}>
+                      {selectedListDefinition ? describeListEntry(entry, selectedListDefinition) : `Eintrag ${entry.id}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field-stack">
+                <span className="field-label">Fixe Spalte</span>
+                <select
+                  value={fixedColumn}
+                  onChange={(event) => applyPatch({ row_config: { ...rowConfig, list_fixed_column: event.target.value } })}
+                >
+                  <option value="column_one">{selectedListDefinition?.column_one_title || "Spalte 1"} ist fix</option>
+                  <option value="column_two">{selectedListDefinition?.column_two_title || "Spalte 2"} ist fix</option>
+                </select>
+              </label>
+            </>
+          ) : null}
+        </div>
+      );
     }
 
     return (
@@ -1206,6 +1362,86 @@ export function ElementDefinitionManager({
       }
     }
     setMatrixDesignerMode(null);
+  }
+
+  function ensureTableDesignerDefaults(mode: "create" | "edit") {
+    const current = mode === "create" ? createBlockForm : blockForm;
+    const ensuredRows = current.table_fields.length ? current.table_fields : [defaultFieldRow(nextTableFieldId(current.table_fields))];
+    if (mode === "create") {
+      setCreateBlockForm((existing) => ({
+        ...existing,
+        table_fields: existing.table_fields.length ? existing.table_fields : ensuredRows,
+      }));
+    } else {
+      setBlockForm((existing) => ({
+        ...existing,
+        table_fields: existing.table_fields.length ? existing.table_fields : ensuredRows,
+      }));
+    }
+    setSelectedTableRowId(ensuredRows[0]?.id ?? null);
+  }
+
+  function openTableDesigner(mode: "create" | "edit", rowId?: string) {
+    ensureTableDesignerDefaults(mode);
+    if (rowId) {
+      setSelectedTableRowId(rowId);
+    }
+    setTableDesignerMode(mode);
+  }
+
+  function updateTableDesignerForm(updater: (current: BlockFormState) => BlockFormState) {
+    if (tableDesignerMode === "create") {
+      setCreateBlockForm(updater);
+      return;
+    }
+    if (tableDesignerMode === "edit") {
+      setBlockForm(updater);
+    }
+  }
+
+  function addTableDesignerRow() {
+    updateTableDesignerForm((current) => {
+      const nextId = nextTableFieldId(current.table_fields);
+      setSelectedTableRowId(nextId);
+      return { ...current, table_fields: [...current.table_fields, defaultFieldRow(nextId)] };
+    });
+  }
+
+  function removeTableDesignerRow(rowId: string) {
+    updateTableDesignerForm((current) => {
+      const nextRows = current.table_fields.filter((entry) => entry.id !== rowId);
+      if (selectedTableRowId === rowId) {
+        setSelectedTableRowId(nextRows[0]?.id ?? null);
+      }
+      return { ...current, table_fields: nextRows };
+    });
+  }
+
+  function reorderTableDesignerRows(sourceId: string, targetId: string) {
+    if (sourceId === targetId) {
+      return;
+    }
+    updateTableDesignerForm((current) => {
+      const rows = [...current.table_fields];
+      const sourceIndex = rows.findIndex((entry) => entry.id === sourceId);
+      const targetIndex = rows.findIndex((entry) => entry.id === targetId);
+      if (sourceIndex === -1 || targetIndex === -1) {
+        return current;
+      }
+      const [moved] = rows.splice(sourceIndex, 1);
+      rows.splice(targetIndex, 0, moved);
+      return { ...current, table_fields: rows };
+    });
+  }
+
+  async function closeTableDesigner() {
+    if (tableDesignerMode === "edit") {
+      const saved = await persistEditedBlock("Tabelle wurde gespeichert");
+      if (!saved) {
+        return;
+      }
+    }
+    setTableDesignerMode(null);
   }
 
   async function createBlock(event: FormEvent<HTMLFormElement>) {
@@ -1561,6 +1797,9 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                   <label className="field-stack">
                     <span className="field-label">Elementtitel</span>
                     <input value={definitionForm.title} onChange={(event) => setDefinitionForm((current) => ({ ...current, title: event.target.value }))} />
+                    <span className="field-help">
+                      Verfuegbare Zyklus-Platzhalter: {"{cycle_name}"}, {"{cycle_year_start}"}, {"{cycle_year_end}"} — werden beim Erstellen des Protokolls anhand des Zyklus der Vorlage ersetzt.
+                    </span>
                   </label>
                   <label className="field-stack">
                     <span className="field-label">Beschreibung</span>
@@ -1691,6 +1930,9 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 <label className="field-stack">
                   <span className="field-label">Elementtitel</span>
                   <input value={createDefinitionForm.title} onChange={(event) => setCreateDefinitionForm((current) => ({ ...current, title: event.target.value }))} placeholder="z. B. Zusammenarbeit mit Blauring" required />
+                  <span className="field-help">
+                    Verfuegbare Zyklus-Platzhalter: {"{cycle_name}"}, {"{cycle_year_start}"}, {"{cycle_year_end}"} — werden beim Erstellen des Protokolls anhand des Zyklus der Vorlage ersetzt.
+                  </span>
                 </label>
                 <label className="field-stack">
                   <span className="field-label">Beschreibung</span>
@@ -1727,6 +1969,9 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 placeholder="Wird für statische Texte als fixer Inhalt und sonst als Startinhalt genutzt"
               />
               <span className="field-help">Für statische Textblöcke ist dies der feste Inhalt, für normale Textblöcke der Startwert.</span>
+              <span className="field-help">
+                Verfuegbare Zyklus-Platzhalter: {"{cycle_name}"}, {"{cycle_year_start}"}, {"{cycle_year_end}"} — werden beim Erstellen des Protokolls anhand des Zyklus der Vorlage ersetzt.
+              </span>
             </label>
           </SettingsSection>
           <SettingsSection
@@ -1970,20 +2215,8 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
               }
               actions={
                 createBlockForm.linked_list_id ? null : (
-                  <button
-                    type="button"
-                    className="button-inline"
-                    onClick={() =>
-                      setCreateBlockForm((current) => ({
-                        ...current,
-                        table_fields: [
-                          ...current.table_fields,
-                          defaultFieldRow(nextTableFieldId(current.table_fields)),
-                        ],
-                      }))
-                    }
-                  >
-                    Zeile hinzufügen
+                  <button type="button" className="button-inline" onClick={() => openTableDesigner("create")}>
+                    Tabelle konfigurieren
                   </button>
                 )
               }
@@ -2149,74 +2382,25 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                     <input value={createBlockForm.value_column_heading} onChange={(event) => setCreateBlockForm((current) => ({ ...current, value_column_heading: event.target.value }))} placeholder="Leer lassen fuer keine Ueberschrift" />
                   </label>
                 </div>
-              {(createBlockForm.table_fields.length ? createBlockForm.table_fields : [defaultFieldRow("1")]).map((field, index) => (
-                <div className="grid" key={`create-table-field-${field.id}`}>
-                <div className="four-col">
-                  <label className="field-stack">
-                    <span className="field-label">Zeilenlabel</span>
-                    <input
-                      value={field.label}
-                      onChange={(event) =>
-                        setCreateBlockForm((current) => ({
-                          ...current,
-                          table_fields: (current.table_fields.length ? current.table_fields : [defaultFieldRow("1")]).map((entry, entryIndex) =>
-                            entryIndex === index ? { ...entry, label: event.target.value } : entry
-                          ),
-                        }))
-                      }
-                      placeholder="z. B. Verantwortlich"
-                    />
-                  </label>
-                  <label className="field-stack">
-                    <span className="field-label">Datentyp</span>
-                    <select
-                      value={field.row_type}
-                      onChange={(event) =>
-                        setCreateBlockForm((current) => ({
-                          ...current,
-                          table_fields: (current.table_fields.length ? current.table_fields : [defaultFieldRow("1")]).map((entry, entryIndex) =>
-                            entryIndex === index
-                              ? {
-                                  ...entry,
-                                  row_type: event.target.value,
-                                }
-                              : entry
-                          ),
-                        }))
-                      }
-                    >
-                      {valueTypeChoices("6").map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                        ))}
-                    </select>
-                  </label>
-                  {renderTypedInitialValueEditor(field, (patch) =>
-                    setCreateBlockForm((current) => ({
-                      ...current,
-                      table_fields: (current.table_fields.length ? current.table_fields : [defaultFieldRow("1")]).map((entry, entryIndex) =>
-                        entryIndex === index ? { ...entry, ...patch } : entry
-                      ),
-                    }))
-                  )}
-                  <div className="table-toolbar-actions align-end">
-                    <button
-                      type="button"
-                      className="button-inline button-danger"
-                      onClick={() =>
-                        setCreateBlockForm((current) => ({
-                          ...current,
-                          table_fields: current.table_fields.filter((entry) => entry.id !== field.id),
-                        }))
-                      }
-                    >
-                      Entfernen
-                    </button>
-                  </div>
-                </div>
-                </div>
-              ))}
+                {createBlockForm.table_fields.length ? (
+                  <DataTable columns={[createBlockForm.left_column_heading || "Zeile", createBlockForm.value_column_heading || "Wert"]}>
+                    {createBlockForm.table_fields.map((field, index) => (
+                      <tr
+                        key={`create-table-row-preview-${field.id}`}
+                        className="table-row-clickable"
+                        onClick={() => openTableDesigner("create", field.id)}
+                      >
+                        <td>
+                          <strong>{field.label || `Zeile ${index + 1}`}</strong>
+                          <div className="muted">{valueTypeLabel(field.row_type as any)}</div>
+                        </td>
+                        <td>{tableRowPreviewValue(field)}</td>
+                      </tr>
+                    ))}
+                  </DataTable>
+                ) : (
+                  <p className="muted">Noch keine Zeilen angelegt. Oeffne den Designer und fuege die erste Zeile hinzu.</p>
+                )}
                 </>
               )}
             </SettingsSection>
@@ -2339,6 +2523,9 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                   value={blockForm.default_content}
                   onChange={(md) => setBlockForm((current) => ({ ...current, default_content: md }))}
                 />
+                <span className="field-help">
+                  Verfuegbare Zyklus-Platzhalter: {"{cycle_name}"}, {"{cycle_year_start}"}, {"{cycle_year_end}"} — werden beim Erstellen des Protokolls anhand des Zyklus der Vorlage ersetzt.
+                </span>
               </label>
             </SettingsSection>
             <SettingsSection
@@ -2582,20 +2769,8 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 }
                 actions={
                   blockForm.linked_list_id ? null : (
-                    <button
-                      type="button"
-                      className="button-inline"
-                      onClick={() =>
-                        setBlockForm((current) => ({
-                          ...current,
-                          table_fields: [
-                            ...current.table_fields,
-                            defaultFieldRow(nextTableFieldId(current.table_fields)),
-                          ],
-                        }))
-                      }
-                    >
-                      Zeile hinzufügen
+                    <button type="button" className="button-inline" onClick={() => openTableDesigner("edit")}>
+                      Tabelle konfigurieren
                     </button>
                   )
                 }
@@ -2769,74 +2944,25 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                         />
                       </label>
                     </div>
-                {blockForm.table_fields.map((field, index) => (
-                <div className="grid" key={`edit-table-field-${field.id}`}>
-                <div className="four-col">
-                  <label className="field-stack">
-                    <span className="field-label">Zeilenlabel</span>
-                      <input
-                        value={field.label}
-                        onChange={(event) =>
-                          setBlockForm((current) => ({
-                            ...current,
-                            table_fields: current.table_fields.map((entry, entryIndex) =>
-                              entryIndex === index ? { ...entry, label: event.target.value } : entry
-                            ),
-                          }))
-                        }
-                        placeholder="z. B. Verantwortlich"
-                      />
-                    </label>
-                    <label className="field-stack">
-                      <span className="field-label">Datentyp</span>
-                      <select
-                        value={field.row_type}
-                        onChange={(event) =>
-                          setBlockForm((current) => ({
-                            ...current,
-                            table_fields: current.table_fields.map((entry, entryIndex) =>
-                              entryIndex === index
-                                ? {
-                                    ...entry,
-                                    row_type: event.target.value,
-                                  }
-                                : entry
-                            ),
-                          }))
-                        }
+                {blockForm.table_fields.length ? (
+                  <DataTable columns={[blockForm.left_column_heading || "Zeile", blockForm.value_column_heading || "Wert"]}>
+                    {blockForm.table_fields.map((field, index) => (
+                      <tr
+                        key={`edit-table-row-preview-${field.id}`}
+                        className="table-row-clickable"
+                        onClick={() => openTableDesigner("edit", field.id)}
                       >
-                        {valueTypeChoices("6").map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                    </select>
-                  </label>
-                  {renderTypedInitialValueEditor(field, (patch) =>
-                    setBlockForm((current) => ({
-                      ...current,
-                      table_fields: current.table_fields.map((entry, entryIndex) =>
-                        entryIndex === index ? { ...entry, ...patch } : entry
-                      ),
-                    }))
-                  )}
-                  <div className="table-toolbar-actions align-end">
-                      <button
-                        type="button"
-                        className="button-inline button-danger"
-                        onClick={() =>
-                          setBlockForm((current) => ({
-                            ...current,
-                            table_fields: current.table_fields.filter((entry) => entry.id !== field.id),
-                          }))
-                        }
-                      >
-                      Entfernen
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                ))}
+                        <td>
+                          <strong>{field.label || `Zeile ${index + 1}`}</strong>
+                          <div className="muted">{valueTypeLabel(field.row_type as any)}</div>
+                        </td>
+                        <td>{tableRowPreviewValue(field)}</td>
+                      </tr>
+                    ))}
+                  </DataTable>
+                ) : (
+                  <p className="muted">Noch keine Zeilen angelegt. Oeffne den Designer und fuege die erste Zeile hinzu.</p>
+                )}
                   </>
                 )}
               </SettingsSection>
@@ -3486,6 +3612,122 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                     </label>
                   </div>
                 ) : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={tableDesignerMode !== null && !!tableDesignerForm}
+        onClose={() => {
+          void closeTableDesigner();
+        }}
+        title="Tabelle konfigurieren"
+        description="Verwalte die Zeilen dieser Tabelle. Klick auf eine Zeile, um Alias, Datentyp und Inhalt zu setzen."
+        size="fullscreen"
+      >
+        {tableDesignerForm ? (
+          <div className="matrix-designer-layout">
+            <div className="matrix-designer-strip">
+              <div className="matrix-designer-strip-left" />
+              <div className="matrix-designer-strip-actions">
+                <button type="button" className="button-inline" onClick={addTableDesignerRow}>
+                  + Zeile
+                </button>
+              </div>
+            </div>
+            <div className="table-designer-body">
+              <div className="matrix-designer-grid-scroll">
+                <div className="table-designer-row-list">
+                  {tableDesignerRows.map((row, index) => (
+                    <button
+                      key={`table-row-${row.id}`}
+                      type="button"
+                      draggable
+                      className={`matrix-designer-row-button${selectedTableRow?.id === row.id ? " matrix-designer-row-button-active" : ""}`}
+                      onClick={() => setSelectedTableRowId(row.id)}
+                      onDragStart={() => setDraggedTableRowId(row.id)}
+                      onDragEnd={() => setDraggedTableRowId(null)}
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        const sourceId = draggedTableRowId;
+                        setDraggedTableRowId(null);
+                        if (sourceId) {
+                          reorderTableDesignerRows(sourceId, row.id);
+                        }
+                      }}
+                    >
+                      <strong>{row.label || `Zeile ${index + 1}`}</strong>
+                      <span className="muted">{valueTypeLabel(row.row_type as any)}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="matrix-designer-panel">
+                {selectedTableRow ? (
+                  <div className="matrix-designer-panel-section">
+                    <div className="matrix-designer-panel-header">
+                      <div>
+                        <div className="eyebrow">Zeile</div>
+                        <strong>{selectedTableRow.label || "Neue Zeile"}</strong>
+                      </div>
+                      <button
+                        type="button"
+                        className="button-inline button-danger"
+                        onClick={() => removeTableDesignerRow(selectedTableRow.id)}
+                      >
+                        Entfernen
+                      </button>
+                    </div>
+                    <label className="field-stack">
+                      <span className="field-label">{selectedTableRow.row_type === "list_entry" ? "Alias (optional)" : "Zeilenlabel"}</span>
+                      <input
+                        value={selectedTableRow.label}
+                        onChange={(event) =>
+                          updateTableDesignerForm((current) => ({
+                            ...current,
+                            table_fields: current.table_fields.map((entry) =>
+                              entry.id === selectedTableRow.id ? { ...entry, label: event.target.value } : entry
+                            ),
+                          }))
+                        }
+                        placeholder={selectedTableRow.row_type === "list_entry" ? "Leer lassen für Listenwert" : "z. B. Verantwortlich"}
+                      />
+                    </label>
+                    <label className="field-stack">
+                      <span className="field-label">Datentyp</span>
+                      <select
+                        value={selectedTableRow.row_type}
+                        onChange={(event) =>
+                          updateTableDesignerForm((current) => ({
+                            ...current,
+                            table_fields: current.table_fields.map((entry) =>
+                              entry.id === selectedTableRow.id ? { ...entry, row_type: event.target.value } : entry
+                            ),
+                          }))
+                        }
+                      >
+                        {valueTypeChoices("6").map((option) => (
+                          <option key={`table-designer-row-type-${option.value}`} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    {renderTypedInitialValueEditor(selectedTableRow, (patch) =>
+                      updateTableDesignerForm((current) => ({
+                        ...current,
+                        table_fields: current.table_fields.map((entry) =>
+                          entry.id === selectedTableRow.id ? { ...entry, ...patch } : entry
+                        ),
+                      }))
+                    )}
+                  </div>
+                ) : (
+                  <p className="muted">Noch keine Zeile ausgewählt.</p>
+                )}
               </div>
             </div>
           </div>

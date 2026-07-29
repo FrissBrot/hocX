@@ -16,6 +16,7 @@ from app.core.config import settings
 from app.models import AttendanceFine, DocumentTemplate, ElementType, Event, FinanceAccount, FinanceTransaction, ListDefinition, ListEntry, Participant, Protocol as ProtocolModel, ProtocolElement, ProtocolExportCache, StoredFile, Tenant
 from app.repositories.export_repository import ExportRepository
 from app.services.event_cycle_service import list_cycle_event_ids, resolve_protocol_cycle
+from app.services.responsible_label_service import resolve_display_section_title
 from app.schemas.protocol import ProtocolExportRead
 
 
@@ -605,14 +606,16 @@ Status: {protocol_status}
         parts: list[str] = []
         image_export_dir = export_dir / "images"
         image_export_dir.mkdir(parents=True, exist_ok=True)
+        protocol_status = db.scalar(select(ProtocolModel.status).where(ProtocolModel.id == protocol_id)) or ""
 
         for element in self.repository.list_protocol_elements(db, protocol_id):
             if not element.export_visible_snapshot:
                 continue
-            if self._trim_section_name(element.section_name_snapshot or "").lower() == "sitzungsnotizen":
+            display_section_name = resolve_display_section_title(db, element, protocol_status)
+            if self._trim_section_name(display_section_name or "").lower() == "sitzungsnotizen":
                 continue
 
-            section_header = f"\\section{{{self._escape_latex(element.section_name_snapshot)}}}"
+            section_header = f"\\section{{{self._escape_latex(display_section_name)}}}"
             visible_blocks = [
                 b for b in self.repository.list_protocol_element_blocks(db, element.id)
                 if b.export_visible_snapshot
@@ -635,7 +638,7 @@ Status: {protocol_status}
                 parts.append(section_header)
 
             # Dynamic session todos: todos tagged with the (trimmed, lowercased) section name.
-            section_tag = self._trim_section_name(element.section_name_snapshot or "").lower()
+            section_tag = self._trim_section_name(display_section_name or "").lower()
             if section_tag and section_tag != "sitzungsnotizen":
                 session_todos = self.repository.list_todos_by_tag(db, protocol_id, section_tag)
                 if session_todos:
@@ -731,8 +734,13 @@ Status: {protocol_status}
             if left_heading_raw or value_heading_raw:
                 parts.append(f"\\textbf{{{left_heading}}} & \\textbf{{{value_heading}}} \\\\")
             for row in rows:
-                label = str(row.get("label") or "Feld").strip()
-                value = self._form_row_value(db, row)
+                row_type = row.get("value_type") or row.get("row_type") or "text"
+                if row_type == "list_entry":
+                    label, value = self._form_row_list_entry_label_and_value(db, row)
+                    label = label or "Feld"
+                else:
+                    label = str(row.get("label") or "Feld").strip()
+                    value = self._form_row_value(db, row)
                 if not str(value).strip():
                     continue
                 parts.append(f"{self._escape_latex(label)} & {self._escape_latex(value)} \\\\")
@@ -1210,6 +1218,24 @@ Status: {protocol_status}
             return f"{date_part} - {event.title}"
         return str(row.get("text_value") or "").strip()
 
+    def _form_row_list_entry_label_and_value(self, db: Session, row: dict) -> tuple[str, str]:
+        list_id = row.get("linked_list_id")
+        entry_id = row.get("linked_list_entry_id")
+        if not list_id or not entry_id:
+            return str(row.get("label") or "").strip(), ""
+        definition = db.get(ListDefinition, int(list_id))
+        entry = db.get(ListEntry, int(entry_id))
+        if definition is None or entry is None:
+            return str(row.get("label") or "").strip() or "(verknuepfter Listeneintrag wurde geloescht)", ""
+        fixed_column = "column_two" if row.get("list_fixed_column") == "column_two" else "column_one"
+        variable_column = "column_two" if fixed_column == "column_one" else "column_one"
+        fixed_title, fixed_value_type = self._linked_list_column_meta(definition, fixed_column)
+        variable_title, variable_value_type = self._linked_list_column_meta(definition, variable_column)
+        alias = str(row.get("label") or "").strip()
+        label = alias or self._linked_list_value(db, value_type=fixed_value_type, value=self._linked_list_entry_value(entry, fixed_column))
+        value = self._linked_list_value(db, value_type=variable_value_type, value=self._linked_list_entry_value(entry, variable_column))
+        return label, value
+
     def _linked_list_value(self, db: Session, *, value_type: str, value: dict) -> str:
         return self._form_row_value(db, {"value_type": value_type, **(value or {})})
 
@@ -1601,10 +1627,16 @@ Status: {protocol_status}
             for row in rows:
                 if not isinstance(row, dict):
                     continue
-                value = self._form_row_value(db, row)
+                row_type = row.get("value_type") or row.get("row_type") or "text"
+                if row_type == "list_entry":
+                    row_label, value = self._form_row_list_entry_label_and_value(db, row)
+                    row_label = row_label or "Feld"
+                else:
+                    row_label = str(row.get("label") or "Feld").strip()
+                    value = self._form_row_value(db, row)
                 if not str(value).strip():
                     continue
-                label = self._escape_latex(str(row.get("label") or "Feld").strip())
+                label = self._escape_latex(row_label)
                 parts.append(f"{label} & {self._escape_latex(value)} \\\\")
                 rendered_row_count += 1
             if rendered_row_count == 0:

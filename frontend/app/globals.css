@@ -609,6 +609,9 @@ pre {
 .grid input,
 .grid textarea,
 .grid select,
+.matrix-designer-panel-section input,
+.matrix-designer-panel-section textarea,
+.matrix-designer-panel-section select,
 button {
   width: 100%;
   min-height: 48px;
@@ -630,7 +633,8 @@ input[type="number"] {
 }
 
 .grid select,
-.block select {
+.block select,
+.matrix-designer-panel-section select {
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
@@ -646,7 +650,8 @@ input[type="number"] {
 }
 
 .grid textarea,
-.block textarea {
+.block textarea,
+.matrix-designer-panel-section textarea {
   min-height: 120px;
   resize: vertical;
 }
@@ -655,7 +660,10 @@ input[type="number"] {
 .grid textarea:focus,
 .grid select:focus,
 .block input:focus,
-.block textarea:focus {
+.block textarea:focus,
+.matrix-designer-panel-section input:focus,
+.matrix-designer-panel-section textarea:focus,
+.matrix-designer-panel-section select:focus {
   outline: none;
   border-color: color-mix(in srgb, var(--accent) 42%, transparent 58%);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent 88%);
@@ -4088,6 +4096,20 @@ input[type="radio"] {
 .matrix-designer-grid-scroll {
   overflow: auto;
   min-height: 0;
+}
+
+.table-designer-body {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 12px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.table-designer-row-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .matrix-designer-panel {

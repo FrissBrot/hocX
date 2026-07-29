@@ -18,6 +18,7 @@ from app.services.autosave_service import AutosaveService
 from app.services.access_service import AccessService
 from app.services.protocol_element_service import ProtocolElementService
 from app.services.protocol_service import ProtocolService
+from app.services.responsible_label_service import resolve_display_section_title
 
 router = APIRouter()
 autosave_service = AutosaveService()
@@ -82,12 +83,13 @@ def patch_protocol_element(
         raise HTTPException(status_code=400, detail="Protocol element could not be updated") from exc
     if protocol_element is None:
         raise HTTPException(status_code=404, detail="Protocol element not found")
+    protocol = protocol_service.get_protocol(db, protocol_element.protocol_id)
     return ProtocolElementRead(
         id=protocol_element.id,
         protocol_id=protocol_element.protocol_id,
         template_element_id=protocol_element.template_element_id,
         sort_index=protocol_element.sort_index,
-        section_name_snapshot=protocol_element.section_name_snapshot,
+        section_name_snapshot=resolve_display_section_title(db, protocol_element, protocol.status if protocol else ""),
         section_order_snapshot=protocol_element.section_order_snapshot,
         is_required_snapshot=protocol_element.is_required_snapshot,
         is_visible_snapshot=protocol_element.is_visible_snapshot,

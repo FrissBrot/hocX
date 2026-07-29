@@ -2970,7 +2970,7 @@ function FocusedElementEditor({
     ? getCycleYear(protocol.protocol_date, focusedTemplate.cycle_config.reset_month, focusedTemplate.cycle_config.reset_day)
     : null;
   const [multiParticipantPicker, setMultiParticipantPicker] = useState<{
-    kind: "form" | "matrix" | "embedded_form" | "event_field";
+    kind: "form" | "matrix" | "embedded_form" | "event_field" | "list_entry";
     blockId: number;
     rowId: string;
     rowLabel: string;
@@ -2980,8 +2980,12 @@ function FocusedElementEditor({
     singleSelect?: boolean;
     eventId?: number;
     eventFieldName?: string;
+    listDefinitionId?: number;
+    listEntryId?: number;
+    listColumnKey?: "column_one_value" | "column_two_value";
   } | null>(null);
   const [eventFieldDrafts, setEventFieldDrafts] = useState<Record<string, string>>({});
+  const [listEntryDrafts, setListEntryDrafts] = useState<Record<string, string>>({});
   const [multiParticipantSearch, setMultiParticipantSearch] = useState("");
   const multiParticipantSearchRef = useRef<HTMLInputElement | null>(null);
   const pickerTriggerRef = useRef<HTMLElement | null>(null);
@@ -3151,9 +3155,32 @@ function FocusedElementEditor({
     return p?.display_name ?? "Teilnehmer waehlen";
   }
 
+  function formatListEntryColumnValue(value: Record<string, any> | null | undefined, valueType: string): string {
+    if (!value) return "";
+    if (valueType === "participant") {
+      const id = Number(value.participant_id ?? 0);
+      return availableParticipants.find((p) => p.id === id)?.display_name ?? "";
+    }
+    if (valueType === "participants") {
+      const ids = Array.isArray(value.participant_ids) ? value.participant_ids.map(Number) : [];
+      return availableParticipants.filter((p) => ids.includes(p.id)).map((p) => p.display_name).join(", ");
+    }
+    if (valueType === "event") {
+      const id = Number(value.event_id ?? 0);
+      const eventRow = availableEvents.find((e) => e.id === id);
+      return eventRow ? `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}` : "";
+    }
+    return String(value.text_value ?? "").trim();
+  }
+
   function selectSingleParticipant(participantId: number) {
     if (!multiParticipantPicker?.singleSelect) return;
-    const { blockId, kind, rowId, columnId } = multiParticipantPicker;
+    const { blockId, kind, rowId, columnId, listDefinitionId, listEntryId, listColumnKey } = multiParticipantPicker;
+    if (kind === "list_entry" && listDefinitionId && listEntryId && listColumnKey) {
+      void updateListEntryFromBlock(blockId, listDefinitionId, listEntryId, { [listColumnKey]: { participant_id: participantId } });
+      closeParticipantPicker();
+      return;
+    }
     const currentBlock = element.blocks.find((b) => b.id === blockId);
     if (!currentBlock) return;
     const config = asObject(currentBlock.configuration_snapshot_json);
@@ -3220,6 +3247,13 @@ function FocusedElementEditor({
       void updateEventFromBlock(currentBlockId, multiParticipantPicker.eventId, {
         [multiParticipantPicker.eventFieldName]: multiParticipantPicker.selectedIds,
       } as Partial<EventSummary>);
+      closeParticipantPicker();
+      return;
+    }
+    if (multiParticipantPicker.kind === "list_entry" && multiParticipantPicker.listDefinitionId && multiParticipantPicker.listEntryId && multiParticipantPicker.listColumnKey) {
+      void updateListEntryFromBlock(currentBlockId, multiParticipantPicker.listDefinitionId, multiParticipantPicker.listEntryId, {
+        [multiParticipantPicker.listColumnKey]: { participant_ids: [...multiParticipantPicker.selectedIds] },
+      });
       closeParticipantPicker();
       return;
     }
@@ -4507,6 +4541,124 @@ function FocusedElementEditor({
                       <div className="form-block-list" data-form-block-id={block.id}>
                         {((Array.isArray(blockConfig.rows) ? blockConfig.rows : []) as Array<Record<string, any>>).map((row, index) => {
                           const rowType = String(row.value_type ?? row.row_type ?? "text");
+                          if (rowType === "list_entry") {
+                            const linkedListId = Number(row.linked_list_id ?? 0);
+                            const linkedListEntryId = Number(row.linked_list_entry_id ?? 0);
+                            const listDefinition = listDefinitionsById.get(linkedListId);
+                            const listEntry = (listEntriesByDefinition[linkedListId] ?? []).find((entry) => entry.id === linkedListEntryId);
+                            if (!listDefinition || !listEntry) {
+                              return (
+                                <div className="form-block-row" key={`${block.id}-form-${index}`}>
+                                  <div className="field-label-inline muted">Verknüpfter Listeneintrag wurde gelöscht</div>
+                                  <div />
+                                </div>
+                              );
+                            }
+                            const fixedColumn: "column_one" | "column_two" = row.list_fixed_column === "column_two" ? "column_two" : "column_one";
+                            const variableColumn: "column_one" | "column_two" = fixedColumn === "column_one" ? "column_two" : "column_one";
+                            const fixedValueType = fixedColumn === "column_two" ? listDefinition.column_two_value_type : listDefinition.column_one_value_type;
+                            const variableValueType = variableColumn === "column_two" ? listDefinition.column_two_value_type : listDefinition.column_one_value_type;
+                            const fixedRawValue = (fixedColumn === "column_two" ? listEntry.column_two_value : listEntry.column_one_value) as Record<string, any>;
+                            const variableRawValue = (variableColumn === "column_two" ? listEntry.column_two_value : listEntry.column_one_value) as Record<string, any>;
+                            const variableColumnKey: "column_one_value" | "column_two_value" = variableColumn === "column_two" ? "column_two_value" : "column_one_value";
+                            const aliasOrFixedValue = String(row.label ?? "").trim() || formatListEntryColumnValue(fixedRawValue, fixedValueType);
+                            const draftKey = `${block.id}-listentry-${row.id ?? index}`;
+                            return (
+                              <div className="form-block-row" key={`${block.id}-form-${index}`}>
+                                <div className="field-label-inline">{aliasOrFixedValue}</div>
+                                {variableValueType === "participant" ? (
+                                  <button
+                                    type="button"
+                                    data-form-input
+                                    className="button-ghost form-participant-picker-button"
+                                    disabled={!blockEditable}
+                                    onKeyDown={handleFormInputKeyDown}
+                                    onClick={(e) => {
+                                      pickerTriggerRef.current = e.currentTarget;
+                                      setMultiParticipantSearch("");
+                                      setMultiParticipantPicker({
+                                        kind: "list_entry",
+                                        blockId: block.id,
+                                        rowId: String(row.id ?? index),
+                                        rowLabel: aliasOrFixedValue || "Wert",
+                                        selectedIds: variableRawValue?.participant_id ? [Number(variableRawValue.participant_id)] : [],
+                                        singleSelect: true,
+                                        listDefinitionId: linkedListId,
+                                        listEntryId: linkedListEntryId,
+                                        listColumnKey: variableColumnKey,
+                                      });
+                                    }}
+                                  >
+                                    {formatListEntryColumnValue(variableRawValue, "participant") || "Teilnehmer wählen"}
+                                  </button>
+                                ) : variableValueType === "participants" ? (
+                                  <button
+                                    type="button"
+                                    data-form-input
+                                    className="button-ghost form-participant-picker-button"
+                                    disabled={!blockEditable}
+                                    onKeyDown={handleFormInputKeyDown}
+                                    onClick={() => {
+                                      pickerTriggerRef.current = document.activeElement as HTMLElement;
+                                      setMultiParticipantSearch("");
+                                      setMultiParticipantPicker({
+                                        kind: "list_entry",
+                                        blockId: block.id,
+                                        rowId: String(row.id ?? index),
+                                        rowLabel: aliasOrFixedValue || "Wert",
+                                        selectedIds: Array.isArray(variableRawValue?.participant_ids) ? variableRawValue.participant_ids.map(Number) : [],
+                                        listDefinitionId: linkedListId,
+                                        listEntryId: linkedListEntryId,
+                                        listColumnKey: variableColumnKey,
+                                      });
+                                    }}
+                                  >
+                                    {formatListEntryColumnValue(variableRawValue, "participants") || "Teilnehmer wählen"}
+                                  </button>
+                                ) : variableValueType === "event" ? (
+                                  <select
+                                    data-form-input
+                                    value={variableRawValue?.event_id ?? ""}
+                                    disabled={!blockEditable}
+                                    onKeyDown={handleFormInputKeyDown}
+                                    onChange={(event) => {
+                                      void updateListEntryFromBlock(block.id, linkedListId, linkedListEntryId, {
+                                        [variableColumnKey]: { event_id: event.target.value ? Number(event.target.value) : null },
+                                      });
+                                    }}
+                                  >
+                                    <option value="">Termin wählen</option>
+                                    {[...availableEvents].sort((left, right) => compareIsoDate(left.event_date, right.event_date)).map((eventRow) => (
+                                      <option key={eventRow.id} value={eventRow.id}>
+                                        {formatDateRange(eventRow.event_date, eventRow.event_end_date)} · {eventRow.title}
+                                      </option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <textarea
+                                    rows={1}
+                                    data-form-input
+                                    className="todo-input"
+                                    disabled={!blockEditable}
+                                    value={listEntryDrafts[draftKey] ?? String(variableRawValue?.text_value ?? "")}
+                                    onInput={(event) => autoResizeTodoField(event.currentTarget)}
+                                    onKeyDown={handleFormInputKeyDown}
+                                    onChange={(event) => setListEntryDrafts((current) => ({ ...current, [draftKey]: event.target.value }))}
+                                    onBlur={(event) => {
+                                      setListEntryDrafts((current) => {
+                                        const next = { ...current };
+                                        delete next[draftKey];
+                                        return next;
+                                      });
+                                      void updateListEntryFromBlock(block.id, linkedListId, linkedListEntryId, {
+                                        [variableColumnKey]: { text_value: event.target.value },
+                                      });
+                                    }}
+                                  />
+                                )}
+                              </div>
+                            );
+                          }
                           return (
                           <div className="form-block-row" key={`${block.id}-form-${index}`}>
                             <div className="field-label-inline">{row.label ?? `Feld ${index + 1}`}</div>
