@@ -545,6 +545,9 @@ class ProtocolElement(Base, TimestampMixin):
     is_required_snapshot: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
     is_visible_snapshot: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
     export_visible_snapshot: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
+    element_title_snapshot: Mapped[str | None] = mapped_column(Text)
+    responsible_assignments_snapshot: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
+    responsible_name_display_mode: Mapped[str | None] = mapped_column(Text)
 
 
 class ProtocolElementBlock(Base, TimestampMixin):

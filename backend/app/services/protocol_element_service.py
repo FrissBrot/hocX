@@ -14,6 +14,7 @@ from app.schemas.protocol import (
     ProtocolElementRead,
     ProtocolElementUpdate,
 )
+from app.services.responsible_label_service import resolve_display_section_title
 
 
 class ProtocolElementService:
@@ -26,6 +27,7 @@ class ProtocolElementService:
         self.block_repository = block_repository or ProtocolElementBlockRepository()
 
     def list_protocol_elements(self, db: Session, protocol_id: int) -> list[ProtocolElementRead]:
+        protocol_status = db.scalar(select(Protocol.status).where(Protocol.id == protocol_id))
         element_rows = self.repository.list_for_protocol(db, protocol_id)
         elements = [row[0] for row in element_rows]
         show_when_empty_by_id = {row[0].id: row[1] for row in element_rows}
@@ -83,7 +85,7 @@ class ProtocolElementService:
                 protocol_id=element.protocol_id,
                 template_element_id=element.template_element_id,
                 sort_index=element.sort_index,
-                section_name_snapshot=element.section_name_snapshot,
+                section_name_snapshot=resolve_display_section_title(db, element, protocol_status or ""),
                 section_order_snapshot=element.section_order_snapshot,
                 is_required_snapshot=element.is_required_snapshot,
                 is_visible_snapshot=element.is_visible_snapshot,
