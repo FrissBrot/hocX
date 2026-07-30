@@ -4,7 +4,10 @@ import { useState } from "react";
 import { DateInput } from "@/components/ui/date-input";
 import { FinanceAccount, FinanceTransaction } from "@/types/api";
 import { browserApiFetch } from "@/lib/api/client";
+import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { formatDate } from "@/lib/utils/format";
+
+const PAGE_SIZE = 50;
 
 type Props = { initialAccounts: FinanceAccount[] };
 
@@ -13,6 +16,8 @@ export function FinancesView({ initialAccounts }: Props) {
   const [selected, setSelected] = useState<FinanceAccount | null>(null);
   const [transactions, setTransactions] = useState<FinanceTransaction[]>([]);
   const [loadingTx, setLoadingTx] = useState(false);
+  const [hasMoreTx, setHasMoreTx] = useState(false);
+  const [isLoadingMoreTx, setIsLoadingMoreTx] = useState(false);
 
   // Account form
   const [showAccountForm, setShowAccountForm] = useState(false);
@@ -28,30 +33,53 @@ export function FinancesView({ initialAccounts }: Props) {
 
   async function openAccount(account: FinanceAccount) {
     setSelected(account);
-    setLoadingTx(true);
-    setTransactions([]);
     setShowTxForm(false);
     setEditingTx(null);
+    await reloadFirstPage(account.id);
+  }
+
+  async function reloadFirstPage(accountId: number) {
+    setLoadingTx(true);
     try {
-      const data = await browserApiFetch<FinanceTransaction[]>(`/api/finance/accounts/${account.id}/transactions`);
+      const data = await browserApiFetch<FinanceTransaction[]>(
+        `/api/finance/accounts/${accountId}/transactions?limit=${PAGE_SIZE}`
+      );
       setTransactions(data ?? []);
+      setHasMoreTx((data ?? []).length === PAGE_SIZE);
     } finally {
       setLoadingTx(false);
     }
   }
 
-  function refreshAccountBalance(accountId: number, txList: FinanceTransaction[]) {
-    const balance = txList.reduce((sum, t) => sum + t.amount, 0);
-    setAccounts((prev) =>
-      prev.map((a) =>
-        a.id === accountId
-          ? { ...a, balance, transaction_count: txList.length }
-          : a
-      )
-    );
-    if (selected?.id === accountId) {
-      setSelected((prev) => prev ? { ...prev, balance, transaction_count: txList.length } : prev);
+  async function loadMoreTx() {
+    if (!selected) return;
+    setIsLoadingMoreTx(true);
+    try {
+      const next = await browserApiFetch<FinanceTransaction[]>(
+        `/api/finance/accounts/${selected.id}/transactions?skip=${transactions.length}&limit=${PAGE_SIZE}`
+      );
+      setTransactions((current) => [...current, ...next]);
+      setHasMoreTx(next.length === PAGE_SIZE);
+    } finally {
+      setIsLoadingMoreTx(false);
     }
+  }
+
+  const loadMoreTxSentinelRef = useInfiniteScroll({
+    hasMore: hasMoreTx,
+    isLoading: isLoadingMoreTx,
+    onLoadMore: () => void loadMoreTx(),
+  });
+
+  // The account's balance/transaction_count are only authoritative from the backend's
+  // aggregate query (list_accounts) — refetch it instead of resumming the currently
+  // loaded transaction page, which since pagination only ever holds a partial view.
+  async function refreshAccounts(accountId: number) {
+    const data = await browserApiFetch<FinanceAccount[]>("/api/finance/accounts");
+    if (!data) return;
+    setAccounts(data);
+    const updated = data.find((a) => a.id === accountId);
+    if (updated) setSelected(updated);
   }
 
   // ── Account CRUD ────────────────────────────────────────────────────────────
@@ -123,22 +151,20 @@ export function FinancesView({ initialAccounts }: Props) {
     if (isNaN(amount)) return;
     setSavingTx(true);
     try {
-      let updated: FinanceTransaction[] = transactions;
       if (editingTx) {
-        const result = await browserApiFetch<FinanceTransaction>(`/api/finance/transactions/${editingTx.id}`, {
+        await browserApiFetch<FinanceTransaction>(`/api/finance/transactions/${editingTx.id}`, {
           method: "PATCH",
           body: JSON.stringify({ amount, description: txDraft.description, transaction_date: txDraft.transaction_date }),
         });
-        if (result) updated = transactions.map((t) => t.id === result.id ? result : t);
       } else {
-        const result = await browserApiFetch<FinanceTransaction>(`/api/finance/accounts/${selected.id}/transactions`, {
+        await browserApiFetch<FinanceTransaction>(`/api/finance/accounts/${selected.id}/transactions`, {
           method: "POST",
           body: JSON.stringify({ amount, description: txDraft.description, transaction_date: txDraft.transaction_date }),
         });
-        if (result) updated = [result, ...transactions];
       }
-      setTransactions(updated);
-      refreshAccountBalance(selected.id, updated);
+      // A single mutated transaction can shift the running balance of every transaction
+      // after it, so reload the first page fresh rather than patching state locally.
+      await Promise.all([reloadFirstPage(selected.id), refreshAccounts(selected.id)]);
       setShowTxForm(false);
       setEditingTx(null);
     } finally {
@@ -149,9 +175,7 @@ export function FinancesView({ initialAccounts }: Props) {
   async function deleteTx(tx: FinanceTransaction) {
     if (!selected) return;
     await browserApiFetch(`/api/finance/transactions/${tx.id}`, { method: "DELETE" });
-    const updated = transactions.filter((t) => t.id !== tx.id);
-    setTransactions(updated);
-    refreshAccountBalance(selected.id, updated);
+    await Promise.all([reloadFirstPage(selected.id), refreshAccounts(selected.id)]);
   }
 
   const currency = selected?.currency_label ?? "";
@@ -298,24 +322,39 @@ export function FinancesView({ initialAccounts }: Props) {
                   <span className="finance-tx-cell-right">Saldo</span>
                   <span></span>
                 </div>
-                {buildRunningBalance(transactions).map(({ tx, running }) => (
-                  <div key={tx.id} className={`finance-tx-row${tx.amount < 0 ? " finance-tx-expense" : " finance-tx-income"}`}>
-                    <span className="finance-tx-date">{formatDate(tx.transaction_date)}</span>
-                    <span className="finance-tx-desc">
-                      {tx.description}
-                    </span>
-                    <span className={`finance-tx-amount finance-tx-cell-right${tx.amount < 0 ? " finance-amount-neg" : " finance-amount-pos"}`}>
-                      {tx.amount > 0 ? "+" : ""}{formatAmount(tx.amount, currency)}
-                    </span>
-                    <span className={`finance-tx-running finance-tx-cell-right${running < 0 ? " finance-balance-negative" : ""}`}>
-                      {formatAmount(running, currency)}
-                    </span>
-                    <span className="finance-tx-actions">
-                      <button type="button" className="btn-icon-sm" onClick={() => startEditTx(tx)} title="Bearbeiten">✎</button>
-                      <button type="button" className="btn-icon-sm btn-icon-danger" onClick={() => void deleteTx(tx)} title="Löschen">✕</button>
-                    </span>
-                  </div>
-                ))}
+                {transactions.map((tx) => {
+                  const running = tx.running_balance ?? tx.amount;
+                  return (
+                    <div key={tx.id} className={`finance-tx-row${tx.amount < 0 ? " finance-tx-expense" : " finance-tx-income"}`}>
+                      <span className="finance-tx-date">{formatDate(tx.transaction_date)}</span>
+                      <span className="finance-tx-desc">
+                        {tx.description}
+                      </span>
+                      <span className={`finance-tx-amount finance-tx-cell-right${tx.amount < 0 ? " finance-amount-neg" : " finance-amount-pos"}`}>
+                        {tx.amount > 0 ? "+" : ""}{formatAmount(tx.amount, currency)}
+                      </span>
+                      <span className={`finance-tx-running finance-tx-cell-right${running < 0 ? " finance-balance-negative" : ""}`}>
+                        {formatAmount(running, currency)}
+                      </span>
+                      <span className="finance-tx-actions">
+                        <button type="button" className="btn-icon-sm" onClick={() => startEditTx(tx)} title="Bearbeiten">✎</button>
+                        <button type="button" className="btn-icon-sm btn-icon-danger" onClick={() => void deleteTx(tx)} title="Löschen">✕</button>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {hasMoreTx && (
+              <div className="load-more-row" ref={loadMoreTxSentinelRef}>
+                {isLoadingMoreTx ? (
+                  <span className="muted">Lädt weitere Transaktionen…</span>
+                ) : (
+                  <button type="button" className="button-inline button-ghost" onClick={() => void loadMoreTx()}>
+                    Mehr laden ({transactions.length} geladen)
+                  </button>
+                )}
               </div>
             )}
           </>
@@ -333,16 +372,4 @@ function formatAmount(amount: number, currency: string): string {
   const abs = Math.abs(amount).toFixed(2);
   const formatted = Number(abs).toLocaleString("de-CH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return `${amount < 0 ? "−" : ""}${formatted} ${currency}`;
-}
-
-function buildRunningBalance(transactions: FinanceTransaction[]): { tx: FinanceTransaction; running: number }[] {
-  // Sorted newest first — build running balance from oldest
-  const sorted = [...transactions].sort((a, b) => a.transaction_date.localeCompare(b.transaction_date) || a.id - b.id);
-  let running = 0;
-  const map = new Map<number, number>();
-  for (const tx of sorted) {
-    running += tx.amount;
-    map.set(tx.id, running);
-  }
-  return transactions.map((tx) => ({ tx, running: map.get(tx.id) ?? 0 }));
 }

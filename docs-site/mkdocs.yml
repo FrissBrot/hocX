@@ -1,0 +1,101 @@
+site_name: hocX Dokumentation
+site_description: Dokumentation der hocX Vereinsverwaltung – für Vereine und für Technik/Betrieb.
+site_url: https://docs.hocx.tweber.ch/
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  language: de
+  icon:
+    logo: material/notebook-outline
+  favicon: assets/favicon.svg
+  # Font-Loading ist bewusst deaktiviert: Material wuerde sonst automatisch ein <link>
+  # auf fonts.googleapis.com einbauen (verraet Besucher-IPs an Google, in der EU/DACH
+  # rechtlich heikel - siehe DSGVO-Rechtsprechung zu eingebundenen Google Fonts). Inter
+  # und JetBrains Mono werden stattdessen selbst gehostet, siehe assets/extra.css.
+  font: false
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Dunkles Design
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Helles Design
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - navigation.footer
+    - navigation.path
+    - navigation.instant
+    - navigation.instant.progress
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - content.tooltips
+
+extra_css:
+  - assets/extra.css
+
+extra_javascript:
+  - assets/mermaid-init.js
+
+extra:
+  generator: false
+
+markdown_extensions:
+  - admonition
+  - tables
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences:
+      custom_fences:
+        # Klasse bewusst NICHT "mermaid" (das wuerde Material dazu bringen, selbst
+        # mermaid.js von unpkg.com nachzuladen, siehe assets/mermaid-init.js).
+        - name: mermaid
+          class: mermaid-diagram
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.details
+  - attr_list
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+nav:
+  - Start: index.md
+  - Für Vereine:
+      - Übersicht: benutzer/index.md
+      - Erste Schritte: benutzer/erste-schritte.md
+      - Rollen & Berechtigungen: benutzer/rollen.md
+      - Zyklen & Vorlagen: benutzer/vorlagen.md
+      - Protokolle: benutzer/protokolle.md
+      - Termine: benutzer/termine.md
+      - Mitglieder & Teilnehmer: benutzer/mitglieder.md
+      - Finanzen & Bussen: benutzer/finanzen.md
+      - Listen: benutzer/listen.md
+      - Todos: benutzer/todos.md
+      - Abgabebox: benutzer/abgabebox.md
+  - Technik & Betrieb:
+      - Übersicht: technik/index.md
+      - Big Picture: technik/big-picture.md
+      - Architektur: technik/architektur.md
+      - Deployment (Dev/Test/Prod): technik/deployment.md
+      - Platform-Admin-Panel: technik/admin-panel.md
+      - Mandanten Export/Import: technik/export-import.md
+      - Sicherheit: technik/sicherheit.md
+      - Bekannte offene Punkte: technik/offene-punkte.md

@@ -9,6 +9,7 @@ import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
 import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
+import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { useTableSort } from "@/lib/hooks/use-table-sort";
 import { formatDate, formatDateTime } from "@/lib/utils/format";
 import { ProtocolSummary, TemplateSummary } from "@/types/api";
@@ -203,6 +204,12 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
       setIsLoadingMore(false);
     }
   }
+
+  const loadMoreSentinelRef = useInfiniteScroll({
+    hasMore,
+    isLoading: isLoadingMore,
+    onLoadMore: () => void loadMore(),
+  });
 
   async function revertStatus(protocolId: number) {
     try {
@@ -405,10 +412,14 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
       {sortedProtocols.length === 0 ? <p className="muted">Keine Protokolle gefunden.</p> : null}
 
       {hasMore && (
-        <div className="load-more-row">
-          <button type="button" className="button-inline button-ghost" onClick={() => void loadMore()} disabled={isLoadingMore}>
-            {isLoadingMore ? "Lädt…" : `Mehr laden (${protocols.length} geladen)`}
-          </button>
+        <div className="load-more-row" ref={loadMoreSentinelRef}>
+          {isLoadingMore ? (
+            <span className="muted">Lädt weitere Protokolle…</span>
+          ) : (
+            <button type="button" className="button-inline button-ghost" onClick={() => void loadMore()}>
+              Mehr laden ({protocols.length} geladen)
+            </button>
+          )}
         </div>
       )}
 

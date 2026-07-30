@@ -35,19 +35,29 @@ class FinesRepository:
             .outerjoin(ClosedProtocol, ClosedProtocol.id == AttendanceFine.closed_in_protocol_id)
         )
 
-    def list_fines_for_tenant(self, db: Session, tenant_id: int) -> list[AttendanceFineListItem]:
+    def list_fines_for_tenant(
+        self, db: Session, tenant_id: int, skip: int = 0, limit: int = 50
+    ) -> list[AttendanceFineListItem]:
         rows = db.execute(
-            self._base_query().where(Protocol.tenant_id == tenant_id).order_by(AttendanceFine.created_at.desc())
+            self._base_query()
+            .where(Protocol.tenant_id == tenant_id)
+            .order_by(AttendanceFine.created_at.desc())
+            .offset(skip)
+            .limit(limit)
         ).all()
         return [self._to_list_item(row) for row in rows]
 
-    def list_fines_for_protocols(self, db: Session, tenant_id: int, protocol_ids: list[int]) -> list[AttendanceFineListItem]:
+    def list_fines_for_protocols(
+        self, db: Session, tenant_id: int, protocol_ids: list[int], skip: int = 0, limit: int = 50
+    ) -> list[AttendanceFineListItem]:
         if not protocol_ids:
             return []
         rows = db.execute(
             self._base_query()
             .where(Protocol.tenant_id == tenant_id, AttendanceFine.protocol_id.in_(protocol_ids))
             .order_by(AttendanceFine.created_at.desc())
+            .offset(skip)
+            .limit(limit)
         ).all()
         return [self._to_list_item(row) for row in rows]
 

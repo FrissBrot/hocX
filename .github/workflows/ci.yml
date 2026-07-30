@@ -37,9 +37,63 @@ jobs:
         working-directory: backend
         env:
           DATABASE_URL: postgresql+psycopg://ci:ci@localhost:5432/hocx_ci
+          # Migration 0020_abgabebox reads these directly via os.environ - without them
+          # it either fails outright (ABGABEBOX_DB_PASSWORD has no default) or silently
+          # GRANTs on the wrong database name (POSTGRES_DB defaults to "hocx", but the
+          # CI database here is "hocx_ci"). The postgres service container's own
+          # POSTGRES_DB/POSTGRES_PASSWORD env (above) only configures that container,
+          # it is not inherited by this step.
+          POSTGRES_DB: hocx_ci
+          ABGABEBOX_DB_PASSWORD: ci-migration-check-dummy-abgabebox-password
           AUTH_SECRET: ci-migration-check-dummy-secret-0123456789
           ADMIN_AUTH_SECRET: ci-migration-check-dummy-admin-secret-0123456789
         run: alembic upgrade head
+
+  backend-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: hocx_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install backend dependencies
+        run: pip install -r backend/requirements-dev.txt
+
+      - name: Run alembic upgrade head against a fresh database
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+psycopg://ci:ci@localhost:5432/hocx_ci
+          POSTGRES_DB: hocx_ci
+          ABGABEBOX_DB_PASSWORD: ci-backend-tests-dummy-abgabebox-password
+          AUTH_SECRET: ci-backend-tests-dummy-secret-0123456789
+          ADMIN_AUTH_SECRET: ci-backend-tests-dummy-admin-secret-0123456789
+        run: alembic upgrade head
+
+      - name: Run pytest
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+psycopg://ci:ci@localhost:5432/hocx_ci
+          AUTH_SECRET: ci-backend-tests-dummy-secret-0123456789
+          ADMIN_AUTH_SECRET: ci-backend-tests-dummy-admin-secret-0123456789
+        run: python3 -m pytest tests/ -v
 
   frontend-build:
     runs-on: ubuntu-latest

@@ -1,7 +1,7 @@
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, require_finance_access
@@ -14,9 +14,11 @@ from app.schemas.finance import (
     FinanceTransactionRead,
     FinanceTransactionUpdate,
 )
+from app.services.audit_service import AuditService
 
 router = APIRouter()
 repo = FinanceRepository()
+audit = AuditService()
 
 
 # ── Accounts ──────────────────────────────────────────────────────────────────
@@ -67,6 +69,7 @@ def delete_account(
     require_finance_access(user)
     if not repo.delete_account(db, account_id, user.current_tenant_id):
         raise HTTPException(status_code=404, detail="Account not found")
+    audit.log(db, action="finance_account.deleted", actor=user, entity_type="finance_account", entity_id=account_id)
     return {"message": "Account deleted"}
 
 
@@ -75,13 +78,15 @@ def delete_account(
 @router.get("/finance/accounts/{account_id}/transactions", response_model=list[FinanceTransactionRead])
 def list_transactions(
     account_id: int,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_finance_access(user)
     if repo.get_account(db, account_id, user.current_tenant_id) is None:
         raise HTTPException(status_code=404, detail="Account not found")
-    return repo.list_transactions(db, account_id)
+    return repo.list_transactions(db, account_id, skip=skip, limit=limit)
 
 
 @router.post("/finance/accounts/{account_id}/transactions", response_model=FinanceTransactionRead, status_code=status.HTTP_201_CREATED)
@@ -95,10 +100,15 @@ def create_transaction(
     if repo.get_account(db, account_id, user.current_tenant_id) is None:
         raise HTTPException(status_code=404, detail="Account not found")
     try:
-        return repo.create_transaction(db, account_id, payload)
+        created = repo.create_transaction(db, account_id, payload)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Transaction could not be created") from exc
+    audit.log(
+        db, action="finance_transaction.created", actor=user, entity_type="finance_transaction", entity_id=created.id,
+        details={"account_id": account_id, "amount": float(created.amount), "description": created.description},
+    )
+    return created
 
 
 @router.patch("/finance/transactions/{tx_id}", response_model=FinanceTransactionRead)
@@ -112,6 +122,10 @@ def update_transaction(
     result = repo.update_transaction(db, tx_id, user.current_tenant_id, payload)
     if result is None:
         raise HTTPException(status_code=404, detail="Transaction not found")
+    audit.log(
+        db, action="finance_transaction.updated", actor=user, entity_type="finance_transaction", entity_id=tx_id,
+        details={"amount": float(result.amount), "description": result.description},
+    )
     return result
 
 
@@ -124,4 +138,5 @@ def delete_transaction(
     require_finance_access(user)
     if not repo.delete_transaction(db, tx_id, user.current_tenant_id):
         raise HTTPException(status_code=404, detail="Transaction not found")
+    audit.log(db, action="finance_transaction.deleted", actor=user, entity_type="finance_transaction", entity_id=tx_id)
     return {"message": "Transaction deleted"}

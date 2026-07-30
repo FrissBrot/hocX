@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, require_finance_access, require_reader
@@ -15,14 +15,18 @@ from app.schemas.fines import (
     CollectFinePayload,
 )
 from app.services.access_service import AccessService
+from app.services.audit_service import AuditService
 
 router = APIRouter()
 repo = FinesRepository()
 access_service = AccessService()
+audit = AuditService()
 
 
 @router.get("/fines", response_model=list[AttendanceFineListItem])
 def list_fines(
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -31,8 +35,8 @@ def list_fines(
     require_reader(user)
     if access_service._is_restricted_reader(db, user):
         protocol_ids = access_service.repository.list_protocol_ids(db, user_id=user.user_id, tenant_id=user.current_tenant_id)
-        return repo.list_fines_for_protocols(db, user.current_tenant_id, protocol_ids)
-    return repo.list_fines_for_tenant(db, user.current_tenant_id)
+        return repo.list_fines_for_protocols(db, user.current_tenant_id, protocol_ids, skip=skip, limit=limit)
+    return repo.list_fines_for_tenant(db, user.current_tenant_id, skip=skip, limit=limit)
 
 
 @router.get("/protocols/{protocol_id}/pending-fines", response_model=list[AttendanceFineListItem])
@@ -69,6 +73,10 @@ def create_fine(
         raise HTTPException(status_code=400, detail="Fine could not be created") from exc
     if result is None:
         raise HTTPException(status_code=404, detail="Protocol, account or participant not found")
+    audit.log(
+        db, action="fine.created", actor=user, entity_type="attendance_fine", entity_id=result.id,
+        details={"protocol_id": result.protocol_id, "amount": float(result.amount), "fine_type": result.fine_type},
+    )
     return result
 
 
@@ -86,6 +94,7 @@ def delete_fine_post(
         raise HTTPException(status_code=400, detail="Fine could not be deleted") from exc
     if not deleted:
         raise HTTPException(status_code=404, detail="Fine not found or already collected")
+    audit.log(db, action="fine.deleted", actor=user, entity_type="attendance_fine", entity_id=fine_id)
 
 
 @router.delete("/fines/{fine_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -102,6 +111,7 @@ def delete_fine(
         raise HTTPException(status_code=400, detail="Fine could not be deleted") from exc
     if not deleted:
         raise HTTPException(status_code=404, detail="Fine not found or already collected")
+    audit.log(db, action="fine.deleted", actor=user, entity_type="attendance_fine", entity_id=fine_id)
 
 
 @router.post("/fines/{fine_id}/collect", response_model=AttendanceFineRead)
@@ -119,6 +129,7 @@ def collect_fine(
         raise HTTPException(status_code=400, detail="Fine could not be collected") from exc
     if result is None:
         raise HTTPException(status_code=404, detail="Fine not found or already collected")
+    audit.log(db, action="fine.collected", actor=user, entity_type="attendance_fine", entity_id=fine_id)
     return result
 
 
@@ -139,4 +150,5 @@ def reopen_fine(
             status_code=404,
             detail="Fine not found, not collected, or already finalized in its protocol",
         )
+    audit.log(db, action="fine.reopened", actor=user, entity_type="attendance_fine", entity_id=fine_id)
     return result

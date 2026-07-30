@@ -1,0 +1,168 @@
+/* hocX Dokumentation – modernes Feintuning über das Material-Theme hinaus */
+
+/* Selbst gehostete Fonts (kein fonts.googleapis.com-Aufruf, siehe mkdocs.yml) */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("fonts/inter-regular.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/inter-italic.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("fonts/jetbrains-mono.woff2") format("woff2");
+}
+
+:root {
+  --hocx-radius: 12px;
+  --hocx-gradient: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  --md-text-font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --md-code-font-family: "JetBrains Mono", SFMono-Regular, Consolas, monospace;
+}
+
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: #4338ca;
+  --md-accent-fg-color: #7c3aed;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #818cf8;
+  --md-accent-fg-color: #a78bfa;
+  --md-default-bg-color: #101322;
+}
+
+.md-header {
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
+}
+
+.md-typeset h1,
+.md-typeset h2 {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* Hero-Box auf der Startseite */
+.hocx-hero {
+  border-radius: var(--hocx-radius);
+  padding: 2.75rem 2.25rem;
+  margin: 0 0 2rem;
+  background: var(--hocx-gradient);
+  color: #fff;
+}
+
+.hocx-hero h1 {
+  color: #fff;
+  margin-top: 0;
+  font-size: 2.1rem;
+}
+
+.hocx-hero p {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 1.1rem;
+  max-width: 42rem;
+  margin-bottom: 0;
+}
+
+/* Karten-Raster (Startseite, Übersichtsseiten) */
+.md-typeset .grid.cards > ul {
+  gap: 0.75rem;
+}
+
+.md-typeset .grid.cards > ul > li {
+  border-radius: var(--hocx-radius);
+  border: 1px solid var(--md-default-fg-color--lightest);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.md-typeset .grid.cards > ul > li:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.1);
+}
+
+/* Code, Admonitions, Tabellen */
+.md-typeset pre > code {
+  border-radius: 8px;
+}
+
+.md-typeset .admonition,
+.md-typeset details {
+  border-radius: 10px;
+}
+
+.md-typeset table:not([class]) {
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* Mermaid-Diagramme: klickbar, öffnen sich im Vollbild (siehe mermaid-init.js) */
+.mermaid-diagram {
+  cursor: zoom-in;
+  border-radius: var(--hocx-radius);
+  transition: box-shadow 0.15s ease;
+}
+
+.mermaid-diagram:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.hocx-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: rgba(0, 0, 0, 0.8);
+  cursor: zoom-out;
+}
+
+.hocx-lightbox[hidden] {
+  display: none;
+}
+
+.hocx-lightbox-content {
+  max-width: 100%;
+  max-height: 100%;
+  cursor: default;
+}
+
+.hocx-lightbox-content svg {
+  display: block;
+  max-width: calc(100vw - 4rem);
+  max-height: calc(100vh - 4rem);
+  background: var(--md-default-bg-color);
+  border-radius: var(--hocx-radius);
+  padding: 2rem;
+}
+
+.hocx-lightbox-close {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.hocx-lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
