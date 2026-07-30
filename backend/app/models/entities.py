@@ -874,3 +874,40 @@ class SystemErrorLog(Base):
     traceback: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
 
+
+class Songbook(Base, TimestampMixin, UpdatedAtMixin):
+    __tablename__ = "songbook"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "title", name="uq_songbook_tenant_title"),
+        Index("idx_songbook_tenant_updated", "tenant_id", "updated_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    songs: Mapped[list["SongbookSong"]] = relationship(
+        "SongbookSong",
+        cascade="all, delete-orphan",
+        order_by="SongbookSong.sort_index",
+        lazy="selectin",
+    )
+
+
+class SongbookSong(Base, TimestampMixin, UpdatedAtMixin):
+    __tablename__ = "songbook_song"
+    __table_args__ = (Index("idx_songbook_song_book_sort", "songbook_id", "sort_index"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    songbook_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("songbook.id", ondelete="CASCADE"), nullable=False
+    )
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    artist: Mapped[str] = mapped_column(Text, nullable=False)
+    album: Mapped[str | None] = mapped_column(Text)
+    duration_seconds: Mapped[int | None] = mapped_column(Integer)
+    lyrics: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("''"))
+    source_name: Mapped[str | None] = mapped_column(Text)
+    source_id: Mapped[str | None] = mapped_column(Text)
+    sort_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))

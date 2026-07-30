@@ -37,6 +37,10 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
 
   if (isWriter) {
     groups.push({
+      title: "Tools",
+      links: [{ href: "/tools/songbooks", label: "Liederbücher" }],
+    });
+    groups.push({
       title: "Datensätze",
       links: [
         { href: "/lists", label: "Listen" },

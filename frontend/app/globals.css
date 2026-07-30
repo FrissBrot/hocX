@@ -1636,6 +1636,185 @@ input[type="radio"] {
   white-space: nowrap;
 }
 
+.songbook-header,
+.songbook-header-actions,
+.songbook-editor-actions,
+.song-search-form,
+.song-search-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.songbook-print {
+  display: none;
+}
+
+.songbook-header h2 {
+  margin: 8px 0 0;
+}
+
+.songbook-header p {
+  margin: 6px 0 0;
+}
+
+.songbook-workspace {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+  min-height: 620px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--panel-solid);
+}
+
+.songbook-song-list {
+  border-right: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel-solid) 84%, var(--bg) 16%);
+  overflow-y: auto;
+}
+
+.songbook-song-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  text-align: left;
+  padding: 14px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.songbook-song-item:hover,
+.songbook-song-item-active {
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel-solid) 92%);
+}
+
+.songbook-song-item strong,
+.songbook-song-item small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.songbook-song-item small {
+  margin-top: 3px;
+  color: var(--muted);
+}
+
+.songbook-song-number {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.songbook-editor {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 16px;
+  min-width: 0;
+  padding: 20px;
+}
+
+.songbook-metadata {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.songbook-lyrics {
+  min-height: 0;
+}
+
+.songbook-lyrics textarea {
+  min-height: 420px;
+  height: 100%;
+  resize: vertical;
+  line-height: 1.6;
+  font-family: inherit;
+}
+
+.song-search-form input {
+  flex: 1;
+}
+
+.song-search-results {
+  display: grid;
+  margin-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.song-search-result {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+@media (max-width: 800px) {
+  .songbook-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .songbook-song-list {
+    max-height: 240px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .songbook-metadata {
+    grid-template-columns: 1fr;
+  }
+
+  .songbook-header,
+  .song-search-result {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .songbook-print,
+  .songbook-print * {
+    visibility: visible;
+  }
+
+  .songbook-print {
+    display: block;
+    position: absolute;
+    inset: 0;
+    color: #000;
+    background: #fff;
+    font-family: serif;
+  }
+
+  .songbook-print header {
+    min-height: 80vh;
+    display: grid;
+    place-content: center;
+    text-align: center;
+    break-after: page;
+  }
+
+  .songbook-print section {
+    break-before: page;
+  }
+
+  .songbook-print h1,
+  .songbook-print h2 {
+    letter-spacing: 0;
+  }
+
+  .songbook-print pre {
+    white-space: pre-wrap;
+    font: 12pt/1.5 serif;
+  }
+}
+
 .template-element-list {
   display: grid;
 }

@@ -622,3 +622,42 @@ export type StatisticsOverview = {
   cycles: { cycle_config_id: number; cycle_config_name: string; cycle_year: number; label: string }[];
   groups_stats: { group_id: number; group_name: string; cycle_config_id: number | null; cycle_year: number | null; session_count: number; session_count_with_participants: number; avg_participants: number }[];
 };
+
+export type SongbookSummary = {
+  id: number;
+  tenant_id: number;
+  title: string;
+  description: string | null;
+  song_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SongbookSong = {
+  id: number;
+  songbook_id: number;
+  title: string;
+  artist: string;
+  album: string | null;
+  duration_seconds: number | null;
+  lyrics: string;
+  source_name: string | null;
+  source_id: string | null;
+  sort_index: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Songbook = SongbookSummary & {
+  songs: SongbookSong[];
+};
+
+export type LyricsSearchResult = {
+  source_id: string;
+  title: string;
+  artist: string;
+  album: string | null;
+  duration_seconds: number | null;
+  lyrics: string;
+  instrumental: boolean;
+};
