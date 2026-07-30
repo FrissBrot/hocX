@@ -6,7 +6,10 @@ import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
+import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { ParticipantSummary, TemplateSummary } from "@/types/api";
+
+const PAGE_SIZE = 50;
 
 type CsvPreviewRow = { display_name: string; first_name: string | null; last_name: string | null; email: string | null };
 type ImportResult = { imported: ParticipantSummary[]; duplicates: string[]; errors: string[] };
@@ -71,6 +74,25 @@ export function ParticipantManager({ initialParticipants, templates }: Participa
 
   const [sortKey, setSortKey] = useState<"display_name" | "first_name" | "last_name" | "email" | "is_active">("display_name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [hasMore, setHasMore] = useState(initialParticipants.length === PAGE_SIZE);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  async function loadMore() {
+    setIsLoadingMore(true);
+    try {
+      const next = await browserApiFetch<ParticipantSummary[]>(`/api/participants?skip=${participants.length}&limit=${PAGE_SIZE}`);
+      setParticipants((current) => [...current, ...(next ?? [])]);
+      setHasMore((next ?? []).length === PAGE_SIZE);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }
+
+  const loadMoreSentinelRef = useInfiniteScroll({
+    hasMore,
+    isLoading: isLoadingMore,
+    onLoadMore: () => void loadMore(),
+  });
 
   function toggleSort(key: typeof sortKey) {
     setSortKey((cur) => {
@@ -264,7 +286,7 @@ export function ParticipantManager({ initialParticipants, templates }: Participa
             <div className="status-row">
               <span className="pill">{selectedParticipantIds.length} ausgewählt</span>
               <span className="pill">{filteredParticipants.length} sichtbar</span>
-              <span className="pill">{participants.length} gesamt</span>
+              <span className="pill">{participants.length} geladen</span>
             </div>
           </div>
         </div>
@@ -325,6 +347,18 @@ export function ParticipantManager({ initialParticipants, templates }: Participa
           );
         })}
       </DataTable>
+
+      {hasMore && (
+        <div className="load-more-row" ref={loadMoreSentinelRef}>
+          {isLoadingMore ? (
+            <span className="muted">Lädt weitere Teilnehmer…</span>
+          ) : (
+            <button type="button" className="button-inline button-ghost" onClick={() => void loadMore()}>
+              Mehr laden ({participants.length} geladen)
+            </button>
+          )}
+        </div>
+      )}
 
       {/* CSV preview modal */}
       <Modal

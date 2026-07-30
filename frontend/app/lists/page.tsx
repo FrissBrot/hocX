@@ -21,7 +21,7 @@ export default async function ListsPage() {
 
   const [lists, participants, events, documentTemplates] = await Promise.all([
     backendFetchWithSession<StructuredListDefinition[]>("/api/lists"),
-    backendFetchWithSession<ParticipantSummary[]>("/api/participants"),
+    backendFetchWithSession<ParticipantSummary[]>("/api/participants?limit=500"),
     backendFetchWithSession<EventSummary[]>("/api/events"),
     backendFetchWithSession<DocumentTemplate[]>("/api/document-templates"),
   ]);

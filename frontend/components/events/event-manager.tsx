@@ -9,6 +9,7 @@ import { Modal } from "@/components/ui/modal";
 import { EventDetailForm } from "@/components/protocol/planning/event-detail-form";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
+import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { useTableSort } from "@/lib/hooks/use-table-sort";
 import { useTagConfig } from "@/lib/hooks/use-tag-config";
 import { getCycleYear } from "@/lib/utils/cycle";
@@ -590,6 +591,12 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     }
   }
 
+  const loadMoreSentinelRef = useInfiniteScroll({
+    hasMore,
+    isLoading: isLoadingMore,
+    onLoadMore: () => void loadMore(),
+  });
+
   function toggleColumn(key: OptionalColumnKey) {
     setVisibleColumns((current) => {
       const next = new Set(current);
@@ -835,10 +842,14 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
       </DataTable>
 
       {hasMore && (
-        <div className="load-more-row">
-          <button type="button" className="button-inline button-ghost" onClick={() => void loadMore()} disabled={isLoadingMore}>
-            {isLoadingMore ? "Lädt…" : `Mehr laden (${events.length} geladen)`}
-          </button>
+        <div className="load-more-row" ref={loadMoreSentinelRef}>
+          {isLoadingMore ? (
+            <span className="muted">Lädt weitere Termine…</span>
+          ) : (
+            <button type="button" className="button-inline button-ghost" onClick={() => void loadMore()}>
+              Mehr laden ({events.length} geladen)
+            </button>
+          )}
         </div>
       )}
 

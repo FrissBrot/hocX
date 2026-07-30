@@ -11,11 +11,13 @@ from app.core.security import CurrentUser, get_current_user, require_reader, req
 from app.models.entities import Event, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolTodo, Template
 from app.schemas.protocol import ProtocolTodoCreate, ProtocolTodoRead, ProtocolTodoUpdate, TodoListItem
 from app.services.access_service import AccessService
+from app.services.audit_service import AuditService
 from app.services.protocol_todo_service import ProtocolTodoService
 
 router = APIRouter()
 service = ProtocolTodoService()
 access_service = AccessService()
+audit = AuditService()
 
 
 @router.post("/todos", response_model=TodoListItem, status_code=status.HTTP_201_CREATED)
@@ -173,6 +175,8 @@ def patch_todo(
 ):
     require_writer(user)
     access_service.ensure_can_read_todo(db, user, todo_id)
+    existing = service.repository.get(db, todo_id)
+    previous_status_id = existing.todo_status_id if existing else None
     try:
         todo = service.update_todo(db, todo_id, payload)
     except (SQLAlchemyError, ValueError) as exc:
@@ -180,6 +184,11 @@ def patch_todo(
         raise HTTPException(status_code=400, detail="Todo could not be updated") from exc
     if todo is None:
         raise HTTPException(status_code=404, detail="Todo not found")
+    if payload.todo_status_id is not None and payload.todo_status_id != previous_status_id:
+        audit.log(
+            db, action="todo.status_changed", actor=user, entity_type="protocol_todo", entity_id=todo_id,
+            details={"from_status_id": previous_status_id, "to_status_id": payload.todo_status_id},
+        )
     todos = service.list_todos(db, todo.protocol_element_block_id)
     return next(item for item in todos if item.id == todo_id)
 
@@ -199,4 +208,5 @@ def delete_todo(
         raise HTTPException(status_code=400, detail="Todo could not be deleted") from exc
     if not deleted:
         raise HTTPException(status_code=404, detail="Todo not found")
+    audit.log(db, action="todo.deleted", actor=user, entity_type="protocol_todo", entity_id=todo_id)
     return {"message": "Todo deleted"}

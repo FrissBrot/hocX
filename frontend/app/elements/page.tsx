@@ -9,7 +9,7 @@ export default async function ElementsPage() {
   const definitions = await backendFetchWithSession<ElementDefinition[]>("/api/element-definitions");
   const events = (await backendFetchWithSession<EventSummary[]>("/api/events")) ?? [];
   const lists = (await backendFetchWithSession<StructuredListDefinition[]>("/api/lists")) ?? [];
-  const participants = canAdmin ? (await backendFetchWithSession<ParticipantSummary[]>("/api/participants")) ?? [] : [];
+  const participants = canAdmin ? (await backendFetchWithSession<ParticipantSummary[]>("/api/participants?limit=500")) ?? [] : [];
   const accounts = (await backendFetchWithSession<FinanceAccount[]>("/api/finance/accounts")) ?? [];
   const knownEventTags = Array.from(
     new Set(events.map((event) => (event.tag ?? "").trim()).filter((tag) => tag.length > 0))

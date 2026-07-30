@@ -9,11 +9,13 @@ from app.core.error_log import record_system_error
 from app.core.security import CurrentUser, get_current_user, require_admin, require_reader
 from app.schemas.protocol import ProtocolExportRead
 from app.services.access_service import AccessService
+from app.services.audit_service import AuditService
 from app.services.export_service import ExportService
 
 router = APIRouter()
 service = ExportService()
 access_service = AccessService()
+audit = AuditService()
 
 _EXPORT_FAILED_MESSAGE = "Export fehlgeschlagen. Bitte später erneut versuchen."
 
@@ -58,13 +60,15 @@ def export_latex(
 ):
     require_admin(user)
     try:
-        return service.export_latex(db, protocol_id)
+        result = service.export_latex(db, protocol_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except (SQLAlchemyError, RuntimeError) as exc:
         db.rollback()
         record_system_error(db, exc=exc, request=request, tenant_id=user.current_tenant_id, actor_email=user.email, status_code=400)
         raise HTTPException(status_code=400, detail=_EXPORT_FAILED_MESSAGE) from exc
+    audit.log(db, action="export.protocol_latex", actor=user, entity_type="protocol", entity_id=protocol_id)
+    return result
 
 
 @router.post("/protocols/{protocol_id}/exports/pdf", response_model=ProtocolExportRead)
@@ -77,13 +81,15 @@ async def export_pdf(
     require_reader(user)
     access_service.ensure_can_read_protocol(db, user, protocol_id)
     try:
-        return await service.export_pdf(db, protocol_id)
+        result = await service.export_pdf(db, protocol_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except (SQLAlchemyError, RuntimeError) as exc:
         db.rollback()
         record_system_error(db, exc=exc, request=request, tenant_id=user.current_tenant_id, actor_email=user.email, status_code=400)
         raise HTTPException(status_code=400, detail=_EXPORT_FAILED_MESSAGE) from exc
+    audit.log(db, action="export.protocol_pdf", actor=user, entity_type="protocol", entity_id=protocol_id)
+    return result
 
 
 @router.get("/protocols/{protocol_id}/exports/latest", response_model=ProtocolExportRead)
@@ -108,13 +114,15 @@ async def export_todo_list(
     require_reader(user)
     access_service.ensure_can_read_protocol(db, user, protocol_id)
     try:
-        return await service.export_standalone_pdf(db, protocol_id, body.template_id, "todos", body.filter)
+        result = await service.export_standalone_pdf(db, protocol_id, body.template_id, "todos", body.filter)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except (SQLAlchemyError, RuntimeError) as exc:
         db.rollback()
         record_system_error(db, exc=exc, request=request, tenant_id=user.current_tenant_id, actor_email=user.email, status_code=400)
         raise HTTPException(status_code=400, detail=_EXPORT_FAILED_MESSAGE) from exc
+    audit.log(db, action="export.protocol_todo_list", actor=user, entity_type="protocol", entity_id=protocol_id)
+    return result
 
 
 @router.post("/protocols/{protocol_id}/exports/event-list", response_model=ProtocolExportRead)
@@ -128,13 +136,15 @@ async def export_event_list(
     require_reader(user)
     access_service.ensure_can_read_protocol(db, user, protocol_id)
     try:
-        return await service.export_standalone_pdf(db, protocol_id, body.template_id, "events", body.filter)
+        result = await service.export_standalone_pdf(db, protocol_id, body.template_id, "events", body.filter)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except (SQLAlchemyError, RuntimeError) as exc:
         db.rollback()
         record_system_error(db, exc=exc, request=request, tenant_id=user.current_tenant_id, actor_email=user.email, status_code=400)
         raise HTTPException(status_code=400, detail=_EXPORT_FAILED_MESSAGE) from exc
+    audit.log(db, action="export.protocol_event_list", actor=user, entity_type="protocol", entity_id=protocol_id)
+    return result
 
 
 @router.post("/exports/todos", response_model=ProtocolExportRead)
@@ -146,7 +156,7 @@ async def export_global_todos(
 ):
     require_reader(user)
     try:
-        return await service.export_global_pdf(
+        result = await service.export_global_pdf(
             db, user.current_tenant_id, body.template_id, "todos", body.filter,
             participant_id=body.participant_id, group_by_person=body.group_by_person,
             until_date=body.until_date,
@@ -157,6 +167,8 @@ async def export_global_todos(
         db.rollback()
         record_system_error(db, exc=exc, request=request, tenant_id=user.current_tenant_id, actor_email=user.email, status_code=400)
         raise HTTPException(status_code=400, detail=_EXPORT_FAILED_MESSAGE) from exc
+    audit.log(db, action="export.global_todos", actor=user, details={"template_id": body.template_id})
+    return result
 
 
 @router.post("/exports/lists", response_model=ProtocolExportRead)
@@ -168,7 +180,7 @@ async def export_global_list(
 ):
     require_reader(user)
     try:
-        return await service.export_global_pdf(
+        result = await service.export_global_pdf(
             db, user.current_tenant_id, body.template_id, "list",
             list_definition_id=body.list_definition_id,
             list_group_by=body.group_by,
@@ -185,6 +197,8 @@ async def export_global_list(
         db.rollback()
         record_system_error(db, exc=exc, request=request, tenant_id=user.current_tenant_id, actor_email=user.email, status_code=400)
         raise HTTPException(status_code=400, detail=_EXPORT_FAILED_MESSAGE) from exc
+    audit.log(db, action="export.global_list", actor=user, details={"template_id": body.template_id, "list_definition_id": body.list_definition_id})
+    return result
 
 
 @router.post("/exports/events", response_model=ProtocolExportRead)
@@ -196,7 +210,7 @@ async def export_global_events(
 ):
     require_reader(user)
     try:
-        return await service.export_global_pdf(
+        result = await service.export_global_pdf(
             db, user.current_tenant_id, body.template_id, "events",
             tag_filters=body.tag_filters, until_date=body.until_date,
         )
@@ -206,3 +220,5 @@ async def export_global_events(
         db.rollback()
         record_system_error(db, exc=exc, request=request, tenant_id=user.current_tenant_id, actor_email=user.email, status_code=400)
         raise HTTPException(status_code=400, detail=_EXPORT_FAILED_MESSAGE) from exc
+    audit.log(db, action="export.global_events", actor=user, details={"template_id": body.template_id})
+    return result

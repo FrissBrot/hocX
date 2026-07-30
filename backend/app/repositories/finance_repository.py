@@ -144,13 +144,23 @@ class FinanceRepository:
 
     # ── Transactions ──────────────────────────────────────────────────────────
 
-    def list_transactions(self, db: Session, account_id: int) -> list[FinanceTransactionRead]:
-        rows = db.scalars(
-            select(FinanceTransaction)
+    def list_transactions(
+        self, db: Session, account_id: int, skip: int = 0, limit: int = 50
+    ) -> list[FinanceTransactionRead]:
+        # Running balance must reflect the account's full chronological history, not just
+        # the current page, so it's computed as a window function over all of the account's
+        # transactions before the outer query applies the newest-first pagination.
+        running_balance = func.sum(FinanceTransaction.amount).over(
+            order_by=(FinanceTransaction.transaction_date, FinanceTransaction.id)
+        )
+        rows = db.execute(
+            select(FinanceTransaction, running_balance.label("running_balance"))
             .where(FinanceTransaction.account_id == account_id)
             .order_by(FinanceTransaction.transaction_date.desc(), FinanceTransaction.id.desc())
+            .offset(skip)
+            .limit(limit)
         ).all()
-        return [self._tx_read(t) for t in rows]
+        return [self._tx_read(row.FinanceTransaction, running_balance=row.running_balance) for row in rows]
 
     def get_transaction(self, db: Session, tx_id: int) -> FinanceTransaction | None:
         return db.scalar(select(FinanceTransaction).where(FinanceTransaction.id == tx_id))
@@ -197,7 +207,7 @@ class FinanceRepository:
         db.commit()
         return True
 
-    def _tx_read(self, tx: FinanceTransaction) -> FinanceTransactionRead:
+    def _tx_read(self, tx: FinanceTransaction, running_balance: Decimal | None = None) -> FinanceTransactionRead:
         return FinanceTransactionRead(
             id=tx.id,
             account_id=tx.account_id,
@@ -206,4 +216,5 @@ class FinanceRepository:
             transaction_date=tx.transaction_date,
             protocol_id=tx.protocol_id,
             created_at=tx.created_at,
+            running_balance=running_balance,
         )

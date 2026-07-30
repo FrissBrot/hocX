@@ -5,8 +5,11 @@ import { useRouter } from "next/navigation";
 
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { browserApiFetch } from "@/lib/api/client";
+import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { formatDate, formatDateTime } from "@/lib/utils/format";
 import { AttendanceFineListItem, FinanceAccount } from "@/types/api";
+
+const PAGE_SIZE = 50;
 
 const FINE_TYPE_LABEL: Record<string, string> = {
   late: "Verspätet",
@@ -29,8 +32,27 @@ export function FinesView({ initialFines, accounts, isAdmin }: Props) {
   const [busy, setBusy] = useState<Record<number, boolean>>({});
   const [sortKey, setSortKey] = useState<SortKey>("participant_name_snapshot");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [hasMore, setHasMore] = useState(initialFines.length === PAGE_SIZE);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   const accountMap = new Map(accounts.map((a) => [a.id, a]));
+
+  async function loadMore() {
+    setIsLoadingMore(true);
+    try {
+      const next = await browserApiFetch<AttendanceFineListItem[]>(`/api/fines?skip=${fines.length}&limit=${PAGE_SIZE}`);
+      setFines((current) => [...current, ...(next ?? [])]);
+      setHasMore((next ?? []).length === PAGE_SIZE);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }
+
+  const loadMoreSentinelRef = useInfiniteScroll({
+    hasMore,
+    isLoading: isLoadingMore,
+    onLoadMore: () => void loadMore(),
+  });
 
   function toggleSort(key: SortKey) {
     setSortKey((cur) => {
@@ -64,6 +86,9 @@ export function FinesView({ initialFines, accounts, isAdmin }: Props) {
       });
   }, [fines, statusFilter, search, sortKey, sortDirection]);
 
+  // Counts only reflect the currently loaded page(s), not the tenant-wide total, once
+  // pagination kicks in (hasMore === true) — same trade-off as the other paginated lists
+  // in this app (search/sort/filter also only ever operate on what's already loaded).
   const counts = useMemo(() => ({
     pending: fines.filter((f) => f.status === "pending").length,
     collected: fines.filter((f) => f.status === "collected").length,
@@ -123,7 +148,7 @@ export function FinesView({ initialFines, accounts, isAdmin }: Props) {
             <div className="eyebrow">Überblick</div>
             <div className="status-row">
               <span className="pill">{filtered.length} sichtbar</span>
-              <span className="pill">{fines.length} gesamt</span>
+              <span className="pill">{fines.length} geladen</span>
             </div>
           </div>
         </div>
@@ -207,6 +232,18 @@ export function FinesView({ initialFines, accounts, isAdmin }: Props) {
           );
         })}
       </DataTable>
+
+      {hasMore && (
+        <div className="load-more-row" ref={loadMoreSentinelRef}>
+          {isLoadingMore ? (
+            <span className="muted">Lädt weitere Bussen…</span>
+          ) : (
+            <button type="button" className="button-inline button-ghost" onClick={() => void loadMore()}>
+              Mehr laden ({fines.length} geladen)
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

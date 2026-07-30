@@ -58,3 +58,8 @@ class FinanceTransactionRead(BaseModel):
     transaction_date: date
     protocol_id: int | None
     created_at: datetime
+    # Cumulative account balance up to and including this transaction (chronological
+    # order), computed server-side so pagination doesn't break the running total.
+    # Only populated by list_transactions; single-transaction create/update responses
+    # leave this None since it isn't cheap to recompute for one row in isolation.
+    running_balance: FinanceDecimal | None = None

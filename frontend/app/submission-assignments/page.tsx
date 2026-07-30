@@ -17,7 +17,7 @@ export default async function SubmissionAssignmentsPage() {
     backendFetchWithSession<SubmissionAssignment[]>("/api/submission-assignments"),
     backendFetchWithSession<StructuredListDefinition[]>("/api/lists"),
     backendFetchWithSession<EventSummary[]>("/api/events"),
-    backendFetchWithSession<ParticipantSummary[]>("/api/participants"),
+    backendFetchWithSession<ParticipantSummary[]>("/api/participants?limit=500"),
   ]);
 
   return (

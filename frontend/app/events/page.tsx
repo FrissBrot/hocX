@@ -16,7 +16,7 @@ export default async function EventsPage() {
   const [events, documentTemplates, participants] = await Promise.all([
     backendFetchWithSession<EventSummary[]>("/api/events"),
     backendFetchWithSession<DocumentTemplate[]>("/api/document-templates"),
-    backendFetchWithSession<ParticipantSummary[]>("/api/participants"),
+    backendFetchWithSession<ParticipantSummary[]>("/api/participants?limit=500"),
   ]);
 
   return (

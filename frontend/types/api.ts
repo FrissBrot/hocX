@@ -606,6 +606,7 @@ export type FinanceTransaction = {
   transaction_date: string;
   protocol_id: number | null;
   created_at: string;
+  running_balance: number | null;
 };
 
 export type StatisticsOverview = {

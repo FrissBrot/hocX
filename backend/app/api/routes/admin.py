@@ -35,6 +35,7 @@ from app.services.admin_tenant_service import AdminTenantService
 from app.services.admin_tenant_user_service import AdminTenantUserService
 from app.services.admin_user_service import AdminUserService, PlatformAdminService
 from app.services.file_service import _safe_storage_path
+from app.services.audit_service import AuditService
 from app.services.platform_oidc_service import PlatformOidcService
 from app.services.tenant_clone_service import TenantCloneService
 from app.services.tenant_export_service import TenantExportService
@@ -52,6 +53,7 @@ domain_service = AdminDomainService()
 error_log_service = AdminErrorLogService()
 export_service = TenantExportService()
 import_service = TenantImportService()
+audit = AuditService()
 
 
 @router.get("/tenants", response_model=list[AdminTenantRead])
@@ -119,7 +121,7 @@ async def update_tenant(
 
 
 @router.delete("/tenants/{tenant_id}", status_code=204)
-def delete_tenant(tenant_id: int, db: Session = Depends(get_db)):
+def delete_tenant(tenant_id: int, db: Session = Depends(get_db), current_admin: CurrentAdmin = Depends(get_current_admin)):
     try:
         deleted = tenant_service.delete_tenant(db, tenant_id)
     except SQLAlchemyError as exc:
@@ -127,6 +129,7 @@ def delete_tenant(tenant_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Tenant could not be deleted") from exc
     if not deleted:
         raise HTTPException(status_code=404, detail="Tenant not found")
+    audit.log(db, action="admin.tenant_deleted", actor_email=current_admin.email, tenant_id=tenant_id, entity_type="tenant", entity_id=tenant_id)
 
 
 @router.post("/tenants/{tenant_id}/clone", response_model=AdminTenantRead, status_code=201)
@@ -153,11 +156,16 @@ def export_tenant(
     tenant_id: int,
     scope: Literal["structure", "structure_lists", "full", "full_abgabebox"] = "structure",
     db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(get_current_admin),
 ):
     try:
         zip_path, filename = export_service.export(db, tenant_id, scope)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    audit.log(
+        db, action="admin.tenant_exported", actor_email=current_admin.email, tenant_id=tenant_id,
+        entity_type="tenant", entity_id=tenant_id, details={"scope": scope},
+    )
     return FileResponse(
         zip_path,
         filename=filename,
@@ -171,6 +179,7 @@ async def import_tenant(
     new_name: str = Form(...),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(get_current_admin),
 ):
     with tempfile.NamedTemporaryFile(prefix="hocx-import-upload-", suffix=".zip", delete=False) as tmp:
         tmp_path = Path(tmp.name)
@@ -189,6 +198,10 @@ async def import_tenant(
     result = tenant_service.get_tenant(db, new_tenant.id)
     if result is None:
         raise HTTPException(status_code=500, detail="Imported tenant could not be reloaded")
+    audit.log(
+        db, action="admin.tenant_imported", actor_email=current_admin.email, tenant_id=new_tenant.id,
+        entity_type="tenant", entity_id=new_tenant.id, details={"new_name": new_name, "warning_count": len(warnings)},
+    )
     return TenantImportResult(tenant=result, warnings=warnings)
 
 
@@ -264,12 +277,17 @@ def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db)
 
 
 @router.post("/users/merge", response_model=UserRead)
-def merge_users(payload: AdminUserMergeRequest, db: Session = Depends(get_db)):
+def merge_users(payload: AdminUserMergeRequest, db: Session = Depends(get_db), current_admin: CurrentAdmin = Depends(get_current_admin)):
     try:
-        return user_service.merge_users(db, source_user_id=payload.source_user_id, target_user_id=payload.target_user_id)
+        result = user_service.merge_users(db, source_user_id=payload.source_user_id, target_user_id=payload.target_user_id)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Users could not be merged") from exc
+    audit.log(
+        db, action="admin.users_merged", actor_email=current_admin.email, entity_type="user", entity_id=payload.target_user_id,
+        details={"source_user_id": payload.source_user_id, "target_user_id": payload.target_user_id},
+    )
+    return result
 
 
 @router.get("/admins", response_model=list[PlatformAdminRead])

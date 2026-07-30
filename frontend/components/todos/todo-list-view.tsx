@@ -8,6 +8,7 @@ import { TagInput } from "@/components/ui/tag-input";
 import { TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
 import { TodoDueMenu, DuePatch } from "@/components/todos/todo-due-menu";
 import { browserApiFetch } from "@/lib/api/client";
+import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { formatDate } from "@/lib/utils/format";
 import { Modal } from "@/components/ui/modal";
 import { DocumentTemplate, EventSummary, ParticipantSummary, TodoBlock, TodoListItem } from "@/types/api";
@@ -189,6 +190,12 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
       setIsLoadingMore(false);
     }
   }
+
+  const loadMoreSentinelRef = useInfiniteScroll({
+    hasMore,
+    isLoading: isLoadingMore,
+    onLoadMore: () => void loadMore(),
+  });
 
   function toggleSort(key: SortKey) {
     setSortKey((cur) => {
@@ -560,10 +567,14 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
       </DataTable>
 
       {hasMore && (
-        <div className="load-more-row">
-          <button type="button" className="button-inline button-ghost" onClick={() => void loadMore()} disabled={isLoadingMore}>
-            {isLoadingMore ? "Lädt…" : `Mehr laden (${activeTodos.length} geladen)`}
-          </button>
+        <div className="load-more-row" ref={loadMoreSentinelRef}>
+          {isLoadingMore ? (
+            <span className="muted">Lädt weitere Todos…</span>
+          ) : (
+            <button type="button" className="button-inline button-ghost" onClick={() => void loadMore()}>
+              Mehr laden ({activeTodos.length} geladen)
+            </button>
+          )}
         </div>
       )}
 
