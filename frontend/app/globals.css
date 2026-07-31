@@ -1598,6 +1598,42 @@ input[type="radio"] {
   font-size: 0.78rem;
 }
 
+.list-snapshot-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 2px 0;
+}
+
+.list-snapshot-refresh-button,
+.list-snapshot-undo-button {
+  border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent 70%);
+  background: transparent;
+  color: var(--warning);
+  border-radius: 5px;
+  padding: 1px 7px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.6;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.list-snapshot-refresh-button:hover,
+.list-snapshot-undo-button:hover {
+  background: color-mix(in srgb, var(--warning) 14%, transparent 86%);
+}
+
+.list-snapshot-undo-button {
+  border-color: color-mix(in srgb, var(--muted) 35%, transparent 65%);
+  color: var(--muted);
+}
+
+.list-snapshot-undo-button:hover {
+  background: color-mix(in srgb, var(--muted) 14%, transparent 86%);
+}
+
 .list-block-config-label {
   color: var(--muted);
   white-space: nowrap;

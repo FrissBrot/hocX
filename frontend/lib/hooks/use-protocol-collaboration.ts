@@ -20,6 +20,11 @@ type StatusChangedEvent = {
   display_name: string;
 };
 
+export type ListChangedEvent = {
+  list_definition_id: number;
+  content_version: number;
+};
+
 const HEARTBEAT_INTERVAL_MS = 20_000;
 const RECONNECT_BASE_DELAY_MS = 1_000;
 const RECONNECT_MAX_DELAY_MS = 15_000;
@@ -54,6 +59,7 @@ export function useProtocolCollaboration(protocolId: number | null | undefined) 
   const selfUserIdRef = useRef<number | null>(null);
   const fieldUpdateListenersRef = useRef<Set<(event: FieldUpdateEvent) => void>>(new Set());
   const statusChangedListenersRef = useRef<Set<(event: StatusChangedEvent) => void>>(new Set());
+  const listChangedListenersRef = useRef<Set<(event: ListChangedEvent) => void>>(new Set());
   const closedByEffectRef = useRef(false);
 
   const send = useCallback((message: Record<string, unknown>) => {
@@ -155,6 +161,12 @@ export function useProtocolCollaboration(protocolId: number | null | undefined) 
             statusChangedListenersRef.current.forEach((listener) => listener(message as StatusChangedEvent));
             break;
           }
+          case "list_changed": {
+            // No user_id/self-filtering here - every open protocol referencing this list
+            // (including whichever protocol/tab caused the change) reacts identically.
+            listChangedListenersRef.current.forEach((listener) => listener(message as ListChangedEvent));
+            break;
+          }
           default:
             break;
         }
@@ -219,6 +231,13 @@ export function useProtocolCollaboration(protocolId: number | null | undefined) 
     };
   }, []);
 
+  const onListChanged = useCallback((listener: (event: ListChangedEvent) => void) => {
+    listChangedListenersRef.current.add(listener);
+    return () => {
+      listChangedListenersRef.current.delete(listener);
+    };
+  }, []);
+
   const isLockedByOther = useCallback((fieldKey: string): CollaboratorInfo | null => {
     const holder = locks[fieldKey];
     if (!holder || holder.user_id === selfUserId) return null;
@@ -249,6 +268,7 @@ export function useProtocolCollaboration(protocolId: number | null | undefined) 
     sendStatusChanged,
     onFieldUpdate,
     onStatusChanged,
+    onListChanged,
     isLockedByOther,
   };
 }

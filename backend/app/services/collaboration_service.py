@@ -20,6 +20,10 @@ def _lock_index_key(protocol_id: int, connection_id: str) -> str:
     return f"hocx:lock-index:{protocol_id}:{connection_id}"
 
 
+def protocol_channel(protocol_id: int) -> str:
+    return f"hocx:protocol:{protocol_id}:events"
+
+
 class CollaborationService:
     """Ephemeral Redis-backed presence, field locks and pub/sub for live protocol editing.
 
@@ -31,7 +35,7 @@ class CollaborationService:
         self.redis = redis
 
     def channel(self, protocol_id: int) -> str:
-        return f"hocx:protocol:{protocol_id}:events"
+        return protocol_channel(protocol_id)
 
     async def publish(self, protocol_id: int, message: dict) -> None:
         await self.redis.publish(self.channel(protocol_id), json.dumps(message))

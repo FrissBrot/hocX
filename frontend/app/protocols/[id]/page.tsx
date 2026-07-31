@@ -49,6 +49,14 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
           const autoSrc = cfg.auto_source as Record<string, unknown> | null | undefined;
           const autoListId = Number(autoSrc?.list_id ?? 0);
           if (autoListId > 0) ids.push(autoListId);
+          // "Zeile aus Liste" rows link their own list independently of the block-level
+          // linked_list_id/auto_source above - previously missed here, which left
+          // listEntriesByDefinition without that list at all for such rows.
+          const rows = Array.isArray(cfg.rows) ? (cfg.rows as Record<string, unknown>[]) : [];
+          for (const row of rows) {
+            const rowListId = Number(row.linked_list_id ?? 0);
+            if (rowListId > 0) ids.push(rowListId);
+          }
           return ids;
         })
       )
