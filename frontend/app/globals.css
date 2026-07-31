@@ -1639,6 +1639,48 @@ input[type="radio"] {
   white-space: nowrap;
 }
 
+/* These selects sit in a compact inline toolbar (not inside .grid/.block), so they never
+   picked up the app's usual select styling and fell back to a bare, unstyled browser
+   control - restyle them to match, but sized for a toolbar instead of a full-width field. */
+.list-block-config-item select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  width: auto;
+  min-height: 0;
+  padding: 4px 26px 4px 9px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background-color: color-mix(in srgb, var(--panel-solid) 92%, transparent 8%);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 15px) calc(50% - 2px),
+    calc(100% - 10px) calc(50% - 2px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  color: var(--text);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+}
+
+.list-block-config-item select:hover {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border) 65%);
+}
+
+.list-block-config-item select:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent) 42%, transparent 58%);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent 88%);
+}
+
+.list-block-config-item select:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
 .protocol-list-toolbar-right {
   display: flex;
   align-items: center;
@@ -5527,7 +5569,10 @@ input[type="radio"] {
   top: calc(100% + 5px);
   left: 0;
   right: 0;
-  background: var(--surface-elevated, var(--surface));
+  /* --surface/--surface-elevated were never defined anywhere in this file, so this
+     background silently resolved to transparent - the field underneath (e.g. "Fällig…")
+     bled through the suggestion list, making names hard to read. */
+  background: var(--panel-solid);
   border: 1px solid var(--border-strong);
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.22), 0 2px 6px rgba(0,0,0,0.10);
