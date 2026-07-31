@@ -317,9 +317,31 @@ export type StructuredListDefinition = {
   column_two_title: string;
   column_two_value_type: StructuredListValueType;
   is_active: boolean;
+  content_version: number;
   created_at: string;
   updated_at: string;
 };
+
+export type ListSnapshot = {
+  synced_version: number;
+  column_one_title: string;
+  column_one_value_type: StructuredListValueType;
+  column_two_title: string;
+  column_two_value_type: StructuredListValueType;
+  previous: ListSnapshot | null;
+};
+
+export type WholeListSnapshot = ListSnapshot & {
+  entries: { id: number; sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }[];
+};
+
+export type RowListSnapshot =
+  | { synced_version: number; entry_exists: false }
+  | (ListSnapshot & {
+      entry_exists: true;
+      column_one_value: Record<string, unknown>;
+      column_two_value: Record<string, unknown>;
+    });
 
 export type StructuredListEntry = {
   id: number;

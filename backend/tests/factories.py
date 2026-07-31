@@ -2,7 +2,22 @@
 satisfy FK constraints for the tables these tests actually touch."""
 from datetime import date
 
-from app.models.entities import AttendanceFine, FinanceAccount, Protocol, Template, Tenant
+from sqlalchemy import select
+
+from app.core.security import CurrentUser
+from app.models.entities import (
+    AttendanceFine,
+    ElementType,
+    FinanceAccount,
+    ListDefinition,
+    ListEntry,
+    Protocol,
+    ProtocolElement,
+    ProtocolElementBlock,
+    RenderType,
+    Template,
+    Tenant,
+)
 
 
 def make_tenant(db, name="Test Tenant") -> Tenant:
@@ -45,6 +60,96 @@ def make_finance_account(db, tenant_id: int, name="Test Account") -> FinanceAcco
     db.add(account)
     db.flush()
     return account
+
+
+def make_list_definition(
+    db,
+    tenant_id: int,
+    name: str = "Test List",
+    column_one_title: str = "Name",
+    column_one_value_type: str = "text",
+    column_two_title: str = "Wert",
+    column_two_value_type: str = "text",
+) -> ListDefinition:
+    definition = ListDefinition(
+        tenant_id=tenant_id,
+        name=name,
+        column_one_title=column_one_title,
+        column_one_value_type=column_one_value_type,
+        column_two_title=column_two_title,
+        column_two_value_type=column_two_value_type,
+    )
+    db.add(definition)
+    db.flush()
+    return definition
+
+
+def make_list_entry(
+    db,
+    list_definition_id: int,
+    sort_index: int = 0,
+    column_one_value: dict | None = None,
+    column_two_value: dict | None = None,
+) -> ListEntry:
+    entry = ListEntry(
+        list_definition_id=list_definition_id,
+        sort_index=sort_index,
+        column_one_value_json=column_one_value or {},
+        column_two_value_json=column_two_value or {},
+    )
+    db.add(entry)
+    db.flush()
+    return entry
+
+
+def make_protocol_element(db, protocol_id: int, sort_index: int = 0, section_name: str = "Traktandum") -> ProtocolElement:
+    element = ProtocolElement(protocol_id=protocol_id, sort_index=sort_index, section_name_snapshot=section_name)
+    db.add(element)
+    db.flush()
+    return element
+
+
+def make_protocol_element_block(
+    db,
+    protocol_element_id: int,
+    configuration_snapshot_json: dict,
+    sort_index: int = 0,
+    element_type_code: str = "form",
+) -> ProtocolElementBlock:
+    element_type_id = db.scalar(select(ElementType.id).where(ElementType.code == element_type_code))
+    render_type_id = db.scalar(select(RenderType.id))
+    block = ProtocolElementBlock(
+        protocol_element_id=protocol_element_id,
+        element_type_id=element_type_id,
+        render_type_id=render_type_id,
+        title_snapshot="Test Block",
+        is_editable_snapshot=True,
+        sort_index=sort_index,
+        configuration_snapshot_json=configuration_snapshot_json,
+    )
+    db.add(block)
+    db.flush()
+    return block
+
+
+def make_current_user(tenant_id: int, role: str = "writer", user_id: int = 1) -> CurrentUser:
+    """A plain CurrentUser for calling route functions directly (bypassing Depends/auth
+    entirely - route functions are still ordinary callables, no ASGI/TestClient needed)."""
+    return CurrentUser(
+        user_id=user_id,
+        first_name="Test",
+        last_name="User",
+        display_name="Test User",
+        email="test@example.com",
+        preferred_language="de",
+        is_participant_account=False,
+        default_tenant_id=tenant_id,
+        current_tenant_id=tenant_id,
+        current_tenant_name="Test Tenant",
+        current_tenant_profile_image_path=None,
+        current_role=role,
+        available_tenants=[],
+    )
 
 
 def make_fine(

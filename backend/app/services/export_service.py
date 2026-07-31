@@ -1219,14 +1219,29 @@ Status: {protocol_status}
         return str(row.get("text_value") or "").strip()
 
     def _form_row_list_entry_label_and_value(self, db: Session, row: dict) -> tuple[str, str]:
-        list_id = row.get("linked_list_id")
-        entry_id = row.get("linked_list_entry_id")
-        if not list_id or not entry_id:
-            return str(row.get("label") or "").strip(), ""
-        definition = db.get(ListDefinition, int(list_id))
-        entry = db.get(ListEntry, int(entry_id))
-        if definition is None or entry is None:
-            return str(row.get("label") or "").strip() or "(verknuepfter Listeneintrag wurde geloescht)", ""
+        snapshot = row.get("list_snapshot")
+        if isinstance(snapshot, dict):
+            if not snapshot.get("entry_exists", True):
+                return str(row.get("label") or "").strip() or "(verknuepfter Listeneintrag wurde geloescht)", ""
+            definition = ListDefinition(
+                column_one_title=snapshot.get("column_one_title") or "",
+                column_one_value_type=snapshot.get("column_one_value_type") or "text",
+                column_two_title=snapshot.get("column_two_title") or "",
+                column_two_value_type=snapshot.get("column_two_value_type") or "text",
+            )
+            entry = ListEntry(
+                column_one_value_json=snapshot.get("column_one_value") or {},
+                column_two_value_json=snapshot.get("column_two_value") or {},
+            )
+        else:
+            list_id = row.get("linked_list_id")
+            entry_id = row.get("linked_list_entry_id")
+            if not list_id or not entry_id:
+                return str(row.get("label") or "").strip(), ""
+            definition = db.get(ListDefinition, int(list_id))
+            entry = db.get(ListEntry, int(entry_id))
+            if definition is None or entry is None:
+                return str(row.get("label") or "").strip() or "(verknuepfter Listeneintrag wurde geloescht)", ""
         fixed_column = "column_two" if row.get("list_fixed_column") == "column_two" else "column_one"
         variable_column = "column_two" if fixed_column == "column_one" else "column_one"
         fixed_title, fixed_value_type = self._linked_list_column_meta(definition, fixed_column)
@@ -1284,20 +1299,42 @@ Status: {protocol_status}
         return " ".join(str(value or "").split()).strip()
 
     def _linked_list_content(self, db: Session, list_definition_id: int, config: dict | None = None) -> str:
-        definition = db.get(ListDefinition, list_definition_id)
-        if definition is None:
-            return ""
-        entries = list(
-            db.scalars(
-                select(ListEntry)
-                .where(ListEntry.list_definition_id == list_definition_id)
-                .order_by(ListEntry.sort_index.asc(), ListEntry.id.asc())
+        config = config if isinstance(config, dict) else {}
+        snapshot = config.get("list_snapshot")
+        if isinstance(snapshot, dict) and isinstance(snapshot.get("entries"), list):
+            # Frozen protocol-block view (see list_snapshot_service.py) - build transient,
+            # never-persisted ORM instances so the rendering logic below (which only ever
+            # reads attributes) works identically whether fed live or frozen data.
+            definition = ListDefinition(
+                column_one_title=snapshot.get("column_one_title") or "",
+                column_one_value_type=snapshot.get("column_one_value_type") or "text",
+                column_two_title=snapshot.get("column_two_title") or "",
+                column_two_value_type=snapshot.get("column_two_value_type") or "text",
             )
-        )
+            entries = [
+                ListEntry(
+                    id=entry.get("id"),
+                    sort_index=entry.get("sort_index") or 0,
+                    column_one_value_json=entry.get("column_one_value") or {},
+                    column_two_value_json=entry.get("column_two_value") or {},
+                )
+                for entry in snapshot["entries"]
+            ]
+        else:
+            # _render_global_list_body (standalone list export, not tied to a protocol
+            # block) always lands here since its config never carries a list_snapshot key.
+            definition = db.get(ListDefinition, list_definition_id)
+            if definition is None:
+                return ""
+            entries = list(
+                db.scalars(
+                    select(ListEntry)
+                    .where(ListEntry.list_definition_id == list_definition_id)
+                    .order_by(ListEntry.sort_index.asc(), ListEntry.id.asc())
+                )
+            )
         if not entries:
             return ""
-
-        config = config if isinstance(config, dict) else {}
 
         # Optional row filter
         filter_column = str(config.get("linked_list_filter_column") or "").strip()

@@ -7,11 +7,14 @@ import uuid
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
+from sqlalchemy import select
+
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.redis_client import get_redis
 from app.core.security import CurrentUser, build_current_user, parse_session_token
-from app.models import AppUser
+from app.models import AppUser, ListDefinition
+from app.services import list_snapshot_service
 from app.services.access_service import AccessService
 from app.services.collaboration_service import CollaborationService
 from app.services.protocol_service import ProtocolService
@@ -19,6 +22,11 @@ from app.services.protocol_service import ProtocolService
 router = APIRouter()
 access_service = AccessService()
 protocol_service = ProtocolService()
+
+# How often each connection re-checks whether a list it references changed, as a
+# reliable fallback/primary mechanism for the "Daten aktualisieren" live hint (see
+# poll_list_versions below for why this exists instead of relying on a Redis push).
+LIST_VERSION_POLL_INTERVAL_SECONDS = 15
 
 
 def _authenticate(token: str | None) -> CurrentUser | None:
@@ -52,6 +60,27 @@ def _load_and_authorize(protocol_id: int, user: CurrentUser) -> bool:
 
 def _can_edit(user: CurrentUser) -> bool:
     return user.current_role in {"writer", "admin"}
+
+
+def _referenced_list_ids(protocol_id: int) -> set[int]:
+    db = SessionLocal()
+    try:
+        return list_snapshot_service.referenced_list_definition_ids(db, protocol_id)
+    finally:
+        db.close()
+
+
+def _list_content_versions(list_ids: set[int]) -> dict[int, int]:
+    if not list_ids:
+        return {}
+    db = SessionLocal()
+    try:
+        rows = db.execute(
+            select(ListDefinition.id, ListDefinition.content_version).where(ListDefinition.id.in_(list_ids))
+        ).all()
+        return {row.id: row.content_version for row in rows}
+    finally:
+        db.close()
 
 
 @router.websocket("/api/ws/protocols/{protocol_id}")
@@ -92,6 +121,41 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: int) -> None
             pass
 
     forward_task = asyncio.create_task(forward_from_redis())
+
+    # "A structured list this protocol references changed" notification, so a second
+    # open protocol referencing the same list lights up its "Daten aktualisieren" hint
+    # without needing a reload. This is a periodic DB poll rather than a Redis pub/sub
+    # push: an earlier version pushed via a per-list Redis channel, but testing found
+    # Redis pub/sub delivery to 2+ concurrent subscribers unreliable in this environment
+    # (a message would silently fail to reach one of two subscribed connections in
+    # roughly half of repeated trials, reproduced even across fully separate OS processes
+    # and independent of connection-pool sharing - never root-caused further). A poll
+    # every 15s is simple, has no such reliability question, and is a perfectly adequate
+    # latency for a background "the data changed elsewhere" indicator.
+    list_ids = await asyncio.to_thread(_referenced_list_ids, protocol_id)
+    known_list_versions = await asyncio.to_thread(_list_content_versions, list_ids)
+
+    async def poll_list_versions() -> None:
+        try:
+            while True:
+                await asyncio.sleep(LIST_VERSION_POLL_INTERVAL_SECONDS)
+                if websocket.application_state != WebSocketState.CONNECTED:
+                    break
+                current = await asyncio.to_thread(_list_content_versions, list_ids)
+                for list_id, version in current.items():
+                    if version > known_list_versions.get(list_id, 0):
+                        known_list_versions[list_id] = version
+                        await websocket.send_json({
+                            "type": "list_changed",
+                            "list_definition_id": list_id,
+                            "content_version": version,
+                        })
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            pass
+
+    poll_task = asyncio.create_task(poll_list_versions()) if list_ids else None
 
     try:
         await collab.join(protocol_id, connection_id, user.user_id, user.display_name)
@@ -163,6 +227,12 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: int) -> None
             await forward_task
         except asyncio.CancelledError:
             pass
+        if poll_task is not None:
+            poll_task.cancel()
+            try:
+                await poll_task
+            except asyncio.CancelledError:
+                pass
         await pubsub.unsubscribe(channel)
         await pubsub.aclose()
 

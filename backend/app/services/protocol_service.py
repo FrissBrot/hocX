@@ -27,6 +27,7 @@ from app.models import (
 from app.services.document_template_service import DocumentTemplateService
 from app.services.access_service import AccessService
 from app.services.block_behavior import resolve_block_behavior
+from app.services import list_snapshot_service
 from app.services.responsible_label_service import resolve_display_section_title, resolve_responsible_label
 from app.repositories.protocol_repository import ProtocolRepository
 from app.schemas.protocol import NextSessionAttendanceEntry, NextSessionRead, ProtocolCreateFromTemplate, ProtocolUpdate
@@ -1053,10 +1054,19 @@ class ProtocolService:
                             for row_value_type in [row.get("row_type") or row.get("value_type") or "text"]
                         ]
                     )
+                    for _field_row in field_rows:
+                        if _field_row.get("linked_list_id") and _field_row.get("linked_list_entry_id"):
+                            _field_row["list_snapshot"] = list_snapshot_service.compute_row_list_snapshot(
+                                db, _field_row["linked_list_id"], _field_row["linked_list_entry_id"]
+                            )
+                    _whole_list_snapshot = (
+                        list_snapshot_service.compute_whole_list_snapshot(db, linked_list_id) if linked_list_id else None
+                    )
                     protocol_block.configuration_snapshot_json = {
                         **(protocol_block.configuration_snapshot_json or {}),
                         "linked_list_id": linked_list_id,
                         "rows": field_rows,
+                        **({"list_snapshot": _whole_list_snapshot} if _whole_list_snapshot is not None else {}),
                     }
                     db.add(protocol_block)
                 elif block["element_type_id"] == matrix_type_id:
@@ -1411,6 +1421,7 @@ class ProtocolService:
         updated = self.repository.update(db, protocol, values)
         if previous_status != "abgeschlossen" and updated.status == "abgeschlossen":
             self._freeze_responsible_titles(db, protocol_id)
+            list_snapshot_service.freeze_list_snapshots_for_protocol(db, protocol_id)
             self._maybe_auto_create_next_protocol(db, updated)
             updated = self.repository.get(db, protocol_id) or updated
         if "document_template_id" in payload.model_fields_set:

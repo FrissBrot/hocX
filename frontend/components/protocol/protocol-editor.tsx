@@ -80,6 +80,7 @@ export function ProtocolEditor({
   const router = useRouter();
   const [elements, setElements] = useState(initialElements);
   const [events, setEvents] = useState(availableEvents);
+  const [lists, setLists] = useState(availableLists);
   const [eventContextMenu, setEventContextMenu] = useState<{ x: number; y: number; eventRow: EventSummary; blockId: number } | null>(null);
 
   useEffect(() => {
@@ -160,12 +161,30 @@ export function ProtocolEditor({
   useEffect(
     () =>
       collab.onFieldUpdate(({ field_key, patch }) => {
+        if (field_key === "element-titles") {
+          void refreshElementTitles();
+          return;
+        }
         if (!field_key.startsWith("block-")) return;
         const blockId = Number(field_key.slice("block-".length).split("-cell-")[0]);
         if (!Number.isFinite(blockId) || !patch || typeof patch !== "object") return;
         updateBlockInState(blockId, (block) => ({ ...block, ...(patch as Partial<typeof block>) }));
       }),
     [collab.onFieldUpdate]
+  );
+
+  // Live "a list this protocol references changed elsewhere" push - just bumps the list's
+  // known content_version so the stale-hint comparison in focused-element-editor.tsx picks
+  // it up on the next render, even while this protocol stays open without a reload. Never
+  // touches list_snapshot data itself - that only ever changes via an explicit refresh/sync.
+  useEffect(
+    () =>
+      collab.onListChanged(({ list_definition_id, content_version }) => {
+        setLists((current) =>
+          current.map((list) => (list.id === list_definition_id ? { ...list, content_version } : list))
+        );
+      }),
+    [collab.onListChanged]
   );
 
   useEffect(() => {
@@ -330,8 +349,8 @@ export function ProtocolEditor({
     [selectedElementId, visibleElements]
   );
   const listDefinitionsById = useMemo(
-    () => new Map(availableLists.map((listDefinition) => [listDefinition.id, listDefinition])),
-    [availableLists]
+    () => new Map(lists.map((listDefinition) => [listDefinition.id, listDefinition])),
+    [lists]
   );
   const selectedElementIndex = useMemo(
     () => visibleElements.findIndex((element) => element.id === selectedElementId),
@@ -528,6 +547,26 @@ export function ProtocolEditor({
         blocks: element.blocks.map((block) => (block.id === blockId ? updater(block) : block))
       }))
     );
+  }
+
+  // Section titles can contain a live-resolved "(Vorname Nachname)" suffix pulled from a
+  // linked list entry (see resolve_display_section_title on the backend) - that resolution
+  // already happens fresh on every fetch of this endpoint, so refetching it after a list
+  // snapshot refresh/undo/sync is enough to pick up new names. Only section_name_snapshot is
+  // merged per element (by id), never the whole element, so local block-editing state is
+  // never disturbed.
+  async function refreshElementTitles() {
+    try {
+      const fresh = await browserApiFetch<ProtocolElement[]>(`/api/protocols/${protocol.id}/elements`);
+      const freshById = new Map(fresh.map((element) => [element.id, element.section_name_snapshot]));
+      setElements((current) =>
+        current.map((element) =>
+          freshById.has(element.id) ? { ...element, section_name_snapshot: freshById.get(element.id)! } : element
+        )
+      );
+    } catch {
+      // best-effort - titles just stay as-is until the next successful refresh
+    }
   }
 
   async function saveBlockConfiguration(blockId: number, configurationSnapshotJson: Record<string, unknown>) {
@@ -751,6 +790,79 @@ export function ProtocolEditor({
     await updateEventFromBlock(blockId, eventRow.id, { is_cancelled: !eventRow.is_cancelled });
   }
 
+  // Manual "Daten aktualisieren" click: pulls in the list's current data, keeps the
+  // block's previous snapshot as the one undo step.
+  //
+  // Only configuration_snapshot_json is merged from the response, never the whole
+  // object - _block_to_read() on the backend always returns element_type_code/
+  // render_type_code/text_content/display_compiled_text as null/empty placeholders
+  // (it's meant to be patched into existing block state, not replace it wholesale).
+  // saveBlockConfiguration() above already follows this same rule; an earlier version
+  // of these three handlers spread the whole response and nulled out element_type_code,
+  // which made the block fall back to an "unknown" type and stop rendering its content
+  // at all - found via Timo's own browser test.
+  async function refreshBlockListSnapshot(blockId: number) {
+    try {
+      const updated = await browserApiFetch<ProtocolElement["blocks"][number]>(
+        `/api/protocol-element-blocks/${blockId}/list-snapshot/refresh`,
+        { method: "POST" }
+      );
+      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json }));
+      void refreshElementTitles();
+      collab.sendFieldUpdate("element-titles", null);
+    } catch (err: unknown) {
+      if (err instanceof Error) showToast(err.message);
+    }
+  }
+
+  async function undoBlockListSnapshot(blockId: number) {
+    try {
+      const updated = await browserApiFetch<ProtocolElement["blocks"][number]>(
+        `/api/protocol-element-blocks/${blockId}/list-snapshot/undo`,
+        { method: "POST" }
+      );
+      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json }));
+      void refreshElementTitles();
+      collab.sendFieldUpdate("element-titles", null);
+    } catch (err: unknown) {
+      if (err instanceof Error) showToast(err.message);
+    }
+  }
+
+  // Silent resync called right after this protocol itself writes to a linked list entry
+  // (see createListEntryFromBlock/updateListEntryFromBlock/deleteListEntryFromBlock below),
+  // so the editor never shows a stale hint for a change it just made itself. Best-effort:
+  // a failure here just leaves a stale badge until the next sync/manual refresh, never
+  // corrupts data.
+  async function syncBlockListSnapshot(blockId: number) {
+    try {
+      const updated = await browserApiFetch<ProtocolElement["blocks"][number]>(
+        `/api/protocol-element-blocks/${blockId}/list-snapshot/sync`,
+        { method: "POST" }
+      );
+      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json }));
+      void refreshElementTitles();
+      collab.sendFieldUpdate("element-titles", null);
+    } catch {
+      // best-effort, see comment above
+    }
+  }
+
+  // The "Liste bearbeiten" planning popup intentionally manages the live list directly
+  // (not the protocol's frozen snapshot) - but listEntriesByDefinition is otherwise only
+  // ever populated once at page load and patched locally by this protocol's own writes,
+  // so it goes stale the moment the list changes through any other route (another tab,
+  // another protocol, or this block's own "Daten aktualisieren"). Refetch right before
+  // opening the popup so it always starts from the real current list state.
+  async function refreshListEntries(listDefinitionId: number) {
+    try {
+      const fresh = await browserApiFetch<StructuredListEntry[]>(`/api/lists/${listDefinitionId}/entries`);
+      setListEntriesByDefinition((current) => ({ ...current, [listDefinitionId]: fresh }));
+    } catch {
+      // best-effort - popup falls back to whatever was cached
+    }
+  }
+
   async function createListEntryFromBlock(
     protocolElementBlockId: number,
     listDefinitionId: number,
@@ -769,6 +881,7 @@ export function ProtocolEditor({
         ),
       }));
       setStatus(protocolElementBlockId, "saved");
+      void syncBlockListSnapshot(protocolElementBlockId);
       return true;
     } catch {
       setStatus(protocolElementBlockId, "error");
@@ -797,6 +910,7 @@ export function ProtocolEditor({
         [listDefinitionId]: (current[listDefinitionId] ?? []).map((entry) => (entry.id === entryId ? updated : entry)),
       }));
       setStatus(protocolElementBlockId, "saved");
+      void syncBlockListSnapshot(protocolElementBlockId);
       return true;
     } catch {
       setStatus(protocolElementBlockId, "error");
@@ -813,6 +927,7 @@ export function ProtocolEditor({
         [listDefinitionId]: (current[listDefinitionId] ?? []).filter((entry) => entry.id !== entryId),
       }));
       setStatus(protocolElementBlockId, "saved");
+      void syncBlockListSnapshot(protocolElementBlockId);
     } catch {
       setStatus(protocolElementBlockId, "error");
     }
@@ -1011,6 +1126,9 @@ export function ProtocolEditor({
               createListEntryFromBlock={createListEntryFromBlock}
               updateListEntryFromBlock={updateListEntryFromBlock}
               deleteListEntryFromBlock={deleteListEntryFromBlock}
+              refreshBlockListSnapshot={refreshBlockListSnapshot}
+              refreshListEntries={refreshListEntries}
+              undoBlockListSnapshot={undoBlockListSnapshot}
               todoTagFilter={todoTagFilter}
               setTodoTagFilter={setTodoTagFilter}
               newTodoTags={newTodoTags}

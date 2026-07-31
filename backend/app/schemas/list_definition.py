@@ -36,6 +36,7 @@ class ListDefinitionUpdate(BaseModel):
 class ListDefinitionRead(ListDefinitionBase):
     id: int
     tenant_id: int
+    content_version: int
     created_at: datetime
     updated_at: datetime
 

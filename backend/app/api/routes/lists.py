@@ -108,10 +108,11 @@ def create_entry(
     if definition is None or definition.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Liste nicht gefunden")
     try:
-        return service.create_entry(db, list_definition_id, payload)
+        created = service.create_entry(db, list_definition_id, payload)
     except (SQLAlchemyError, ValueError) as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc) if isinstance(exc, ValueError) else "Eintrag konnte nicht erstellt werden") from exc
+    return created
 
 
 @router.patch("/list-entries/{list_entry_id}", response_model=ListEntryRead)

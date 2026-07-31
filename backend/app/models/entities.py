@@ -287,6 +287,11 @@ class ListDefinition(Base, TimestampMixin, UpdatedAtMixin):
     column_two_title: Mapped[str] = mapped_column(Text, nullable=False)
     column_two_value_type: Mapped[str] = mapped_column(Text, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
+    # Bumped on any entry create/update/delete, or a column title/type change - lets protocol
+    # blocks that snapshot this list's data cheaply detect "has anything relevant changed"
+    # without reconciling independent per-row updated_at timestamps (entries don't cascade
+    # to bump this table's updated_at, and deletes don't touch it at all).
+    content_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
 
 
 class ListEntry(Base, TimestampMixin, UpdatedAtMixin):

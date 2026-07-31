@@ -1,10 +1,14 @@
+import json
+
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.db import get_db
+from app.core.redis_client import get_redis_sync
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
+from app.models import ProtocolElementBlock
 from app.schemas.protocol import (
     ProtocolElementBlockFromEventCreate,
     ProtocolElementBlockRead,
@@ -14,8 +18,10 @@ from app.schemas.protocol import (
     ProtocolTextRead,
     ProtocolTextUpdate,
 )
+from app.services import list_snapshot_service
 from app.services.autosave_service import AutosaveService
 from app.services.access_service import AccessService
+from app.services.collaboration_service import protocol_channel
 from app.services.protocol_element_service import ProtocolElementService
 from app.services.protocol_service import ProtocolService
 from app.services.responsible_label_service import resolve_display_section_title
@@ -25,6 +31,39 @@ autosave_service = AutosaveService()
 service = ProtocolElementService()
 protocol_service = ProtocolService()
 access_service = AccessService()
+
+
+def _broadcast_block_update(protocol_id: int, block: ProtocolElementBlock, user: CurrentUser) -> None:
+    """Same mechanism regular block edits already use (collaboration_ws.py's field_update
+    passthrough) - other viewers of this same protocol see the refresh/sync/undo live with
+    no new frontend WS handling needed."""
+    get_redis_sync().publish(
+        protocol_channel(protocol_id),
+        json.dumps({
+            "type": "field_update",
+            "field_key": f"block-{block.id}",
+            "patch": {"configuration_snapshot_json": block.configuration_snapshot_json},
+            "user_id": user.user_id,
+            "display_name": user.display_name,
+        }),
+    )
+
+
+def _block_and_protocol_or_404(db: Session, user: CurrentUser, protocol_element_block_id: int):
+    """Shared guard for the three list-snapshot routes below: resolves the block + its
+    protocol, 404s if either is missing/inaccessible, 409s if the protocol is already
+    abgeschlossen (permanently frozen, refresh/undo no longer apply)."""
+    access_service.ensure_can_read_protocol_block(db, user, protocol_element_block_id)
+    block = db.get(ProtocolElementBlock, protocol_element_block_id)
+    if block is None:
+        raise HTTPException(status_code=404, detail="Protocol element block not found")
+    protocol_id = access_service.repository.protocol_id_for_block(db, protocol_element_block_id=protocol_element_block_id)
+    protocol = protocol_service.get_protocol(db, protocol_id)
+    if protocol is None:
+        raise HTTPException(status_code=404, detail="Protocol not found")
+    if protocol.status == "abgeschlossen":
+        raise HTTPException(status_code=409, detail="Protocol is already abgeschlossen")
+    return block, protocol_id
 
 
 def _block_to_read(block) -> ProtocolElementBlockRead:
@@ -115,6 +154,52 @@ def patch_protocol_element_block(
     if protocol_element_block is None:
         raise HTTPException(status_code=404, detail="Protocol element block not found")
     return _block_to_read(protocol_element_block)
+
+
+@router.post("/protocol-element-blocks/{protocol_element_block_id}/list-snapshot/refresh", response_model=ProtocolElementBlockRead)
+def refresh_block_list_snapshot(
+    protocol_element_block_id: int,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """User-initiated refresh: pulls in the list's current data, stashes the block's
+    previous snapshot as the one undo step."""
+    require_writer(user)
+    block, protocol_id = _block_and_protocol_or_404(db, user, protocol_element_block_id)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, keep_undo=True)
+    _broadcast_block_update(protocol_id, block, user)
+    return _block_to_read(block)
+
+
+@router.post("/protocol-element-blocks/{protocol_element_block_id}/list-snapshot/sync", response_model=ProtocolElementBlockRead)
+def sync_block_list_snapshot(
+    protocol_element_block_id: int,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Silent resync called by the frontend right after the protocol itself writes to a
+    linked list entry, so the editor never shows a stale hint for a change it just made
+    itself. Never touches an existing undo point."""
+    require_writer(user)
+    block, protocol_id = _block_and_protocol_or_404(db, user, protocol_element_block_id)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, keep_undo=False)
+    _broadcast_block_update(protocol_id, block, user)
+    return _block_to_read(block)
+
+
+@router.post("/protocol-element-blocks/{protocol_element_block_id}/list-snapshot/undo", response_model=ProtocolElementBlockRead)
+def undo_block_list_snapshot(
+    protocol_element_block_id: int,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_writer(user)
+    block, protocol_id = _block_and_protocol_or_404(db, user, protocol_element_block_id)
+    updated = list_snapshot_service.undo_block_list_snapshot(db, block)
+    if updated is None:
+        raise HTTPException(status_code=409, detail="Nothing to undo")
+    _broadcast_block_update(protocol_id, updated, user)
+    return _block_to_read(updated)
 
 
 @router.delete("/protocol-element-blocks/{protocol_element_block_id}", status_code=204)

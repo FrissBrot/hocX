@@ -33,10 +33,12 @@ import {
   ProtocolImage,
   ProtocolSummary,
   ProtocolTodo,
+  RowListSnapshot,
   StructuredListDefinition,
   StructuredListEntry,
   TemplateSummary,
   TodoListItem,
+  WholeListSnapshot,
 } from "@/types/api";
 import {
   ATTENDANCE_OPTIONS,
@@ -107,6 +109,9 @@ export function FocusedElementEditor({
   createListEntryFromBlock,
   updateListEntryFromBlock,
   deleteListEntryFromBlock,
+  refreshBlockListSnapshot,
+  undoBlockListSnapshot,
+  refreshListEntries,
   todoTagFilter,
   setTodoTagFilter,
   newTodoTags,
@@ -164,6 +169,9 @@ export function FocusedElementEditor({
   createListEntryFromBlock: (protocolElementBlockId: number, listDefinitionId: number, payload: { sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }) => Promise<boolean>;
   updateListEntryFromBlock: (protocolElementBlockId: number, listDefinitionId: number, entryId: number, payload: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>) => Promise<boolean>;
   deleteListEntryFromBlock: (protocolElementBlockId: number, listDefinitionId: number, entryId: number) => Promise<void>;
+  refreshBlockListSnapshot: (blockId: number) => Promise<void>;
+  undoBlockListSnapshot: (blockId: number) => Promise<void>;
+  refreshListEntries: (listDefinitionId: number) => Promise<void>;
   todoTagFilter: Record<number, string | null>;
   setTodoTagFilter: Dispatch<SetStateAction<Record<number, string | null>>>;
   newTodoTags: Record<number, string>;
@@ -1596,6 +1604,52 @@ export function FocusedElementEditor({
                   const linkedListId = Number(blockConfig.linked_list_id ?? 0);
                   const linkedListDefinition = listDefinitionsById.get(linkedListId);
                   if (linkedListId && linkedListDefinition) {
+                    // The list may have changed since this block's snapshot was taken (or
+                    // there may be no snapshot yet on an old/abgeschlossen protocol) - the
+                    // read-only preview and the directly-editable table below both render
+                    // from the frozen snapshot when present, falling back to today's live
+                    // lookup otherwise. The management modal further down intentionally
+                    // keeps reading/writing the live list, since it's a "manage the list
+                    // itself" tool, not part of the protocol's frozen record.
+                    const wholeListSnapshot = blockConfig.list_snapshot as WholeListSnapshot | undefined;
+                    const snapshotDefinition: StructuredListDefinition | null = wholeListSnapshot
+                      ? {
+                          ...linkedListDefinition,
+                          column_one_title: wholeListSnapshot.column_one_title,
+                          column_one_value_type: wholeListSnapshot.column_one_value_type,
+                          column_two_title: wholeListSnapshot.column_two_title,
+                          column_two_value_type: wholeListSnapshot.column_two_value_type,
+                        }
+                      : null;
+                    const snapshotEntries: StructuredListEntry[] | null = wholeListSnapshot
+                      ? wholeListSnapshot.entries.map((entry) => ({
+                          id: entry.id,
+                          list_definition_id: linkedListId,
+                          sort_index: entry.sort_index,
+                          column_one_value: entry.column_one_value,
+                          column_two_value: entry.column_two_value,
+                          created_at: "",
+                          updated_at: "",
+                        }))
+                      : null;
+                    const displayDefinition = snapshotDefinition ?? linkedListDefinition;
+                    const displayEntries = snapshotEntries ?? (listEntriesByDefinition[linkedListId] ?? []);
+                    const isListStale = !isReadOnly && !!wholeListSnapshot && linkedListDefinition.content_version > wholeListSnapshot.synced_version;
+                    const hasListUndo = !!wholeListSnapshot?.previous;
+                    const listSnapshotBanner = (isListStale || hasListUndo) && (
+                      <div className="list-snapshot-banner">
+                        {isListStale && (
+                          <button type="button" className="list-snapshot-refresh-button" onClick={() => void refreshBlockListSnapshot(block.id)}>
+                            ⟳ Daten aktualisieren
+                          </button>
+                        )}
+                        {hasListUndo && (
+                          <button type="button" className="list-snapshot-undo-button" onClick={() => void undoBlockListSnapshot(block.id)}>
+                            Rückgängig
+                          </button>
+                        )}
+                      </div>
+                    );
                     const linkedListGroupBy =
                       blockConfig.linked_list_group_by === "column_one" || blockConfig.linked_list_group_by === "column_two"
                         ? blockConfig.linked_list_group_by
@@ -1613,11 +1667,12 @@ export function FocusedElementEditor({
                       return (
                         <div className="grid">
                           <div className="editor-planning-toolbar">
-                            <PlanningIconTrigger title="Liste bearbeiten" onClick={() => setListEditModalBlockId(block.id)} />
+                            <PlanningIconTrigger title="Liste bearbeiten" onClick={() => { void refreshListEntries(linkedListId).then(() => setListEditModalBlockId(block.id)); }} />
                           </div>
+                          {listSnapshotBanner}
                           <StructuredListTable
-                            definition={linkedListDefinition}
-                            entries={listEntriesByDefinition[linkedListId] ?? []}
+                            definition={displayDefinition}
+                            entries={displayEntries}
                             availableParticipants={availableParticipants}
                             availableEvents={availableEvents}
                             editable={false}
@@ -1651,6 +1706,7 @@ export function FocusedElementEditor({
                     }
                     return (
                       <div className="grid">
+                        {listSnapshotBanner}
                         <div className="list-block-config-bar">
                           <label className="list-block-config-item">
                             <span className="list-block-config-label">Gruppieren</span>
@@ -1686,8 +1742,8 @@ export function FocusedElementEditor({
                           </label>
                         </div>
                         <StructuredListTable
-                          definition={linkedListDefinition}
-                          entries={listEntriesByDefinition[linkedListId] ?? []}
+                          definition={displayDefinition}
+                          entries={displayEntries}
                           availableParticipants={availableParticipants}
                           availableEvents={availableEvents}
                           editable={blockEditable}
@@ -1783,14 +1839,79 @@ export function FocusedElementEditor({
                           })}
                         </div>
                       )}
+                      {(() => {
+                        // Block-level (not per-row) stale check: this block's "Daten
+                        // aktualisieren" refreshes every list_entry row it owns in one call
+                        // (see list_snapshot_service.refresh_block_list_snapshot), so one
+                        // shared banner for the whole block matches that granularity.
+                        const listEntryRows = ((Array.isArray(blockConfig.rows) ? blockConfig.rows : []) as Array<Record<string, any>>)
+                          .filter((row) => String(row.value_type ?? row.row_type ?? "text") === "list_entry");
+                        const rowsAreStale = !isReadOnly && listEntryRows.some((row) => {
+                          const snapshot = row.list_snapshot as RowListSnapshot | undefined;
+                          if (!snapshot) return false;
+                          const liveDefinition = listDefinitionsById.get(Number(row.linked_list_id ?? 0));
+                          return !!liveDefinition && liveDefinition.content_version > snapshot.synced_version;
+                        });
+                        const rowsHaveUndo = listEntryRows.some((row) => {
+                          const snapshot = row.list_snapshot as RowListSnapshot | undefined;
+                          return !!snapshot && "previous" in snapshot && !!snapshot.previous;
+                        });
+                        if (!rowsAreStale && !rowsHaveUndo) return null;
+                        return (
+                          <div className="list-snapshot-banner">
+                            {rowsAreStale && (
+                              <button type="button" className="list-snapshot-refresh-button" onClick={() => void refreshBlockListSnapshot(block.id)}>
+                                ⟳ Daten aktualisieren
+                              </button>
+                            )}
+                            {rowsHaveUndo && (
+                              <button type="button" className="list-snapshot-undo-button" onClick={() => void undoBlockListSnapshot(block.id)}>
+                                Rückgängig
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()}
                       <div className="form-block-list" data-form-block-id={block.id}>
                         {((Array.isArray(blockConfig.rows) ? blockConfig.rows : []) as Array<Record<string, any>>).map((row, index) => {
                           const rowType = String(row.value_type ?? row.row_type ?? "text");
                           if (rowType === "list_entry") {
                             const linkedListId = Number(row.linked_list_id ?? 0);
                             const linkedListEntryId = Number(row.linked_list_entry_id ?? 0);
-                            const listDefinition = listDefinitionsById.get(linkedListId);
-                            const listEntry = (listEntriesByDefinition[linkedListId] ?? []).find((entry) => entry.id === linkedListEntryId);
+                            const rowSnapshot = row.list_snapshot as RowListSnapshot | undefined;
+                            const liveListDefinition = listDefinitionsById.get(linkedListId);
+                            const liveListEntry = (listEntriesByDefinition[linkedListId] ?? []).find((entry) => entry.id === linkedListEntryId);
+                            const entryExists = rowSnapshot ? rowSnapshot.entry_exists : !!liveListDefinition && !!liveListEntry;
+                            if (!entryExists) {
+                              return (
+                                <div className="form-block-row" key={`${block.id}-form-${index}`}>
+                                  <div className="field-label-inline muted">Verknüpfter Listeneintrag wurde gelöscht</div>
+                                  <div />
+                                </div>
+                              );
+                            }
+                            // Column titles/types come from the snapshot (frozen at last
+                            // sync) rather than the live definition, so a pending column
+                            // structure change doesn't get misinterpreted before refresh -
+                            // e.g. a column retyped from text to participant must keep being
+                            // read as text here until "Daten aktualisieren" is clicked.
+                            const listDefinition: StructuredListDefinition | undefined =
+                              rowSnapshot && "column_one_title" in rowSnapshot
+                                ? {
+                                    ...(liveListDefinition as StructuredListDefinition),
+                                    column_one_title: rowSnapshot.column_one_title,
+                                    column_one_value_type: rowSnapshot.column_one_value_type,
+                                    column_two_title: rowSnapshot.column_two_title,
+                                    column_two_value_type: rowSnapshot.column_two_value_type,
+                                  }
+                                : liveListDefinition;
+                            const listEntry =
+                              rowSnapshot && rowSnapshot.entry_exists
+                                ? {
+                                    column_one_value: rowSnapshot.column_one_value,
+                                    column_two_value: rowSnapshot.column_two_value,
+                                  }
+                                : liveListEntry;
                             if (!listDefinition || !listEntry) {
                               return (
                                 <div className="form-block-row" key={`${block.id}-form-${index}`}>
