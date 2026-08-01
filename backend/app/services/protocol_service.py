@@ -617,7 +617,16 @@ class ProtocolService:
             )
         return contexts
 
-    def _previous_protocol_element(self, db: Session, *, tenant_id: int, template_element_id: int | None, protocol_date: date, current_protocol_id: int):
+    def _previous_protocol_element(
+        self,
+        db: Session,
+        *,
+        tenant_id: int,
+        template_element_id: int | None,
+        protocol_date: date,
+        current_protocol_id: int,
+        status: str | None = None,
+    ):
         if template_element_id is None:
             return None
         query = (
@@ -632,9 +641,10 @@ class ProtocolService:
                     (Protocol.protocol_date == protocol_date) & (Protocol.id < current_protocol_id),
                 ),
             )
-            .order_by(Protocol.protocol_date.desc(), Protocol.id.desc())
-            .limit(1)
         )
+        if status is not None:
+            query = query.where(Protocol.status == status)
+        query = query.order_by(Protocol.protocol_date.desc(), Protocol.id.desc()).limit(1)
         return db.scalar(query)
 
     def _previous_block_payloads(self, db: Session, *, protocol_element_id: int) -> dict[tuple[int, str, int | None], dict]:
@@ -677,6 +687,40 @@ class ProtocolService:
                 "text_content": row.content,
                 "todos": todos,
                 "images": images,
+            }
+        return payloads
+
+    def _previous_completed_block_list_snapshots(self, db: Session, *, protocol_element_id: int) -> dict[tuple[int, str, int | None], dict]:
+        """Same block-matching shape as _previous_block_payloads, but for the
+        frozen list_snapshot data of the last abgeschlossen protocol - used as
+        the track-changes baseline for newly-created list/form blocks (see
+        create_from_template's form_type_id branch), so a fresh protocol shows
+        changes since the last completed meeting instead of since its own
+        creation time."""
+        rows = db.execute(
+            select(ProtocolElementBlock.configuration_snapshot_json)
+            .where(ProtocolElementBlock.protocol_element_id == protocol_element_id)
+        ).scalars()
+        payloads: dict[tuple[int, str, int | None], dict] = {}
+        for config in rows:
+            if not isinstance(config, dict):
+                continue
+            source_sort_index = config.get("source_sort_index")
+            if source_sort_index is None:
+                continue
+            repeat_source_type = str(config.get("repeat_source_type") or "") or None
+            repeat_source_id_raw = config.get("repeat_source_id")
+            try:
+                repeat_source_id = int(repeat_source_id_raw) if repeat_source_id_raw is not None else None
+            except (TypeError, ValueError):
+                repeat_source_id = None
+            payloads[self._payload_key(
+                source_sort_index=int(source_sort_index),
+                repeat_source_type=repeat_source_type,
+                repeat_source_id=repeat_source_id,
+            )] = {
+                "list_snapshot": config.get("list_snapshot"),
+                "rows": config.get("rows") if isinstance(config.get("rows"), list) else [],
             }
         return payloads
 
@@ -913,6 +957,19 @@ class ProtocolService:
                 if previous_element is not None
                 else {}
             )
+            last_completed_element = self._previous_protocol_element(
+                db,
+                tenant_id=tenant_id,
+                template_element_id=template_element.id,
+                protocol_date=payload.protocol_date,
+                current_protocol_id=protocol.id,
+                status="abgeschlossen",
+            )
+            last_completed_list_snapshots = (
+                self._previous_completed_block_list_snapshots(db, protocol_element_id=last_completed_element.id)
+                if last_completed_element is not None
+                else {}
+            )
             protocol_element = ProtocolElement(
                 protocol_id=protocol.id,
                 template_element_id=template_element.id,
@@ -940,6 +997,14 @@ class ProtocolService:
                 except (TypeError, ValueError):
                     repeat_source_id = None
                 previous_payload = previous_payloads.get(
+                    self._payload_key(
+                        source_sort_index=block["sort_index"],
+                        repeat_source_type=repeat_source_type or None,
+                        repeat_source_id=repeat_source_id,
+                    ),
+                    {},
+                )
+                last_completed_payload = last_completed_list_snapshots.get(
                     self._payload_key(
                         source_sort_index=block["sort_index"],
                         repeat_source_type=repeat_source_type or None,
@@ -1054,14 +1119,37 @@ class ProtocolService:
                             for row_value_type in [row.get("row_type") or row.get("value_type") or "text"]
                         ]
                     )
+                    _last_completed_rows = last_completed_payload.get("rows") or []
+                    _last_completed_rows_by_entry = {
+                        row["linked_list_entry_id"]: row.get("list_snapshot")
+                        for row in _last_completed_rows
+                        if isinstance(row, dict) and row.get("linked_list_entry_id") is not None
+                    }
                     for _field_row in field_rows:
                         if _field_row.get("linked_list_id") and _field_row.get("linked_list_entry_id"):
-                            _field_row["list_snapshot"] = list_snapshot_service.compute_row_list_snapshot(
+                            _live_row_snapshot = list_snapshot_service.compute_row_list_snapshot(
                                 db, _field_row["linked_list_id"], _field_row["linked_list_entry_id"]
+                            )
+                            _field_row["list_snapshot"] = list_snapshot_service.tag_initial_row_snapshot(
+                                _live_row_snapshot,
+                                _last_completed_rows_by_entry.get(_field_row["linked_list_entry_id"]),
+                                track_changes_active=protocol.track_changes_enabled,
                             )
                     _whole_list_snapshot = (
                         list_snapshot_service.compute_whole_list_snapshot(db, linked_list_id) if linked_list_id else None
                     )
+                    if _whole_list_snapshot is not None:
+                        _last_completed_whole = last_completed_payload.get("list_snapshot")
+                        _last_completed_entries = (
+                            _last_completed_whole.get("entries")
+                            if isinstance(_last_completed_whole, dict)
+                            else None
+                        )
+                        _whole_list_snapshot["entries"] = list_snapshot_service.tag_initial_list_entries(
+                            _whole_list_snapshot["entries"],
+                            _last_completed_entries,
+                            track_changes_active=protocol.track_changes_enabled,
+                        )
                     protocol_block.configuration_snapshot_json = {
                         **(protocol_block.configuration_snapshot_json or {}),
                         "linked_list_id": linked_list_id,
