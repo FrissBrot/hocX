@@ -6,6 +6,7 @@ import { TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
 import { StructuredListTable, TrackedEntryInfo } from "@/components/lists/structured-list-table";
 import { DateInput } from "@/components/ui/date-input";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { TrackedChangeHideButton } from "@/components/ui/tracked-change-hide-button";
 import { Modal } from "@/components/ui/modal";
 import { StructuredListEditModal } from "@/components/protocol/planning/structured-list-edit-modal";
 import { EventOverviewModal } from "@/components/protocol/planning/event-overview-modal";
@@ -100,6 +101,10 @@ export function FocusedElementEditor({
   addTodo,
   updateTodo,
   deleteTodo,
+  acceptTodoTrackedChange,
+  acceptTrackedListEntry,
+  acceptTrackedRow,
+  acceptTextTrackedChanges,
   createEventFromBlock,
   updateEventFromBlock,
   deleteEventFromBlock,
@@ -161,6 +166,10 @@ export function FocusedElementEditor({
   addTodo: (protocolElementBlockId: number) => Promise<void>;
   updateTodo: (protocolElementBlockId: number, todoId: number, patch: Partial<ProtocolTodo>) => Promise<void>;
   deleteTodo: (protocolElementBlockId: number, todoId: number) => Promise<void>;
+  acceptTodoTrackedChange: (protocolElementBlockId: number, todoId: number) => Promise<void>;
+  acceptTrackedListEntry: (blockId: number, entryId: number) => Promise<void>;
+  acceptTrackedRow: (blockId: number, rowId: string) => Promise<void>;
+  acceptTextTrackedChanges: (protocolElementBlockId: number) => Promise<void>;
   createEventFromBlock: (protocolElementBlockId: number, blockConfig: Record<string, any>, draftOverride?: ProtocolEventDraft) => Promise<EventSummary | null>;
   updateEventFromBlock: (protocolElementBlockId: number, eventId: number, patch: Partial<EventSummary>) => Promise<boolean>;
   deleteEventFromBlock: (protocolElementBlockId: number, eventId: number) => Promise<void>;
@@ -1309,13 +1318,21 @@ export function FocusedElementEditor({
               </div>
 
               {(elementType === "text" || elementType === "static_text") && (
-                <RichTextEditor
-                  value={textDrafts[block.id] ?? ""}
-                  onChange={(md) => handleTextChange(block.id, md)}
-                  readOnly={!blockEditable}
-                  placeholder="Text schreiben… Fett mit **text**, kursiv mit *text*, Liste mit - oder 1."
-                  trackedBaseline={trackChangesActive && block.tracked_dirty ? block.tracked_baseline_content : undefined}
-                />
+                <div className="tracked-text-block">
+                  <RichTextEditor
+                    value={textDrafts[block.id] ?? ""}
+                    onChange={(md) => handleTextChange(block.id, md)}
+                    readOnly={!blockEditable}
+                    placeholder="Text schreiben… Fett mit **text**, kursiv mit *text*, Liste mit - oder 1."
+                    trackedBaseline={trackChangesActive && block.tracked_dirty ? block.tracked_baseline_content : undefined}
+                  />
+                  {trackChangesActive && block.tracked_dirty && block.tracked_baseline_content !== textDrafts[block.id] && (
+                    <TrackedChangeHideButton
+                      title="Änderungen in diesem Textblock ausblenden"
+                      onAccept={() => void acceptTextTrackedChanges(block.id)}
+                    />
+                  )}
+                </div>
               )}
 
               {elementType === "todo" && (() => {
@@ -1392,6 +1409,12 @@ export function FocusedElementEditor({
                                 void updateTodo(block.id, todo.id, { task });
                               }}
                             />
+                            {(isPendingDelete || isTrackedAdded || trackedBeforeTask) && (
+                              <TrackedChangeHideButton
+                                title="Änderung an diesem Todo ausblenden"
+                                onAccept={() => void acceptTodoTrackedChange(block.id, todo.id)}
+                              />
+                            )}
                           </div>
                           {todoEditable && (
                           <div className="todo-inline-meta">
@@ -1703,6 +1726,7 @@ export function FocusedElementEditor({
                             sortByColumn={linkedListSortBy}
                             sortDirection={linkedListSortDirection}
                             entryTrackedStatusById={entryTrackedStatusById}
+                            onAcceptTrackedEntry={(entryId) => void acceptTrackedListEntry(block.id, entryId)}
                             onCreateEntry={() => Promise.resolve(false)}
                             onUpdateEntry={() => Promise.resolve(false)}
                             onDeleteEntry={() => Promise.resolve()}
@@ -1775,6 +1799,7 @@ export function FocusedElementEditor({
                           sortByColumn={linkedListSortBy}
                           sortDirection={linkedListSortDirection}
                           entryTrackedStatusById={entryTrackedStatusById}
+                          onAcceptTrackedEntry={(entryId) => void acceptTrackedListEntry(block.id, entryId)}
                           onCreateEntry={(payload) => createListEntryFromBlock(block.id, linkedListId, payload)}
                           onUpdateEntry={(entryId, payload) => updateListEntryFromBlock(block.id, linkedListId, entryId, payload)}
                           onDeleteEntry={(entryId) => deleteListEntryFromBlock(block.id, linkedListId, entryId)}
@@ -1961,7 +1986,13 @@ export function FocusedElementEditor({
                               return (
                                 <div className="form-block-row" key={`${block.id}-form-${index}`}>
                                   <div className="field-label-inline tracked-strike">{aliasOrFixedValue}</div>
-                                  <div className="tracked-strike">{formatListEntryColumnValue(variableRawValue, variableValueType)}</div>
+                                  <div className="tracked-strike">
+                                    {formatListEntryColumnValue(variableRawValue, variableValueType)}
+                                    <TrackedChangeHideButton
+                                      title="Entfernte Zeile ausblenden"
+                                      onAccept={() => void acceptTrackedRow(block.id, String(row.id ?? index))}
+                                    />
+                                  </div>
                                 </div>
                               );
                             }
@@ -1980,6 +2011,9 @@ export function FocusedElementEditor({
                                       after={formatListEntryColumnValue(variableRawValue, variableValueType)}
                                     />
                                   </div>
+                                )}
+                                {variableTrackedChanged && (
+                                  <TrackedChangeHideButton onAccept={() => void acceptTrackedRow(block.id, String(row.id ?? index))} />
                                 )}
                                 {variableValueType === "participant" ? (
                                   <button
@@ -3153,6 +3187,7 @@ export function FocusedElementEditor({
       onDelete={deleteTodo}
       onPendingUpdate={onPendingUpdate}
       onPendingDone={onPendingDone}
+      onAcceptTrackedChange={acceptTodoTrackedChange}
     />
     {isPlanningMode && (() => {
       const referenceBlock = element.blocks.find((b) => asObject(b.configuration_snapshot_json).repeat_source_type === "event");

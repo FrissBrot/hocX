@@ -26,6 +26,7 @@ export function SessionTodosSection({
   onDelete,
   onPendingUpdate,
   onPendingDone,
+  onAcceptTrackedChange,
 }: {
   sectionTag: string;
   todos: ProtocolTodo[];
@@ -39,6 +40,7 @@ export function SessionTodosSection({
   onDelete: (blockId: number, todoId: number) => Promise<void>;
   onPendingUpdate: (updated: Partial<TodoListItem> & { id: number }) => void;
   onPendingDone: (todoId: number) => void;
+  onAcceptTrackedChange?: (blockId: number, todoId: number) => void;
 }) {
   if (todos.length === 0 && pendingTodos.length === 0) return null;
   if (!sectionTag) return null;
@@ -137,7 +139,11 @@ export function SessionTodosSection({
               <div className="todo-main todo-main-compact">
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <span className="todo-task-text">
-                    <TrackedTaskText todo={todo} trackChangesActive={trackChangesActive} />
+                    <TrackedTaskText
+                      todo={todo}
+                      trackChangesActive={trackChangesActive}
+                      onAccept={onAcceptTrackedChange ? () => onAcceptTrackedChange(todo.protocol_element_block_id, todo.id) : undefined}
+                    />
                   </span>
                   {isLocked && !isPendingDelete && <span className="todo-closed-elsewhere-badge">Später geschlossen</span>}
                 </div>

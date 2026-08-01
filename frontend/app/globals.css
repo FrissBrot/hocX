@@ -3387,6 +3387,55 @@ input[type="radio"] {
   background: color-mix(in srgb, var(--danger) 6%, transparent);
 }
 
+/* "Ausblenden" (hide) control on a single tracked change - see
+   TrackedChangeHideButton (components/ui/tracked-change-hide-button.tsx). Small and
+   muted by default, full-strength on hover/focus so it doesn't visually compete with
+   the red text itself. */
+.tracked-accept-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  margin-left: 4px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+  font-size: 0.72rem;
+  line-height: 1;
+  opacity: 0.55;
+  cursor: pointer;
+  vertical-align: middle;
+  transition: opacity 0.12s ease, background 0.12s ease;
+}
+
+.tracked-accept-btn:hover,
+.tracked-accept-btn:focus-visible {
+  opacity: 1;
+  background: color-mix(in srgb, var(--danger) 22%, transparent);
+}
+
+.tracked-run {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.tracked-text-block {
+  position: relative;
+}
+
+.tracked-text-block > .tracked-accept-btn {
+  position: absolute;
+  top: -10px;
+  right: -6px;
+  margin-left: 0;
+  z-index: 1;
+}
+
 /* Deleted-word widget rendered inline inside the live RichTextEditor by
    tracked-changes-extension.ts - a decoration only, not real doc content. */
 .tracked-word-widget {

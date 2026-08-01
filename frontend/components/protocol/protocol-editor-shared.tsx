@@ -8,6 +8,7 @@ import { useToast } from "@/contexts/toast-context";
 import { SessionPanel, SessionPanelHandle } from "@/components/protocol/session-panel";
 import { TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
 import { StructuredListTable } from "@/components/lists/structured-list-table";
+import { TrackedChangeHideButton } from "@/components/ui/tracked-change-hide-button";
 import { DataToolbar } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
@@ -538,20 +539,35 @@ export function TodoMiniMenu({
 // added/new content, strikethrough for removed/old content. A pending-delete todo (a
 // pre-existing todo deleted while tracked - it isn't really gone yet, see
 // ProtocolTodoService.delete_todo) always renders fully struck through regardless of
-// whether it also has a "changed" mark from an earlier edit.
-export function TrackedTaskText({ todo, trackChangesActive }: { todo: ProtocolTodo; trackChangesActive: boolean }) {
+// whether it also has a "changed" mark from an earlier edit. onAccept, if given, renders
+// a hover-revealed "Ausblenden" icon that accepts this one todo's change.
+export function TrackedTaskText({ todo, trackChangesActive, onAccept }: { todo: ProtocolTodo; trackChangesActive: boolean; onAccept?: () => void }) {
   if (!trackChangesActive) return <>{todo.task}</>;
-  if (todo.pending_delete) return <span className="tracked-strike">{todo.task}</span>;
+  const hideButton = onAccept ? <TrackedChangeHideButton onAccept={onAccept} title="Änderung an diesem Todo ausblenden" /> : null;
+  if (todo.pending_delete) {
+    return (
+      <span className="tracked-run">
+        <span className="tracked-strike">{todo.task}</span>
+        {hideButton}
+      </span>
+    );
+  }
   if (todo.tracked_change === "changed" && todo.tracked_change_before_json?.task) {
     return (
-      <>
+      <span className="tracked-run">
         <span className="tracked-strike">{todo.tracked_change_before_json.task}</span>{" "}
         <span className="tracked-underline">{todo.task}</span>
-      </>
+        {hideButton}
+      </span>
     );
   }
   if (todo.tracked_change === "added") {
-    return <span className="tracked-underline">{todo.task}</span>;
+    return (
+      <span className="tracked-run">
+        <span className="tracked-underline">{todo.task}</span>
+        {hideButton}
+      </span>
+    );
   }
   return <>{todo.task}</>;
 }

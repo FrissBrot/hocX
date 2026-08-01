@@ -1133,7 +1133,11 @@ class ProtocolService:
                             _field_row["list_snapshot"] = list_snapshot_service.tag_initial_row_snapshot(
                                 _live_row_snapshot,
                                 _last_completed_rows_by_entry.get(_field_row["linked_list_entry_id"]),
-                                track_changes_active=protocol.track_changes_enabled,
+                                # Only tag against a real prior baseline: with no last-completed
+                                # protocol at all (the very first protocol for this template),
+                                # there's nothing to have changed relative to - see
+                                # tag_initial_list_entries call below for the whole-list case.
+                                track_changes_active=protocol.track_changes_enabled and last_completed_element is not None,
                             )
                     _whole_list_snapshot = (
                         list_snapshot_service.compute_whole_list_snapshot(db, linked_list_id) if linked_list_id else None
@@ -1148,7 +1152,13 @@ class ProtocolService:
                         _whole_list_snapshot["entries"] = list_snapshot_service.tag_initial_list_entries(
                             _whole_list_snapshot["entries"],
                             _last_completed_entries,
-                            track_changes_active=protocol.track_changes_enabled,
+                            # Gate on an actual recorded snapshot existing for THIS block, not
+                            # just on a last-completed protocol existing: a protocol completed
+                            # before the list_snapshot feature shipped has no 'list_snapshot' on
+                            # its blocks at all, which looks identical to "never captured" - if
+                            # we tagged against that, every entry would come back "added" against
+                            # a baseline that was simply never recorded, not one that was empty.
+                            track_changes_active=protocol.track_changes_enabled and _last_completed_whole is not None,
                         )
                     protocol_block.configuration_snapshot_json = {
                         **(protocol_block.configuration_snapshot_json or {}),

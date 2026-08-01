@@ -297,6 +297,68 @@ def refresh_block_list_snapshot(
     return block
 
 
+def accept_tracked_list_entry(db: Session, block: ProtocolElementBlock, entry_id: int) -> ProtocolElementBlock:
+    """'Ausblenden' for one whole-list entry's tracked-change highlight: strips its
+    '_tracked'/'_tracked_before' markers so it renders as plain data again, independent
+    of the protocol-wide clear that otherwise only happens at vorbereitet ->
+    durchgefuehrt (clear_tracked_changes_for_protocol). A 'removed' phantom is dropped
+    entirely now, finalizing its removal early."""
+    config = dict(block.configuration_snapshot_json or {})
+    list_snapshot = config.get("list_snapshot")
+    entries = list_snapshot.get("entries") if isinstance(list_snapshot, dict) else None
+    if not isinstance(entries, list):
+        return block
+    new_entries = []
+    changed = False
+    for entry in entries:
+        if not isinstance(entry, dict) or entry.get("id") != entry_id or not entry.get("_tracked"):
+            new_entries.append(entry)
+            continue
+        changed = True
+        if entry.get("_tracked") == "removed":
+            continue
+        new_entries.append({k: v for k, v in entry.items() if k not in ("_tracked", "_tracked_before")})
+    if not changed:
+        return block
+    config["list_snapshot"] = {**list_snapshot, "entries": new_entries}
+    block.configuration_snapshot_json = config
+    db.add(block)
+    db.commit()
+    db.refresh(block)
+    return block
+
+
+def accept_tracked_row(db: Session, block: ProtocolElementBlock, row_id: str) -> ProtocolElementBlock:
+    """Row-link ('Zeile aus Liste') counterpart to accept_tracked_list_entry - see its
+    docstring. row_id is the form row's own id (compared as a string since it may be
+    stored as either an int or a string in configuration_snapshot_json), not the linked
+    list entry's id."""
+    config = dict(block.configuration_snapshot_json or {})
+    rows = config.get("rows")
+    if not isinstance(rows, list):
+        return block
+    new_rows = []
+    changed = False
+    for row in rows:
+        if not isinstance(row, dict) or str(row.get("id")) != row_id:
+            new_rows.append(row)
+            continue
+        row_snapshot = row.get("list_snapshot")
+        if isinstance(row_snapshot, dict) and row_snapshot.get("_tracked"):
+            changed = True
+            row = dict(row)
+            row["list_snapshot"] = {k: v for k, v in row_snapshot.items() if k not in ("_tracked", "_tracked_before")}
+        new_rows.append(row)
+    if not changed:
+        return block
+    config["rows"] = new_rows
+    block.configuration_snapshot_json = config
+    db.add(block)
+    db.commit()
+    db.refresh(block)
+    return block
+
+
 def undo_block_list_snapshot(db: Session, block: ProtocolElementBlock) -> ProtocolElementBlock | None:
     """Restores whichever list_snapshot(s) on this block have a 'previous' back into the
     current position and clears 'previous'. Returns None if there's nothing to undo (route

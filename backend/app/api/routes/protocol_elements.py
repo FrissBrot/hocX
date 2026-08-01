@@ -248,6 +248,55 @@ def create_protocol_element_block_from_event(
     return _block_to_read(protocol_block)
 
 
+@router.post("/protocol-element-blocks/{protocol_element_block_id}/list-snapshot/entries/{entry_id}/accept-tracked-change", response_model=ProtocolElementBlockRead)
+def accept_tracked_list_entry(
+    protocol_element_block_id: int,
+    entry_id: int,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """'Ausblenden' for one whole-list entry's red tracked-change highlight."""
+    require_writer(user)
+    block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
+    block = list_snapshot_service.accept_tracked_list_entry(db, block, entry_id)
+    _broadcast_block_update(protocol.id, block, user)
+    return _block_to_read(block)
+
+
+@router.post("/protocol-element-blocks/{protocol_element_block_id}/rows/{row_id}/accept-tracked-change", response_model=ProtocolElementBlockRead)
+def accept_tracked_row(
+    protocol_element_block_id: int,
+    row_id: str,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """'Ausblenden' for one row-link ('Zeile aus Liste') form row's red tracked-change highlight."""
+    require_writer(user)
+    block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
+    block = list_snapshot_service.accept_tracked_row(db, block, row_id)
+    _broadcast_block_update(protocol.id, block, user)
+    return _block_to_read(block)
+
+
+@router.post("/protocol-element-blocks/{protocol_element_block_id}/text/accept-tracked-changes", response_model=ProtocolTextRead)
+def accept_text_tracked_changes(
+    protocol_element_block_id: int,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """'Ausblenden' for a text block's red tracked-change highlight (whole block)."""
+    require_writer(user)
+    access_service.ensure_can_read_protocol_block(db, user, protocol_element_block_id)
+    try:
+        result = autosave_service.accept_tracked_changes(db, protocol_element_block_id)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Change could not be accepted") from exc
+    if result is None:
+        raise HTTPException(status_code=404, detail="Text block not found")
+    return ProtocolTextRead(**result)
+
+
 @router.put("/protocol-element-blocks/{protocol_element_block_id}/text", response_model=ProtocolTextRead)
 def put_protocol_text(
     protocol_element_block_id: int,

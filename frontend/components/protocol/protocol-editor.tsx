@@ -668,6 +668,28 @@ export function ProtocolEditor({
     }, 700);
   }
 
+  // "Ausblenden" for a text block's red tracked-change highlight (whole block at once -
+  // see AutosaveService.accept_tracked_changes for why not per-word).
+  async function acceptTextTrackedChanges(protocolElementBlockId: number) {
+    try {
+      const result = await browserApiFetch<{ tracked_dirty: boolean; tracked_baseline_content: string | null }>(
+        `/api/protocol-element-blocks/${protocolElementBlockId}/text/accept-tracked-changes`,
+        { method: "POST" }
+      );
+      updateBlockInState(protocolElementBlockId, (block) => ({
+        ...block,
+        tracked_dirty: result.tracked_dirty,
+        tracked_baseline_content: result.tracked_baseline_content,
+      }));
+      collab.sendFieldUpdate(`block-${protocolElementBlockId}`, {
+        tracked_dirty: result.tracked_dirty,
+        tracked_baseline_content: result.tracked_baseline_content,
+      });
+    } catch (err: unknown) {
+      if (err instanceof Error) showToast(err.message);
+    }
+  }
+
   async function addTodo(protocolElementBlockId: number) {
     const task = newTodoTask[protocolElementBlockId]?.trim();
     if (!task) return;
@@ -721,6 +743,26 @@ export function ProtocolEditor({
       setStatus(protocolElementBlockId, "saved");
     } catch {
       setStatus(protocolElementBlockId, "error");
+    }
+  }
+
+  // "Ausblenden" on a todo's red tracked-change highlight: keeps the todo, just stops
+  // marking it as changed/added/pending-delete. A pending-delete ghost is hard-deleted
+  // server-side, so it disappears from the list entirely.
+  async function acceptTodoTrackedChange(protocolElementBlockId: number, todoId: number) {
+    try {
+      const result = await browserApiFetch<{ todo: ProtocolTodo | null }>(
+        `/api/protocol-todos/${todoId}/accept-tracked-change`,
+        { method: "POST" }
+      );
+      setTodosByBlock((current) => ({
+        ...current,
+        [protocolElementBlockId]: result.todo
+          ? (current[protocolElementBlockId] ?? []).map((todo) => (todo.id === todoId ? result.todo! : todo))
+          : (current[protocolElementBlockId] ?? []).filter((todo) => todo.id !== todoId),
+      }));
+    } catch (err: unknown) {
+      if (err instanceof Error) showToast(err.message);
     }
   }
 
@@ -881,6 +923,31 @@ export function ProtocolEditor({
       updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json }));
       void refreshElementTitles();
       collab.sendFieldUpdate("element-titles", null);
+    } catch (err: unknown) {
+      if (err instanceof Error) showToast(err.message);
+    }
+  }
+
+  // "Ausblenden" on one whole-list entry's or row-link row's red tracked-change highlight.
+  async function acceptTrackedListEntry(blockId: number, entryId: number) {
+    try {
+      const updated = await browserApiFetch<ProtocolElement["blocks"][number]>(
+        `/api/protocol-element-blocks/${blockId}/list-snapshot/entries/${entryId}/accept-tracked-change`,
+        { method: "POST" }
+      );
+      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json }));
+    } catch (err: unknown) {
+      if (err instanceof Error) showToast(err.message);
+    }
+  }
+
+  async function acceptTrackedRow(blockId: number, rowId: string) {
+    try {
+      const updated = await browserApiFetch<ProtocolElement["blocks"][number]>(
+        `/api/protocol-element-blocks/${blockId}/rows/${rowId}/accept-tracked-change`,
+        { method: "POST" }
+      );
+      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json }));
     } catch (err: unknown) {
       if (err instanceof Error) showToast(err.message);
     }
@@ -1200,6 +1267,10 @@ export function ProtocolEditor({
               addTodo={addTodo}
               updateTodo={updateTodo}
               deleteTodo={deleteTodo}
+              acceptTodoTrackedChange={acceptTodoTrackedChange}
+              acceptTrackedListEntry={acceptTrackedListEntry}
+              acceptTrackedRow={acceptTrackedRow}
+              acceptTextTrackedChanges={acceptTextTrackedChanges}
               createEventFromBlock={createEventFromBlock}
               updateEventFromBlock={updateEventFromBlock}
               deleteEventFromBlock={deleteEventFromBlock}
