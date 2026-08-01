@@ -3,9 +3,13 @@
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { Badge } from "@/components/ui/badge";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
+import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
+import { Popover } from "@/components/ui/popover";
+import { SearchInput } from "@/components/ui/search-input";
 import { EventDetailForm } from "@/components/protocol/planning/event-detail-form";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
@@ -159,7 +163,6 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
   const [eventContextMenu, setEventContextMenu] = useState<{ x: number; y: number; event: EventSummary } | null>(null);
 
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
-  const [viewMenuStyle, setViewMenuStyle] = useState<React.CSSProperties>({});
   const viewMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const [showImportModal, setShowImportModal] = useState(false);
@@ -275,48 +278,6 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     browserApiFetch<CycleConfigSummary[]>("/api/cycle-configs")
       .then((configs) => setCycleConfigs(configs ?? []))
       .catch(() => setCycleConfigs([]));
-  }, []);
-
-  useEffect(() => {
-    if (!viewMenuOpen || !viewMenuTriggerRef.current) return;
-    const rect = viewMenuTriggerRef.current.getBoundingClientRect();
-    const gap = 6;
-    const margin = 8;
-    const estimatedHeight = 460;
-    const spaceBelow = window.innerHeight - rect.bottom - margin;
-    const spaceAbove = rect.top - margin;
-    const showAbove = spaceBelow < estimatedHeight && spaceAbove > spaceBelow;
-    setViewMenuStyle({
-      position: "fixed",
-      ...(showAbove
-        ? { bottom: window.innerHeight - rect.top + gap, maxHeight: spaceAbove }
-        : { top: rect.bottom + gap, maxHeight: spaceBelow }),
-      right: window.innerWidth - rect.right,
-      minWidth: Math.max(rect.width, 260),
-      zIndex: 9999,
-      overflowY: "auto",
-    });
-  }, [viewMenuOpen]);
-
-  useEffect(() => {
-    function onPointerDown(event: MouseEvent) {
-      const target = event.target as Node;
-      if (
-        !viewMenuTriggerRef.current?.contains(target) &&
-        !document.getElementById("event-view-menu-portal")?.contains(target)
-      ) {
-        setViewMenuOpen(false);
-      }
-    }
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setViewMenuOpen(false);
-    }
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
   }, []);
 
   useEffect(() => {
@@ -477,7 +438,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
 
   const optionalColumnRenderers: Record<OptionalColumnKey, (item: EventSummary) => ReactNode> = {
     is_cancelled: (item) =>
-      item.is_cancelled ? <span className="pill pill-error">Abgesagt</span> : <span className="muted">–</span>,
+      item.is_cancelled ? <Badge variant="danger">Abgesagt</Badge> : <span className="muted">–</span>,
     participant_count: (item) => item.participant_count ?? 0,
     location: (item) => item.location || <span className="muted">–</span>,
     organizer_ids: (item) => formatParticipantNames(item.organizer_ids),
@@ -707,41 +668,38 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                 <span className="mini-menu-trigger-label">Ansicht</span>
                 <span className="mini-menu-trigger-icon">⌄</span>
               </button>
-              {viewMenuOpen && typeof document !== "undefined" && createPortal(
-                <div id="event-view-menu-portal" className="mini-menu-popover-portal" style={viewMenuStyle} role="menu">
-                  <div className="mini-menu-section">
-                    <div className="mini-menu-section-title">Filter</div>
+              <Popover open={viewMenuOpen} onOpenChange={setViewMenuOpen} anchorRef={viewMenuTriggerRef} align="end" className="mini-menu-popover-portal">
+                <div className="mini-menu-section">
+                  <div className="mini-menu-section-title">Filter</div>
+                  <label className="mini-menu-option">
+                    <span>Vergangene Termine anzeigen</span>
+                    <input type="checkbox" checked={showPast} onChange={(event) => setShowPast(event.target.checked)} />
+                  </label>
+                  {cycleConfigs.length > 0 && (
                     <label className="mini-menu-option">
-                      <span>Vergangene Termine anzeigen</span>
-                      <input type="checkbox" checked={showPast} onChange={(event) => setShowPast(event.target.checked)} />
+                      <span>Alle Zyklus-Perioden anzeigen</span>
+                      <input
+                        type="checkbox"
+                        checked={showAllPeriods}
+                        onChange={(event) => setShowAllPeriods(event.target.checked)}
+                      />
                     </label>
-                    {cycleConfigs.length > 0 && (
-                      <label className="mini-menu-option">
-                        <span>Alle Zyklus-Perioden anzeigen</span>
-                        <input
-                          type="checkbox"
-                          checked={showAllPeriods}
-                          onChange={(event) => setShowAllPeriods(event.target.checked)}
-                        />
-                      </label>
-                    )}
-                  </div>
-                  <div className="mini-menu-section">
-                    <div className="mini-menu-section-title">Zusätzliche Spalten</div>
-                    {OPTIONAL_COLUMNS.map((column) => (
-                      <label key={column.key} className="mini-menu-option">
-                        <span>{column.label}</span>
-                        <input
-                          type="checkbox"
-                          checked={visibleColumns.has(column.key)}
-                          onChange={() => toggleColumn(column.key)}
-                        />
-                      </label>
-                    ))}
-                  </div>
-                </div>,
-                document.body
-              )}
+                  )}
+                </div>
+                <div className="mini-menu-section">
+                  <div className="mini-menu-section-title">Zusätzliche Spalten</div>
+                  {OPTIONAL_COLUMNS.map((column) => (
+                    <label key={column.key} className="mini-menu-option">
+                      <span>{column.label}</span>
+                      <input
+                        type="checkbox"
+                        checked={visibleColumns.has(column.key)}
+                        onChange={() => toggleColumn(column.key)}
+                      />
+                    </label>
+                  ))}
+                </div>
+              </Popover>
             </div>
             <button type="button" className="button-inline" onClick={openCreate}>
               Neuer Termin
@@ -750,31 +708,17 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
         }
       />
 
-      <div className="segment-control">
-        <button
-          type="button"
-          className={`segment-button${tagFilter === "all" ? " segment-button-active" : ""}`}
-          onClick={() => setTagFilter("all")}
-        >
-          Alle
-        </button>
-        {knownTags.map((tag) => (
-          <button
-            key={tag}
-            type="button"
-            className={`segment-button${tagFilter === tag ? " segment-button-active" : ""}`}
-            onClick={() => setTagFilter(tag)}
-          >
-            {tag}
-          </button>
-        ))}
-      </div>
+      <FilterTabs
+        options={[{ value: "all", label: "Alle" }, ...knownTags.map((tag) => ({ value: tag, label: tag }))]}
+        value={tagFilter}
+        onChange={setTagFilter}
+      />
 
       <article className="card">
         <div className="two-col">
           <label className="field-stack">
             <span className="field-label">Suche</span>
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Termine durchsuchen" />
+            <SearchInput value={search} onChange={setSearch} placeholder="Termine durchsuchen" />
           </label>
           <div className="card">
             <div className="eyebrow">Überblick</div>
@@ -924,8 +868,8 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
               </div>
 
               <div className="status-row">
-                <span className="pill pill-success">{importPreview.valid_count} gültig</span>
-                {importPreview.error_count > 0 && <span className="pill pill-error">{importPreview.error_count} mit Fehlern</span>}
+                <Badge variant="success">{importPreview.valid_count} gültig</Badge>
+                {importPreview.error_count > 0 && <Badge variant="danger">{importPreview.error_count} mit Fehlern</Badge>}
                 <span className="pill">{importPreview.rows.length} Zeile(n) gesamt</span>
                 {importPreviewLoading && <span className="muted">Aktualisiere Vorschau…</span>}
               </div>
@@ -942,9 +886,9 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                     <td>{row.participant_count ?? <span className="muted">–</span>}</td>
                     <td>
                       {row.error ? (
-                        <span className="pill pill-error">{row.error}</span>
+                        <Badge variant="danger">{row.error}</Badge>
                       ) : (
-                        <span className="pill pill-success">Gültig</span>
+                        <Badge variant="success">Gültig</Badge>
                       )}
                     </td>
                   </tr>

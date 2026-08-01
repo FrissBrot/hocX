@@ -2,6 +2,7 @@
 
 import { ChangeEvent, FormEvent, useMemo, useState } from "react";
 
+import { Badge } from "@/components/ui/badge";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
 import { browserApiFetch } from "@/lib/api/client";
@@ -397,19 +398,11 @@ export function ParticipantManager({ initialParticipants, templates }: Participa
         {importResult && (
           <div className="grid">
             <div className="status-row">
-              <span className="pill pill-success">
-                {importResult.imported.length} importiert
-              </span>
+              <Badge variant="success">{importResult.imported.length} importiert</Badge>
               {importResult.duplicates.length > 0 && (
-                <span className="pill pill-warning">
-                  {importResult.duplicates.length} Duplikate übersprungen
-                </span>
+                <Badge variant="warning">{importResult.duplicates.length} Duplikate übersprungen</Badge>
               )}
-              {importResult.errors.length > 0 && (
-                <span className="pill pill-error">
-                  {importResult.errors.length} Fehler
-                </span>
-              )}
+              {importResult.errors.length > 0 && <Badge variant="danger">{importResult.errors.length} Fehler</Badge>}
             </div>
             {importResult.duplicates.length > 0 && (
               <div>
