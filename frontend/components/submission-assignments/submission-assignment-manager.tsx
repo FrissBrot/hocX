@@ -2,8 +2,10 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 
+import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { DataToolbar } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
+import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import {
@@ -34,21 +36,21 @@ const LOG_STATUS_LABEL: Record<string, string> = {
   rescan_pending: "Rescan: ClamAV offline",
 };
 
-const LOG_STATUS_CLASS: Record<string, string> = {
-  upload_received: "",
-  quarantined: "pill-warning",
-  moved_to_storage: "pill-success",
-  submitted: "pill-success",
-  captcha_failed: "pill-warning",
-  validation_failed: "pill-warning",
-  element_closed: "pill-warning",
-  upload_error: "pill-error",
-  scan_clean: "pill-success",
-  scan_pending: "pill-warning",
-  scan_infected: "pill-error",
-  rescan_clean: "pill-success",
-  rescan_infected: "pill-error",
-  rescan_pending: "pill-warning",
+const LOG_STATUS_VARIANT: Record<string, BadgeVariant> = {
+  upload_received: "neutral",
+  quarantined: "warning",
+  moved_to_storage: "success",
+  submitted: "success",
+  captcha_failed: "warning",
+  validation_failed: "warning",
+  element_closed: "warning",
+  upload_error: "danger",
+  scan_clean: "success",
+  scan_pending: "warning",
+  scan_infected: "danger",
+  rescan_clean: "success",
+  rescan_infected: "danger",
+  rescan_pending: "warning",
 };
 
 const SCAN_STATUS_LABEL: Record<string, string> = {
@@ -57,10 +59,10 @@ const SCAN_STATUS_LABEL: Record<string, string> = {
   infected: "Schadware",
 };
 
-const SCAN_STATUS_CLASS: Record<string, string> = {
-  clean: "pill-success",
-  pending: "pill-warning",
-  infected: "pill-error",
+const SCAN_STATUS_VARIANT: Record<string, BadgeVariant> = {
+  clean: "success",
+  pending: "warning",
+  infected: "danger",
 };
 
 const SINGLE_PARTICIPANT_EVENT_FIELDS: { field: string; label: string }[] = [
@@ -156,12 +158,12 @@ function statusLabel(element: SubmissionElementStatusEntry): string {
   return "Offen";
 }
 
-function statusClass(element: SubmissionElementStatusEntry): string {
+function statusVariant(element: SubmissionElementStatusEntry): BadgeVariant | null {
   if (element.status === "submitted") {
-    if (element.files.some((f) => f.scan_status === "pending")) return "pill-warning";
-    return "pill-success";
+    if (element.files.some((f) => f.scan_status === "pending")) return "warning";
+    return "success";
   }
-  return "";
+  return null;
 }
 
 function SummaryBar({ summary }: { summary: AssignmentSummary | undefined }) {
@@ -593,12 +595,7 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
 
         {/* Left sidebar — assignment list */}
         <aside className="subm-sidebar">
-          <input
-            className="subm-search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Abgaben suchen…"
-          />
+          <SearchInput value={search} onChange={setSearch} placeholder="Abgaben suchen…" />
 
           <div className="subm-sidebar-list">
             {filteredAssignments.length === 0 ? (
@@ -677,9 +674,9 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
                 <div className="subm-panel-heading">
                   <h2 className="subm-panel-title">{selectedAssignment?.title}</h2>
                   {hasPendingFiles && (
-                    <span className="pill pill-sm pill-warning subm-pulse">
+                    <Badge variant="warning" className="subm-pulse">
                       Dateien in Quarantäne
-                    </span>
+                    </Badge>
                   )}
                 </div>
                 <button
@@ -741,8 +738,8 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
                                 : element.window_end ?? "—"}
                             </td>
                             <td className="subm-status-cell">
-                              {statusClass(element) ? (
-                                <span className={`pill pill-sm ${statusClass(element)}`}>{statusLabel(element)}</span>
+                              {statusVariant(element) ? (
+                                <Badge variant={statusVariant(element)!}>{statusLabel(element)}</Badge>
                               ) : (
                                 <span className="subm-empty-cell">{statusLabel(element)}</span>
                               )}
@@ -778,10 +775,10 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
         {elementModal ? (
           <div className="grid subm-element-modal">
             <div className="status-row">
-              {statusClass(elementModal) ? (
-                <span className={`pill pill-sm ${statusClass(elementModal)}`}>{statusLabel(elementModal)}</span>
+              {statusVariant(elementModal) ? (
+                <Badge variant={statusVariant(elementModal)!}>{statusLabel(elementModal)}</Badge>
               ) : (
-                <span className="pill pill-sm">{statusLabel(elementModal)}</span>
+                <Badge variant="neutral">{statusLabel(elementModal)}</Badge>
               )}
               {elementModal.window_start && elementModal.window_end ? (
                 <span className="subm-modal-meta">{elementModal.window_start} – {elementModal.window_end}</span>
@@ -831,9 +828,9 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
                           </button>
                         </>
                       ) : (
-                        <span className={`pill pill-sm ${SCAN_STATUS_CLASS[file.scan_status] ?? ""}`}>
+                        <Badge variant={SCAN_STATUS_VARIANT[file.scan_status] ?? "neutral"}>
                           {SCAN_STATUS_LABEL[file.scan_status] ?? file.scan_status}
-                        </span>
+                        </Badge>
                       )}
                     </div>
                   ))}
@@ -862,15 +859,14 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
               ) : (
                 <div className="subm-log-list">
                   {logEntries.map((entry) => {
-                    const tone = (LOG_STATUS_CLASS[entry.status] ?? "").replace("pill-", "") || "neutral";
+                    const variant = LOG_STATUS_VARIANT[entry.status] ?? "neutral";
+                    const tone = variant === "danger" ? "error" : variant;
                     return (
                       <div key={entry.id} className={`subm-log-entry subm-log-entry-${tone}`}>
                         <span className="subm-log-dot" />
                         <div className="subm-log-body">
                           <div className="subm-log-header">
-                            <span className={`pill pill-sm ${LOG_STATUS_CLASS[entry.status] ?? ""}`}>
-                              {LOG_STATUS_LABEL[entry.status] ?? entry.status}
-                            </span>
+                            <Badge variant={variant}>{LOG_STATUS_LABEL[entry.status] ?? entry.status}</Badge>
                             <span className="subm-log-time">{new Date(entry.created_at).toLocaleString("de-CH")}</span>
                           </div>
                           {entry.error_message ? <div className="subm-log-detail">{entry.error_message}</div> : null}
@@ -953,7 +949,7 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
                           placeholder="Suchen…"
                           value={tagDropdownSearch}
                           onChange={(e) => setTagDropdownSearch(e.target.value)}
-                          style={{ width: "100%", boxSizing: "border-box", padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border)", backgroundColor: "var(--surface)", color: "var(--text)", fontSize: "0.88rem", minHeight: 0, outline: "none" }}
+                          style={{ width: "100%", boxSizing: "border-box", padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border)", backgroundColor: "var(--bg)", color: "var(--text)", fontSize: "0.88rem", minHeight: 0, outline: "none" }}
                         />
                       </div>
                       <div style={{ maxHeight: 220, overflowY: "auto", padding: "4px 0" }}>
