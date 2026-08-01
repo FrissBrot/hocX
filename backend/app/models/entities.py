@@ -531,6 +531,7 @@ class Protocol(Base, TimestampMixin, UpdatedAtMixin):
     version_minor: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     version_final_minor: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     session_notes: Mapped[str | None] = mapped_column(Text)
+    track_changes_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
 
 
@@ -611,6 +612,8 @@ class ProtocolText(Base, TimestampMixin, UpdatedAtMixin):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     protocol_element_block_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("protocol_element_block.id", ondelete="CASCADE"), nullable=False, unique=True)
     content: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("''"))
+    tracked_baseline_content: Mapped[str | None] = mapped_column(Text)
+    tracked_dirty: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
 
 
 class ProtocolDisplaySnapshot(Base, TimestampMixin):
@@ -664,6 +667,9 @@ class ProtocolTodo(Base, TimestampMixin, UpdatedAtMixin):
     closed_in_protocol_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="SET NULL"))
     submission_assignment_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("submission_assignment.id", ondelete="CASCADE"))
     element_ref: Mapped[str | None] = mapped_column(Text)
+    tracked_change: Mapped[str | None] = mapped_column(Text)
+    tracked_change_before_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    pending_delete: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
 
 
 class ProtocolImage(Base, TimestampMixin):

@@ -74,6 +74,8 @@ class ProtocolElementService:
                     latex_template_snapshot=block.latex_template_snapshot,
                     configuration_snapshot_json=config,
                     text_content=row.text_content,
+                    tracked_dirty=bool(row.tracked_dirty),
+                    tracked_baseline_content=row.tracked_baseline_content,
                     display_compiled_text=row.display_compiled_text,
                     display_snapshot_json=row.display_snapshot_json or {},
                 )

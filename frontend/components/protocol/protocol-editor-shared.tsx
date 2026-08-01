@@ -532,6 +532,30 @@ export function TodoMiniMenu({
   );
 }
 
+// Shared "track changes" rendering for a todo's task text - used identically by both
+// session-todos-section.tsx and focused-element-editor.tsx, which otherwise duplicate
+// their todo-card markup independently. Word-style: a single red accent, underline for
+// added/new content, strikethrough for removed/old content. A pending-delete todo (a
+// pre-existing todo deleted while tracked - it isn't really gone yet, see
+// ProtocolTodoService.delete_todo) always renders fully struck through regardless of
+// whether it also has a "changed" mark from an earlier edit.
+export function TrackedTaskText({ todo, trackChangesActive }: { todo: ProtocolTodo; trackChangesActive: boolean }) {
+  if (!trackChangesActive) return <>{todo.task}</>;
+  if (todo.pending_delete) return <span className="tracked-strike">{todo.task}</span>;
+  if (todo.tracked_change === "changed" && todo.tracked_change_before_json?.task) {
+    return (
+      <>
+        <span className="tracked-strike">{todo.tracked_change_before_json.task}</span>{" "}
+        <span className="tracked-underline">{todo.task}</span>
+      </>
+    );
+  }
+  if (todo.tracked_change === "added") {
+    return <span className="tracked-underline">{todo.task}</span>;
+  }
+  return <>{todo.task}</>;
+}
+
 export function TodoMenuOption({
   label,
   active = false,

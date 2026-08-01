@@ -5,7 +5,7 @@ import { DateInput } from "@/components/ui/date-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { formatDate, formatDateRange } from "@/lib/utils/format";
 import { EventSummary, ParticipantSummary, ProtocolSummary, ProtocolTodo, TodoListItem } from "@/types/api";
-import { TODO_STATUS, TodoMenuOption, TodoMiniMenu, formatShortDate } from "@/components/protocol/protocol-editor-shared";
+import { TODO_STATUS, TodoMenuOption, TodoMiniMenu, TrackedTaskText, formatShortDate } from "@/components/protocol/protocol-editor-shared";
 
 type DueDraft =
   | { type: "none" }
@@ -18,6 +18,7 @@ export function SessionTodosSection({
   todos,
   pendingTodos = [],
   isReadOnly,
+  trackChangesActive = false,
   participants,
   dueEvents,
   protocol,
@@ -30,6 +31,7 @@ export function SessionTodosSection({
   todos: ProtocolTodo[];
   pendingTodos?: TodoListItem[];
   isReadOnly: boolean;
+  trackChangesActive?: boolean;
   participants: ParticipantSummary[];
   dueEvents: EventSummary[];
   protocol: ProtocolSummary;
@@ -115,9 +117,10 @@ export function SessionTodosSection({
         {todos.map((todo) => {
           const isDone = todo.todo_status_code === "done";
           const isClosedElsewhere = !!todo.closed_in_protocol_id;
-          const isLocked = isClosedElsewhere;
+          const isPendingDelete = trackChangesActive && !!todo.pending_delete;
+          const isLocked = isClosedElsewhere || isPendingDelete;
           return (
-            <article className={`todo-card todo-card-compact${isDone ? " todo-card-done" : ""}${isLocked ? " todo-card-locked" : ""}`} key={todo.id}>
+            <article className={`todo-card todo-card-compact${isDone ? " todo-card-done" : ""}${isLocked ? " todo-card-locked" : ""}${isPendingDelete ? " todo-tracked-pending-delete" : ""}`} key={todo.id}>
               <button
                 type="button"
                 className={`todo-toggle${isDone || isLocked ? " todo-toggle-done" : ""}`}
@@ -133,8 +136,10 @@ export function SessionTodosSection({
               </button>
               <div className="todo-main todo-main-compact">
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span className="todo-task-text">{todo.task}</span>
-                  {isLocked && <span className="todo-closed-elsewhere-badge">Später geschlossen</span>}
+                  <span className="todo-task-text">
+                    <TrackedTaskText todo={todo} trackChangesActive={trackChangesActive} />
+                  </span>
+                  {isLocked && !isPendingDelete && <span className="todo-closed-elsewhere-badge">Später geschlossen</span>}
                 </div>
                 {!isReadOnly && !isLocked && (
                   <div className="todo-inline-meta">

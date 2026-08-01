@@ -14,9 +14,12 @@ from app.models.entities import (
     Protocol,
     ProtocolElement,
     ProtocolElementBlock,
+    ProtocolText,
+    ProtocolTodo,
     RenderType,
     Template,
     Tenant,
+    TodoStatus,
 )
 
 
@@ -41,6 +44,7 @@ def make_protocol(
     protocol_number: str = "P-1",
     protocol_date: date = date(2026, 1, 1),
     status: str = "geplant",
+    track_changes_enabled: bool = True,
 ) -> Protocol:
     protocol = Protocol(
         tenant_id=tenant_id,
@@ -49,6 +53,7 @@ def make_protocol(
         protocol_number=protocol_number,
         protocol_date=protocol_date,
         status=status,
+        track_changes_enabled=track_changes_enabled,
     )
     db.add(protocol)
     db.flush()
@@ -130,6 +135,33 @@ def make_protocol_element_block(
     db.add(block)
     db.flush()
     return block
+
+
+def make_protocol_text(db, protocol_element_block_id: int, content: str = "Hello") -> ProtocolText:
+    protocol_text = ProtocolText(protocol_element_block_id=protocol_element_block_id, content=content)
+    db.add(protocol_text)
+    db.flush()
+    return protocol_text
+
+
+def make_protocol_todo(
+    db,
+    protocol_element_block_id: int,
+    task: str = "Test Task",
+    sort_index: int = 0,
+    tenant_id: int | None = None,
+) -> ProtocolTodo:
+    open_status_id = db.scalar(select(TodoStatus.id).where(TodoStatus.code == "open"))
+    todo = ProtocolTodo(
+        tenant_id=tenant_id,
+        protocol_element_block_id=protocol_element_block_id,
+        sort_index=sort_index,
+        task=task,
+        todo_status_id=open_status_id,
+    )
+    db.add(todo)
+    db.flush()
+    return todo
 
 
 def make_current_user(tenant_id: int, role: str = "writer", user_id: int = 1) -> CurrentUser:

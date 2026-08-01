@@ -1407,6 +1407,42 @@ class ProtocolService:
         if changed:
             db.commit()
 
+    def _clear_tracked_changes(self, db: Session, protocol_id: int) -> None:
+        """Called once at vorbereitet -> durchgefuehrt (mirrors _freeze_responsible_titles):
+        this is the point where every track-changes mark ever made on this protocol -
+        regardless of the toggle's on/off history - permanently disappears. Todos created
+        during tracking and then deleted before this point never had a pending_delete row
+        (they hard-delete immediately, see ProtocolTodoService.delete_todo); anything still
+        pending_delete here is a pre-existing todo that really gets removed only now."""
+        todos = db.scalars(
+            select(ProtocolTodo)
+            .join(ProtocolElementBlock, ProtocolElementBlock.id == ProtocolTodo.protocol_element_block_id)
+            .join(ProtocolElement, ProtocolElement.id == ProtocolElementBlock.protocol_element_id)
+            .where(ProtocolElement.protocol_id == protocol_id)
+        ).all()
+        for todo in todos:
+            if todo.pending_delete:
+                db.delete(todo)
+            elif todo.tracked_change is not None or todo.tracked_change_before_json is not None:
+                todo.tracked_change = None
+                todo.tracked_change_before_json = None
+                db.add(todo)
+
+        texts = db.scalars(
+            select(ProtocolText)
+            .join(ProtocolElementBlock, ProtocolElementBlock.id == ProtocolText.protocol_element_block_id)
+            .join(ProtocolElement, ProtocolElement.id == ProtocolElementBlock.protocol_element_id)
+            .where(ProtocolElement.protocol_id == protocol_id)
+        ).all()
+        for protocol_text in texts:
+            if protocol_text.tracked_dirty or protocol_text.tracked_baseline_content is not None:
+                protocol_text.tracked_dirty = False
+                protocol_text.tracked_baseline_content = None
+                db.add(protocol_text)
+
+        db.commit()
+        list_snapshot_service.clear_tracked_changes_for_protocol(db, protocol_id)
+
     def update_protocol(self, db: Session, protocol_id: int, payload: ProtocolUpdate):
         protocol = self.repository.get(db, protocol_id)
         if protocol is None:
@@ -1419,6 +1455,9 @@ class ProtocolService:
                 return self.document_template_service.snapshot_template_for_protocol(db, protocol, document_template_id)
             return protocol
         updated = self.repository.update(db, protocol, values)
+        if previous_status == "vorbereitet" and updated.status == "durchgeführt":
+            self._clear_tracked_changes(db, protocol_id)
+            updated = self.repository.get(db, protocol_id) or updated
         if previous_status != "abgeschlossen" and updated.status == "abgeschlossen":
             self._freeze_responsible_titles(db, protocol_id)
             list_snapshot_service.freeze_list_snapshots_for_protocol(db, protocol_id)

@@ -102,8 +102,11 @@ def create_todo(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
+    protocol_id = access_service.repository.protocol_id_for_block(db, protocol_element_block_id=protocol_element_block_id)
+    protocol = db.get(Protocol, protocol_id) if protocol_id else None
+    track_changes_active = bool(protocol and protocol.status == "geplant" and protocol.track_changes_enabled)
     try:
-        todo = service.create_todo(db, protocol_element_block_id, payload)
+        todo = service.create_todo(db, protocol_element_block_id, payload, track_changes_active=track_changes_active)
     except (SQLAlchemyError, ValueError) as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Todo could not be created") from exc
@@ -177,8 +180,11 @@ def patch_todo(
     access_service.ensure_can_read_todo(db, user, todo_id)
     existing = service.repository.get(db, todo_id)
     previous_status_id = existing.todo_status_id if existing else None
+    protocol_id = access_service.repository.protocol_id_for_todo(db, todo_id=todo_id)
+    protocol = db.get(Protocol, protocol_id) if protocol_id else None
+    track_changes_active = bool(protocol and protocol.status == "geplant" and protocol.track_changes_enabled)
     try:
-        todo = service.update_todo(db, todo_id, payload)
+        todo = service.update_todo(db, todo_id, payload, track_changes_active=track_changes_active)
     except (SQLAlchemyError, ValueError) as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Todo could not be updated") from exc
@@ -193,7 +199,7 @@ def patch_todo(
     return next(item for item in todos if item.id == todo_id)
 
 
-@router.delete("/protocol-todos/{todo_id}", response_model=dict[str, str])
+@router.delete("/protocol-todos/{todo_id}")
 def delete_todo(
     todo_id: int,
     db: Session = Depends(get_db),
@@ -201,12 +207,20 @@ def delete_todo(
 ):
     require_writer(user)
     access_service.ensure_can_read_todo(db, user, todo_id)
+    protocol_id = access_service.repository.protocol_id_for_todo(db, todo_id=todo_id)
+    protocol = db.get(Protocol, protocol_id) if protocol_id else None
+    track_changes_active = bool(protocol and protocol.status == "geplant" and protocol.track_changes_enabled)
     try:
-        deleted = service.delete_todo(db, todo_id)
+        result = service.delete_todo(db, todo_id, track_changes_active=track_changes_active)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Todo could not be deleted") from exc
-    if not deleted:
+    if result is None:
         raise HTTPException(status_code=404, detail="Todo not found")
+    hard_deleted, block_id = result
     audit.log(db, action="todo.deleted", actor=user, entity_type="protocol_todo", entity_id=todo_id)
-    return {"message": "Todo deleted"}
+    if hard_deleted or block_id is None:
+        return {"pending_delete": False, "message": "Todo deleted", "todo": None}
+    todos = service.list_todos(db, block_id)
+    todo_read = next((item for item in todos if item.id == todo_id), None)
+    return {"pending_delete": True, "message": "Todo pending delete", "todo": todo_read}

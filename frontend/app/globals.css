@@ -3352,6 +3352,55 @@ input[type="radio"] {
   opacity: 0.6;
 }
 
+/* "Änderungen nachverfolgen" (track changes): a single red accent everywhere, matching
+   Word's default single-reviewer-color convention - underline for new/current content,
+   strikethrough for old/removed content. Used across text blocks, todos, and list rows. */
+.tracked-underline {
+  text-decoration: underline;
+  text-decoration-color: var(--danger);
+  color: var(--danger);
+}
+
+.tracked-strike {
+  text-decoration: line-through;
+  text-decoration-color: var(--danger);
+  color: var(--danger);
+  opacity: 0.75;
+}
+
+.tracked-before-caption {
+  font-size: 0.78em;
+  margin-bottom: 2px;
+}
+
+.tracked-cell {
+  border-left: 2px solid var(--danger);
+  padding-left: 6px;
+}
+
+.tracked-removed-row {
+  opacity: 0.7;
+}
+
+.todo-tracked-pending-delete {
+  opacity: 0.75;
+  background: color-mix(in srgb, var(--danger) 6%, transparent);
+}
+
+/* Deleted-word widget rendered inline inside the live RichTextEditor by
+   tracked-changes-extension.ts - a decoration only, not real doc content. */
+.tracked-word-widget {
+  user-select: none;
+  cursor: default;
+}
+
+/* A whole deleted paragraph with no replacement - own line, not run into
+   the following paragraph's text. */
+.tracked-word-widget-block {
+  display: block;
+  margin: 2px 0;
+}
+
 .todo-toggle {
   display: inline-flex;
   align-items: center;

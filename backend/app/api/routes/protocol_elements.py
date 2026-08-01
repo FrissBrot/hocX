@@ -63,7 +63,7 @@ def _block_and_protocol_or_404(db: Session, user: CurrentUser, protocol_element_
         raise HTTPException(status_code=404, detail="Protocol not found")
     if protocol.status == "abgeschlossen":
         raise HTTPException(status_code=409, detail="Protocol is already abgeschlossen")
-    return block, protocol_id
+    return block, protocol
 
 
 def _block_to_read(block) -> ProtocolElementBlockRead:
@@ -165,9 +165,12 @@ def refresh_block_list_snapshot(
     """User-initiated refresh: pulls in the list's current data, stashes the block's
     previous snapshot as the one undo step."""
     require_writer(user)
-    block, protocol_id = _block_and_protocol_or_404(db, user, protocol_element_block_id)
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, keep_undo=True)
-    _broadcast_block_update(protocol_id, block, user)
+    block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
+    track_changes_active = protocol.status == "geplant" and protocol.track_changes_enabled
+    block = list_snapshot_service.refresh_block_list_snapshot(
+        db, block, keep_undo=True, track_changes_active=track_changes_active
+    )
+    _broadcast_block_update(protocol.id, block, user)
     return _block_to_read(block)
 
 
@@ -181,9 +184,12 @@ def sync_block_list_snapshot(
     linked list entry, so the editor never shows a stale hint for a change it just made
     itself. Never touches an existing undo point."""
     require_writer(user)
-    block, protocol_id = _block_and_protocol_or_404(db, user, protocol_element_block_id)
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, keep_undo=False)
-    _broadcast_block_update(protocol_id, block, user)
+    block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
+    track_changes_active = protocol.status == "geplant" and protocol.track_changes_enabled
+    block = list_snapshot_service.refresh_block_list_snapshot(
+        db, block, keep_undo=False, track_changes_active=track_changes_active
+    )
+    _broadcast_block_update(protocol.id, block, user)
     return _block_to_read(block)
 
 
@@ -194,11 +200,11 @@ def undo_block_list_snapshot(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
-    block, protocol_id = _block_and_protocol_or_404(db, user, protocol_element_block_id)
+    block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     updated = list_snapshot_service.undo_block_list_snapshot(db, block)
     if updated is None:
         raise HTTPException(status_code=409, detail="Nothing to undo")
-    _broadcast_block_update(protocol_id, updated, user)
+    _broadcast_block_update(protocol.id, updated, user)
     return _block_to_read(updated)
 
 
@@ -251,8 +257,13 @@ def put_protocol_text(
 ):
     require_writer(user)
     access_service.ensure_can_read_protocol_block(db, user, protocol_element_block_id)
+    protocol_id = access_service.repository.protocol_id_for_block(db, protocol_element_block_id=protocol_element_block_id)
+    protocol = protocol_service.get_protocol(db, protocol_id) if protocol_id else None
+    track_changes_active = bool(protocol and protocol.status == "geplant" and protocol.track_changes_enabled)
     try:
-        result = autosave_service.save_text_block(db, protocol_element_block_id, payload.content)
+        result = autosave_service.save_text_block(
+            db, protocol_element_block_id, payload.content, track_changes_active=track_changes_active
+        )
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Text block could not be saved") from exc

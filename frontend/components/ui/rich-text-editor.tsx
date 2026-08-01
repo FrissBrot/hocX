@@ -6,16 +6,25 @@ import { Markdown } from "tiptap-markdown";
 import { liftListItem } from "prosemirror-schema-list";
 import { useEffect, useRef } from "react";
 
+import { TrackedChanges } from "@/components/ui/tracked-changes-extension";
+
 type RichTextEditorProps = {
   value: string;
   onChange: (markdown: string) => void;
   readOnly?: boolean;
   placeholder?: string;
+  // When set, renders "Änderungen nachverfolgen" inline in this same editor
+  // (removed words struck through, added words underlined) instead of a
+  // separate before/after view - see tracked-changes-extension.tsx.
+  trackedBaseline?: string | null;
 };
 
-export function RichTextEditor({ value, onChange, readOnly = false, placeholder }: RichTextEditorProps) {
+export function RichTextEditor({ value, onChange, readOnly = false, placeholder, trackedBaseline }: RichTextEditorProps) {
   // Keep a stable ref so the handleKeyDown closure always sees the current editor
   const editorRef = useRef<ReturnType<typeof useEditor>>(null);
+  // Read via ref inside the tracked-changes plugin's decorations() callback so
+  // it always sees the latest baseline without needing to recreate the editor.
+  const baselineRef = useRef(trackedBaseline);
 
   const editor = useEditor({
     extensions: [
@@ -32,6 +41,7 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder 
         transformPastedText: true,
         transformCopiedText: false,
       }),
+      TrackedChanges.configure({ getBaseline: () => baselineRef.current }),
     ],
     content: value,
     editable: !readOnly,
@@ -97,6 +107,14 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder 
   useEffect(() => {
     if (editor) editor.setEditable(!readOnly);
   }, [readOnly, editor]);
+
+  // Sync tracked-changes baseline; the ref is read lazily by the plugin, but
+  // a no-op dispatch is needed to force ProseMirror to recompute decorations
+  // when only the baseline changed (no doc transaction to trigger it otherwise).
+  useEffect(() => {
+    baselineRef.current = trackedBaseline;
+    if (editor) editor.view.dispatch(editor.state.tr);
+  }, [trackedBaseline, editor]);
 
   return (
     <div className={`rich-text-editor${readOnly ? " rich-text-editor-readonly" : ""}`}>

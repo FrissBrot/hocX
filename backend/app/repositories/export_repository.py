@@ -83,6 +83,7 @@ class ExportRepository:
             .outerjoin(next_event, next_event.c.id == Template.next_event_id)
             .outerjoin(last_event, last_event.c.id == Template.last_event_id)
             .where(ProtocolTodo.protocol_element_block_id == protocol_element_block_id)
+            .where(ProtocolTodo.pending_delete.is_(False))
             .order_by(ProtocolTodo.sort_index.asc())
         )
         return db.execute(query).all()

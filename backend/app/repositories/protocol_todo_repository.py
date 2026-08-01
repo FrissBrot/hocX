@@ -52,6 +52,8 @@ class ProtocolTodoRepository:
         query, *_ = self._base_todo_query()
         query = query.where(
             or_(Protocol.tenant_id == tenant_id, ProtocolTodo.tenant_id == tenant_id)
+        ).where(
+            ProtocolTodo.pending_delete.is_(False)
         ).order_by(
             ProtocolTodo.todo_status_id.asc(),
             Protocol.protocol_date.desc(),
@@ -70,6 +72,8 @@ class ProtocolTodoRepository:
         query, *_ = self._base_todo_query()
         query = query.where(
             or_(Protocol.tenant_id == tenant_id, ProtocolTodo.tenant_id == tenant_id)
+        ).where(
+            ProtocolTodo.pending_delete.is_(False)
         ).where(
             or_(
                 ProtocolTodo.assigned_user_id == user_id,
@@ -103,6 +107,8 @@ class ProtocolTodoRepository:
         query = query.where(
             or_(Protocol.tenant_id == tenant_id, ProtocolTodo.tenant_id == tenant_id)
         ).where(
+            ProtocolTodo.pending_delete.is_(False)
+        ).where(
             or_(*conditions)
         ).order_by(
             ProtocolTodo.todo_status_id.asc(),
@@ -127,6 +133,7 @@ class ProtocolTodoRepository:
             .where(
                 Protocol.template_id == template_id,
                 ProtocolElement.section_name_snapshot == "Sitzungsnotizen",
+                ProtocolTodo.pending_delete.is_(False),
                 or_(
                     Protocol.protocol_date < protocol_date,
                     (Protocol.protocol_date == protocol_date) & (Protocol.id < protocol_id),
