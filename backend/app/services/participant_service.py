@@ -35,7 +35,6 @@ class ParticipantService:
             first_name=participant.first_name or participant.display_name,
             last_name=participant.last_name or "Participant",
             display_name=participant.display_name,
-            name=participant.display_name,
             email=self._synthetic_email(tenant_id=participant.tenant_id, participant_id=participant.id),
             password_hash=hash_password(secret),
             preferred_language="de",
