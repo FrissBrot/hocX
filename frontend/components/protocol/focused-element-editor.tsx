@@ -3,7 +3,7 @@
 import { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 
 import { TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
-import { StructuredListTable } from "@/components/lists/structured-list-table";
+import { StructuredListTable, TrackedEntryInfo } from "@/components/lists/structured-list-table";
 import { DateInput } from "@/components/ui/date-input";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Modal } from "@/components/ui/modal";
@@ -12,6 +12,7 @@ import { EventOverviewModal } from "@/components/protocol/planning/event-overvie
 import { CheckboxCandidateModal, CandidateItem } from "@/components/protocol/planning/checkbox-candidate-modal";
 import { EventDetailForm } from "@/components/protocol/planning/event-detail-form";
 import { PlanningIconTrigger } from "@/components/protocol/planning/planning-icon-trigger";
+import { TrackedWordDiff } from "@/components/protocol/tracked-word-diff";
 import { fetchCycleEvents } from "@/lib/api/cycle-events";
 import { TagInput } from "@/components/ui/tag-input";
 import { bumpStatsCharts } from "@/components/protocol/chart-block";
@@ -67,6 +68,7 @@ import { SessionTodosSection } from "@/components/protocol/session-todos-section
 
 export function FocusedElementEditor({
   collab,
+  trackChangesActive,
   element,
   elementIndex,
   textDrafts,
@@ -127,6 +129,7 @@ export function FocusedElementEditor({
   documentTemplates,
 }: {
   collab: ReturnType<typeof useProtocolCollaboration>;
+  trackChangesActive: boolean;
   element: ProtocolElement;
   elementIndex: number;
   textDrafts: Record<number, string>;
@@ -1311,6 +1314,7 @@ export function FocusedElementEditor({
                   onChange={(md) => handleTextChange(block.id, md)}
                   readOnly={!blockEditable}
                   placeholder="Text schreiben… Fett mit **text**, kursiv mit *text*, Liste mit - oder 1."
+                  trackedBaseline={trackChangesActive && block.tracked_dirty ? block.tracked_baseline_content : undefined}
                 />
               )}
 
@@ -1345,14 +1349,19 @@ export function FocusedElementEditor({
                   <div className="todo-list">
                     {visibleTodos.map((todo) => {
                       const isDone = todo.todo_status_code === "done";
+                      const isPendingDelete = trackChangesActive && !!todo.pending_delete;
+                      const todoEditable = blockEditable && !isPendingDelete;
+                      const isTrackedAdded = trackChangesActive && todo.tracked_change === "added";
+                      const trackedBeforeTask =
+                        trackChangesActive && todo.tracked_change === "changed" ? todo.tracked_change_before_json?.task : undefined;
                       return (
-                        <article className={`todo-card todo-card-compact${isDone ? " todo-card-done" : ""}`} key={todo.id}>
+                        <article className={`todo-card todo-card-compact${isDone ? " todo-card-done" : ""}${isPendingDelete ? " todo-tracked-pending-delete" : ""}`} key={todo.id}>
                           <button
                             type="button"
                             className={`todo-toggle${isDone ? " todo-toggle-done" : ""}`}
-                            disabled={!blockEditable}
+                            disabled={!todoEditable}
                             onClick={() =>
-                              blockEditable && void updateTodo(block.id, todo.id, {
+                              todoEditable && void updateTodo(block.id, todo.id, {
                                 todo_status_id: isDone ? TODO_STATUS.open : TODO_STATUS.done,
                                 completed_at: isDone ? null : new Date().toISOString(),
                               }).then(bumpStatsCharts)
@@ -1362,14 +1371,17 @@ export function FocusedElementEditor({
                             {isDone ? "✓" : "○"}
                           </button>
                           <div className="todo-main todo-main-compact">
+                            {trackedBeforeTask && (
+                              <div className="tracked-strike tracked-before-caption">{trackedBeforeTask}</div>
+                            )}
                             <textarea
-                              className="todo-input"
+                              className={`todo-input${isPendingDelete ? " tracked-strike" : isTrackedAdded || trackedBeforeTask ? " tracked-underline" : ""}`}
                               rows={1}
                               value={todo.task}
-                              readOnly={!blockEditable}
+                              readOnly={!todoEditable}
                               onInput={(event) => autoResizeTodoField(event.currentTarget)}
                               onChange={(event) => {
-                                if (!blockEditable) return;
+                                if (!todoEditable) return;
                                 const task = event.target.value;
                                 setTodosByBlock((current) => ({
                                   ...current,
@@ -1381,7 +1393,7 @@ export function FocusedElementEditor({
                               }}
                             />
                           </div>
-                          {blockEditable && (
+                          {todoEditable && (
                           <div className="todo-inline-meta">
                             <TodoAssigneeMenu
                               label={todo.assigned_participant_name ?? "Niemand"}
@@ -1485,7 +1497,7 @@ export function FocusedElementEditor({
                               ))}
                             </div>
                           )}
-                          {blockEditable && (
+                          {todoEditable && (
                             <button
                               type="button"
                               className="button-inline button-danger todo-delete"
@@ -1634,6 +1646,16 @@ export function FocusedElementEditor({
                       : null;
                     const displayDefinition = snapshotDefinition ?? linkedListDefinition;
                     const displayEntries = snapshotEntries ?? (listEntriesByDefinition[linkedListId] ?? []);
+                    // Diffing already happened server-side at the last sync (see
+                    // list_snapshot_service._merge_tracked_list_entries) - this just reads
+                    // the '_tracked'/'_tracked_before' markers already embedded per entry.
+                    const entryTrackedStatusById: Record<number, TrackedEntryInfo> | undefined = trackChangesActive && wholeListSnapshot
+                      ? Object.fromEntries(
+                          wholeListSnapshot.entries
+                            .filter((entry) => !!entry._tracked)
+                            .map((entry) => [entry.id, { status: entry._tracked!, before: entry._tracked_before }])
+                        )
+                      : undefined;
                     const isListStale = !isReadOnly && !!wholeListSnapshot && linkedListDefinition.content_version > wholeListSnapshot.synced_version;
                     const hasListUndo = !!wholeListSnapshot?.previous;
                     const listSnapshotBanner = (isListStale || hasListUndo) && (
@@ -1680,6 +1702,7 @@ export function FocusedElementEditor({
                             groupByColumn={linkedListGroupBy}
                             sortByColumn={linkedListSortBy}
                             sortDirection={linkedListSortDirection}
+                            entryTrackedStatusById={entryTrackedStatusById}
                             onCreateEntry={() => Promise.resolve(false)}
                             onUpdateEntry={() => Promise.resolve(false)}
                             onDeleteEntry={() => Promise.resolve()}
@@ -1751,6 +1774,7 @@ export function FocusedElementEditor({
                           groupByColumn={linkedListGroupBy}
                           sortByColumn={linkedListSortBy}
                           sortDirection={linkedListSortDirection}
+                          entryTrackedStatusById={entryTrackedStatusById}
                           onCreateEntry={(payload) => createListEntryFromBlock(block.id, linkedListId, payload)}
                           onUpdateEntry={(entryId, payload) => updateListEntryFromBlock(block.id, linkedListId, entryId, payload)}
                           onDeleteEntry={(entryId) => deleteListEntryFromBlock(block.id, linkedListId, entryId)}
@@ -1929,9 +1953,34 @@ export function FocusedElementEditor({
                             const variableColumnKey: "column_one_value" | "column_two_value" = variableColumn === "column_two" ? "column_two_value" : "column_one_value";
                             const aliasOrFixedValue = String(row.label ?? "").trim() || formatListEntryColumnValue(fixedRawValue, fixedValueType);
                             const draftKey = `${block.id}-listentry-${row.id ?? index}`;
+                            // A removed row is a phantom reconstructed from its last-known
+                            // values (entry_exists stays true on purpose so it keeps
+                            // rendering here instead of falling into the "wurde gelöscht"
+                            // branch above) - always struck through, never editable.
+                            if (trackChangesActive && rowSnapshot?._tracked === "removed") {
+                              return (
+                                <div className="form-block-row" key={`${block.id}-form-${index}`}>
+                                  <div className="field-label-inline tracked-strike">{aliasOrFixedValue}</div>
+                                  <div className="tracked-strike">{formatListEntryColumnValue(variableRawValue, variableValueType)}</div>
+                                </div>
+                              );
+                            }
+                            const trackedBeforeVariableValue =
+                              trackChangesActive && rowSnapshot?._tracked === "changed" ? rowSnapshot._tracked_before?.[variableColumnKey] : undefined;
+                            const variableTrackedChanged =
+                              !!trackedBeforeVariableValue && JSON.stringify(variableRawValue ?? {}) !== JSON.stringify(trackedBeforeVariableValue ?? {});
                             return (
                               <div className="form-block-row" key={`${block.id}-form-${index}`}>
                                 <div className="field-label-inline">{aliasOrFixedValue}</div>
+                                <div className={variableTrackedChanged ? "tracked-cell" : undefined}>
+                                {variableTrackedChanged && (
+                                  <div className="tracked-before-caption">
+                                    <TrackedWordDiff
+                                      before={formatListEntryColumnValue(trackedBeforeVariableValue as Record<string, any>, variableValueType)}
+                                      after={formatListEntryColumnValue(variableRawValue, variableValueType)}
+                                    />
+                                  </div>
+                                )}
                                 {variableValueType === "participant" ? (
                                   <button
                                     type="button"
@@ -2022,6 +2071,7 @@ export function FocusedElementEditor({
                                     }}
                                   />
                                 )}
+                                </div>
                               </div>
                             );
                           }
@@ -3095,6 +3145,7 @@ export function FocusedElementEditor({
       todos={Object.values(todosByBlock).flat().filter((t) => (t.tags ?? []).includes(trimSectionName(element.section_name_snapshot).toLowerCase()))}
       pendingTodos={pendingTodos.filter((t) => (t.tags ?? []).includes(trimSectionName(element.section_name_snapshot).toLowerCase()))}
       isReadOnly={isReadOnly}
+      trackChangesActive={trackChangesActive}
       participants={availableParticipants}
       dueEvents={[...availableEvents].sort((a, b) => a.event_date.localeCompare(b.event_date))}
       protocol={protocol}

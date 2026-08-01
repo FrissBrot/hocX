@@ -36,6 +36,8 @@ class ProtocolElementRepository:
                 ElementType.code.label("element_type_code"),
                 RenderType.code.label("render_type_code"),
                 ProtocolText.content.label("text_content"),
+                ProtocolText.tracked_dirty.label("tracked_dirty"),
+                ProtocolText.tracked_baseline_content.label("tracked_baseline_content"),
                 ProtocolDisplaySnapshot.compiled_text.label("display_compiled_text"),
                 ProtocolDisplaySnapshot.snapshot_json.label("display_snapshot_json"),
                 ElementDefinition.configuration_json.label("element_definition_configuration_json"),

@@ -16,6 +16,11 @@ type StructuredListValue = Record<string, unknown>;
 type StructuredListColumnKey = "column_one_value" | "column_two_value";
 type StructuredListDisplayColumn = "column_one" | "column_two";
 
+export type TrackedEntryInfo = {
+  status: "added" | "changed" | "removed";
+  before?: { column_one_value: StructuredListValue; column_two_value: StructuredListValue };
+};
+
 type StructuredListTableProps = {
   definition: StructuredListDefinition;
   entries: StructuredListEntry[];
@@ -28,6 +33,7 @@ type StructuredListTableProps = {
   sortByColumn?: "" | StructuredListDisplayColumn;
   sortDirection?: "asc" | "desc";
   onHeaderSort?: (column: "column_one" | "column_two") => void;
+  entryTrackedStatusById?: Record<number, TrackedEntryInfo>;
   onCreateEntry: (payload: {
     sort_index: number;
     column_one_value: StructuredListValue;
@@ -87,6 +93,10 @@ function normalizeValueForType(valueType: StructuredListValueType, rawValue: Str
     return eventId ? { event_id: eventId } : { event_id: null };
   }
   return { text_value: String(rawValue.text_value ?? "") };
+}
+
+function valuesEqual(left: StructuredListValue | undefined, right: StructuredListValue | undefined): boolean {
+  return JSON.stringify(left ?? {}) === JSON.stringify(right ?? {});
 }
 
 function hasValueContent(valueType: StructuredListValueType, rawValue: StructuredListValue) {
@@ -179,6 +189,7 @@ export function StructuredListTable({
   sortByColumn = "",
   sortDirection = "asc",
   onHeaderSort,
+  entryTrackedStatusById,
   onCreateEntry,
   onUpdateEntry,
   onDeleteEntry,
@@ -642,21 +653,53 @@ export function StructuredListTable({
                     {group.entries.map((entry) => {
                       const firstValue = rowValue(entry, "column_one_value");
                       const secondValue = rowValue(entry, "column_two_value");
+                      const trackedInfo = entryTrackedStatusById?.[entry.id];
+                      // A removed row is a phantom reconstructed from its last-known
+                      // values (see list_snapshot_service._merge_tracked_list_entries) -
+                      // it no longer exists in the shared list, so it's always struck
+                      // through and non-interactive regardless of the editable prop.
+                      if (trackedInfo?.status === "removed") {
+                        return (
+                          <tr key={entry.id} className="tracked-removed-row">
+                            <td><span className="tracked-strike">{valueSummary(definition.column_one_value_type, firstValue, availableParticipants, sortedEvents)}</span></td>
+                            <td><span className="tracked-strike">{valueSummary(definition.column_two_value_type, secondValue, availableParticipants, sortedEvents)}</span></td>
+                            {editable ? <td /> : null}
+                          </tr>
+                        );
+                      }
+                      const col1Changed = trackedInfo?.status === "changed" && !valuesEqual(firstValue, trackedInfo.before?.column_one_value);
+                      const col2Changed = trackedInfo?.status === "changed" && !valuesEqual(secondValue, trackedInfo.before?.column_two_value);
+                      const col1Added = trackedInfo?.status === "added";
+                      const col2Added = trackedInfo?.status === "added";
                       return (
                         <tr key={entry.id}>
-                          <td>
+                          <td className={col1Changed || col1Added ? "tracked-cell" : undefined}>
+                            {col1Changed && (
+                              <div className="tracked-before-caption tracked-strike">
+                                {valueSummary(definition.column_one_value_type, trackedInfo?.before?.column_one_value ?? {}, availableParticipants, sortedEvents)}
+                              </div>
+                            )}
                             {editable
                               ? renderEditableCell(entry.id, "column_one_value", definition.column_one_value_type, firstValue, {
                                   isNewRow: false,
                                 })
-                              : valueSummary(definition.column_one_value_type, firstValue, availableParticipants, sortedEvents)}
+                              : (col1Changed || col1Added
+                                  ? <span className="tracked-underline">{valueSummary(definition.column_one_value_type, firstValue, availableParticipants, sortedEvents)}</span>
+                                  : valueSummary(definition.column_one_value_type, firstValue, availableParticipants, sortedEvents))}
                           </td>
-                          <td>
+                          <td className={col2Changed || col2Added ? "tracked-cell" : undefined}>
+                            {col2Changed && (
+                              <div className="tracked-before-caption tracked-strike">
+                                {valueSummary(definition.column_two_value_type, trackedInfo?.before?.column_two_value ?? {}, availableParticipants, sortedEvents)}
+                              </div>
+                            )}
                             {editable
                               ? renderEditableCell(entry.id, "column_two_value", definition.column_two_value_type, secondValue, {
                                   isNewRow: false,
                                 })
-                              : valueSummary(definition.column_two_value_type, secondValue, availableParticipants, sortedEvents)}
+                              : (col2Changed || col2Added
+                                  ? <span className="tracked-underline">{valueSummary(definition.column_two_value_type, secondValue, availableParticipants, sortedEvents)}</span>
+                                  : valueSummary(definition.column_two_value_type, secondValue, availableParticipants, sortedEvents))}
                           </td>
                           {editable ? (
                             <td>

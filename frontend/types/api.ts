@@ -331,16 +331,27 @@ export type ListSnapshot = {
   previous: ListSnapshot | null;
 };
 
+export type TrackedListValues = { column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> };
+
 export type WholeListSnapshot = ListSnapshot & {
-  entries: { id: number; sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }[];
+  entries: {
+    id: number;
+    sort_index: number;
+    column_one_value: Record<string, unknown>;
+    column_two_value: Record<string, unknown>;
+    _tracked?: "added" | "changed" | "removed";
+    _tracked_before?: TrackedListValues;
+  }[];
 };
 
 export type RowListSnapshot =
-  | { synced_version: number; entry_exists: false }
+  | { synced_version: number; entry_exists: false; _tracked?: undefined; _tracked_before?: undefined }
   | (ListSnapshot & {
       entry_exists: true;
       column_one_value: Record<string, unknown>;
       column_two_value: Record<string, unknown>;
+      _tracked?: "changed" | "removed";
+      _tracked_before?: TrackedListValues;
     });
 
 export type StructuredListEntry = {
@@ -369,6 +380,7 @@ export type ProtocolSummary = {
   version_minor?: number;
   version_final_minor?: number;
   session_notes?: string | null;
+  track_changes_enabled?: boolean;
   created_by?: number | null;
   created_at?: string;
   updated_at?: string;
@@ -508,6 +520,9 @@ export type ProtocolTodo = {
   created_at: string;
   updated_at: string;
   closed_in_protocol_id: number | null;
+  tracked_change?: "added" | "changed" | null;
+  tracked_change_before_json?: { task?: string; tags?: string[] } | null;
+  pending_delete?: boolean;
 };
 
 export type TodoListItem = ProtocolTodo & {
@@ -569,6 +584,8 @@ export type ProtocolElementBlock = {
   text_content: string | null;
   display_compiled_text: string | null;
   display_snapshot_json: Record<string, unknown> | null;
+  tracked_dirty?: boolean;
+  tracked_baseline_content?: string | null;
 };
 
 export type ProtocolElement = {

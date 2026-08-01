@@ -123,6 +123,97 @@ def list_linked_blocks_for_protocol(db: Session, protocol_id: int) -> list[Proto
     return result
 
 
+def _merge_tracked_list_entries(
+    new_entries: list[dict[str, Any]], old_entries: Any, *, track_changes_active: bool
+) -> list[dict[str, Any]]:
+    """Diff-merges freshly-fetched whole-list entries against the entries as they were on
+    the block's own last-stored snapshot, tagging each with a sticky '_tracked' marker
+    ('added'/'changed'/'removed') for the track-changes feature. Once an entry is marked
+    'added' or 'changed', that marker (and its pinned '_tracked_before') is carried forward
+    unconditionally on every later call, regardless of track_changes_active, so toggling
+    tracking off never erases history - only tracking new changes stops. An 'added' entry
+    that disappears again just vanishes (it never existed in accepted history, mirrors how
+    a todo created-then-deleted while tracked hard-deletes with no phantom); a 'changed' or
+    previously-untracked entry that disappears is re-injected using its last-known values,
+    tagged 'removed', and keeps being carried forward until the whole protocol's tracked
+    changes are cleared (see clear_tracked_changes_for_protocol)."""
+    old_by_id = {e["id"]: e for e in (old_entries or []) if isinstance(e, dict)}
+    new_ids = {e["id"] for e in new_entries}
+    merged: list[dict[str, Any]] = []
+    for entry in new_entries:
+        entry = dict(entry)
+        old = old_by_id.get(entry["id"])
+        if old is not None and old.get("_tracked") in ("added", "changed"):
+            entry["_tracked"] = old["_tracked"]
+            if "_tracked_before" in old:
+                entry["_tracked_before"] = old["_tracked_before"]
+        elif track_changes_active:
+            if old is None:
+                entry["_tracked"] = "added"
+            elif entry.get("column_one_value") != old.get("column_one_value") or entry.get("column_two_value") != old.get("column_two_value"):
+                entry["_tracked"] = "changed"
+                entry["_tracked_before"] = {
+                    "column_one_value": old.get("column_one_value"),
+                    "column_two_value": old.get("column_two_value"),
+                }
+        merged.append(entry)
+    for old_id, old in old_by_id.items():
+        if old_id in new_ids:
+            continue
+        previous_marker = old.get("_tracked")
+        if previous_marker == "removed":
+            merged.append(dict(old))
+            continue
+        if previous_marker == "added":
+            continue
+        if track_changes_active or previous_marker == "changed":
+            phantom = {k: v for k, v in old.items() if k not in ("_tracked", "_tracked_before")}
+            phantom["_tracked"] = "removed"
+            if previous_marker == "changed" and "_tracked_before" in old:
+                phantom["_tracked_before"] = old["_tracked_before"]
+            merged.append(phantom)
+    return merged
+
+
+def _merge_tracked_row_snapshot(new_snapshot: dict[str, Any], old_snapshot: Any, *, track_changes_active: bool) -> dict[str, Any]:
+    """Same idea as _merge_tracked_list_entries but for a single row-link entry (no id
+    array to diff - just one before/current pair)."""
+    if not isinstance(old_snapshot, dict):
+        return new_snapshot
+    old_marker = old_snapshot.get("_tracked")
+    if old_marker == "removed":
+        return dict(old_snapshot)
+    if old_marker == "changed":
+        if new_snapshot.get("entry_exists"):
+            merged = dict(new_snapshot)
+            merged["_tracked"] = "changed"
+            merged["_tracked_before"] = old_snapshot.get("_tracked_before")
+            return merged
+        phantom = {k: v for k, v in old_snapshot.items() if k != "_tracked"}
+        phantom["_tracked"] = "removed"
+        return phantom
+    if not old_snapshot.get("entry_exists"):
+        return new_snapshot
+    if not new_snapshot.get("entry_exists"):
+        if track_changes_active:
+            phantom = dict(old_snapshot)
+            phantom["_tracked"] = "removed"
+            return phantom
+        return new_snapshot
+    if track_changes_active and (
+        new_snapshot.get("column_one_value") != old_snapshot.get("column_one_value")
+        or new_snapshot.get("column_two_value") != old_snapshot.get("column_two_value")
+    ):
+        merged = dict(new_snapshot)
+        merged["_tracked"] = "changed"
+        merged["_tracked_before"] = {
+            "column_one_value": old_snapshot.get("column_one_value"),
+            "column_two_value": old_snapshot.get("column_two_value"),
+        }
+        return merged
+    return new_snapshot
+
+
 def _carry_or_stash_previous(new_snapshot: dict, old_snapshot: Any, *, keep_undo: bool) -> None:
     """Mutates new_snapshot in place to set its 'previous' key. keep_undo=True (explicit
     manual refresh): stash the old snapshot's own current values as the one undo step -
@@ -137,9 +228,15 @@ def _carry_or_stash_previous(new_snapshot: dict, old_snapshot: Any, *, keep_undo
         new_snapshot["previous"] = old_snapshot["previous"]
 
 
-def refresh_block_list_snapshot(db: Session, block: ProtocolElementBlock, *, keep_undo: bool) -> ProtocolElementBlock:
+def refresh_block_list_snapshot(
+    db: Session, block: ProtocolElementBlock, *, keep_undo: bool, track_changes_active: bool = False
+) -> ProtocolElementBlock:
     """Recomputes list_snapshot (whole-list) and/or every row's list_snapshot (row-link)
-    from current live data and writes it back onto the block."""
+    from current live data and writes it back onto the block. When track_changes_active,
+    also diff-merges against the entries this same call is about to overwrite so
+    added/changed/removed rows get a sticky '_tracked' marker for the track-changes
+    feature (see _merge_tracked_list_entries/_merge_tracked_row_snapshot) - this is
+    completely independent of the 'previous'/undo mechanism above."""
     config = dict(block.configuration_snapshot_json or {})
     changed = False
 
@@ -147,7 +244,13 @@ def refresh_block_list_snapshot(db: Session, block: ProtocolElementBlock, *, kee
     if linked_list_id:
         new_snapshot = compute_whole_list_snapshot(db, int(linked_list_id))
         if new_snapshot is not None:
-            _carry_or_stash_previous(new_snapshot, config.get("list_snapshot"), keep_undo=keep_undo)
+            old_list_snapshot = config.get("list_snapshot")
+            new_snapshot["entries"] = _merge_tracked_list_entries(
+                new_snapshot["entries"],
+                old_list_snapshot.get("entries") if isinstance(old_list_snapshot, dict) else None,
+                track_changes_active=track_changes_active,
+            )
+            _carry_or_stash_previous(new_snapshot, old_list_snapshot, keep_undo=keep_undo)
             config["list_snapshot"] = new_snapshot
             changed = True
 
@@ -161,6 +264,9 @@ def refresh_block_list_snapshot(db: Session, block: ProtocolElementBlock, *, kee
             row = dict(row)
             new_snapshot = compute_row_list_snapshot(
                 db, int(row["linked_list_id"]), int(row.get("linked_list_entry_id") or 0)
+            )
+            new_snapshot = _merge_tracked_row_snapshot(
+                new_snapshot, row.get("list_snapshot"), track_changes_active=track_changes_active
             )
             _carry_or_stash_previous(new_snapshot, row.get("list_snapshot"), keep_undo=keep_undo)
             row["list_snapshot"] = new_snapshot
@@ -208,6 +314,67 @@ def undo_block_list_snapshot(db: Session, block: ProtocolElementBlock) -> Protoc
     db.commit()
     db.refresh(block)
     return block
+
+
+def clear_tracked_changes_for_protocol(db: Session, protocol_id: int) -> None:
+    """Called once at vorbereitet -> durchgefuehrt: strips every '_tracked'/'_tracked_before'
+    marker and drops every '_tracked: removed' phantom entry from every list-linked block's
+    list_snapshot, permanently - mirrors freeze_list_snapshots_for_protocol's shape. Never
+    touches 'previous' (an unrelated, pre-existing undo mechanism)."""
+
+    def _strip(snapshot: Any) -> tuple[Any, bool]:
+        if not isinstance(snapshot, dict):
+            return snapshot, False
+        stripped_any = False
+        result = dict(snapshot)
+        if "entries" in result and isinstance(result["entries"], list):
+            new_entries = []
+            for entry in result["entries"]:
+                if not isinstance(entry, dict):
+                    new_entries.append(entry)
+                    continue
+                if entry.get("_tracked") == "removed":
+                    stripped_any = True
+                    continue
+                if "_tracked" in entry or "_tracked_before" in entry:
+                    entry = {k: v for k, v in entry.items() if k not in ("_tracked", "_tracked_before")}
+                    stripped_any = True
+                new_entries.append(entry)
+            if stripped_any:
+                result["entries"] = new_entries
+        elif "_tracked" in result or "_tracked_before" in result:
+            result = {k: v for k, v in result.items() if k not in ("_tracked", "_tracked_before")}
+            stripped_any = True
+        return result, stripped_any
+
+    for block in list_linked_blocks_for_protocol(db, protocol_id):
+        config = dict(block.configuration_snapshot_json or {})
+        changed = False
+
+        list_snapshot, stripped = _strip(config.get("list_snapshot"))
+        if stripped:
+            config["list_snapshot"] = list_snapshot
+            changed = True
+
+        rows = config.get("rows")
+        if isinstance(rows, list):
+            new_rows = list(rows)
+            for i, row in enumerate(new_rows):
+                if not isinstance(row, dict):
+                    continue
+                row_snapshot, row_stripped = _strip(row.get("list_snapshot"))
+                if row_stripped:
+                    row = dict(row)
+                    row["list_snapshot"] = row_snapshot
+                    new_rows[i] = row
+                    changed = True
+            if changed:
+                config["rows"] = new_rows
+
+        if changed:
+            block.configuration_snapshot_json = config
+            db.add(block)
+    db.commit()
 
 
 def freeze_list_snapshots_for_protocol(db: Session, protocol_id: int) -> None:

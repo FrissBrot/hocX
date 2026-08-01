@@ -33,6 +33,8 @@ import {
 import {
   ProtocolEventDraft,
   TODO_STATUS,
+  TodoMenuOption,
+  TodoMiniMenu,
   createProtocolEventDraft,
   protocolStatusLabel,
   resequenceProtocolElements,
@@ -138,6 +140,12 @@ export function ProtocolEditor({
   const [selectedElementId, setSelectedElementId] = useState<number | null>(initialElements[0]?.id ?? null);
   const [draggedElementId, setDraggedElementId] = useState<number | null>(null);
   const [protocolStatus, setProtocolStatus] = useState(protocol.status);
+  const [trackChangesEnabled, setTrackChangesEnabledState] = useState(protocol.track_changes_enabled ?? false);
+  // Tracking applies during "geplant" - confusingly, that's the status the app's own
+  // workflowMeta below labels "Vorbereitungsmodus" ("preparation mode"); "vorbereitet"
+  // is actually the live-session phase ("Sitzungsmodus"), where existing marks stay
+  // visible but nothing new gets marked, exactly as requested.
+  const trackChangesActive = protocolStatus === "geplant" && trackChangesEnabled;
   const [sessionNotes, setSessionNotes] = useState(protocol.session_notes ?? "");
   const [transitioningStatus, setTransitioningStatus] = useState(false);
   const showToast = useToast();
@@ -154,6 +162,13 @@ export function ProtocolEditor({
       collab.onStatusChanged(({ status, display_name }) => {
         setProtocolStatus(status);
         showToast(`Status wurde von ${display_name} zu "${protocolStatusLabel(status)}" geändert.`);
+        // The backend already cleared every tracked-change mark server-side on this same
+        // transition - refetch so a viewer who stays on this page (not the one who
+        // triggered the transition, which navigates away right after) doesn't keep
+        // showing stale red marks until a manual reload.
+        if (status === "durchgeführt") {
+          void refreshAfterTrackingCleared();
+        }
       }),
     [collab.onStatusChanged, showToast]
   );
@@ -163,6 +178,10 @@ export function ProtocolEditor({
       collab.onFieldUpdate(({ field_key, patch }) => {
         if (field_key === "element-titles") {
           void refreshElementTitles();
+          return;
+        }
+        if (field_key === "track-changes-toggle") {
+          setTrackChangesEnabledState(!!(patch as { enabled?: boolean } | null)?.enabled);
           return;
         }
         if (!field_key.startsWith("block-")) return;
@@ -569,6 +588,35 @@ export function ProtocolEditor({
     }
   }
 
+  // Full replacement (not the narrow section_name_snapshot-only merge above) - this is
+  // only called right after tracked-change marks were cleared server-side, so every
+  // block's fresh configuration_snapshot_json/tracked_dirty/tracked_baseline_content is
+  // exactly what should now be shown, plus todos need a per-block refetch since
+  // pending-delete rows are now really gone.
+  async function refreshAfterTrackingCleared() {
+    try {
+      const fresh = await browserApiFetch<ProtocolElement[]>(`/api/protocols/${protocol.id}/elements`);
+      setElements(fresh);
+      const todoBlockIds = fresh.flatMap((element) =>
+        element.blocks.filter((block) => block.element_type_code === "todo").map((block) => block.id)
+      );
+      const todoLists = await Promise.all(
+        todoBlockIds.map((blockId) =>
+          browserApiFetch<ProtocolTodo[]>(`/api/protocol-element-blocks/${blockId}/todos`).then(
+            (list) => [blockId, list] as const
+          )
+        )
+      );
+      setTodosByBlock((current) => {
+        const next = { ...current };
+        for (const [blockId, list] of todoLists) next[blockId] = list;
+        return next;
+      });
+    } catch {
+      // best-effort - a manual reload always recovers correct state
+    }
+  }
+
   async function saveBlockConfiguration(blockId: number, configurationSnapshotJson: Record<string, unknown>) {
     setStatus(blockId, "saving");
     updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: configurationSnapshotJson }));
@@ -598,13 +646,22 @@ export function ProtocolEditor({
 
     timers.current[protocolElementBlockId] = window.setTimeout(async () => {
       try {
-        await browserApiFetch(`/api/protocol-element-blocks/${protocolElementBlockId}/text`, {
-          method: "PUT",
-          body: JSON.stringify({ content })
-        });
-        updateBlockInState(protocolElementBlockId, (block) => ({ ...block, text_content: content }));
+        const result = await browserApiFetch<{ tracked_dirty: boolean; tracked_baseline_content: string | null }>(
+          `/api/protocol-element-blocks/${protocolElementBlockId}/text`,
+          { method: "PUT", body: JSON.stringify({ content }) }
+        );
+        updateBlockInState(protocolElementBlockId, (block) => ({
+          ...block,
+          text_content: content,
+          tracked_dirty: result.tracked_dirty,
+          tracked_baseline_content: result.tracked_baseline_content,
+        }));
         setStatus(protocolElementBlockId, "saved");
-        collab.sendFieldUpdate(`block-${protocolElementBlockId}`, { text_content: content });
+        collab.sendFieldUpdate(`block-${protocolElementBlockId}`, {
+          text_content: content,
+          tracked_dirty: result.tracked_dirty,
+          tracked_baseline_content: result.tracked_baseline_content,
+        });
       } catch {
         setStatus(protocolElementBlockId, "error");
       }
@@ -848,6 +905,23 @@ export function ProtocolEditor({
     }
   }
 
+  // Only meaningful while protocolStatus === "geplant" - turning it off doesn't
+  // retroactively unmark anything already tracked, it just stops new edits from being
+  // marked going forward (see backend gating in the text/todo/list-sync routes).
+  async function setTrackChangesEnabled(enabled: boolean) {
+    setTrackChangesEnabledState(enabled);
+    try {
+      await browserApiFetch(`/api/protocols/${protocol.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ track_changes_enabled: enabled }),
+      });
+      collab.sendFieldUpdate("track-changes-toggle", { enabled });
+    } catch (err: unknown) {
+      setTrackChangesEnabledState(!enabled);
+      if (err instanceof Error) showToast(err.message);
+    }
+  }
+
   // The "Liste bearbeiten" planning popup intentionally manages the live list directly
   // (not the protocol's frozen snapshot) - but listEntriesByDefinition is otherwise only
   // ever populated once at page load and patched locally by this protocol's own writes,
@@ -1016,6 +1090,16 @@ export function ProtocolEditor({
       <div className="status-row">
         <span className="pill">{protocol.protocol_number}</span>
         <span className="pill">{workflowMeta[protocolStatus]?.modeLabel ?? protocolStatusLabel(protocolStatus)}</span>
+        {protocolStatus === "geplant" && !isReadOnly && (
+          <TodoMiniMenu label={trackChangesEnabled ? "Änderungen nachverfolgen: An" : "Änderungen nachverfolgen: Aus"} compact>
+            {(close) => (
+              <>
+                <TodoMenuOption label="An" active={trackChangesEnabled} onClick={() => { void setTrackChangesEnabled(true); close(); }} />
+                <TodoMenuOption label="Aus" active={!trackChangesEnabled} onClick={() => { void setTrackChangesEnabled(false); close(); }} />
+              </>
+            )}
+          </TodoMiniMenu>
+        )}
         <CollaborationPresenceBar users={collab.otherPresence} connected={collab.connected} />
       </div>
 
@@ -1084,6 +1168,7 @@ export function ProtocolEditor({
           {selectedElement ? (
             <FocusedElementEditor
               collab={collab}
+              trackChangesActive={trackChangesActive}
               element={selectedElement}
               elementIndex={selectedElementIndex}
               textDrafts={textDrafts}

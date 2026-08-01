@@ -102,7 +102,9 @@ class ProtocolTodoService:
         )
         return self.repository.create(db, todo)
 
-    def create_todo(self, db: Session, protocol_element_block_id: int, payload: ProtocolTodoCreate) -> ProtocolTodo:
+    def create_todo(
+        self, db: Session, protocol_element_block_id: int, payload: ProtocolTodoCreate, *, track_changes_active: bool = False
+    ) -> ProtocolTodo:
         if payload.assigned_participant_id is not None and not self.repository.participant_allowed_for_block(
             db,
             protocol_element_block_id,
@@ -129,10 +131,11 @@ class ProtocolTodoService:
             reference_link=payload.reference_link,
             tags=payload.tags,
             created_by=payload.created_by,
+            tracked_change="added" if track_changes_active else None,
         )
         return self.repository.create(db, todo)
 
-    def update_todo(self, db: Session, todo_id: int, payload: ProtocolTodoUpdate):
+    def update_todo(self, db: Session, todo_id: int, payload: ProtocolTodoUpdate, *, track_changes_active: bool = False):
         todo = self.repository.get(db, todo_id)
         if todo is None:
             return None
@@ -146,11 +149,26 @@ class ProtocolTodoService:
             raise ValueError("Due event is not available for this tenant")
         if not values:
             return todo
+        # Only task/tags count as "content" for marking purposes (assignee/due-date/status
+        # are workflow metadata, not something a reviewer needs to see red-marked). The
+        # original values are pinned exactly once - a todo already marked "added" or
+        # "changed" keeps its first-captured before-value across any number of further edits.
+        if track_changes_active and todo.tracked_change is None and ("task" in values or "tags" in values):
+            values["tracked_change"] = "changed"
+            values["tracked_change_before_json"] = {"task": todo.task, "tags": todo.tags}
         return self.repository.update(db, todo, values)
 
-    def delete_todo(self, db: Session, todo_id: int) -> bool:
+    def delete_todo(self, db: Session, todo_id: int, *, track_changes_active: bool = False) -> tuple[bool, int | None] | None:
+        """Returns None if not found, else (hard_deleted, protocol_element_block_id). A
+        todo created during this same tracked window has no accepted history to preserve,
+        so it hard-deletes immediately; a pre-existing todo is soft-deleted (pending_delete)
+        instead, so it can render struck-through until tracking is cleared."""
         todo = self.repository.get(db, todo_id)
         if todo is None:
-            return False
+            return None
+        block_id = todo.protocol_element_block_id
+        if track_changes_active and todo.tracked_change != "added":
+            self.repository.update(db, todo, {"pending_delete": True})
+            return False, block_id
         self.repository.delete(db, todo)
-        return True
+        return True, block_id

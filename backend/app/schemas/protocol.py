@@ -37,6 +37,7 @@ class ProtocolUpdate(BaseModel):
     status: str | None = None
     document_template_id: int | None = None
     session_notes: str | None = None
+    track_changes_enabled: bool | None = None
 
 
 class ProtocolRead(BaseModel):
@@ -55,6 +56,7 @@ class ProtocolRead(BaseModel):
     version_minor: int = 0
     version_final_minor: int = 0
     session_notes: str | None = None
+    track_changes_enabled: bool = False
     created_by: int | None = None
     created_at: datetime
     updated_at: datetime
@@ -117,6 +119,8 @@ class ProtocolElementBlockRead(BaseModel):
     text_content: str | None = None
     display_compiled_text: str | None = None
     display_snapshot_json: dict | None = None
+    tracked_dirty: bool = False
+    tracked_baseline_content: str | None = None
 
 
 class ProtocolElementRead(BaseModel):
@@ -170,6 +174,8 @@ class ProtocolTextRead(BaseModel):
     protocol_element_block_id: int
     content: str
     status: str
+    tracked_dirty: bool = False
+    tracked_baseline_content: str | None = None
 
 
 class ProtocolTodoCreate(BaseModel):
@@ -227,6 +233,9 @@ class ProtocolTodoRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     closed_in_protocol_id: int | None = None
+    tracked_change: str | None = None
+    tracked_change_before_json: dict | None = None
+    pending_delete: bool = False
 
     _validate_reference_link_read = field_validator("reference_link")(_validate_reference_link)
 
