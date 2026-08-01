@@ -6,44 +6,82 @@
 
 :root {
   color-scheme: light;
-  --bg: #eef3fb;
+  --bg: #f6f7f9;
   --bg-accent: rgba(90, 146, 255, 0.16);
-  --panel: rgba(255, 255, 255, 0.72);
-  --panel-strong: rgba(255, 255, 255, 0.88);
+  --panel: #ffffff;
+  --panel-strong: #ffffff;
   --panel-solid: #ffffff;
-  --text: #162033;
-  --muted: #69748a;
-  --border: rgba(134, 151, 181, 0.22);
-  --border-strong: rgba(134, 151, 181, 0.38);
+  --text: #101828;
+  --muted: #667085;
+  --border: #e4e7ec;
+  --border-strong: #d0d5dd;
   --accent: #2f6df6;
   --accent-strong: #1d54cf;
-  --accent-soft: rgba(47, 109, 246, 0.1);
-  --success: #188b66;
-  --warning: #c27a17;
-  --danger: #d14f5d;
-  --shadow: 0 30px 80px rgba(12, 23, 44, 0.14);
-  --shadow-soft: 0 18px 42px rgba(20, 29, 47, 0.08);
+  --accent-soft: #e8f0fe;
+  --success: #12805c;
+  --warning: #b45309;
+  --danger: #dc2626;
+  --shadow: 0 4px 12px rgba(16, 24, 40, 0.08);
+  --shadow-soft: 0 1px 2px rgba(16, 24, 40, 0.05), 0 1px 3px rgba(16, 24, 40, 0.06);
+
+  --primary: #16223d;
+  --primary-strong: #0b1626;
+  --primary-contrast: #ffffff;
+
+  --success-bg: #dcfce7;
+  --success-fg: #0f7a4c;
+  --warning-bg: #fef3c7;
+  --warning-fg: #92400e;
+  --danger-bg: #fee2e2;
+  --danger-fg: #b42318;
+  --info-bg: #e8f0fe;
+  --info-fg: #1d54cf;
+  --neutral-bg: #f1f2f4;
+  --neutral-fg: #667085;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --z-popover: 1000;
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --bg: #09111f;
-  --bg-accent: rgba(77, 128, 255, 0.18);
-  --panel: rgba(12, 20, 36, 0.78);
-  --panel-strong: rgba(18, 28, 48, 0.84);
-  --panel-solid: #101a2d;
-  --text: #eef4ff;
-  --muted: #94a0b8;
-  --border: rgba(141, 167, 214, 0.18);
-  --border-strong: rgba(141, 167, 214, 0.32);
-  --accent: #78a8ff;
-  --accent-strong: #9bc0ff;
-  --accent-soft: rgba(120, 168, 255, 0.14);
-  --success: #42bf98;
-  --warning: #f0b251;
-  --danger: #ff7f90;
-  --shadow: 0 34px 90px rgba(0, 0, 0, 0.42);
-  --shadow-soft: 0 18px 42px rgba(0, 0, 0, 0.22);
+  --bg: #0e1420;
+  --bg-accent: rgba(91, 141, 239, 0.18);
+  --panel: #161d2c;
+  --panel-strong: #161d2c;
+  --panel-solid: #161d2c;
+  --text: #e7eaf0;
+  --muted: #8b94a7;
+  --border: #262e40;
+  --border-strong: #333d54;
+  --accent: #5b8def;
+  --accent-strong: #8ab0ff;
+  --accent-soft: rgba(91, 141, 239, 0.16);
+  --success: #3ecf8e;
+  --warning: #f0b84f;
+  --danger: #f87171;
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.3);
+
+  /* Dark-mode primary deliberately uses the accent blue rather than a dark navy:
+     a near-black button on an already-dark surface would read as low-contrast. */
+  --primary: #5b8def;
+  --primary-strong: #3d6fd4;
+  --primary-contrast: #0b1626;
+
+  --success-bg: rgba(34, 197, 94, 0.16);
+  --success-fg: #4ade80;
+  --warning-bg: rgba(245, 158, 11, 0.16);
+  --warning-fg: #fbbf24;
+  --danger-bg: rgba(248, 113, 113, 0.16);
+  --danger-fg: #f87171;
+  --info-bg: rgba(91, 141, 239, 0.16);
+  --info-fg: #8ab0ff;
+  --neutral-bg: rgba(148, 158, 180, 0.14);
+  --neutral-fg: #9aa4bc;
 }
 
 * {
@@ -55,12 +93,9 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100%;
-  background:
-    radial-gradient(circle at top left, var(--bg-accent), transparent 22%),
-    radial-gradient(circle at bottom right, rgba(68, 214, 182, 0.08), transparent 20%),
-    linear-gradient(180deg, color-mix(in srgb, var(--bg) 86%, white 14%) 0%, var(--bg) 100%);
+  background: var(--bg);
   color: var(--text);
-  font-family: "Satoshi", "Manrope", "Avenir Next", "Segoe UI", sans-serif;
+  font-family: var(--font-inter), "Segoe UI", "Avenir Next", sans-serif;
 }
 
 body {
@@ -144,14 +179,13 @@ pre {
 .brand-mark {
   display: grid;
   place-items: center;
-  width: 54px;
-  height: 54px;
-  border-radius: 18px;
-  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 65%, white 35%));
-  color: white;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  background: var(--primary);
+  color: var(--primary-contrast);
   font-weight: 700;
   letter-spacing: 0.08em;
-  box-shadow: 0 18px 36px color-mix(in srgb, var(--accent) 28%, transparent 72%);
 }
 
 .sidebar-title {
@@ -462,7 +496,7 @@ pre {
   display: grid;
   gap: 16px;
   padding: 20px;
-  border-radius: 26px;
+  border-radius: var(--radius-lg);
   background: var(--panel);
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
@@ -506,7 +540,7 @@ pre {
 .editor-panel {
   background: var(--panel-solid);
   border: 1px solid var(--border);
-  border-radius: 24px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-soft);
 }
 
@@ -616,9 +650,9 @@ button {
   width: 100%;
   min-height: 48px;
   padding: 12px 14px;
-  border-radius: 16px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel-solid) 92%, transparent 8%);
+  background: var(--panel-solid);
   color: var(--text);
   transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
 }
@@ -708,15 +742,14 @@ input[type="number"] {
 
 button {
   border: 1px solid transparent;
-  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
-  color: white;
+  background: var(--primary);
+  color: var(--primary-contrast);
   font-weight: 600;
   letter-spacing: -0.01em;
 }
 
 button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 10px 20px color-mix(in srgb, var(--accent) 14%, transparent 86%);
+  background: var(--primary-strong);
 }
 
 button:disabled {
@@ -740,7 +773,7 @@ button:disabled {
 .input {
   width: 100%;
   padding: 10px 14px;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   border: 1.5px solid var(--border-strong, var(--border));
   background: var(--bg);
   color: var(--text);
@@ -757,15 +790,19 @@ button:disabled {
 .input::placeholder { color: var(--muted); }
 
 .button-danger {
-  background: linear-gradient(135deg, color-mix(in srgb, var(--danger) 92%, black 8%), var(--danger));
+  background: var(--danger);
 }
 
 .button-primary {
   width: auto;
   min-width: 0;
-  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 85%, black 15%), var(--accent));
-  color: #fff;
+  background: var(--primary);
+  color: var(--primary-contrast);
   font-weight: 600;
+}
+
+.button-primary:hover {
+  background: var(--primary-strong);
 }
 
 .button-toggle {
