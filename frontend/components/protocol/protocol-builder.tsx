@@ -1,21 +1,32 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 
+import { Badge } from "@/components/ui/badge";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
+import { FilterTabOption, FilterTabs } from "@/components/ui/filter-tabs";
+import { Menu, MenuItem, Popover } from "@/components/ui/popover";
 import { Modal } from "@/components/ui/modal";
+import { SearchInput } from "@/components/ui/search-input";
 import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { useTableSort } from "@/lib/hooks/use-table-sort";
 import { formatDate, formatDateTime } from "@/lib/utils/format";
 import { ProtocolSummary, TemplateSummary } from "@/types/api";
-import { protocolStatusClassName, protocolStatusLabel } from "@/components/protocol/protocol-status";
+import { protocolStatusLabel, protocolStatusVariant } from "@/components/protocol/protocol-status";
 
 const PAGE_SIZE = 100;
+
+const STATUS_FILTER_OPTIONS: FilterTabOption[] = [
+  { value: "all", label: "Alle" },
+  { value: "geplant", label: "Geplant" },
+  { value: "vorbereitet", label: "Vorbereitet" },
+  { value: "durchgeführt", label: "Durchgeführt" },
+  { value: "abgeschlossen", label: "Abgeschlossen" },
+];
 
 type ProtocolBuilderProps = {
   initialProtocols: ProtocolSummary[];
@@ -46,8 +57,8 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
   const [availableTemplates, setAvailableTemplates] = useState(templates);
   const [pdfBusyByProtocol, setPdfBusyByProtocol] = useState<Record<number, boolean>>({});
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
-  const [menuPos, setMenuPos] = useState<{ top?: number; bottom?: number; right: number } | null>(null);
   const menuBtnRefs = useRef<Record<number, HTMLButtonElement | null>>({});
+  const activeMenuAnchorRef = useRef<HTMLButtonElement | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const { sortKey, sortDirection, toggleSort, sortIndicator } = useTableSort<"id" | "protocol_number" | "title" | "status" | "protocol_date">("protocol_date", "desc");
@@ -82,13 +93,6 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
         return (b.id - a.id) * dir;
       });
   }, [protocols, search, statusFilter, sortKey, sortDirection]);
-
-  useEffect(() => {
-    if (openMenuId === null) return;
-    function handleClick() { setOpenMenuId(null); setMenuPos(null); }
-    document.addEventListener("click", handleClick);
-    return () => document.removeEventListener("click", handleClick);
-  }, [openMenuId]);
 
   useEffect(() => {
     if (!showCreateForm) {
@@ -236,19 +240,13 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
         }
       />
 
-      <div className="segment-control">
-        <button type="button" className={`segment-button${statusFilter === "all" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("all")}>Alle</button>
-        <button type="button" className={`segment-button${statusFilter === "geplant" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("geplant")}>Geplant</button>
-        <button type="button" className={`segment-button${statusFilter === "vorbereitet" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("vorbereitet")}>Vorbereitet</button>
-        <button type="button" className={`segment-button${statusFilter === "durchgeführt" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("durchgeführt")}>Durchgeführt</button>
-        <button type="button" className={`segment-button${statusFilter === "abgeschlossen" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("abgeschlossen")}>Abgeschlossen</button>
-      </div>
+      <FilterTabs options={STATUS_FILTER_OPTIONS} value={statusFilter} onChange={setStatusFilter} />
 
       <article className="card">
         <div className="two-col">
           <label className="field-stack">
             <span className="field-label">Suche</span>
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Protokolle durchsuchen" />
+            <SearchInput value={search} onChange={setSearch} placeholder="Protokolle durchsuchen" />
           </label>
           <div className="card">
             <div className="eyebrow">Überblick</div>
@@ -342,7 +340,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
               <td>{protocol.title ?? "—"}</td>
               <td>
                 <div className="status-cell">
-                  <span className={`pill ${protocolStatusClassName(protocol.status)}`}>{protocolStatusLabel(protocol.status)}</span>
+                  <Badge variant={protocolStatusVariant(protocol.status)}>{protocolStatusLabel(protocol.status)}</Badge>
                   {versionStr && <span className="version-badge">{versionStr}</span>}
                 </div>
               </td>
@@ -353,34 +351,22 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
               <td>
                 <div className="protocol-row-actions" onClick={(e) => e.stopPropagation()}>
                   {!readOnly && (
-                    <div className="kebab-menu-wrapper">
-                      <button
-                        type="button"
-                        className="button-ghost button-icon"
-                        title="Weitere Aktionen"
-                        ref={(el) => { menuBtnRefs.current[protocol.id] = el; }}
-                        onClick={() => {
-                          if (menuOpen) {
-                            setOpenMenuId(null);
-                            setMenuPos(null);
-                          } else {
-                            const btn = menuBtnRefs.current[protocol.id];
-                            if (btn) {
-                              const rect = btn.getBoundingClientRect();
-                              const spaceBelow = window.innerHeight - rect.bottom - 8;
-                              const spaceAbove = rect.top - 8;
-                              const showAbove = spaceBelow < 200 && spaceAbove > spaceBelow;
-                              setMenuPos(showAbove
-                                ? { bottom: window.innerHeight - rect.top + 6, right: window.innerWidth - rect.right }
-                                : { top: rect.bottom + 6, right: window.innerWidth - rect.right });
-                            }
-                            setOpenMenuId(protocol.id);
-                          }
-                        }}
-                      >
-                        ⋯
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      className="button-ghost button-icon"
+                      title="Weitere Aktionen"
+                      ref={(el) => { menuBtnRefs.current[protocol.id] = el; }}
+                      onClick={() => {
+                        if (menuOpen) {
+                          setOpenMenuId(null);
+                        } else {
+                          activeMenuAnchorRef.current = menuBtnRefs.current[protocol.id] ?? null;
+                          setOpenMenuId(protocol.id);
+                        }
+                      }}
+                    >
+                      ⋯
+                    </button>
                   )}
                   {isFinal ? (
                     <button
@@ -423,72 +409,64 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
         </div>
       )}
 
-      {!readOnly && openMenuId !== null && menuPos !== null && typeof document !== "undefined" && createPortal(
-        <div
-          className="kebab-menu-dropdown"
-          style={{ position: "fixed", top: menuPos.top, bottom: menuPos.bottom, right: menuPos.right }}
-          onClick={(e) => e.stopPropagation()}
+      {!readOnly && (
+        <Popover
+          open={openMenuId !== null}
+          onOpenChange={(open) => { if (!open) setOpenMenuId(null); }}
+          anchorRef={activeMenuAnchorRef}
+          align="end"
         >
-          {(() => {
-            const protocol = sortedProtocols.find((p) => p.id === openMenuId);
-            if (!protocol) return null;
-            const isFinal = protocol.status === "abgeschlossen";
-            const canRevert = protocol.status !== "geplant";
-            return (
-              <>
-                <button
-                  type="button"
-                  className="kebab-menu-item"
-                  onClick={() => {
-                    setOpenMenuId(null);
-                    if (protocol.latest_pdf_url) {
-                      window.open(`${browserApiBaseUrl}${protocol.latest_pdf_url}`, "_blank", "noopener,noreferrer");
-                    } else {
-                      void generateAndOpenPdf(protocol.id, protocol.protocol_number);
-                    }
-                  }}
-                  disabled={pdfBusyByProtocol[protocol.id]}
-                >
-                  {pdfBusyByProtocol[protocol.id] ? "Generiere…" : "PDF"}
-                </button>
-                <button
-                  type="button"
-                  className="kebab-menu-item"
-                  onClick={() => {
-                    setOpenMenuId(null);
-                    void generateAndOpenPdf(protocol.id, protocol.protocol_number);
-                  }}
-                  disabled={pdfBusyByProtocol[protocol.id]}
-                >
-                  {pdfBusyByProtocol[protocol.id] ? "Generiere…" : "PDF neu generieren"}
-                </button>
-                {canRevert && (
-                  <button
-                    type="button"
-                    className="kebab-menu-item"
-                    onClick={() => {
+          <Menu>
+            {(() => {
+              const protocol = sortedProtocols.find((p) => p.id === openMenuId);
+              if (!protocol) return null;
+              const canRevert = protocol.status !== "geplant";
+              return (
+                <>
+                  <MenuItem
+                    onSelect={() => {
                       setOpenMenuId(null);
-                      void revertStatus(protocol.id);
+                      if (protocol.latest_pdf_url) {
+                        window.open(`${browserApiBaseUrl}${protocol.latest_pdf_url}`, "_blank", "noopener,noreferrer");
+                      } else {
+                        void generateAndOpenPdf(protocol.id, protocol.protocol_number);
+                      }
                     }}
                   >
-                    Status zurücksetzen
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="kebab-menu-item kebab-menu-item-danger"
-                  onClick={() => {
-                    setOpenMenuId(null);
-                    void deleteProtocol(protocol.id);
-                  }}
-                >
-                  Löschen
-                </button>
-              </>
-            );
-          })()}
-        </div>,
-        document.body
+                    {pdfBusyByProtocol[protocol.id] ? "Generiere…" : "PDF"}
+                  </MenuItem>
+                  <MenuItem
+                    onSelect={() => {
+                      setOpenMenuId(null);
+                      void generateAndOpenPdf(protocol.id, protocol.protocol_number);
+                    }}
+                  >
+                    {pdfBusyByProtocol[protocol.id] ? "Generiere…" : "PDF neu generieren"}
+                  </MenuItem>
+                  {canRevert && (
+                    <MenuItem
+                      onSelect={() => {
+                        setOpenMenuId(null);
+                        void revertStatus(protocol.id);
+                      }}
+                    >
+                      Status zurücksetzen
+                    </MenuItem>
+                  )}
+                  <MenuItem
+                    danger
+                    onSelect={() => {
+                      setOpenMenuId(null);
+                      void deleteProtocol(protocol.id);
+                    }}
+                  >
+                    Löschen
+                  </MenuItem>
+                </>
+              );
+            })()}
+          </Menu>
+        </Popover>
       )}
     </div>
   );
@@ -503,7 +481,7 @@ export function ProtocolOverview({ protocol }: ProtocolOverviewProps) {
     <div className="grid">
       <div className="status-row">
         <span className="pill">{protocol.protocol_number}</span>
-        <span className={`pill ${protocolStatusClassName(protocol.status)}`}>Status: {protocolStatusLabel(protocol.status)}</span>
+        <Badge variant={protocolStatusVariant(protocol.status)}>Status: {protocolStatusLabel(protocol.status)}</Badge>
         <span className="pill">Template zugewiesen</span>
         <span className="pill">Layout from template snapshot</span>
       </div>

@@ -1,3 +1,5 @@
+import { BadgeVariant } from "@/components/ui/badge";
+
 export function protocolStatusLabel(status: string): string {
   switch (status) {
     case "geplant":
@@ -13,17 +15,17 @@ export function protocolStatusLabel(status: string): string {
   }
 }
 
-export function protocolStatusClassName(status: string): string {
+export function protocolStatusVariant(status: string): BadgeVariant {
   switch (status) {
     case "geplant":
-      return "status-pill-planned";
+      return "info";
     case "vorbereitet":
-      return "status-pill-prepared";
+      return "warning";
     case "durchgeführt":
-      return "status-pill-conducted";
+      return "success";
     case "abgeschlossen":
-      return "status-pill-completed";
+      return "neutral";
     default:
-      return "";
+      return "neutral";
   }
 }

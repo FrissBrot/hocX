@@ -3,7 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
+import { FilterTabOption, FilterTabs } from "@/components/ui/filter-tabs";
+import { SearchInput } from "@/components/ui/search-input";
 import { TagInput } from "@/components/ui/tag-input";
 import { TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
 import { TodoDueMenu, DuePatch } from "@/components/todos/todo-due-menu";
@@ -20,12 +23,17 @@ const STATUS_LABEL: Record<string, string> = {
   cancelled: "Abgebrochen",
 };
 
-const STATUS_CLASS: Record<string, string> = {
-  open: "todo-status-open",
-  in_progress: "todo-status-open",
-  done: "todo-status-done",
-  cancelled: "todo-status-cancelled",
+const STATUS_VARIANT: Record<string, BadgeVariant> = {
+  open: "warning",
+  in_progress: "info",
+  done: "success",
+  cancelled: "neutral",
 };
+
+const SCOPE_OPTIONS: FilterTabOption<"all" | "my">[] = [
+  { value: "all", label: "Alle" },
+  { value: "my", label: "Meine" },
+];
 
 type SortKey = "task" | "protocol_number" | "assigned_participant_name" | "resolved_due_date" | "todo_status_code";
 
@@ -378,28 +386,23 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
       />
 
       <div className="table-toolbar-actions">
-        {allTodos !== null && (
-          <div className="segment-control">
-            <button type="button" className={`segment-button${scope === "all" ? " segment-button-active" : ""}`} onClick={() => setScope("all")}>Alle</button>
-            <button type="button" className={`segment-button${scope === "my" ? " segment-button-active" : ""}`} onClick={() => setScope("my")}>Meine</button>
-          </div>
-        )}
-        <div className="segment-control">
-          <button type="button" className={`segment-button${statusFilter === "open" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("open")}>
-            Offen {counts.open > 0 ? <span className="todo-count-badge">{counts.open}</span> : null}
-          </button>
-          <button type="button" className={`segment-button${statusFilter === "done" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("done")}>
-            Erledigt {counts.done > 0 ? <span className="todo-count-badge">{counts.done}</span> : null}
-          </button>
-          <button type="button" className={`segment-button${statusFilter === "all" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("all")}>Alle</button>
-        </div>
+        {allTodos !== null && <FilterTabs options={SCOPE_OPTIONS} value={scope} onChange={setScope} />}
+        <FilterTabs
+          options={[
+            { value: "open", label: "Offen", count: counts.open || undefined },
+            { value: "done", label: "Erledigt", count: counts.done || undefined },
+            { value: "all", label: "Alle" },
+          ]}
+          value={statusFilter}
+          onChange={setStatusFilter}
+        />
       </div>
 
       <article className="card">
         <div className="two-col">
           <label className="field-stack">
             <span className="field-label">Suche</span>
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Todos durchsuchen" />
+            <SearchInput value={search} onChange={setSearch} placeholder="Todos durchsuchen" />
           </label>
           <div className="card">
             <div className="eyebrow">Überblick</div>
@@ -557,9 +560,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
                 </span>
               </td>
               <td>
-                <span className={`pill pill-sm ${STATUS_CLASS[code] ?? ""}`}>
-                  {STATUS_LABEL[code] ?? code}
-                </span>
+                <Badge variant={STATUS_VARIANT[code] ?? "neutral"}>{STATUS_LABEL[code] ?? code}</Badge>
               </td>
             </tr>
           );

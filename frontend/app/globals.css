@@ -667,6 +667,53 @@ pre {
   font-weight: 600;
 }
 
+/* Badge (components/ui/badge.tsx) - the single canonical status-pill look,
+   replacing several parallel per-domain badge class families. */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: none;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.badge-success {
+  background: var(--success-bg);
+  color: var(--success-fg);
+}
+
+.badge-warning {
+  background: var(--warning-bg);
+  color: var(--warning-fg);
+}
+
+.badge-danger {
+  background: var(--danger-bg);
+  color: var(--danger-fg);
+}
+
+.badge-info {
+  background: var(--info-bg);
+  color: var(--info-fg);
+}
+
+.badge-neutral {
+  background: var(--neutral-bg);
+  color: var(--neutral-fg);
+}
+
 .status-banner {
   padding: 14px 16px;
   border-radius: 18px;
@@ -865,6 +912,47 @@ button:disabled {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 .input::placeholder { color: var(--muted); }
+
+/* SearchInput (components/ui/search-input.tsx) - light-gray filled, borderless
+   until focus, the one canonical search field replacing per-page duplicates. */
+.search-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.search-input-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.search-input input {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 14px 0 36px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid transparent;
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.92rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
+}
+
+.search-input input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--panel-solid);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.search-input input::placeholder {
+  color: var(--muted);
+}
 
 .button-danger {
   background: var(--danger);
@@ -5248,7 +5336,7 @@ input[type="radio"] {
 }
 .segment-button:hover {
   background: color-mix(in srgb, var(--accent) 8%, transparent 92%);
-  color: var(--fg);
+  color: var(--text);
   box-shadow: none;
   transform: none !important;
 }
@@ -5261,6 +5349,75 @@ input[type="radio"] {
 .segment-button-active:hover {
   background: linear-gradient(135deg, var(--accent), var(--accent-strong));
   color: white;
+}
+
+/* FilterTabs (components/ui/filter-tabs.tsx) - light-gray track with a white
+   active pill, replacing the copy-pasted .segment-control markup per page. */
+.filter-tabs {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.filter-tabs-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  min-width: 0;
+  min-height: 0;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+  line-height: 1.5;
+  transform: none !important;
+  box-shadow: none;
+}
+
+.filter-tabs-option:hover {
+  background: transparent;
+  color: var(--text);
+  transform: none !important;
+  box-shadow: none;
+}
+
+.filter-tabs-option-active {
+  background: var(--panel-solid);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: var(--shadow-soft);
+}
+
+.filter-tabs-option-active:hover {
+  background: var(--panel-solid);
+  color: var(--text);
+}
+
+.filter-tabs-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--neutral-bg);
+  color: var(--neutral-fg);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.filter-tabs-option-active .filter-tabs-count {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
 }
 
 .login-frame {
@@ -6787,36 +6944,15 @@ input[type="radio"] {
 
 /* ── Assignee search dropdown ───────────────────────────────────── */
 
+/* Popover panel chrome now comes from .popover-panel (components/ui/popover.tsx);
+   this only adds the assignee menu's own internal layout. */
 .assignee-popover-portal {
   display: grid;
   gap: 6px;
-  padding: 8px;
-  border-radius: 14px;
-  border: 1px solid var(--border);
-  background: var(--panel-solid);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
 }
 
-.assignee-popover {
-  gap: 6px;
-}
-
-.assignee-search {
-  width: 100%;
-  padding: 6px 10px;
-  font-size: 0.85rem;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--input-bg, var(--panel));
-  color: var(--fg);
-  outline: none;
-}
-.assignee-search:focus {
-  border-color: var(--accent);
-}
-
-.assignee-list {
-  max-height: 220px;
+.menu-list {
+  max-height: 240px;
   overflow-y: auto;
   display: grid;
   gap: 2px;
@@ -6829,9 +6965,8 @@ input[type="radio"] {
   color: var(--muted);
 }
 
-.mini-menu-option-highlighted {
-  background: color-mix(in srgb, var(--accent) 10%, transparent 90%);
-  color: var(--accent);
+.menu-item-highlighted {
+  background: var(--accent-soft);
 }
 
 /* ── Finance tabs ────────────────────────────────────────────── */
@@ -7145,13 +7280,9 @@ input[type="radio"] {
 }
 
 /* ── Todo due-date menu popover ─────────────────────────────────── */
-
+/* Panel chrome comes from .popover-panel (components/ui/popover.tsx); this only
+   adds the due-menu's own internal layout/options. */
 .due-menu-popover {
-  padding: 6px;
-  border-radius: 14px;
-  border: 1px solid var(--border);
-  background: var(--panel-solid);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
   display: grid;
   gap: 2px;
   min-width: 200px;
@@ -7169,14 +7300,14 @@ input[type="radio"] {
   width: 100%;
   padding: 7px 12px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text);
   font-size: 0.85rem;
   cursor: pointer;
   text-align: left;
 }
-.due-menu-option:hover { background: var(--hover); }
+.due-menu-option:hover { background: var(--accent-soft); }
 .due-menu-option-sub {
   font-size: 0.75rem;
   color: var(--muted);
@@ -7830,12 +7961,24 @@ input[type="radio"] {
   grid-column: 1 / -1;
   gap: 8px;
   padding: 22px 24px;
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-contrast);
+}
+
+.dashboard-hero .eyebrow {
+  color: color-mix(in srgb, var(--primary-contrast) 65%, transparent);
+}
+
+.dashboard-hero .muted {
+  color: color-mix(in srgb, var(--primary-contrast) 70%, transparent);
 }
 
 .dashboard-hero-title {
   margin: 0;
   font-size: clamp(1.3rem, 2.4vw, 1.8rem);
   line-height: 1.2;
+  color: var(--primary-contrast);
 }
 
 .dashboard-hero-meta {
@@ -7851,6 +7994,9 @@ input[type="radio"] {
   padding: 3px 10px;
   font-size: 0.75rem;
   font-weight: 600;
+  background: color-mix(in srgb, var(--primary-contrast) 16%, transparent);
+  border-color: color-mix(in srgb, var(--primary-contrast) 24%, transparent);
+  color: var(--primary-contrast);
 }
 
 .dashboard-hero-action {
@@ -7859,6 +8005,12 @@ input[type="radio"] {
   padding: 8px 16px;
   font-size: 0.85rem;
   justify-self: start;
+  background: var(--primary-contrast);
+  color: var(--primary);
+}
+
+.dashboard-hero-action:hover {
+  background: color-mix(in srgb, var(--primary-contrast) 90%, transparent);
 }
 
 .dashboard-tile {
@@ -7879,38 +8031,34 @@ input[type="radio"] {
   font-size: 0.76rem;
 }
 
-/* Teilnehmer entschuldigen: eine Zeile pro Teilnehmer, GitHub-artige Liste */
+/* Teilnehmer entschuldigen: umbrechendes Raster aus Pill-Chips (dem Mockup entsprechend) */
 .excuse-chip-grid {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .excuse-chip {
-  width: 100%;
+  width: auto;
   min-height: 0;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 4px;
-  border: none;
-  border-top: 1px solid var(--border);
-  border-radius: 0;
-  background: transparent;
+  gap: 8px;
+  padding: 6px 12px 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-solid);
   color: var(--text);
   cursor: pointer;
   text-align: left;
   font-weight: 500;
   font-size: 0.86rem;
   line-height: 1.1;
-  transition: background 120ms ease;
-}
-
-.excuse-chip:first-child {
-  border-top: none;
+  transition: background 120ms ease, border-color 120ms ease;
 }
 
 .excuse-chip:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  border-color: var(--accent);
 }
 
 .excuse-chip:disabled {
@@ -7930,12 +8078,14 @@ input[type="radio"] {
 }
 
 .excuse-chip-excused {
-  color: var(--success);
+  border-color: var(--success-fg);
+  background: var(--success-bg);
+  color: var(--success-fg);
 }
 
 .excuse-chip-excused .excuse-chip-status-icon {
-  border-color: var(--success);
-  color: var(--success);
+  border-color: var(--success-fg);
+  color: var(--success-fg);
 }
 
 .excuse-chip-name {
@@ -7988,13 +8138,13 @@ input[type="radio"] {
 }
 
 .dashboard-list-row-icon-warn {
-  background: color-mix(in srgb, #e5a339 18%, transparent 82%);
-  color: #e5a339;
+  background: var(--warning-bg);
+  color: var(--warning-fg);
 }
 
 .dashboard-list-row-icon-fine {
-  background: color-mix(in srgb, var(--danger, #d9534f) 16%, transparent 84%);
-  color: var(--danger, #d9534f);
+  background: var(--danger-bg);
+  color: var(--danger-fg);
 }
 
 .dashboard-list-row-text {

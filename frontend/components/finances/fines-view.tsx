@@ -3,7 +3,10 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { Badge } from "@/components/ui/badge";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
+import { FilterTabs } from "@/components/ui/filter-tabs";
+import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { formatDate, formatDateTime } from "@/lib/utils/format";
@@ -126,23 +129,21 @@ export function FinesView({ initialFines, accounts, isAdmin }: Props) {
     <div className="grid">
       <DataToolbar title="Bussen" description="Alle Verspätungs- und Absenzbussen dieses Mandanten." />
 
-      <div className="segment-control">
-        <button type="button" className={`segment-button${statusFilter === "pending" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("pending")}>
-          Ausstehend {counts.pending > 0 ? <span className="todo-count-badge">{counts.pending}</span> : null}
-        </button>
-        <button type="button" className={`segment-button${statusFilter === "collected" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("collected")}>
-          Kassiert {counts.collected > 0 ? <span className="todo-count-badge">{counts.collected}</span> : null}
-        </button>
-        <button type="button" className={`segment-button${statusFilter === "all" ? " segment-button-active" : ""}`} onClick={() => setStatusFilter("all")}>
-          Alle
-        </button>
-      </div>
+      <FilterTabs
+        options={[
+          { value: "pending", label: "Ausstehend", count: counts.pending || undefined },
+          { value: "collected", label: "Kassiert", count: counts.collected || undefined },
+          { value: "all", label: "Alle" },
+        ]}
+        value={statusFilter}
+        onChange={setStatusFilter}
+      />
 
       <article className="card">
         <div className="two-col">
           <label className="field-stack">
             <span className="field-label">Suche</span>
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Bussen durchsuchen" />
+            <SearchInput value={search} onChange={setSearch} placeholder="Bussen durchsuchen" />
           </label>
           <div className="card">
             <div className="eyebrow">Überblick</div>
@@ -202,9 +203,7 @@ export function FinesView({ initialFines, accounts, isAdmin }: Props) {
               <td>{account?.name ?? `Konto ${fine.account_id}`}</td>
               <td>{fine.amount.toFixed(2)} {cur}</td>
               <td>
-                <span className={`pill pill-sm ${isCollected ? "todo-status-done" : "todo-status-open"}`}>
-                  {isCollected ? "Kassiert" : "Ausstehend"}
-                </span>
+                <Badge variant={isCollected ? "success" : "warning"}>{isCollected ? "Kassiert" : "Ausstehend"}</Badge>
                 {isCollected && fine.collected_at ? (
                   <div className="muted fines-collected-note">
                     {formatDateTime(fine.collected_at)}
