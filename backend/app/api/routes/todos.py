@@ -199,6 +199,31 @@ def patch_todo(
     return next(item for item in todos if item.id == todo_id)
 
 
+@router.post("/protocol-todos/{todo_id}/accept-tracked-change")
+def accept_todo_tracked_change(
+    todo_id: int,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """'Ausblenden' for one todo's red tracked-change highlight - keeps the todo, just
+    stops marking it as changed/added/pending-delete."""
+    require_writer(user)
+    access_service.ensure_can_read_todo(db, user, todo_id)
+    try:
+        result = service.accept_tracked_change(db, todo_id)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Change could not be accepted") from exc
+    if result is None:
+        raise HTTPException(status_code=404, detail="Todo not found")
+    hard_deleted, block_id = result
+    if hard_deleted or block_id is None:
+        return {"todo": None}
+    todos = service.list_todos(db, block_id)
+    todo_read = next((item for item in todos if item.id == todo_id), None)
+    return {"todo": todo_read}
+
+
 @router.delete("/protocol-todos/{todo_id}")
 def delete_todo(
     todo_id: int,

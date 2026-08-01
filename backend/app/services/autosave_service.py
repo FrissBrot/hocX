@@ -30,6 +30,22 @@ class AutosaveService:
                 protocol_text.tracked_dirty = True
             protocol_text.content = content
         saved = self.text_repository.save(db, protocol_text)
+        return self._result(saved, protocol_element_block_id)
+
+    def accept_tracked_changes(self, db: Session, protocol_element_block_id: int) -> dict[str, str | int | bool | None] | None:
+        """'Ausblenden' for a text block's red tracked-change highlighting: resets the
+        baseline to the block's current content, so the word-diff has nothing left to
+        show. Whole-block granularity (not per-word) - splicing a single word-run back
+        into the markdown baseline risks corrupting surrounding formatting (lists, bold)
+        on rejoin, so accepting resolves everything in the block at once."""
+        protocol_text = self.text_repository.get_by_protocol_element_block_id(db, protocol_element_block_id)
+        if protocol_text is None:
+            return None
+        protocol_text.tracked_baseline_content = protocol_text.content
+        saved = self.text_repository.save(db, protocol_text)
+        return self._result(saved, protocol_element_block_id)
+
+    def _result(self, saved: ProtocolText, protocol_element_block_id: int) -> dict[str, str | int | bool | None]:
         return {
             "status": "saved",
             "protocol_element_block_id": protocol_element_block_id,

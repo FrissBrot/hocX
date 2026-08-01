@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { Modal } from "@/components/ui/modal";
+import { TrackedChangeHideButton } from "@/components/ui/tracked-change-hide-button";
 import { formatDate, formatDateRange } from "@/lib/utils/format";
 import {
   EventSummary,
@@ -34,6 +35,7 @@ type StructuredListTableProps = {
   sortDirection?: "asc" | "desc";
   onHeaderSort?: (column: "column_one" | "column_two") => void;
   entryTrackedStatusById?: Record<number, TrackedEntryInfo>;
+  onAcceptTrackedEntry?: (entryId: number) => void;
   onCreateEntry: (payload: {
     sort_index: number;
     column_one_value: StructuredListValue;
@@ -190,6 +192,7 @@ export function StructuredListTable({
   sortDirection = "asc",
   onHeaderSort,
   entryTrackedStatusById,
+  onAcceptTrackedEntry,
   onCreateEntry,
   onUpdateEntry,
   onDeleteEntry,
@@ -662,7 +665,15 @@ export function StructuredListTable({
                         return (
                           <tr key={entry.id} className="tracked-removed-row">
                             <td><span className="tracked-strike">{valueSummary(definition.column_one_value_type, firstValue, availableParticipants, sortedEvents)}</span></td>
-                            <td><span className="tracked-strike">{valueSummary(definition.column_two_value_type, secondValue, availableParticipants, sortedEvents)}</span></td>
+                            <td>
+                              <span className="tracked-strike">{valueSummary(definition.column_two_value_type, secondValue, availableParticipants, sortedEvents)}</span>
+                              {onAcceptTrackedEntry && (
+                                <TrackedChangeHideButton
+                                  title="Entfernten Eintrag ausblenden"
+                                  onAccept={() => onAcceptTrackedEntry(entry.id)}
+                                />
+                              )}
+                            </td>
                             {editable ? <td /> : null}
                           </tr>
                         );
@@ -686,6 +697,9 @@ export function StructuredListTable({
                               : (col1Changed || col1Added
                                   ? <span className="tracked-underline">{valueSummary(definition.column_one_value_type, firstValue, availableParticipants, sortedEvents)}</span>
                                   : valueSummary(definition.column_one_value_type, firstValue, availableParticipants, sortedEvents))}
+                            {(col1Changed || col1Added) && onAcceptTrackedEntry && (
+                              <TrackedChangeHideButton onAccept={() => onAcceptTrackedEntry(entry.id)} />
+                            )}
                           </td>
                           <td className={col2Changed || col2Added ? "tracked-cell" : undefined}>
                             {col2Changed && (
@@ -700,6 +714,9 @@ export function StructuredListTable({
                               : (col2Changed || col2Added
                                   ? <span className="tracked-underline">{valueSummary(definition.column_two_value_type, secondValue, availableParticipants, sortedEvents)}</span>
                                   : valueSummary(definition.column_two_value_type, secondValue, availableParticipants, sortedEvents))}
+                            {(col2Changed || col2Added) && onAcceptTrackedEntry && (
+                              <TrackedChangeHideButton onAccept={() => onAcceptTrackedEntry(entry.id)} />
+                            )}
                           </td>
                           {editable ? (
                             <td>

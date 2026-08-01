@@ -158,6 +158,23 @@ class ProtocolTodoService:
             values["tracked_change_before_json"] = {"task": todo.task, "tags": todo.tags}
         return self.repository.update(db, todo, values)
 
+    def accept_tracked_change(self, db: Session, todo_id: int) -> tuple[bool, int | None] | None:
+        """'Ausblenden' for one todo's tracked-change highlight: permanently accepts its
+        current state as the new normal, independent of the protocol-wide clear that
+        otherwise only happens at vorbereitet -> durchgefuehrt. Returns None if not found,
+        else (hard_deleted, protocol_element_block_id) - mirrors delete_todo's shape. A
+        pending-delete ghost is hard-deleted now, finalizing the removal early."""
+        todo = self.repository.get(db, todo_id)
+        if todo is None:
+            return None
+        block_id = todo.protocol_element_block_id
+        if todo.pending_delete:
+            self.repository.delete(db, todo)
+            return True, block_id
+        if todo.tracked_change is not None or todo.tracked_change_before_json is not None:
+            self.repository.update(db, todo, {"tracked_change": None, "tracked_change_before_json": None})
+        return False, block_id
+
     def delete_todo(self, db: Session, todo_id: int, *, track_changes_active: bool = False) -> tuple[bool, int | None] | None:
         """Returns None if not found, else (hard_deleted, protocol_element_block_id). A
         todo created during this same tracked window has no accepted history to preserve,
