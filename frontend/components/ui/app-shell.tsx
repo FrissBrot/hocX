@@ -13,6 +13,7 @@ import { buildNav, formatRoleLabel } from "@/components/ui/app-shell-nav";
 import { ToastProvider } from "@/contexts/toast-context";
 import { ProfileModal } from "@/components/ui/profile-modal";
 import { TenantSelectorModal } from "@/components/ui/tenant-selector-modal";
+import { Menu, MenuDivider, MenuItem, Popover } from "@/components/ui/popover";
 
 // Login rendert nie auf einer Mandanten-Custom-Domain — von dort muss eine volle Navigation
 // (nicht SPA-Routing) zur Hauptdomain erfolgen, sonst gäbe es dort keine Login-Seite zu zeigen.
@@ -43,20 +44,12 @@ function readStoredThemePreference(): "light" | "dark" | "auto" {
 export function AppShell({ children, initialSession = null }: { children: ReactNode; initialSession?: SessionInfo | null }) {
   const pathname = usePathname();
   const router = useRouter();
-  const sidebarRef = useRef<HTMLElement | null>(null);
-  const brandLockupRef = useRef<HTMLDivElement | null>(null);
-  const sidebarCopyRef = useRef<HTMLParagraphElement | null>(null);
-  const sidebarNavRef = useRef<HTMLElement | null>(null);
-  const compactFooterRef = useRef<HTMLDivElement | null>(null);
-  const compactFooterPanelsRef = useRef<HTMLDivElement | null>(null);
-  const compactFooterCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const avatarTriggerRef = useRef<HTMLButtonElement | null>(null);
   const tenantPromptCheckedRef = useRef(false);
   const [themePreference, setThemePreference] = useState<"light" | "dark" | "auto">("auto");
   const [themeReady, setThemeReady] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [compactFooterEnabled, setCompactFooterEnabled] = useState(false);
-  const [compactFooterOpen, setCompactFooterOpen] = useState(false);
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [session, setSession] = useState<SessionInfo | null>(initialSession);
   const [tenantModalOpen, setTenantModalOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
@@ -88,110 +81,8 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
   }, [themePreference, themeReady]);
 
   useEffect(() => {
-    const activeGroupTitle = navGroups.find((group) =>
-      group.links.some((link) => pathname === link.href || pathname.startsWith(`${link.href}/`))
-    )?.title;
-    setExpandedGroups(
-      Object.fromEntries(navGroups.map((group) => [group.title, group.title === activeGroupTitle]))
-    );
-  }, [navGroups, pathname]);
-
-  useEffect(() => {
-    setCompactFooterOpen(false);
-  }, [pathname, tenantModalOpen, profileModalOpen]);
-
-  useEffect(() => {
-    if (!compactFooterOpen) {
-      return;
-    }
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!compactFooterRef.current?.contains(event.target as Node)) {
-        setCompactFooterOpen(false);
-      }
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setCompactFooterOpen(false);
-      }
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [compactFooterOpen]);
-
-  useEffect(() => {
-    return () => {
-      if (compactFooterCloseTimerRef.current) {
-        clearTimeout(compactFooterCloseTimerRef.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    const sidebar = sidebarRef.current;
-    const brandLockup = brandLockupRef.current;
-    const sidebarCopy = sidebarCopyRef.current;
-    const sidebarNav = sidebarNavRef.current;
-    const footerPanels = compactFooterPanelsRef.current;
-    if (!sidebar || !brandLockup || !sidebarCopy || !sidebarNav || !footerPanels) {
-      return;
-    }
-
-    let frameId = 0;
-    const measureCompactFooter = () => {
-      frameId = 0;
-      const sidebarStyles = window.getComputedStyle(sidebar);
-      const sidebarGap = Number.parseFloat(sidebarStyles.rowGap || sidebarStyles.gap || "0") || 0;
-      const paddingTop = Number.parseFloat(sidebarStyles.paddingTop || "0") || 0;
-      const paddingBottom = Number.parseFloat(sidebarStyles.paddingBottom || "0") || 0;
-      const totalContentHeight =
-        brandLockup.scrollHeight +
-        sidebarCopy.scrollHeight +
-        sidebarNav.scrollHeight +
-        footerPanels.scrollHeight +
-        paddingTop +
-        paddingBottom +
-        sidebarGap * 3;
-
-      setCompactFooterEnabled(totalContentHeight > sidebar.clientHeight + 2);
-    };
-
-    const scheduleMeasure = () => {
-      if (frameId) {
-        window.cancelAnimationFrame(frameId);
-      }
-      frameId = window.requestAnimationFrame(measureCompactFooter);
-    };
-
-    scheduleMeasure();
-
-    const observer = new ResizeObserver(() => scheduleMeasure());
-    observer.observe(sidebar);
-    observer.observe(brandLockup);
-    observer.observe(sidebarCopy);
-    observer.observe(sidebarNav);
-    observer.observe(footerPanels);
-    window.addEventListener("resize", scheduleMeasure);
-
-    return () => {
-      if (frameId) {
-        window.cancelAnimationFrame(frameId);
-      }
-      observer.disconnect();
-      window.removeEventListener("resize", scheduleMeasure);
-    };
-  }, [expandedGroups, navGroups, pathname, session]);
-
-  useEffect(() => {
-    if (!compactFooterEnabled) {
-      setCompactFooterOpen(false);
-    }
-  }, [compactFooterEnabled]);
+    setAvatarMenuOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     let cancelled = false;
@@ -249,30 +140,20 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
     }
   }, [session]);
 
-  const activeLabel = useMemo(() => {
+  const activeCrumb = useMemo(() => {
     for (const group of navGroups) {
       for (const link of group.links) {
         if (pathname === link.href || pathname.startsWith(`${link.href}/`)) {
-          return link.label;
+          return { group: group.title, label: link.label };
         }
       }
     }
-    return "Dashboard";
+    return { group: "Übersicht", label: "Dashboard" };
   }, [navGroups, pathname]);
 
-  const userFullName = [session?.user?.first_name, session?.user?.last_name].filter(Boolean).join(" ");
-  const userSecondaryLine =
-    session?.user && userFullName && userFullName !== session.user.display_name ? userFullName : "Profil & Sprache";
   const tenantName = session?.current_tenant?.name ?? "Mandant";
-
-  function renderTenantAvatar() {
-    if (session?.current_tenant?.profile_image_url) {
-      // eslint-disable-next-line @next/next/no-img-element
-      return <img src={session.current_tenant.profile_image_url} alt={tenantName} />;
-    }
-
-    return <span>{tenantName.slice(0, 1) || "T"}</span>;
-  }
+  const userInitial = session?.user?.display_name?.slice(0, 1) ?? "U";
+  const roleLabel = formatRoleLabel(session?.current_role) || sessionStatus;
 
   function selectTheme(nextTheme: "light" | "dark" | "auto") {
     setThemePreference(nextTheme);
@@ -337,7 +218,6 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
     <main className={`app-frame${isProtocolWriting ? " app-frame-writing" : ""}`}>
       <div className="shell">
         <aside
-          ref={sidebarRef}
           className={`sidebar${mobileNavOpen ? " sidebar-open" : ""}${isProtocolWriting ? " sidebar-writing" : ""}`}
           onMouseLeave={() => {
             // Opens only via the ☰ button next to the page title, never on hover — but once
@@ -347,177 +227,35 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
             }
           }}
         >
-          <div className="brand-lockup" ref={brandLockupRef}>
+          <div className="brand-lockup">
             <div className="brand-mark">hX</div>
             <div>
-              <div className="eyebrow">hocX</div>
-              <h2 className="sidebar-title">Protokoll Studio</h2>
+              <div className="sidebar-wordmark">hocX</div>
+              <div className="sidebar-tenant-name">{tenantName}</div>
             </div>
           </div>
-          <p className="muted sidebar-copy" ref={sidebarCopyRef}>Protokolle, Vorlagen, Termine und Exporte verwalten.</p>
-          <nav className="sidebar-nav" ref={sidebarNavRef}>
+          <nav className="sidebar-nav">
             {navGroups.map((group) => (
               <div className="nav-group" key={group.title}>
-                <button
-                  type="button"
-                  className="nav-group-toggle"
-                  onClick={() =>
-                    setExpandedGroups((current) => {
-                      const isOpen = current[group.title];
-                      const allClosed = Object.fromEntries(navGroups.map((g) => [g.title, false]));
-                      return isOpen ? allClosed : { ...allClosed, [group.title]: true };
-                    })
-                  }
-                >
-                  <span className="nav-group-title">{group.title}</span>
-                  <span className="nav-group-icon">{expandedGroups[group.title] ? "−" : "+"}</span>
-                </button>
-                {expandedGroups[group.title] ? (
-                  <div className="nav-links">
-                    {group.links.map((link) => {
-                      const isActive = pathname === link.href || pathname.startsWith(`${link.href}/`);
-                      return (
-                        <Link
-                          href={link.href as any}
-                          key={link.href}
-                          className={isActive ? "nav-link nav-link-active" : "nav-link"}
-                          onClick={() => setMobileNavOpen(false)}
-                        >
-                          {link.label}
-                        </Link>
-                      );
-                    })}
-                  </div>
-                ) : null}
+                <div className="nav-group-label">{group.title}</div>
+                <div className="nav-links">
+                  {group.links.map((link) => {
+                    const isActive = pathname === link.href || pathname.startsWith(`${link.href}/`);
+                    return (
+                      <Link
+                        href={link.href as any}
+                        key={link.href}
+                        className={isActive ? "nav-link nav-link-active" : "nav-link"}
+                        onClick={() => setMobileNavOpen(false)}
+                      >
+                        {link.label}
+                      </Link>
+                    );
+                  })}
+                </div>
               </div>
             ))}
           </nav>
-          <div
-            className={`sidebar-footer${compactFooterEnabled ? " sidebar-footer-compact-enabled" : ""}${compactFooterOpen ? " sidebar-footer-open" : ""}`}
-            ref={compactFooterRef}
-            onMouseEnter={() => {
-              if (compactFooterEnabled) {
-                if (compactFooterCloseTimerRef.current) {
-                  clearTimeout(compactFooterCloseTimerRef.current);
-                  compactFooterCloseTimerRef.current = null;
-                }
-                setCompactFooterOpen(true);
-              }
-            }}
-            onMouseLeave={(event) => {
-              if (!compactFooterEnabled) {
-                return;
-              }
-              const nextTarget = event.relatedTarget;
-              if (!compactFooterRef.current?.contains(nextTarget as Node | null)) {
-                compactFooterCloseTimerRef.current = setTimeout(() => {
-                  setCompactFooterOpen(false);
-                }, 150);
-              }
-            }}
-            onFocusCapture={() => {
-              if (compactFooterEnabled) {
-                if (compactFooterCloseTimerRef.current) {
-                  clearTimeout(compactFooterCloseTimerRef.current);
-                  compactFooterCloseTimerRef.current = null;
-                }
-                setCompactFooterOpen(true);
-              }
-            }}
-            onBlurCapture={(event) => {
-              if (!compactFooterEnabled) {
-                return;
-              }
-              const nextTarget = event.relatedTarget;
-              if (!compactFooterRef.current?.contains(nextTarget as Node | null)) {
-                compactFooterCloseTimerRef.current = setTimeout(() => {
-                  setCompactFooterOpen(false);
-                }, 150);
-              }
-            }}
-          >
-            <button
-              type="button"
-              className="sidebar-footer-trigger"
-              aria-label={compactFooterOpen ? `Menü für ${tenantName} schließen` : `Menü für ${tenantName} öffnen`}
-              aria-expanded={compactFooterOpen}
-              aria-controls="sidebar-footer-menu"
-              onClick={() => setCompactFooterOpen((current) => !current)}
-            >
-              <div className="identity-avatar sidebar-footer-trigger-avatar">{renderTenantAvatar()}</div>
-              <span className="sidebar-footer-trigger-text">Menü</span>
-              <span className="sidebar-footer-trigger-spacer" aria-hidden="true" />
-            </button>
-
-            <div className="sidebar-footer-panels" id="sidebar-footer-menu" ref={compactFooterPanelsRef}>
-              <div className="theme-panel">
-                <div className="eyebrow">Darstellung</div>
-                <div className="field-label">Farbmodus</div>
-                <div className="theme-switcher">
-                  <button type="button" className={`theme-switch-button${themeReady && themePreference === "light" ? " theme-switch-button-active" : ""}`} onClick={() => selectTheme("light")}>
-                    Hell
-                  </button>
-                  <button type="button" className={`theme-switch-button${themeReady && themePreference === "dark" ? " theme-switch-button-active" : ""}`} onClick={() => selectTheme("dark")}>
-                    Dunkel
-                  </button>
-                  <button
-                    type="button"
-                    className={`theme-switch-button theme-switch-icon${themeReady && themePreference === "auto" ? " theme-switch-button-active" : ""}`}
-                    onClick={() => selectTheme("auto")}
-                    aria-label="Auto"
-                    title="Auto"
-                  >
-                    ◐
-                  </button>
-                </div>
-              </div>
-
-              <div className="identity-panel">
-                <div className="identity-card">
-                  <button
-                    type="button"
-                    className="identity-button"
-                    onClick={() => {
-                      setCompactFooterOpen(false);
-                      setTenantModalOpen(true);
-                    }}
-                  >
-                    <div className="identity-avatar">{renderTenantAvatar()}</div>
-                    <div>
-                      <div className="identity-heading">
-                        <span className="eyebrow">Mandant</span>
-                        <span className="identity-role-pill">{formatRoleLabel(session?.current_role) || sessionStatus}</span>
-                      </div>
-                      <strong>{session?.current_tenant?.name ?? "..."}</strong>
-                      <div className="identity-subtle">Aktiver Arbeitsbereich</div>
-                    </div>
-                  </button>
-                </div>
-
-                <div className="identity-card">
-                  <button
-                    type="button"
-                    className="identity-button"
-                    onClick={() => {
-                      setCompactFooterOpen(false);
-                      setProfileModalOpen(true);
-                    }}
-                  >
-                    <div className="identity-avatar identity-avatar-user">
-                      <span>{session?.user?.display_name?.slice(0, 1) ?? "U"}</span>
-                    </div>
-                    <div>
-                      <div className="identity-heading">
-                        <span className="eyebrow">Benutzer</span>
-                      </div>
-                      <strong>{session?.user?.display_name ?? "..."}</strong>
-                      <div className="identity-subtle">{session?.user ? userSecondaryLine : sessionStatus}</div>
-                    </div>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
         </aside>
         <div className="shell-main">
           <header className="topbar">
@@ -526,7 +264,70 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
                 {mobileNavOpen ? "Schliessen" : "☰"}
               </button>
             </div>
-            <h1 className="topbar-title">{activeLabel}</h1>
+            <div className="topbar-breadcrumb">
+              <span className="topbar-breadcrumb-group">{activeCrumb.group}</span>
+              <span className="topbar-breadcrumb-sep">/</span>
+              <span className="topbar-breadcrumb-page">{activeCrumb.label}</span>
+            </div>
+            <div className="topbar-right">
+              <span className="role-badge">{roleLabel}</span>
+              <button
+                ref={avatarTriggerRef}
+                type="button"
+                className="avatar-trigger"
+                aria-haspopup="menu"
+                aria-expanded={avatarMenuOpen}
+                onClick={() => setAvatarMenuOpen((current) => !current)}
+              >
+                <span className="avatar-trigger-initial">{userInitial}</span>
+              </button>
+              <Popover open={avatarMenuOpen} onOpenChange={setAvatarMenuOpen} anchorRef={avatarTriggerRef} align="end">
+                <Menu>
+                  <div className="menu-header">
+                    <div className="menu-header-name">{session?.user?.display_name ?? "..."}</div>
+                    <div className="menu-header-role">{roleLabel}</div>
+                  </div>
+                  <MenuDivider />
+                  <MenuItem
+                    onSelect={() => {
+                      setAvatarMenuOpen(false);
+                      setProfileModalOpen(true);
+                    }}
+                  >
+                    Profil bearbeiten
+                  </MenuItem>
+                  <MenuItem
+                    onSelect={() => {
+                      setAvatarMenuOpen(false);
+                      setTenantModalOpen(true);
+                    }}
+                  >
+                    Mandant wechseln
+                  </MenuItem>
+                  <MenuDivider />
+                  <div className="menu-header menu-header-tight">Darstellung</div>
+                  <MenuItem selected={themeReady && themePreference === "light"} onSelect={() => selectTheme("light")}>
+                    Hell
+                  </MenuItem>
+                  <MenuItem selected={themeReady && themePreference === "dark"} onSelect={() => selectTheme("dark")}>
+                    Dunkel
+                  </MenuItem>
+                  <MenuItem selected={themeReady && themePreference === "auto"} onSelect={() => selectTheme("auto")}>
+                    Automatisch
+                  </MenuItem>
+                  <MenuDivider />
+                  <MenuItem
+                    danger
+                    onSelect={() => {
+                      setAvatarMenuOpen(false);
+                      void logout();
+                    }}
+                  >
+                    Abmelden
+                  </MenuItem>
+                </Menu>
+              </Popover>
+            </div>
           </header>
           <div className="shell-content">{children}</div>
         </div>
