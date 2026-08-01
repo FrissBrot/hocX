@@ -214,6 +214,20 @@ def _merge_tracked_row_snapshot(new_snapshot: dict[str, Any], old_snapshot: Any,
     return new_snapshot
 
 
+def tag_initial_list_entries(new_entries: list[dict[str, Any]], old_entries: Any, *, track_changes_active: bool) -> list[dict[str, Any]]:
+    """Public entry point for _merge_tracked_list_entries, used by
+    ProtocolService.create_from_template to pre-tag a freshly-created whole-list
+    block's entries against the last abgeschlossen protocol's frozen entries
+    (rather than leaving it untagged until the first later edit/refresh) - so a
+    new protocol shows changes since the last completed meeting immediately."""
+    return _merge_tracked_list_entries(new_entries, old_entries, track_changes_active=track_changes_active)
+
+
+def tag_initial_row_snapshot(new_snapshot: dict[str, Any], old_snapshot: Any, *, track_changes_active: bool) -> dict[str, Any]:
+    """Row-link counterpart to tag_initial_list_entries - see its docstring."""
+    return _merge_tracked_row_snapshot(new_snapshot, old_snapshot, track_changes_active=track_changes_active)
+
+
 def _carry_or_stash_previous(new_snapshot: dict, old_snapshot: Any, *, keep_undo: bool) -> None:
     """Mutates new_snapshot in place to set its 'previous' key. keep_undo=True (explicit
     manual refresh): stash the old snapshot's own current values as the one undo step -
