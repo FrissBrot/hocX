@@ -2,6 +2,7 @@
 
 import { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 
+import { Badge } from "@/components/ui/badge";
 import { TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
 import { StructuredListTable, TrackedEntryInfo } from "@/components/lists/structured-list-table";
 import { DateInput } from "@/components/ui/date-input";
@@ -2727,7 +2728,7 @@ export function FocusedElementEditor({
                                 ) : null}
                                 {editableEventColumns?.showCancelled ? (
                                   <td>
-                                    {eventRow.is_cancelled ? <span className="pill pill-error">Abgesagt</span> : <span className="muted">–</span>}
+                                    {eventRow.is_cancelled ? <Badge variant="danger">Abgesagt</Badge> : <span className="muted">–</span>}
                                   </td>
                                 ) : null}
                                 {eventListInlineEditable ? (

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
+import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { formatDateRange } from "@/lib/utils/format";
@@ -572,7 +573,7 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
         <div className="two-col">
           <label className="field-stack">
             <span className="field-label">Suche</span>
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Vorlagen durchsuchen" />
+            <SearchInput value={search} onChange={setSearch} placeholder="Vorlagen durchsuchen" />
           </label>
           <div className="card">
             <div className="eyebrow">Überblick</div>
@@ -1582,12 +1583,7 @@ export function TemplateEditor({
         <div className="grid">
           <label className="field-stack">
             <span className="field-label">Suche</span>
-            <input
-              value={participantPickerSearch}
-              onChange={(event) => setParticipantPickerSearch(event.target.value)}
-              placeholder="Teilnehmer suchen"
-              autoFocus
-            />
+            <SearchInput value={participantPickerSearch} onChange={setParticipantPickerSearch} placeholder="Teilnehmer suchen" autoFocus />
           </label>
           <div className="status-row">
             <span className="pill">{assignedParticipantIds.length} ausgewaehlt</span>
@@ -1928,11 +1924,7 @@ export function TemplateEditor({
                   <div className="eyebrow">Teilnehmende manuell zuweisen</div>
                   <label className="field-stack">
                     <span className="field-label">Suchen</span>
-                    <input
-                      value={responsibilitySearch}
-                      onChange={(event) => setResponsibilitySearch(event.target.value)}
-                      placeholder="Teilnehmer suchen"
-                    />
+                    <SearchInput value={responsibilitySearch} onChange={setResponsibilitySearch} placeholder="Teilnehmer suchen" />
                   </label>
                   <div className="selection-list selection-grid">
                     {filteredResponsibilityParticipants.map((participant) => {

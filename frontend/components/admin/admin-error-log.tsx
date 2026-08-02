@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { Badge } from "@/components/ui/badge";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { browserApiFetch } from "@/lib/api/client";
 import { AdminTenantSummary, SystemErrorLogEntry, SystemErrorLogFilterOptions, SystemErrorLogPage } from "@/types/api";
@@ -146,7 +147,7 @@ function ErrorRow({ entry, expanded, onToggle }: { entry: SystemErrorLogEntry; e
         <td>{entry.tenant_name ?? <span className="muted">—</span>}</td>
         <td>{SOURCE_LABELS[entry.source] ?? entry.source}</td>
         <td>
-          <span className="pill pill-error">{entry.error_type}</span>
+          <Badge variant="danger">{entry.error_type}</Badge>
         </td>
         <td className="muted">{entry.status_code ?? "—"}</td>
         <td className="muted">

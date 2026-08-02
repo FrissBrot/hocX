@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { StructuredListTable } from "@/components/lists/structured-list-table";
 import { Modal } from "@/components/ui/modal";
+import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import {
@@ -353,7 +354,7 @@ export function ListManager({
         <div className="list-manager-sidebar">
           <label className="field-stack" style={{ marginBottom: 8 }}>
             <span className="field-label">Suche</span>
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Listen suchen…" />
+            <SearchInput value={search} onChange={setSearch} placeholder="Listen suchen…" />
           </label>
 
           {/* List items — scrollable, fills available height */}

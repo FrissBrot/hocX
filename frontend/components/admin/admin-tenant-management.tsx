@@ -6,6 +6,7 @@ import { AdminTenantSettingsModal } from "@/components/admin/admin-tenant-settin
 import { ActionMenu } from "@/components/ui/action-menu";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
+import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { AdminTenantSummary } from "@/types/api";
@@ -176,7 +177,7 @@ export function AdminTenantManagement({ initialTenants }: Props) {
       <article className="card">
         <label className="field-stack">
           <span className="field-label">Suche</span>
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Mandanten durchsuchen" />
+          <SearchInput value={search} onChange={setSearch} placeholder="Mandanten durchsuchen" />
         </label>
       </article>
 

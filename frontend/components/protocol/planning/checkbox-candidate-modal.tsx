@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 
 import { Modal } from "@/components/ui/modal";
+import { SearchInput } from "@/components/ui/search-input";
 
 export type CandidateItem = {
   id: string;
@@ -88,7 +89,7 @@ export function CheckboxCandidateModal({
         {searchable && (
           <label className="field-stack">
             <span className="field-label">Suche</span>
-            <input className="input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Suchen…" autoFocus />
+            <SearchInput value={search} onChange={setSearch} placeholder="Suchen…" autoFocus />
           </label>
         )}
 
