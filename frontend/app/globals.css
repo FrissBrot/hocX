@@ -239,12 +239,26 @@ pre {
 .nav-link {
   display: flex;
   align-items: center;
+  gap: 10px;
   min-height: 40px;
   padding: 0 12px;
   border-radius: var(--radius-sm);
   color: var(--muted);
   font-weight: 500;
   transition: background 140ms ease, color 140ms ease;
+}
+
+.nav-link-icon {
+  flex-shrink: 0;
+  color: inherit;
+  opacity: 0.85;
+}
+
+.nav-link-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .nav-link:hover {
@@ -1209,8 +1223,9 @@ input[type="radio"] {
   overflow-x: auto;
   overflow-y: hidden;
   border: 1px solid var(--border);
-  border-radius: 24px;
+  border-radius: var(--radius-lg);
   background: var(--panel-solid);
+  box-shadow: var(--shadow-soft);
 }
 
 .data-table {
@@ -1220,19 +1235,23 @@ input[type="radio"] {
 
 .data-table th,
 .data-table td {
-  padding: 16px 18px;
+  padding: 14px 18px;
   border-bottom: 1px solid var(--border);
   text-align: left;
   vertical-align: top;
 }
 
 .data-table th {
-  font-size: 0.76rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted);
-  background: color-mix(in srgb, var(--panel-solid) 78%, transparent 22%);
+  background: transparent;
+}
+
+.data-table tbody tr:not(.table-row-clickable):hover td {
+  background: var(--bg);
 }
 
 .table-sort-button {

@@ -10,6 +10,7 @@ import { getRuntimeConfig } from "@/lib/runtime-config";
 import { SessionInfo, TenantMembership } from "@/types/api";
 
 import { buildNav, formatRoleLabel } from "@/components/ui/app-shell-nav";
+import { NavIcon } from "@/components/ui/nav-icons";
 import { ToastProvider } from "@/contexts/toast-context";
 import { ProfileModal } from "@/components/ui/profile-modal";
 import { TenantSelectorModal } from "@/components/ui/tenant-selector-modal";
@@ -248,7 +249,8 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
                         className={isActive ? "nav-link nav-link-active" : "nav-link"}
                         onClick={() => setMobileNavOpen(false)}
                       >
-                        {link.label}
+                        <NavIcon name={link.icon} className="nav-link-icon" />
+                        <span className="nav-link-label">{link.label}</span>
                       </Link>
                     );
                   })}
