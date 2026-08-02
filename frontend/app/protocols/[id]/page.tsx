@@ -108,8 +108,8 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
 
   return (
     <AppShell initialSession={session}>
-      <section className="panel">
-        <ProtocolOverview protocol={protocol} />
+      <section className={`panel${protocol.status !== "abgeschlossen" ? " protocol-panel-document" : ""}`}>
+        {protocol.status === "abgeschlossen" && <ProtocolOverview protocol={protocol} />}
         <ProtocolEditor
           protocol={protocol}
           initialElements={elements}

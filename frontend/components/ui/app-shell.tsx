@@ -228,13 +228,16 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
             }
           }}
         >
-          <div className="brand-lockup">
+          <button type="button" className="brand-lockup brand-lockup-trigger" onClick={() => setTenantModalOpen(true)}>
             <div className="brand-mark">hX</div>
-            <div>
+            <div className="brand-lockup-text">
               <div className="sidebar-wordmark">hocX</div>
               <div className="sidebar-tenant-name">{tenantName}</div>
             </div>
-          </div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" width={16} height={16} aria-hidden="true" className="brand-lockup-chevron">
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </button>
           <nav className="sidebar-nav">
             {navGroups.map((group) => (
               <div className="nav-group" key={group.title}>
@@ -258,6 +261,28 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
               </div>
             ))}
           </nav>
+          <div className="sidebar-footer">
+            <div className="identity-panel">
+              <div className="identity-card">
+                <button
+                  ref={avatarTriggerRef}
+                  type="button"
+                  className="identity-button"
+                  aria-haspopup="menu"
+                  aria-expanded={avatarMenuOpen}
+                  onClick={() => setAvatarMenuOpen((current) => !current)}
+                >
+                  <div className="identity-avatar identity-avatar-user">
+                    <span>{userInitial}</span>
+                  </div>
+                  <div>
+                    <strong>{session?.user?.display_name ?? "..."}</strong>
+                    <div className="identity-subtle">{roleLabel}</div>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
         </aside>
         <div className="shell-main">
           <header className="topbar">
@@ -271,65 +296,52 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
               <span className="topbar-breadcrumb-sep">/</span>
               <span className="topbar-breadcrumb-page">{activeCrumb.label}</span>
             </div>
-            <div className="topbar-right">
-              <span className="role-badge">{roleLabel}</span>
-              <button
-                ref={avatarTriggerRef}
-                type="button"
-                className="avatar-trigger"
-                aria-haspopup="menu"
-                aria-expanded={avatarMenuOpen}
-                onClick={() => setAvatarMenuOpen((current) => !current)}
-              >
-                <span className="avatar-trigger-initial">{userInitial}</span>
-              </button>
-              <Popover open={avatarMenuOpen} onOpenChange={setAvatarMenuOpen} anchorRef={avatarTriggerRef} align="end">
-                <Menu>
-                  <div className="menu-header">
-                    <div className="menu-header-name">{session?.user?.display_name ?? "..."}</div>
-                    <div className="menu-header-role">{roleLabel}</div>
-                  </div>
-                  <MenuDivider />
-                  <MenuItem
-                    onSelect={() => {
-                      setAvatarMenuOpen(false);
-                      setProfileModalOpen(true);
-                    }}
-                  >
-                    Profil bearbeiten
-                  </MenuItem>
-                  <MenuItem
-                    onSelect={() => {
-                      setAvatarMenuOpen(false);
-                      setTenantModalOpen(true);
-                    }}
-                  >
-                    Mandant wechseln
-                  </MenuItem>
-                  <MenuDivider />
-                  <div className="menu-header menu-header-tight">Darstellung</div>
-                  <MenuItem selected={themeReady && themePreference === "light"} onSelect={() => selectTheme("light")}>
-                    Hell
-                  </MenuItem>
-                  <MenuItem selected={themeReady && themePreference === "dark"} onSelect={() => selectTheme("dark")}>
-                    Dunkel
-                  </MenuItem>
-                  <MenuItem selected={themeReady && themePreference === "auto"} onSelect={() => selectTheme("auto")}>
-                    Automatisch
-                  </MenuItem>
-                  <MenuDivider />
-                  <MenuItem
-                    danger
-                    onSelect={() => {
-                      setAvatarMenuOpen(false);
-                      void logout();
-                    }}
-                  >
-                    Abmelden
-                  </MenuItem>
-                </Menu>
-              </Popover>
-            </div>
+            <Popover open={avatarMenuOpen} onOpenChange={setAvatarMenuOpen} anchorRef={avatarTriggerRef} align="start">
+              <Menu>
+                <div className="menu-header">
+                  <div className="menu-header-name">{session?.user?.display_name ?? "..."}</div>
+                  <div className="menu-header-role">{roleLabel}</div>
+                </div>
+                <MenuDivider />
+                <MenuItem
+                  onSelect={() => {
+                    setAvatarMenuOpen(false);
+                    setProfileModalOpen(true);
+                  }}
+                >
+                  Profil bearbeiten
+                </MenuItem>
+                <MenuItem
+                  onSelect={() => {
+                    setAvatarMenuOpen(false);
+                    setTenantModalOpen(true);
+                  }}
+                >
+                  Mandant wechseln
+                </MenuItem>
+                <MenuDivider />
+                <div className="menu-header menu-header-tight">Darstellung</div>
+                <MenuItem selected={themeReady && themePreference === "light"} onSelect={() => selectTheme("light")}>
+                  Hell
+                </MenuItem>
+                <MenuItem selected={themeReady && themePreference === "dark"} onSelect={() => selectTheme("dark")}>
+                  Dunkel
+                </MenuItem>
+                <MenuItem selected={themeReady && themePreference === "auto"} onSelect={() => selectTheme("auto")}>
+                  Automatisch
+                </MenuItem>
+                <MenuDivider />
+                <MenuItem
+                  danger
+                  onSelect={() => {
+                    setAvatarMenuOpen(false);
+                    void logout();
+                  }}
+                >
+                  Abmelden
+                </MenuItem>
+              </Menu>
+            </Popover>
           </header>
           <div className="shell-content">{children}</div>
         </div>

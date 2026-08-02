@@ -4,16 +4,15 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
-import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { FilterTabOption, FilterTabs } from "@/components/ui/filter-tabs";
 import { Menu, MenuItem, Popover } from "@/components/ui/popover";
 import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
-import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
+import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
-import { useTableSort } from "@/lib/hooks/use-table-sort";
+import { usePdfExport, PdfExportResult } from "@/lib/hooks/use-pdf-export";
 import { formatDate, formatDateTime } from "@/lib/utils/format";
 import { ProtocolSummary, TemplateSummary } from "@/types/api";
 import { protocolStatusLabel, protocolStatusVariant } from "@/components/protocol/protocol-status";
@@ -55,13 +54,12 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
   const showToast = useToast();
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [availableTemplates, setAvailableTemplates] = useState(templates);
-  const [pdfBusyByProtocol, setPdfBusyByProtocol] = useState<Record<number, boolean>>({});
+  const { busyByProtocol: pdfBusyByProtocol, generatePdf, openOrGeneratePdf } = usePdfExport();
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const menuBtnRefs = useRef<Record<number, HTMLButtonElement | null>>({});
   const activeMenuAnchorRef = useRef<HTMLButtonElement | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const { sortKey, sortDirection, toggleSort, sortIndicator } = useTableSort<"id" | "protocol_number" | "title" | "status" | "protocol_date">("protocol_date", "desc");
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [form, setForm] = useState<ProtocolFormState>({
     template_id: templates[0] ? String(templates[0].id) : "",
@@ -77,7 +75,6 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
   const autoTitle = !!selectedTemplate?.title_pattern?.trim();
 
   const sortedProtocols = useMemo(() => {
-    const dir = sortDirection === "asc" ? 1 : -1;
     return [...protocols]
       .filter((protocol) => {
         const haystack = `${protocol.protocol_number} ${protocol.title ?? ""}`.toLowerCase();
@@ -85,14 +82,8 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
         const matchesStatus = statusFilter === "all" || protocol.status === statusFilter;
         return matchesSearch && matchesStatus;
       })
-      .sort((a, b) => {
-        if (sortKey === "protocol_date") return (a.protocol_date ?? "").localeCompare(b.protocol_date ?? "") * dir;
-        if (sortKey === "protocol_number") return (a.protocol_number ?? "").localeCompare(b.protocol_number ?? "") * dir;
-        if (sortKey === "title") return (a.title ?? "").localeCompare(b.title ?? "") * dir;
-        if (sortKey === "status") return a.status.localeCompare(b.status) * dir;
-        return (b.id - a.id) * dir;
-      });
-  }, [protocols, search, statusFilter, sortKey, sortDirection]);
+      .sort((a, b) => (b.protocol_date ?? "").localeCompare(a.protocol_date ?? ""));
+  }, [protocols, search, statusFilter]);
 
   useEffect(() => {
     if (!showCreateForm) {
@@ -165,34 +156,14 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
     }
   }
 
-  async function generateAndOpenPdf(protocolId: number, protocolNumber: string) {
-    setPdfBusyByProtocol((current) => ({ ...current, [protocolId]: true }));
-
-    try {
-      const result = await browserApiFetch<{ content_url?: string | null; status: string; export_format: string; version_major?: number | null; version_minor?: number | null }>(
-        `/api/protocols/${protocolId}/exports/pdf`,
-        { method: "POST" }
+  function handlePdfExported(protocolId: number, result: PdfExportResult) {
+    // Update version in local protocol list
+    if (result.version_major != null && result.version_minor != null) {
+      setProtocols((current) =>
+        current.map((p) =>
+          p.id === protocolId ? { ...p, version_major: result.version_major!, version_minor: result.version_minor! } : p
+        )
       );
-      // Update version in local protocol list
-      if (result.version_major != null && result.version_minor != null) {
-        setProtocols((current) =>
-          current.map((p) =>
-            p.id === protocolId ? { ...p, version_major: result.version_major!, version_minor: result.version_minor! } : p
-          )
-        );
-      }
-      if (result.content_url) {
-        const pdfUrl = `${browserApiBaseUrl}${result.content_url}`;
-        showToast(`PDF bereit – hier klicken zum Öffnen`, "success", {
-          onMessageClick: () => window.open(pdfUrl, "_blank", "noopener,noreferrer"),
-        });
-      } else {
-        showToast(`PDF ready for ${protocolNumber}`, "success");
-      }
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "PDF export failed", "error");
-    } finally {
-      setPdfBusyByProtocol((current) => ({ ...current, [protocolId]: false }));
     }
   }
 
@@ -228,35 +199,24 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
 
   return (
     <div className="grid">
-      <DataToolbar
-        title="Protokolle"
-        description="Alle Protokolle dieses Mandanten."
-        actions={
-          !readOnly ? (
-            <button type="button" className="button-inline" onClick={() => setShowCreateForm((c) => !c)}>
-              {showCreateForm ? "Abbrechen" : "+ Protokoll"}
-            </button>
-          ) : undefined
-        }
-      />
-
-      <FilterTabs options={STATUS_FILTER_OPTIONS} value={statusFilter} onChange={setStatusFilter} />
-
-      <article className="card">
-        <div className="two-col">
-          <label className="field-stack">
-            <span className="field-label">Suche</span>
-            <SearchInput value={search} onChange={setSearch} placeholder="Protokolle durchsuchen" />
-          </label>
-          <div className="card">
-            <div className="eyebrow">Überblick</div>
-            <div className="status-row">
-              <span className="pill">{sortedProtocols.length} sichtbar</span>
-              <span className="pill">{protocols.length} gesamt</span>
-            </div>
-          </div>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Protokolle</h1>
+          <p className="muted">Alle Sitzungsprotokolle dieses Mandanten.</p>
         </div>
-      </article>
+        {!readOnly ? (
+          <button type="button" className="button-inline" onClick={() => setShowCreateForm((c) => !c)}>
+            {showCreateForm ? "Abbrechen" : "+ Neues Protokoll"}
+          </button>
+        ) : null}
+      </div>
+
+      <div className="list-filter-row">
+        <FilterTabs options={STATUS_FILTER_OPTIONS} value={statusFilter} onChange={setStatusFilter} />
+        <div className="list-filter-search">
+          <SearchInput value={search} onChange={setSearch} placeholder="Protokolle durchsuchen" />
+        </div>
+      </div>
 
       <Modal
         open={showCreateForm}
@@ -318,38 +278,42 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
         </form>
       </Modal>
 
-      <DataTable columns={[
-        { key: "protocol_number", label: "Protokoll", sortable: true, sortDirection: sortIndicator("protocol_number"), onSort: () => toggleSort("protocol_number") },
-        { key: "title", label: "Titel", sortable: true, sortDirection: sortIndicator("title"), onSort: () => toggleSort("title") },
-        { key: "status", label: "Status", sortable: true, sortDirection: sortIndicator("status"), onSort: () => toggleSort("status") },
-        ...(!readOnly ? ["Template" as const] : []),
-        { key: "protocol_date", label: "Datum", sortable: true, sortDirection: sortIndicator("protocol_date"), onSort: () => toggleSort("protocol_date") },
-        "Aktionen",
-      ]}>
-        {sortedProtocols.map((protocol) => {
-          const isFinal = protocol.status === "abgeschlossen";
-          const displayMinor = isFinal ? (protocol.version_final_minor ?? 0) : (protocol.version_minor ?? 0);
-          const displayMajor = isFinal ? 1 : 0;
-          const versionStr = (displayMajor > 0 || displayMinor > 0) ? `v${displayMajor}.${displayMinor}` : null;
-          const menuOpen = openMenuId === protocol.id;
-          return (
-            <tr key={protocol.id} className="table-row-clickable" onClick={() => router.push(`/protocols/${protocol.id}`)}>
-              <td>
-                <strong>{protocol.protocol_number}</strong>
-              </td>
-              <td>{protocol.title ?? "—"}</td>
-              <td>
-                <div className="status-cell">
-                  <Badge variant={protocolStatusVariant(protocol.status)}>{protocolStatusLabel(protocol.status)}</Badge>
-                  {versionStr && <span className="version-badge">{versionStr}</span>}
-                </div>
-              </td>
-              {!readOnly && (
-                <td>{templates.find((t) => t.id === protocol.template_id)?.name ?? "—"}</td>
-              )}
-              <td>{formatDate(protocol.protocol_date) || "—"}</td>
-              <td>
-                <div className="protocol-row-actions" onClick={(e) => e.stopPropagation()}>
+      <article className="card">
+        <div className="record-list">
+          {sortedProtocols.map((protocol) => {
+            const isFinal = protocol.status === "abgeschlossen";
+            const menuOpen = openMenuId === protocol.id;
+            const statusVariant = protocolStatusVariant(protocol.status);
+            const subtitle = [
+              protocol.protocol_number,
+              formatDate(protocol.protocol_date) || null,
+              !readOnly ? templates.find((t) => t.id === protocol.template_id)?.name ?? null : null,
+            ]
+              .filter(Boolean)
+              .join(" · ");
+            return (
+              <div key={protocol.id} className="record-list-row" onClick={() => router.push(`/protocols/${protocol.id}`)}>
+                <span className={`record-list-row-dot record-list-row-dot-${statusVariant}`} aria-hidden="true" />
+                <span className="record-list-row-text">
+                  <span className="record-list-row-title">{protocol.title ?? protocol.protocol_number}</span>
+                  <span className="record-list-row-sub">{subtitle}</span>
+                </span>
+                <div className="record-list-row-trailing" onClick={(e) => e.stopPropagation()}>
+                  <Badge variant={statusVariant}>{protocolStatusLabel(protocol.status)}</Badge>
+                  {isFinal ? (
+                    <button
+                      type="button"
+                      className={`pdf-icon-link pdf-icon-link-success pdf-icon-link-sm${pdfBusyByProtocol[protocol.id] ? " pdf-icon-disabled" : ""}`}
+                      onClick={() => openOrGeneratePdf(protocol, (result) => handlePdfExported(protocol.id, result))}
+                      aria-label={`PDF exportieren für ${protocol.protocol_number}`}
+                      title="PDF exportieren"
+                      disabled={pdfBusyByProtocol[protocol.id]}
+                    >
+                      {pdfBusyByProtocol[protocol.id] ? "..." : "PDF"}
+                    </button>
+                  ) : (
+                    <span className="record-list-row-pdf-spacer" aria-hidden="true" />
+                  )}
                   {!readOnly && (
                     <button
                       type="button"
@@ -368,34 +332,14 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
                       ⋯
                     </button>
                   )}
-                  {isFinal ? (
-                    <button
-                      type="button"
-                      className={`pdf-icon-link pdf-icon-link-success${pdfBusyByProtocol[protocol.id] ? " pdf-icon-disabled" : ""}`}
-                      onClick={() => {
-                        if (protocol.latest_pdf_url) {
-                          window.open(`${browserApiBaseUrl}${protocol.latest_pdf_url}`, "_blank", "noopener,noreferrer");
-                        } else {
-                          void generateAndOpenPdf(protocol.id, protocol.protocol_number);
-                        }
-                      }}
-                      aria-label={`PDF exportieren für ${protocol.protocol_number}`}
-                      title="PDF exportieren"
-                      disabled={pdfBusyByProtocol[protocol.id]}
-                    >
-                      {pdfBusyByProtocol[protocol.id] ? "..." : "PDF"}
-                    </button>
-                  ) : (
-                    <span className="protocol-row-action-spacer" aria-hidden="true" />
-                  )}
                 </div>
-              </td>
-            </tr>
-          );
-        })}
-      </DataTable>
+              </div>
+            );
+          })}
+        </div>
 
-      {sortedProtocols.length === 0 ? <p className="muted">Keine Protokolle gefunden.</p> : null}
+        {sortedProtocols.length === 0 ? <p className="muted record-list-empty">Keine Protokolle gefunden.</p> : null}
+      </article>
 
       {hasMore && (
         <div className="load-more-row" ref={loadMoreSentinelRef}>
@@ -426,11 +370,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
                   <MenuItem
                     onSelect={() => {
                       setOpenMenuId(null);
-                      if (protocol.latest_pdf_url) {
-                        window.open(`${browserApiBaseUrl}${protocol.latest_pdf_url}`, "_blank", "noopener,noreferrer");
-                      } else {
-                        void generateAndOpenPdf(protocol.id, protocol.protocol_number);
-                      }
+                      openOrGeneratePdf(protocol, (result) => handlePdfExported(protocol.id, result));
                     }}
                   >
                     {pdfBusyByProtocol[protocol.id] ? "Generiere…" : "PDF"}
@@ -438,7 +378,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
                   <MenuItem
                     onSelect={() => {
                       setOpenMenuId(null);
-                      void generateAndOpenPdf(protocol.id, protocol.protocol_number);
+                      void generatePdf(protocol.id, protocol.protocol_number, (result) => handlePdfExported(protocol.id, result));
                     }}
                   >
                     {pdfBusyByProtocol[protocol.id] ? "Generiere…" : "PDF neu generieren"}

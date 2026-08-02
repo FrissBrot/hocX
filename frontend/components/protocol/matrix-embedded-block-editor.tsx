@@ -4,6 +4,7 @@ import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { DateInput } from "@/components/ui/date-input";
+import { LightboxImage } from "@/components/ui/lightbox-image";
 import { EventOverviewModal } from "@/components/protocol/planning/event-overview-modal";
 import { PlanningIconTrigger } from "@/components/protocol/planning/planning-icon-trigger";
 import { TagConfig } from "@/lib/hooks/use-tag-config";
@@ -371,7 +372,7 @@ export function MatrixEmbeddedBlockEditor({
             <div className="image-grid">
               {images.map((image, index) => (
                 <div className="card image-card" key={String(image.id ?? index)}>
-                  {String(image.url ?? "").trim() ? <img alt={String(image.caption ?? "Matrixbild")} src={String(image.url)} /> : null}
+                  {String(image.url ?? "").trim() ? <LightboxImage alt={String(image.caption ?? "Matrixbild")} src={String(image.url)} /> : null}
                   {String(image.caption ?? "").trim() ? <div className="muted">{String(image.caption)}</div> : null}
                 </div>
               ))}
@@ -419,7 +420,7 @@ export function MatrixEmbeddedBlockEditor({
                   placeholder="Optional"
                 />
               </label>
-              {String(image.url ?? "").trim() ? <img alt={String(image.caption ?? "Matrixbild")} src={String(image.url)} /> : null}
+              {String(image.url ?? "").trim() ? <LightboxImage alt={String(image.caption ?? "Matrixbild")} src={String(image.url)} /> : null}
               <button
                 type="button"
                 className="button-inline button-danger"
