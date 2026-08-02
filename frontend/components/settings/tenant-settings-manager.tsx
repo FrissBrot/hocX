@@ -4,7 +4,7 @@ import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { DomainWizardModal } from "@/components/ui/domain-wizard-modal";
-import { DataTable, DataToolbar } from "@/components/ui/data-table";
+import { DataTable } from "@/components/ui/data-table";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
@@ -103,7 +103,12 @@ export function TenantSettingsManager({ initialTenant }: Props) {
 
   return (
     <div className="section-stack">
-      <DataToolbar title={`Mandant-Einstellungen – ${tenantName}`} description="Stammdaten und Domains für diesen Mandanten verwalten." />
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Mandant-Einstellungen</h1>
+          <p className="muted">Stammdaten und Domains für {tenantName} verwalten.</p>
+        </div>
+      </div>
 
       <FilterTabs
         options={[
@@ -167,7 +172,7 @@ export function TenantSettingsManager({ initialTenant }: Props) {
           </p>
 
           {domains.length > 0 && (
-            <DataTable columns={["Zweck", "Domain", "Status", ""]}>
+            <DataTable className="data-table-lg" columns={["Zweck", "Domain", "Status", ""]}>
               {domains.map((d) => (
                 <tr key={d.id}>
                   <td>{d.purpose === "app" ? "hocX-App" : "Abgabebox"}</td>

@@ -352,6 +352,7 @@ export function ListManager({
 
         {/* Left sidebar */}
         <div className="list-manager-sidebar">
+          <div className="list-manager-sidebar-title">Listen</div>
           <label className="field-stack" style={{ marginBottom: 8 }}>
             <span className="field-label">Suche</span>
             <SearchInput value={search} onChange={setSearch} placeholder="Listen suchen…" />

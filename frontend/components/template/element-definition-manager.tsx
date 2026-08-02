@@ -2,7 +2,7 @@
 
 import { FormEvent, Fragment, ReactNode, useEffect, useMemo, useState } from "react";
 
-import { DataTable, DataToolbar } from "@/components/ui/data-table";
+import { DataTable } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
@@ -1713,44 +1713,38 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
 
   return (
     <div className="grid">
-      <DataToolbar
-        title="Elemente"
-        description="Elemente bündeln mehrere interne Blöcke wie Text, Todos, Bilder oder Tabellen. Vorlagen wählen später nur das fertige Element."
-        actions={
-          <button
-            type="button"
-            className="button-inline"
-            onClick={() => {
-              setCreateDefinitionForm(initialDefinitionForm);
-              setCreateBlockForm({ ...initialBlockForm, id: "1", sort_index: "10" });
-              setCreatingNewDefinition(true);
-              setShowCreateBlockModal(true);
-              setTypePickerMode("create");
-            }}
-          >
-            Neues Element
-          </button>
-        }
-      />
-
-      <article className="card">
-        <div className="two-col">
-          <label className="field-stack">
-            <span className="field-label">Suche</span>
-            <SearchInput value={search} onChange={setSearch} placeholder="Elemente durchsuchen" />
-          </label>
-          <div className="card">
-            <div className="eyebrow">Überblick</div>
-            <div className="status-row">
-              <span className="pill">{filteredDefinitions.length} sichtbar</span>
-              <span className="pill">{definitions.length} gesamt</span>
-            </div>
-          </div>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Elemente</h1>
+          <p className="muted">Elemente bündeln mehrere interne Blöcke wie Text, Todos, Bilder oder Tabellen. Vorlagen wählen später nur das fertige Element.</p>
         </div>
-        <div className="info-note">Fixe Inhalte legst du hier am besten als nicht editierbare Blöcke an. Im Protokoll erscheinen sie später automatisch schreibgeschützt.</div>
-      </article>
+        <button
+          type="button"
+          className="button-inline"
+          onClick={() => {
+            setCreateDefinitionForm(initialDefinitionForm);
+            setCreateBlockForm({ ...initialBlockForm, id: "1", sort_index: "10" });
+            setCreatingNewDefinition(true);
+            setShowCreateBlockModal(true);
+            setTypePickerMode("create");
+          }}
+        >
+          Neues Element
+        </button>
+      </div>
 
-      <DataTable columns={["Element", "Blöcke", "Aktionen"]}>
+      <div className="list-filter-row">
+        <div className="status-row">
+          <span className="pill">{filteredDefinitions.length} sichtbar</span>
+          <span className="pill">{definitions.length} gesamt</span>
+        </div>
+        <div className="list-filter-search">
+          <SearchInput value={search} onChange={setSearch} placeholder="Elemente durchsuchen" />
+        </div>
+      </div>
+      <p className="muted">Fixe Inhalte legst du hier am besten als nicht editierbare Blöcke an. Im Protokoll erscheinen sie später automatisch schreibgeschützt.</p>
+
+      <DataTable className="data-table-lg" columns={["Element", "Blöcke", "Aktionen"]}>
         {filteredDefinitions.map((definition) => (
           <tr key={definition.id} className={`table-row-clickable${selectedDefinitionId === definition.id ? " table-row-active" : ""}`} onClick={() => selectDefinition(definition)}>
             <td>

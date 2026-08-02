@@ -193,6 +193,8 @@ def get_assignment_summary(
     total = None
     if assignment.source_type == "list" and assignment.list_definition_id:
         total = service.repository.count_list_entries(db, list_definition_id=assignment.list_definition_id)
+    elif assignment.source_type == "events":
+        total = len(service.repository.list_events_by_tag(db, tenant_id=assignment.tenant_id, tag=assignment.tag_filter or ""))
     clean = max(0, counts["submitted"] - counts["quarantine"] - counts["infected"])
     return {
         "submitted": clean,

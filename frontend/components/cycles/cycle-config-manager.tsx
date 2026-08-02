@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { DataToolbar } from "@/components/ui/data-table";
 import { browserApiFetch } from "@/lib/api/client";
 import { CycleConfigSummary } from "@/types/api";
 import { formatCycleName } from "@/lib/utils/cycle";
@@ -230,24 +229,24 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
 
   return (
     <div className="grid">
-      <DataToolbar
-        title="Zyklen"
-        description="Zyklus-Definitionen verwalten und Protokoll-Templates zuordnen."
-        actions={
-          !showCreate && editId === null ? (
-            <button
-              type="button"
-              className="button-inline"
-              onClick={() => {
-                setShowCreate(true);
-                setCreateError(null);
-              }}
-            >
-              + Neuer Zyklus
-            </button>
-          ) : undefined
-        }
-      />
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Zyklen</h1>
+          <p className="muted">Zyklus-Definitionen verwalten und Protokoll-Templates zuordnen.</p>
+        </div>
+        {!showCreate && editId === null ? (
+          <button
+            type="button"
+            className="button-inline"
+            onClick={() => {
+              setShowCreate(true);
+              setCreateError(null);
+            }}
+          >
+            + Neuer Zyklus
+          </button>
+        ) : null}
+      </div>
 
       {/* Create form */}
       {showCreate && (

@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode } from "react";
+import { Children, ReactNode } from "react";
 
 export type DataTableColumn =
   | string
@@ -41,6 +41,7 @@ export function DataToolbar({
 }
 
 export function DataTable({ columns, children, emptyMessage, className }: DataTableProps) {
+  const isEmpty = Children.count(children) === 0;
   return (
     <div className="table-shell">
       <table className={`data-table${className ? ` ${className}` : ""}`}>
@@ -68,7 +69,7 @@ export function DataTable({ columns, children, emptyMessage, className }: DataTa
         </thead>
         <tbody>{children}</tbody>
       </table>
-      {emptyMessage ? <div className="table-empty muted">{emptyMessage}</div> : null}
+      {emptyMessage && isEmpty ? <div className="table-empty muted">{emptyMessage}</div> : null}
     </div>
   );
 }

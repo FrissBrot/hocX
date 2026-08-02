@@ -1182,6 +1182,13 @@ export function DocumentTemplateManager({ initialTemplates, initialParts }: Prop
 
   return (
     <div className="grid">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Dokument-Vorlagen</h1>
+          <p className="muted">PDF-Layouts und wiederverwendbare LaTeX-Parts für den Protokoll-Export verwalten.</p>
+        </div>
+      </div>
+
       <FilterTabs
         options={[
           { value: "layouts", label: "Layouts" },
@@ -1248,7 +1255,7 @@ export function DocumentTemplateManager({ initialTemplates, initialParts }: Prop
               <SearchInput value={partSearch} onChange={setPartSearch} placeholder="Parts durchsuchen" />
             </label>
           </article>
-          <DataTable columns={["Name", "Typ", "Version", "Status", "Aktionen"]} emptyMessage="Keine Parts gefunden.">
+          <DataTable className="data-table-lg" columns={["Name", "Typ", "Version", "Status", "Aktionen"]} emptyMessage="Keine Parts gefunden.">
             {filteredParts.map((part) => (
               <tr key={part.id}>
                 <td><strong>{part.name}</strong><div className="muted">{part.code}</div></td>

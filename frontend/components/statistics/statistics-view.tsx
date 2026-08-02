@@ -25,19 +25,19 @@ function useChartHeight(normal: number, fs = 480) {
 }
 
 const COLORS = {
-  present: "#22c55e",
-  absent: "#ef4444",
-  excused: "#f59e0b",
-  income: "#22c55e",
-  expenses: "#ef4444",
-  done: "#22c55e",
-  open: "#94a3b8",
-  fines: "#f59e0b",
+  present: "#15803d",
+  absent: "#b91c1c",
+  excused: "#b45309",
+  income: "#15803d",
+  expenses: "#b91c1c",
+  done: "#15803d",
+  open: "#d1d5db",
+  fines: "#b45309",
   sessions: "#6366f1",
   participants: "#06b6d4",
 };
 
-const PIE_PALETTE = ["#6366f1", "#22c55e", "#f59e0b", "#ef4444", "#06b6d4", "#a855f7", "#ec4899", "#84cc16"];
+const PIE_PALETTE = ["#b45309", "#b91c1c", "#15803d", "#6366f1", "#06b6d4", "#a855f7", "#ec4899", "#84cc16"];
 
 function fmtMonth(m: string): string {
   const [y, mo] = m.split("-");
@@ -319,8 +319,7 @@ function PieDonutChart({ data }: { data: PieEntry[] }) {
         {data.map((d) => (
           <div key={d.name} className="stats-pie-legend-row">
             <span className="stats-pie-dot" style={{ background: d.color }} />
-            <span>{d.name}</span>
-            <span className="stats-pie-val">{d.value}</span>
+            <span>{d.name} · {d.value}</span>
           </div>
         ))}
       </div>
@@ -423,6 +422,13 @@ export function StatisticsView({ data }: Props) {
 
   return (
     <div className="stats-page">
+
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Statistiken</h1>
+          <p className="muted">Auswertungen und Kennzahlen für diesen Mandanten.</p>
+        </div>
+      </div>
 
       {/* ── KPI row ── */}
       <div className="stats-kpi-row">

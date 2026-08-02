@@ -643,95 +643,90 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
 
   return (
     <div className="grid">
-      <DataToolbar
-        title="Termine"
-        description="Alle Termine dieses Mandanten."
-        actions={
-          <div className="table-toolbar-actions">
-            <button type="button" className="button-inline button-ghost" onClick={openImportModal}>
-              CSV Import
-            </button>
-            {landscapeTemplates.length > 0 && (
-              <button type="button" className="button-inline button-ghost" onClick={() => setExportModalOpen(true)}>
-                Export
-              </button>
-            )}
-            <div className="mini-menu mini-menu-compact mini-menu-end">
-              <button
-                ref={viewMenuTriggerRef}
-                type="button"
-                className={`mini-menu-trigger${viewMenuOpen ? " mini-menu-trigger-open" : ""}`}
-                onClick={() => setViewMenuOpen((value) => !value)}
-                aria-haspopup="menu"
-                aria-expanded={viewMenuOpen}
-              >
-                <span className="mini-menu-trigger-label">Ansicht</span>
-                <span className="mini-menu-trigger-icon">⌄</span>
-              </button>
-              <Popover open={viewMenuOpen} onOpenChange={setViewMenuOpen} anchorRef={viewMenuTriggerRef} align="end" className="mini-menu-popover-portal">
-                <div className="mini-menu-section">
-                  <div className="mini-menu-section-title">Filter</div>
-                  <label className="mini-menu-option">
-                    <span>Vergangene Termine anzeigen</span>
-                    <input type="checkbox" checked={showPast} onChange={(event) => setShowPast(event.target.checked)} />
-                  </label>
-                  {cycleConfigs.length > 0 && (
-                    <label className="mini-menu-option">
-                      <span>Alle Zyklus-Perioden anzeigen</span>
-                      <input
-                        type="checkbox"
-                        checked={showAllPeriods}
-                        onChange={(event) => setShowAllPeriods(event.target.checked)}
-                      />
-                    </label>
-                  )}
-                </div>
-                <div className="mini-menu-section">
-                  <div className="mini-menu-section-title">Zusätzliche Spalten</div>
-                  {OPTIONAL_COLUMNS.map((column) => (
-                    <label key={column.key} className="mini-menu-option">
-                      <span>{column.label}</span>
-                      <input
-                        type="checkbox"
-                        checked={visibleColumns.has(column.key)}
-                        onChange={() => toggleColumn(column.key)}
-                      />
-                    </label>
-                  ))}
-                </div>
-              </Popover>
-            </div>
-            <button type="button" className="button-inline" onClick={openCreate}>
-              Neuer Termin
-            </button>
-          </div>
-        }
-      />
-
-      <FilterTabs
-        options={[{ value: "all", label: "Alle" }, ...knownTags.map((tag) => ({ value: tag, label: tag }))]}
-        value={tagFilter}
-        onChange={setTagFilter}
-      />
-
-      <article className="card">
-        <div className="two-col">
-          <label className="field-stack">
-            <span className="field-label">Suche</span>
-            <SearchInput value={search} onChange={setSearch} placeholder="Termine durchsuchen" />
-          </label>
-          <div className="card">
-            <div className="eyebrow">Überblick</div>
-            <div className="status-row">
-              <span className="pill">{filteredEvents.length} sichtbar</span>
-              <span className="pill">{events.length} gesamt</span>
-              <span className="pill">{knownTags.length} Tags</span>
-            </div>
-          </div>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Termine</h1>
+          <p className="muted">Alle Termine dieses Mandanten.</p>
         </div>
-      </article>
+        <div className="table-toolbar-actions">
+          <button type="button" className="button-inline button-ghost" onClick={openImportModal}>
+            CSV Import
+          </button>
+          {landscapeTemplates.length > 0 && (
+            <button type="button" className="button-inline button-ghost" onClick={() => setExportModalOpen(true)}>
+              Export
+            </button>
+          )}
+          <div className="mini-menu mini-menu-compact mini-menu-end">
+            <button
+              ref={viewMenuTriggerRef}
+              type="button"
+              className={`mini-menu-trigger${viewMenuOpen ? " mini-menu-trigger-open" : ""}`}
+              onClick={() => setViewMenuOpen((value) => !value)}
+              aria-haspopup="menu"
+              aria-expanded={viewMenuOpen}
+            >
+              <span className="mini-menu-trigger-label">Ansicht</span>
+              <span className="mini-menu-trigger-icon">⌄</span>
+            </button>
+            <Popover open={viewMenuOpen} onOpenChange={setViewMenuOpen} anchorRef={viewMenuTriggerRef} align="end" className="mini-menu-popover-portal">
+              <div className="mini-menu-section">
+                <div className="mini-menu-section-title">Filter</div>
+                <label className="mini-menu-option">
+                  <span>Vergangene Termine anzeigen</span>
+                  <input type="checkbox" checked={showPast} onChange={(event) => setShowPast(event.target.checked)} />
+                </label>
+                {cycleConfigs.length > 0 && (
+                  <label className="mini-menu-option">
+                    <span>Alle Zyklus-Perioden anzeigen</span>
+                    <input
+                      type="checkbox"
+                      checked={showAllPeriods}
+                      onChange={(event) => setShowAllPeriods(event.target.checked)}
+                    />
+                  </label>
+                )}
+              </div>
+              <div className="mini-menu-section">
+                <div className="mini-menu-section-title">Zusätzliche Spalten</div>
+                {OPTIONAL_COLUMNS.map((column) => (
+                  <label key={column.key} className="mini-menu-option">
+                    <span>{column.label}</span>
+                    <input
+                      type="checkbox"
+                      checked={visibleColumns.has(column.key)}
+                      onChange={() => toggleColumn(column.key)}
+                    />
+                  </label>
+                ))}
+              </div>
+            </Popover>
+          </div>
+          <button type="button" className="button-inline" onClick={openCreate}>
+            Neuer Termin
+          </button>
+        </div>
+      </div>
+
+      <div className="list-filter-row">
+        <FilterTabs
+          options={[{ value: "all", label: "Alle" }, ...knownTags.map((tag) => ({ value: tag, label: tag }))]}
+          value={tagFilter}
+          onChange={setTagFilter}
+        />
+        <div className="list-filter-search">
+          <SearchInput value={search} onChange={setSearch} placeholder="Termine durchsuchen" />
+        </div>
+      </div>
+
+      <div className="status-row">
+        <span className="pill">{filteredEvents.length} sichtbar</span>
+        <span className="pill">{events.length} gesamt</span>
+        <span className="pill">{knownTags.length} Tags</span>
+      </div>
 
       <DataTable
+        className="data-table-lg"
         columns={[
           { key: "event_date", label: "Datum", sortable: true, sortDirection: sortIndicator("event_date"), onSort: () => toggleSort("event_date") },
           { key: "title", label: "Titel", sortable: true, sortDirection: sortIndicator("title"), onSort: () => toggleSort("title") },
@@ -766,7 +761,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
             {activeOptionalColumns.map((column) => (
               <td key={column.key}>{optionalColumnRenderers[column.key](item)}</td>
             ))}
-            <td>{item.description ?? <span className="muted">Keine Beschreibung</span>}</td>
+            <td className="table-cell-wrap">{item.description ?? <span className="muted">Keine Beschreibung</span>}</td>
             <td>
               <div className="table-actions table-actions-start">
                 <button
