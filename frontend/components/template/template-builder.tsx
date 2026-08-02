@@ -505,15 +505,15 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
 
   return (
     <div className="grid">
-      <DataToolbar
-        title="Vorlagen"
-        description="Vorlagen sind schlanke Container: sie wählen fertige Elemente aus und legen nur deren Reihenfolge fest."
-        actions={
-          <button type="button" className="button-inline" onClick={() => setShowCreateForm((current) => !current)}>
-            {showCreateForm ? "Abbrechen" : "+ Vorlage"}
-          </button>
-        }
-      />
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Vorlagen</h1>
+          <p className="muted">Vorlagen sind schlanke Container: sie wählen fertige Elemente aus und legen nur deren Reihenfolge fest.</p>
+        </div>
+        <button type="button" className="button-inline" onClick={() => setShowCreateForm((current) => !current)}>
+          {showCreateForm ? "Abbrechen" : "+ Vorlage"}
+        </button>
+      </div>
 
       <Modal
         open={showCreateForm}
@@ -569,30 +569,24 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
         </form>
       </Modal>
 
-      <article className="card">
-        <div className="two-col">
-          <label className="field-stack">
-            <span className="field-label">Suche</span>
-            <SearchInput value={search} onChange={setSearch} placeholder="Vorlagen durchsuchen" />
-          </label>
-          <div className="card">
-            <div className="eyebrow">Überblick</div>
-            <div className="status-row">
-              <span className="pill">{filteredTemplates.length} sichtbar</span>
-              <span className="pill">{templates.length} gesamt</span>
-            </div>
-          </div>
+      <div className="list-filter-row">
+        <div className="status-row">
+          <span className="pill">{filteredTemplates.length} sichtbar</span>
+          <span className="pill">{templates.length} gesamt</span>
         </div>
-      </article>
+        <div className="list-filter-search">
+          <SearchInput value={search} onChange={setSearch} placeholder="Vorlagen durchsuchen" />
+        </div>
+      </div>
 
-      <DataTable columns={["Vorlage", "Beschreibung", "Version", "Aktionen"]}>
+      <DataTable className="data-table-lg" columns={["Vorlage", "Beschreibung", "Version", "Aktionen"]}>
         {filteredTemplates.map((template) => (
           <tr key={template.id} className="table-row-clickable" onClick={() => router.push(`/templates/${template.id}`)}>
             <td>
               <strong>{template.name}</strong>
               <div className="muted">{template.status === "archived" ? "Archiviert" : "Aktiv"}</div>
             </td>
-            <td>{template.description ?? "Keine Beschreibung"}</td>
+            <td className="table-cell-wrap">{template.description ?? "Keine Beschreibung"}</td>
             <td>{template.version}</td>
             <td>
               <div className="table-actions">

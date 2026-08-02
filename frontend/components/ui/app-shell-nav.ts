@@ -9,11 +9,11 @@ export function formatRoleLabel(role: string | null | undefined): string {
     case "admin":
       return "Admin";
     case "writer":
-      return "Writer";
+      return "Schreiber";
     case "kassier":
       return "Kassier";
     case "reader":
-      return "Reader";
+      return "Leser";
     default:
       return role ?? "Status";
   }

@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
-import { DataTable, DataToolbar } from "@/components/ui/data-table";
+import { DataTable } from "@/components/ui/data-table";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
@@ -127,33 +127,27 @@ export function FinesView({ initialFines, accounts, isAdmin }: Props) {
 
   return (
     <div className="grid">
-      <DataToolbar title="Bussen" description="Alle Verspätungs- und Absenzbussen dieses Mandanten." />
-
-      <FilterTabs
-        options={[
-          { value: "pending", label: "Ausstehend", count: counts.pending || undefined },
-          { value: "collected", label: "Kassiert", count: counts.collected || undefined },
-          { value: "all", label: "Alle" },
-        ]}
-        value={statusFilter}
-        onChange={setStatusFilter}
-      />
-
-      <article className="card">
-        <div className="two-col">
-          <label className="field-stack">
-            <span className="field-label">Suche</span>
-            <SearchInput value={search} onChange={setSearch} placeholder="Bussen durchsuchen" />
-          </label>
-          <div className="card">
-            <div className="eyebrow">Überblick</div>
-            <div className="status-row">
-              <span className="pill">{filtered.length} sichtbar</span>
-              <span className="pill">{fines.length} geladen</span>
-            </div>
-          </div>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Bussen</h1>
+          <p className="muted">Alle Verspätungs- und Absenzbussen dieses Mandanten.</p>
         </div>
-      </article>
+      </div>
+
+      <div className="list-filter-row">
+        <FilterTabs
+          options={[
+            { value: "pending", label: "Ausstehend", count: counts.pending || undefined },
+            { value: "collected", label: "Kassiert", count: counts.collected || undefined },
+            { value: "all", label: "Alle" },
+          ]}
+          value={statusFilter}
+          onChange={setStatusFilter}
+        />
+        <div className="list-filter-search">
+          <SearchInput value={search} onChange={setSearch} placeholder="Bussen durchsuchen" />
+        </div>
+      </div>
 
       <DataTable
         className="data-table-lg"
@@ -185,9 +179,9 @@ export function FinesView({ initialFines, accounts, isAdmin }: Props) {
                     onClick={() => !isCollected && void collectFine(fine)}
                   >
                     {isCollected ? (
-                      <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" strokeWidth="1.5"/><path d="M4.5 8.5l2.5 2.5 4.5-4.5" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                      <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="4" fill="currentColor"/><path d="M4.5 8.5l2.5 2.5 4.5-4.5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                     ) : (
-                      <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" strokeWidth="1.5"/></svg>
+                      <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="4" strokeWidth="1.5"/></svg>
                     )}
                   </button>
                 </td>
@@ -203,7 +197,7 @@ export function FinesView({ initialFines, accounts, isAdmin }: Props) {
               <td>{account?.name ?? `Konto ${fine.account_id}`}</td>
               <td>{fine.amount.toFixed(2)} {cur}</td>
               <td>
-                <Badge variant={isCollected ? "success" : "warning"}>{isCollected ? "Kassiert" : "Ausstehend"}</Badge>
+                <Badge variant={isCollected ? "success" : "neutral"}>{isCollected ? "Kassiert" : "Ausstehend"}</Badge>
                 {isCollected && fine.collected_at ? (
                   <div className="muted fines-collected-note">
                     {formatDateTime(fine.collected_at)}
@@ -215,12 +209,12 @@ export function FinesView({ initialFines, accounts, isAdmin }: Props) {
                 <td>
                   <div className="table-actions table-actions-start">
                     {!isCollected && (
-                      <button type="button" className="button-inline button-danger" onClick={() => void deleteFine(fine)}>
+                      <button type="button" className="row-text-action row-text-action-danger" onClick={() => void deleteFine(fine)}>
                         Löschen
                       </button>
                     )}
                     {isCollected && fine.can_reopen && (
-                      <button type="button" className="button-inline button-ghost" disabled={busy[fine.id]} onClick={() => void reopenFine(fine)}>
+                      <button type="button" className="row-text-action" disabled={busy[fine.id]} onClick={() => void reopenFine(fine)}>
                         Rückgängig
                       </button>
                     )}

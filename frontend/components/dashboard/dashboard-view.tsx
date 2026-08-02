@@ -161,7 +161,9 @@ export function DashboardView({ todos, fines, nextSession, canExcuse }: Props) {
                     {todo.protocol_number ?? ""}
                   </span>
                 </span>
-                <span className="dashboard-list-row-meta">{todo.resolved_due_date ? formatDate(todo.resolved_due_date) : ""}</span>
+                <span className="dashboard-list-row-meta dashboard-list-row-meta-overdue">
+                  {todo.resolved_due_date ? formatDate(todo.resolved_due_date) : ""}
+                </span>
               </button>
             ))}
           </div>

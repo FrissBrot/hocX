@@ -14,9 +14,7 @@ export default async function FinancesPage() {
 
   return (
     <AppShell initialSession={session}>
-      <section className="panel">
-        <FinancesView initialAccounts={accounts} />
-      </section>
+      <FinancesView initialAccounts={accounts} />
     </AppShell>
   );
 }

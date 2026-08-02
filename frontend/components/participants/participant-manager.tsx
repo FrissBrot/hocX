@@ -3,8 +3,9 @@
 import { ChangeEvent, FormEvent, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
-import { DataTable, DataToolbar } from "@/components/ui/data-table";
+import { DataTable } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
+import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
@@ -252,48 +253,43 @@ export function ParticipantManager({ initialParticipants, templates }: Participa
 
   return (
     <div className="grid">
-      <DataToolbar
-        title="Teilnehmer"
-        description="Mandantenweite Personen, die spaeter Templates und Todos zugeordnet werden koennen."
-        actions={
-          <div className="table-toolbar-actions">
-            <label className="button-inline button-ghost participant-import-button">
-              CSV import
-              <input type="file" accept=".csv,text/csv" onChange={(e) => void handleCsvFileSelected(e)} hidden />
-            </label>
-            <button
-              type="button"
-              className="button-inline button-danger"
-              onClick={() => void bulkDeleteParticipants()}
-              disabled={selectedParticipantIds.length === 0}
-            >
-              Bulk delete
-            </button>
-            <button type="button" className="button-inline" onClick={openCreate}>
-              Neuer Teilnehmer
-            </button>
-          </div>
-        }
-      />
-
-      <article className="card">
-        <div className="two-col">
-          <label className="field-stack">
-            <span className="field-label">Search</span>
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search participants" />
-          </label>
-          <div className="card">
-            <div className="eyebrow">Überblick</div>
-            <div className="status-row">
-              <span className="pill">{selectedParticipantIds.length} ausgewählt</span>
-              <span className="pill">{filteredParticipants.length} sichtbar</span>
-              <span className="pill">{participants.length} geladen</span>
-            </div>
-          </div>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Teilnehmer</h1>
+          <p className="muted">Mandantenweite Personen, die später Templates und Todos zugeordnet werden können.</p>
         </div>
-      </article>
+        <div className="table-toolbar-actions">
+          <label className="button-inline button-ghost participant-import-button">
+            CSV import
+            <input type="file" accept=".csv,text/csv" onChange={(e) => void handleCsvFileSelected(e)} hidden />
+          </label>
+          <button
+            type="button"
+            className="button-inline button-danger"
+            onClick={() => void bulkDeleteParticipants()}
+            disabled={selectedParticipantIds.length === 0}
+          >
+            Bulk delete
+          </button>
+          <button type="button" className="button-inline" onClick={openCreate}>
+            Neuer Teilnehmer
+          </button>
+        </div>
+      </div>
+
+      <div className="list-filter-row">
+        <div className="status-row">
+          <span className="pill">{selectedParticipantIds.length} ausgewählt</span>
+          <span className="pill">{filteredParticipants.length} sichtbar</span>
+          <span className="pill">{participants.length} geladen</span>
+        </div>
+        <div className="list-filter-search">
+          <SearchInput value={search} onChange={setSearch} placeholder="Teilnehmer durchsuchen" />
+        </div>
+      </div>
 
       <DataTable
+        className="data-table-lg"
         columns={[
           "",
           { key: "display_name", label: "Teilnehmer", sortable: true, sortDirection: sortKey === "display_name" ? sortDirection : null, onSort: () => toggleSort("display_name") },

@@ -3,7 +3,6 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 
 import { Badge, BadgeVariant } from "@/components/ui/badge";
-import { DataToolbar } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
@@ -166,56 +165,70 @@ function statusVariant(element: SubmissionElementStatusEntry): BadgeVariant | nu
   return null;
 }
 
-function SummaryBar({ summary }: { summary: AssignmentSummary | undefined }) {
-  if (!summary) {
-    return <div className="subm-summary-track" />;
-  }
-  const { submitted, quarantine, infected, total } = summary;
-  const clean = Math.max(0, submitted);
+function SummaryBar({ summary, size = "row" }: { summary: AssignmentSummary | undefined; size?: "row" | "detail" }) {
+  const isDetail = size === "detail";
+  const wrapClass = `subm-summary ${isDetail ? "subm-summary-detail" : "subm-summary-list"}`;
 
-  if (total !== null && total > 0) {
-    const cleanPct = Math.min(100, (clean / total) * 100);
-    const qPct = Math.min(100 - cleanPct, (quarantine / total) * 100);
-    const infPct = Math.min(100 - cleanPct - qPct, (infected / total) * 100);
-    const missingPct = Math.max(0, 100 - cleanPct - qPct - infPct);
-    const label = `${clean + quarantine + infected}/${total}`;
+  if (!summary) {
     return (
-      <div className="subm-summary">
-        <div className="subm-summary-track">
-          {cleanPct > 0 && <div className="subm-summary-segment subm-summary-segment-clean" style={{ width: `${cleanPct}%` }} />}
-          {qPct > 0 && <div className="subm-summary-segment subm-summary-segment-quarantine" style={{ width: `${qPct}%` }} />}
-          {infPct > 0 && <div className="subm-summary-segment subm-summary-segment-infected" style={{ width: `${infPct}%` }} />}
-          {missingPct > 0 && <div className="subm-summary-segment" style={{ width: `${missingPct}%` }} />}
-        </div>
-        <span className="subm-summary-caption">
-          {label} abgegeben
-          {quarantine > 0 ? ` · ${quarantine} Quarantäne` : ""}
-          {infected > 0 ? ` · ${infected} Schadware` : ""}
-        </span>
+      <div className={wrapClass}>
+        <div className="subm-summary-track" />
       </div>
     );
   }
 
-  const total2 = clean + quarantine + infected;
-  if (total2 === 0) {
+  const { submitted, quarantine, infected, total } = summary;
+  const clean = Math.max(0, submitted);
+  const known = total !== null && total > 0;
+  const sum = clean + quarantine + infected;
+  const denom = known ? (total as number) : sum;
+
+  if (denom === 0) {
     return (
-      <div className="subm-summary">
+      <div className={wrapClass}>
         <div className="subm-summary-track" />
         <span className="subm-summary-caption">Noch keine Abgaben</span>
       </div>
     );
   }
-  return (
-    <div className="subm-summary">
-      <div className="subm-summary-track">
-        {clean > 0 && <div className="subm-summary-segment subm-summary-segment-clean" style={{ flex: clean }} />}
-        {quarantine > 0 && <div className="subm-summary-segment subm-summary-segment-quarantine" style={{ flex: quarantine }} />}
-        {infected > 0 && <div className="subm-summary-segment subm-summary-segment-infected" style={{ flex: infected }} />}
+
+  const cleanPct = Math.min(100, (clean / denom) * 100);
+  const qPct = Math.min(100 - cleanPct, (quarantine / denom) * 100);
+  const infPct = Math.min(100 - cleanPct - qPct, (infected / denom) * 100);
+  const missingPct = Math.max(0, 100 - cleanPct - qPct - infPct);
+
+  const countLabel = known ? `${sum} von ${total}` : `${sum}`;
+  const extraParts = [
+    quarantine > 0 ? `${quarantine} Quarantäne` : null,
+    infected > 0 ? `${infected} Schadware` : null,
+  ].filter((v): v is string => Boolean(v));
+
+  const track = (
+    <div className="subm-summary-track">
+      {cleanPct > 0 && <div className="subm-summary-segment subm-summary-segment-clean" style={{ width: `${cleanPct}%` }} />}
+      {qPct > 0 && <div className="subm-summary-segment subm-summary-segment-quarantine" style={{ width: `${qPct}%` }} />}
+      {infPct > 0 && <div className="subm-summary-segment subm-summary-segment-infected" style={{ width: `${infPct}%` }} />}
+      {!isDetail && missingPct > 0 && <div className="subm-summary-segment" style={{ width: `${missingPct}%` }} />}
+    </div>
+  );
+
+  if (isDetail) {
+    return (
+      <div className={wrapClass}>
+        <div className="subm-summary-detail-row">
+          {track}
+          <span className="subm-summary-detail-count">{countLabel}</span>
+        </div>
+        {extraParts.length > 0 ? <span className="subm-summary-caption">{extraParts.join(" · ")}</span> : null}
       </div>
+    );
+  }
+
+  return (
+    <div className={wrapClass}>
+      {track}
       <span className="subm-summary-caption">
-        {total2} abgegeben
-        {quarantine > 0 ? ` · ${quarantine} Quarantäne` : ""}
-        {infected > 0 ? ` · ${infected} Schadware` : ""}
+        {countLabel} eingereicht{extraParts.length > 0 ? ` · ${extraParts.join(" · ")}` : ""}
       </span>
     </div>
   );
@@ -226,6 +239,33 @@ function initials(name: string): string {
   if (parts.length === 0) return "?";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+const MONTHS_DE = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+
+function formatDateShort(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return `${String(d.getDate()).padStart(2, "0")}. ${MONTHS_DE[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function relativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const minute = 60_000;
+  const hour = 3_600_000;
+  const day = 86_400_000;
+  if (diffMs < minute) return "gerade eben";
+  if (diffMs < hour) {
+    const m = Math.max(1, Math.round(diffMs / minute));
+    return `vor ${m} Minute${m === 1 ? "" : "n"}`;
+  }
+  if (diffMs < day) {
+    const h = Math.round(diffMs / hour);
+    return `vor ${h} Stunde${h === 1 ? "" : "n"}`;
+  }
+  const d = Math.round(diffMs / day);
+  if (d <= 1) return "gestern";
+  return `vor ${d} Tagen`;
 }
 
 function DownloadIcon() {
@@ -280,7 +320,6 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
   const [elementsLoading, setElementsLoading] = useState(false);
   const [clamavStatus, setClamavStatus] = useState<"online" | "offline" | "unknown">("unknown");
   const [summaries, setSummaries] = useState<Record<number, AssignmentSummary>>({});
-  const [hoveredAssignmentId, setHoveredAssignmentId] = useState<number | null>(null);
   const rescanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [elementModal, setElementModal] = useState<SubmissionElementStatusEntry | null>(null);
   const [logEntries, setLogEntries] = useState<SubmissionUploadLogEntry[]>([]);
@@ -571,199 +610,172 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
   const selectedAssignment = assignments.find((a) => a.id === selectedId);
   const hasPendingFiles = elements.some((el) => el.files.some((f) => f.scan_status === "pending"));
 
+  function metaLine(assignment: SubmissionAssignment): string {
+    if (assignment.source_type === "events") {
+      const source = assignment.tag_filter ? `Termin „${assignment.tag_filter}“` : "Termine";
+      const before = assignment.offset_days_before ?? 0;
+      const after = assignment.offset_days_after ?? 0;
+      return `Quelle: ${source} · Fenster ${before}–${after} Tage`;
+    }
+    const list = availableLists.find((l) => l.id === assignment.list_definition_id);
+    const source = list ? `Liste „${list.name}“` : "Liste";
+    const deadline = assignment.deadline ? `Deadline ${formatDateShort(assignment.deadline)}` : "Keine Deadline";
+    return `Quelle: ${source} · ${deadline}`;
+  }
+
   return (
     <div className="grid subm-root">
-      {/* Toolbar — always visible, including ClamAV status */}
-      <DataToolbar
-        title="Abgaben"
-        description="Externe Abgaben ohne Anmeldung — gekoppelt an Termine oder eine Liste."
-        actions={
-          <div className="subm-toolbar-actions">
-            <span className={`subm-clamav subm-clamav-${clamavStatus}`}>
-              <span className="subm-clamav-dot" />
-              ClamAV {clamavStatus === "online" ? "Online" : clamavStatus === "offline" ? "Offline" : "…"}
-            </span>
-            <button type="button" className="button-inline subm-new-button" onClick={openCreate}>
-              <PlusIcon /> Neue Abgabe
-            </button>
-          </div>
-        }
-      />
+      {/* Header — always visible, including ClamAV status */}
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Abgaben</h1>
+          <p className="muted">Externe Abgaben ohne Anmeldung — gekoppelt an Termine oder eine Liste.</p>
+        </div>
+        <div className="subm-toolbar-actions">
+          <span className={`subm-clamav subm-clamav-${clamavStatus}`}>
+            <span className="subm-clamav-dot" />
+            ClamAV {clamavStatus === "online" ? "Online" : clamavStatus === "offline" ? "Offline" : "…"}
+          </span>
+          <button type="button" className="button-inline subm-new-button" onClick={openCreate}>
+            <PlusIcon /> Abgabe
+          </button>
+        </div>
+      </div>
 
-      {/* Split layout */}
-      <div className="subm-layout">
-
-        {/* Left sidebar — assignment list */}
-        <aside className="subm-sidebar">
+      <div className="list-filter-row">
+        <div />
+        <div className="list-filter-search">
           <SearchInput value={search} onChange={setSearch} placeholder="Abgaben suchen…" />
+        </div>
+      </div>
 
-          <div className="subm-sidebar-list">
-            {filteredAssignments.length === 0 ? (
-              <span className="subm-sidebar-empty">
-                {assignments.length === 0 ? "Noch keine Abgaben" : "Keine Treffer"}
+      {/* Assignment list */}
+      {filteredAssignments.length === 0 ? (
+        <p className="muted record-list-empty">
+          {assignments.length === 0 ? "Noch keine Abgaben" : "Keine Treffer"}
+        </p>
+      ) : (
+        <div className="record-list">
+          {filteredAssignments.map((assignment) => (
+            <div
+              key={assignment.id}
+              className="record-list-row"
+              onClick={() => void loadElements(assignment.id)}
+            >
+              <span className="record-list-row-text">
+                <span className="record-list-row-title">{assignment.title}</span>
+                <span className="record-list-row-sub">{metaLine(assignment)}</span>
               </span>
-            ) : filteredAssignments.map((assignment, index) => {
-              const isSelected = selectedId === assignment.id;
-              const isHovered = hoveredAssignmentId === assignment.id;
-              return (
-                <div
-                  key={assignment.id}
-                  className="subm-sidebar-item"
-                  style={{ animationDelay: `${Math.min(index, 12) * 28}ms` }}
-                  onMouseEnter={() => setHoveredAssignmentId(assignment.id)}
-                  onMouseLeave={() => setHoveredAssignmentId(null)}
-                >
+              <div className="record-list-row-trailing">
+                <SummaryBar summary={summaries[assignment.id]} />
+                <Badge variant={assignment.is_active ? "success" : "neutral"}>
+                  {assignment.is_active ? "Aktiv" : "Inaktiv"}
+                </Badge>
+                <div className="subm-row-actions">
                   <button
                     type="button"
-                    onClick={() => void loadElements(assignment.id)}
-                    className={`subm-sidebar-item-button${isSelected ? " subm-sidebar-item-active" : ""}${isHovered && !isSelected ? " subm-sidebar-item-hover-actions" : ""}`}
+                    className="subm-sidebar-icon-button"
+                    onClick={(e) => { e.stopPropagation(); openEdit(assignment); }}
+                    aria-label="Bearbeiten"
                   >
-                    <div className="subm-sidebar-item-title">
-                      {assignment.title}
-                    </div>
-                    <div className="subm-sidebar-item-meta">
-                      <span className="subm-sidebar-item-type">
-                        {assignment.source_type === "events" ? "Termine" : "Liste"}
-                      </span>
-                      {!assignment.is_active && (
-                        <span className="subm-sidebar-item-inactive">· Inaktiv</span>
-                      )}
-                    </div>
-                    <SummaryBar summary={summaries[assignment.id]} />
+                    ✎
                   </button>
+                  <button
+                    type="button"
+                    className="subm-sidebar-icon-button subm-sidebar-icon-button-danger"
+                    onClick={(e) => { e.stopPropagation(); void deleteAssignment(assignment.id); }}
+                    aria-label="Löschen"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
-                  {isHovered && !isSelected && (
-                    <div className="subm-sidebar-item-actions">
-                      <button
-                        type="button"
-                        className="subm-sidebar-icon-button"
-                        onClick={(e) => { e.stopPropagation(); openEdit(assignment); }}
-                        aria-label="Bearbeiten"
-                      >
-                        ✎
-                      </button>
-                      <button
-                        type="button"
-                        className="subm-sidebar-icon-button subm-sidebar-icon-button-danger"
-                        onClick={(e) => { e.stopPropagation(); void deleteAssignment(assignment.id); }}
-                        aria-label="Löschen"
-                      >
-                        ×
-                      </button>
+      {/* Assignment detail popup — participants + progress */}
+      <Modal
+        open={selectedId !== null}
+        onClose={() => setSelectedId(null)}
+        title={selectedAssignment?.title ?? ""}
+        description={selectedAssignment ? metaLine(selectedAssignment) : undefined}
+        size="wide"
+      >
+        {selectedId !== null ? (
+          <div className="grid subm-detail">
+            <SummaryBar summary={summaries[selectedId]} size="detail" />
+
+            {hasPendingFiles && (
+              <Badge variant="warning" className="subm-pulse">
+                Dateien in Quarantäne
+              </Badge>
+            )}
+
+            <div className="subm-modal-section-title">Teilnehmer</div>
+
+            {elementsLoading ? (
+              <div className="subm-skeleton-box">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="subm-skeleton-row" style={{ animationDelay: `${i * 90}ms` }} />
+                ))}
+              </div>
+            ) : elements.length === 0 ? (
+              <p className="muted">Keine Elemente gefunden.</p>
+            ) : (
+              <div className="subm-participant-list">
+                {elements.map((element, rowIndex) => {
+                  const responsibleName = element.responsible_participant_id
+                    ? (availableParticipants.find((p) => p.id === element.responsible_participant_id)?.display_name ?? `#${element.responsible_participant_id}`)
+                    : null;
+                  const displayName = responsibleName ?? element.label;
+                  const isSubmitted = element.status === "submitted";
+                  const variant = statusVariant(element);
+                  const label = statusLabel(element);
+                  const meta = isSubmitted
+                    ? `${element.files.length} Datei${element.files.length === 1 ? "" : "en"}${element.submitted_at ? ` · ${relativeTime(element.submitted_at)}` : ""}`
+                    : "Noch nicht eingereicht";
+                  return (
+                    <div
+                      key={element.element_ref}
+                      className="subm-participant-row"
+                      style={{ animationDelay: `${Math.min(rowIndex, 14) * 25}ms` }}
+                      onClick={() => void openElementModal(selectedId, element)}
+                    >
+                      <span className="subm-avatar subm-avatar-lg">{initials(displayName)}</span>
+                      <div className="subm-participant-info">
+                        <div className="subm-participant-name">{displayName}</div>
+                        <div className="subm-participant-meta">{meta}</div>
+                      </div>
+                      <div className="subm-participant-status">
+                        <Badge variant={variant ?? "neutral"}>
+                          {isSubmitted ? <DownloadIcon /> : null} {label}
+                        </Badge>
+                      </div>
                     </div>
-                  )}
-                </div>
-              );
-            })}
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="subm-detail-footer">
+              <button
+                type="button"
+                className="button-ghost button-inline"
+                onClick={() => void downloadZip(selectedId)}
+                disabled={zipLoading}
+                title="Alle geprüften Dateien als ZIP herunterladen"
+              >
+                <DownloadIcon /> {zipLoading ? "…" : "Alle Dateien (.zip)"}
+              </button>
+              <button type="button" className="button-inline" onClick={() => setSelectedId(null)}>
+                Schliessen
+              </button>
+            </div>
           </div>
-        </aside>
-
-        {/* Right panel — elements */}
-        <section className="subm-panel">
-          {selectedId === null ? (
-            <div className="subm-panel-empty">
-              <div className="subm-panel-empty-icon">
-                <FileIcon />
-              </div>
-              Abgabe auswählen
-            </div>
-          ) : (
-            <div key={selectedId} className="subm-panel-content">
-              {/* Panel header */}
-              <div className="subm-panel-header">
-                <div className="subm-panel-heading">
-                  <h2 className="subm-panel-title">{selectedAssignment?.title}</h2>
-                  {hasPendingFiles && (
-                    <Badge variant="warning" className="subm-pulse">
-                      Dateien in Quarantäne
-                    </Badge>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  className="button-inline subm-zip-button"
-                  onClick={() => void downloadZip(selectedId)}
-                  disabled={zipLoading}
-                  title="Alle geprüften Dateien als ZIP herunterladen"
-                >
-                  <DownloadIcon /> {zipLoading ? "…" : "ZIP"}
-                </button>
-              </div>
-
-              {/* Elements table */}
-              {elementsLoading ? (
-                <div className="subm-table-box subm-skeleton-box">
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="subm-skeleton-row" style={{ animationDelay: `${i * 90}ms` }} />
-                  ))}
-                </div>
-              ) : elements.length === 0 ? (
-                <p className="muted">Keine Elemente gefunden.</p>
-              ) : (
-                <div className="subm-table-box">
-                  <table className="subm-table">
-                    <thead>
-                      <tr>
-                        {["Element", "Verantwortlich", "Fenster/Frist", "Status", "Dateien"].map((col) => (
-                          <th key={col}>{col}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {elements.map((element, rowIndex) => {
-                        const responsibleName = element.responsible_participant_id
-                          ? (availableParticipants.find((p) => p.id === element.responsible_participant_id)?.display_name ?? `#${element.responsible_participant_id}`)
-                          : null;
-                        return (
-                          <tr
-                            key={element.element_ref}
-                            className="subm-table-row subm-table-row-clickable"
-                            style={{ animationDelay: `${Math.min(rowIndex, 14) * 25}ms` }}
-                            onClick={() => void openElementModal(selectedId, element)}
-                          >
-                            <td className="subm-element-title">{element.label}</td>
-                            <td>
-                              {responsibleName ? (
-                                <span className="subm-responsible">
-                                  <span className="subm-avatar">{initials(responsibleName)}</span>
-                                  {responsibleName}
-                                </span>
-                              ) : (
-                                <span className="subm-empty-cell">—</span>
-                              )}
-                            </td>
-                            <td className="subm-window-cell">
-                              {element.window_start && element.window_end
-                                ? `${element.window_start} – ${element.window_end}`
-                                : element.window_end ?? "—"}
-                            </td>
-                            <td className="subm-status-cell">
-                              {statusVariant(element) ? (
-                                <Badge variant={statusVariant(element)!}>{statusLabel(element)}</Badge>
-                              ) : (
-                                <span className="subm-empty-cell">{statusLabel(element)}</span>
-                              )}
-                            </td>
-                            <td className="subm-status-cell">
-                              {element.files.length === 0 ? (
-                                <span className="subm-empty-cell">—</span>
-                              ) : (
-                                <span className="subm-file-count">
-                                  <FileIcon /> {element.files.length}
-                                </span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
-        </section>
-      </div>
+        ) : null}
+      </Modal>
 
       {/* Element detail popup — files + log combined */}
       <Modal

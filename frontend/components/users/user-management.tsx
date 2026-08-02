@@ -2,7 +2,7 @@
 
 import { FormEvent, useMemo, useState } from "react";
 
-import { DataTable, DataToolbar } from "@/components/ui/data-table";
+import { DataTable } from "@/components/ui/data-table";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
@@ -237,48 +237,42 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
 
   return (
     <div className="grid">
-      <DataToolbar
-        title="Benutzer"
-        description="Systemweite Konten mit genau den Mandantenrollen, die du verwalten darfst."
-        actions={
-          <button type="button" className="button-inline" onClick={openNewUser}>
-            Neuer Benutzer
-          </button>
-        }
-      />
-
-      <FilterTabs
-        options={[
-          { value: "active", label: "Aktive Benutzer", count: activeUsers.length },
-          { value: "nologin", label: "Teilnehmer", count: usersWithoutLogin.length },
-        ]}
-        value={userTab}
-        onChange={setUserTab}
-      />
-
-      <article className="card">
-        <div className="two-col">
-          <label className="field-stack">
-            <span className="field-label">Suche</span>
-            <SearchInput
-              value={search}
-              onChange={setSearch}
-              placeholder={userTab === "active" ? "Benutzer durchsuchen" : "Teilnehmer durchsuchen"}
-            />
-          </label>
-          <div className="card">
-            <div className="eyebrow">Überblick</div>
-            <div className="status-row">
-              <span className="pill">{visibleUsers.length} sichtbar</span>
-              <span className="pill">{tabUsers.length} im Tab</span>
-              <span className="pill">{users.length} gesamt</span>
-            </div>
-          </div>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Benutzer</h1>
+          <p className="muted">Systemweite Konten mit genau den Mandantenrollen, die du verwalten darfst.</p>
         </div>
-      </article>
+        <button type="button" className="button-inline" onClick={openNewUser}>
+          Neuer Benutzer
+        </button>
+      </div>
+
+      <div className="list-filter-row">
+        <FilterTabs
+          options={[
+            { value: "active", label: "Aktive Benutzer", count: activeUsers.length },
+            { value: "nologin", label: "Teilnehmer", count: usersWithoutLogin.length },
+          ]}
+          value={userTab}
+          onChange={setUserTab}
+        />
+        <div className="list-filter-search">
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder={userTab === "active" ? "Benutzer durchsuchen" : "Teilnehmer durchsuchen"}
+          />
+        </div>
+      </div>
+
+      <div className="status-row">
+        <span className="pill">{visibleUsers.length} sichtbar</span>
+        <span className="pill">{tabUsers.length} im Tab</span>
+        <span className="pill">{users.length} gesamt</span>
+      </div>
 
       {userTab === "active" ? (
-        <DataTable columns={["Anzeigename", "Name", "E-Mail", "Rollen", "Aktionen"]}>
+        <DataTable className="data-table-lg" columns={["Anzeigename", "Name", "E-Mail", "Rollen", "Aktionen"]}>
           {visibleUsers.map((user) => (
             <tr key={user.id} className="table-row-clickable" onClick={() => openEditUser(user)}>
               <td>
@@ -315,7 +309,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
           ))}
         </DataTable>
       ) : (
-        <DataTable columns={["Name", "E-Mail (Teilnehmer)", "Rollen", "Aktionen"]}>
+        <DataTable className="data-table-lg" columns={["Name", "E-Mail (Teilnehmer)", "Rollen", "Aktionen"]}>
           {visibleUsers.map((user) => (
             <tr key={user.id}>
               <td>

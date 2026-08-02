@@ -9,9 +9,7 @@ export default async function StatisticsPage() {
 
   return (
     <AppShell initialSession={session}>
-      <section className="panel">
-        <StatisticsView data={data} />
-      </section>
+      <StatisticsView data={data} />
     </AppShell>
   );
 }
