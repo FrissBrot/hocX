@@ -3,7 +3,9 @@
 import { FormEvent, useMemo, useState } from "react";
 
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
+import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
+import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { TenantSummary, UserSummary } from "@/types/api";
@@ -245,30 +247,22 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
         }
       />
 
-      <div className="segment-control">
-        <button
-          type="button"
-          className={`segment-button${userTab === "active" ? " segment-button-active" : ""}`}
-          onClick={() => setUserTab("active")}
-        >
-          Aktive Benutzer ({activeUsers.length})
-        </button>
-        <button
-          type="button"
-          className={`segment-button${userTab === "nologin" ? " segment-button-active" : ""}`}
-          onClick={() => setUserTab("nologin")}
-        >
-          Teilnehmer ({usersWithoutLogin.length})
-        </button>
-      </div>
+      <FilterTabs
+        options={[
+          { value: "active", label: "Aktive Benutzer", count: activeUsers.length },
+          { value: "nologin", label: "Teilnehmer", count: usersWithoutLogin.length },
+        ]}
+        value={userTab}
+        onChange={setUserTab}
+      />
 
       <article className="card">
         <div className="two-col">
           <label className="field-stack">
             <span className="field-label">Suche</span>
-            <input
+            <SearchInput
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={setSearch}
               placeholder={userTab === "active" ? "Benutzer durchsuchen" : "Teilnehmer durchsuchen"}
             />
           </label>

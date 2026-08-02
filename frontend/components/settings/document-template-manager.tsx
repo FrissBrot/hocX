@@ -2,8 +2,11 @@
 
 import { Dispatch, FormEvent, SetStateAction, useMemo, useState } from "react";
 
+import { Badge } from "@/components/ui/badge";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
+import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
+import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { DocumentTemplate, DocumentTemplatePart } from "@/types/api";
@@ -785,17 +788,15 @@ function TemplateForm({
       </div>
 
       {/* Tab nav */}
-      <div className="segment-control" style={{ marginTop: "8px" }}>
-        <button type="button" className={`segment-button${activeTab === "design" ? " segment-button-active" : ""}`} onClick={() => setActiveTab("design")}>
-          Gestaltung
-        </button>
-        <button type="button" className={`segment-button${activeTab === "structure" ? " segment-button-active" : ""}`} onClick={() => setActiveTab("structure")}>
-          Struktur
-        </button>
-        <button type="button" className={`segment-button${activeTab === "advanced" ? " segment-button-active" : ""}`} onClick={() => setActiveTab("advanced")}>
-          Erweitert {hasCustomSlot(["preamble", "macros", "title_page", "header_footer", "toc"]) ? "·" : ""}
-        </button>
-      </div>
+      <FilterTabs
+        options={[
+          { value: "design", label: "Gestaltung" },
+          { value: "structure", label: "Struktur" },
+          { value: "advanced", label: `Erweitert${hasCustomSlot(["preamble", "macros", "title_page", "header_footer", "toc"]) ? " ·" : ""}` },
+        ]}
+        value={activeTab}
+        onChange={setActiveTab}
+      />
 
       {/* ── Gestaltung ── */}
       {activeTab === "design" && (
@@ -1181,14 +1182,14 @@ export function DocumentTemplateManager({ initialTemplates, initialParts }: Prop
 
   return (
     <div className="grid">
-      <div className="segment-control">
-        <button type="button" className={`segment-button${activePanel === "layouts" ? " segment-button-active" : ""}`} onClick={() => setActivePanel("layouts")}>
-          Layouts
-        </button>
-        <button type="button" className={`segment-button${activePanel === "parts" ? " segment-button-active" : ""}`} onClick={() => setActivePanel("parts")}>
-          Parts-Bibliothek
-        </button>
-      </div>
+      <FilterTabs
+        options={[
+          { value: "layouts", label: "Layouts" },
+          { value: "parts", label: "Parts-Bibliothek" },
+        ]}
+        value={activePanel}
+        onChange={setActivePanel}
+      />
 
       <Modal open={showPartForm} onClose={() => setShowPartForm(false)} title="LaTeX-Part hochladen" description="Eigene .tex-Datei oder Font-Datei hochladen.">
         <form className="grid" onSubmit={createPart}>
@@ -1244,7 +1245,7 @@ export function DocumentTemplateManager({ initialTemplates, initialParts }: Prop
           <article className="card">
             <label className="field-stack">
               <span className="field-label">Suche</span>
-              <input value={partSearch} onChange={(e) => setPartSearch(e.target.value)} placeholder="Parts durchsuchen" />
+              <SearchInput value={partSearch} onChange={setPartSearch} placeholder="Parts durchsuchen" />
             </label>
           </article>
           <DataTable columns={["Name", "Typ", "Version", "Status", "Aktionen"]} emptyMessage="Keine Parts gefunden.">
@@ -1253,7 +1254,7 @@ export function DocumentTemplateManager({ initialTemplates, initialParts }: Prop
                 <td><strong>{part.name}</strong><div className="muted">{part.code}</div></td>
                 <td>{partTypeDefinitions.find((d) => d.key === part.part_type)?.label ?? part.part_type}</td>
                 <td>{part.version}</td>
-                <td><span className="pill">{part.is_active ? "Aktiv" : "Inaktiv"}</span></td>
+                <td><Badge variant={part.is_active ? "success" : "neutral"}>{part.is_active ? "Aktiv" : "Inaktiv"}</Badge></td>
                 <td>
                   <div className="table-actions">
                     <button type="button" className="button-inline button-danger" onClick={() => deletePart(part.id)}>Löschen</button>
@@ -1275,7 +1276,7 @@ export function DocumentTemplateManager({ initialTemplates, initialParts }: Prop
               <div className="editor-nav-section">
                 <h3 className="editor-nav-title">Layouts</h3>
                 <label className="field-stack" style={{ padding: "0 8px 8px" }}>
-                  <input value={layoutSearch} onChange={(e) => setLayoutSearch(e.target.value)} placeholder="Suchen…" style={{ fontSize: "0.82rem" }} />
+                  <SearchInput value={layoutSearch} onChange={setLayoutSearch} placeholder="Suchen…" />
                 </label>
                 {filteredTemplates.map((template) => {
                   const cfg = (template.configuration_json ?? {}) as Record<string, any>;

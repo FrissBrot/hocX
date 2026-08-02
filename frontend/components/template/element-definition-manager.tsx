@@ -6,6 +6,7 @@ import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { SearchInput } from "@/components/ui/search-input";
 import { TagInput } from "@/components/ui/tag-input";
 import { useToast } from "@/contexts/toast-context";
 import { useTagConfig } from "@/lib/hooks/use-tag-config";
@@ -1736,7 +1737,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
         <div className="two-col">
           <label className="field-stack">
             <span className="field-label">Suche</span>
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Elemente durchsuchen" />
+            <SearchInput value={search} onChange={setSearch} placeholder="Elemente durchsuchen" />
           </label>
           <div className="card">
             <div className="eyebrow">Überblick</div>

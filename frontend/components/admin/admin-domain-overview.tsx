@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 
+import { Badge } from "@/components/ui/badge";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
+import { SearchInput } from "@/components/ui/search-input";
 import { AdminDomainSummary } from "@/types/api";
 
 type Props = {
@@ -28,7 +30,7 @@ export function AdminDomainOverview({ initialDomains }: Props) {
       <article className="card">
         <label className="field-stack">
           <span className="field-label">Suche</span>
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Domain oder Mandant durchsuchen" />
+          <SearchInput value={search} onChange={setSearch} placeholder="Domain oder Mandant durchsuchen" />
         </label>
       </article>
 
@@ -40,11 +42,11 @@ export function AdminDomainOverview({ initialDomains }: Props) {
             <td className="domain-row-domain">{d.domain}</td>
             <td>
               {d.status === "pending" ? (
-                <span className="pill">Ausstehend</span>
+                <Badge variant="neutral">Ausstehend</Badge>
               ) : d.is_healthy ? (
-                <span className="pill pill-success">Aktiv</span>
+                <Badge variant="success">Aktiv</Badge>
               ) : (
-                <span className="pill pill-error">Nicht erreichbar</span>
+                <Badge variant="danger">Nicht erreichbar</Badge>
               )}
             </td>
             <td className="muted">

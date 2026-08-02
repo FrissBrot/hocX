@@ -2,8 +2,10 @@
 
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 
+import { Badge } from "@/components/ui/badge";
 import { DomainWizardModal } from "@/components/ui/domain-wizard-modal";
-import { DataTable } from "@/components/ui/data-table";
+import { DataTable, DataToolbar } from "@/components/ui/data-table";
+import { FilterTabs } from "@/components/ui/filter-tabs";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { TenantDomain, TenantSummary } from "@/types/api";
@@ -101,19 +103,16 @@ export function TenantSettingsManager({ initialTenant }: Props) {
 
   return (
     <div className="section-stack">
-      <div className="page-header">
-        <h1 className="page-title">Mandant-Einstellungen – {tenantName}</h1>
-        <p className="page-description">Stammdaten und Domains für diesen Mandanten verwalten.</p>
-      </div>
+      <DataToolbar title={`Mandant-Einstellungen – ${tenantName}`} description="Stammdaten und Domains für diesen Mandanten verwalten." />
 
-      <div className="segment-control">
-        <button type="button" className={`segment-button${activeTab === "general" ? " segment-button-active" : ""}`} onClick={() => setActiveTab("general")}>
-          Allgemein
-        </button>
-        <button type="button" className={`segment-button${activeTab === "domains" ? " segment-button-active" : ""}`} onClick={() => setActiveTab("domains")}>
-          Domains {domains.some((d) => d.status === "pending") ? "·" : ""}
-        </button>
-      </div>
+      <FilterTabs
+        options={[
+          { value: "general", label: "Allgemein" },
+          { value: "domains", label: `Domains${domains.some((d) => d.status === "pending") ? " ·" : ""}` },
+        ]}
+        value={activeTab}
+        onChange={setActiveTab}
+      />
 
       {activeTab === "general" && (
         <section className="card">
@@ -175,13 +174,13 @@ export function TenantSettingsManager({ initialTenant }: Props) {
                   <td className="domain-row-domain">{d.domain}</td>
                   <td>
                     {d.status === "pending" ? (
-                      <span className="pill">Ausstehend</span>
+                      <Badge variant="neutral">Ausstehend</Badge>
                     ) : d.is_healthy ? (
-                      <span className="pill pill-success">Aktiv</span>
+                      <Badge variant="success">Aktiv</Badge>
                     ) : (
-                      <span className="pill pill-error" title="Domain zeigt bei der letzten Prüfung nicht mehr auf hocX — DNS-Einträge prüfen">
-                        Nicht erreichbar
-                      </span>
+                      <Badge variant="danger">
+                        <span title="Domain zeigt bei der letzten Prüfung nicht mehr auf hocX — DNS-Einträge prüfen">Nicht erreichbar</span>
+                      </Badge>
                     )}
                   </td>
                   <td>

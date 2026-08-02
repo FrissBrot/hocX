@@ -2,6 +2,7 @@
 
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
+import { Badge } from "@/components/ui/badge";
 import { DateInput } from "@/components/ui/date-input";
 import { EventOverviewModal } from "@/components/protocol/planning/event-overview-modal";
 import { PlanningIconTrigger } from "@/components/protocol/planning/planning-icon-trigger";
@@ -704,7 +705,7 @@ export function MatrixEmbeddedBlockEditor({
                           {embeddedEventColumns.showDescription ? <td>{eventRow.description || "—"}</td> : null}
                           {embeddedEventColumns.showParticipantCount ? <td className="event-column-count">{eventRow.participant_count ?? 0}</td> : null}
                           {embeddedEventColumns.showCancelled ? (
-                            <td>{eventRow.is_cancelled ? <span className="pill pill-error">Abgesagt</span> : <span className="muted">–</span>}</td>
+                            <td>{eventRow.is_cancelled ? <Badge variant="danger">Abgesagt</Badge> : <span className="muted">–</span>}</td>
                           ) : null}
                         </tr>
                       );
@@ -955,7 +956,7 @@ export function MatrixEmbeddedBlockEditor({
                       ) : null}
                       {embeddedEventColumns.showCancelled ? (
                         <td>
-                          {eventRow.is_cancelled ? <span className="pill pill-error">Abgesagt</span> : <span className="muted">–</span>}
+                          {eventRow.is_cancelled ? <Badge variant="danger">Abgesagt</Badge> : <span className="muted">–</span>}
                         </td>
                       ) : null}
                       {editable ? (

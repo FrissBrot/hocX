@@ -5,6 +5,7 @@ import { FormEvent, useMemo, useState } from "react";
 import { ROLE_OPTIONS } from "@/components/admin/admin-tenant-settings-modal";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
+import { SearchInput } from "@/components/ui/search-input";
 import { Tabs } from "@/components/ui/tabs";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
@@ -223,7 +224,7 @@ export function AdminUserManagement({ initialUsers, allTenants }: Props) {
       <article className="card">
         <label className="field-stack">
           <span className="field-label">Suche</span>
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Benutzer durchsuchen" />
+          <SearchInput value={search} onChange={setSearch} placeholder="Benutzer durchsuchen" />
         </label>
       </article>
 
