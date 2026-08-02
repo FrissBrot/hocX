@@ -3,8 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { Badge, BadgeVariant } from "@/components/ui/badge";
-import { DataTable, DataToolbar } from "@/components/ui/data-table";
+import { DataTable } from "@/components/ui/data-table";
 import { FilterTabOption, FilterTabs } from "@/components/ui/filter-tabs";
 import { SearchInput } from "@/components/ui/search-input";
 import { TagInput } from "@/components/ui/tag-input";
@@ -15,20 +14,6 @@ import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { formatDate } from "@/lib/utils/format";
 import { Modal } from "@/components/ui/modal";
 import { DocumentTemplate, EventSummary, ParticipantSummary, TodoBlock, TodoListItem } from "@/types/api";
-
-const STATUS_LABEL: Record<string, string> = {
-  open: "Offen",
-  in_progress: "Offen",
-  done: "Erledigt",
-  cancelled: "Abgebrochen",
-};
-
-const STATUS_VARIANT: Record<string, BadgeVariant> = {
-  open: "warning",
-  in_progress: "info",
-  done: "success",
-  cancelled: "neutral",
-};
 
 const SCOPE_OPTIONS: FilterTabOption<"all" | "my">[] = [
   { value: "all", label: "Alle" },
@@ -263,6 +248,18 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
     return c;
   }, [activeTodos]);
 
+  // Assigns each tag a color slot in the order it first appears in the visible
+  // list, so tags stay visually distinct without needing per-tag config.
+  const tagColorIndex = useMemo(() => {
+    const map = new Map<string, number>();
+    filtered.forEach((todo) => {
+      (todo.tags ?? []).forEach((tag) => {
+        if (!map.has(tag)) map.set(tag, map.size % 5);
+      });
+    });
+    return map;
+  }, [filtered]);
+
   async function cycleStatus(todo: TodoListItem) {
     const current = todo.todo_status_code ?? "open";
     const isDone = current === "done" || current === "cancelled";
@@ -322,6 +319,21 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
     }
   }
 
+  async function updateTodoFields(todoId: number, patch: { task?: string; tags?: string[] }) {
+    function applyUpdate(list: TodoListItem[]) {
+      return list.map((t) => (t.id === todoId ? { ...t, ...patch } : t));
+    }
+    setTodos((prev) => ({ all: applyUpdate(prev.all), my: applyUpdate(prev.my) }));
+    try {
+      await browserApiFetch(`/api/protocol-todos/${todoId}`, {
+        method: "PATCH",
+        body: JSON.stringify(patch),
+      });
+    } catch {
+      // keep optimistic local state on error, matches updateTodoAssignee/updateTodoDue
+    }
+  }
+
   async function updateTodoDue(todoId: number, patch: DuePatch) {
     try {
       const updated = await browserApiFetch<TodoListItem>(`/api/protocol-todos/${todoId}`, {
@@ -366,53 +378,42 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
 
   return (
     <div className="grid">
-      <DataToolbar
-        title="Todos"
-        description="Alle offenen und erledigten Todos dieses Mandanten."
-        actions={
-          <div className="table-toolbar-actions">
-            {landscapeTemplates.length > 0 && (
-              <button type="button" className="button-inline button-ghost" onClick={() => setExportModalOpen(true)}>
-                Export
-              </button>
-            )}
-            {canEdit && (
-              <button type="button" className="button-inline" onClick={() => setShowCreate((v) => !v)}>
-                {showCreate ? "Abbrechen" : "+ Todo"}
-              </button>
-            )}
-          </div>
-        }
-      />
-
-      <div className="table-toolbar-actions">
-        {allTodos !== null && <FilterTabs options={SCOPE_OPTIONS} value={scope} onChange={setScope} />}
-        <FilterTabs
-          options={[
-            { value: "open", label: "Offen", count: counts.open || undefined },
-            { value: "done", label: "Erledigt", count: counts.done || undefined },
-            { value: "all", label: "Alle" },
-          ]}
-          value={statusFilter}
-          onChange={setStatusFilter}
-        />
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Todos</h1>
+          <p className="muted">Alle offenen und erledigten Todos dieses Mandanten.</p>
+        </div>
+        <div className="table-toolbar-actions">
+          {landscapeTemplates.length > 0 && (
+            <button type="button" className="button-inline button-ghost" onClick={() => setExportModalOpen(true)}>
+              Export
+            </button>
+          )}
+          {canEdit && (
+            <button type="button" className="button-inline" onClick={() => setShowCreate((v) => !v)}>
+              {showCreate ? "Abbrechen" : "+ Todo"}
+            </button>
+          )}
+        </div>
       </div>
 
-      <article className="card">
-        <div className="two-col">
-          <label className="field-stack">
-            <span className="field-label">Suche</span>
-            <SearchInput value={search} onChange={setSearch} placeholder="Todos durchsuchen" />
-          </label>
-          <div className="card">
-            <div className="eyebrow">Überblick</div>
-            <div className="status-row">
-              <span className="pill">{filtered.length} sichtbar</span>
-              <span className="pill">{activeTodos.length} gesamt</span>
-            </div>
-          </div>
+      <div className="list-filter-row">
+        <div className="table-toolbar-actions">
+          {allTodos !== null && <FilterTabs options={SCOPE_OPTIONS} value={scope} onChange={setScope} />}
+          <FilterTabs
+            options={[
+              { value: "open", label: "Offen", count: counts.open || undefined },
+              { value: "done", label: "Erledigt", count: counts.done || undefined },
+              { value: "all", label: "Alle" },
+            ]}
+            value={statusFilter}
+            onChange={setStatusFilter}
+          />
         </div>
-      </article>
+        <div className="list-filter-search">
+          <SearchInput value={search} onChange={setSearch} placeholder="Todos durchsuchen" />
+        </div>
+      </div>
 
       {showCreate && (
         <div className="todo-create-panel">
@@ -447,10 +448,8 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
           "",
           { key: "task", label: "Aufgabe", sortable: true, sortDirection: sd("task"), onSort: () => toggleSort("task") },
           { key: "tags", label: "Tags", header: tagsColumnHeader },
-          { key: "protocol_number", label: "Protokoll", sortable: true, sortDirection: sd("protocol_number"), onSort: () => toggleSort("protocol_number") },
           { key: "assigned_participant_name" as SortKey, label: "Zugewiesen", sortable: true, sortDirection: sd("assigned_participant_name"), onSort: () => toggleSort("assigned_participant_name") },
           { key: "resolved_due_date", label: "Fällig", sortable: true, sortDirection: sd("resolved_due_date"), onSort: () => toggleSort("resolved_due_date") },
-          { key: "todo_status_code", label: "Status", sortable: true, sortDirection: sd("todo_status_code"), onSort: () => toggleSort("todo_status_code") },
         ]}
         emptyMessage="Keine Todos gefunden."
       >
@@ -480,9 +479,9 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
                       }}
                     >
                       {isDone ? (
-                        <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" strokeWidth="1.5"/><path d="M4.5 8.5l2.5 2.5 4.5-4.5" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="4" fill="currentColor"/><path d="M4.5 8.5l2.5 2.5 4.5-4.5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                       ) : (
-                        <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" strokeWidth="1.5"/></svg>
+                        <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="4" strokeWidth="1.5"/></svg>
                       )}
                     </button>
                   );
@@ -495,46 +494,14 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
                 {tags.length > 0 ? (
                   <div className="todo-row-tags">
                     {tags.map((tag) => (
-                      <button
+                      <span
                         key={tag}
-                        type="button"
-                        className={`tag-chip tag-chip-sm${tagFilter === tag ? " tag-chip-active" : ""}`}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setTagFilter(tagFilter === tag ? null : tag);
-                        }}
+                        className={`tag-chip tag-chip-sm tag-chip-hue-${tagColorIndex.get(tag) ?? 0}`}
                       >
                         {tag}
-                      </button>
+                      </span>
                     ))}
                   </div>
-                ) : (
-                  <span className="muted">—</span>
-                )}
-              </td>
-              <td>
-                {todo.protocol_id ? (
-                  <button
-                    type="button"
-                    className="todo-protocol-link"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      router.push(`/protocols/${todo.protocol_id}`);
-                    }}
-                  >
-                    <span className="todo-protocol-num">{todo.protocol_number}</span>
-                    {todo.protocol_title ? <span className="todo-protocol-title">{todo.protocol_title}</span> : null}
-                    {todo.block_title ? <span className="todo-protocol-block">· {todo.block_title}</span> : null}
-                  </button>
-                ) : todo.reference_link && /^https?:\/\//i.test(todo.reference_link) ? (
-                  <a href={todo.reference_link} target="_blank" rel="noreferrer" className="todo-protocol-link" onClick={(event) => event.stopPropagation()}>
-                    <span className="todo-protocol-num">Abgabebox</span>
-                    <span className="todo-protocol-block">↗</span>
-                  </a>
-                ) : todo.reference_link ? (
-                  <span className="todo-protocol-link">
-                    <span className="todo-protocol-num">Abgabebox</span>
-                  </span>
                 ) : (
                   <span className="muted">—</span>
                 )}
@@ -559,9 +526,6 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
                     : formatDate(todo.resolved_due_date) ?? "—"}
                 </span>
               </td>
-              <td>
-                <Badge variant={STATUS_VARIANT[code] ?? "neutral"}>{STATUS_LABEL[code] ?? code}</Badge>
-              </td>
             </tr>
           );
         })}
@@ -581,12 +545,59 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
 
       <Modal
         open={editingTodo !== null}
-        title="Todo bearbeiten"
-        description={editingTodo?.task}
+        title={editingTodo?.task || "Todo"}
+        description={
+          editingTodo?.protocol_number
+            ? `${editingTodo.protocol_number}${editingTodo.protocol_title ? ` · ${editingTodo.protocol_title}` : ""}`
+            : undefined
+        }
         onClose={() => setEditTodoId(null)}
       >
         {editingTodo && (
-          <div className="grid" style={{ gap: 20, minWidth: 320 }}>
+          <div className="grid" style={{ gap: 14, minWidth: 320 }}>
+            {(() => {
+              const isDone = editingTodo.todo_status_code === "done" || editingTodo.todo_status_code === "cancelled";
+              const isAuto = !!editingTodo.submission_assignment_id;
+              return (
+                <label className="field-radio-option">
+                  <input
+                    type="checkbox"
+                    checked={isDone}
+                    disabled={!canEdit || isAuto || busy[editingTodo.id]}
+                    onChange={() => void cycleStatus(editingTodo)}
+                  />
+                  <div>
+                    <strong>Erledigt</strong>
+                    <div className="muted" style={{ fontSize: "0.82rem" }}>
+                      {isAuto
+                        ? "Wird automatisch durch die Abgabe geschlossen."
+                        : "Markiert die Aufgabe als erledigt."}
+                    </div>
+                  </div>
+                </label>
+              );
+            })()}
+
+            <label className="field-stack">
+              <span className="field-label">Aufgabe</span>
+              <input
+                value={editingTodo.task}
+                disabled={!canEdit}
+                onChange={(e) => void updateTodoFields(editingTodo.id, { task: e.target.value })}
+              />
+            </label>
+
+            <label className="field-stack">
+              <span className="field-label">Tags</span>
+              <TagInput
+                value={(editingTodo.tags ?? []).join(",")}
+                onChange={(v) => void updateTodoFields(editingTodo.id, { tags: v ? v.split(",").map((t) => t.trim()).filter(Boolean) : [] })}
+                suggestions={allTagSuggestions}
+                placeholder="Tags…"
+                readOnly={!canEdit}
+              />
+            </label>
+
             <label className="field-stack">
               <span className="field-label">Zugewiesen an</span>
               {participants.length > 0 ? (
@@ -600,6 +611,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
                 <span className="muted">Keine Teilnehmer verfügbar</span>
               )}
             </label>
+
             {editingTodo.protocol_id ? (
               <label className="field-stack">
                 <span className="field-label">Fällig</span>
@@ -615,6 +627,43 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
                   onApply={(patch) => void updateTodoDue(editingTodo.id, patch)}
                 />
               </label>
+            ) : null}
+
+            {editingTodo.protocol_id ? (
+              <div className="info-note">
+                <span className="field-label">Aus Protokoll</span>
+                <div style={{ marginTop: 8 }}>
+                  <button
+                    type="button"
+                    className="todo-protocol-link"
+                    onClick={() => {
+                      const protocolId = editingTodo.protocol_id;
+                      setEditTodoId(null);
+                      router.push(`/protocols/${protocolId}`);
+                    }}
+                  >
+                    <span className="todo-protocol-num">{editingTodo.protocol_number}</span>
+                    {editingTodo.protocol_title ? <span className="todo-protocol-title">{editingTodo.protocol_title}</span> : null}
+                    {editingTodo.block_title ? <span className="todo-protocol-block">· {editingTodo.block_title}</span> : null}
+                  </button>
+                </div>
+              </div>
+            ) : editingTodo.reference_link ? (
+              <div className="info-note">
+                <span className="field-label">Quelle</span>
+                <div style={{ marginTop: 8 }}>
+                  {/^https?:\/\//i.test(editingTodo.reference_link) ? (
+                    <a href={editingTodo.reference_link} target="_blank" rel="noreferrer" className="todo-protocol-link">
+                      <span className="todo-protocol-num">Abgabebox</span>
+                      <span className="todo-protocol-block">↗</span>
+                    </a>
+                  ) : (
+                    <span className="todo-protocol-link">
+                      <span className="todo-protocol-num">Abgabebox</span>
+                    </span>
+                  )}
+                </div>
+              </div>
             ) : null}
           </div>
         )}
