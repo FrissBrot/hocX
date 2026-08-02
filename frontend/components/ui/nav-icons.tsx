@@ -16,7 +16,8 @@ export type NavIconKey =
   | "cycles"
   | "users"
   | "documents"
-  | "tenant";
+  | "tenant"
+  | "activity";
 
 type IconProps = Omit<SVGProps<SVGSVGElement>, "viewBox" | "fill">;
 
@@ -147,6 +148,11 @@ const ICONS: Record<NavIconKey, (props: IconProps) => React.ReactElement> = {
     <Icon {...props}>
       <circle cx="12" cy="12" r="2.9" />
       <path d="M12 3.3v2.3M12 18.4v2.3M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M3.3 12h2.3M18.4 12h2.3M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6" />
+    </Icon>
+  ),
+  activity: (props) => (
+    <Icon {...props}>
+      <path d="M3 12.5h3.4l2-5.4 3.2 10.8 2.4-8.4 1.6 3h5.4" />
     </Icon>
   ),
 };

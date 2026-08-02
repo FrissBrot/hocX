@@ -3,6 +3,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { browserApiFetch } from "@/lib/api/client";
 import { formatDateRange } from "@/lib/utils/format";
+import { NavIcon } from "@/components/ui/nav-icons";
 import { EventSummary, ParticipantSummary, ProtocolSummary } from "@/types/api";
 
 type DueDraft =
@@ -22,12 +23,14 @@ type SessionPanelProps = {
 export type SessionPanelHandle = {
   openAndFocusTodo: () => void;
   openAndFocusNotes: () => void;
+  close: () => void;
 };
+
+type ActivePanel = "notes" | "todo" | null;
 
 export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
   function SessionPanel({ protocol, participants, dueEvents = [], currentSectionName, onSessionNotesChange, onQuickTodoCreated }, ref) {
-    const [open, setOpen] = useState(false);
-    const [pinned, setPinned] = useState(false);
+    const [active, setActive] = useState<ActivePanel>(null);
     const [notes, setNotes] = useState(protocol.session_notes ?? "");
     const [notesSaveState, setNotesSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
     const [todoTask, setTodoTask] = useState("");
@@ -48,7 +51,6 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
     const [dueHighlighted, setDueHighlighted] = useState(0);
 
     const notesTimerRef = useRef<number | undefined>(undefined);
-    const panelRef = useRef<HTMLDivElement | null>(null);
     const leaveTimerRef = useRef<number | undefined>(undefined);
     const todoInputRef = useRef<HTMLInputElement | null>(null);
     const dueInputRef = useRef<HTMLInputElement | null>(null);
@@ -58,13 +60,17 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
     useImperativeHandle(ref, () => ({
       openAndFocusTodo() {
         if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current);
-        setPinned(true);
+        setActive("todo");
         window.setTimeout(() => todoInputRef.current?.focus(), 60);
       },
       openAndFocusNotes() {
         if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current);
-        setPinned(true);
+        setActive("notes");
         window.setTimeout(() => notesRef.current?.focus(), 60);
+      },
+      close() {
+        if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current);
+        setActive(null);
       },
     }));
 
@@ -183,7 +189,7 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
         window.setTimeout(() => assigneeInputRef.current?.focus(), 0);
         return;
       }
-      if (e.key === "Escape") { setPinned(false); setOpen(false); }
+      if (e.key === "Escape") setActive(null);
     }
 
     function handleAssigneeKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -219,8 +225,7 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
           setAssigneeSearch("");
           setAssigneeId(null);
         } else {
-          setPinned(false);
-          setOpen(false);
+          setActive(null);
         }
       }
       if (e.key === "Tab") {
@@ -273,8 +278,7 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
           setDueSearch("");
           setNewDue({ type: "none" });
         } else {
-          setPinned(false);
-          setOpen(false);
+          setActive(null);
         }
       }
       if (e.key === "Tab") {
@@ -292,177 +296,189 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
 
     const handleMouseEnter = () => {
       if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current);
-      setOpen(true);
     };
 
     const handleMouseLeave = () => {
       leaveTimerRef.current = window.setTimeout(() => {
-        setOpen(false);
-        if (
-          document.activeElement !== todoInputRef.current &&
-          document.activeElement !== assigneeInputRef.current &&
-          document.activeElement !== dueInputRef.current
-        ) {
-          setPinned(false);
-        }
+        const activeEl = document.activeElement;
+        const stillEditing =
+          activeEl === notesRef.current ||
+          activeEl === todoInputRef.current ||
+          activeEl === assigneeInputRef.current ||
+          activeEl === dueInputRef.current;
+        if (!stillEditing) setActive(null);
       }, 300);
     };
 
-    const isOpen = open || pinned;
     const showAssigneeDropdown = !assigneeConfirmed && assigneeSearch.trim() && filteredParticipants.length > 0;
     const [dueFocused, setDueFocused] = useState(false);
     const showDueDropdown = dueFocused && !dueConfirmed && filteredDueOptions.length > 0;
 
     return (
-      <div
-        className={`session-panel${isOpen ? " session-panel-open" : ""}`}
-        ref={panelRef}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-      >
-        <div className="session-panel-body">
-          <div className="session-panel-inner">
-            <div className="session-panel-section">
-              <div className="session-panel-section-label">Sitzungsnotizen</div>
-              <textarea
-                ref={notesRef}
-                className="session-panel-notes"
-                value={notes}
-                onChange={(e) => handleNotesChange(e.target.value)}
-                placeholder="Notizen zur Sitzung…"
-                rows={5}
-              />
-              {notesSaveState === "saving" && <div className="session-panel-status">Speichert…</div>}
-              {notesSaveState === "saved" && <div className="session-panel-status session-panel-status-ok">✓ Gespeichert</div>}
-              {notesSaveState === "error" && <div className="session-panel-status session-panel-status-err">Fehler beim Speichern</div>}
+      <>
+        <div
+          className={`quick-flyout${active === "notes" ? " quick-flyout-open" : ""}`}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        >
+          <div className="quick-flyout-header">
+            <div className="quick-flyout-title">
+              <span className="quick-flyout-title-icon"><NavIcon name="lists" /></span>
+              <span className="eyebrow">Sitzungsnotizen</span>
             </div>
+            <button
+              type="button"
+              className="button-ghost quick-flyout-close"
+              aria-label="Schliessen"
+              onClick={() => setActive(null)}
+            >
+              ✕
+            </button>
+          </div>
 
-            <div className="session-panel-divider" />
-
-            <div className="session-panel-section">
-              <div className="session-panel-section-label">Schnelles Todo</div>
-              <input
-                ref={todoInputRef}
-                className="session-panel-input"
-                type="text"
-                value={todoTask}
-                onChange={(e) => setTodoTask(e.target.value)}
-                placeholder={participants.length > 0 ? "Aufgabe… (Tab: Person)" : "Aufgabe…"}
-                onKeyDown={handleTaskKeyDown}
-                onBlur={() => {
-                  if (document.activeElement !== assigneeInputRef.current) setPinned(false);
-                }}
-              />
-
-              {participants.length > 0 && (
-                <div className="session-panel-assignee-wrap" style={{ position: "relative" }}>
-                  <input
-                    ref={assigneeInputRef}
-                    className={`session-panel-input session-panel-input-sm${assigneeConfirmed ? " session-panel-input-confirmed" : ""}`}
-                    type="text"
-                    value={assigneeSearch}
-                    onChange={(e) => handleAssigneeChange(e.target.value)}
-                    placeholder="Person zuweisen…"
-                    onKeyDown={handleAssigneeKeyDown}
-                    onFocus={() => { if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current); }}
-                    onBlur={() => {
-                      if (document.activeElement !== todoInputRef.current) setPinned(false);
-                    }}
-                  />
-                  {showAssigneeDropdown && (
-                    <div className="session-panel-assignee-dropdown">
-                      {filteredParticipants.map((p, index) => (
-                        <button
-                          key={p.id}
-                          type="button"
-                          className={`session-panel-assignee-option${index === assigneeHighlighted ? " session-panel-assignee-option-highlighted" : ""}`}
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            setAssigneeId(p.id);
-                            setAssigneeSearch(p.display_name);
-                            setAssigneeConfirmed(true);
-                            assigneeInputRef.current?.focus();
-                          }}
-                          onMouseEnter={() => setAssigneeHighlighted(index)}
-                        >
-                          <span className="session-panel-option-avatar">
-                            {p.display_name.trim().charAt(0)}
-                          </span>
-                          <span className="session-panel-option-name">{p.display_name}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {dueEvents.length > 0 && (
-                <div className="session-panel-assignee-wrap" style={{ position: "relative" }}>
-                  <input
-                    ref={dueInputRef}
-                    className={`session-panel-input session-panel-input-sm${dueConfirmed ? " session-panel-input-confirmed" : ""}`}
-                    type="text"
-                    value={dueSearch}
-                    onChange={(e) => handleDueChange(e.target.value)}
-                    placeholder="Fällig…"
-                    onKeyDown={handleDueKeyDown}
-                    onFocus={() => { setDueFocused(true); if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current); }}
-                    onBlur={() => { setDueFocused(false); if (document.activeElement !== todoInputRef.current && document.activeElement !== assigneeInputRef.current) setPinned(false); }}
-                  />
-                  {showDueDropdown && (
-                    <div className="session-panel-assignee-dropdown">
-                      {filteredDueOptions.map((opt, index) => (
-                        <button
-                          key={index}
-                          type="button"
-                          className={`session-panel-assignee-option${index === dueHighlighted ? " session-panel-assignee-option-highlighted" : ""}`}
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            setNewDue(opt.draft);
-                            setDueSearch(dueDraftLabel(opt.draft));
-                            setDueConfirmed(true);
-                            dueInputRef.current?.focus();
-                          }}
-                          onMouseEnter={() => setDueHighlighted(index)}
-                        >
-                          <span className="session-panel-option-text">
-                            <span className="session-panel-option-name">{opt.label}</span>
-                            {opt.sub && <span className="session-panel-assignee-option-sub">{opt.sub}</span>}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <input
-                className="session-panel-input session-panel-input-sm"
-                type="text"
-                value={todoTag}
-                onChange={(e) => setTodoTag(e.target.value)}
-                placeholder="Kategorie / Tag"
-              />
-              <button
-                type="button"
-                className="session-panel-btn"
-                disabled={creatingTodo || !todoTask.trim()}
-                onClick={() => void handleCreateTodo()}
-              >
-                {todoSaved ? "✓ Erstellt" : creatingTodo ? "…" : "Todo erstellen"}
-              </button>
-            </div>
+          <div className="session-panel-section">
+            <textarea
+              ref={notesRef}
+              className="session-panel-notes"
+              value={notes}
+              onChange={(e) => handleNotesChange(e.target.value)}
+              placeholder="Notizen zur Sitzung…"
+              rows={9}
+            />
+            {notesSaveState === "saving" && <div className="session-panel-status">Speichert…</div>}
+            {notesSaveState === "saved" && <div className="session-panel-status session-panel-status-ok">✓ Gespeichert</div>}
+            {notesSaveState === "error" && <div className="session-panel-status session-panel-status-err">Fehler beim Speichern</div>}
           </div>
         </div>
 
-        <div className="session-panel-trigger">
-          <span className="session-panel-label">Sitzung</span>
-          <span className="session-panel-shortcuts">
-            <span className="session-panel-shortcut" title="Sitzungsnotizen öffnen"><kbd>⌃⌥N</kbd> Notizen</span>
-            <span className="session-panel-shortcut" title="Schnelles Todo öffnen"><kbd>⌃⌥T</kbd> Todo</span>
-          </span>
+        <div
+          className={`quick-flyout${active === "todo" ? " quick-flyout-open" : ""}`}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        >
+          <div className="quick-flyout-header">
+            <div className="quick-flyout-title">
+              <span className="quick-flyout-title-icon"><NavIcon name="todos" /></span>
+              <span className="eyebrow">Schnelles Todo</span>
+            </div>
+            <button
+              type="button"
+              className="button-ghost quick-flyout-close"
+              aria-label="Schliessen"
+              onClick={() => setActive(null)}
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="session-panel-section">
+            <input
+              ref={todoInputRef}
+              className="session-panel-input"
+              type="text"
+              value={todoTask}
+              onChange={(e) => setTodoTask(e.target.value)}
+              placeholder={participants.length > 0 ? "Aufgabe… (Tab: Person)" : "Aufgabe…"}
+              onKeyDown={handleTaskKeyDown}
+            />
+
+            {participants.length > 0 && (
+              <div className="session-panel-assignee-wrap" style={{ position: "relative" }}>
+                <input
+                  ref={assigneeInputRef}
+                  className={`session-panel-input session-panel-input-sm${assigneeConfirmed ? " session-panel-input-confirmed" : ""}`}
+                  type="text"
+                  value={assigneeSearch}
+                  onChange={(e) => handleAssigneeChange(e.target.value)}
+                  placeholder="Person zuweisen…"
+                  onKeyDown={handleAssigneeKeyDown}
+                  onFocus={() => { if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current); }}
+                />
+                {showAssigneeDropdown && (
+                  <div className="session-panel-assignee-dropdown">
+                    {filteredParticipants.map((p, index) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        className={`session-panel-assignee-option${index === assigneeHighlighted ? " session-panel-assignee-option-highlighted" : ""}`}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setAssigneeId(p.id);
+                          setAssigneeSearch(p.display_name);
+                          setAssigneeConfirmed(true);
+                          assigneeInputRef.current?.focus();
+                        }}
+                        onMouseEnter={() => setAssigneeHighlighted(index)}
+                      >
+                        <span className="session-panel-option-avatar">
+                          {p.display_name.trim().charAt(0)}
+                        </span>
+                        <span className="session-panel-option-name">{p.display_name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {dueEvents.length > 0 && (
+              <div className="session-panel-assignee-wrap" style={{ position: "relative" }}>
+                <input
+                  ref={dueInputRef}
+                  className={`session-panel-input session-panel-input-sm${dueConfirmed ? " session-panel-input-confirmed" : ""}`}
+                  type="text"
+                  value={dueSearch}
+                  onChange={(e) => handleDueChange(e.target.value)}
+                  placeholder="Fällig…"
+                  onKeyDown={handleDueKeyDown}
+                  onFocus={() => { setDueFocused(true); if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current); }}
+                  onBlur={() => setDueFocused(false)}
+                />
+                {showDueDropdown && (
+                  <div className="session-panel-assignee-dropdown">
+                    {filteredDueOptions.map((opt, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        className={`session-panel-assignee-option${index === dueHighlighted ? " session-panel-assignee-option-highlighted" : ""}`}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setNewDue(opt.draft);
+                          setDueSearch(dueDraftLabel(opt.draft));
+                          setDueConfirmed(true);
+                          dueInputRef.current?.focus();
+                        }}
+                        onMouseEnter={() => setDueHighlighted(index)}
+                      >
+                        <span className="session-panel-option-text">
+                          <span className="session-panel-option-name">{opt.label}</span>
+                          {opt.sub && <span className="session-panel-assignee-option-sub">{opt.sub}</span>}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <input
+              className="session-panel-input session-panel-input-sm"
+              type="text"
+              value={todoTag}
+              onChange={(e) => setTodoTag(e.target.value)}
+              placeholder="Kategorie / Tag"
+            />
+            <button
+              type="button"
+              className="session-panel-btn"
+              disabled={creatingTodo || !todoTask.trim()}
+              onClick={() => void handleCreateTodo()}
+            >
+              {todoSaved ? "✓ Erstellt" : creatingTodo ? "…" : "Todo erstellen"}
+            </button>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 );

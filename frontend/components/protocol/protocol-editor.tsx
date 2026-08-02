@@ -7,11 +7,17 @@ import { useToast } from "@/contexts/toast-context";
 
 import { SessionPanel, SessionPanelHandle } from "@/components/protocol/session-panel";
 import { Modal } from "@/components/ui/modal";
+import { Badge } from "@/components/ui/badge";
+import { NavIcon } from "@/components/ui/nav-icons";
+import { QuickActionsPill } from "@/components/protocol/quick-actions-pill";
 import { bumpStatsCharts } from "@/components/protocol/chart-block";
 import { CollaborationPresenceBar } from "@/components/protocol/collaboration-presence";
 import { useProtocolCollaboration } from "@/lib/hooks/use-protocol-collaboration";
+import { useTagConfig } from "@/lib/hooks/use-tag-config";
+import { usePdfExport } from "@/lib/hooks/use-pdf-export";
 import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { getCycleYear } from "@/lib/utils/cycle";
+import { protocolStatusVariant } from "@/components/protocol/protocol-status";
 import {
   AttendanceFine,
   AttendanceFineListItem,
@@ -35,13 +41,17 @@ import {
   TODO_STATUS,
   TodoMenuOption,
   TodoMiniMenu,
+  attendanceParticipants,
   createProtocolEventDraft,
   protocolStatusLabel,
   resequenceProtocolElements,
+  sectionIconKey,
   smartPopoverStyle,
+  tallyAttendance,
   trimSectionName,
   visibleBlockTitle,
 } from "@/components/protocol/protocol-editor-shared";
+import { CollaborationStatusPanel } from "@/components/protocol/collaboration-status-panel";
 import { FocusedElementEditor } from "@/components/protocol/focused-element-editor";
 
 type ProtocolEditorProps = {
@@ -254,6 +264,13 @@ export function ProtocolEditor({
   // Matrix-Auto-Spalten) is available in every status except "abgeschlossen", where isReadOnly
   // already blocks all editing.
   const isPlanningMode = !isReadOnly;
+  // Scrollable-document layout (all sections mounted, non-active ones blurred) for every
+  // status except "abgeschlossen", which keeps the original single-section-at-a-time view.
+  const useDocumentLayout = protocolStatus !== "abgeschlossen";
+  // Lifted here (was previously called once per FocusedElementEditor instance) so it fires
+  // once regardless of how many sections are simultaneously mounted in the document layout.
+  const { tagConfig, updateTagColor, renameTag } = useTagConfig();
+  const { busyByProtocol: pdfBusyByProtocol, openOrGeneratePdf } = usePdfExport();
 
   const workflowMeta: Record<string, { modeLabel: string; ctaLabel: string; nextStatus: string }> = {
     geplant:       { modeLabel: "Vorbereitungsmodus",   ctaLabel: "Vorbereitung abschliessen", nextStatus: "vorbereitet" },
@@ -315,6 +332,7 @@ export function ProtocolEditor({
   const shouldScrollToElementRef = useRef(false);
   const navRef = useRef<HTMLElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
+  const documentRef = useRef<HTMLElement | null>(null);
   const sessionPanelRef = useRef<SessionPanelHandle | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
 
@@ -375,6 +393,26 @@ export function ProtocolEditor({
     () => visibleElements.findIndex((element) => element.id === selectedElementId),
     [selectedElementId, visibleElements]
   );
+  const attendanceTally = useMemo(() => {
+    const attendanceBlock = elements.flatMap((element) => element.blocks).find((block) => block.element_type_code === "attendance");
+    if (!attendanceBlock) return null;
+    const entries = Array.isArray(attendanceBlock.configuration_snapshot_json.attendance_entries)
+      ? (attendanceBlock.configuration_snapshot_json.attendance_entries as Array<Record<string, any>>)
+      : [];
+    return tallyAttendance(availableParticipants, entries);
+  }, [elements, availableParticipants]);
+  const attendanceRoster = useMemo(() => {
+    const attendanceBlock = elements.flatMap((element) => element.blocks).find((block) => block.element_type_code === "attendance");
+    const entries = attendanceBlock && Array.isArray(attendanceBlock.configuration_snapshot_json.attendance_entries)
+      ? (attendanceBlock.configuration_snapshot_json.attendance_entries as Array<Record<string, any>>)
+      : [];
+    return attendanceParticipants(availableParticipants).map((participant) => ({
+      id: participant.id,
+      name: participant.display_name,
+      status: (entries.find((entry) => Number(entry.participant_id) === participant.id)?.status as string | undefined) ?? null,
+    }));
+  }, [elements, availableParticipants]);
+  const [collabStatusPanelOpen, setCollabStatusPanelOpen] = useState(false);
 
   function setStatus(protocolElementBlockId: number, status: SaveState) {
     setBlockStatus((current) => ({ ...current, [protocolElementBlockId]: status }));
@@ -408,8 +446,11 @@ export function ProtocolEditor({
       if (panel) {
         panel.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
       } else {
+        // Document layout: center the jump target to match the scroll-snap-align: center
+        // set on .protocol-doc-section, so an explicit jump lands exactly where free
+        // scrolling would settle too.
         const section = document.getElementById(`protocol-element-${selectedElementId}`);
-        section?.scrollIntoView({ behavior: "smooth", block: "start" });
+        section?.scrollIntoView({ behavior: "smooth", block: "center" });
       }
 
       // Center active nav item
@@ -434,6 +475,93 @@ export function ProtocolEditor({
       }, 120);
     });
   }, [selectedElementId]);
+
+  const visibleElementIdsKey = visibleElements.map((element) => element.id).join(",");
+
+  // Scroll-spy for the continuous document layout: tracks whichever section currently sits at
+  // the vertical center of .protocol-document and makes it the active/unblurred one - matching
+  // scroll-snap-align: center below. Uses plain getBoundingClientRect() math (rAF-throttled on
+  // scroll/resize) rather than IntersectionObserver - that earlier approach combined a custom
+  // `root`, percentage rootMargin and the .protocol-document-shell `zoom` scale in a way that
+  // didn't reliably fire (nothing ever got marked active/blurred). getBoundingClientRect always
+  // reports already-zoomed, viewport-relative coordinates, so it isn't affected by that.
+  // Deliberately only calls setSelectedElementId directly (never focusElement/
+  // shouldScrollToElementRef) so passive scrolling never triggers the jump-effect's own
+  // scroll/focus side effects above.
+  useEffect(() => {
+    if (!useDocumentLayout) return;
+    const container = documentRef.current;
+    if (!container) return;
+
+    let rafId: number | null = null;
+
+    function computeActiveSection() {
+      rafId = null;
+      const containerRect = container!.getBoundingClientRect();
+      const centerY = containerRect.top + containerRect.height / 2;
+      const sections = visibleElementIdsKey
+        .split(",")
+        .filter(Boolean)
+        .map((id) => document.getElementById(`protocol-element-${id}`))
+        .filter((section): section is HTMLElement => Boolean(section));
+      if (!sections.length) return;
+
+      let bestId: number | null = null;
+      let bestDistance = Infinity;
+      for (const section of sections) {
+        const rect = section.getBoundingClientRect();
+        const id = Number(section.id.replace("protocol-element-", ""));
+        if (rect.top <= centerY && rect.bottom >= centerY) {
+          bestId = id;
+          break;
+        }
+        const distance = Math.abs(rect.top + rect.height / 2 - centerY);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestId = id;
+        }
+      }
+      if (bestId !== null) {
+        setSelectedElementId((current) => (current === bestId ? current : bestId));
+      }
+    }
+
+    function scheduleCompute() {
+      if (rafId !== null) return;
+      rafId = window.requestAnimationFrame(computeActiveSection);
+    }
+
+    computeActiveSection();
+    container.addEventListener("scroll", scheduleCompute, { passive: true });
+    window.addEventListener("resize", scheduleCompute);
+    return () => {
+      container.removeEventListener("scroll", scheduleCompute);
+      window.removeEventListener("resize", scheduleCompute);
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
+    };
+  }, [useDocumentLayout, visibleElementIdsKey]);
+
+  // Suspend the section blur/opacity transition while .protocol-document is actively being
+  // scrolled - animating `filter: blur()` on a section at the same time the browser is running
+  // its own native scroll-snap animation is what made the whole thing feel janky/buggy;
+  // applying the blur state change instantly (no transition) once scrolling settles avoids the
+  // two animations fighting each other.
+  useEffect(() => {
+    if (!useDocumentLayout) return;
+    const container = documentRef.current;
+    if (!container) return;
+    let settleTimer: number | null = null;
+    function onScroll() {
+      container!.classList.add("is-scrolling");
+      if (settleTimer) window.clearTimeout(settleTimer);
+      settleTimer = window.setTimeout(() => container!.classList.remove("is-scrolling"), 150);
+    }
+    container.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      container.removeEventListener("scroll", onScroll);
+      if (settleTimer) window.clearTimeout(settleTimer);
+    };
+  }, [useDocumentLayout]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -1154,6 +1282,40 @@ export function ProtocolEditor({
 
   return (
     <div className="grid" ref={editorRef}>
+      {useDocumentLayout && (
+        <div className="protocol-document-header">
+          <a href="/protocols" className="button-inline protocol-document-back">← Zurück zu Protokollen</a>
+          <div className="page-header">
+            <div>
+              <Badge variant={protocolStatusVariant(protocolStatus)} className="protocol-document-badge">
+                {protocolStatusLabel(protocolStatus)}
+              </Badge>
+              <h1 className="page-title">{protocol.title || protocol.protocol_number}</h1>
+            </div>
+            <div className="protocol-document-actions">
+              <button
+                type="button"
+                className="button-ghost"
+                disabled={pdfBusyByProtocol[protocol.id]}
+                onClick={() => openOrGeneratePdf(protocol)}
+              >
+                {pdfBusyByProtocol[protocol.id] ? "…" : "PDF exportieren"}
+              </button>
+              {!isReadOnly && workflowMeta[protocolStatus]?.ctaLabel && (
+                <button
+                  type="button"
+                  className="button-primary"
+                  disabled={transitioningStatus}
+                  onClick={transitionStatus}
+                >
+                  {transitioningStatus ? "…" : workflowMeta[protocolStatus]?.ctaLabel}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="status-row">
         <span className="pill">{protocol.protocol_number}</span>
         <span className="pill">{workflowMeta[protocolStatus]?.modeLabel ?? protocolStatusLabel(protocolStatus)}</span>
@@ -1195,6 +1357,155 @@ export function ProtocolEditor({
 
       {showSavedIndicator && <div className="save-indicator">✓ Gespeichert</div>}
 
+      {useDocumentLayout ? (
+        <div className="protocol-document-shell">
+          <article className="protocol-document" ref={documentRef}>
+            {visibleElements.length === 0 && (
+              <div className="editor-panel-empty">
+                <div>
+                  <div className="eyebrow">Keine Punkte</div>
+                  <h3>Dieses Protokoll hat noch keine sichtbaren Abschnitte</h3>
+                </div>
+              </div>
+            )}
+            {visibleElements.map((element, index) => (
+              <div
+                key={element.id}
+                className="protocol-doc-section-wrap"
+                onClick={selectedElementId === element.id ? undefined : () => focusElement(element.id)}
+              >
+              <FocusedElementEditor
+                isActive={selectedElementId === element.id}
+                tagConfig={tagConfig}
+                updateTagColor={updateTagColor}
+                renameTag={renameTag}
+                collab={collab}
+                trackChangesActive={trackChangesActive}
+                element={element}
+                elementIndex={index}
+                textDrafts={textDrafts}
+                todosByBlock={todosByBlock}
+                imagesByBlock={imagesByBlock}
+                newTodoTask={newTodoTask}
+                browserApiBaseUrl={browserApiBaseUrl}
+                protocol={protocol}
+                availableParticipants={availableParticipants}
+                availableEvents={events}
+                availableTemplates={availableTemplates}
+                availableAccounts={availableAccounts}
+                financeTransactions={financeTransactions}
+                protocolFines={protocolFines}
+                setProtocolFines={setProtocolFines}
+                pendingFines={pendingFines}
+                setPendingFines={setPendingFines}
+                newEventDrafts={newEventDrafts}
+                selectedFiles={selectedFiles}
+                setTodosByBlock={setTodosByBlock}
+                setNewEventDrafts={setNewEventDrafts}
+                setSelectedFiles={setSelectedFiles}
+                setNewTodoTask={setNewTodoTask}
+                saveBlockConfiguration={saveBlockConfiguration}
+                updateBlockInState={updateBlockInState}
+                handleTextChange={handleTextChange}
+                forceEditable={forceEditable}
+                isReadOnly={isReadOnly}
+                addTodo={addTodo}
+                updateTodo={updateTodo}
+                deleteTodo={deleteTodo}
+                acceptTodoTrackedChange={acceptTodoTrackedChange}
+                acceptTrackedListEntry={acceptTrackedListEntry}
+                acceptTrackedRow={acceptTrackedRow}
+                acceptTextTrackedChanges={acceptTextTrackedChanges}
+                createEventFromBlock={createEventFromBlock}
+                updateEventFromBlock={updateEventFromBlock}
+                deleteEventFromBlock={deleteEventFromBlock}
+                onEventContextMenu={openEventContextMenu}
+                uploadImage={uploadImage}
+                deleteImage={deleteImage}
+                listDefinitionsById={listDefinitionsById}
+                listEntriesByDefinition={listEntriesByDefinition}
+                createListEntryFromBlock={createListEntryFromBlock}
+                updateListEntryFromBlock={updateListEntryFromBlock}
+                deleteListEntryFromBlock={deleteListEntryFromBlock}
+                refreshBlockListSnapshot={refreshBlockListSnapshot}
+                refreshListEntries={refreshListEntries}
+                undoBlockListSnapshot={undoBlockListSnapshot}
+                todoTagFilter={todoTagFilter}
+                setTodoTagFilter={setTodoTagFilter}
+                newTodoTags={newTodoTags}
+                setNewTodoTags={setNewTodoTags}
+                isPlanningMode={isPlanningMode}
+                unhideEventBlock={unhideEventBlock}
+                removeEventBlock={removeEventBlock}
+                addEventBlockToElement={addEventBlockToElement}
+                onQuickTodoCreated={handleQuickTodoCreated}
+                pendingTodos={pendingTodos}
+                onPendingUpdate={(updated) => setPendingTodos((prev) => prev.map((t) => t.id === updated.id ? { ...t, ...updated } : t))}
+                onPendingDone={(todoId) => setPendingTodos((prev) => prev.filter((t) => t.id !== todoId))}
+                documentTemplates={documentTemplates}
+              />
+              </div>
+            ))}
+          </article>
+
+          <aside className="protocol-quicknav" ref={navRef}>
+            <div className="card protocol-quicknav-section">
+              <div className="eyebrow">Schnellzugriff</div>
+              <nav className="protocol-quicknav-list">
+                {visibleElements.map((element) => (
+                  <div
+                    className={`editor-nav-section${draggedElementId === element.id ? " editor-nav-section-dragging" : ""}`}
+                    key={element.id}
+                    draggable={!isReadOnly}
+                    onDragStart={isReadOnly ? undefined : () => setDraggedElementId(element.id)}
+                    onDragEnd={isReadOnly ? undefined : () => setDraggedElementId(null)}
+                    onDragOver={isReadOnly ? undefined : (event) => event.preventDefault()}
+                    onDrop={isReadOnly ? undefined : (event) => {
+                      event.preventDefault();
+                      const sourceId = draggedElementId;
+                      setDraggedElementId(null);
+                      if (sourceId) {
+                        void reorderElements(sourceId, element.id);
+                      }
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className={`protocol-quicknav-item${selectedElementId === element.id ? " protocol-quicknav-item-active" : ""}`}
+                      onClick={() => focusElement(element.id)}
+                      title={element.section_name_snapshot}
+                    >
+                      <span className="protocol-quicknav-icon-badge"><NavIcon name={sectionIconKey(element)} /></span>
+                      <span className="protocol-quicknav-item-label">{element.section_name_snapshot}</span>
+                    </button>
+                  </div>
+                ))}
+              </nav>
+            </div>
+
+            {attendanceTally && (
+              <div className="card protocol-quicknav-attendance">
+                <div className="eyebrow">Anwesenheit</div>
+                <div className="protocol-quicknav-stat-row">
+                  <span>Anwesend</span>
+                  <strong>{attendanceTally.present}</strong>
+                </div>
+                <div className="protocol-quicknav-stat-row">
+                  <span>Entschuldigt</span>
+                  <strong>{attendanceTally.excused}</strong>
+                </div>
+                <div className="protocol-quicknav-stat-row protocol-quicknav-stat-danger">
+                  <span>Unentschuldigt</span>
+                  <strong>{attendanceTally.absent}</strong>
+                </div>
+              </div>
+            )}
+
+            {!isReadOnly && <p className="protocol-quicknav-autosave muted">Änderungen werden automatisch gespeichert.</p>}
+          </aside>
+        </div>
+      ) : (
+      <>
       <div className="editor-shell">
         <aside className="editor-nav" ref={navRef}>
           {visibleElements.map((element) => (
@@ -1234,6 +1545,9 @@ export function ProtocolEditor({
         <article className="editor-panel" ref={panelRef}>
           {selectedElement ? (
             <FocusedElementEditor
+              tagConfig={tagConfig}
+              updateTagColor={updateTagColor}
+              renameTag={renameTag}
               collab={collab}
               trackChangesActive={trackChangesActive}
               element={selectedElement}
@@ -1360,6 +1674,8 @@ export function ProtocolEditor({
           <a href="/protocols" className="button-inline">← Zurück zu den Protokollen</a>
         )}
       </div>
+      </>
+      )}
 
       {/* Floating session panel — only during active session */}
       {protocolStatus === "vorbereitet" && !forceReadOnly && (
@@ -1378,6 +1694,32 @@ export function ProtocolEditor({
           onSessionNotesChange={(notes) => setSessionNotes(notes)}
           onQuickTodoCreated={(blockId, todoId, elementId) => void handleQuickTodoCreated(blockId, todoId, elementId)}
         />
+      )}
+
+      {protocolStatus === "vorbereitet" && !forceReadOnly && (
+        <>
+          <QuickActionsPill
+            onNotesClick={() => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openAndFocusNotes(); }}
+            onTodosClick={() => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openAndFocusTodo(); }}
+            onCollabClick={() => { sessionPanelRef.current?.close(); setCollabStatusPanelOpen(true); }}
+          />
+          <CollaborationStatusPanel
+            open={collabStatusPanelOpen}
+            onClose={() => setCollabStatusPanelOpen(false)}
+            protocolNumber={protocol.protocol_number}
+            modeLabel={workflowMeta[protocolStatus]?.modeLabel ?? protocolStatusLabel(protocolStatus)}
+            attendanceTally={attendanceTally}
+            attendanceRoster={attendanceRoster}
+            otherPresence={collab.otherPresence}
+            connected={collab.connected}
+            ctaLabel={!isReadOnly ? workflowMeta[protocolStatus]?.ctaLabel : undefined}
+            onCta={() => {
+              setCollabStatusPanelOpen(false);
+              transitionStatus();
+            }}
+            ctaBusy={transitioningStatus}
+          />
+        </>
       )}
 
       {eventContextMenu && typeof document !== "undefined" && createPortal(

@@ -104,6 +104,40 @@ export function attendanceParticipants(participants: ParticipantSummary[]) {
   return participants.filter((participant) => !participant.exclude_from_attendance);
 }
 
+export type AttendanceTally = { present: number; late: number; excused: number; absent: number };
+
+export function tallyAttendance(
+  participants: ParticipantSummary[],
+  attendanceEntries: Array<Record<string, any>>
+): AttendanceTally {
+  const eligible = attendanceParticipants(participants);
+  const countByStatus = (status: string) =>
+    eligible.filter((participant) => {
+      const entry = attendanceEntries.find((candidate) => Number(candidate.participant_id) === participant.id);
+      return (entry?.status ?? null) === status;
+    }).length;
+  return {
+    present: countByStatus("present"),
+    late: countByStatus("late"),
+    excused: countByStatus("excused"),
+    absent: countByStatus("absent"),
+  };
+}
+
+/** Maps a protocol section's dominant block type to an existing app-shell nav icon for the Schnellzugriff sidebar. */
+export function sectionIconKey(element: ProtocolElement): import("@/components/ui/nav-icons").NavIconKey {
+  const codes = element.blocks.map((block) => block.element_type_code);
+  if (codes.includes("attendance")) return "participants";
+  if (codes.includes("todo")) return "todos";
+  if (codes.includes("fine_list")) return "fines";
+  if (codes.includes("finance_balance") || codes.includes("finance_transactions")) return "finances";
+  if (codes.includes("chart")) return "statistics";
+  if (codes.includes("event_list") || codes.includes("session_date")) return "events";
+  if (codes.includes("bullet_list")) return "lists";
+  if (codes.includes("matrix")) return "elements";
+  return "documents";
+}
+
 export const EMBEDDED_BLOCK_OPTIONS = [
   { value: 1, label: "Text" },
   { value: 6, label: "Tabelle" },

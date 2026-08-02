@@ -174,6 +174,35 @@ pre {
   gap: 14px;
 }
 
+.brand-lockup-trigger {
+  --button-hover-bg: var(--accent-soft);
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  text-align: left;
+  transition: background 140ms ease;
+}
+
+.brand-lockup-trigger:hover {
+  background: var(--accent-soft);
+  transform: none;
+}
+
+.brand-lockup-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.brand-lockup-chevron {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--muted);
+}
+
 .brand-mark {
   display: grid;
   place-items: center;
@@ -237,6 +266,7 @@ pre {
 }
 
 .nav-link {
+  --button-hover-bg: var(--accent-soft);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -278,6 +308,8 @@ pre {
   position: relative;
   display: grid;
   gap: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
 }
 
 .identity-panel {
@@ -286,6 +318,7 @@ pre {
 }
 
 .identity-card {
+  --button-hover-bg: color-mix(in srgb, var(--accent) 8%, var(--panel-solid) 92%);
   display: grid;
   padding: 12px;
   border-radius: 22px;
@@ -300,6 +333,7 @@ pre {
 }
 
 .identity-button {
+  --button-hover-bg: transparent;
   display: grid;
   grid-template-columns: 46px minmax(0, 1fr);
   gap: 12px;
@@ -408,47 +442,6 @@ pre {
   font-weight: 500;
 }
 
-.topbar-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-shrink: 0;
-}
-
-.role-badge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 30px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: var(--neutral-bg);
-  color: var(--neutral-fg);
-  font-size: 0.8rem;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.avatar-trigger {
-  width: 38px;
-  min-width: 38px;
-  height: 38px;
-  min-height: 38px;
-  padding: 0;
-  border-radius: 50%;
-  background: var(--accent-soft);
-  border: 1px solid var(--border);
-}
-
-.avatar-trigger:hover {
-  background: var(--accent-soft);
-}
-
-.avatar-trigger-initial {
-  color: var(--accent-strong);
-  font-weight: 700;
-  font-size: 0.95rem;
-}
-
 .menu-header {
   padding: 8px 10px 4px;
 }
@@ -520,6 +513,30 @@ pre {
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+/* Page header (protocols list etc.) - large serif page title + subtitle,
+   action button aligned top-right. Distinct from the huge marketing .title. */
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.page-title {
+  margin: 0;
+  font-family: "Canela", "Iowan Old Style", "Palatino Linotype", serif;
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--text);
+}
+
+.page-header .muted {
+  margin: 6px 0 0;
 }
 
 .title {
@@ -784,8 +801,11 @@ button {
   letter-spacing: -0.01em;
 }
 
-button:hover {
-  background: var(--primary-strong);
+/* Buttons that opt out of the default solid background (ghost/icon/text-link
+   buttons) should also set --button-hover-bg on their own base rule, otherwise
+   they inherit this dark solid hover regardless of their own resting style. */
+button:hover:not(:disabled) {
+  background: var(--button-hover-bg, var(--primary-strong));
 }
 
 button:disabled {
@@ -866,11 +886,43 @@ button:disabled {
   color: var(--muted);
 }
 
-.button-danger {
+.button-danger { --button-hover-bg: var(--danger);
   background: var(--danger);
 }
 
+/* Plain-text row action links (e.g. table Aktionen column) - no button chrome,
+   just colored text, matching the mockup's "Löschen"/"Rückgängig" links. */
+.row-text-action {
+  --button-hover-bg: transparent;
+  width: auto;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.85rem;
+  box-shadow: none;
+}
+
+.row-text-action:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.row-text-action-danger {
+  color: var(--danger-fg);
+}
+
+.row-text-action-danger:hover:not(:disabled) {
+  color: var(--danger-fg);
+  text-decoration: underline;
+}
+
 .button-primary {
+  --button-hover-bg: var(--primary-strong);
   width: auto;
   min-width: 0;
   background: var(--primary);
@@ -900,6 +952,7 @@ button:disabled {
 }
 
 .button-ghost {
+  --button-hover-bg: var(--accent-soft);
   width: auto;
   min-width: 0;
   background: transparent;
@@ -944,6 +997,7 @@ button:disabled {
 }
 
 .menu-item {
+  --button-hover-bg: var(--accent-soft);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -970,6 +1024,7 @@ button:disabled {
 }
 
 .menu-item-danger {
+  --button-hover-bg: var(--danger-bg);
   color: var(--danger);
 }
 
@@ -1015,6 +1070,7 @@ button:disabled {
 }
 
 .button-icon-danger {
+  --button-hover-bg: color-mix(in srgb, var(--danger) 10%, transparent 90%);
   color: var(--danger);
   border-color: color-mix(in srgb, var(--danger) 24%, var(--border) 76%);
 }
@@ -1045,6 +1101,7 @@ button:disabled {
 }
 
 .action-menu-item {
+  --button-hover-bg: color-mix(in srgb, var(--accent) 10%, transparent 90%);
   display: block;
   width: 100%;
   text-align: left;
@@ -1065,6 +1122,7 @@ button:disabled {
 }
 
 .action-menu-item-danger {
+  --button-hover-bg: color-mix(in srgb, var(--danger) 10%, transparent 90%);
   color: var(--danger);
 }
 
@@ -1186,6 +1244,21 @@ input[type="radio"] {
   flex-wrap: wrap;
 }
 
+/* Filter tabs + search on one row (protocols list) - reuses FilterTabs/SearchInput
+   side by side instead of the search-plus-overview-card layout used elsewhere. */
+.list-filter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.list-filter-search {
+  width: 100%;
+  max-width: 320px;
+}
+
 .import-help-card {
   overflow: hidden;
 }
@@ -1254,7 +1327,7 @@ input[type="radio"] {
   background: var(--bg);
 }
 
-.table-sort-button {
+.table-sort-button { --button-hover-bg: transparent;
   width: 100%;
   display: inline-flex;
   align-items: center;
@@ -1333,6 +1406,7 @@ input[type="radio"] {
 }
 
 .table-row-clickable {
+  --button-hover-bg: color-mix(in srgb, var(--accent) 8%, transparent 92%);
   cursor: pointer;
 }
 
@@ -1468,6 +1542,7 @@ input[type="radio"] {
 }
 
 .responsibility-lock-button {
+  --button-hover-bg: color-mix(in srgb, var(--accent) 8%, transparent 92%);
   width: 38px;
   min-width: 38px;
   min-height: 38px;
@@ -1500,17 +1575,91 @@ input[type="radio"] {
   justify-content: flex-start;
 }
 
-.protocol-row-actions {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 10px;
+/* Record list (protocols list) - GitHub-style row list with a status dot,
+   card-embedded, replacing the data-table layout for this page. */
+.record-list {
+  display: flex;
+  flex-direction: column;
 }
 
-.protocol-row-action-spacer {
-  width: 42px;
-  height: 42px;
+.record-list-row {
+  --button-hover-bg: color-mix(in srgb, var(--accent) 6%, transparent);
+  width: 100%;
+  min-height: 68px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 4px;
+  border: none;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.record-list-row:first-child {
+  border-top: none;
+}
+
+.record-list-row:hover {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+.record-list-row-dot {
   flex-shrink: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.record-list-row-dot-success { color: var(--success-fg); }
+.record-list-row-dot-warning { color: var(--warning-fg); }
+.record-list-row-dot-info { color: var(--info-fg); }
+.record-list-row-dot-danger { color: var(--danger-fg); }
+.record-list-row-dot-neutral { color: var(--neutral-fg); }
+
+.record-list-row-text {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.record-list-row-title {
+  font-weight: 700;
+  font-size: 1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.record-list-row-sub {
+  font-size: 0.82rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.record-list-row-trailing {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* Reserves the PDF button's footprint on non-final rows so the status badge
+   sits at the same horizontal position whether or not the button is shown. */
+.record-list-row-pdf-spacer {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.record-list-empty {
+  padding: 24px 4px;
+  text-align: center;
 }
 
 .table-empty {
@@ -1556,6 +1705,7 @@ input[type="radio"] {
 }
 
 .rule-option-card {
+  --button-hover-bg: color-mix(in srgb, var(--accent) 8%, transparent 92%);
   display: grid;
   gap: 8px;
   padding: 18px;
@@ -1717,6 +1867,7 @@ input[type="radio"] {
 }
 
 .pdf-icon-link {
+  --button-hover-bg: color-mix(in srgb, var(--accent) 22%, transparent 78%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1732,9 +1883,21 @@ input[type="radio"] {
   text-transform: uppercase;
 }
 
+.pdf-icon-link:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 22%, transparent 78%);
+  color: var(--accent);
+}
+
 .pdf-icon-link-success {
+  --button-hover-bg: color-mix(in srgb, var(--success, #22c55e) 24%, transparent 76%);
   border-color: color-mix(in srgb, var(--success, #22c55e) 32%, transparent 68%);
   background: color-mix(in srgb, var(--success, #22c55e) 14%, transparent 86%);
+  color: var(--success, #22c55e);
+}
+
+.pdf-icon-link-success:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--success, #22c55e) 46%, transparent 54%);
+  background: color-mix(in srgb, var(--success, #22c55e) 24%, transparent 76%);
   color: var(--success, #22c55e);
 }
 
@@ -1744,26 +1907,16 @@ input[type="radio"] {
   color: var(--muted);
 }
 
-.status-cell {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.version-badge {
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-  background: color-mix(in srgb, var(--muted) 10%, transparent 90%);
-  border: 1px solid color-mix(in srgb, var(--muted) 22%, transparent 78%);
-  border-radius: 6px;
-  padding: 1px 6px;
-  white-space: nowrap;
+/* Smaller variant for compact list rows (protocols list). */
+.pdf-icon-link-sm {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  font-size: 0.66rem;
 }
 
 .revert-status-btn {
+  --button-hover-bg: color-mix(in srgb, var(--warning) 12%, transparent 88%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1818,6 +1971,7 @@ input[type="radio"] {
 
 .list-snapshot-refresh-button,
 .list-snapshot-undo-button {
+  --button-hover-bg: color-mix(in srgb, var(--warning) 14%, transparent 86%);
   border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent 70%);
   background: transparent;
   color: var(--warning);
@@ -1836,6 +1990,7 @@ input[type="radio"] {
 }
 
 .list-snapshot-undo-button {
+  --button-hover-bg: color-mix(in srgb, var(--muted) 14%, transparent 86%);
   border-color: color-mix(in srgb, var(--muted) 35%, transparent 65%);
   color: var(--muted);
 }
@@ -1956,6 +2111,7 @@ input[type="radio"] {
 }
 
 .template-element-row {
+  --button-hover-bg: linear-gradient(180deg, color-mix(in srgb, var(--panel-solid) 94%, transparent 6%), color-mix(in srgb, var(--accent) 8%, transparent 92%));
   display: flex;
   align-items: center;
   gap: 14px;
@@ -1986,7 +2142,7 @@ input[type="radio"] {
   margin: 0;
 }
 
-.template-element-drag-handle {
+.template-element-drag-handle { --button-hover-bg: color-mix(in srgb, var(--accent) 9%, transparent 91%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2087,6 +2243,7 @@ input[type="radio"] {
   border-radius: 999px;
   border: 1px solid transparent;
   background: transparent;
+  --button-hover-bg: transparent;
   flex-shrink: 0;
 }
 
@@ -2152,6 +2309,7 @@ input[type="radio"] {
 }
 
 .behavior-icon-button {
+  --button-hover-bg: color-mix(in srgb, var(--accent) 9%, transparent 91%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2229,6 +2387,7 @@ input[type="radio"] {
 }
 
 .kebab-menu-btn {
+  --button-hover-bg: var(--surface-2);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2265,6 +2424,7 @@ input[type="radio"] {
 }
 
 .kebab-menu-item {
+  --button-hover-bg: var(--surface-2);
   display: block;
   width: 100%;
   text-align: left;
@@ -2289,6 +2449,7 @@ input[type="radio"] {
 }
 
 .kebab-menu-item-danger {
+  --button-hover-bg: color-mix(in srgb, var(--danger) 12%, transparent 88%);
   color: var(--danger);
 }
 
@@ -2382,6 +2543,7 @@ input[type="radio"] {
 }
 
 .tabs-trigger {
+  --button-hover-bg: transparent;
   width: auto;
   min-width: 0;
   min-height: 0;
@@ -2854,6 +3016,7 @@ input[type="radio"] {
 }
 
 .identity-button {
+  --button-hover-bg: transparent;
   width: 100%;
   min-width: 0;
   min-height: 0;
@@ -2863,6 +3026,8 @@ input[type="radio"] {
 }
 
 .identity-button:hover {
+  background: transparent;
+  color: var(--text);
   transform: translateY(0);
   box-shadow: none;
 }
@@ -2881,6 +3046,233 @@ input[type="radio"] {
 .editor-nav,
 .editor-panel {
   padding: 20px;
+}
+
+/* .panel's own `overflow: clip` makes IT the nearest "scroll container" for any sticky
+   descendant per the CSS Overflow spec (any overflow value other than visible qualifies,
+   clip included, even though .panel itself never actually scrolls) - so .protocol-document-
+   header's `position: sticky` was computing against .panel's static, always-zero scroll
+   offset instead of the real page scroll, making it behave like plain `position: relative`
+   and scroll away with everything else. Lifting the clip here (document-mode pages only,
+   via this modifier class added in page.tsx) lets the header stick to the actual page
+   scroll instead. */
+.protocol-panel-document {
+  overflow: visible;
+}
+
+/* ── Protocol "document mode": continuous scrollable document + Schnellzugriff sidebar ── */
+.protocol-document-header {
+  display: grid;
+  gap: 10px;
+  /* Pinned page header: title + back-link must never scroll away, unlike the old
+     hard-swap view where the whole page (incl. header) scrolled together. Sticky (not
+     fixed) so it stays within the .panel's rounded box instead of overlaying the sidebar/
+     app chrome - same top offset as the other sticky panes below (.protocol-document,
+     .protocol-quicknav) for a consistent pinned distance from the viewport top. */
+  position: sticky;
+  top: 20px;
+  z-index: 5;
+  background: var(--panel);
+  padding-bottom: 14px;
+}
+
+.protocol-document-back {
+  justify-self: start;
+}
+
+.protocol-document-badge {
+  margin-bottom: 8px;
+}
+
+.protocol-document-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.protocol-document-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
+  gap: 18px;
+  align-items: start;
+  /* Slightly zoomed out so more of the document is visible at once - readability request,
+     not a standard CSS property but well supported in the Chromium/Linux target this project
+     already commits to (see the backdrop-filter removal note above). Recomputes layout at the
+     scaled size (unlike transform: scale), so position: sticky in the sidebar keeps working. */
+  zoom: 0.9;
+}
+
+.protocol-document {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+  /* Self-scrolling, pinned near the top of the viewport (mirrors .protocol-quicknav's own
+     sticky/max-height pattern below) - this is what lets scroll-snap center the active
+     section within it regardless of how tall the page around it is. */
+  position: sticky;
+  top: 20px;
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  /* Setting overflow-y:auto alone makes browsers auto-compute overflow-x as auto too (CSS
+     Overflow spec), which would open a second, sideways scrollbar for any section content
+     that's even slightly too wide (e.g. a wide table). Force it off explicitly - inner
+     content that needs horizontal scroll (.table-shell) handles that itself instead. */
+  overflow-x: hidden;
+  /* "Magnetic" scrolling: one wheel/trackpad gesture settles on the next section, centered.
+     A section taller than the viewport still scrolls normally inside itself - per spec, once
+     a snap area is already as centered as it can get, the browser doesn't yank it away. */
+  scroll-snap-type: y mandatory;
+}
+
+.protocol-doc-section {
+  min-width: 0; /* flex item default is min-width:auto - without this, wide inner content
+    (tables etc.) grows the section past .protocol-document's width instead of scrolling
+    internally via .table-shell's own overflow-x. */
+  background: var(--panel-solid);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+  padding: 20px;
+  transition: filter 150ms ease, opacity 150ms ease;
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
+}
+
+/* While the document is actively scrolling, apply the blur/opacity state change instantly
+   instead of animating it - see the JS comment next to the scroll listener that toggles this
+   class. Animating filter at the same time as the native scroll-snap motion is what made the
+   whole thing feel janky. */
+.protocol-document.is-scrolling .protocol-doc-section {
+  transition: none;
+}
+
+.protocol-doc-section-active {
+  filter: none;
+  opacity: 1;
+}
+
+/* Plain CSS filter, deliberately not backdrop-filter — see the removal note above about
+   Linux/Chromium compositing performance; this needs to stay cheap with up to ~15 sections
+   simultaneously mounted. */
+.protocol-doc-section-blurred {
+  filter: blur(6px);
+  opacity: 0.55;
+}
+
+/* The section itself is inert while blurred (see focused-element-editor.tsx), so clicks pass
+   through to this wrapper - that's what makes "click a blurred section to jump there" work. */
+.protocol-doc-section-wrap:has(.protocol-doc-section-blurred) {
+  cursor: pointer;
+}
+
+.protocol-quicknav {
+  position: sticky;
+  top: 20px;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+}
+
+.protocol-quicknav-list {
+  display: grid;
+  gap: 0;
+  margin-top: 14px;
+}
+
+.protocol-quicknav-item {
+  /* Base `button` rule sets a solid dark hover fallback (--button-hover-bg, var(--primary-strong))
+     for every button project-wide - override it here, otherwise a plain :hover rule on this
+     class loses to that higher-specificity `button:hover:not(:disabled)` selector. */
+  --button-hover-bg: color-mix(in srgb, var(--accent) 6%, transparent 94%);
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 8px 6px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  color: var(--text);
+  transition: background 0.12s ease;
+}
+
+/* Vertical stepper line running through the center of the icon column, connecting
+   consecutive items - each row draws the line for its own full height (top:0 to bottom:0),
+   which lines up seamlessly with the next row's line since there is no gap between rows. */
+.protocol-quicknav-item::before {
+  content: "";
+  position: absolute;
+  left: 25px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--border);
+  z-index: 0;
+}
+
+.protocol-quicknav-list > *:first-child .protocol-quicknav-item::before {
+  top: 50%;
+}
+
+.protocol-quicknav-list > *:last-child .protocol-quicknav-item::before {
+  bottom: 50%;
+}
+
+.protocol-quicknav-icon-badge {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--muted) 14%, transparent 86%);
+  color: var(--muted);
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.protocol-quicknav-item-active .protocol-quicknav-icon-badge {
+  background: var(--primary);
+  color: var(--primary-contrast);
+}
+
+.protocol-quicknav-item-label {
+  font-size: 0.88rem;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.protocol-quicknav-item-active .protocol-quicknav-item-label {
+  font-weight: 700;
+}
+
+.protocol-quicknav-attendance {
+  display: grid;
+}
+
+.protocol-quicknav-stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 0;
+  font-size: 0.9rem;
+}
+
+.protocol-quicknav-stat-danger strong {
+  color: var(--danger);
+}
+
+.protocol-quicknav-autosave {
+  font-size: 0.8rem;
+  text-align: center;
 }
 
 .editor-nav {
@@ -2947,6 +3339,7 @@ input[type="radio"] {
 }
 
 .tag-chip-remove {
+  --button-hover-bg: color-mix(in srgb, var(--accent) 35%, transparent 65%);
   width: 16px;
   height: 16px;
   min-height: 0;
@@ -2969,6 +3362,14 @@ input[type="radio"] {
   padding: 1px 7px;
 }
 
+/* Deterministic per-tag colors (todos table) - hashes the tag text into one
+   of 5 hues from the existing badge palette, so the same tag always matches. */
+.tag-chip-hue-0 { background: var(--info-bg); border-color: color-mix(in srgb, var(--info-fg) 30%, transparent 70%); color: var(--info-fg); }
+.tag-chip-hue-1 { background: var(--warning-bg); border-color: color-mix(in srgb, var(--warning-fg) 30%, transparent 70%); color: var(--warning-fg); }
+.tag-chip-hue-2 { background: var(--success-bg); border-color: color-mix(in srgb, var(--success-fg) 30%, transparent 70%); color: var(--success-fg); }
+.tag-chip-hue-3 { background: var(--danger-bg); border-color: color-mix(in srgb, var(--danger-fg) 30%, transparent 70%); color: var(--danger-fg); }
+.tag-chip-hue-4 { background: var(--neutral-bg); border-color: color-mix(in srgb, var(--neutral-fg) 30%, transparent 70%); color: var(--neutral-fg); }
+
 .tag-chip-active {
   background: color-mix(in srgb, var(--accent) 22%, transparent 78%);
   border-color: color-mix(in srgb, var(--accent) 40%, transparent 60%);
@@ -2984,6 +3385,7 @@ input[type="radio"] {
 }
 
 .tag-filter-chip {
+  --button-hover-bg: var(--surface-2);
   display: inline-flex;
   align-items: center;
   padding: 3px 10px;
@@ -3003,7 +3405,7 @@ input[type="radio"] {
   color: var(--foreground);
 }
 
-.tag-filter-chip-active {
+.tag-filter-chip-active { --button-hover-bg: color-mix(in srgb, var(--accent) 16%, transparent 84%);
   background: color-mix(in srgb, var(--accent) 16%, transparent 84%);
   border-color: color-mix(in srgb, var(--accent) 36%, transparent 64%);
   color: var(--accent);
@@ -3104,6 +3506,7 @@ input[type="radio"] {
 }
 
 .tag-input-option {
+  --button-hover-bg: color-mix(in srgb, var(--accent) 10%, transparent 90%);
   flex: 1;
   display: flex;
   align-items: center;
@@ -3126,6 +3529,7 @@ input[type="radio"] {
 }
 
 .tag-input-edit-btn {
+  --button-hover-bg: color-mix(in srgb, var(--accent) 14%, transparent 86%);
   flex-shrink: 0;
   width: 26px;
   height: 26px;
@@ -3172,7 +3576,7 @@ input[type="radio"] {
   letter-spacing: 0.08em;
 }
 
-.tag-edit-cancel {
+.tag-edit-cancel { --button-hover-bg: transparent;
   width: 22px;
   height: 22px;
   min-height: 0;
@@ -3221,7 +3625,7 @@ input[type="radio"] {
   box-shadow: 0 0 0 2px var(--accent);
 }
 
-.tag-color-swatch-none {
+.tag-color-swatch-none { --button-hover-bg: color-mix(in srgb, var(--muted) 20%, transparent 80%);
   background: color-mix(in srgb, var(--muted) 20%, transparent 80%) !important;
   color: var(--muted);
   font-size: 0.7rem;
@@ -3230,7 +3634,7 @@ input[type="radio"] {
   justify-content: center;
 }
 
-.tag-edit-save {
+.tag-edit-save { --button-hover-bg: var(--accent);
   font-size: 0.82rem;
   padding: 4px 12px;
   min-height: 0;
@@ -3297,7 +3701,7 @@ input[type="radio"] {
   pointer-events: auto;
 }
 
-.editor-fixed-actions-close {
+.editor-fixed-actions-close { --button-hover-bg: var(--panel);
   background: var(--panel);
   box-shadow: var(--shadow);
 }
@@ -3315,6 +3719,7 @@ input[type="radio"] {
 }
 
 .editor-nav-item {
+  --button-hover-bg: color-mix(in srgb, var(--accent) 6%, transparent 94%);
   display: grid;
   grid-template-columns: 22px 1fr;
   grid-template-rows: auto auto;
@@ -3567,7 +3972,7 @@ input[type="radio"] {
    TrackedChangeHideButton (components/ui/tracked-change-hide-button.tsx). Small and
    muted by default, full-strength on hover/focus so it doesn't visually compete with
    the red text itself. */
-.tracked-accept-btn {
+.tracked-accept-btn { --button-hover-bg: color-mix(in srgb, var(--danger) 22%, transparent);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3627,6 +4032,7 @@ input[type="radio"] {
 }
 
 .todo-toggle {
+  --button-hover-bg: color-mix(in srgb, var(--accent) 14%, transparent);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3677,6 +4083,7 @@ input[type="radio"] {
 }
 
 .todo-delete {
+  --button-hover-bg: color-mix(in srgb, var(--danger, #ef4444) 10%, transparent);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3799,7 +4206,7 @@ input[type="radio"] {
   text-transform: uppercase;
 }
 
-.mini-menu-option {
+.mini-menu-option { --button-hover-bg: color-mix(in srgb, var(--accent) 10%, transparent 90%);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3875,6 +4282,7 @@ input[type="radio"] {
 }
 
 .attendance-row {
+  --button-hover-bg: color-mix(in srgb, var(--accent) 8%, transparent 92%);
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
@@ -4180,6 +4588,7 @@ input[type="radio"] {
 }
 
 .rich-text-btn {
+  --button-hover-bg: color-mix(in srgb, var(--accent) 12%, transparent);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4801,6 +5210,7 @@ input[type="radio"] {
 }
 
 .matrix-col-remove {
+  --button-hover-bg: color-mix(in srgb, var(--danger) 10%, transparent 90%);
   flex-shrink: 0;
   background: none;
   border: none;
@@ -5039,7 +5449,7 @@ input[type="radio"] {
   border-bottom: 1px solid var(--border);
 }
 
-.candidate-card {
+.candidate-card { --button-hover-bg: color-mix(in srgb, var(--panel-solid) 90%, transparent 10%);
   position: relative;
   display: grid;
   gap: 6px;
@@ -5134,6 +5544,7 @@ input[type="radio"] {
 }
 
 .participant-import-button {
+  --button-hover-bg: var(--accent-soft);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -5153,6 +5564,7 @@ input[type="radio"] {
 
 .image-grid {
   display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 14px;
 }
 
@@ -5163,8 +5575,56 @@ input[type="radio"] {
 .image-card img {
   display: block;
   width: 100%;
+  height: 160px;
   border-radius: 18px;
   object-fit: cover;
+}
+
+.image-lightbox-trigger {
+  cursor: zoom-in;
+}
+
+.image-lightbox-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  background: color-mix(in srgb, #000 78%, transparent 22%);
+  backdrop-filter: blur(4px);
+  animation: image-lightbox-fade 0.15s ease-out;
+}
+
+.image-lightbox-img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 12px;
+  object-fit: contain;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+  cursor: default;
+}
+
+.image-lightbox-close {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  cursor: pointer;
+}
+
+@keyframes image-lightbox-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .segment-control {
@@ -5178,6 +5638,7 @@ input[type="radio"] {
 }
 
 .segment-button {
+  --button-hover-bg: color-mix(in srgb, var(--accent) 8%, transparent 92%);
   width: auto;
   min-width: 0;
   min-height: 0;
@@ -5201,6 +5662,7 @@ input[type="radio"] {
 }
 
 .segment-button-active {
+  --button-hover-bg: linear-gradient(135deg, var(--accent), var(--accent-strong));
   background: linear-gradient(135deg, var(--accent), var(--accent-strong));
   color: white;
   box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 30%, transparent 70%);
@@ -5223,6 +5685,7 @@ input[type="radio"] {
 }
 
 .filter-tabs-option {
+  --button-hover-bg: transparent;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -5249,6 +5712,7 @@ input[type="radio"] {
 }
 
 .filter-tabs-option-active {
+  --button-hover-bg: var(--panel-solid);
   background: var(--panel-solid);
   color: var(--text);
   font-weight: 600;
@@ -5356,6 +5820,7 @@ input[type="radio"] {
 }
 
 .oidc-button {
+  --button-hover-bg: var(--accent-soft);
   width: 100%;
   background: transparent;
   color: var(--text);
@@ -5602,6 +6067,93 @@ input[type="radio"] {
   }
 }
 
+/* ── Protocol document mode: lock the whole page to the viewport height, no outer/body
+   scroll at all - only .protocol-document and .protocol-quicknav scroll internally.
+   Scoped with :has(.protocol-panel-document) so this never touches the old "abgeschlossen"
+   hard-swap view (that one only has plain .panel, no .protocol-panel-document, and already
+   fits the viewport via its own .editor-panel height:calc(100dvh - 130px) rule above - a
+   magic-number match rather than a hard constraint, so it's deliberately left untouched
+   here to avoid clipping it if that number is ever slightly off). */
+@media (min-width: 901px) {
+  .app-frame-writing:has(.protocol-panel-document) {
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .app-frame-writing:has(.protocol-panel-document) .shell {
+    height: calc(100vh - 40px);
+    min-height: 0;
+  }
+
+  .app-frame-writing:has(.protocol-panel-document) .shell-main {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .app-frame-writing:has(.protocol-panel-document) .shell-content {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .protocol-panel-document {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ProtocolEditor's own root element - turn it into the flex column that lays out
+     header / status-row / document-shell top to bottom, with the document-shell taking
+     all remaining height. Direct-child selector on purpose: `.grid` is a generic layout
+     utility class reused all over the app (incl. deep inside block forms) - `>` keeps this
+     from also flattening every nested .grid form inside the document into a flex column. */
+  .protocol-panel-document > .grid {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .protocol-document-header {
+    position: static;
+    flex-shrink: 0;
+  }
+
+  .protocol-panel-document .status-row {
+    flex-shrink: 0;
+  }
+
+  .protocol-document-shell {
+    flex: 1;
+    min-height: 0;
+    /* Was an implicit auto-height row sized to fit position:sticky children - now the
+       shell itself has a definite, viewport-bound height (via flex:1 above), so give the
+       row an explicit 1fr track + stretch instead, letting .protocol-document/
+       .protocol-quicknav fill it exactly via their own height:auto + overflow-y:auto. */
+    grid-template-rows: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .protocol-document,
+  .protocol-quicknav {
+    position: static;
+    top: auto;
+    max-height: none;
+    min-height: 0;
+  }
+
+  /* .protocol-quicknav sets its own align-self: start (base rule, for the old sticky
+     layout) - that wins over the grid container's align-items: stretch above unless
+     overridden here too, so without this it would stay content-sized instead of filling
+     the row. */
+  .protocol-quicknav {
+    align-self: stretch;
+  }
+}
+
 .editor-block-card {
   scroll-snap-align: start;
   scroll-margin-top: 16px;
@@ -5737,118 +6289,256 @@ input[type="radio"] {
 
 /* ── Session Panel ─────────────────────────────────────────────────────────── */
 
-.session-panel {
+/* ── Quick Actions Pill (Schnellmenü: Notizen / Todos / Kollaboration) ──────── */
+
+.protocol-quick-actions {
   position: fixed;
-  right: 0;
+  right: 28px;
   top: 50%;
   transform: translateY(-50%);
-  z-index: 600;
-  display: flex;
-  flex-direction: row;
-  align-items: stretch;
-  pointer-events: auto;
-}
-
-.session-panel-trigger {
-  width: 28px;
-  min-height: 120px;
-  background: var(--accent);
-  border-radius: 10px 0 0 10px;
+  z-index: 630;
   display: flex;
   flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: var(--primary);
+  border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.protocol-quick-actions-btn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  cursor: pointer;
-  flex-shrink: 0;
-  box-shadow: -2px 0 12px rgba(0,0,0,0.12);
 }
 
-.session-panel-label {
-  writing-mode: vertical-lr;
-  text-orientation: mixed;
-  transform: rotate(180deg);
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  color: #fff;
-  user-select: none;
-  text-transform: uppercase;
+.protocol-quick-actions-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
-.session-panel-shortcuts {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-}
+/* ── Shared floating quick-action panel (Notizen/Todo, Status & Zusammenarbeit) ──
+   Both flyouts dock next to the pill instead of the page edge, so they share one
+   compact "card popover" look/position instead of each inventing its own. */
 
-.session-panel-shortcut {
-  writing-mode: vertical-lr;
-  text-orientation: mixed;
-  transform: rotate(180deg);
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 0.6rem;
-  color: rgba(255,255,255,0.75);
-  user-select: none;
-  white-space: nowrap;
-}
-
-.session-panel-shortcut kbd {
-  font-family: inherit;
-  font-size: 0.58rem;
-  font-weight: 700;
-  background: rgba(255,255,255,0.2);
-  border-radius: 3px;
-  padding: 1px 3px;
-  color: #fff;
-}
-
-.session-panel-body {
-  width: 0;
-  overflow: hidden;
-  transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+.quick-flyout {
+  position: fixed;
+  top: 50%;
+  right: 84px;
+  transform: translateY(-50%) scale(0.97);
+  z-index: 620;
+  width: 328px;
+  max-width: calc(100vw - 48px);
+  max-height: min(74vh, 620px);
+  overflow-y: auto;
+  overflow-x: hidden;
   background: var(--panel-solid);
   border: 1px solid var(--border-strong);
-  border-right: none;
-  border-radius: 10px 0 0 10px;
-  box-shadow: -4px 0 24px rgba(0,0,0,0.1);
-}
-
-.session-panel-open .session-panel-body {
-  width: 290px;
-}
-
-.session-panel-inner {
-  width: 290px;
-  padding: 16px;
+  border-radius: 18px;
+  box-shadow: 0 20px 56px rgba(0, 0, 0, 0.24);
+  padding: 18px;
   display: flex;
   flex-direction: column;
-  gap: 0;
-  height: 100%;
-  min-height: 340px;
+  gap: 14px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.quick-flyout-open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(-50%) scale(1);
+}
+
+.quick-flyout-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.quick-flyout-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.quick-flyout-title-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.quick-flyout-close {
+  padding: 4px 8px;
+  flex-shrink: 0;
+}
+
+/* ── Collaboration Status Panel (Status & Zusammenarbeit flyout) ────────────── */
+
+.collab-status-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 619;
+  background: transparent;
+}
+
+.collab-status-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.collab-status-section-label {
+  margin-top: 4px;
+}
+
+.collab-status-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.collab-status-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 6px;
+  border-radius: 12px;
+  text-align: center;
+  min-width: 0;
+}
+
+.collab-status-tile strong {
+  font-size: 1.3rem;
+  line-height: 1.1;
+}
+
+.collab-status-tile span {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  overflow-wrap: break-word;
+}
+
+.collab-status-tile-success {
+  background: var(--success-bg);
+  color: var(--success-fg);
+}
+
+.collab-status-tile-neutral {
+  background: var(--neutral-bg);
+  color: var(--neutral-fg);
+}
+
+.collab-status-tile-danger {
+  background: var(--danger-bg);
+  color: var(--danger-fg);
+}
+
+.collab-status-roster {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.collab-status-roster-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.collab-status-roster-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.collab-status-roster-name {
+  flex: 1;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.collab-status-active {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.collab-status-active-avatars {
+  display: flex;
+}
+
+.collab-status-active-avatars .collab-avatar {
+  margin-left: -8px;
+}
+
+.collab-status-active-avatars .collab-avatar:first-child {
+  margin-left: 0;
+}
+
+.collab-status-active-empty {
+  font-size: 0.85rem;
+}
+
+.collab-status-cta {
+  width: 100%;
+  padding: 12px;
+}
+
+.collab-status-shortcuts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.collab-status-shortcut-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.collab-status-shortcut-row kbd {
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: var(--accent-soft);
+  border-radius: 5px;
+  padding: 2px 6px;
+  color: var(--text);
+  flex-shrink: 0;
 }
 
 .session-panel-section {
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-
-.session-panel-section-label {
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.session-panel-divider {
-  height: 1px;
-  background: var(--border);
-  margin: 12px 0;
 }
 
 .session-panel-notes {
@@ -5965,7 +6655,7 @@ input[type="radio"] {
   background: color-mix(in srgb, var(--accent) 28%, var(--panel-solid));
 }
 
-.session-panel-btn {
+.session-panel-btn { --button-hover-bg: var(--accent);
   font-size: 0.82rem;
   padding: 7px 12px;
   border-radius: 8px;
@@ -6030,6 +6720,15 @@ input[type="radio"] {
 
   .editor-shell {
     grid-template-columns: 1fr;
+  }
+
+  .protocol-document-shell {
+    grid-template-columns: 1fr;
+    zoom: 1;
+  }
+
+  .protocol-quicknav {
+    display: none;
   }
 
   .data-table th,
@@ -6113,10 +6812,11 @@ input[type="radio"] {
 
 .todo-check {
   flex-shrink: 0;
-  width: 20px;
-  height: 20px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   background: none;
+  --button-hover-bg: transparent;
   border: none;
   cursor: pointer;
   color: var(--muted);
@@ -6127,8 +6827,8 @@ input[type="radio"] {
   border-radius: 50%;
 }
 .todo-check svg {
-  width: 16px;
-  height: 16px;
+  width: 22px;
+  height: 22px;
   stroke: currentColor;
 }
 .todo-check:hover { color: var(--accent); transform: scale(1.15); }
@@ -6155,6 +6855,7 @@ input[type="radio"] {
   width: auto;
   min-height: 0;
   background: none;
+  --button-hover-bg: transparent;
   border: none;
   border-radius: 6px;
   padding: 0;
@@ -6251,6 +6952,13 @@ input[type="radio"] {
   font-size: 0.78rem;
 }
 
+/* Escape hatch for data-table-lg's default single-line nowrap, for columns with
+   variable-length free text (descriptions etc.) that would otherwise force the
+   whole table to the width of its longest row. */
+.data-table-lg td.table-cell-wrap {
+  white-space: normal;
+}
+
 .fines-collected-note {
   font-size: 0.78rem;
   margin-top: 2px;
@@ -6266,22 +6974,21 @@ input[type="radio"] {
 
 .finance-layout {
   display: grid;
-  grid-template-columns: 260px 1fr;
-  gap: 0;
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  overflow: hidden;
+  grid-template-columns: 280px 1fr;
+  gap: 20px;
+  align-items: start;
   min-height: 480px;
 }
 
 .finance-sidebar {
-  border-right: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel-solid) 60%, transparent 40%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
-  gap: 0;
-  padding: 16px;
-  gap: 12px;
+  padding: 20px;
+  gap: 14px;
 }
 
 .finance-sidebar-header {
@@ -6304,12 +7011,13 @@ input[type="radio"] {
 }
 
 .finance-account-card {
+  --button-hover-bg: color-mix(in srgb, var(--accent) 6%, var(--panel) 94%);
   display: grid;
   gap: 2px;
   padding: 10px 12px;
   border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--panel);
+  border: 1px solid transparent;
+  background: transparent;
   text-align: left;
   cursor: pointer;
   transition: background 0.1s, border-color 0.1s;
@@ -6317,19 +7025,20 @@ input[type="radio"] {
   min-height: 0;
   box-shadow: none;
 }
-.finance-account-card:hover { background: color-mix(in srgb, var(--accent) 6%, var(--panel) 94%); border-color: var(--accent); transform: none; }
-.finance-account-card-active { border-color: var(--accent) !important; background: color-mix(in srgb, var(--accent) 8%, var(--panel) 92%) !important; }
+.finance-account-card:hover { background: color-mix(in srgb, var(--accent) 6%, var(--panel) 94%); }
+.finance-account-card-active,
+.finance-account-card-active:hover { background: var(--accent-soft) !important; border-color: transparent !important; }
 
 .finance-account-name {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--primary);
 }
 
 .finance-account-balance {
-  font-size: 1rem;
+  font-size: 1.05rem;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--primary);
   font-variant-numeric: tabular-nums;
 }
 
@@ -6344,6 +7053,13 @@ input[type="radio"] {
   align-items: center;
   gap: 6px;
   margin-top: 4px;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.finance-account-card:hover .finance-account-actions,
+.finance-account-card:focus-within .finance-account-actions,
+.finance-account-card-active .finance-account-actions {
+  opacity: 1;
 }
 
 .finance-account-count {
@@ -6361,7 +7077,11 @@ input[type="radio"] {
 
 /* Finance main panel */
 .finance-main {
-  padding: 20px 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  padding: 24px 28px;
   display: grid;
   gap: 20px;
   align-content: start;
@@ -6383,17 +7103,20 @@ input[type="radio"] {
 }
 
 .finance-main-title {
-  font-size: 1.05rem;
+  font-size: 0.75rem;
   font-weight: 700;
-  margin: 0 0 2px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 6px;
 }
 
 .finance-main-balance {
-  font-size: 1.6rem;
+  font-size: 2.6rem;
   font-weight: 800;
-  color: var(--accent);
+  color: var(--text);
   font-variant-numeric: tabular-nums;
-  line-height: 1.2;
+  line-height: 1.15;
 }
 
 /* Transaction form */
@@ -6590,7 +7313,7 @@ input[type="radio"] {
 .finance-proto-row:last-child { border-bottom: none; }
 
 /* Utility buttons */
-.btn-icon {
+.btn-icon { --button-hover-bg: color-mix(in srgb, var(--accent) 25%, transparent 75%);
   width: 28px;
   height: 28px;
   min-height: 0;
@@ -6611,6 +7334,7 @@ input[type="radio"] {
 .btn-icon:hover { background: color-mix(in srgb, var(--accent) 25%, transparent 75%); }
 
 .btn-icon-sm {
+  --button-hover-bg: color-mix(in srgb, var(--muted) 22%, transparent 78%);
   width: 22px;
   height: 22px;
   min-height: 0;
@@ -6628,7 +7352,7 @@ input[type="radio"] {
   transform: none !important;
 }
 .btn-icon-sm:hover { background: color-mix(in srgb, var(--muted) 22%, transparent 78%); color: var(--text); }
-.btn-icon-danger { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent 90%); }
+.btn-icon-danger { --button-hover-bg: color-mix(in srgb, var(--danger) 20%, transparent 80%); color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent 90%); }
 .btn-icon-danger:hover { background: color-mix(in srgb, var(--danger) 20%, transparent 80%); }
 
 /* ── Portal-based mini-menu popover (due date, etc.) ────────────── */
@@ -6689,6 +7413,7 @@ input[type="radio"] {
 .finance-tab {
   padding: 8px 16px;
   background: none;
+  --button-hover-bg: transparent;
   border: none;
   border-bottom: 2px solid transparent;
   margin-bottom: -2px;
@@ -6726,7 +7451,8 @@ input[type="radio"] {
 /* ── Provisional balance ────────────────────────────────────────── */
 .finance-account-provisional {
   font-size: 0.75rem;
-  color: var(--muted);
+  color: var(--success);
+  font-weight: 600;
   margin-top: 2px;
 }
 
@@ -6823,6 +7549,7 @@ input[type="radio"] {
 .fine-pending-origin { font-size: 0.75rem; color: var(--muted); }
 
 .fine-action-btn {
+  --button-hover-bg: color-mix(in srgb, var(--accent) 10%, var(--panel));
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -6837,9 +7564,9 @@ input[type="radio"] {
   transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
 .fine-action-btn:hover { background: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
-.fine-collect-btn { color: var(--success, #22c55e); border-color: color-mix(in srgb, var(--success, #22c55e) 30%, transparent); }
+.fine-collect-btn { --button-hover-bg: color-mix(in srgb, var(--success, #22c55e) 12%, var(--panel)); color: var(--success, #22c55e); border-color: color-mix(in srgb, var(--success, #22c55e) 30%, transparent); }
 .fine-collect-btn:hover { background: color-mix(in srgb, var(--success, #22c55e) 12%, var(--panel)); }
-.fine-delete-btn { color: var(--danger, #ef4444); border-color: color-mix(in srgb, var(--danger, #ef4444) 30%, transparent); }
+.fine-delete-btn { --button-hover-bg: color-mix(in srgb, var(--danger, #ef4444) 12%, var(--panel)); color: var(--danger, #ef4444); border-color: color-mix(in srgb, var(--danger, #ef4444) 30%, transparent); }
 .fine-delete-btn:hover { background: color-mix(in srgb, var(--danger, #ef4444) 12%, var(--panel)); }
 .fine-comment-btn { color: var(--muted); }
 .fine-comment-missing { color: var(--warning, #f59e0b); border-color: color-mix(in srgb, var(--warning, #f59e0b) 40%, transparent); animation: fine-comment-pulse 1.8s infinite; }
@@ -6900,6 +7627,7 @@ input[type="radio"] {
 .fines-filter-tab {
   padding: 6px 14px;
   background: none;
+  --button-hover-bg: transparent;
   border: none;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
@@ -6999,7 +7727,7 @@ input[type="radio"] {
   font-size: 0.82rem;
   color: var(--muted);
 }
-.due-menu-option {
+.due-menu-option { --button-hover-bg: var(--accent-soft);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -7075,6 +7803,7 @@ input[type="radio"] {
   color: var(--text);
 }
 .app-toast-close {
+  --button-hover-bg: color-mix(in srgb, var(--muted) 14%, transparent);
   flex-shrink: 0;
   align-self: flex-start;
   display: flex;
@@ -7127,6 +7856,7 @@ input[type="radio"] {
 }
 
 .cycle-chip {
+  --button-hover-bg: transparent;
   padding: 3px 10px;
   border-radius: 20px;
   border: 1.5px solid var(--border, #d1d5db);
@@ -7140,12 +7870,20 @@ input[type="radio"] {
 }
 
 .cycle-chip:hover {
+  background: transparent;
+  color: var(--fg, #111);
   border-color: var(--accent, #6366f1);
 }
 
 .cycle-chip-active {
+  --button-hover-bg: var(--accent, #6366f1);
   background: var(--accent, #6366f1);
   border-color: var(--accent, #6366f1);
+  color: #fff;
+}
+
+.cycle-chip-active:hover {
+  background: var(--accent, #6366f1);
   color: #fff;
 }
 
@@ -7285,6 +8023,7 @@ input[type="radio"] {
 }
 
 .stats-expand-btn {
+  --button-hover-bg: color-mix(in srgb, var(--muted) 15%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -7356,6 +8095,7 @@ input[type="radio"] {
 }
 
 .stats-fs-close {
+  --button-hover-bg: color-mix(in srgb, var(--muted) 15%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -7405,6 +8145,7 @@ input[type="radio"] {
   font-weight: 500;
   color: var(--muted);
   background: none;
+  --button-hover-bg: transparent;
   border: none;
   cursor: pointer;
   transition: background 0.12s, color 0.12s;
@@ -7445,12 +8186,6 @@ input[type="radio"] {
   height: 10px;
   border-radius: 50%;
   flex-shrink: 0;
-}
-
-.stats-pie-val {
-  margin-left: auto;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
 }
 
 .stats-tooltip {
@@ -7554,6 +8289,7 @@ input[type="radio"] {
 }
 
 .stats-chip-active {
+  --button-hover-bg: color-mix(in srgb, var(--accent) 20%, transparent);
   background: color-mix(in srgb, var(--accent) 15%, transparent);
   border-color: color-mix(in srgb, var(--accent) 50%, transparent);
   color: var(--accent);
@@ -7569,6 +8305,7 @@ input[type="radio"] {
 }
 
 .stats-cycle-btn {
+  --button-hover-bg: color-mix(in srgb, var(--accent) 4%, var(--panel-solid));
   display: flex;
   align-items: center;
   gap: 6px;
@@ -7619,6 +8356,7 @@ input[type="radio"] {
 }
 
 .stats-cycle-item {
+  --button-hover-bg: color-mix(in srgb, var(--accent) 8%, transparent);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -7664,10 +8402,15 @@ input[type="radio"] {
   align-items: start;
 }
 
+.dashboard-hero,
+.dashboard-tile {
+  border-radius: 28px;
+}
+
 .dashboard-hero {
   grid-column: 1 / -1;
-  gap: 8px;
-  padding: 22px 24px;
+  gap: 10px;
+  padding: 32px 36px;
   background: var(--primary);
   border-color: var(--primary);
   color: var(--primary-contrast);
@@ -7683,8 +8426,11 @@ input[type="radio"] {
 
 .dashboard-hero-title {
   margin: 0;
-  font-size: clamp(1.3rem, 2.4vw, 1.8rem);
-  line-height: 1.2;
+  font-family: "Canela", "Iowan Old Style", "Palatino Linotype", serif;
+  font-size: clamp(1.6rem, 3vw, 2.3rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
   color: var(--primary-contrast);
 }
 
@@ -7707,6 +8453,7 @@ input[type="radio"] {
 }
 
 .dashboard-hero-action {
+  --button-hover-bg: color-mix(in srgb, var(--primary-contrast) 90%, transparent);
   width: auto;
   min-height: 0;
   padding: 8px 16px;
@@ -7746,6 +8493,7 @@ input[type="radio"] {
 }
 
 .excuse-chip {
+  --button-hover-bg: var(--panel-solid);
   width: auto;
   min-height: 0;
   display: inline-flex;
@@ -7765,6 +8513,8 @@ input[type="radio"] {
 }
 
 .excuse-chip:hover:not(:disabled) {
+  background: var(--panel-solid);
+  color: var(--text);
   border-color: var(--accent);
 }
 
@@ -7785,14 +8535,22 @@ input[type="radio"] {
 }
 
 .excuse-chip-excused {
+  --button-hover-bg: var(--success-bg);
   border-color: var(--success-fg);
   background: var(--success-bg);
   color: var(--success-fg);
 }
 
-.excuse-chip-excused .excuse-chip-status-icon {
-  border-color: var(--success-fg);
+.excuse-chip-excused:hover:not(:disabled) {
+  background: var(--success-bg);
   color: var(--success-fg);
+  border-color: var(--success-fg);
+}
+
+.excuse-chip-excused .excuse-chip-status-icon {
+  background: var(--success-fg);
+  border-color: var(--success-fg);
+  color: #fff;
 }
 
 .excuse-chip-name {
@@ -7808,6 +8566,7 @@ input[type="radio"] {
 }
 
 .dashboard-list-row {
+  --button-hover-bg: color-mix(in srgb, var(--accent) 6%, transparent);
   width: 100%;
   min-height: 0;
   display: flex;
@@ -7837,21 +8596,29 @@ input[type="radio"] {
   flex-shrink: 0;
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 7px;
-  font-size: 0.62rem;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  font-size: 0.78rem;
   font-weight: 700;
 }
 
 .dashboard-list-row-icon-warn {
-  background: var(--warning-bg);
-  color: var(--warning-fg);
+  background: var(--danger-bg);
+  color: var(--danger-fg);
+  font-size: 1rem;
 }
 
 .dashboard-list-row-icon-fine {
-  background: var(--danger-bg);
-  color: var(--danger-fg);
+  width: auto;
+  min-width: 34px;
+  height: 28px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--warning-bg);
+  color: var(--warning-fg);
+  font-size: 0.66rem;
+  letter-spacing: 0.02em;
 }
 
 .dashboard-list-row-text {
@@ -7862,23 +8629,28 @@ input[type="radio"] {
 }
 
 .dashboard-list-row-title {
-  font-weight: 600;
-  font-size: 0.86rem;
+  font-weight: 700;
+  font-size: 0.95rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .dashboard-list-row-sub {
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   color: var(--muted);
 }
 
 .dashboard-list-row-meta {
   flex-shrink: 0;
-  font-size: 0.76rem;
-  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text);
   white-space: nowrap;
+}
+
+.dashboard-list-row-meta-overdue {
+  color: var(--danger-fg);
 }
 
 @media (max-width: 640px) {
@@ -7959,139 +8731,22 @@ input[type="radio"] {
   gap: 6px;
 }
 
-/* ── Layout ── */
+/* ── Assignment list ── */
 
-.subm-layout {
-  display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
-  gap: 0;
-  align-items: stretch;
-  height: calc(100vh - 230px);
-  min-height: 520px;
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  overflow: hidden;
-  background: color-mix(in srgb, var(--panel-solid) 96%, transparent 4%);
-}
-
-@media (max-width: 860px) {
-  .subm-layout {
-    grid-template-columns: 1fr;
-    height: auto;
-    min-height: 0;
-  }
-}
-
-/* ── Sidebar ── */
-
-.subm-sidebar {
-  border-right: 1px solid var(--border);
-  padding: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  height: 100%;
-  min-height: 0;
-}
-
-@media (max-width: 860px) {
-  .subm-sidebar {
-    height: auto;
-    max-height: 50vh;
-  }
-}
-
-.subm-sidebar-list {
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.subm-sidebar-empty {
-  font-size: 0.85rem;
-  color: var(--muted);
-  padding: 8px 6px;
-  display: block;
-}
-
-.subm-sidebar-item {
-  position: relative;
-  animation: subm-fade-in-up 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.subm-sidebar-item-button {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 10px 12px 8px;
-  border-radius: 12px;
-  border: 1px solid transparent;
-  border-left: 3px solid transparent;
-  background: none;
-  color: var(--text);
-  cursor: pointer;
-  min-height: 0;
-  transition: background 0.14s ease, border-color 0.14s ease, transform 0.14s ease;
-}
-
-.subm-sidebar-item-button:hover {
-  background: color-mix(in srgb, var(--accent) 7%, transparent 93%);
-  border-left-color: color-mix(in srgb, var(--accent) 40%, transparent 60%);
-}
-
-.subm-sidebar-item-button.subm-sidebar-item-hover-actions {
-  padding-right: 62px;
-}
-
-.subm-sidebar-item-active {
-  background: color-mix(in srgb, var(--accent) 13%, transparent 87%);
-  border-left-color: var(--accent);
-}
-
-.subm-sidebar-item-title {
-  font-size: 0.9rem;
-  font-weight: 600;
-  line-height: 1.35;
-  color: var(--text);
-}
-
-.subm-sidebar-item-meta {
-  margin-top: 3px;
-  margin-bottom: 6px;
-  display: flex;
-  gap: 5px;
-  align-items: center;
-}
-
-.subm-sidebar-item-type {
-  font-size: 0.66rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-}
-
-.subm-sidebar-item-inactive {
-  font-size: 0.64rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.subm-sidebar-item-actions {
-  position: absolute;
-  top: 50%;
-  right: 6px;
-  transform: translateY(-50%);
+.subm-row-actions {
   display: flex;
   gap: 3px;
-  z-index: 1;
-  animation: subm-fade-in 0.12s ease both;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.record-list-row:hover .subm-row-actions,
+.record-list-row:focus-within .subm-row-actions {
+  opacity: 1;
 }
 
 .subm-sidebar-icon-button {
+  --button-hover-bg: var(--panel-solid);
   width: 24px;
   height: 24px;
   padding: 0;
@@ -8125,6 +8780,37 @@ input[type="radio"] {
   margin-top: 6px;
 }
 
+.subm-summary-list {
+  width: 170px;
+  flex-shrink: 0;
+  margin-top: 0;
+}
+
+.subm-summary-detail {
+  flex: 1;
+  min-width: 0;
+  margin-top: 0;
+}
+
+.subm-summary-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.subm-summary-detail-row .subm-summary-track {
+  flex: 1;
+  height: 10px;
+}
+
+.subm-summary-detail-count {
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--success);
+  white-space: nowrap;
+}
+
 .subm-summary-track {
   height: 4px;
   border-radius: 3px;
@@ -8151,179 +8837,79 @@ input[type="radio"] {
   display: block;
 }
 
-/* ── Right panel ── */
-
-.subm-panel {
-  padding: 18px 22px;
-  min-width: 0;
-  height: 100%;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-}
-
-.subm-panel-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  flex: 1;
-  color: var(--muted);
-  font-size: 0.92rem;
-}
-
-.subm-panel-empty-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--muted);
-  border: 1px dashed var(--border);
-}
-
-.subm-panel-content {
-  animation: subm-fade-in-up 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-}
-
-@media (max-width: 860px) {
-  .subm-panel {
-    height: auto;
-    overflow-y: visible;
-  }
-}
-
-.subm-panel-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.subm-panel-heading {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.subm-panel-title {
-  margin: 0;
-  font-size: 1.05rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
 .subm-pulse {
   animation: pulse 2s infinite;
 }
 
-.subm-zip-button {
-  flex-shrink: 0;
-  gap: 6px;
-  min-width: 64px;
-  border-color: color-mix(in srgb, var(--success) 35%, transparent 65%);
-  background: color-mix(in srgb, var(--success) 12%, transparent 88%);
-  color: var(--success);
-  transition: transform 0.12s ease, background 0.12s ease;
+/* ── Assignment detail popup ── */
+
+.subm-detail {
+  gap: 18px;
 }
 
-.subm-zip-button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--success) 20%, transparent 80%);
-  transform: translateY(-1px);
+.subm-participant-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.subm-zip-button:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-/* ── Elements table ── */
-
-.subm-table-box {
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  overflow: hidden;
-  overflow-x: auto;
-  background: var(--panel-solid);
-}
-
-.subm-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.88rem;
-}
-
-.subm-table th {
-  text-align: left;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--accent) 4%, transparent 96%);
-  color: var(--muted);
-  font-weight: 700;
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  white-space: nowrap;
-}
-
-.subm-table td {
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-  vertical-align: top;
-}
-
-.subm-table-row {
-  animation: subm-fade-in 0.25s ease both;
+.subm-participant-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 6px;
+  border-radius: 12px;
+  cursor: pointer;
   transition: background 0.12s ease;
+  animation: subm-fade-in 0.25s ease both;
 }
 
-.subm-table-row:hover {
+.subm-participant-row:hover {
   background: color-mix(in srgb, var(--accent) 5%, transparent 95%);
 }
 
-.subm-table-row:last-child td {
-  border-bottom: none;
+.subm-avatar-lg {
+  width: 34px;
+  height: 34px;
+  font-size: 0.8rem;
 }
 
-.subm-element-title {
+.subm-participant-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.subm-participant-name {
   font-weight: 600;
+  font-size: 0.94rem;
   color: var(--text);
-}
-
-.subm-empty-cell {
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-
-.subm-window-cell {
-  color: var(--muted);
-  white-space: nowrap;
-  font-size: 0.82rem;
-}
-
-.subm-status-cell {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.subm-table-row-clickable {
-  cursor: pointer;
+.subm-participant-meta {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 1px;
 }
 
-.subm-file-count {
-  display: inline-flex;
+.subm-participant-status {
+  display: flex;
   align-items: center;
-  gap: 5px;
-  color: var(--muted);
-  font-size: 0.85rem;
-  white-space: nowrap;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.subm-detail-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
 }
 
 .subm-responsible {
@@ -8414,6 +9000,7 @@ input[type="radio"] {
   border-radius: 7px;
   border: 1px solid var(--border);
   background: transparent;
+  --button-hover-bg: transparent;
   color: var(--muted);
   cursor: pointer;
   transition: color 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
@@ -8425,7 +9012,7 @@ input[type="radio"] {
   transform: translateY(-1px);
 }
 
-.subm-reopen-button {
+.subm-reopen-button { --button-hover-bg: color-mix(in srgb, var(--warning) 12%, transparent 88%);
   width: auto;
   min-width: 0;
   color: var(--warning);
@@ -8435,21 +9022,6 @@ input[type="radio"] {
 .subm-reopen-button:hover {
   background: color-mix(in srgb, var(--warning) 12%, transparent 88%);
   color: var(--warning);
-}
-
-.subm-actions-cell {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  white-space: nowrap;
-}
-
-.subm-row-action {
-  font-size: 0.78rem;
-  padding: 4px 10px;
-  min-height: 0;
-  width: auto;
-  min-width: 0;
 }
 
 /* ── Loading skeleton ── */
@@ -8707,6 +9279,7 @@ input[type="radio"] {
 }
 
 .wizard-copy-button {
+  --button-hover-bg: var(--accent-soft);
   background: transparent;
   color: var(--muted);
   border: 1px solid var(--border);
@@ -8774,6 +9347,7 @@ input[type="radio"] {
 }
 
 .wizard-remove-link {
+  --button-hover-bg: color-mix(in srgb, var(--danger) 10%, transparent 90%);
   color: var(--danger);
 }
 
@@ -8787,7 +9361,7 @@ input[type="radio"] {
   font-size: 0.92rem;
 }
 
-.domain-add-trigger {
+.domain-add-trigger { --button-hover-bg: var(--accent-soft);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -8825,6 +9399,15 @@ input[type="radio"] {
   min-height: calc(100vh - 120px);
 }
 
+.list-manager-sidebar-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
 .list-manager-items {
   flex: 1;
   overflow-y: auto;
@@ -8860,6 +9443,7 @@ input[type="radio"] {
 
 .list-manager-item-button-active,
 .list-manager-item-button-active:hover {
+  --button-hover-bg: var(--accent);
   background: var(--accent);
   color: #fff;
   font-weight: 600;

@@ -9,6 +9,7 @@ import { DateInput } from "@/components/ui/date-input";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { TrackedChangeHideButton } from "@/components/ui/tracked-change-hide-button";
 import { Modal } from "@/components/ui/modal";
+import { LightboxImage } from "@/components/ui/lightbox-image";
 import { StructuredListEditModal } from "@/components/protocol/planning/structured-list-edit-modal";
 import { EventOverviewModal } from "@/components/protocol/planning/event-overview-modal";
 import { CheckboxCandidateModal, CandidateItem } from "@/components/protocol/planning/checkbox-candidate-modal";
@@ -20,7 +21,7 @@ import { TagInput } from "@/components/ui/tag-input";
 import { bumpStatsCharts } from "@/components/protocol/chart-block";
 import { LockBadge } from "@/components/protocol/collaboration-presence";
 import { useProtocolCollaboration } from "@/lib/hooks/use-protocol-collaboration";
-import { useTagConfig } from "@/lib/hooks/use-tag-config";
+import { TagConfig } from "@/lib/hooks/use-tag-config";
 import { browserApiFetch } from "@/lib/api/client";
 import { formatDate, formatDateRange, formatDateTime } from "@/lib/utils/format";
 import { getCycleYear } from "@/lib/utils/cycle";
@@ -52,6 +53,7 @@ import {
   TodoMiniMenu,
   asObject,
   attendanceParticipants,
+  tallyAttendance,
   canCreateProtocolEventDraft,
   compareIsoDate,
   createInlineProtocolEventDraft,
@@ -133,6 +135,11 @@ export function FocusedElementEditor({
   onPendingUpdate,
   onPendingDone,
   documentTemplates,
+  isActive = true,
+  autoFocusToken = 0,
+  tagConfig,
+  updateTagColor,
+  renameTag,
 }: {
   collab: ReturnType<typeof useProtocolCollaboration>;
   trackChangesActive: boolean;
@@ -198,6 +205,13 @@ export function FocusedElementEditor({
   onPendingUpdate: (updated: Partial<TodoListItem> & { id: number }) => void;
   onPendingDone: (todoId: number) => void;
   documentTemplates: DocumentTemplate[];
+  /** True while this section is the one currently in focus in the scrollable document (see protocol-editor.tsx's scroll-spy); defaults to true for the legacy single-section "abgeschlossen" view, which always renders exactly one instance. */
+  isActive?: boolean;
+  /** Bumped by the parent only on an explicit "jump to this section" action (sidebar click, keyboard nav, restored scroll position) so autofocus never fires just because several sections mount at once. */
+  autoFocusToken?: number;
+  tagConfig: TagConfig;
+  updateTagColor: (tag: string, color: string) => Promise<void>;
+  renameTag: (oldTag: string, newTag: string) => Promise<void>;
 }) {
   const sectionRef = useRef<HTMLElement | null>(null);
   const didMountRef = useRef(false);
@@ -213,7 +227,7 @@ export function FocusedElementEditor({
       );
       firstEditable?.focus();
     }, 50);
-  }, [element.id]);
+  }, [autoFocusToken]);
 
   const bulletSkipBlurRef = useRef(false);
   // Planning-mode ("geplant") popups: which block's edit/overview modal is currently open.
@@ -262,8 +276,6 @@ export function FocusedElementEditor({
     () => Array.from(new Set(availableEvents.map((e) => (e.tag ?? "").trim()).filter(Boolean))).sort(),
     [availableEvents]
   );
-  const { tagConfig, updateTagColor, renameTag } = useTagConfig();
-
   const [eventBlockCandidatesRefreshKey, setEventBlockCandidatesRefreshKey] = useState(0);
   function refreshEventBlockCandidates() {
     setEventBlockCandidatesRefreshKey((k) => k + 1);
@@ -1200,7 +1212,12 @@ export function FocusedElementEditor({
 
   return (
     <>
-    <section id={`protocol-element-${element.id}`} ref={sectionRef}>
+    <section
+      id={`protocol-element-${element.id}`}
+      ref={sectionRef}
+      className={`protocol-doc-section${isActive ? " protocol-doc-section-active" : " protocol-doc-section-blurred"}`}
+      inert={!isActive}
+    >
       <div className="editor-panel-header">
         <div>
           <div className="eyebrow">Punkt {elementIndex + 1}</div>
@@ -2832,14 +2849,8 @@ export function FocusedElementEditor({
                   bumpStatsCharts();
                 }
 
-                const countByStatus = (s: string) => eligibleAttendanceParticipants.filter((p) => {
-                  const e = attendanceEntries.find(e => Number(e.participant_id) === p.id);
-                  return (e?.status ?? null) === s;
-                }).length;
-                const nPresent = countByStatus("present");
-                const nLate = countByStatus("late");
-                const nExcused = countByStatus("excused");
-                const nAbsent = countByStatus("absent");
+                const { present: nPresent, late: nLate, excused: nExcused, absent: nAbsent } =
+                  tallyAttendance(availableParticipants, attendanceEntries);
                 return (
                   <>
                     <div className="attendance-list">
@@ -3158,7 +3169,7 @@ export function FocusedElementEditor({
                   <div className="image-grid">
                     {(imagesByBlock[block.id] ?? []).map((image) => (
                       <div className="card image-card" key={image.id}>
-                        <img alt={image.title ?? image.original_name} src={`${browserApiBaseUrl}${image.content_url}`} />
+                        <LightboxImage alt={image.title ?? image.original_name} src={`${browserApiBaseUrl}${image.content_url}`} />
                         <p className="muted">{image.original_name}</p>
                         <button type="button" onClick={() => deleteImage(block.id, image.id)}>
                           Delete image
@@ -3174,22 +3185,25 @@ export function FocusedElementEditor({
         {/* The "Termine auswählen" trigger lives in the top-right notch of the red border
             itself (see isFirstInAutoGroup above), not as a separate row. */}
       </div>
+      {/* Rendered inside the same <section> (not as a sibling) so it shares this element's
+          blur/inert/active state in the scrollable document layout, and is included in the
+          section's own bounding box for the scroll-spy's centering calculation. */}
+      <SessionTodosSection
+        sectionTag={trimSectionName(element.section_name_snapshot)}
+        todos={Object.values(todosByBlock).flat().filter((t) => (t.tags ?? []).includes(trimSectionName(element.section_name_snapshot).toLowerCase()))}
+        pendingTodos={pendingTodos.filter((t) => (t.tags ?? []).includes(trimSectionName(element.section_name_snapshot).toLowerCase()))}
+        isReadOnly={isReadOnly}
+        trackChangesActive={trackChangesActive}
+        participants={availableParticipants}
+        dueEvents={[...availableEvents].sort((a, b) => a.event_date.localeCompare(b.event_date))}
+        protocol={protocol}
+        onUpdate={updateTodo}
+        onDelete={deleteTodo}
+        onPendingUpdate={onPendingUpdate}
+        onPendingDone={onPendingDone}
+        onAcceptTrackedChange={acceptTodoTrackedChange}
+      />
     </section>
-    <SessionTodosSection
-      sectionTag={trimSectionName(element.section_name_snapshot)}
-      todos={Object.values(todosByBlock).flat().filter((t) => (t.tags ?? []).includes(trimSectionName(element.section_name_snapshot).toLowerCase()))}
-      pendingTodos={pendingTodos.filter((t) => (t.tags ?? []).includes(trimSectionName(element.section_name_snapshot).toLowerCase()))}
-      isReadOnly={isReadOnly}
-      trackChangesActive={trackChangesActive}
-      participants={availableParticipants}
-      dueEvents={[...availableEvents].sort((a, b) => a.event_date.localeCompare(b.event_date))}
-      protocol={protocol}
-      onUpdate={updateTodo}
-      onDelete={deleteTodo}
-      onPendingUpdate={onPendingUpdate}
-      onPendingDone={onPendingDone}
-      onAcceptTrackedChange={acceptTodoTrackedChange}
-    />
     {isPlanningMode && (() => {
       const referenceBlock = element.blocks.find((b) => asObject(b.configuration_snapshot_json).repeat_source_type === "event");
       const referenceConfig = referenceBlock ? asObject(referenceBlock.configuration_snapshot_json) : {};
