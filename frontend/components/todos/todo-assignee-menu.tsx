@@ -1,6 +1,6 @@
 "use client";
 
-import { KeyboardEvent, useEffect, useRef, useState } from "react";
+import { KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { Popover } from "@/components/ui/popover";
 import { SearchInput } from "@/components/ui/search-input";
@@ -12,16 +12,21 @@ type Props = {
   participants: AssigneeOption[];
   activeId: number | null;
   onChange: (option: AssigneeOption) => void;
+  /** Text for the built-in "id: null" option - defaults to the todo-assignee wording
+   * ("Niemand") but callers reusing this as a generic searchable dropdown (e.g. picking
+   * an existing record vs. creating a new one) pass their own, e.g. "Neu anlegen". */
+  nullLabel?: string;
 };
 
-export function TodoAssigneeMenu({ label, participants, activeId, onChange }: Props) {
+export function TodoAssigneeMenu({ label, participants, activeId, onChange, nullLabel = "Niemand" }: Props) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [highlighted, setHighlighted] = useState(0);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
 
-  const options: AssigneeOption[] = [{ id: null, display_name: "Niemand" }, ...participants];
+  const options: AssigneeOption[] = [{ id: null, display_name: nullLabel }, ...participants];
   const filtered = search.trim()
     ? options.filter((o) => o.display_name.toLowerCase().includes(search.trim().toLowerCase()))
     : options;
@@ -33,6 +38,18 @@ export function TodoAssigneeMenu({ label, participants, activeId, onChange }: Pr
   useEffect(() => {
     if (!open) {
       setSearch("");
+    }
+  }, [open]);
+
+  // Deliberately not the `autoFocus` prop: React applies that during the DOM-mutation
+  // part of the commit, before Popover's own useLayoutEffect has positioned the portaled
+  // panel - the browser then scroll-into-views the still-unpositioned panel (appended at
+  // the end of <body>), jumping the whole page to the bottom. Focusing here, in a
+  // useLayoutEffect on the parent, runs after Popover's (child) positioning effect, and
+  // `preventScroll` is a second line of defense against the page jumping regardless.
+  useLayoutEffect(() => {
+    if (open) {
+      searchRef.current?.focus({ preventScroll: true });
     }
   }, [open]);
 
@@ -71,7 +88,7 @@ export function TodoAssigneeMenu({ label, participants, activeId, onChange }: Pr
         <span className="mini-menu-trigger-icon">⌄</span>
       </button>
       <Popover open={open} onOpenChange={setOpen} anchorRef={triggerRef} className="assignee-popover-portal">
-        <SearchInput value={search} onChange={setSearch} placeholder="Suchen…" onKeyDown={handleInputKey} autoFocus />
+        <SearchInput ref={searchRef} value={search} onChange={setSearch} placeholder="Suchen…" onKeyDown={handleInputKey} />
         <div className="menu-list" role="listbox" ref={listRef}>
           {filtered.length === 0 ? (
             <span className="assignee-empty">Keine Ergebnisse</span>

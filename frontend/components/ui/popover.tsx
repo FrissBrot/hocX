@@ -1,6 +1,6 @@
 "use client";
 
-import { CSSProperties, ReactNode, RefObject, useEffect, useRef, useState } from "react";
+import { CSSProperties, ReactNode, RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 type Align = "start" | "end";
@@ -9,9 +9,12 @@ type Align = "start" | "end";
 // isn't enough room below - same heuristic todo-assignee-menu.tsx used before this
 // primitive existed, generalized so every popover in the app positions consistently.
 function usePopoverPosition(open: boolean, anchorRef: RefObject<HTMLElement | null>, align: Align, gap: number) {
+  // Fixed position must be set before the browser paints - otherwise the portaled
+  // panel briefly renders unpositioned at the end of <body> (bottom of the whole
+  // page), and an autoFocus input inside it makes the browser auto-scroll there.
   const [style, setStyle] = useState<CSSProperties>({});
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open || !anchorRef.current) {
       return;
     }
