@@ -38,7 +38,7 @@ def _app_routers(domain: str, domain_id: int) -> dict:
             "entryPoints": ["websecure"],
             "service": "hocx-auth@docker",
             "priority": 200,
-            "middlewares": ["hocx-auth-ratelimit@docker"],
+            "middlewares": ["auth-ratelimit@docker"],
             "tls": {"certResolver": "letsencrypt"},
         },
     }
@@ -66,7 +66,7 @@ def _abgabebox_routers(domain: str, domain_id: int) -> dict:
             "entryPoints": ["websecure"],
             "service": "hocx-abgabebox-backend@docker",
             "priority": 200,
-            "middlewares": ["hocx-abgabebox-upload-ratelimit@docker"],
+            "middlewares": ["abgabebox-upload-ratelimit@docker"],
             "tls": {"certResolver": "letsencrypt"},
         },
     }
