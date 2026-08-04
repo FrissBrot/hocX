@@ -1574,6 +1574,59 @@ class ProtocolService:
         self.repository.delete(db, protocol)
         return True
 
+    def _build_event_repeat_form_snapshot(self, db: Session, *, raw_config: dict, repeat_context: dict) -> dict:
+        """Same rows/value_type transform as create_from_template's form_type_id branch
+        (raw ElementDefinition row schema -> runtime schema with text_value/participant_id/
+        participant_ids/etc.), for a freshly-added single event-repeat "form" block. There
+        is no "last completed protocol" to diff track-changes against here (this block is
+        brand new to this protocol), so track_changes_active is always False - equivalent
+        to leaving each row/entry untagged."""
+        linked_list_id = self._coerce_optional_int(raw_config.get("linked_list_id"))
+        raw_rows = raw_config.get("rows") or raw_config.get("field_rows") or []
+        field_rows = (
+            []
+            if linked_list_id
+            else [
+                {
+                    "id": row.get("id"),
+                    "label": (
+                        self._render_context_text(row.get("label") or "", repeat_context) or ""
+                        if row_value_type == "list_entry"
+                        else self._render_context_text(row.get("label") or row.get("title") or "Feld", repeat_context) or "Feld"
+                    ),
+                    "value_type": row_value_type,
+                    "sort_index": row.get("sort_index"),
+                    "text_value": self._render_context_text(row.get("template_value") or "", repeat_context) or "" if row_value_type == "text" else "",
+                    "participant_id": self._coerce_optional_int(row.get("template_participant_id")) if row_value_type == "participant" else None,
+                    "participant_ids": self._coerce_int_list(row.get("template_participant_ids")) if row_value_type == "participants" else [],
+                    "event_id": self._coerce_optional_int(row.get("template_event_id")) if row_value_type == "event" else None,
+                    "linked_list_id": self._coerce_optional_int((row.get("row_config") or {}).get("linked_list_id")) if row_value_type == "list_entry" else None,
+                    "linked_list_entry_id": self._coerce_optional_int((row.get("row_config") or {}).get("linked_list_entry_id")) if row_value_type == "list_entry" else None,
+                    "list_fixed_column": (row.get("row_config") or {}).get("list_fixed_column") if row_value_type == "list_entry" else None,
+                }
+                for row in raw_rows
+                for row_value_type in [row.get("row_type") or row.get("value_type") or "text"]
+            ]
+        )
+        for field_row in field_rows:
+            if field_row.get("linked_list_id") and field_row.get("linked_list_entry_id"):
+                live_row_snapshot = list_snapshot_service.compute_row_list_snapshot(
+                    db, field_row["linked_list_id"], field_row["linked_list_entry_id"]
+                )
+                field_row["list_snapshot"] = list_snapshot_service.tag_initial_row_snapshot(
+                    live_row_snapshot, None, track_changes_active=False
+                )
+        whole_list_snapshot = list_snapshot_service.compute_whole_list_snapshot(db, linked_list_id) if linked_list_id else None
+        if whole_list_snapshot is not None:
+            whole_list_snapshot["entries"] = list_snapshot_service.tag_initial_list_entries(
+                whole_list_snapshot["entries"], None, track_changes_active=False
+            )
+        return {
+            "linked_list_id": linked_list_id,
+            "rows": field_rows,
+            **({"list_snapshot": whole_list_snapshot} if whole_list_snapshot is not None else {}),
+        }
+
     def add_event_block_to_element(
         self,
         db: Session,
@@ -1659,8 +1712,14 @@ class ProtocolService:
 
         text_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "text"))
         static_text_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "static_text"))
+        form_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "form"))
 
         rendered_default_content = self._render_context_text(event_block_template.get("default_content"), repeat_context) or ""
+        form_snapshot = (
+            self._build_event_repeat_form_snapshot(db, raw_config=block_config, repeat_context=repeat_context)
+            if event_block_template["element_type_id"] == form_type_id
+            else {}
+        )
 
         protocol_block = ProtocolElementBlock(
             protocol_element_id=protocol_element_id,
@@ -1692,6 +1751,7 @@ class ProtocolService:
                 "repeat_source_type": "event",
                 "repeat_source_id": event.id,
                 "repeat_source_label": event.title or "",
+                **form_snapshot,
             },
         )
         db.add(protocol_block)

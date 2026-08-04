@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 
-from app.api.routes import admin, admin_auth, auth, collaboration_ws, cycle_configs, document_templates, events, exports, files, finance, fines, lists, participants, protocol_elements, protocols, statistics, submission_assignments, tag_config, templates, tenants, todos, users
+from app.api.routes import admin, admin_auth, auth, collaboration_ws, cycle_configs, document_templates, events, exports, files, finance, fines, lists, participants, protocol_elements, protocols, statistics, submission_assignments, tag_config, templates, tenants, todos, users, word_import
 from app.core.db import SessionLocal
 from app.core.config import settings
 from app.core.error_log import best_effort_actor_from_request, record_system_error
@@ -256,4 +256,5 @@ app.include_router(finance.router, prefix="/api", tags=["finance"])
 app.include_router(fines.router, prefix="/api", tags=["fines"])
 app.include_router(statistics.router, prefix="/api", tags=["statistics"])
 app.include_router(submission_assignments.router, prefix="/api", tags=["submission-assignments"])
+app.include_router(word_import.router, prefix="/api", tags=["word-import"])
 app.include_router(collaboration_ws.router, tags=["collaboration"])
