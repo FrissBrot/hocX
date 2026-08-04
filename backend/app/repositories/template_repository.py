@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from datetime import date
+
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.models import Participant, Template, TemplateParticipant
+from app.repositories.participant_repository import participant_eligible_on
 
 
 class TemplateRepository:
@@ -49,13 +52,17 @@ class TemplateRepository:
         db.delete(template)
         db.commit()
 
-    def list_participant_assignments(self, db: Session, template_id: int) -> list[tuple[Participant, bool]]:
+    def list_participant_assignments(
+        self, db: Session, template_id: int, *, as_of: date | None = None
+    ) -> list[tuple[Participant, bool]]:
         statement = (
             select(Participant, TemplateParticipant.exclude_from_attendance)
             .join(TemplateParticipant, TemplateParticipant.participant_id == Participant.id)
             .where(TemplateParticipant.template_id == template_id)
             .order_by(Participant.display_name.asc(), Participant.id.asc())
         )
+        if as_of is not None:
+            statement = statement.where(participant_eligible_on(as_of))
         return [(participant, bool(exclude_from_attendance)) for participant, exclude_from_attendance in db.execute(statement).all()]
 
     def list_participants(self, db: Session, template_id: int) -> list[Participant]:

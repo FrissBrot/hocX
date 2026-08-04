@@ -124,6 +124,8 @@ class ParticipantService:
             display_name=payload.display_name,
             email=payload.email,
             is_active=payload.is_active,
+            joined_at=payload.joined_at,
+            left_at=payload.left_at,
         )
         created = self.repository.create(db, participant)
         created = self._ensure_linked_user(db, created)

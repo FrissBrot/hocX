@@ -27,6 +27,7 @@ from app.models import (
 from app.services.document_template_service import DocumentTemplateService
 from app.services.access_service import AccessService
 from app.services.block_behavior import resolve_block_behavior
+from app.repositories.participant_repository import participant_eligible_on
 from app.services import list_snapshot_service
 from app.services.responsible_label_service import resolve_display_section_title, resolve_responsible_label
 from app.repositories.protocol_repository import ProtocolRepository
@@ -1336,6 +1337,7 @@ class ProtocolService:
                             .where(
                                 TemplateParticipant.template_id == template.id,
                                 TemplateParticipant.exclude_from_attendance.is_(False),
+                                participant_eligible_on(payload.protocol_date),
                             )
                             .order_by(Participant.display_name.asc(), Participant.id.asc())
                         ).scalars()

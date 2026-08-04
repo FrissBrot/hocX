@@ -4,11 +4,13 @@ import { ChangeEvent, FormEvent, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
+import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
+import { formatDate } from "@/lib/utils/format";
 import { ParticipantSummary, TemplateSummary } from "@/types/api";
 
 const PAGE_SIZE = 50;
@@ -51,6 +53,8 @@ type ParticipantFormState = {
   display_name: string;
   email: string;
   is_active: boolean;
+  joined_at: string;
+  left_at: string;
 };
 
 const emptyForm: ParticipantFormState = {
@@ -59,7 +63,24 @@ const emptyForm: ParticipantFormState = {
   display_name: "",
   email: "",
   is_active: true,
+  joined_at: "",
+  left_at: "",
 };
+
+/** "Ausgetreten (seit dd.mm.yyyy)" / "Noch nicht eingetreten (ab dd.mm.yyyy)" - membership-window
+ * status derived from joined_at/left_at, shown alongside the existing is_active toggle since the
+ * two are independent: is_active/inactive is a manual switch, join/leave dates gate which
+ * protocols' attendance rosters a participant appears in. */
+function membershipStatus(participant: ParticipantSummary): string | null {
+  const today = new Date().toISOString().slice(0, 10);
+  if (participant.left_at && participant.left_at <= today) {
+    return `Ausgetreten seit ${formatDate(participant.left_at)}`;
+  }
+  if (participant.joined_at && participant.joined_at > today) {
+    return `Eintritt ab ${formatDate(participant.joined_at)}`;
+  }
+  return null;
+}
 
 export function ParticipantManager({ initialParticipants, templates }: ParticipantManagerProps) {
   const showToast = useToast();
@@ -134,6 +155,8 @@ export function ParticipantManager({ initialParticipants, templates }: Participa
       display_name: participant.display_name,
       email: participant.email ?? "",
       is_active: participant.is_active,
+      joined_at: participant.joined_at ?? "",
+      left_at: participant.left_at ?? "",
     });
     try {
       const assignedTemplates = await browserApiFetch<TemplateSummary[]>(`/api/participants/${participant.id}/templates`);
@@ -147,6 +170,11 @@ export function ParticipantManager({ initialParticipants, templates }: Participa
   async function saveParticipant(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    if (form.joined_at && form.left_at && form.left_at < form.joined_at) {
+      showToast("Austrittsdatum darf nicht vor dem Eintrittsdatum liegen", "error");
+      return;
+    }
+
     try {
       const payload = {
         first_name: form.first_name || null,
@@ -154,6 +182,8 @@ export function ParticipantManager({ initialParticipants, templates }: Participa
         display_name: form.display_name,
         email: form.email || null,
         is_active: form.is_active,
+        joined_at: form.joined_at || null,
+        left_at: form.left_at || null,
       };
 
       let participantId: number;
@@ -325,7 +355,10 @@ export function ParticipantManager({ initialParticipants, templates }: Participa
               <td>{participant.first_name ?? "—"}</td>
               <td>{participant.last_name ?? "—"}</td>
               <td>{participant.email ?? "—"}</td>
-              <td><span className="pill">{participant.is_active ? "Aktiv" : "Inaktiv"}</span></td>
+              <td>
+                <span className="pill">{participant.is_active ? "Aktiv" : "Inaktiv"}</span>
+                {membershipStatus(participant) && <div className="muted">{membershipStatus(participant)}</div>}
+              </td>
               <td>
                 <div className="table-actions">
                   <button
@@ -459,6 +492,22 @@ export function ParticipantManager({ initialParticipants, templates }: Participa
             <span className="field-label">E-Mail</span>
             <input value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} />
           </label>
+          <div className="two-col">
+            <label className="field-stack">
+              <span className="field-label">Eintrittsdatum</span>
+              <DateInput value={form.joined_at} onChange={(value) => setForm((current) => ({ ...current, joined_at: value }))} />
+              <span className="muted" style={{ fontSize: "0.8rem" }}>
+                Erscheint erst ab diesem Datum in Anwesenheitslisten. Leer = kein Beginn hinterlegt.
+              </span>
+            </label>
+            <label className="field-stack">
+              <span className="field-label">Austrittsdatum</span>
+              <DateInput value={form.left_at} onChange={(value) => setForm((current) => ({ ...current, left_at: value }))} />
+              <span className="muted" style={{ fontSize: "0.8rem" }}>
+                Erscheint ab dem Folgetag nicht mehr in Anwesenheitslisten. Leer = kein Austritt hinterlegt.
+              </span>
+            </label>
+          </div>
           <div className="field-stack">
             <span className="field-label">Templates</span>
             <div className="participant-check-grid">

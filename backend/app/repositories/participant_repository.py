@@ -1,10 +1,22 @@
 from __future__ import annotations
 
-from sqlalchemy import delete, select
+from datetime import date
+
+from sqlalchemy import ColumnElement, and_, delete, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.models import Participant, Template, TemplateParticipant
+
+
+def participant_eligible_on(as_of: date) -> ColumnElement[bool]:
+    """SQL predicate: participant was a member on `as_of` (i.e. an attendance roster for a
+    protocol dated `as_of` should include them). `joined_at`/`left_at` unset means no bound on
+    that side, so an untouched participant always matches."""
+    return and_(
+        or_(Participant.joined_at.is_(None), Participant.joined_at <= as_of),
+        or_(Participant.left_at.is_(None), Participant.left_at >= as_of),
+    )
 
 
 class ParticipantRepository:
