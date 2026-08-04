@@ -255,6 +255,8 @@ export type ParticipantSummary = {
   display_name: string;
   email: string | null;
   is_active: boolean;
+  joined_at: string | null;
+  left_at: string | null;
   exclude_from_attendance?: boolean;
   created_at: string;
   updated_at: string;

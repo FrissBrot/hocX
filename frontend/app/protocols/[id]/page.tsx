@@ -36,8 +36,9 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
   const events = (await backendFetchWithSession<EventSummary[]>("/api/events")) ?? [];
   const lists = (await backendFetchWithSession<StructuredListDefinition[]>("/api/lists")) ?? [];
   const elements = (await backendFetchWithSession<ProtocolElement[]>(`/api/protocols/${id}/elements`)) ?? [];
+  const participantsQuery = protocol.protocol_date ? `?as_of=${encodeURIComponent(protocol.protocol_date)}` : "";
   const participants =
-    (await backendFetchWithSession<ParticipantSummary[]>(`/api/templates/${protocol.template_id}/participants`)) ?? [];
+    (await backendFetchWithSession<ParticipantSummary[]>(`/api/templates/${protocol.template_id}/participants${participantsQuery}`)) ?? [];
   const linkedListIds = Array.from(
     new Set(
       elements.flatMap((element) =>

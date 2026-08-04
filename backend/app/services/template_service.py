@@ -1,4 +1,5 @@
 import copy
+from datetime import date
 
 from sqlalchemy.orm import Session
 
@@ -143,8 +144,12 @@ class TemplateService:
             for participant, exclude_from_attendance in rows
         ]
 
-    def list_template_participants(self, db: Session, template_id: int) -> list[dict[str, object]]:
-        return self._serialize_template_participants(self.repository.list_participant_assignments(db, template_id))
+    def list_template_participants(
+        self, db: Session, template_id: int, *, as_of: date | None = None
+    ) -> list[dict[str, object]]:
+        return self._serialize_template_participants(
+            self.repository.list_participant_assignments(db, template_id, as_of=as_of)
+        )
 
     def replace_template_participants(
         self,

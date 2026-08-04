@@ -1,3 +1,5 @@
+from datetime import date
+
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -138,6 +140,7 @@ def bulk_delete_participants(
 @router.get("/templates/{template_id}/participants", response_model=list[TemplateParticipantAssignmentRead])
 def list_template_participants(
     template_id: int,
+    as_of: date | None = Query(default=None, description="Only include participants who were members on this date (joined_at/left_at)"),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -146,7 +149,7 @@ def list_template_participants(
     if template is None or template.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Template not found")
     access_service.ensure_can_read_template(db, user, template_id)
-    return template_service.list_template_participants(db, template_id)
+    return template_service.list_template_participants(db, template_id, as_of=as_of)
 
 
 @router.put("/templates/{template_id}/participants", response_model=list[TemplateParticipantAssignmentRead])

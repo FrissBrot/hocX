@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ParticipantBase(BaseModel):
@@ -12,6 +12,14 @@ class ParticipantBase(BaseModel):
     display_name: str
     email: str | None = None
     is_active: bool = True
+    joined_at: date | None = None
+    left_at: date | None = None
+
+    @model_validator(mode="after")
+    def _check_date_order(self) -> "ParticipantBase":
+        if self.joined_at is not None and self.left_at is not None and self.left_at < self.joined_at:
+            raise ValueError("left_at must not be before joined_at")
+        return self
 
 
 class ParticipantCreate(ParticipantBase):
@@ -24,6 +32,14 @@ class ParticipantUpdate(BaseModel):
     display_name: str | None = None
     email: str | None = None
     is_active: bool | None = None
+    joined_at: date | None = None
+    left_at: date | None = None
+
+    @model_validator(mode="after")
+    def _check_date_order(self) -> "ParticipantUpdate":
+        if self.joined_at is not None and self.left_at is not None and self.left_at < self.joined_at:
+            raise ValueError("left_at must not be before joined_at")
+        return self
 
 
 class ParticipantRead(ParticipantBase):

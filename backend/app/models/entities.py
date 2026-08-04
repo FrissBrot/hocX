@@ -192,6 +192,8 @@ class Participant(Base, TimestampMixin, UpdatedAtMixin):
     display_name: Mapped[str] = mapped_column(Text, nullable=False)
     email: Mapped[str | None] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
+    joined_at: Mapped[date | None] = mapped_column(Date)
+    left_at: Mapped[date | None] = mapped_column(Date)
 
 
 class EventCategory(Base):
@@ -248,6 +250,19 @@ class CycleConfig(Base, TimestampMixin, UpdatedAtMixin):
     reset_month: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("12"))
     reset_day: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("31"))
     name_pattern: Mapped[str | None] = mapped_column(Text)
+
+
+class WordImportProfile(Base, TimestampMixin, UpdatedAtMixin):
+    __tablename__ = "word_import_profile"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "template_id", name="uq_word_import_profile_tenant_template"),
+        Index("idx_word_import_profile_tenant", "tenant_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    template_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("template.id", ondelete="SET NULL"))
+    mapping_config_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
 
 
 class EventCycle(Base):
