@@ -82,6 +82,10 @@ def get_stored_file_content(
     stored_file = service.get_stored_file(db, stored_file_id)
     if stored_file is None:
         raise HTTPException(status_code=404, detail="Stored file not found")
+    if stored_file.scan_status == "infected":
+        raise HTTPException(status_code=403, detail="Datei wurde von der Virenprüfung als infiziert erkannt und ist gesperrt")
+    if stored_file.scan_status == "pending":
+        raise HTTPException(status_code=425, detail="Datei wird noch auf Schadsoftware geprüft, bitte in Kürze erneut versuchen")
     file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File missing on filesystem")

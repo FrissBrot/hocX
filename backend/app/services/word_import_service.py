@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date
 from difflib import SequenceMatcher
 from io import BytesIO
 
+import pdfplumber
 from docx import Document
 from docx.oxml.ns import qn
 from docx.table import Table as DocxTable
@@ -243,6 +245,19 @@ def parse_docx(raw_bytes: bytes) -> ParsedDocx:
     if current_heading is not None and current_lines:
         sections.append(ParsedSection(heading=current_heading, text="\n".join(current_lines)))
 
+    sections, tables = _reclassify_text_only_sections(sections, tables, table_index)
+    return ParsedDocx(protocol_date=protocol_date, title_hint=title_hint, sections=sections, tables=tables)
+
+
+def _reclassify_text_only_sections(
+    sections: list[ParsedSection], tables: list[ParsedTable], table_index: int
+) -> tuple[list[ParsedSection], list[ParsedTable]]:
+    """Some legacy documents lay out what's structurally a Termine list or a
+    role/person list as plain paragraph text instead of a real table (a Word table
+    style, or - for a PDF - without any grid lines pdfplumber can detect) - this
+    reclassifies such a section as an extra synthetic ParsedTable (see
+    _classify_section_kind) instead of leaving it only importable as opaque free
+    text. Shared by parse_docx and parse_pdf."""
     kept_sections: list[ParsedSection] = []
     for section in sections:
         lines = [line.strip() for line in section.text.split("\n") if line.strip()]
@@ -264,9 +279,129 @@ def parse_docx(raw_bytes: bytes) -> ParsedDocx:
             )
         )
         table_index += 1
-    sections = kept_sections
+    return kept_sections, tables
 
+
+_PDF_LINE_CLUSTER_TOLERANCE = 3.0
+_PDF_HEADING_SIZE_MARGIN = 0.5
+
+
+def _cluster_pdf_lines(words: list[dict]) -> list[list[dict]]:
+    """Groups words on one page into visual lines by vertical position. pdfplumber
+    hands back individual words with float y-coordinates that can jitter by a
+    fraction of a point even within the same printed line, so a plain
+    round(top)-equality grouping would sometimes split one line into two."""
+    ordered = sorted(words, key=lambda word: (word["top"], word["x0"]))
+    lines: list[list[dict]] = []
+    for word in ordered:
+        if lines and abs(word["top"] - lines[-1][0]["top"]) <= _PDF_LINE_CLUSTER_TOLERANCE:
+            lines[-1].append(word)
+        else:
+            lines.append([word])
+    for line in lines:
+        line.sort(key=lambda word: word["x0"])
+    return lines
+
+
+def parse_pdf(raw_bytes: bytes) -> ParsedDocx:
+    """Heuristic extraction for text-based PDFs (e.g. a Word document exported/printed
+    to PDF, the format hocX's word-import tool is designed for - not a scanned image,
+    which has no text layer to extract at all). Mirrors parse_docx's approach, but a
+    PDF has no paragraph style or real table object to rely on: headings are inferred
+    from font size (a line printed noticeably larger than the document's body text,
+    the same visual cue a human would use) and tables from pdfplumber's own
+    line-based table detection, which works well for a bordered Word table exported
+    to PDF (the normal case) but not for a borderless one - those fall through to the
+    same plain-text list/table reclassification as an unrecognized docx table would."""
+    page_items: list[list[tuple[float, str, object]]] = []
+    body_size_votes: Counter = Counter()
+    with pdfplumber.open(BytesIO(raw_bytes)) as pdf:
+        for page in pdf.pages:
+            tables = page.find_tables()
+            table_bboxes = [table.bbox for table in tables]
+            words = page.extract_words(extra_attrs=["size"], keep_blank_chars=False)
+            for word in words:
+                if word.get("size"):
+                    body_size_votes[round(word["size"], 1)] += 1
+
+            def _inside_table(word: dict, bboxes: list[tuple[float, float, float, float]] = table_bboxes) -> bool:
+                return any(
+                    bbox[0] - 3 <= word["x0"] and word["x1"] <= bbox[2] + 3
+                    and bbox[1] - 3 <= word["top"] and word["bottom"] <= bbox[3] + 3
+                    for bbox in bboxes
+                )
+
+            free_words = [word for word in words if not _inside_table(word)]
+            items: list[tuple[float, str, object]] = []
+            for line in _cluster_pdf_lines(free_words):
+                text = " ".join(word["text"] for word in line).strip()
+                if not text:
+                    continue
+                avg_size = sum(word.get("size", 0) for word in line) / len(line)
+                items.append((line[0]["top"], "line", (text, avg_size)))
+            for table in tables:
+                rows = [[(cell or "").strip() for cell in row] for row in (table.extract() or [])]
+                if rows:
+                    items.append((table.bbox[1], "table", rows))
+            items.sort(key=lambda entry: entry[0])
+            page_items.append(items)
+
+    body_size = body_size_votes.most_common(1)[0][0] if body_size_votes else 11
+    heading_min_size = body_size + _PDF_HEADING_SIZE_MARGIN
+
+    non_empty_texts = [payload[0] for items in page_items for _, kind, payload in items if kind == "line"]
+    title_hint = non_empty_texts[0] if non_empty_texts else None
+    protocol_date = None
+    for text in non_empty_texts[:15]:
+        protocol_date = _extract_date(text)
+        if protocol_date:
+            break
+
+    sections: list[ParsedSection] = []
+    tables: list[ParsedTable] = []
+    current_heading: str | None = None
+    current_lines: list[str] = []
+    table_index = 0
+    for items in page_items:
+        for _, kind, payload in items:
+            if kind == "line":
+                text, avg_size = payload
+                is_heading = len(text) <= 120 and not _starts_with_date(text) and avg_size >= heading_min_size
+                if is_heading:
+                    if current_heading is not None and current_lines:
+                        sections.append(ParsedSection(heading=current_heading, text="\n".join(current_lines)))
+                    current_heading = text
+                    current_lines = []
+                elif current_heading is not None:
+                    current_lines.append(text)
+            else:
+                header_cells, *data_rows = payload
+                tables.append(
+                    ParsedTable(
+                        index=table_index,
+                        header_cells=header_cells,
+                        rows=[row for row in data_rows if any(row)],
+                        preceding_heading=current_heading,
+                    )
+                )
+                table_index += 1
+    if current_heading is not None and current_lines:
+        sections.append(ParsedSection(heading=current_heading, text="\n".join(current_lines)))
+
+    if not non_empty_texts and table_index == 0:
+        raise ValueError("PDF enthält keinen erkennbaren Text (evtl. eingescannt) – Texterkennung wird nicht unterstützt.")
+
+    sections, tables = _reclassify_text_only_sections(sections, tables, table_index)
     return ParsedDocx(protocol_date=protocol_date, title_hint=title_hint, sections=sections, tables=tables)
+
+
+def parse_document(raw_bytes: bytes) -> ParsedDocx:
+    """Dispatches to the right parser by sniffing the actual file signature - never
+    trusts a filename/extension, consistent with FileService's own content-based mime
+    check for stored word-import documents."""
+    if raw_bytes[:5] == b"%PDF-":
+        return parse_pdf(raw_bytes)
+    return parse_docx(raw_bytes)
 
 
 def _resolve_table_role(
@@ -590,7 +725,7 @@ class WordImportService:
         raw_bytes: bytes,
         table_role_overrides: dict[int, dict] | None = None,
     ) -> WordImportAnalysis:
-        parsed = parse_docx(raw_bytes)
+        parsed = parse_document(raw_bytes)
         protocol_date = protocol_date_hint or parsed.protocol_date
         warnings: list[str] = []
 

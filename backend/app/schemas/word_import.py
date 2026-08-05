@@ -241,6 +241,21 @@ class WordImportCommit(BaseModel):
     tables: list[WordImportTableRoleCommit] = Field(default_factory=list)
 
 
+class WordImportDuplicateCandidate(BaseModel):
+    """Another queue document (open or already imported) sharing the same recognized
+    protocol_date + template as the document this is attached to - surfaced so the user
+    can decide whether it's genuinely the same protocol uploaded twice (in another
+    format or under another filename) or a coincidental same-day duplicate."""
+
+    id: int
+    display_name: str
+    original_filename: str
+    status: WordImportDocumentStatus
+    protocol_id: int | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class WordImportDocumentSummary(BaseModel):
     """One row of the multi-document import queue (`/tools/import`) - a stored upload
     that has either only been read in ('eingelesen') or already turned into a protocol
@@ -257,6 +272,7 @@ class WordImportDocumentSummary(BaseModel):
     created_at: datetime
     imported_at: datetime | None = None
     stored_file_id: int
+    duplicates: list[WordImportDuplicateCandidate] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 

@@ -16,6 +16,24 @@ class StoredFileRepository:
     def delete(self, db: Session, stored_file: StoredFile) -> None:
         db.delete(stored_file)
 
+    def list_pending_word_import_files(self, db: Session) -> list[StoredFile]:
+        """Word-import documents are stored under a fixed 'word-imports/' path prefix
+        (see FileService.save_word_import_document) - that's used here instead of a join
+        to WordImportDocument so a file still mid-analyze (not yet turned into a
+        WordImportDocument row) is picked up too."""
+        return list(
+            db.execute(
+                select(StoredFile).where(
+                    StoredFile.scan_status == "pending",
+                    StoredFile.storage_path.like("uploads/word-imports/%"),
+                )
+            ).scalars()
+        )
+
+    def update_scan_status(self, db: Session, stored_file: StoredFile, *, scan_status: str) -> None:
+        stored_file.scan_status = scan_status
+        db.add(stored_file)
+
 
 class ProtocolImageRepository:
     def list_for_protocol_block(self, db: Session, protocol_element_block_id: int):

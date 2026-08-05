@@ -165,6 +165,23 @@ async def abgabebox_rescan_loop() -> None:
         await asyncio.sleep(interval_seconds)
 
 
+async def word_import_rescan_loop() -> None:
+    """Periodic sweep for word-import StoredFile rows stuck in scan_status='pending'
+    (ClamAV was unreachable at upload time - see file_service.py's save_word_import_document).
+    Same every-worker-but-advisory-locked pattern as abgabebox_rescan_loop above."""
+    interval_seconds = settings.word_import_rescan_interval_minutes * 60
+    file_service = FileService()
+    while True:
+        with SessionLocal() as db:
+            acquired = db.execute(text("SELECT pg_try_advisory_lock(202600006)")).scalar()
+            if acquired:
+                try:
+                    file_service.rescan_pending_word_import_files(db)
+                finally:
+                    db.execute(text("SELECT pg_advisory_unlock(202600006)"))
+        await asyncio.sleep(interval_seconds)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     FileService().ensure_storage()
@@ -174,9 +191,11 @@ async def lifespan(_: FastAPI):
     ensure_traefik_dynamic_config()
     health_check_task = asyncio.create_task(domain_health_check_loop())
     rescan_task = asyncio.create_task(abgabebox_rescan_loop())
+    word_import_rescan_task = asyncio.create_task(word_import_rescan_loop())
     yield
     health_check_task.cancel()
     rescan_task.cancel()
+    word_import_rescan_task.cancel()
     await close_redis_pool()
 
 
