@@ -274,14 +274,19 @@ def _resolve_table_role(
     overrides: dict[int, dict],
     profile_table_roles: dict[str, dict],
     list_definitions: list[tuple[int, str]],
-) -> tuple[str, int | None]:
+) -> tuple[str, int | None, bool]:
+    """Third return value is True when the role came from an explicit source (this
+    call's manual override, or a learned profile signature match) rather than a
+    heuristic guess - see the "first table defaults to attendance" fallback below,
+    which must never clobber an explicit source just because it happens to sit at
+    index 0."""
     if table.index in overrides:
         entry = overrides[table.index]
-        return entry.get("role", "ignore"), entry.get("list_definition_id")
+        return entry.get("role", "ignore"), entry.get("list_definition_id"), True
     signature = _normalize(" | ".join(table.header_cells))
     if signature in profile_table_roles:
         entry = profile_table_roles[signature]
-        return entry.get("role", "ignore"), entry.get("list_definition_id")
+        return entry.get("role", "ignore"), entry.get("list_definition_id"), True
 
     role = table.known_role
     if role is None:
@@ -299,19 +304,19 @@ def _resolve_table_role(
                 best_score = score
                 best_id = list_id
         if best_id is not None and best_score >= _LIST_NAME_MATCH_THRESHOLD:
-            return "list", best_id
+            return "list", best_id, False
         if role == "list":
-            return "list", None
+            return "list", None, False
 
     if role is not None:
-        return role, None
+        return role, None, False
     if len(table.header_cells) == 2:
         # A plausible two-column role/assignment table (like "Amt" / "Person") even
         # without a confident name match against an existing List - surfaced as
         # "list" with no target yet, rather than silently "ignore", so it's visible
         # in the review step and the user only has to pick which List it belongs to.
-        return "list", None
-    return "ignore", None
+        return "list", None, False
+    return "ignore", None, False
 
 
 _DATE_RANGE_PATTERN = re.compile(
@@ -610,13 +615,26 @@ class WordImportService:
 
         table_roles: dict[int, str] = {}
         table_list_definitions: dict[int, int | None] = {}
+        table_role_explicit: dict[int, bool] = {}
         for table in parsed.tables:
-            role, list_definition_id = _resolve_table_role(
+            role, list_definition_id, explicit = _resolve_table_role(
                 table, table_role_overrides or {}, table_roles_by_signature, list_definitions_for_matching
             )
             table_roles[table.index] = role
             table_list_definitions[table.index] = list_definition_id
-        if parsed.tables and not any(role == "attendance" for role in table_roles.values()) and 0 not in (table_role_overrides or {}):
+            table_role_explicit[table.index] = explicit
+        # Last-resort default when nothing in the document was recognized as the
+        # attendance table at all: assume the first table is it. Must never override
+        # table 0's role if that role came from an explicit source (this call's manual
+        # override, or a signature learned from a previous import) - otherwise a
+        # learned "table 0 is actually the Ämtli list, not attendance" mapping would
+        # get silently clobbered back to "attendance" on every later import where the
+        # real attendance table's heuristic match happens to miss.
+        if (
+            parsed.tables
+            and not any(role == "attendance" for role in table_roles.values())
+            and not table_role_explicit.get(parsed.tables[0].index, False)
+        ):
             table_roles[parsed.tables[0].index] = "attendance"
 
         form_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "form"))
