@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.core.cycle_utils import get_cycle_year
 from app.repositories.participant_repository import participant_eligible_on
+from app.services.isolated_parse import parse_document_isolated
 from app.models import (
     CycleConfig,
     ElementDefinition,
@@ -725,7 +726,10 @@ class WordImportService:
         raw_bytes: bytes,
         table_role_overrides: dict[int, dict] | None = None,
     ) -> WordImportAnalysis:
-        parsed = parse_document(raw_bytes)
+        # Isoliert statt parse_document(raw_bytes) direkt - siehe isolated_parse.py: ein
+        # pathologisches/bösartig komprimiertes Dokument wird nach Timeout hart
+        # abgebrochen statt den aufrufenden Worker unbegrenzt zu blockieren.
+        parsed = parse_document_isolated(raw_bytes)
         protocol_date = protocol_date_hint or parsed.protocol_date
         warnings: list[str] = []
 

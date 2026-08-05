@@ -77,6 +77,17 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.service=${ROUTER_PREFIX:-hocx}-admin-auth"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.middlewares=${ROUTER_PREFIX:-hocx}-auth-ratelimit"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-admin-auth.loadbalancer.server.port=8000"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-word-import.rule=Host(`${TRAEFIK_DOMAIN}`) && PathPrefix(`/api/tools/word-import`) && Method(`POST`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-word-import.entrypoints=websecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-word-import.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-word-import.priority=200"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-word-import.service=${ROUTER_PREFIX:-hocx}-word-import"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-word-import.middlewares=${ROUTER_PREFIX:-hocx}-word-import-ratelimit,${ROUTER_PREFIX:-hocx}-word-import-body-limit"
+      - "traefik.http.services.${ROUTER_PREFIX:-hocx}-word-import.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-word-import-ratelimit.ratelimit.average=20"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-word-import-ratelimit.ratelimit.burst=10"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-word-import-ratelimit.ratelimit.period=1m"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-word-import-body-limit.buffering.maxRequestBodyBytes=157286400"
 
   frontend:
     image: ghcr.io/${GHCR_NAMESPACE}/hocx-frontend:${HOCX_VERSION}
