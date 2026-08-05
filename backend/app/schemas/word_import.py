@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
+
+WordImportDocumentStatus = Literal["eingelesen", "importiert"]
 
 TableRole = Literal["attendance", "events", "list", "ignore"]
 EventMatchStatus = Literal["matched", "changed", "new"]
@@ -237,3 +239,37 @@ class WordImportCommit(BaseModel):
     events: list[WordImportEventCommit] = Field(default_factory=list)
     lists: list[WordImportListRowCommit] = Field(default_factory=list)
     tables: list[WordImportTableRoleCommit] = Field(default_factory=list)
+
+
+class WordImportDocumentSummary(BaseModel):
+    """One row of the multi-document import queue (`/tools/import`) - a stored upload
+    that has either only been read in ('eingelesen') or already turned into a protocol
+    ('importiert', in which case protocol_id/imported_at/imported_by are set)."""
+
+    id: int
+    template_id: int
+    template_name: str
+    display_name: str
+    original_filename: str
+    status: WordImportDocumentStatus
+    protocol_id: int | None = None
+    protocol_date: date | None = None
+    created_at: datetime
+    imported_at: datetime | None = None
+    stored_file_id: int
+
+    model_config = {"from_attributes": True}
+
+
+class WordImportDocumentDetail(WordImportDocumentSummary):
+    analysis: WordImportAnalysis
+
+
+class WordImportDocumentUploadResult(BaseModel):
+    documents: list[WordImportDocumentSummary] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+
+
+class WordImportDocumentReanalyzeRequest(BaseModel):
+    protocol_date: date | None = None
+    table_roles: dict[int, dict] = Field(default_factory=dict)

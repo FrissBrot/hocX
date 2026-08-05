@@ -387,6 +387,8 @@ export type ProtocolSummary = {
   created_at?: string;
   updated_at?: string;
   latest_pdf_url?: string | null;
+  import_source_filename?: string | null;
+  import_source_url?: string | null;
 };
 
 export type NextSessionAttendanceEntry = {

@@ -11,10 +11,12 @@ from app.models import (
     ProtocolExportCache,
     ProtocolImage,
     ProtocolTodo,
+    StoredFile,
     Template,
     TemplateParticipant,
     UserProtocolAccess,
     UserTemplateAccess,
+    WordImportDocument,
 )
 
 
@@ -163,5 +165,15 @@ class AccessRepository:
             .join(ProtocolImage, ProtocolImage.protocol_element_block_id == ProtocolElementBlock.id)
             .where(ProtocolImage.stored_file_id == stored_file_id)
         )
-        combined = union_all(export_q, image_q).subquery()
+        # Only covers already-imported Word-Import documents (protocol_id set) - queued-but-
+        # not-yet-imported ones (no protocol yet) fall through to tenant_id_for_stored_file's
+        # coarser tenant+role check below, same as any other unlinked stored file.
+        import_q = select(WordImportDocument.protocol_id.label("protocol_id")).where(
+            WordImportDocument.stored_file_id == stored_file_id,
+            WordImportDocument.protocol_id.is_not(None),
+        )
+        combined = union_all(export_q, image_q, import_q).subquery()
         return db.scalar(select(combined.c.protocol_id).limit(1))
+
+    def tenant_id_for_stored_file(self, db: Session, *, stored_file_id: int) -> int | None:
+        return db.scalar(select(StoredFile.tenant_id).where(StoredFile.id == stored_file_id))

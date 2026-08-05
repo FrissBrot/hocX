@@ -299,6 +299,11 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
                   <span className="record-list-row-sub">{subtitle}</span>
                 </span>
                 <div className="record-list-row-trailing" onClick={(e) => e.stopPropagation()}>
+                  {protocol.import_source_filename && (
+                    <span title={`Importiert aus ${protocol.import_source_filename}`}>
+                      <Badge variant="info">Importiert</Badge>
+                    </span>
+                  )}
                   <Badge variant={statusVariant}>{protocolStatusLabel(protocol.status)}</Badge>
                   {isFinal ? (
                     <button

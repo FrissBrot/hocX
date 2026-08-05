@@ -15,7 +15,7 @@ from app.services.event_service import EventService
 from app.services.export_service import ExportService
 from app.services.protocol_service import ProtocolService
 from app.services.protocol_todo_service import ProtocolTodoService
-from app.models.entities import ProtocolExportCache, StoredFile, UserProtocolScroll
+from app.models.entities import ProtocolExportCache, StoredFile, UserProtocolScroll, WordImportDocument
 
 router = APIRouter()
 service = ProtocolService()
@@ -63,6 +63,26 @@ def _inject_pdf_urls(db: Session, protocols: list, tenant_id: int) -> list[Proto
     return result
 
 
+def _inject_import_links(db: Session, protocols: list[ProtocolRead]) -> list[ProtocolRead]:
+    """Bulk-attach the originating Word-Import document (filename + download url), if the
+    protocol was created via /tools/import - shown as an "Importiert" badge + link."""
+    ids = [p.id for p in protocols]
+    if not ids:
+        return protocols
+    rows = db.execute(
+        select(WordImportDocument.protocol_id, WordImportDocument.original_filename, WordImportDocument.stored_file_id).where(
+            WordImportDocument.protocol_id.in_(ids)
+        )
+    ).all()
+    by_protocol = {row.protocol_id: (row.original_filename, row.stored_file_id) for row in rows}
+    for r in protocols:
+        if r.id in by_protocol:
+            filename, stored_file_id = by_protocol[r.id]
+            r.import_source_filename = filename
+            r.import_source_url = f"/api/stored-files/{stored_file_id}/content"
+    return protocols
+
+
 @router.get("/protocols", response_model=list[ProtocolRead])
 def list_protocols(
     q: str | None = Query(default=None),
@@ -88,7 +108,7 @@ def list_protocols(
         skip=skip,
         limit=limit,
     )
-    return _inject_pdf_urls(db, protocols, user.current_tenant_id)
+    return _inject_import_links(db, _inject_pdf_urls(db, protocols, user.current_tenant_id))
 
 
 @router.post("/protocols/from-template", response_model=dict[str, int], status_code=status.HTTP_201_CREATED)
@@ -144,7 +164,7 @@ def get_protocol(protocol_id: int, db: Session = Depends(get_db), user: CurrentU
     if protocol is None or protocol.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Protocol not found")
     access_service.ensure_can_read_protocol(db, user, protocol_id)
-    return protocol
+    return _inject_import_links(db, [ProtocolRead.model_validate(protocol)])[0]
 
 
 @router.patch("/protocols/{protocol_id}", response_model=ProtocolRead)
