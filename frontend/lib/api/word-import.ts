@@ -183,6 +183,14 @@ export async function commitWordImport(payload: WordImportCommitPayload): Promis
 
 export type WordImportDocumentStatus = "eingelesen" | "importiert";
 
+export type WordImportDuplicateCandidate = {
+  id: number;
+  display_name: string;
+  original_filename: string;
+  status: WordImportDocumentStatus;
+  protocol_id: number | null;
+};
+
 export type WordImportDocumentSummary = {
   id: number;
   template_id: number;
@@ -195,6 +203,10 @@ export type WordImportDocumentSummary = {
   created_at: string;
   imported_at: string | null;
   stored_file_id: number;
+  // Other queue documents (open or already imported) sharing the same recognized
+  // protocol_date + template - likely the same protocol uploaded twice, e.g. once as
+  // .docx and once as .pdf, or under a different filename.
+  duplicates: WordImportDuplicateCandidate[];
 };
 
 export type WordImportDocumentDetail = WordImportDocumentSummary & {

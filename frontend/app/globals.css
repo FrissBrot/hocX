@@ -9411,6 +9411,25 @@ input[type="radio"] {
   font-size: 0.95rem;
 }
 
+.word-import-dropzone-compact {
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  text-align: left;
+}
+
+.word-import-dropzone-compact .word-import-dropzone-icon {
+  margin-bottom: 0;
+}
+
+.word-import-dropzone-link {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
 .word-import-filebar {
   display: flex;
   align-items: center;
@@ -9487,6 +9506,15 @@ input[type="radio"] {
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.word-import-duplicate-hint {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 0.82rem;
 }
 
 .word-import-alert-date-input {

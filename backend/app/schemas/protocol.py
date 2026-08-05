@@ -62,7 +62,7 @@ class ProtocolRead(BaseModel):
     updated_at: datetime
     latest_pdf_url: str | None = None
     # Set when this protocol was created via the Word-Import queue (/tools/import) -
-    # lets the UI show an "Importiert" badge + a link back to the source .docx.
+    # lets the UI show an "Importiert" badge + a link back to the source .docx/.pdf.
     import_source_filename: str | None = None
     import_source_url: str | None = None
 

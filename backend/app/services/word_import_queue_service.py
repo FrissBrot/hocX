@@ -82,7 +82,9 @@ class WordImportQueueService:
                 errors.append(f"{filename}: {detail}")
         return documents, errors
 
-    def list_documents(self, db: Session, *, tenant_id: int, status: str | None = None) -> list[tuple[WordImportDocument, str]]:
+    def list_documents(
+        self, db: Session, *, tenant_id: int, status: str | None = None
+    ) -> list[tuple[WordImportDocument, str, list[WordImportDocument]]]:
         statement = (
             select(WordImportDocument, Template.name)
             .join(Template, Template.id == WordImportDocument.template_id)
@@ -91,7 +93,43 @@ class WordImportQueueService:
         if status:
             statement = statement.where(WordImportDocument.status == status)
         statement = statement.order_by(WordImportDocument.created_at.desc())
-        return [(row[0], row[1]) for row in db.execute(statement).all()]
+        rows = [(row[0], row[1]) for row in db.execute(statement).all()]
+        duplicate_map = self._duplicate_map(db, tenant_id=tenant_id)
+        return [(document, template_name, duplicate_map.get(document.id, [])) for document, template_name in rows]
+
+    def duplicates_for_document(self, db: Session, document: WordImportDocument) -> list[WordImportDocument]:
+        """Other documents (open or already imported) of the same tenant+template sharing
+        the same recognized protocol_date - a same protocol very likely uploaded twice,
+        e.g. once as .docx and once as .pdf, or under a different filename."""
+        if document.protocol_date is None:
+            return []
+        statement = select(WordImportDocument).where(
+            WordImportDocument.tenant_id == document.tenant_id,
+            WordImportDocument.template_id == document.template_id,
+            WordImportDocument.protocol_date == document.protocol_date,
+            WordImportDocument.id != document.id,
+        )
+        return list(db.execute(statement).scalars())
+
+    def _duplicate_map(self, db: Session, *, tenant_id: int) -> dict[int, list[WordImportDocument]]:
+        rows = list(
+            db.execute(
+                select(WordImportDocument).where(
+                    WordImportDocument.tenant_id == tenant_id,
+                    WordImportDocument.protocol_date.is_not(None),
+                )
+            ).scalars()
+        )
+        groups: dict[tuple[int, date], list[WordImportDocument]] = {}
+        for doc in rows:
+            groups.setdefault((doc.template_id, doc.protocol_date), []).append(doc)
+        result: dict[int, list[WordImportDocument]] = {}
+        for docs in groups.values():
+            if len(docs) < 2:
+                continue
+            for doc in docs:
+                result[doc.id] = [other for other in docs if other.id != doc.id]
+        return result
 
     def get_document(self, db: Session, *, tenant_id: int, document_id: int) -> WordImportDocument | None:
         document = db.get(WordImportDocument, document_id)

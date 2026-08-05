@@ -456,7 +456,7 @@ export function WordImportWizard({
   }
 
   function pickFile(candidate: File | null) {
-    if (candidate && !candidate.name.toLowerCase().endsWith(".docx")) return;
+    if (candidate && !/\.(docx|pdf)$/i.test(candidate.name)) return;
     setFile(candidate);
   }
 
@@ -692,7 +692,7 @@ export function WordImportWizard({
             </select>
           </label>
           <label className="field-stack">
-            <span className="field-label">Word-Datei (.docx)</span>
+            <span className="field-label">Word- oder PDF-Datei (.docx, .pdf)</span>
             <label
               className={`word-import-dropzone${isDragOver ? " is-dragover" : ""}`}
               onDragOver={(event) => {
@@ -722,10 +722,10 @@ export function WordImportWizard({
                     <UploadIcon />
                   </span>
                   <strong>Datei auswählen</strong>
-                  <span className="muted">.docx hierher ziehen oder klicken</span>
+                  <span className="muted">.docx/.pdf hierher ziehen oder klicken</span>
                 </>
               )}
-              <input type="file" accept=".docx" onChange={(event) => pickFile(event.target.files?.[0] ?? null)} hidden />
+              <input type="file" accept=".docx,.pdf" onChange={(event) => pickFile(event.target.files?.[0] ?? null)} hidden />
             </label>
           </label>
           <button type="button" className="button-primary" disabled={busy || !file || !templateId} onClick={() => void submitUpload()}>
