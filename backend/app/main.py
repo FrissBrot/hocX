@@ -18,6 +18,7 @@ from app.services import domain_health_check_service, traefik_config_service
 from app.services.submission_service import SubmissionService
 from app.services.document_template_service import DocumentTemplateService
 from app.services.file_service import FileService
+from app.services.isolated_parse import warm_up_pool as warm_up_word_import_parse_pool
 
 
 def ensure_roles() -> None:
@@ -185,6 +186,7 @@ async def word_import_rescan_loop() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     FileService().ensure_storage()
+    warm_up_word_import_parse_pool()
     ensure_runtime_columns()
     ensure_startup_seed_data()
     ensure_default_document_templates()

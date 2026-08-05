@@ -123,6 +123,25 @@ services:
       - "traefik.http.routers.hocx-admin-auth.service=hocx-admin-auth"
       - "traefik.http.routers.hocx-admin-auth.middlewares=auth-ratelimit"
       - "traefik.http.services.hocx-admin-auth.loadbalancer.server.port=8000"
+      # Dedicated router for the Word/PDF/ZIP import upload endpoints - defense in depth
+      # in front of the application-level checks in routes/word_import.py (MAX_UPLOAD_BYTES/
+      # MAX_WORD_IMPORT_BATCH_BYTES etc.): rejects an oversized request body at the proxy
+      # before it ever reaches a backend worker, and throttles repeated upload bursts from
+      # a single (potentially compromised) writer account. Scoped to POST only so the
+      # listing/detail GET endpoints under the same path prefix keep using the unthrottled
+      # generic hocx-backend router.
+      - "traefik.http.routers.hocx-word-import.rule=Host(`${TRAEFIK_DOMAIN}`) && PathPrefix(`/api/tools/word-import`) && Method(`POST`)"
+      - "traefik.http.routers.hocx-word-import.entrypoints=websecure"
+      - "traefik.http.routers.hocx-word-import.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.hocx-word-import.priority=200"
+      - "traefik.http.routers.hocx-word-import.service=hocx-word-import"
+      - "traefik.http.routers.hocx-word-import.middlewares=word-import-ratelimit,word-import-body-limit"
+      - "traefik.http.services.hocx-word-import.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.word-import-ratelimit.ratelimit.average=20"
+      - "traefik.http.middlewares.word-import-ratelimit.ratelimit.burst=10"
+      - "traefik.http.middlewares.word-import-ratelimit.ratelimit.period=1m"
+      # 150 MB - matches MAX_WORD_IMPORT_BATCH_BYTES in routes/word_import.py
+      - "traefik.http.middlewares.word-import-body-limit.buffering.maxRequestBodyBytes=157286400"
 
   frontend:
     build:

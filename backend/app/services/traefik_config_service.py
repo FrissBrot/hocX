@@ -41,6 +41,16 @@ def _app_routers(domain: str, domain_id: int) -> dict:
             "middlewares": ["auth-ratelimit@docker"],
             "tls": {"certResolver": "letsencrypt"},
         },
+        f"{base}-word-import": {
+            # Same rate-limit/body-size protection as docker-compose.yml's hocx-word-import
+            # router, but for a tenant's own custom domain - see routes/word_import.py.
+            "rule": f"Host(`{domain}`) && PathPrefix(`/api/tools/word-import`) && Method(`POST`)",
+            "entryPoints": ["websecure"],
+            "service": "hocx-word-import@docker",
+            "priority": 200,
+            "middlewares": ["word-import-ratelimit@docker", "word-import-body-limit@docker"],
+            "tls": {"certResolver": "letsencrypt"},
+        },
     }
 
 
