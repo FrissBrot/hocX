@@ -180,3 +180,68 @@ export async function commitWordImport(payload: WordImportCommitPayload): Promis
     body: JSON.stringify(payload),
   });
 }
+
+export type WordImportDocumentStatus = "eingelesen" | "importiert";
+
+export type WordImportDocumentSummary = {
+  id: number;
+  template_id: number;
+  template_name: string;
+  display_name: string;
+  original_filename: string;
+  status: WordImportDocumentStatus;
+  protocol_id: number | null;
+  protocol_date: string | null;
+  created_at: string;
+  imported_at: string | null;
+  stored_file_id: number;
+};
+
+export type WordImportDocumentDetail = WordImportDocumentSummary & {
+  analysis: WordImportAnalysis;
+};
+
+export type WordImportDocumentUploadResult = {
+  documents: WordImportDocumentSummary[];
+  errors: string[];
+};
+
+// One batch = one template (see the queue's upload panel) - files are analyzed
+// immediately server-side and land in the queue with status "eingelesen".
+export async function ingestWordImportDocuments(templateId: number, files: File[]): Promise<WordImportDocumentUploadResult> {
+  const formData = new FormData();
+  formData.append("template_id", String(templateId));
+  files.forEach((file) => formData.append("files", file));
+  return browserApiFetch<WordImportDocumentUploadResult>("/api/tools/word-import/documents", { method: "POST", body: formData });
+}
+
+export async function listWordImportDocuments(status?: WordImportDocumentStatus): Promise<WordImportDocumentSummary[]> {
+  const query = status ? `?status_filter=${status}` : "";
+  return browserApiFetch<WordImportDocumentSummary[]>(`/api/tools/word-import/documents${query}`);
+}
+
+export async function getWordImportDocument(documentId: number): Promise<WordImportDocumentDetail> {
+  return browserApiFetch<WordImportDocumentDetail>(`/api/tools/word-import/documents/${documentId}`);
+}
+
+export async function reanalyzeWordImportDocument(
+  documentId: number,
+  protocolDate: string | null,
+  tableRoles: Record<number, TableRoleOverride>
+): Promise<WordImportAnalysis> {
+  return browserApiFetch<WordImportAnalysis>(`/api/tools/word-import/documents/${documentId}/reanalyze`, {
+    method: "POST",
+    body: JSON.stringify({ protocol_date: protocolDate, table_roles: tableRoles }),
+  });
+}
+
+export async function commitWordImportDocument(documentId: number, payload: WordImportCommitPayload): Promise<{ id: number }> {
+  return browserApiFetch<{ id: number }>(`/api/tools/word-import/documents/${documentId}/commit`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteWordImportDocument(documentId: number): Promise<void> {
+  await browserApiFetch(`/api/tools/word-import/documents/${documentId}`, { method: "DELETE" });
+}

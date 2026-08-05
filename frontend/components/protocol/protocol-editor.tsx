@@ -1319,6 +1319,15 @@ export function ProtocolEditor({
       <div className="status-row">
         <span className="pill">{protocol.protocol_number}</span>
         <span className="pill">{workflowMeta[protocolStatus]?.modeLabel ?? protocolStatusLabel(protocolStatus)}</span>
+        {protocol.import_source_url && (
+          <a
+            className="pill"
+            href={protocol.import_source_url}
+            title={protocol.import_source_filename ?? undefined}
+          >
+            Original-Dokument öffnen
+          </a>
+        )}
         {protocolStatus === "geplant" && !isReadOnly && (
           <TodoMiniMenu label={trackChangesEnabled ? "Änderungen nachverfolgen: An" : "Änderungen nachverfolgen: Aus"} compact>
             {(close) => (

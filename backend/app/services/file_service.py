@@ -21,6 +21,7 @@ ALLOWED_IMAGE_MIME_TYPES = {
     "image/bmp",
     "image/tiff",
 }
+WORD_IMPORT_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 
 # SECURITY: the client-sent Content-Type header (file.content_type) is fully attacker
@@ -41,6 +42,8 @@ def _content_matches_mime(content: bytes, mime: str) -> bool:
         return head.startswith(b"BM")
     if mime == "image/tiff":
         return head.startswith(b"II*\x00") or head.startswith(b"MM\x00*")
+    if mime == WORD_IMPORT_MIME_TYPE:
+        return head.startswith(b"PK\x03\x04")  # .docx is a ZIP archive
     return False
 
 
@@ -153,6 +156,54 @@ class FileService:
             file_size_bytes=stored_file.file_size_bytes,
             content_url=self.build_content_url(stored_file.id),
         )
+
+    def save_word_import_document(
+        self,
+        db: Session,
+        *,
+        tenant_id: int,
+        filename: str,
+        content: bytes,
+        created_by: int | None = None,
+    ) -> StoredFile:
+        self.ensure_storage()
+
+        if len(content) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail=f"Datei zu gross. Maximum {MAX_UPLOAD_BYTES // 1024 // 1024} MB")
+        if not _content_matches_mime(content, WORD_IMPORT_MIME_TYPE):
+            raise HTTPException(status_code=400, detail="Datei ist keine gültige .docx-Datei")
+
+        storage_dir = Path(settings.upload_root) / "word-imports" / f"tenant-{tenant_id}"
+        storage_dir.mkdir(parents=True, exist_ok=True)
+        target_path = storage_dir / f"{uuid4().hex}.docx"
+
+        checksum = hashlib.sha256(content).hexdigest()
+        target_path.write_bytes(content)
+
+        relative_path = target_path.relative_to(settings.storage_root)
+        stored_file = StoredFile(
+            tenant_id=tenant_id,
+            original_name=filename,
+            mime_type=WORD_IMPORT_MIME_TYPE,
+            storage_path=str(relative_path),
+            latex_path=None,
+            file_size_bytes=len(content),
+            checksum_sha256=checksum,
+            created_by=created_by,
+        )
+        return self.stored_file_repository.create(db, stored_file)
+
+    def read_stored_file_bytes(self, stored_file: StoredFile) -> bytes:
+        file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="Datei fehlt im Speicher")
+        return file_path.read_bytes()
+
+    def delete_stored_file(self, db: Session, stored_file: StoredFile) -> None:
+        file_path = Path(settings.storage_root) / stored_file.storage_path
+        if file_path.exists():
+            file_path.unlink()
+        self.stored_file_repository.delete(db, stored_file)
 
     def get_stored_file(self, db: Session, stored_file_id: int) -> StoredFile | None:
         return self.stored_file_repository.get(db, stored_file_id)

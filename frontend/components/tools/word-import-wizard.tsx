@@ -1,14 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { ATTENDANCE_OPTIONS } from "@/components/protocol/protocol-editor-shared";
 import { AssigneeOption, TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
 import {
   analyzeWordImport,
   commitWordImport,
+  commitWordImportDocument,
   EventMatchStatus,
+  getWordImportDocument,
   ListRowStatus,
+  reanalyzeWordImportDocument,
   TableRole,
   TableRoleOverride,
   WordImportAnalysis,
@@ -281,13 +284,22 @@ function textSummaryLabel(text: TextDraft, target: WordImportTextTarget | undefi
 export function WordImportWizard({
   templates,
   participants,
+  documentId,
+  onExitQueueMode,
 }: {
   templates: TemplateSummary[];
   participants: ParticipantSummary[];
+  // When set, the wizard resumes an already-uploaded queue document (/tools/import)
+  // instead of starting from the "upload a file" step - loaded once on mount, review
+  // reruns via the document-scoped reanalyze/commit endpoints (the original bytes are
+  // already stored server-side, no File object needed).
+  documentId?: number;
+  onExitQueueMode?: () => void;
 }) {
-  const [step, setStep] = useState<Step>("upload");
+  const [step, setStep] = useState<Step>(documentId ? "review" : "upload");
   const [templateId, setTemplateId] = useState<number | null>(templates[0]?.id ?? null);
   const [file, setFile] = useState<File | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -304,6 +316,22 @@ export function WordImportWizard({
   const [expandedTexts, setExpandedTexts] = useState<Set<number>>(new Set());
   const [showAllAttendance, setShowAllAttendance] = useState(false);
   const [doneSummary, setDoneSummary] = useState<{ attendance: number; events: number; lists: number; skipped: number } | null>(null);
+
+  useEffect(() => {
+    if (!documentId) return;
+    setBusy(true);
+    setError(null);
+    getWordImportDocument(documentId)
+      .then((detail) => {
+        setTemplateId(detail.template_id);
+        setFileName(detail.original_filename);
+        applyAnalysis(detail.analysis);
+        setStep("review");
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Dokument konnte nicht geladen werden"))
+      .finally(() => setBusy(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentId]);
 
   function toggleTextExpanded(index: number) {
     setExpandedTexts((current) => {
@@ -396,11 +424,14 @@ export function WordImportWizard({
   }
 
   async function reanalyze() {
-    if (!file || !templateId) return;
+    if (!templateId) return;
+    if (!documentId && !file) return;
     setBusy(true);
     setError(null);
     try {
-      const result = await analyzeWordImport(file, templateId, protocolDate || null, tableRoles);
+      const result = documentId
+        ? await reanalyzeWordImportDocument(documentId, protocolDate || null, tableRoles)
+        : await analyzeWordImport(file!, templateId, protocolDate || null, tableRoles);
       applyAnalysis(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Datei konnte nicht erneut analysiert werden");
@@ -520,7 +551,7 @@ export function WordImportWizard({
       const approvedLists = lists
         .filter((entry) => entry.approved && entry.has_snapshot_target)
         .filter((entry) => (tableRoles[entry.table_index]?.list_definition_id ?? 0) > 0);
-      const result = await commitWordImport({
+      const payload = {
         template_id: templateId,
         protocol_date: protocolDate,
         texts: texts.map((text) => ({
@@ -566,7 +597,8 @@ export function WordImportWizard({
           role: tableRoles[table.index]?.role ?? table.role,
           list_definition_id: tableRoles[table.index]?.list_definition_id ?? table.list_definition_id,
         })),
-      });
+      };
+      const result = documentId ? await commitWordImportDocument(documentId, payload) : await commitWordImport(payload);
       setDoneSummary({
         attendance: approvedAttendance.length,
         events: approvedEvents.length,
@@ -645,6 +677,8 @@ export function WordImportWizard({
 
       {error && <div className="form-error-banner">{error}</div>}
 
+      {step === "review" && !analysis && busy && <p className="muted">Dokument wird geladen…</p>}
+
       {step === "upload" && (
         <div className="grid word-import-narrow">
           <label className="field-stack">
@@ -709,7 +743,7 @@ export function WordImportWizard({
               <DocIcon />
             </span>
             <span className="word-import-filebar-meta">
-              <strong>{file?.name ?? "Dokument"}</strong>
+              <strong>{fileName ?? file?.name ?? "Dokument"}</strong>
               <span className="muted"> · {templateName}</span>
               <span className="muted"> · </span>
               <input
@@ -1463,8 +1497,12 @@ export function WordImportWizard({
               <span />
             )}
             <div className="wizard-footer-actions">
-              <button type="button" className="button-ghost" onClick={() => setStep("upload")}>
-                Abbrechen
+              <button
+                type="button"
+                className="button-ghost"
+                onClick={() => (documentId ? onExitQueueMode?.() : setStep("upload"))}
+              >
+                {documentId ? "Zurück zur Warteschlange" : "Abbrechen"}
               </button>
               <button type="button" className="button-primary" disabled={busy || !protocolDate} onClick={() => void submitCommit()}>
                 {busy ? "…" : "Protokoll erstellen"}
@@ -1492,8 +1530,12 @@ export function WordImportWizard({
             </div>
           </div>
           <div className="wizard-footer">
-            <button type="button" className="button-ghost" onClick={resetWizard}>
-              Neuer Import
+            <button
+              type="button"
+              className="button-ghost"
+              onClick={() => (documentId ? onExitQueueMode?.() : resetWizard())}
+            >
+              {documentId ? "Zurück zur Warteschlange" : "Neuer Import"}
             </button>
             <div className="wizard-footer-actions">
               <a className="button-primary" href={`/protocols/${createdProtocolId}`}>

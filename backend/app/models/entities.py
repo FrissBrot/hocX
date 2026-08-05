@@ -265,6 +265,33 @@ class WordImportProfile(Base, TimestampMixin, UpdatedAtMixin):
     mapping_config_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
 
 
+class WordImportDocument(Base, TimestampMixin):
+    __tablename__ = "word_import_document"
+    __table_args__ = (
+        CheckConstraint("status IN ('eingelesen', 'importiert')", name="ck_word_import_document_status"),
+        Index("idx_word_import_document_tenant_template_status", "tenant_id", "template_id", "status"),
+        Index("idx_word_import_document_protocol", "protocol_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    template_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("template.id", ondelete="RESTRICT"), nullable=False)
+    stored_file_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("stored_file.id", ondelete="RESTRICT"), nullable=False)
+    original_filename: Mapped[str] = mapped_column(Text, nullable=False)
+    display_name: Mapped[str] = mapped_column(Text, nullable=False)
+    protocol_date: Mapped[date | None] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'eingelesen'"))
+    # Cached WordImportAnalysis output, so the review step can be reopened later without
+    # re-reading/re-parsing the stored file - refreshed on manual reanalyze and whenever a
+    # sibling document in the same tenant+template queue gets committed (see
+    # WordImportQueueService._refresh_pending_siblings).
+    analysis_snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
+    protocol_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="SET NULL"))
+    created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    imported_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    imported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class EventCycle(Base):
     __tablename__ = "event_cycle"
     __table_args__ = (

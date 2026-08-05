@@ -64,8 +64,11 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
           { href: "/users", label: "Benutzer", icon: "users" },
           { href: "/settings", label: "Dokument-Vorlagen", icon: "documents" },
           { href: "/tenant-settings", label: "Mandant-Einstellungen", icon: "tenant" },
-          { href: "/tools", label: "Tools", icon: "tools" },
         ],
+      },
+      {
+        title: "Tools",
+        links: [{ href: "/tools/import", label: "Import", icon: "tools" }],
       }
     );
   }

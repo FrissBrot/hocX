@@ -73,9 +73,17 @@ class AccessService:
 
     def ensure_can_read_stored_file(self, db: Session, user: CurrentUser, stored_file_id: int) -> None:
         protocol_id = self.repository.protocol_id_for_stored_file(db, stored_file_id=stored_file_id)
-        if protocol_id is None:
+        if protocol_id is not None:
+            self.ensure_can_read_protocol(db, user, protocol_id)
             return
-        self.ensure_can_read_protocol(db, user, protocol_id)
+        # Not linked to a protocol (export/image) or an imported Word-Import document (e.g. a
+        # still-queued, not-yet-imported one) - fall back to a plain same-tenant + privileged-
+        # role check instead of allowing any authenticated reader in any tenant to read it.
+        tenant_id = self.repository.tenant_id_for_stored_file(db, stored_file_id=stored_file_id)
+        if tenant_id is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stored file not found")
+        if user.current_role not in {"admin", "writer", "kassier"} or user.current_tenant_id != tenant_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Stored file not accessible")
 
     def sync_user_access_from_participants(self, db: Session, *, user_id: int, tenant_id: int) -> None:
         template_ids = self.repository.linked_template_ids_for_user(db, user_id=user_id, tenant_id=tenant_id)

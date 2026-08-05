@@ -45,6 +45,7 @@ from app.models.entities import (
     UserProtocolAccess,
     UserTemplateAccess,
     UserTenantRole,
+    WordImportDocument,
     WordImportProfile,
 )
 
@@ -95,5 +96,6 @@ __all__ = [
     "UserProtocolAccess",
     "UserTemplateAccess",
     "UserTenantRole",
+    "WordImportDocument",
     "WordImportProfile",
 ]
