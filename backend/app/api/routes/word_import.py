@@ -16,6 +16,7 @@ from app.schemas.word_import import (
     WordImportDocumentReanalyzeRequest,
     WordImportDocumentSummary,
     WordImportDocumentUploadResult,
+    WordImportDraftSave,
     WordImportDuplicateCandidate,
 )
 from app.services.file_service import MAX_UPLOAD_BYTES, MAX_ZIP_TOTAL_BYTES, extract_word_import_files_from_zip
@@ -223,7 +224,30 @@ def get_word_import_document(
     template = db.get(Template, document.template_id)
     duplicates = queue_service.duplicates_for_document(db, document)
     summary = _to_summary(document, template.name if template else "", duplicates)
-    return WordImportDocumentDetail(**summary.model_dump(), analysis=WordImportAnalysis(**document.analysis_snapshot_json))
+    return WordImportDocumentDetail(
+        **summary.model_dump(),
+        analysis=WordImportAnalysis(**document.analysis_snapshot_json),
+        review_draft=document.review_draft_json,
+    )
+
+
+@router.put("/tools/word-import/documents/{document_id}/draft", response_model=dict[str, str])
+def save_word_import_document_draft(
+    document_id: int,
+    payload: WordImportDraftSave,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_writer(user)
+    document = queue_service.get_document(db, tenant_id=user.current_tenant_id, document_id=document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="Dokument nicht gefunden")
+    try:
+        queue_service.save_draft(db, document=document, draft=payload.draft)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"message": "Entwurf gespeichert"}
 
 
 @router.post("/tools/word-import/documents/{document_id}/reanalyze", response_model=WordImportAnalysis)

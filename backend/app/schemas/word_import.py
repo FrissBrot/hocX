@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
 WordImportDocumentStatus = Literal["eingelesen", "importiert"]
 
-TableRole = Literal["attendance", "events", "list", "ignore"]
+TableRole = Literal["attendance", "events", "list", "matrix", "ignore"]
 EventMatchStatus = Literal["matched", "changed", "new"]
 ListRowStatus = Literal["matched", "changed", "new"]
 
@@ -18,6 +18,9 @@ class TablePreview(BaseModel):
     sample_rows: list[list[str]] = Field(default_factory=list)
     role: TableRole = "ignore"
     list_definition_id: int | None = None
+    # Only meaningful for role == "matrix": which template Matrix block this table was
+    # matched against, see WordImportMatrixOption/matrix_options.
+    matrix_key: str | None = None
     # Only meaningful for role == "list": whether the chosen template already has a
     # block linked to this list, i.e. whether there's a snapshot slot to import into
     # at all (lists are never written live - see WordImportListRowMapping docstring).
@@ -123,6 +126,26 @@ class WordImportEventMapping(BaseModel):
     # Ranked alternatives (best first, top match included) so the wizard can offer a
     # dropdown instead of only the single auto-picked candidate.
     candidates: list[WordImportEventCandidate] = Field(default_factory=list)
+    # Only set for rows extracted from a Matrix "events" row (a Matrix column's dates are
+    # never stored per-cell - they're always resolved live at render time by matching an
+    # Event's own `tag` against the column, see WordImportService.analyze) - the tag this
+    # Event needs so it actually shows up in that Matrix column. None for ordinary
+    # "events"-role table rows, whose tag is never touched by the importer.
+    tag: str | None = None
+    # Only set for rows extracted from a Matrix "events" row when a trailing "(N)" was
+    # found right after the date (e.g. "18.10.2025 (7)") - the exact format
+    # export_service._matrix_event_row_value writes for event_show_participant_count,
+    # so a previously exported/re-imported protocol round-trips its attendance counts.
+    participant_count: int | None = None
+    # Matrix/row/column context, only set alongside `tag` (Matrix-sourced rows) - lets
+    # the wizard group these back into the Matrix's own card layout instead of only
+    # showing them in the flat Termine list.
+    matrix_key: str | None = None
+    matrix_title: str | None = None
+    row_id: str | None = None
+    row_label: str | None = None
+    column_key: str | None = None
+    column_label: str | None = None
 
 
 class WordImportListDefinitionOption(BaseModel):
@@ -158,6 +181,46 @@ class WordImportListRowMapping(BaseModel):
     has_snapshot_target: bool = True
 
 
+class WordImportMatrixOption(BaseModel):
+    """One Matrix block target available in the chosen template - matrix_key encodes
+    (template_element_id, block_sort_index), the same identity block_by_key already
+    uses in WordImportService.commit, so a resolved match needs no separate lookup
+    scheme."""
+
+    matrix_key: str
+    title: str
+
+
+class WordImportMatrixColumnCandidate(BaseModel):
+    column_key: str
+    label: str
+    score: float = 0.0
+
+
+class WordImportMatrixCellMapping(BaseModel):
+    """One document row x column cell resolved against a fixed Matrix row and a
+    (possibly not-yet-existing) Matrix column. Matrix rows are structurally fixed by
+    the template - a document row that matches no configured row is dropped with a
+    warning in analyze() instead of appearing here at all (unlike list rows, there's
+    no "new row" concept). Columns can be brand new: participant/event/list
+    auto-source columns are created on demand in commit() rather than needing to
+    already exist - column_key is None when no column matched confidently enough,
+    in which case the wizard offers column_candidates for a manual pick."""
+
+    table_index: int
+    matrix_key: str
+    matrix_title: str
+    row_id: str
+    row_label: str
+    row_label_raw: str
+    row_type: str
+    column_label_raw: str
+    column_key: str | None = None
+    column_candidates: list[WordImportMatrixColumnCandidate] = Field(default_factory=list)
+    raw_value: str
+    names: list[WordImportNameResolution] = Field(default_factory=list)
+
+
 class WordImportAnalysis(BaseModel):
     protocol_date: date | None = None
     tables: list[TablePreview] = Field(default_factory=list)
@@ -167,6 +230,8 @@ class WordImportAnalysis(BaseModel):
     event_mappings: list[WordImportEventMapping] = Field(default_factory=list)
     list_definitions: list[WordImportListDefinitionOption] = Field(default_factory=list)
     list_mappings: list[WordImportListRowMapping] = Field(default_factory=list)
+    matrix_options: list[WordImportMatrixOption] = Field(default_factory=list)
+    matrix_mappings: list[WordImportMatrixCellMapping] = Field(default_factory=list)
     profile_applied: bool = False
     warnings: list[str] = Field(default_factory=list)
 
@@ -208,6 +273,13 @@ class WordImportEventCommit(BaseModel):
     linked_event_id: int | None = None
     final_title: str
     final_date: date
+    # Mirrors WordImportEventMapping.tag - when set (Matrix-sourced row), the created/
+    # updated Event's tag is set to this value so it appears in the right Matrix column.
+    # None for ordinary Termine-table rows, whose tag is left untouched.
+    tag: str | None = None
+    # Mirrors WordImportEventMapping.participant_count - when set, the created/updated
+    # Event's participant_count is set to this value. None leaves it untouched.
+    participant_count: int | None = None
 
 
 class WordImportListRowCommit(BaseModel):
@@ -225,10 +297,26 @@ class WordImportListRowCommit(BaseModel):
     linked_entry_id: int | None = None
 
 
+class WordImportMatrixCellCommit(BaseModel):
+    """Unlike lists, matrix cells are written straight into the live protocol's own
+    Matrix block (see WordImportService.commit) - there is no separate persisted
+    entity to preserve a reference to, so this carries the resolved value itself."""
+
+    matrix_key: str
+    row_id: str
+    row_type: str
+    column_key: str
+    column_label: str
+    raw_value: str
+    names: list[WordImportNameResolution] = Field(default_factory=list)
+    approved: bool
+
+
 class WordImportTableRoleCommit(BaseModel):
     header_signature: str
     role: TableRole
     list_definition_id: int | None = None
+    matrix_key: str | None = None
 
 
 class WordImportCommit(BaseModel):
@@ -238,6 +326,7 @@ class WordImportCommit(BaseModel):
     attendance: list[WordImportAttendanceCommit] = Field(default_factory=list)
     events: list[WordImportEventCommit] = Field(default_factory=list)
     lists: list[WordImportListRowCommit] = Field(default_factory=list)
+    matrices: list[WordImportMatrixCellCommit] = Field(default_factory=list)
     tables: list[WordImportTableRoleCommit] = Field(default_factory=list)
 
 
@@ -279,6 +368,13 @@ class WordImportDocumentSummary(BaseModel):
 
 class WordImportDocumentDetail(WordImportDocumentSummary):
     analysis: WordImportAnalysis
+    # Opaque reviewer draft (see WordImportDocument.review_draft_json) - {} if none saved
+    # yet or if it was reset by a reanalyze since it was last saved.
+    review_draft: dict[str, Any] = Field(default_factory=dict)
+
+
+class WordImportDraftSave(BaseModel):
+    draft: dict[str, Any] = Field(default_factory=dict)
 
 
 class WordImportDocumentUploadResult(BaseModel):

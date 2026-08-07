@@ -286,6 +286,12 @@ class WordImportDocument(Base, TimestampMixin):
     # sibling document in the same tenant+template queue gets committed (see
     # WordImportQueueService._refresh_pending_siblings).
     analysis_snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
+    # Reviewer's in-progress edits on top of analysis_snapshot_json (candidate links,
+    # approve toggles, corrected values) - opaque to the backend, shape owned entirely by
+    # the frontend wizard. Reset to {} whenever analysis_snapshot_json is regenerated (see
+    # WordImportQueueService._reanalyze_document), since row indices/candidates it refers
+    # to no longer match.
+    review_draft_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
     protocol_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="SET NULL"))
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
     imported_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))

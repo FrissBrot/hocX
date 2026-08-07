@@ -1,6 +1,6 @@
 import { browserApiFetch } from "@/lib/api/client";
 
-export type TableRole = "attendance" | "events" | "list" | "ignore";
+export type TableRole = "attendance" | "events" | "list" | "matrix" | "ignore";
 export type EventMatchStatus = "matched" | "changed" | "new";
 export type ListRowStatus = "matched" | "changed" | "new";
 
@@ -10,6 +10,7 @@ export type TablePreview = {
   sample_rows: string[][];
   role: TableRole;
   list_definition_id: number | null;
+  matrix_key: string | null;
   has_snapshot_target: boolean;
 };
 
@@ -83,6 +84,21 @@ export type WordImportEventMapping = {
   matched_event_title: string | null;
   matched_event_date: string | null;
   candidates: WordImportEventCandidate[];
+  // Only set for rows extracted from a Matrix "events" row - the tag this Event needs
+  // so it shows up in that Matrix column (see WordImportService.analyze). null for
+  // ordinary Termine-table rows, whose tag is never touched by the importer.
+  tag: string | null;
+  // Only set when a trailing "(N)" was found right after the date (e.g. "18.10.2025
+  // (7)") - null if the document didn't annotate a count for this date.
+  participant_count: number | null;
+  // Matrix/row/column context, only set alongside `tag` - lets the wizard group these
+  // back into the Matrix's own card layout instead of the flat Termine list.
+  matrix_key: string | null;
+  matrix_title: string | null;
+  row_id: string | null;
+  row_label: string | null;
+  column_key: string | null;
+  column_label: string | null;
 };
 
 export type WordImportListDefinitionOption = {
@@ -112,6 +128,32 @@ export type WordImportListRowMapping = {
   has_snapshot_target: boolean;
 };
 
+export type WordImportMatrixOption = {
+  matrix_key: string;
+  title: string;
+};
+
+export type WordImportMatrixColumnCandidate = {
+  column_key: string;
+  label: string;
+  score: number;
+};
+
+export type WordImportMatrixCellMapping = {
+  table_index: number;
+  matrix_key: string;
+  matrix_title: string;
+  row_id: string;
+  row_label: string;
+  row_label_raw: string;
+  row_type: string;
+  column_label_raw: string;
+  column_key: string | null;
+  column_candidates: WordImportMatrixColumnCandidate[];
+  raw_value: string;
+  names: WordImportNameResolution[];
+};
+
 export type WordImportAnalysis = {
   protocol_date: string | null;
   tables: TablePreview[];
@@ -121,11 +163,13 @@ export type WordImportAnalysis = {
   event_mappings: WordImportEventMapping[];
   list_definitions: WordImportListDefinitionOption[];
   list_mappings: WordImportListRowMapping[];
+  matrix_options: WordImportMatrixOption[];
+  matrix_mappings: WordImportMatrixCellMapping[];
   profile_applied: boolean;
   warnings: string[];
 };
 
-export type TableRoleOverride = { role: TableRole; list_definition_id: number | null };
+export type TableRoleOverride = { role: TableRole; list_definition_id: number | null; matrix_key?: string | null };
 
 export type WordImportCommitPayload = {
   template_id: number;
@@ -146,6 +190,8 @@ export type WordImportCommitPayload = {
     linked_event_id: number | null;
     final_title: string;
     final_date: string;
+    tag: string | null;
+    participant_count: number | null;
   }[];
   lists: {
     table_index: number;
@@ -157,7 +203,17 @@ export type WordImportCommitPayload = {
     approved: boolean;
     linked_entry_id: number | null;
   }[];
-  tables: { header_signature: string; role: TableRole; list_definition_id: number | null }[];
+  matrices: {
+    matrix_key: string;
+    row_id: string;
+    row_type: string;
+    column_key: string;
+    column_label: string;
+    raw_value: string;
+    names: WordImportNameResolution[];
+    approved: boolean;
+  }[];
+  tables: { header_signature: string; role: TableRole; list_definition_id: number | null; matrix_key: string | null }[];
 };
 
 export async function analyzeWordImport(
@@ -209,8 +265,13 @@ export type WordImportDocumentSummary = {
   duplicates: WordImportDuplicateCandidate[];
 };
 
+// Opaque to the backend - shape is owned by the wizard (see WordImportReviewDraft there).
+// Typed loosely here since lib/api is not where the review-draft shape should be defined.
+export type WordImportReviewDraftJson = Record<string, unknown>;
+
 export type WordImportDocumentDetail = WordImportDocumentSummary & {
   analysis: WordImportAnalysis;
+  review_draft: WordImportReviewDraftJson;
 };
 
 export type WordImportDocumentUploadResult = {
@@ -251,6 +312,13 @@ export async function commitWordImportDocument(documentId: number, payload: Word
   return browserApiFetch<{ id: number }>(`/api/tools/word-import/documents/${documentId}/commit`, {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export async function saveWordImportDocumentDraft(documentId: number, draft: WordImportReviewDraftJson): Promise<void> {
+  await browserApiFetch(`/api/tools/word-import/documents/${documentId}/draft`, {
+    method: "PUT",
+    body: JSON.stringify({ draft }),
   });
 }
 

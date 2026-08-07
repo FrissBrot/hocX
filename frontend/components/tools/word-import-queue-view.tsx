@@ -41,12 +41,15 @@ export function WordImportQueueView({ templates, participants, initialDocuments 
   const [uploading, setUploading] = useState(false);
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function refresh() {
     const result = await listWordImportDocuments();
     setDocuments(result);
+    setSelectedIds([]);
   }
 
   async function handleFilesSelected(fileList: FileList | null) {
@@ -73,8 +76,22 @@ export function WordImportQueueView({ templates, participants, initialDocuments 
     try {
       await deleteWordImportDocument(document.id);
       setDocuments((current) => current.filter((doc) => doc.id !== document.id));
+      setSelectedIds((current) => current.filter((id) => id !== document.id));
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function handleBulkDelete() {
+    if (!selectedIds.length) return;
+    if (!confirm(`${selectedIds.length} Dokument(e) aus der Warteschlange entfernen?`)) return;
+    setBulkDeleting(true);
+    try {
+      await Promise.all(selectedIds.map((id) => deleteWordImportDocument(id)));
+      setDocuments((current) => current.filter((doc) => !selectedIds.includes(doc.id)));
+      setSelectedIds([]);
+    } finally {
+      setBulkDeleting(false);
     }
   }
 
@@ -83,6 +100,7 @@ export function WordImportQueueView({ templates, participants, initialDocuments 
     importiert: documents.filter((doc) => doc.status === "importiert").length,
   };
   const filtered = documents.filter((doc) => statusFilter === "all" || doc.status === statusFilter);
+  const allFilteredSelected = filtered.length > 0 && filtered.every((doc) => selectedIds.includes(doc.id));
 
   if (openDocumentId !== null) {
     return (
@@ -171,15 +189,57 @@ export function WordImportQueueView({ templates, participants, initialDocuments 
           value={statusFilter}
           onChange={setStatusFilter}
         />
+        {selectedIds.length > 0 && (
+          <div className="table-toolbar-actions">
+            <span className="pill">{selectedIds.length} ausgewählt</span>
+            <button
+              type="button"
+              className="button-inline button-danger"
+              disabled={bulkDeleting}
+              onClick={() => void handleBulkDelete()}
+            >
+              Auswahl entfernen
+            </button>
+          </div>
+        )}
       </div>
 
       <DataTable
         className="data-table-lg"
-        columns={["Name", "Vorlage", "Hochgeladen am", "Status", "Aktionen"]}
+        columns={[
+          {
+            key: "select",
+            label: "",
+            header: (
+              <input
+                type="checkbox"
+                aria-label="Alle auswählen"
+                checked={allFilteredSelected}
+                onChange={(event) => setSelectedIds(event.target.checked ? filtered.map((doc) => doc.id) : [])}
+              />
+            ),
+          },
+          "Name",
+          "Vorlage",
+          "Hochgeladen am",
+          "Status",
+          "Aktionen",
+        ]}
         emptyMessage="Keine Dokumente in dieser Ansicht."
       >
         {filtered.map((document) => (
           <tr key={document.id}>
+            <td onClick={(event) => event.stopPropagation()}>
+              <input
+                type="checkbox"
+                checked={selectedIds.includes(document.id)}
+                onChange={(event) =>
+                  setSelectedIds((current) =>
+                    event.target.checked ? [...current, document.id] : current.filter((id) => id !== document.id)
+                  )
+                }
+              />
+            </td>
             <td>
               {document.status === "eingelesen" ? (
                 <button type="button" className="row-text-action" onClick={() => setOpenDocumentId(document.id)}>

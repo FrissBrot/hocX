@@ -151,6 +151,13 @@ class WordImportQueueService:
         db.commit()
         return analysis
 
+    def save_draft(self, db: Session, *, document: WordImportDocument, draft: dict) -> None:
+        if document.status != "eingelesen":
+            raise ValueError("Dokument wurde bereits importiert")
+        document.review_draft_json = draft
+        db.add(document)
+        db.commit()
+
     def commit_document(
         self,
         db: Session,
@@ -234,6 +241,10 @@ class WordImportQueueService:
         )
         document.protocol_date = analysis.protocol_date
         document.analysis_snapshot_json = analysis.model_dump(mode="json")
+        # Row indices/candidates the old draft refers to no longer match the freshly
+        # regenerated mappings above - keeping it around would silently misapply stale
+        # edits (e.g. an "approved" flag landing on an unrelated row) on next reload.
+        document.review_draft_json = {}
         document.display_name = self._compute_display_name(
             db,
             tenant_id=document.tenant_id,
