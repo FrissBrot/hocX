@@ -107,6 +107,23 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.priority=10"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-frontend.loadbalancer.server.port=3000"
 
+  website:
+    image: ghcr.io/${GHCR_NAMESPACE}/hocx-frontend:${HOCX_VERSION}
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      INTERNAL_API_URL: ${INTERNAL_API_URL}
+      HOCX_SITE_VARIANT: marketing
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website.rule=Host(`${TRAEFIK_WEB_DOMAIN}`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website.entrypoints=websecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website.priority=10"
+      - "traefik.http.services.${ROUTER_PREFIX:-hocx}-website.loadbalancer.server.port=3000"
+
   abgabebox-backend:
     image: ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-backend:${HOCX_VERSION}
     restart: unless-stopped

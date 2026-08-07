@@ -160,7 +160,7 @@ services:
       - /app/node_modules
       - /app/.next
       - ./.git:/app/.git:ro
-    command: sh -c "export HOCX_VERSION=dev-$(git -C /app rev-parse --short HEAD 2>/dev/null || echo unknown) && npm run build && npm start"
+    command: sh -c "export HOCX_VERSION=dev-$(git -C /app rev-parse --short HEAD 2>/dev/null || echo unknown) && npm run build && rm -rf .next/standalone/public .next/standalone/.next/static && cp -r public .next/standalone/public && cp -r .next/static .next/standalone/.next/static && HOSTNAME=0.0.0.0 PORT=3000 node .next/standalone/server.js"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.hocx-frontend.rule=Host(`${TRAEFIK_DOMAIN}`)"
@@ -168,6 +168,31 @@ services:
       - "traefik.http.routers.hocx-frontend.tls.certresolver=letsencrypt"
       - "traefik.http.routers.hocx-frontend.priority=10"
       - "traefik.http.services.hocx-frontend.loadbalancer.server.port=3000"
+
+  website:
+    build:
+      context: ./frontend
+      target: deps
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      INTERNAL_API_URL: ${INTERNAL_API_URL}
+      HOCX_SITE_VARIANT: marketing
+    volumes:
+      - ./frontend:/app
+      - ./frontend/node_modules:/app/node_modules
+      - ./frontend/.next:/app/.next
+      - ./.git:/app/.git:ro
+    command: sh -c "export HOCX_VERSION=dev-$(git -C /app rev-parse --short HEAD 2>/dev/null || echo unknown) && npm run build && rm -rf .next/standalone/public .next/standalone/.next/static && cp -r public .next/standalone/public && cp -r .next/static .next/standalone/.next/static && HOSTNAME=0.0.0.0 PORT=3000 node .next/standalone/server.js"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.hocx-website.rule=Host(`${TRAEFIK_WEB_DOMAIN}`)"
+      - "traefik.http.routers.hocx-website.entrypoints=websecure"
+      - "traefik.http.routers.hocx-website.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.hocx-website.priority=10"
+      - "traefik.http.services.hocx-website.loadbalancer.server.port=3000"
 
   # Oeffentliche Abgabebox (kein Login) auf eigener Subdomain, eigener Codebase,
   # eigene restricted DB-Rolle (siehe backend/alembic/versions/0020_abgabebox.py).

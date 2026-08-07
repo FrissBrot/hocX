@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Badge, BadgeVariant } from "@/components/ui/badge";
+import { PillMenu } from "@/components/ui/pill-menu";
 import { ATTENDANCE_OPTIONS } from "@/components/protocol/protocol-editor-shared";
 import { AssigneeOption, TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
+import { browserApiFetch } from "@/lib/api/client";
+import { formatDate } from "@/lib/utils/format";
 import {
   analyzeWordImport,
   commitWordImport,
@@ -12,13 +15,16 @@ import {
   getWordImportDocument,
   ListRowStatus,
   reanalyzeWordImportDocument,
+  saveWordImportDocumentDraft,
   TableRole,
   TableRoleOverride,
   WordImportAnalysis,
   WordImportEventCandidate,
   WordImportFormFieldValue,
   WordImportListEntryCandidate,
+  WordImportMatrixColumnCandidate,
   WordImportNameResolution,
+  WordImportReviewDraftJson,
   WordImportTextTarget,
 } from "@/lib/api/word-import";
 import { ParticipantSummary, TemplateSummary } from "@/types/api";
@@ -36,9 +42,25 @@ const TABLE_ROLE_OPTIONS: { value: TableRole; label: string }[] = [
   { value: "attendance", label: "Anwesenheit" },
   { value: "events", label: "Termine" },
   { value: "list", label: "Liste" },
+  { value: "matrix", label: "Matrix" },
 ];
 
-type Category = "tables" | "attendance" | "events" | "lists" | "texts";
+const TABLE_ROLE_PILL_OPTIONS = TABLE_ROLE_OPTIONS.map((option) => ({
+  ...option,
+  variant: roleBadgeVariant(option.value),
+}));
+
+const ATTENDANCE_PILL_OPTIONS = ATTENDANCE_OPTIONS.map((option) => ({
+  ...option,
+  variant: statusPillVariant(option.value),
+}));
+
+const APPROVE_PILL_OPTIONS: { value: "take" | "ignore"; label: string; variant: BadgeVariant }[] = [
+  { value: "take", label: "Übernehmen", variant: "success" },
+  { value: "ignore", label: "Ignorieren", variant: "neutral" },
+];
+
+type Category = "tables" | "attendance" | "events" | "lists" | "matrices" | "texts";
 
 function UploadIcon() {
   return (
@@ -74,6 +96,58 @@ function CheckIcon() {
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="15" height="15">
       <path d="M3 8.5 6.2 11.5 13 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="15" height="15">
+      <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function SpinnerIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg
+      className="word-import-spinner"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      width={size}
+      height={size}
+    >
+      <circle cx="12" cy="12" r="9.5" stroke="currentColor" strokeOpacity="0.2" strokeWidth="3" />
+      <path d="M21.5 12a9.5 9.5 0 0 0-9.5-9.5" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+// Native <input type="date"> always renders its OWN text in the browser/OS locale
+// (e.g. "10/14/2025" on an en-US Chrome) - CSS can't override that. To always show
+// dd.mm.yyyy we overlay a formatted label on top of a fully transparent native input;
+// the input still handles the click and the calendar picker, it's just invisible.
+function InlineDateField({
+  value,
+  onChange,
+  className,
+  placeholder = "– Datum wählen –",
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  className?: string;
+  placeholder?: string;
+}) {
+  return (
+    <span className="word-import-inline-date">
+      <span className={className}>{value ? formatDate(value) : placeholder}</span>
+      <input
+        type="date"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        aria-label="Datum"
+      />
+    </span>
   );
 }
 
@@ -125,11 +199,23 @@ function AlignIcon() {
   );
 }
 
+function MatrixIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" width="16" height="16">
+      <rect x="3.5" y="3.5" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.5" />
+      <rect x="13.5" y="3.5" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.5" />
+      <rect x="3.5" y="13.5" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.5" />
+      <rect x="13.5" y="13.5" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
 const CATEGORIES: { key: Category; label: string; Icon: typeof TableIcon }[] = [
   { key: "tables", label: "Tabellen", Icon: TableIcon },
   { key: "attendance", label: "Anwesenheit", Icon: PeopleIcon },
   { key: "events", label: "Termine", Icon: CalendarIcon },
   { key: "lists", label: "Listen", Icon: ListIcon },
+  { key: "matrices", label: "Matrizen", Icon: MatrixIcon },
   { key: "texts", label: "Texte", Icon: AlignIcon },
 ];
 
@@ -140,6 +226,8 @@ function roleBadgeVariant(role: TableRole): BadgeVariant {
     case "events":
       return "warning";
     case "list":
+      return "info";
+    case "matrix":
       return "info";
     default:
       return "neutral";
@@ -197,7 +285,10 @@ type TextDraft = {
   formFields: WordImportFormFieldValue[];
   formFieldsByTarget: Record<string, WordImportFormFieldValue[]>;
 };
-type AttendanceDraft = { raw_name: string; status: string; participant_id: number | null; createNew: boolean };
+// `linkedNone` records that the user explicitly chose "Keinen verknüpfen" - without it,
+// that choice is indistinguishable from "not yet decided" (both leave participant_id null),
+// so the row would stay flagged as needing review forever.
+type AttendanceDraft = { raw_name: string; status: string; participant_id: number | null; createNew: boolean; linkedNone: boolean };
 // Sentinel id for the "create as new participant" option in the attendance assignee menu -
 // distinct from `null` (which means "don't link this row to anyone").
 const CREATE_NEW_PARTICIPANT_ID = -1;
@@ -212,6 +303,15 @@ type EventDraft = {
   title_source: FieldSource;
   date_source: FieldSource;
   approved: boolean;
+  // Only set for rows extracted from a Matrix "events" row - see WordImportEventMapping.
+  tag: string | null;
+  participant_count: number | null;
+  matrix_key: string | null;
+  matrix_title: string | null;
+  row_id: string | null;
+  row_label: string | null;
+  column_key: string | null;
+  column_label: string | null;
 };
 type ListDraft = {
   table_index: number;
@@ -230,7 +330,64 @@ type ListDraft = {
   approved: boolean;
 };
 
+type MatrixDraft = {
+  table_index: number;
+  matrix_key: string;
+  matrix_title: string;
+  row_id: string;
+  row_label: string;
+  row_type: string;
+  column_label_raw: string;
+  column_key: string | null;
+  column_candidates: WordImportMatrixColumnCandidate[];
+  raw_value: string;
+  names: WordImportNameResolution[];
+  approved: boolean;
+};
+
 const NAME_COLUMN_TYPES = new Set(["participant", "participants"]);
+
+// Everything a reviewer can edit in the review step, on top of what applyAnalysis derives
+// fresh from an (re)analysis - saved to the queue document (see saveWordImportDocumentDraft)
+// so leaving the page or reloading mid-review doesn't lose it. Table roles/protocol_date
+// auto-detection are excluded on purpose: those already round-trip through the server via
+// reanalyzeWordImportDocument and are baked into `analysis` itself.
+type WordImportReviewDraft = {
+  protocolDate: string;
+  texts: TextDraft[];
+  attendance: AttendanceDraft[];
+  events: EventDraft[];
+  lists: ListDraft[];
+  matrices: MatrixDraft[];
+};
+
+// Best-effort parse of the opaque JSON blob loaded from the server - only shape-checked
+// (right keys, right array-ness), not deeply validated, since it's the same wizard's own
+// previously-saved output. Returns null for "no draft yet" (fresh document) as well as for
+// anything that doesn't look like a draft at all, so callers can fall back to the freshly
+// derived state without special-casing.
+function parseReviewDraft(raw: WordImportReviewDraftJson | null | undefined): WordImportReviewDraft | null {
+  if (!raw || typeof raw !== "object") return null;
+  const { protocolDate, texts, attendance, events, lists, matrices } = raw as Record<string, unknown>;
+  if (
+    typeof protocolDate !== "string" ||
+    !Array.isArray(texts) ||
+    !Array.isArray(attendance) ||
+    !Array.isArray(events) ||
+    !Array.isArray(lists) ||
+    !Array.isArray(matrices)
+  ) {
+    return null;
+  }
+  return {
+    protocolDate,
+    texts: texts as TextDraft[],
+    attendance: attendance as AttendanceDraft[],
+    events: events as EventDraft[],
+    lists: lists as ListDraft[],
+    matrices: matrices as MatrixDraft[],
+  };
+}
 
 function resolveEventFinal(entry: EventDraft): { title: string; date: string } {
   const linked = entry.candidates.find((candidate) => candidate.event_id === entry.linked_event_id);
@@ -265,12 +422,103 @@ function listNeedsReview(entry: ListDraft): boolean {
   return col2Differs || hasUnmatchedName;
 }
 
+// A matrix cell needs a decision when its target column couldn't be confidently
+// resolved (no column_key yet - the doc header didn't clearly match a template
+// column, a real participant, an event, or a list entry), or when a participant/
+// participants-typed cell's name(s) couldn't be matched, mirroring listNeedsReview.
+function matrixNeedsReview(entry: MatrixDraft): boolean {
+  if (entry.column_key === null) return true;
+  if (NAME_COLUMN_TYPES.has(entry.row_type)) {
+    return entry.names.some((name) => name.participant_id === null);
+  }
+  return false;
+}
+
+// Groups the flat matrices/events state back into a card-per-column layout mirroring
+// the real Matrix block in the protocol editor (.matrix-cards/.matrix-card - see
+// focused-element-editor.tsx) instead of one row per cell - lets Timo review an import
+// in the same shape he already knows from editing a protocol. Matrix "events" rows
+// (e.g. "Daten") never produce MatrixDraft cells (see WordImportService.analyze - their
+// dates are folded into the `events` state instead, carrying matrix/row/column context)
+// so they're re-attached here as their own row bucket per column, alongside the plain
+// text/participant(s) cells.
+type MatrixCardCellRow = { kind: "cell"; entry: MatrixDraft; index: number };
+type MatrixCardEventsRow = { kind: "events"; rowId: string; rowLabel: string; items: { entry: EventDraft; index: number }[] };
+type MatrixCardRow = MatrixCardCellRow | MatrixCardEventsRow;
+
+type MatrixCardColumn = {
+  columnLabelRaw: string;
+  columnKey: string | null;
+  candidates: WordImportMatrixColumnCandidate[];
+  rows: MatrixCardRow[];
+};
+
+type MatrixCardGroup = {
+  matrixKey: string;
+  matrixTitle: string;
+  columns: MatrixCardColumn[];
+};
+
+function buildMatrixCardGroups(
+  cellItems: { entry: MatrixDraft; index: number }[],
+  eventItems: { entry: EventDraft; index: number }[]
+): MatrixCardGroup[] {
+  const order: string[] = [];
+  const groups = new Map<string, MatrixCardGroup>();
+
+  function ensureGroup(matrixKey: string, matrixTitle: string): MatrixCardGroup {
+    let group = groups.get(matrixKey);
+    if (!group) {
+      group = { matrixKey, matrixTitle, columns: [] };
+      groups.set(matrixKey, group);
+      order.push(matrixKey);
+    }
+    return group;
+  }
+
+  function ensureColumn(
+    group: MatrixCardGroup,
+    columnLabelRaw: string,
+    columnKey: string | null,
+    candidates: WordImportMatrixColumnCandidate[]
+  ): MatrixCardColumn {
+    let column = group.columns.find((candidate) => candidate.columnLabelRaw === columnLabelRaw);
+    if (!column) {
+      column = { columnLabelRaw, columnKey, candidates, rows: [] };
+      group.columns.push(column);
+    } else if (columnKey && !column.columnKey) {
+      column.columnKey = columnKey;
+    }
+    return column;
+  }
+
+  cellItems.forEach(({ entry, index }) => {
+    const group = ensureGroup(entry.matrix_key, entry.matrix_title);
+    const column = ensureColumn(group, entry.column_label_raw, entry.column_key, entry.column_candidates);
+    column.rows.push({ kind: "cell", entry, index });
+  });
+
+  eventItems.forEach(({ entry, index }) => {
+    if (!entry.matrix_key || !entry.column_label || !entry.row_id) return;
+    const group = ensureGroup(entry.matrix_key, entry.matrix_title ?? "");
+    const column = ensureColumn(group, entry.column_label, entry.column_key, []);
+    let bucket = column.rows.find((row): row is MatrixCardEventsRow => row.kind === "events" && row.rowId === entry.row_id);
+    if (!bucket) {
+      bucket = { kind: "events", rowId: entry.row_id, rowLabel: entry.row_label ?? "Termine", items: [] };
+      column.rows.push(bucket);
+    }
+    bucket.items.push({ entry, index });
+  });
+
+  return order.map((key) => groups.get(key)!);
+}
+
 function textNeedsReview(text: TextDraft): boolean {
   return text.template_element_id === null || (text.isEventRepeat && text.linkedEventId === null);
 }
 
 function attendanceNeedsReview(entry: AttendanceDraft): boolean {
-  return entry.participant_id === null && !entry.createNew;
+  return entry.participant_id === null && !entry.createNew && !entry.linkedNone;
 }
 
 function textSummaryLabel(text: TextDraft, target: WordImportTextTarget | undefined, linkedEvent: WordImportEventCandidate | undefined): string {
@@ -311,11 +559,82 @@ export function WordImportWizard({
   const [attendance, setAttendance] = useState<AttendanceDraft[]>([]);
   const [events, setEvents] = useState<EventDraft[]>([]);
   const [lists, setLists] = useState<ListDraft[]>([]);
+  const [matrices, setMatrices] = useState<MatrixDraft[]>([]);
   const [createdProtocolId, setCreatedProtocolId] = useState<number | null>(null);
   const [activeCategory, setActiveCategory] = useState<Category>("tables");
+  const [pendingTableIndex, setPendingTableIndex] = useState<number | null>(null);
   const [expandedTexts, setExpandedTexts] = useState<Set<number>>(new Set());
+  const [expandedEvents, setExpandedEvents] = useState<Set<number>>(new Set());
   const [showAllAttendance, setShowAllAttendance] = useState(false);
-  const [doneSummary, setDoneSummary] = useState<{ attendance: number; events: number; lists: number; skipped: number } | null>(null);
+  const [doneSummary, setDoneSummary] = useState<{ attendance: number; events: number; lists: number; matrices: number; skipped: number } | null>(
+    null
+  );
+  // Participants eligible for THIS template's attendance tracking (excludes people marked
+  // "keine Anwesenheitskontrolle" for the template, mirroring the backend's own attendance
+  // matching pool) - falls back to the full tenant participant list until loaded so the
+  // picker isn't empty while the request is in flight.
+  const [attendanceParticipants, setAttendanceParticipants] = useState<ParticipantSummary[]>(participants);
+
+  // Draft autosave (queue mode only, see saveWordImportDocumentDraft): isHydratingRef
+  // suppresses the save that would otherwise fire from applyAnalysis's own state update
+  // (loading a document / reanalyzing isn't a reviewer edit); pendingDraftRef always holds
+  // the latest not-yet-sent draft so the unmount effect below can flush it immediately
+  // instead of losing it when a pending debounce gets cancelled by navigating away.
+  const isHydratingRef = useRef(false);
+  const pendingDraftRef = useRef<WordImportReviewDraft | null>(null);
+  const draftTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const documentIdRef = useRef(documentId);
+  documentIdRef.current = documentId;
+
+  function flushDraftSave() {
+    const id = documentIdRef.current;
+    const draft = pendingDraftRef.current;
+    if (!id || !draft) return;
+    if (draftTimeoutRef.current) {
+      clearTimeout(draftTimeoutRef.current);
+      draftTimeoutRef.current = null;
+    }
+    pendingDraftRef.current = null;
+    void saveWordImportDocumentDraft(id, draft as unknown as WordImportReviewDraftJson).catch(() => {});
+  }
+
+  useEffect(() => {
+    if (!documentId) return;
+    if (isHydratingRef.current) {
+      isHydratingRef.current = false;
+      return;
+    }
+    pendingDraftRef.current = { protocolDate, texts, attendance, events, lists, matrices };
+    draftTimeoutRef.current = setTimeout(flushDraftSave, 800);
+    return () => {
+      if (draftTimeoutRef.current) clearTimeout(draftTimeoutRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentId, protocolDate, texts, attendance, events, lists, matrices]);
+
+  // Flushes on unmount specifically (empty deps => cleanup runs only when the wizard goes
+  // away entirely - the queue view unmounts it both on "Zurück zur Warteschlange" and on
+  // navigating elsewhere), so a change made just before leaving isn't lost to the debounce.
+  useEffect(() => {
+    return () => flushDraftSave();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!templateId) return;
+    let cancelled = false;
+    browserApiFetch<ParticipantSummary[]>(`/api/templates/${templateId}/participants`)
+      .then((templateParticipants) => {
+        if (cancelled) return;
+        setAttendanceParticipants(templateParticipants.filter((participant) => !participant.exclude_from_attendance));
+      })
+      .catch(() => {
+        if (!cancelled) setAttendanceParticipants(participants);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [templateId, participants]);
 
   useEffect(() => {
     if (!documentId) return;
@@ -325,7 +644,7 @@ export function WordImportWizard({
       .then((detail) => {
         setTemplateId(detail.template_id);
         setFileName(detail.original_filename);
-        applyAnalysis(detail.analysis);
+        applyAnalysis(detail.analysis, parseReviewDraft(detail.review_draft));
         setStep("review");
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Dokument konnte nicht geladen werden"))
@@ -342,69 +661,254 @@ export function WordImportWizard({
     });
   }
 
-  function applyAnalysis(result: WordImportAnalysis) {
+  function toggleEventExpanded(index: number) {
+    setExpandedEvents((current) => {
+      const next = new Set(current);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }
+
+  function updateEventAt(index: number, patch: Partial<EventDraft>) {
+    setEvents((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
+  }
+
+  // One shared row for a Termin under review, used both in the flat "Termine" tab and
+  // inside a Matrix card's "events" row - identical interaction everywhere: collapsed by
+  // default, click the row to expand the link-picker and (if the linked event's title/date
+  // actually differs from the document) the doc-vs-existing choice for each field, and an
+  // Übernehmen/Ignorieren button pair at the end that both selects AND confirms the
+  // decision - independent of expand state so it stays reachable while collapsed. New
+  // links always default back to "existing" data, matching the global default that DB
+  // data wins unless explicitly swapped to the doc's.
+  function renderEventRow(entry: EventDraft, index: number) {
+    const linked = entry.candidates.find((candidate) => candidate.event_id === entry.linked_event_id);
+    const hasDiff = eventNeedsReview(entry);
+    const isOpen = expandedEvents.has(index);
+    const titleDiffers = !!linked && linked.title !== entry.raw_title;
+    const dateDiffers = !!linked && linked.event_date !== (entry.raw_date ?? linked.event_date);
+    return (
+      <div className={`word-import-text-row${hasDiff ? " word-import-flag" : ""}`} key={entry.row_index}>
+        <div className="word-import-text-row-head" style={{ cursor: "pointer" }} onClick={() => toggleEventExpanded(index)}>
+          <span className="word-import-text-row-title">
+            {entry.raw_title} ({formatDate(entry.raw_date) || "?"})
+            {entry.participant_count !== null && <span className="muted"> · {entry.participant_count} TN</span>}
+          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            {!isOpen &&
+              (linked ? (
+                <span className="word-import-text-row-summary">
+                  <CheckIcon /> {linked.title} ({formatDate(linked.event_date)})
+                </span>
+              ) : (
+                <span className="word-import-text-row-summary is-new">
+                  <PlusIcon /> Neu anlegen
+                </span>
+              ))}
+            <div className="word-import-decision-group">
+              <button
+                type="button"
+                className={`word-import-decision-btn is-take${entry.approved ? " is-active" : ""}`}
+                onClick={(clickEvent) => {
+                  clickEvent.stopPropagation();
+                  updateEventAt(index, { approved: true });
+                }}
+              >
+                {entry.approved && <CheckIcon />} Übernehmen
+              </button>
+              <button
+                type="button"
+                className={`word-import-decision-btn is-ignore${!entry.approved ? " is-active" : ""}`}
+                onClick={(clickEvent) => {
+                  clickEvent.stopPropagation();
+                  updateEventAt(index, { approved: false });
+                }}
+              >
+                {!entry.approved && <CheckIcon />} Ignorieren
+              </button>
+            </div>
+          </div>
+        </div>
+        {isOpen && (
+          <div className="grid" style={{ gap: "10px" }}>
+            <TodoAssigneeMenu
+              label={linked ? `${linked.title} (${formatDate(linked.event_date)})` : "🆕 Neu anlegen"}
+              nullLabel="🆕 Neu anlegen"
+              activeId={entry.linked_event_id}
+              participants={entry.candidates.map(
+                (candidate): AssigneeOption => ({
+                  id: candidate.event_id,
+                  display_name: `${candidate.title} (${formatDate(candidate.event_date)})`,
+                })
+              )}
+              onChange={(option) =>
+                updateEventAt(index, { linked_event_id: option.id, title_source: "existing", date_source: "existing" })
+              }
+            />
+            {linked && (titleDiffers || dateDiffers) && (
+              <div className="word-import-alert word-import-alert-block">
+                <WarningIcon />
+                <div className="grid" style={{ gap: "10px" }}>
+                  <span>Welchen Wert übernehmen?</span>
+                  {titleDiffers && (
+                    <div className="word-import-diff-options">
+                      <label className="field-radio-option">
+                        <input
+                          type="radio"
+                          checked={entry.title_source === "doc"}
+                          onChange={() => updateEventAt(index, { title_source: "doc" })}
+                        />
+                        <span>
+                          <span className="field-radio-option-label">Aus Dokument</span>
+                          <strong>{entry.raw_title}</strong>
+                        </span>
+                      </label>
+                      <label className="field-radio-option">
+                        <input
+                          type="radio"
+                          checked={entry.title_source === "existing"}
+                          onChange={() => updateEventAt(index, { title_source: "existing" })}
+                        />
+                        <span>
+                          <span className="field-radio-option-label">Bestehend</span>
+                          <strong>{linked.title}</strong>
+                        </span>
+                      </label>
+                    </div>
+                  )}
+                  {dateDiffers && (
+                    <div className="word-import-diff-options">
+                      <label className="field-radio-option">
+                        <input
+                          type="radio"
+                          checked={entry.date_source === "doc"}
+                          onChange={() => updateEventAt(index, { date_source: "doc" })}
+                        />
+                        <span>
+                          <span className="field-radio-option-label">Aus Dokument</span>
+                          <strong>{formatDate(entry.raw_date) || "?"}</strong>
+                        </span>
+                      </label>
+                      <label className="field-radio-option">
+                        <input
+                          type="radio"
+                          checked={entry.date_source === "existing"}
+                          onChange={() => updateEventAt(index, { date_source: "existing" })}
+                        />
+                        <span>
+                          <span className="field-radio-option-label">Bestehend</span>
+                          <strong>{formatDate(linked.event_date)}</strong>
+                        </span>
+                      </label>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function applyAnalysis(result: WordImportAnalysis, draft?: WordImportReviewDraft | null) {
+    // Suppresses the draft-autosave effect for the state update this triggers - loading or
+    // reanalyzing a document isn't itself a reviewer edit worth saving back.
+    isHydratingRef.current = true;
     setAnalysis(result);
-    setProtocolDate(result.protocol_date ?? "");
+    setProtocolDate(draft ? draft.protocolDate : result.protocol_date ?? "");
     setTableRoles(
       Object.fromEntries(
-        result.tables.map((table) => [table.index, { role: table.role, list_definition_id: table.list_definition_id }])
+        result.tables.map((table) => [
+          table.index,
+          { role: table.role, list_definition_id: table.list_definition_id, matrix_key: table.matrix_key },
+        ])
       )
     );
-    setTexts(
-      result.text_mappings.map((mapping) => ({
-        extracted_heading: mapping.extracted_heading,
-        content: mapping.extracted_text,
-        template_element_id: mapping.template_element_id,
-        block_sort_index: mapping.block_sort_index,
-        isEventRepeat: mapping.is_event_repeat,
-        eventCandidates: mapping.event_candidates,
-        linkedEventId: mapping.matched_event_id,
-        isFormBlock: mapping.is_form_block,
-        formFields: mapping.form_fields,
-        formFieldsByTarget: mapping.form_fields_by_target,
-      }))
-    );
-    setAttendance(
-      result.attendance_mappings.map((mapping) => ({
-        raw_name: mapping.raw_name,
-        status: mapping.status,
-        participant_id: mapping.suggested_participant_id,
-        createNew: false,
-      }))
-    );
-    setEvents(
-      result.event_mappings.map((mapping) => ({
-        row_index: mapping.row_index,
-        raw_title: mapping.raw_title,
-        raw_date: mapping.raw_date,
-        status: mapping.status,
-        candidates: mapping.candidates,
-        linked_event_id: mapping.status !== "new" ? mapping.matched_event_id : null,
-        title_source: "doc",
-        date_source: "doc",
-        approved: mapping.status === "matched",
-      }))
-    );
-    setLists(
-      result.list_mappings.map((mapping) => ({
-        table_index: mapping.table_index,
-        row_index: mapping.row_index,
-        column_one_raw: mapping.column_one_raw,
-        column_two_raw: mapping.column_two_raw,
-        column_one_type: mapping.column_one_type,
-        column_two_type: mapping.column_two_type,
-        column_one_names: mapping.column_one_names,
-        column_two_names: mapping.column_two_names,
-        status: mapping.status,
-        candidates: mapping.candidates,
-        linked_entry_id: mapping.status !== "new" ? mapping.matched_entry_id : null,
-        column_two_source: "doc",
-        has_snapshot_target: mapping.has_snapshot_target,
-        approved: mapping.status === "matched" && mapping.has_snapshot_target,
-      }))
-    );
+    const freshTexts: TextDraft[] = result.text_mappings.map((mapping) => ({
+      extracted_heading: mapping.extracted_heading,
+      content: mapping.extracted_text,
+      template_element_id: mapping.template_element_id,
+      block_sort_index: mapping.block_sort_index,
+      isEventRepeat: mapping.is_event_repeat,
+      eventCandidates: mapping.event_candidates,
+      linkedEventId: mapping.matched_event_id,
+      isFormBlock: mapping.is_form_block,
+      formFields: mapping.form_fields,
+      formFieldsByTarget: mapping.form_fields_by_target,
+    }));
+    const freshAttendance: AttendanceDraft[] = result.attendance_mappings.map((mapping) => ({
+      raw_name: mapping.raw_name,
+      status: mapping.status,
+      participant_id: mapping.suggested_participant_id,
+      createNew: false,
+      linkedNone: false,
+    }));
+    const freshEvents: EventDraft[] = result.event_mappings.map((mapping) => ({
+      row_index: mapping.row_index,
+      raw_title: mapping.raw_title,
+      raw_date: mapping.raw_date,
+      status: mapping.status,
+      candidates: mapping.candidates,
+      linked_event_id: mapping.status !== "new" ? mapping.matched_event_id : null,
+      title_source: "existing",
+      date_source: "existing",
+      approved: mapping.status === "matched",
+      tag: mapping.tag,
+      participant_count: mapping.participant_count,
+      matrix_key: mapping.matrix_key,
+      matrix_title: mapping.matrix_title,
+      row_id: mapping.row_id,
+      row_label: mapping.row_label,
+      column_key: mapping.column_key,
+      column_label: mapping.column_label,
+    }));
+    const freshLists: ListDraft[] = result.list_mappings.map((mapping) => ({
+      table_index: mapping.table_index,
+      row_index: mapping.row_index,
+      column_one_raw: mapping.column_one_raw,
+      column_two_raw: mapping.column_two_raw,
+      column_one_type: mapping.column_one_type,
+      column_two_type: mapping.column_two_type,
+      column_one_names: mapping.column_one_names,
+      column_two_names: mapping.column_two_names,
+      status: mapping.status,
+      candidates: mapping.candidates,
+      linked_entry_id: mapping.status !== "new" ? mapping.matched_entry_id : null,
+      column_two_source: "existing",
+      has_snapshot_target: mapping.has_snapshot_target,
+      approved: mapping.status === "matched" && mapping.has_snapshot_target,
+    }));
+    const freshMatrices: MatrixDraft[] = result.matrix_mappings.map((mapping) => ({
+      table_index: mapping.table_index,
+      matrix_key: mapping.matrix_key,
+      matrix_title: mapping.matrix_title,
+      row_id: mapping.row_id,
+      row_label: mapping.row_label,
+      row_type: mapping.row_type,
+      column_label_raw: mapping.column_label_raw,
+      column_key: mapping.column_key,
+      column_candidates: mapping.column_candidates,
+      raw_value: mapping.raw_value,
+      names: mapping.names,
+      approved:
+        mapping.column_key !== null &&
+        !(NAME_COLUMN_TYPES.has(mapping.row_type) && mapping.names.some((name) => name.participant_id === null)),
+    }));
+    // A saved draft is only applied per-category when its row count still matches the
+    // freshly derived one - a mismatch means the underlying document was reanalyzed since
+    // the draft was saved (new/removed rows), so the draft's indices no longer line up and
+    // falling back to the fresh suggestions is safer than silently misapplying old edits.
+    const eventsToUse = draft && draft.events.length === freshEvents.length ? draft.events : freshEvents;
+    setTexts(draft && draft.texts.length === freshTexts.length ? draft.texts : freshTexts);
+    setAttendance(draft && draft.attendance.length === freshAttendance.length ? draft.attendance : freshAttendance);
+    setEvents(eventsToUse);
+    setLists(draft && draft.lists.length === freshLists.length ? draft.lists : freshLists);
+    setMatrices(draft && draft.matrices.length === freshMatrices.length ? draft.matrices : freshMatrices);
     setActiveCategory("tables");
     setExpandedTexts(new Set());
+    setExpandedEvents(new Set());
     setShowAllAttendance(false);
   }
 
@@ -423,21 +927,38 @@ export function WordImportWizard({
     }
   }
 
-  async function reanalyze() {
+  async function reanalyzeWithRoles(nextTableRoles: Record<number, TableRoleOverride>) {
     if (!templateId) return;
     if (!documentId && !file) return;
+    setTableRoles(nextTableRoles);
     setBusy(true);
     setError(null);
     try {
       const result = documentId
-        ? await reanalyzeWordImportDocument(documentId, protocolDate || null, tableRoles)
-        : await analyzeWordImport(file!, templateId, protocolDate || null, tableRoles);
+        ? await reanalyzeWordImportDocument(documentId, protocolDate || null, nextTableRoles)
+        : await analyzeWordImport(file!, templateId, protocolDate || null, nextTableRoles);
       applyAnalysis(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Datei konnte nicht erneut analysiert werden");
     } finally {
       setBusy(false);
+      setPendingTableIndex(null);
     }
+  }
+
+  // Reassigning a table's role (e.g. "Liste"/"Matrix"/Ziel) changes how its rows must be
+  // interpreted, so it has to go back through the server-side parser rather than just
+  // updating local state - otherwise the attendance/events/lists/matrices tabs would keep
+  // showing stale rows derived from the table's previous role.
+  function updateTableRole(tableIndex: number, patch: Partial<TableRoleOverride>) {
+    if (busy) return;
+    const current = tableRoles[tableIndex] ?? { role: "ignore" as TableRole, list_definition_id: null, matrix_key: null };
+    setPendingTableIndex(tableIndex);
+    void reanalyzeWithRoles({ ...tableRoles, [tableIndex]: { ...current, ...patch } });
+  }
+
+  async function reanalyze() {
+    await reanalyzeWithRoles(tableRoles);
   }
 
   function resetWizard() {
@@ -451,6 +972,7 @@ export function WordImportWizard({
     setAttendance([]);
     setEvents([]);
     setLists([]);
+    setMatrices([]);
     setCreatedProtocolId(null);
     setDoneSummary(null);
   }
@@ -541,6 +1063,28 @@ export function WordImportWizard({
     );
   }
 
+  function updateMatrixName(rowIndex: number, nameIndex: number, participantId: number | null) {
+    setMatrices((current) =>
+      current.map((row, index) => {
+        if (index !== rowIndex) return row;
+        const updatedNames = row.names.map((name, i) => (i === nameIndex ? { ...name, participant_id: participantId } : name));
+        return { ...row, names: updatedNames, approved: true };
+      })
+    );
+  }
+
+  // Picking a column in the card header must resolve EVERY cell sharing that same
+  // (matrix, doc column) - not just one row - since the backend computes column
+  // resolution once per table, shared across all its rows (see column_resolution in
+  // WordImportService.analyze).
+  function resolveMatrixColumn(matrixKey: string, columnLabelRaw: string, columnKey: string) {
+    setMatrices((current) =>
+      current.map((row) =>
+        row.matrix_key === matrixKey && row.column_label_raw === columnLabelRaw ? { ...row, column_key: columnKey, approved: true } : row
+      )
+    );
+  }
+
   async function submitCommit() {
     if (!templateId || !protocolDate || !analysis) return;
     setBusy(true);
@@ -551,6 +1095,7 @@ export function WordImportWizard({
       const approvedLists = lists
         .filter((entry) => entry.approved && entry.has_snapshot_target)
         .filter((entry) => (tableRoles[entry.table_index]?.list_definition_id ?? 0) > 0);
+      const approvedMatrices = matrices.filter((entry) => entry.approved && entry.column_key !== null);
       const payload = {
         template_id: templateId,
         protocol_date: protocolDate,
@@ -580,6 +1125,8 @@ export function WordImportWizard({
             linked_event_id: entry.linked_event_id,
             final_title: resolved.title,
             final_date: resolved.date,
+            tag: entry.tag,
+            participant_count: entry.participant_count,
           };
         }),
         lists: approvedLists.map((entry) => ({
@@ -592,10 +1139,22 @@ export function WordImportWizard({
           approved: true,
           linked_entry_id: entry.linked_entry_id,
         })),
+        matrices: approvedMatrices.map((entry) => ({
+          matrix_key: entry.matrix_key,
+          row_id: entry.row_id,
+          row_type: entry.row_type,
+          column_key: entry.column_key as string,
+          column_label:
+            entry.column_candidates.find((candidate) => candidate.column_key === entry.column_key)?.label ?? entry.column_label_raw,
+          raw_value: entry.raw_value,
+          names: entry.names,
+          approved: true,
+        })),
         tables: analysis.tables.map((table) => ({
           header_signature: normalizeHeaderSignature(table.header_cells),
           role: tableRoles[table.index]?.role ?? table.role,
           list_definition_id: tableRoles[table.index]?.list_definition_id ?? table.list_definition_id,
+          matrix_key: tableRoles[table.index]?.matrix_key ?? table.matrix_key,
         })),
       };
       const result = documentId ? await commitWordImportDocument(documentId, payload) : await commitWordImport(payload);
@@ -603,11 +1162,13 @@ export function WordImportWizard({
         attendance: approvedAttendance.length,
         events: approvedEvents.length,
         lists: approvedLists.length,
+        matrices: approvedMatrices.length,
         skipped:
           attendance.length -
           approvedAttendance.length +
           (events.length - approvedEvents.length) +
           (lists.filter((entry) => entry.has_snapshot_target).length - approvedLists.length) +
+          (matrices.length - approvedMatrices.length) +
           texts.filter((text) => textNeedsReview(text)).length,
       });
       setCreatedProtocolId(result.id);
@@ -622,25 +1183,37 @@ export function WordImportWizard({
   const stepIndex = STEPS.findIndex((entry) => entry.key === step);
   const templateName = templates.find((template) => template.id === templateId)?.name ?? "";
 
+  // Matrix "events" rows (e.g. "Daten") never produce a MatrixDraft cell (see
+  // buildMatrixCardGroups) - they live in `events` alongside ordinary Termine-table
+  // rows, distinguished only by matrix_key. Split once here so the Termine tab shows
+  // only the latter, while the Matrizen tab's cards re-absorb the former.
+  const plainEventItems = events.map((entry, index) => ({ entry, index })).filter((item) => item.entry.matrix_key === null);
+  const matrixEventItems = events.map((entry, index) => ({ entry, index })).filter((item) => item.entry.matrix_key !== null);
+  const matrixCellItems = matrices.map((entry, index) => ({ entry, index }));
+  const matrixCardGroups = buildMatrixCardGroups(matrixCellItems, matrixEventItems);
+
   const attendanceOpen = attendance.filter(attendanceNeedsReview).length;
-  const eventsOpen = events.filter(eventNeedsReview).length;
+  const eventsOpen = plainEventItems.filter((item) => eventNeedsReview(item.entry)).length;
   const listsOpen = lists.filter(listNeedsReview).length;
+  const matricesOpen = matrices.filter(matrixNeedsReview).length + matrixEventItems.filter((item) => eventNeedsReview(item.entry)).length;
   const textsOpen = texts.filter(textNeedsReview).length;
-  const totalOpen = attendanceOpen + eventsOpen + listsOpen + textsOpen;
+  const totalOpen = attendanceOpen + eventsOpen + listsOpen + matricesOpen + textsOpen;
 
   const categoryCounts: Record<Category, number> = {
     tables: analysis?.tables.length ?? 0,
     attendance: attendanceOpen,
     events: eventsOpen,
     lists: listsOpen,
+    matrices: matricesOpen,
     texts: textsOpen,
   };
   const categoryVariants: Record<Category, BadgeVariant> = {
     tables: "neutral",
-    attendance: "danger",
+    attendance: "warning",
     events: "warning",
     lists: "warning",
-    texts: "danger",
+    matrices: "warning",
+    texts: "warning",
   };
 
   // Preserve document order: always show rows that need a decision, plus the
@@ -746,16 +1319,20 @@ export function WordImportWizard({
               <strong>{fileName ?? file?.name ?? "Dokument"}</strong>
               <span className="muted"> · {templateName}</span>
               <span className="muted"> · </span>
-              <input
-                type="date"
+              <InlineDateField
                 className="word-import-filebar-date"
                 value={protocolDate}
-                onChange={(event) => setProtocolDate(event.target.value)}
-                title="Protokolldatum"
+                onChange={setProtocolDate}
               />
             </span>
             <button type="button" className="button-ghost" disabled={busy} onClick={() => void reanalyze()}>
-              {busy ? "…" : "Neu analysieren"}
+              {busy ? (
+                <span className="word-import-cell-with-spinner">
+                  <SpinnerIcon size={12} /> Neu analysieren
+                </span>
+              ) : (
+                "Neu analysieren"
+              )}
             </button>
           </div>
 
@@ -764,11 +1341,10 @@ export function WordImportWizard({
               <WarningIcon />
               <span className="word-import-alert-date">
                 Protokolldatum konnte nicht automatisch erkannt werden.
-                <input
-                  type="date"
+                <InlineDateField
                   className="input word-import-alert-date-input"
                   value={protocolDate}
-                  onChange={(event) => setProtocolDate(event.target.value)}
+                  onChange={setProtocolDate}
                 />
               </span>
             </div>
@@ -814,9 +1390,22 @@ export function WordImportWizard({
                 <>
                   <div>
                     <h3 className="word-import-panel-title">Erkannte Tabellen</h3>
-                    <p className="word-import-panel-desc">Rolle pro Tabelle zuweisen — steuert, wie Zeilen unten interpretiert werden.</p>
+                    <p className={`word-import-panel-desc${busy ? " word-import-panel-desc-busy" : ""}`}>
+                      {busy ? (
+                        <>
+                          <SpinnerIcon /> Wird neu analysiert…
+                        </>
+                      ) : (
+                        "Rolle pro Tabelle zuweisen — steuert, wie Zeilen unten interpretiert werden."
+                      )}
+                    </p>
                   </div>
-                  <div className="table-shell">
+                  {busy && (
+                    <div className="word-import-progress-track">
+                      <div className="word-import-progress-bar" />
+                    </div>
+                  )}
+                  <div className={`table-shell${busy ? " word-import-panel-busy" : ""}`}>
                     <table className="data-table">
                       <thead>
                         <tr>
@@ -829,51 +1418,53 @@ export function WordImportWizard({
                       <tbody>
                         {analysis.tables.map((table) => {
                           const current = tableRoles[table.index] ?? { role: table.role, list_definition_id: table.list_definition_id };
+                          const isPending = pendingTableIndex === table.index;
                           return (
-                            <tr key={table.index}>
+                            <tr key={table.index} className={isPending ? "word-import-row-pending" : undefined}>
                               <td>#{table.index + 1}</td>
                               <td className="muted">{table.header_cells.join(" · ")}</td>
                               <td>
-                                <select
-                                  className="pill-select"
-                                  data-variant={roleBadgeVariant(current.role)}
-                                  value={current.role}
-                                  onChange={(event) =>
-                                    setTableRoles((prev) => ({
-                                      ...prev,
-                                      [table.index]: { ...current, role: event.target.value as TableRole },
-                                    }))
-                                  }
-                                >
-                                  {TABLE_ROLE_OPTIONS.map((option) => (
-                                    <option key={option.value} value={option.value}>
-                                      {option.label}
-                                    </option>
-                                  ))}
-                                </select>
+                                <span className="word-import-cell-with-spinner">
+                                  <PillMenu
+                                    value={current.role}
+                                    options={TABLE_ROLE_PILL_OPTIONS}
+                                    onChange={(role) => updateTableRole(table.index, { role })}
+                                  />
+                                  {isPending && <SpinnerIcon size={12} />}
+                                </span>
                               </td>
                               <td>
-                                {current.role === "list" ? (
-                                  <TodoAssigneeMenu
-                                    label={
-                                      analysis.list_definitions.find((definition) => definition.id === current.list_definition_id)
-                                        ?.name ?? "– auswählen –"
-                                    }
-                                    nullLabel="– auswählen –"
-                                    activeId={current.list_definition_id}
-                                    participants={analysis.list_definitions.map(
-                                      (definition): AssigneeOption => ({ id: definition.id, display_name: definition.name })
-                                    )}
-                                    onChange={(option) =>
-                                      setTableRoles((prev) => ({
-                                        ...prev,
-                                        [table.index]: { ...current, list_definition_id: option.id },
-                                      }))
-                                    }
-                                  />
-                                ) : (
-                                  <span className="muted">—</span>
-                                )}
+                                <span className="word-import-cell-with-spinner">
+                                  {current.role === "list" ? (
+                                    <TodoAssigneeMenu
+                                      label={
+                                        analysis.list_definitions.find((definition) => definition.id === current.list_definition_id)
+                                          ?.name ?? "– auswählen –"
+                                      }
+                                      nullLabel="– auswählen –"
+                                      activeId={current.list_definition_id}
+                                      participants={analysis.list_definitions.map(
+                                        (definition): AssigneeOption => ({ id: definition.id, display_name: definition.name })
+                                      )}
+                                      onChange={(option) => updateTableRole(table.index, { list_definition_id: option.id })}
+                                    />
+                                  ) : current.role === "matrix" ? (
+                                    <select
+                                      value={current.matrix_key ?? ""}
+                                      onChange={(event) => updateTableRole(table.index, { matrix_key: event.target.value || null })}
+                                    >
+                                      <option value="">– auswählen –</option>
+                                      {analysis.matrix_options.map((option) => (
+                                        <option key={option.matrix_key} value={option.matrix_key}>
+                                          {option.title}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <span className="muted">—</span>
+                                  )}
+                                  {isPending && <SpinnerIcon size={12} />}
+                                </span>
                               </td>
                             </tr>
                           );
@@ -903,32 +1494,41 @@ export function WordImportWizard({
                       </thead>
                       <tbody>
                         {visibleAttendance.map(({ entry, index }) => {
-                          const assigneeOptions: AssigneeOption[] = entry.raw_name
-                            ? [{ id: CREATE_NEW_PARTICIPANT_ID, display_name: `🆕 Als neuen Teilnehmer anlegen: "${entry.raw_name}"` }, ...participants]
-                            : participants;
+                          // A participant already linked to a different row that was actually
+                          // found in the document may not be picked again here - that would
+                          // silently link the same person twice. Rows with no raw_name are the
+                          // "not found in document, defaults to absent" placeholders (see
+                          // applyAnalysis/attendance onChange below) and are deliberately excluded
+                          // from this check: reassigning one of those participants to a real
+                          // document row is exactly how such a placeholder gets resolved.
+                          const takenElsewhere = new Set(
+                            attendance
+                              .filter((row, rowIndex) => rowIndex !== index && row.raw_name)
+                              .map((row) => row.participant_id)
+                              .filter((id): id is number => id !== null)
+                          );
+                          const assigneeOptions: AssigneeOption[] = (entry.raw_name
+                            ? [{ id: CREATE_NEW_PARTICIPANT_ID, display_name: `🆕 Als neuen Teilnehmer anlegen: "${entry.raw_name}"` }, ...attendanceParticipants]
+                            : attendanceParticipants
+                          ).filter((option) => option.id === CREATE_NEW_PARTICIPANT_ID || !takenElsewhere.has(option.id as number));
                           const label = entry.createNew
                             ? `🆕 Neuer Teilnehmer: "${entry.raw_name}"`
-                            : participants.find((participant) => participant.id === entry.participant_id)?.display_name ?? "Keinen verknüpfen";
+                            : attendanceParticipants.find((participant) => participant.id === entry.participant_id)?.display_name ??
+                              participants.find((participant) => participant.id === entry.participant_id)?.display_name ??
+                              "Keinen verknüpfen";
                           return (
                             <tr key={index} className={attendanceNeedsReview(entry) ? "table-row-error" : undefined}>
                               <td>{entry.raw_name || <span className="muted">– nicht im Dokument (Standard: abwesend) –</span>}</td>
                               <td>
-                                <select
-                                  className="pill-select"
-                                  data-variant={statusPillVariant(entry.status)}
+                                <PillMenu
                                   value={entry.status}
-                                  onChange={(event) =>
+                                  options={ATTENDANCE_PILL_OPTIONS}
+                                  onChange={(status) =>
                                     setAttendance((current) =>
-                                      current.map((row, rowIndex) => (rowIndex === index ? { ...row, status: event.target.value } : row))
+                                      current.map((row, rowIndex) => (rowIndex === index ? { ...row, status } : row))
                                     )
                                   }
-                                >
-                                  {ATTENDANCE_OPTIONS.map((option) => (
-                                    <option key={option.value} value={option.value}>
-                                      {option.label}
-                                    </option>
-                                  ))}
-                                </select>
+                                />
                               </td>
                               <td>
                                 {attendanceNeedsReview(entry) ? (
@@ -938,15 +1538,23 @@ export function WordImportWizard({
                                     activeId={entry.createNew ? CREATE_NEW_PARTICIPANT_ID : entry.participant_id}
                                     participants={assigneeOptions}
                                     onChange={(option) =>
-                                      setAttendance((current) =>
-                                        current.map((row, rowIndex) =>
+                                      setAttendance((current) => {
+                                        const updated = current.map((row, rowIndex) =>
                                           rowIndex === index
                                             ? option.id === CREATE_NEW_PARTICIPANT_ID
-                                              ? { ...row, participant_id: null, createNew: true }
-                                              : { ...row, participant_id: option.id, createNew: false }
+                                              ? { ...row, participant_id: null, createNew: true, linkedNone: false }
+                                              : { ...row, participant_id: option.id, createNew: false, linkedNone: option.id === null }
                                             : row
-                                        )
-                                      )
+                                        );
+                                        // Linking this document row to a participant who was only
+                                        // present as a "not found in document" placeholder (see
+                                        // applyAnalysis) makes that placeholder row redundant - drop
+                                        // it, otherwise the participant would be submitted twice.
+                                        if (option.id === null || option.id === CREATE_NEW_PARTICIPANT_ID) return updated;
+                                        return updated.filter(
+                                          (row, rowIndex) => rowIndex === index || !(row.raw_name === "" && row.participant_id === option.id)
+                                        );
+                                      })
                                     }
                                   />
                                 ) : (
@@ -990,140 +1598,9 @@ export function WordImportWizard({
                     <h3 className="word-import-panel-title">Termine</h3>
                     <p className="word-import-panel-desc">Im Dokument erwähnte Anlässe mit bestehenden Terminen abgleichen.</p>
                   </div>
-                  <div className="table-shell">
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>Im Dokument</th>
-                          <th>Verknüpfung</th>
-                          <th>Übernehmen</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {events.map((entry, index) => {
-                          const linked = entry.candidates.find((candidate) => candidate.event_id === entry.linked_event_id);
-                          const hasDiff = eventNeedsReview(entry);
-                          return (
-                            <>
-                              <tr key={entry.row_index} className={hasDiff ? "table-row-error" : undefined}>
-                                <td>
-                                  {entry.raw_title} ({entry.raw_date ?? "?"})
-                                </td>
-                                <td>
-                                  <TodoAssigneeMenu
-                                    label={linked ? `${linked.title} (${linked.event_date})` : "🆕 Neu anlegen"}
-                                    nullLabel="🆕 Neu anlegen"
-                                    activeId={entry.linked_event_id}
-                                    participants={entry.candidates.map(
-                                      (candidate): AssigneeOption => ({
-                                        id: candidate.event_id,
-                                        display_name: `${candidate.title} (${candidate.event_date})`,
-                                      })
-                                    )}
-                                    onChange={(option) =>
-                                      setEvents((current) =>
-                                        current.map((row, rowIndex) =>
-                                          rowIndex === index
-                                            ? { ...row, linked_event_id: option.id, title_source: "doc", date_source: "doc" }
-                                            : row
-                                        )
-                                      )
-                                    }
-                                  />
-                                </td>
-                                <td>
-                                  <input
-                                    type="checkbox"
-                                    checked={entry.approved}
-                                    onChange={(event) =>
-                                      setEvents((current) =>
-                                        current.map((row, rowIndex) => (rowIndex === index ? { ...row, approved: event.target.checked } : row))
-                                      )
-                                    }
-                                  />
-                                </td>
-                              </tr>
-                              {linked && hasDiff && (
-                                <tr key={`${entry.row_index}-diff`} className="table-row-error">
-                                  <td colSpan={3}>
-                                    <div className="grid" style={{ gap: "0.35rem" }}>
-                                      <span className="muted">Datum weicht ab — welchen Wert übernehmen?</span>
-                                      {linked.title !== entry.raw_title && (
-                                        <div className="field-stack">
-                                          <span className="muted">Titel</span>
-                                          <label>
-                                            <input
-                                              type="radio"
-                                              checked={entry.title_source === "doc"}
-                                              onChange={() =>
-                                                setEvents((current) =>
-                                                  current.map((row, rowIndex) => (rowIndex === index ? { ...row, title_source: "doc" } : row))
-                                                )
-                                              }
-                                            />{" "}
-                                            aus Dokument: {entry.raw_title}
-                                          </label>
-                                          <label>
-                                            <input
-                                              type="radio"
-                                              checked={entry.title_source === "existing"}
-                                              onChange={() =>
-                                                setEvents((current) =>
-                                                  current.map((row, rowIndex) => (rowIndex === index ? { ...row, title_source: "existing" } : row))
-                                                )
-                                              }
-                                            />{" "}
-                                            bestehender Wert: {linked.title}
-                                          </label>
-                                        </div>
-                                      )}
-                                      {linked.event_date !== (entry.raw_date ?? linked.event_date) && (
-                                        <div className="field-stack">
-                                          <span className="muted">Datum</span>
-                                          <label>
-                                            <input
-                                              type="radio"
-                                              checked={entry.date_source === "doc"}
-                                              onChange={() =>
-                                                setEvents((current) =>
-                                                  current.map((row, rowIndex) => (rowIndex === index ? { ...row, date_source: "doc" } : row))
-                                                )
-                                              }
-                                            />{" "}
-                                            aus Dokument: {entry.raw_date ?? "?"}
-                                          </label>
-                                          <label>
-                                            <input
-                                              type="radio"
-                                              checked={entry.date_source === "existing"}
-                                              onChange={() =>
-                                                setEvents((current) =>
-                                                  current.map((row, rowIndex) =>
-                                                    rowIndex === index ? { ...row, date_source: "existing" } : row
-                                                  )
-                                                )
-                                              }
-                                            />{" "}
-                                            bestehender Wert: {linked.event_date}
-                                          </label>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </td>
-                                </tr>
-                              )}
-                            </>
-                          );
-                        })}
-                        {events.length === 0 && (
-                          <tr>
-                            <td colSpan={3} className="muted">
-                              Keine Termin-Tabelle erkannt bzw. zugeordnet.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
+                  <div className="grid" style={{ gap: "10px" }}>
+                    {plainEventItems.map(({ entry, index }) => renderEventRow(entry, index))}
+                    {plainEventItems.length === 0 && <p className="muted">Keine Termin-Tabelle erkannt bzw. zugeordnet.</p>}
                   </div>
                 </>
               )}
@@ -1190,24 +1667,34 @@ export function WordImportWizard({
                                   )}
                                 </td>
                                 <td>
-                                  <TodoAssigneeMenu
-                                    label={linked ? `${linked.column_one_display} → ${linked.column_two_display}` : "🆕 Neu (nur in diesem Protokoll)"}
-                                    nullLabel="🆕 Neu (nur in diesem Protokoll)"
-                                    activeId={entry.linked_entry_id}
-                                    participants={entry.candidates.map(
-                                      (candidate): AssigneeOption => ({
-                                        id: candidate.entry_id,
-                                        display_name: `${candidate.column_one_display} → ${candidate.column_two_display}`,
-                                      })
-                                    )}
-                                    onChange={(option) =>
-                                      setLists((current) =>
-                                        current.map((row, rowIndex) =>
-                                          rowIndex === index ? { ...row, linked_entry_id: option.id, column_two_source: "doc" } : row
+                                  {needsReview ? (
+                                    <TodoAssigneeMenu
+                                      label={linked ? `${linked.column_one_display} → ${linked.column_two_display}` : "🆕 Neu (nur in diesem Protokoll)"}
+                                      nullLabel="🆕 Neu (nur in diesem Protokoll)"
+                                      activeId={entry.linked_entry_id}
+                                      participants={entry.candidates.map(
+                                        (candidate): AssigneeOption => ({
+                                          id: candidate.entry_id,
+                                          display_name: `${candidate.column_one_display} → ${candidate.column_two_display}`,
+                                        })
+                                      )}
+                                      onChange={(option) =>
+                                        setLists((current) =>
+                                          current.map((row, rowIndex) =>
+                                            rowIndex === index ? { ...row, linked_entry_id: option.id, column_two_source: "doc" } : row
+                                          )
                                         )
-                                      )
-                                    }
-                                  />
+                                      }
+                                    />
+                                  ) : linked ? (
+                                    <span className="word-import-text-row-summary">
+                                      <CheckIcon /> {linked.column_one_display} → {linked.column_two_display}
+                                    </span>
+                                  ) : (
+                                    <span className="word-import-text-row-summary is-new">
+                                      <PlusIcon /> Neu (nur in diesem Protokoll)
+                                    </span>
+                                  )}
                                 </td>
                                 <td>
                                   {NAME_COLUMN_TYPES.has(entry.column_two_type) ? (
@@ -1234,48 +1721,59 @@ export function WordImportWizard({
                                   )}
                                 </td>
                                 <td>
-                                  <input
-                                    type="checkbox"
-                                    checked={entry.approved}
-                                    onChange={(event) =>
+                                  <PillMenu
+                                    value={entry.approved ? "take" : "ignore"}
+                                    options={APPROVE_PILL_OPTIONS}
+                                    onChange={(value) =>
                                       setLists((current) =>
-                                        current.map((row, rowIndex) => (rowIndex === index ? { ...row, approved: event.target.checked } : row))
+                                        current.map((row, rowIndex) => (rowIndex === index ? { ...row, approved: value === "take" } : row))
                                       )
                                     }
                                   />
                                 </td>
                               </tr>
                               {linked && col2Differs && col2IsText && (
-                                <tr key={`${entry.table_index}-${entry.row_index}-diff`} className="table-row-error">
-                                  <td colSpan={5}>
-                                    <div className="field-stack">
-                                      <span className="muted">Spalte 2</span>
-                                      <label>
-                                        <input
-                                          type="radio"
-                                          checked={entry.column_two_source === "doc"}
-                                          onChange={() =>
-                                            setLists((current) =>
-                                              current.map((row, rowIndex) => (rowIndex === index ? { ...row, column_two_source: "doc" } : row))
-                                            )
-                                          }
-                                        />{" "}
-                                        aus Dokument: {entry.column_two_raw}
-                                      </label>
-                                      <label>
-                                        <input
-                                          type="radio"
-                                          checked={entry.column_two_source === "existing"}
-                                          onChange={() =>
-                                            setLists((current) =>
-                                              current.map((row, rowIndex) =>
-                                                rowIndex === index ? { ...row, column_two_source: "existing" } : row
-                                              )
-                                            )
-                                          }
-                                        />{" "}
-                                        bestehender Wert: {linked.column_two_display}
-                                      </label>
+                                <tr key={`${entry.table_index}-${entry.row_index}-diff`}>
+                                  <td colSpan={5} className="word-import-diff-cell">
+                                    <div className="word-import-alert word-import-alert-block">
+                                      <WarningIcon />
+                                      <div className="grid" style={{ gap: "10px" }}>
+                                        <span>Spalte 2 weicht ab — welchen Wert übernehmen?</span>
+                                        <div className="word-import-diff-options">
+                                          <label className="field-radio-option">
+                                            <input
+                                              type="radio"
+                                              checked={entry.column_two_source === "doc"}
+                                              onChange={() =>
+                                                setLists((current) =>
+                                                  current.map((row, rowIndex) => (rowIndex === index ? { ...row, column_two_source: "doc" } : row))
+                                                )
+                                              }
+                                            />
+                                            <span>
+                                              <span className="field-radio-option-label">Aus Dokument</span>
+                                              <strong>{entry.column_two_raw}</strong>
+                                            </span>
+                                          </label>
+                                          <label className="field-radio-option">
+                                            <input
+                                              type="radio"
+                                              checked={entry.column_two_source === "existing"}
+                                              onChange={() =>
+                                                setLists((current) =>
+                                                  current.map((row, rowIndex) =>
+                                                    rowIndex === index ? { ...row, column_two_source: "existing" } : row
+                                                  )
+                                                )
+                                              }
+                                            />
+                                            <span>
+                                              <span className="field-radio-option-label">Bestehend</span>
+                                              <strong>{linked.column_two_display}</strong>
+                                            </span>
+                                          </label>
+                                        </div>
+                                      </div>
                                     </div>
                                   </td>
                                 </tr>
@@ -1292,6 +1790,115 @@ export function WordImportWizard({
                         )}
                       </tbody>
                     </table>
+                  </div>
+                </>
+              )}
+
+              {activeCategory === "matrices" && (
+                <>
+                  <div>
+                    <h3 className="word-import-panel-title">Matrizen</h3>
+                    <p className="word-import-panel-desc">Erkannte Matrix-Daten je Spalte, wie im Protokoll-Editor.</p>
+                  </div>
+                  <div className="grid" style={{ gap: "20px" }}>
+                    {matrixCardGroups.map((group) => (
+                      <div key={group.matrixKey} className="grid" style={{ gap: "8px" }}>
+                        <strong>{group.matrixTitle}</strong>
+                        <div className="matrix-cards">
+                          {group.columns.map((column) => {
+                            const resolvedLabel = column.columnKey
+                              ? column.candidates.find((candidate) => candidate.column_key === column.columnKey)?.label ??
+                                column.columnLabelRaw
+                              : null;
+                            return (
+                              <div className="matrix-card" key={`${group.matrixKey}-${column.columnLabelRaw}`}>
+                                <div className="matrix-card-header">
+                                  <span className="matrix-card-title">
+                                    {column.columnKey ? <CheckIcon /> : <WarningIcon />} {resolvedLabel ?? column.columnLabelRaw}
+                                  </span>
+                                </div>
+                                {column.columnKey === null && (
+                                  <div className="matrix-card-row">
+                                    <div className="matrix-card-row-label">Ziel-Spalte</div>
+                                    <div className="matrix-card-row-cell">
+                                      <select
+                                        value=""
+                                        onChange={(event) => {
+                                          const value = event.target.value;
+                                          if (!value) return;
+                                          resolveMatrixColumn(group.matrixKey, column.columnLabelRaw, value);
+                                        }}
+                                      >
+                                        <option value="">– auswählen ({column.columnLabelRaw}) –</option>
+                                        {column.candidates.map((candidate) => (
+                                          <option key={candidate.column_key} value={candidate.column_key}>
+                                            {candidate.label}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                  </div>
+                                )}
+                                {column.rows.map((row) =>
+                                  row.kind === "cell" ? (
+                                    <div className="matrix-card-row" key={`cell-${row.index}`}>
+                                      <div className="matrix-card-row-label">{row.entry.row_label}</div>
+                                      <div className="matrix-card-row-cell">
+                                        {NAME_COLUMN_TYPES.has(row.entry.row_type) && row.entry.names.length > 0 ? (
+                                          <div className="grid" style={{ gap: "0.35rem" }}>
+                                            {row.entry.names.map((name, nameIndex) => (
+                                              <div key={nameIndex} className="field-stack">
+                                                <span className="muted">{name.raw_name}</span>
+                                                <TodoAssigneeMenu
+                                                  label={
+                                                    participants.find((participant) => participant.id === name.participant_id)
+                                                      ?.display_name ?? "Keinen verknüpfen"
+                                                  }
+                                                  nullLabel="Keinen verknüpfen"
+                                                  activeId={name.participant_id}
+                                                  participants={participants}
+                                                  onChange={(option) => updateMatrixName(row.index, nameIndex, option.id)}
+                                                />
+                                              </div>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <span className="matrix-static-value">{row.entry.raw_value || "–"}</span>
+                                        )}
+                                        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                                          <PillMenu
+                                            value={row.entry.approved ? "take" : "ignore"}
+                                            options={APPROVE_PILL_OPTIONS}
+                                            onChange={(value) =>
+                                              setMatrices((current) =>
+                                                current.map((item, itemIndex) =>
+                                                  itemIndex === row.index ? { ...item, approved: value === "take" } : item
+                                                )
+                                              )
+                                            }
+                                          />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="matrix-card-row" key={`events-${row.rowId}`}>
+                                      <div className="matrix-card-row-label">{row.rowLabel}</div>
+                                      <div className="matrix-card-row-cell">
+                                        <div className="matrix-event-list">
+                                          {row.items.map(({ entry, index }) => renderEventRow(entry, index))}
+                                          {row.items.length === 0 && <span className="muted">Keine Termine</span>}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                    {matrixCardGroups.length === 0 && <p className="muted">Keine Matrix-Tabelle erkannt bzw. zugeordnet.</p>}
                   </div>
                 </>
               )}
@@ -1388,13 +1995,13 @@ export function WordImportWizard({
                                 <label className="field-stack" style={{ gap: "0.25rem" }}>
                                   <span className="muted">Aufgrund welchem Termin wird dieser Block erstellt?</span>
                                   <TodoAssigneeMenu
-                                    label={linkedEvent ? `${linkedEvent.title} (${linkedEvent.event_date})` : "– Anlass wählen –"}
+                                    label={linkedEvent ? `${linkedEvent.title} (${formatDate(linkedEvent.event_date)})` : "– Anlass wählen –"}
                                     nullLabel="– nicht verknüpfen (Text wird nicht übernommen) –"
                                     activeId={text.linkedEventId}
                                     participants={text.eventCandidates.map(
                                       (candidate): AssigneeOption => ({
                                         id: candidate.event_id,
-                                        display_name: `${candidate.title} (${candidate.event_date})`,
+                                        display_name: `${candidate.title} (${formatDate(candidate.event_date)})`,
                                       })
                                     )}
                                     onChange={(option) =>
@@ -1522,7 +2129,7 @@ export function WordImportWizard({
               <h3 style={{ margin: "0 0 6px" }}>Protokoll erstellt</h3>
               <p className="muted word-import-success-stats">
                 {doneSummary &&
-                  `${doneSummary.attendance} Anwesenheiten, ${doneSummary.events} Termine und ${doneSummary.lists} Listeneinträge wurden übernommen.`}
+                  `${doneSummary.attendance} Anwesenheiten, ${doneSummary.events} Termine, ${doneSummary.lists} Listeneinträge und ${doneSummary.matrices} Matrix-Werte wurden übernommen.`}
                 {doneSummary && doneSummary.skipped > 0 && (
                   <> {doneSummary.skipped} Einträge wurden übersprungen und können manuell nachgetragen werden.</>
                 )}

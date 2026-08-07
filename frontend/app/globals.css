@@ -4148,6 +4148,7 @@ input[type="radio"] {
 }
 
 .mini-menu-trigger {
+  --button-hover-bg: color-mix(in srgb, var(--accent) 8%, var(--panel-solid) 92%);
   display: inline-flex;
   align-items: center;
   justify-content: space-between;
@@ -9453,31 +9454,66 @@ input[type="radio"] {
 }
 
 .word-import-filebar-meta {
-  flex: 1;
-  min-width: 160px;
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
-  flex-wrap: wrap;
   align-items: baseline;
   gap: 4px;
   font-size: 0.92rem;
 }
 
-.word-import-filebar-date {
-  border: 1px solid transparent;
+/* Keep the whole "filename · Vorlage · Datum" line on one row like the design -
+   truncate the filename first (it's the longest, most variable piece) instead of
+   letting each piece wrap onto its own line when space is tight. */
+.word-import-filebar-meta strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 3ch;
+}
+
+.word-import-filebar-meta > .muted {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Wrapper for InlineDateField - a formatted dd.mm.yyyy label with a fully
+   transparent native <input type="date"> stacked on top so clicks/focus still
+   hit the real input (and its calendar picker), but the browser never gets to
+   render its own locale-formatted text (e.g. "10/14/2025" on en-US Chrome). */
+.word-import-inline-date {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: baseline;
+}
+
+.word-import-inline-date input[type="date"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+  border: none;
   background: transparent;
+  cursor: pointer;
+}
+
+.word-import-filebar-date {
+  display: inline-block;
+  border: 1px solid transparent;
   padding: 1px 4px;
   margin: -1px -4px;
   border-radius: 6px;
   color: var(--muted);
   font: inherit;
   font-size: 0.92rem;
-  cursor: pointer;
-  min-height: 0;
-  width: auto;
+  white-space: nowrap;
 }
 
-.word-import-filebar-date:hover,
-.word-import-filebar-date:focus {
+.word-import-inline-date:hover .word-import-filebar-date,
+.word-import-inline-date:focus-within .word-import-filebar-date {
   border-color: var(--border-strong);
   background: var(--panel);
   color: var(--text);
@@ -9518,6 +9554,8 @@ input[type="radio"] {
 }
 
 .word-import-alert-date-input {
+  display: inline-flex;
+  align-items: center;
   width: auto;
   min-height: 0;
   padding: 6px 10px;
@@ -9525,6 +9563,45 @@ input[type="radio"] {
   color: var(--warning-fg);
   background: var(--panel-solid);
   border-color: color-mix(in srgb, var(--warning) 40%, transparent 60%);
+  cursor: pointer;
+}
+
+/* Inline conflict-resolution box (event date/title, list column-two) inside a
+   table row - same alert chrome as .word-import-alert but the intro line stays
+   normal weight and the options grid below it is allowed to grow full width. */
+.word-import-alert-block {
+  align-items: flex-start;
+  font-weight: 400;
+}
+
+.word-import-alert-block > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.word-import-diff-cell {
+  padding-top: 0 !important;
+  border-bottom: none !important;
+}
+
+.word-import-diff-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.word-import-diff-options .field-radio-option {
+  background: var(--panel-solid);
+}
+
+.field-radio-option-label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 2px;
 }
 
 .word-import-layout {
@@ -9637,6 +9714,72 @@ input[type="radio"] {
   padding-right: 0;
 }
 
+.word-import-panel-busy {
+  pointer-events: none;
+}
+
+.word-import-panel-desc-busy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent);
+}
+
+.word-import-cell-with-spinner {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+@keyframes word-import-spin {
+  to { transform: rotate(360deg); }
+}
+
+.word-import-spinner {
+  flex-shrink: 0;
+  animation: word-import-spin 0.7s linear infinite;
+  color: var(--accent);
+}
+
+.word-import-progress-track {
+  position: relative;
+  height: 3px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--border) 70%, transparent 30%);
+  animation: word-import-fade-in 0.15s ease both;
+}
+
+@keyframes word-import-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes word-import-progress-sweep {
+  0%   { left: -35%; }
+  100% { left: 105%; }
+}
+
+.word-import-progress-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -35%;
+  width: 35%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  animation: word-import-progress-sweep 1.1s ease-in-out infinite;
+}
+
+@keyframes word-import-row-pulse {
+  0%, 100% { background-color: transparent; }
+  50% { background-color: var(--accent-soft); }
+}
+
+.word-import-row-pending {
+  animation: word-import-row-pulse 1.1s ease-in-out infinite;
+}
+
 .word-import-summary-row td {
   padding-top: 12px;
   padding-bottom: 12px;
@@ -9691,6 +9834,69 @@ input[type="radio"] {
   color: var(--danger);
 }
 
+.word-import-text-row-summary.is-new {
+  color: var(--accent);
+}
+
+.word-import-text-row-summary.is-ignored {
+  color: var(--muted);
+}
+
+.word-import-decision-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.word-import-decision-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: auto;
+  min-width: 0;
+  min-height: 0;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1.5px solid var(--border-strong, var(--border));
+  background: var(--panel-solid);
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.word-import-decision-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.word-import-decision-btn.is-active.is-take {
+  border-color: color-mix(in srgb, var(--success) 46%, transparent 54%);
+  background: var(--success-bg);
+  color: var(--success-fg);
+}
+
+.word-import-decision-btn.is-active.is-take:hover:not(:disabled) {
+  border-color: var(--success);
+  background: var(--success-bg);
+  color: var(--success-fg);
+}
+
+.word-import-decision-btn.is-active.is-ignore {
+  border-color: color-mix(in srgb, var(--neutral-fg) 40%, transparent 60%);
+  background: var(--neutral-bg);
+  color: var(--neutral-fg);
+}
+
+.word-import-decision-btn.is-active.is-ignore:hover:not(:disabled) {
+  border-color: var(--neutral-fg);
+  background: var(--neutral-bg);
+  color: var(--neutral-fg);
+}
+
 .word-import-footer {
   display: flex;
   align-items: center;
@@ -9713,30 +9919,45 @@ input[type="radio"] {
   max-width: 460px;
 }
 
-/* Rolle/Status as colored pill <select> elements, matching the read-only
-   Badge look but remaining a real interactive form control. */
-.pill-select {
-  appearance: none;
-  -webkit-appearance: none;
+/* Rolle/Status as colored pill trigger buttons, matching the read-only Badge
+   look but opening the app's standard Popover/menu-item dropdown (same pattern
+   as TodoAssigneeMenu etc.) instead of a native <select>. */
+.pill-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   width: auto;
   min-height: 0;
-  padding: 6px 28px 6px 14px;
+  padding: 6px 10px 6px 14px;
   border: none;
   border-radius: 999px;
   font-weight: 600;
   font-size: 0.82rem;
   cursor: pointer;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M4 6l4 4 4-4' stroke='currentColor' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 8px center;
-  background-size: 14px;
+  box-shadow: none;
 }
 
-.pill-select[data-variant="neutral"] { background-color: var(--neutral-bg); color: var(--neutral-fg); }
-.pill-select[data-variant="success"] { background-color: var(--success-bg); color: var(--success-fg); }
-.pill-select[data-variant="warning"] { background-color: var(--warning-bg); color: var(--warning-fg); }
-.pill-select[data-variant="danger"] { background-color: var(--danger-bg); color: var(--danger-fg); }
-.pill-select[data-variant="info"] { background-color: var(--info-bg); color: var(--info-fg); }
+.pill-menu-trigger-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  opacity: 0.75;
+}
+
+.pill-menu-trigger[data-variant="neutral"] { --button-hover-bg: var(--neutral-bg); background-color: var(--neutral-bg); color: var(--neutral-fg); }
+.pill-menu-trigger[data-variant="success"] { --button-hover-bg: var(--success-bg); background-color: var(--success-bg); color: var(--success-fg); }
+.pill-menu-trigger[data-variant="warning"] { --button-hover-bg: var(--warning-bg); background-color: var(--warning-bg); color: var(--warning-fg); }
+.pill-menu-trigger[data-variant="danger"] { --button-hover-bg: var(--danger-bg); background-color: var(--danger-bg); color: var(--danger-fg); }
+.pill-menu-trigger[data-variant="info"] { --button-hover-bg: var(--info-bg); background-color: var(--info-bg); color: var(--info-fg); }
+
+.pill-menu-trigger:hover:not(:disabled),
+.pill-menu-trigger-open {
+  filter: brightness(0.96);
+}
+
+[data-theme="dark"] .pill-menu-trigger:hover:not(:disabled),
+[data-theme="dark"] .pill-menu-trigger-open {
+  filter: brightness(1.12);
+}
 
 .domain-row-domain {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
