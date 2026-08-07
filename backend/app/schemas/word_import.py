@@ -25,6 +25,21 @@ class TablePreview(BaseModel):
     # block linked to this list, i.e. whether there's a snapshot slot to import into
     # at all (lists are never written live - see WordImportListRowMapping docstring).
     has_snapshot_target: bool = True
+    # Only meaningful for role == "list": which row-grouping interpretation of this
+    # table's raw cells was used to build list_mappings (see
+    # WordImportService._select_list_row_variant) - "flat"/"fill_down"/"swap", or an
+    # exploded split keyed "explode:<delimiter>"/"explode_swap:<delimiter>" (delimiter
+    # is one of _LIST_SPLIT_DELIMITERS, e.g. "explode_swap:comma"). None if this table
+    # isn't a list at all.
+    grouping_strategy: str | None = None
+    # True when the target list has no live entries yet, so no automatic
+    # variant-scoring was possible - the wizard must offer a manual strategy picker
+    # for this table instead of trusting the "flat" default silently.
+    needs_manual_grouping: bool = False
+    # Every grouping_strategy value _build_list_row_variants actually produced for this
+    # table's real data (delimiters that don't occur in the cells never appear here) -
+    # lets the wizard's manual picker only ever offer choices that exist for real.
+    available_grouping_strategies: list[str] = Field(default_factory=list)
 
 
 class WordImportEventCandidate(BaseModel):
@@ -179,6 +194,11 @@ class WordImportListRowMapping(BaseModel):
     column_two_names: list[WordImportNameResolution] = Field(default_factory=list)
     candidates: list[WordImportListEntryCandidate] = Field(default_factory=list)
     has_snapshot_target: bool = True
+    # True when this row's column_one_raw/column_two_raw grouping value was inferred
+    # (fill-down from a previous row, or repeated across an exploded multi-value cell)
+    # rather than literally present in this row's own document cell - see
+    # ListRowCandidate.group_filled. Lets the wizard flag these rows for review.
+    group_filled: bool = False
 
 
 class WordImportMatrixOption(BaseModel):
@@ -317,6 +337,11 @@ class WordImportTableRoleCommit(BaseModel):
     role: TableRole
     list_definition_id: int | None = None
     matrix_key: str | None = None
+    # Mirrors TablePreview.grouping_strategy - remembered per table signature so a
+    # recurring document layout (e.g. a monthly protocol) doesn't need the grouping
+    # strategy re-picked on every import, same learning mechanism as role/
+    # list_definition_id/matrix_key above.
+    list_grouping_strategy: str | None = None
 
 
 class WordImportCommit(BaseModel):

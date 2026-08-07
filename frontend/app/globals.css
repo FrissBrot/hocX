@@ -5153,6 +5153,16 @@ input[type="radio"] {
   border-bottom: none;
 }
 
+/* Explicitly ignored (not sitting on an unresolved conflict) - same greyed-out treatment as
+   an unlinked attendance row / ignored Termine-Listen row (see word-import-text-row-muted). */
+.matrix-card-row-muted {
+  opacity: 0.6;
+}
+
+.matrix-card-row-muted .matrix-card-row-label {
+  color: var(--muted);
+}
+
 .matrix-card-row-label {
   display: flex;
   align-items: flex-start;
@@ -9584,6 +9594,14 @@ input[type="radio"] {
   border-bottom: none !important;
 }
 
+/* Erkannte Tabellen: Gruppierungs-Auswahl, wenn die Ziel-Liste noch leer ist und der
+   Import daher keine Variante automatisch anhand von Treffern auswählen konnte. */
+.word-import-select-warning {
+  border-color: color-mix(in srgb, var(--warning) 45%, var(--border-strong) 55%);
+  background: var(--warning-bg);
+  color: var(--warning-fg);
+}
+
 .word-import-diff-options {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -9809,11 +9827,35 @@ input[type="radio"] {
   border-color: color-mix(in srgb, var(--danger) 30%, transparent 70%);
 }
 
+/* Not linked to any participant - won't actually be imported, so the row is dimmed and its
+   title greyed out rather than showing a status pill that implies a real decision was made
+   about a real person (see renderAttendanceRow). */
+.word-import-text-row-muted {
+  opacity: 0.6;
+}
+
+.word-import-text-row-muted .word-import-text-row-title {
+  color: var(--muted);
+  font-weight: 600;
+}
+
 .word-import-text-row-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.word-import-text-row-head-clickable {
+  margin: -6px -8px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.word-import-text-row-head-clickable:hover {
+  background: color-mix(in srgb, var(--accent) 7%, transparent 93%);
 }
 
 .word-import-text-row-title {
@@ -9842,13 +9884,6 @@ input[type="radio"] {
   color: var(--muted);
 }
 
-.word-import-decision-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
 .word-import-decision-btn {
   display: inline-flex;
   align-items: center;
@@ -9859,42 +9894,37 @@ input[type="radio"] {
   min-height: 0;
   padding: 6px 14px;
   border-radius: 999px;
-  border: 1.5px solid var(--border-strong, var(--border));
-  background: var(--panel-solid);
-  color: var(--text);
+  border: 1.5px solid transparent;
   font-weight: 600;
   font-size: 0.88rem;
   line-height: 1.5;
   white-space: nowrap;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
 }
 
-.word-import-decision-btn:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.word-import-decision-btn.is-active.is-take {
+.word-import-decision-btn.is-take {
+  /* Base `button` rule sets a solid dark hover fallback (--button-hover-bg, var(--primary-strong))
+     for every button project-wide - override it here, otherwise hovering this pill replaced its
+     pastel success background with a solid blue in dark mode instead of just darkening it. */
+  --button-hover-bg: var(--success-bg);
   border-color: color-mix(in srgb, var(--success) 46%, transparent 54%);
   background: var(--success-bg);
   color: var(--success-fg);
 }
 
-.word-import-decision-btn.is-active.is-take:hover:not(:disabled) {
+.word-import-decision-btn.is-take:hover:not(:disabled) {
   border-color: var(--success);
-  background: var(--success-bg);
-  color: var(--success-fg);
 }
 
-.word-import-decision-btn.is-active.is-ignore {
-  border-color: color-mix(in srgb, var(--neutral-fg) 40%, transparent 60%);
-  background: var(--neutral-bg);
-  color: var(--neutral-fg);
+.word-import-decision-btn.is-ignore {
+  --button-hover-bg: var(--danger-bg);
+  border-color: color-mix(in srgb, var(--danger) 46%, transparent 54%);
+  background: var(--danger-bg);
+  color: var(--danger-fg);
 }
 
-.word-import-decision-btn.is-active.is-ignore:hover:not(:disabled) {
-  border-color: var(--neutral-fg);
-  background: var(--neutral-bg);
-  color: var(--neutral-fg);
+.word-import-decision-btn.is-ignore:hover:not(:disabled) {
+  border-color: var(--danger);
 }
 
 .word-import-footer {
