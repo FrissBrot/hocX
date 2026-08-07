@@ -84,6 +84,20 @@ _CANDIDATE_LIMIT = 5
 _LIST_ENTRY_CANDIDATE_MIN_SCORE = 0.3
 _MATRIX_ROW_MATCH_THRESHOLD = 0.5
 _MATRIX_COLUMN_MATCH_THRESHOLD = 0.6
+# Deliberately excludes "&"/" und ": a raw List cell often holds several distinct
+# values ("Felsenheim, Dolomiten Sport"), but "&"/" und " inside such a value usually
+# joins a single entity's own name (e.g. company "Omlin & Partner Gmbh") rather than
+# separating two different ones - splitting on them there corrupts the value. Order
+# here also doubles as the tie-break preference in _select_list_row_variant when two
+# delimiters score identically (comma before the riskier, much more eager "space").
+_LIST_SPLIT_DELIMITERS: dict[str, re.Pattern[str]] = {
+    "comma": re.compile(r","),
+    "semicolon": re.compile(r";"),
+    "slash": re.compile(r"/"),
+    "newline": re.compile(r"\n"),
+    "space": re.compile(r"\s+"),
+}
+_LIST_VARIANT_CONFIDENT_SCORE = 0.75
 # Row types whose cell value can be resolved by this importer, reusing the exact same
 # machinery as list columns/form fields (_match_names/_resolved_value_json). Matrix
 # rows of type "event" or an embedded-block element_type_id (nested Terminliste/
@@ -620,25 +634,60 @@ def _score_event_candidate(title: str, raw_date: date | None, event: Event) -> f
     return 0.2 * title_score
 
 
+def _name_score(raw_name: str, display_name: str) -> float:
+    # A raw name in a list/matrix cell is often just a first name (e.g. an informal
+    # "Beisitzer: Nevio, Lino, Gian" column), while display_name is the full "Vorname
+    # Nachname" - scored against the full name alone, SequenceMatcher penalizes the length
+    # mismatch enough that a clean first-name match can fall under the threshold (e.g.
+    # "Nevio" vs. "Nevio Kim Nguyen" scores ~0.45). Also score against just the display
+    # name's first token and take the better of the two, so a first-name-only mention still
+    # resolves as confidently as a full-name one.
+    full_score = _similarity(raw_name, display_name)
+    first_token = display_name.split(None, 1)[0] if display_name.strip() else display_name
+    return max(full_score, _similarity(raw_name, first_token))
+
+
 def _match_names(
     raw_text: str, participants: list[Participant], name_overrides: dict[str, int] | None = None
 ) -> list[WordImportNameResolution]:
     overrides = name_overrides or {}
     names = [part.strip() for part in _NAME_SPLIT_PATTERN.split(raw_text) if part.strip()]
-    resolutions: list[WordImportNameResolution] = []
-    for name in names:
+    resolutions: dict[int, int] = {}
+
+    # Same two-phase strategy as the attendance matcher: saved overrides are claimed first in
+    # document order, then the remaining names are resolved by GLOBAL best score across the
+    # whole group (not left-to-right) so a mediocre match on an earlier name can't steal the
+    # participant a later, better-matching name actually needs. Once a participant is claimed
+    # by one name in this group, no other name in the same raw_text can also claim them (e.g.
+    # "Nevio, Lino, Gian" must resolve to three distinct participants, not the same one three
+    # times).
+    used_participant_ids: set[int] = set()
+    for index, name in enumerate(names):
         override_id = overrides.get(_normalize(name))
-        if override_id is not None:
-            resolutions.append(WordImportNameResolution(raw_name=name, participant_id=override_id))
+        if override_id is not None and override_id not in used_participant_ids:
+            resolutions[index] = override_id
+            used_participant_ids.add(override_id)
+
+    scored_pairs: list[tuple[float, int, int]] = []
+    for index, name in enumerate(names):
+        if index in resolutions:
             continue
-        scored = sorted(
-            ((_similarity(name, participant.display_name), participant.id) for participant in participants),
-            key=lambda entry: entry[0],
-            reverse=True,
-        )
-        participant_id = scored[0][1] if scored and scored[0][0] >= _PARTICIPANT_MATCH_THRESHOLD else None
-        resolutions.append(WordImportNameResolution(raw_name=name, participant_id=participant_id))
-    return resolutions
+        for participant in participants:
+            score = _name_score(name, participant.display_name)
+            if score >= 0.4:
+                scored_pairs.append((score, index, participant.id))
+    scored_pairs.sort(key=lambda entry: entry[0], reverse=True)
+    for score, index, participant_id in scored_pairs:
+        if score < _PARTICIPANT_MATCH_THRESHOLD:
+            break
+        if index in resolutions or participant_id in used_participant_ids:
+            continue
+        resolutions[index] = participant_id
+        used_participant_ids.add(participant_id)
+
+    return [
+        WordImportNameResolution(raw_name=name, participant_id=resolutions.get(index)) for index, name in enumerate(names)
+    ]
 
 
 def _build_column_value(
@@ -823,6 +872,231 @@ def _value_key(value_type: str, value_json: dict) -> str:
     return ""
 
 
+@dataclass
+class ListRowCandidate:
+    """One resolved (column_one_raw, column_two_raw) pair produced by a grouping
+    variant - source_row_index points back at the originating document row (several
+    candidates from an "explode" variant can share the same source_row_index).
+    group_filled marks a value that was inferred (fill-down/exploded repeat) rather
+    than literally present in that document cell, so the wizard can flag it for
+    review."""
+
+    source_row_index: int
+    column_one_raw: str
+    column_two_raw: str
+    group_filled: bool = False
+
+
+def _flat_list_rows(rows: list[list[str]]) -> list[ListRowCandidate]:
+    """The importer's original behaviour: row N's cell 0/1 map straight to
+    column_one_raw/column_two_raw, rows with an empty first cell are dropped. Kept as
+    its own variant (rather than inlined in the loop) so it can be scored against the
+    alternatives below and stays the default when nothing scores better."""
+    candidates: list[ListRowCandidate] = []
+    for row_index, cells in enumerate(rows):
+        column_one_raw = cells[0] if len(cells) > 0 else ""
+        column_two_raw = cells[1] if len(cells) > 1 else ""
+        if not column_one_raw:
+            continue
+        candidates.append(ListRowCandidate(row_index, column_one_raw, column_two_raw))
+    return candidates
+
+
+def _swapped_list_rows(rows: list[list[str]]) -> list[ListRowCandidate]:
+    """Same as _flat_list_rows with the two cells swapped - covers documents whose
+    table simply orders the two values opposite to the target list's own column
+    order."""
+    candidates: list[ListRowCandidate] = []
+    for row_index, cells in enumerate(rows):
+        column_one_raw = cells[1] if len(cells) > 1 else ""
+        column_two_raw = cells[0] if len(cells) > 0 else ""
+        if not column_one_raw:
+            continue
+        candidates.append(ListRowCandidate(row_index, column_one_raw, column_two_raw))
+    return candidates
+
+
+def _fill_down_list_rows(rows: list[list[str]]) -> list[ListRowCandidate]:
+    """Handles Word tables where the first column is only filled on a group's first
+    row (vertically merged/rowspan-styled in Word) and left blank on the group's other
+    rows - python-docx surfaces those continuation cells as empty text, which
+    _flat_list_rows silently drops today. Carries the previous non-empty first-cell
+    value down onto blank-first-cell rows instead."""
+    candidates: list[ListRowCandidate] = []
+    last_column_one = ""
+    for row_index, cells in enumerate(rows):
+        column_one_raw = (cells[0] if len(cells) > 0 else "").strip()
+        column_two_raw = cells[1] if len(cells) > 1 else ""
+        group_filled = False
+        if column_one_raw:
+            last_column_one = column_one_raw
+        elif last_column_one and column_two_raw.strip():
+            column_one_raw = last_column_one
+            group_filled = True
+        if not column_one_raw:
+            continue
+        candidates.append(ListRowCandidate(row_index, column_one_raw, column_two_raw, group_filled))
+    return candidates
+
+
+def _present_delimiters(rows: list[list[str]], raw_index: int) -> list[str]:
+    """Which of _LIST_SPLIT_DELIMITERS actually occur in this document column, i.e.
+    are "smart"ly worth trying as an explode split - a delimiter only counts if it
+    splits at least one row's cell into 2+ non-empty parts, so e.g. "slash" is never
+    tried as a variant when no cell in this column contains a "/" at all. Returned in
+    _LIST_SPLIT_DELIMITERS's declared order (also the tie-break preference order)."""
+    present: list[str] = []
+    for name, pattern in _LIST_SPLIT_DELIMITERS.items():
+        for cells in rows:
+            cell = cells[raw_index] if len(cells) > raw_index else ""
+            parts = [part.strip() for part in pattern.split(cell) if part.strip()]
+            if len(parts) >= 2:
+                present.append(name)
+                break
+    return present
+
+
+def _exploded_list_rows(
+    rows: list[list[str]], *, text_raw_index: int, text_target: str, delimiter: re.Pattern[str]
+) -> list[ListRowCandidate]:
+    """Handles documents that group by one column and cram every value belonging to
+    that group into a single, multi-value cell of the other column - e.g. one document
+    row "Enea | Omlin & Partner Gmbh, Felsenheim, Dolomiten Sport" really means three
+    target-list rows, each pairing one sponsor with "Enea". text_raw_index (0 or 1) is
+    which raw document cell holds the multi-value text to split on `delimiter` (one of
+    _LIST_SPLIT_DELIMITERS, chosen by the caller per _present_delimiters);
+    text_target ("one"/"two") is which target list column those split values belong
+    in - the other raw cell is the group value, repeated onto every row produced from
+    that source row. Only ever called when exactly one of the list's two columns is
+    value_type "text" (see _build_list_row_variants), since splitting into several
+    independent values only makes sense for freeform text."""
+    group_raw_index = 1 - text_raw_index
+    candidates: list[ListRowCandidate] = []
+    for row_index, cells in enumerate(rows):
+        text_cell = cells[text_raw_index] if len(cells) > text_raw_index else ""
+        group_value = (cells[group_raw_index] if len(cells) > group_raw_index else "").strip()
+        if not group_value or not text_cell.strip():
+            continue
+        parts = [part.strip() for part in delimiter.split(text_cell) if part.strip()]
+        if len(parts) < 2:
+            continue
+        for part in parts:
+            if text_target == "one":
+                candidates.append(ListRowCandidate(row_index, part, group_value, group_filled=True))
+            else:
+                candidates.append(ListRowCandidate(row_index, group_value, part, group_filled=True))
+    return candidates
+
+
+def _build_list_row_variants(rows: list[list[str]], definition: ListDefinition) -> dict[str, list[ListRowCandidate]]:
+    """Builds every plausible interpretation of a document table's rows against one
+    target ListDefinition - the caller (analyze()) scores each against the list's live
+    entries and picks whichever produces the most confident matches ("meiste
+    Zuweisungen"). Explode variants are generated per delimiter actually present in
+    the data (see _present_delimiters) rather than a single fixed split pattern, so a
+    document using "/" or plain whitespace to separate values gets exactly as fair a
+    shot as one using commas - keyed "explode:<delimiter>"/"explode_swap:<delimiter>"
+    so the caller can tell callers/the wizard exactly which split won."""
+    variants: dict[str, list[ListRowCandidate]] = {
+        "flat": _flat_list_rows(rows),
+        "fill_down": _fill_down_list_rows(rows),
+        "swap": _swapped_list_rows(rows),
+    }
+    text_target: str | None = None
+    if definition.column_one_value_type == "text" and definition.column_two_value_type != "text":
+        text_target = "one"
+    elif definition.column_two_value_type == "text" and definition.column_one_value_type != "text":
+        text_target = "two"
+    if text_target is not None:
+        for text_raw_index, prefix in ((0, "explode"), (1, "explode_swap")):
+            for delimiter_name in _present_delimiters(rows, text_raw_index):
+                exploded = _exploded_list_rows(
+                    rows,
+                    text_raw_index=text_raw_index,
+                    text_target=text_target,
+                    delimiter=_LIST_SPLIT_DELIMITERS[delimiter_name],
+                )
+                if exploded:
+                    variants[f"{prefix}:{delimiter_name}"] = exploded
+    return variants
+
+
+def _score_list_variant(
+    candidates: list[ListRowCandidate],
+    definition: ListDefinition,
+    existing_entries: list[ListEntry],
+    participants_by_id: dict[int, Participant],
+) -> tuple[int, int]:
+    """Scores one variant's candidate rows against the list's live entries: how many
+    resolve confidently, i.e. the best _similarity() against any existing entry's
+    column_one display value clears _LIST_VARIANT_CONFIDENT_SCORE. This is the "meiste
+    Zuweisungen" signal used to pick the best grouping interpretation of an ambiguous
+    document table - reuses the exact same _similarity/_display_value comparison the
+    main per-row candidate list below already does, just condensed to a best-score
+    count instead of a full sorted candidate list."""
+    confident = 0
+    for candidate in candidates:
+        best_score = 0.0
+        for entry in existing_entries:
+            score = _similarity(
+                candidate.column_one_raw,
+                _display_value(definition.column_one_value_type, entry.column_one_value_json or {}, participants_by_id),
+            )
+            if score > best_score:
+                best_score = score
+        if best_score >= _LIST_VARIANT_CONFIDENT_SCORE:
+            confident += 1
+    return confident, len(candidates)
+
+
+# Tie-break preference when two variants score identically confident matches - flat/
+# swap/fill_down (no splitting at all) come first, then whichever _LIST_SPLIT_DELIMITERS
+# order the exploded variant's delimiter has (comma before the much more eager "space").
+_VARIANT_BASE_PREFERENCE = ["flat", "swap", "fill_down"]
+
+
+def _variant_preference_rank(name: str) -> int:
+    if name in _VARIANT_BASE_PREFERENCE:
+        return _VARIANT_BASE_PREFERENCE.index(name)
+    delimiter_name = name.rsplit(":", 1)[-1] if ":" in name else None
+    delimiter_order = list(_LIST_SPLIT_DELIMITERS.keys())
+    offset = delimiter_order.index(delimiter_name) if delimiter_name in delimiter_order else len(delimiter_order)
+    return len(_VARIANT_BASE_PREFERENCE) + offset
+
+
+def _select_list_row_variant(
+    rows: list[list[str]],
+    definition: ListDefinition,
+    existing_entries: list[ListEntry],
+    participants_by_id: dict[int, Participant],
+    forced_strategy: str | None,
+) -> tuple[str, list[ListRowCandidate], bool, list[str]]:
+    """Returns (strategy_name, chosen_rows, needs_manual_grouping, available_strategies).
+    needs_manual_grouping is True exactly when the list has no live entries yet to
+    score variants against - in that case automatic selection is meaningless and the
+    wizard must let the user pick a strategy manually (see word_import.py
+    TablePreview.needs_manual_grouping); available_strategies lists every variant name
+    _build_list_row_variants actually produced for this table's data, so the wizard's
+    manual picker only ever offers choices that exist for real."""
+    variants = _build_list_row_variants(rows, definition)
+    available_strategies = list(variants.keys())
+    if forced_strategy and forced_strategy in variants:
+        return forced_strategy, variants[forced_strategy], False, available_strategies
+    if not existing_entries:
+        return "flat", variants["flat"], True, available_strategies
+    scored = {
+        name: _score_list_variant(candidates, definition, existing_entries, participants_by_id)
+        for name, candidates in variants.items()
+    }
+
+    def _rank(name: str) -> tuple[int, int, int]:
+        confident, total = scored[name]
+        return (confident, -_variant_preference_rank(name), total)
+
+    best_name = max(scored, key=_rank)
+    return best_name, variants[best_name], False, available_strategies
+
+
 class WordImportService:
     def analyze(
         self,
@@ -914,6 +1188,7 @@ class WordImportService:
             )
             for table in parsed.tables
         ]
+        tables_preview_by_index = {preview.index: preview for preview in tables_preview}
 
         text_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "text"))
         static_text_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "static_text"))
@@ -1319,11 +1594,21 @@ class WordImportService:
                     else {}
                 )
             previous_entries = previous_entries_by_list[list_definition_id]
-            for list_row_index, cells in enumerate(table.rows):
-                column_one_raw = cells[0] if len(cells) > 0 else ""
-                column_two_raw = cells[1] if len(cells) > 1 else ""
-                if not column_one_raw:
-                    continue
+            table_signature = _normalize(" | ".join(table.header_cells))
+            forced_strategy = (table_role_overrides or {}).get(table.index, {}).get(
+                "list_grouping_strategy"
+            ) or table_roles_by_signature.get(table_signature, {}).get("list_grouping_strategy")
+            grouping_strategy, row_candidates, needs_manual_grouping, available_grouping_strategies = _select_list_row_variant(
+                table.rows, definition, existing_entries, participants_by_id, forced_strategy
+            )
+            table_preview = tables_preview_by_index.get(table.index)
+            if table_preview is not None:
+                table_preview.grouping_strategy = grouping_strategy
+                table_preview.needs_manual_grouping = needs_manual_grouping
+                table_preview.available_grouping_strategies = available_grouping_strategies
+            for list_row_index, row_candidate in enumerate(row_candidates):
+                column_one_raw = row_candidate.column_one_raw
+                column_two_raw = row_candidate.column_two_raw
                 col1_value, col1_names = _build_column_value(
                     definition.column_one_value_type, column_one_raw, participants, participant_name_overrides
                 )
@@ -1401,6 +1686,7 @@ class WordImportService:
                         column_two_names=col2_names,
                         candidates=candidates,
                         has_snapshot_target=has_snapshot_target,
+                        group_filled=row_candidate.group_filled,
                     )
                 )
 
@@ -2034,7 +2320,12 @@ class WordImportService:
             if tc.template_element_id is not None and tc.block_sort_index is not None and not tc.is_event_repeat
         }
         table_role_updates = {
-            tc.header_signature: {"role": tc.role, "list_definition_id": tc.list_definition_id, "matrix_key": tc.matrix_key}
+            tc.header_signature: {
+                "role": tc.role,
+                "list_definition_id": tc.list_definition_id,
+                "matrix_key": tc.matrix_key,
+                "list_grouping_strategy": tc.list_grouping_strategy,
+            }
             for tc in payload.tables
         }
         name_updates: dict[str, int] = {

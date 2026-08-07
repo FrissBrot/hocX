@@ -4,6 +4,13 @@ export type TableRole = "attendance" | "events" | "list" | "matrix" | "ignore";
 export type EventMatchStatus = "matched" | "changed" | "new";
 export type ListRowStatus = "matched" | "changed" | "new";
 
+// "flat" | "fill_down" | "swap", or an exploded split keyed
+// "explode:<delimiter>"/"explode_swap:<delimiter>" where delimiter is one of
+// "comma"/"semicolon"/"slash"/"newline"/"space" - which delimiters actually appear is
+// data-dependent, so this is a plain string rather than a fixed union; see
+// TablePreview.available_grouping_strategies for the real, per-table option set.
+export type ListGroupingStrategy = string;
+
 export type TablePreview = {
   index: number;
   header_cells: string[];
@@ -12,6 +19,12 @@ export type TablePreview = {
   list_definition_id: number | null;
   matrix_key: string | null;
   has_snapshot_target: boolean;
+  grouping_strategy: ListGroupingStrategy | null;
+  needs_manual_grouping: boolean;
+  // Every grouping_strategy value the server actually produced for this table's real
+  // data (see word_import.py TablePreview docstring) - the wizard's manual picker
+  // must only ever offer entries from this list.
+  available_grouping_strategies: ListGroupingStrategy[];
 };
 
 export type WordImportNameResolution = {
@@ -126,6 +139,10 @@ export type WordImportListRowMapping = {
   column_two_names: WordImportNameResolution[];
   candidates: WordImportListEntryCandidate[];
   has_snapshot_target: boolean;
+  // True when column_one_raw/column_two_raw's grouping value was inferred
+  // (fill-down or repeated across an exploded multi-value cell) rather than
+  // literally present in this row's own document cell - worth a second look.
+  group_filled: boolean;
 };
 
 export type WordImportMatrixOption = {
@@ -169,7 +186,15 @@ export type WordImportAnalysis = {
   warnings: string[];
 };
 
-export type TableRoleOverride = { role: TableRole; list_definition_id: number | null; matrix_key?: string | null };
+export type TableRoleOverride = {
+  role: TableRole;
+  list_definition_id: number | null;
+  matrix_key?: string | null;
+  // Only meaningful for role "list" - forces a specific grouping interpretation
+  // instead of letting analyze() auto-score variants (see ListGroupingStrategy).
+  // null/undefined lets the server pick automatically.
+  list_grouping_strategy?: ListGroupingStrategy | null;
+};
 
 export type WordImportCommitPayload = {
   template_id: number;
@@ -213,7 +238,13 @@ export type WordImportCommitPayload = {
     names: WordImportNameResolution[];
     approved: boolean;
   }[];
-  tables: { header_signature: string; role: TableRole; list_definition_id: number | null; matrix_key: string | null }[];
+  tables: {
+    header_signature: string;
+    role: TableRole;
+    list_definition_id: number | null;
+    matrix_key: string | null;
+    list_grouping_strategy: ListGroupingStrategy | null;
+  }[];
 };
 
 export async function analyzeWordImport(
