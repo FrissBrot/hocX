@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { useConfirm } from "@/contexts/confirm-context";
 import { Modal } from "@/components/ui/modal";
 import { DateInput } from "@/components/ui/date-input";
 import { TagInput } from "@/components/ui/tag-input";
@@ -89,6 +90,7 @@ export function EventOverviewModal({
   const [creating, setCreating] = useState(false);
   const [assigningId, setAssigningId] = useState<number | null>(null);
   const [detailEvent, setDetailEvent] = useState<EventSummary | null>(null);
+  const confirm = useConfirm();
 
   const visibleIds = new Set(visibleEvents.map((e) => e.id));
 
@@ -146,7 +148,14 @@ export function EventOverviewModal({
   }
 
   async function handleDelete(eventId: number, title: string) {
-    if (!window.confirm(`Termin "${title}" endgültig löschen? Das entfernt ihn aus allen Protokollen.`)) return;
+    if (
+      !(await confirm({
+        message: `Termin "${title}" endgültig löschen? Das entfernt ihn aus allen Protokollen.`,
+        tone: "danger",
+        confirmLabel: "Löschen"
+      }))
+    )
+      return;
     await onDeleteEvent(eventId);
   }
 

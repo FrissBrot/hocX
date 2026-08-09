@@ -12,6 +12,7 @@ import { SessionInfo, TenantMembership } from "@/types/api";
 import { buildNav, formatRoleLabel } from "@/components/ui/app-shell-nav";
 import { NavIcon } from "@/components/ui/nav-icons";
 import { ToastProvider } from "@/contexts/toast-context";
+import { ConfirmProvider } from "@/contexts/confirm-context";
 import { ProfileModal } from "@/components/ui/profile-modal";
 import { TenantSelectorModal } from "@/components/ui/tenant-selector-modal";
 import { Menu, MenuDivider, MenuItem, Popover } from "@/components/ui/popover";
@@ -216,6 +217,7 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
 
   return (
     <ToastProvider>
+    <ConfirmProvider>
     <main className={`app-frame${isProtocolWriting ? " app-frame-writing" : ""}`}>
       <div className="shell">
         <aside
@@ -365,6 +367,7 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
         onLogout={() => void logout()}
       />
     </main>
+    </ConfirmProvider>
     </ToastProvider>
   );
 }

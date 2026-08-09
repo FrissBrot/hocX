@@ -9,6 +9,7 @@ import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
+import { useConfirm } from "@/contexts/confirm-context";
 import { AdminTenantSummary } from "@/types/api";
 
 type Props = {
@@ -17,6 +18,7 @@ type Props = {
 
 export function AdminTenantManagement({ initialTenants }: Props) {
   const showToast = useToast();
+  const confirm = useConfirm();
   const [tenants, setTenants] = useState(initialTenants);
   const [modalOpen, setModalOpen] = useState(false);
   const [name, setName] = useState("");
@@ -110,10 +112,12 @@ export function AdminTenantManagement({ initialTenants }: Props) {
   }
 
   async function deleteTenant(tenant: AdminTenantSummary) {
-    const confirmed = window.confirm(
-      `"${tenant.name}" wirklich unwiderruflich löschen?\n\n` +
-        `${tenant.participant_count} Teilnehmer, ${tenant.user_count} Benutzerzugriffe und alle Protokolle, Termine und Dateien dieses Mandanten gehen dabei verloren. Das kann nicht rückgängig gemacht werden.`
-    );
+    const confirmed = await confirm({
+      title: `"${tenant.name}" löschen?`,
+      message: `${tenant.participant_count} Teilnehmer, ${tenant.user_count} Benutzerzugriffe und alle Protokolle, Termine und Dateien dieses Mandanten gehen dabei verloren. Das kann nicht rückgängig gemacht werden.`,
+      tone: "danger",
+      confirmLabel: "Endgültig löschen"
+    });
     if (!confirmed) return;
     try {
       await browserApiFetch(`/api/admin/tenants/${tenant.id}`, { method: "DELETE" });

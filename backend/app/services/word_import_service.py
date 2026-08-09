@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from difflib import SequenceMatcher
 from io import BytesIO
+from typing import Callable
 
 import pdfplumber
 from docx import Document
@@ -18,6 +19,8 @@ from sqlalchemy.orm import Session
 from app.core.cycle_utils import get_cycle_year
 from app.repositories.participant_repository import participant_eligible_on
 from app.services.isolated_parse import parse_document_isolated
+from app.services.optimal_assignment import solve_optimal_assignment
+from app.services.word_import_thresholds import adaptive_threshold
 from app.models import (
     CycleConfig,
     ElementDefinition,
@@ -34,6 +37,7 @@ from app.models import (
     TemplateElement,
     TemplateParticipant,
     WordImportProfile,
+    WordImportSuggestionOutcome,
 )
 from app.schemas.event import CycleAssignment, EventCreate, EventUpdate
 from app.schemas.participant import ParticipantCreate
@@ -41,6 +45,7 @@ from app.schemas.protocol import ProtocolCreateFromTemplate, ProtocolUpdate
 from app.schemas.word_import import (
     TablePreview,
     WordImportAnalysis,
+    WordImportAttendanceCandidate,
     WordImportAttendanceMapping,
     WordImportCommit,
     WordImportEventCandidate,
@@ -84,6 +89,17 @@ _CANDIDATE_LIMIT = 5
 _LIST_ENTRY_CANDIDATE_MIN_SCORE = 0.3
 _MATRIX_ROW_MATCH_THRESHOLD = 0.5
 _MATRIX_COLUMN_MATCH_THRESHOLD = 0.6
+# Deliberately much stricter than the other thresholds above - a fuzzy signature match
+# redirects an ENTIRE table's rows to a learned role/target, a much larger blast radius
+# than a single name/event mismatch, so this only tolerates a near-identical header
+# (e.g. one OCR/typo character, or one extra/missing normalized space) rather than a
+# genuinely different table shape.
+_TABLE_SIGNATURE_FUZZY_THRESHOLD = 0.92
+# Score penalty applied to a candidate previously recorded as rejected for the exact
+# same context (see WordImportProfile.mapping_config_json["rejected_candidates"]) - a
+# demotion, not a hard exclusion, so a genuinely-still-correct match just needs a
+# bigger margin over alternatives to win the auto-pick again.
+_REJECTED_CANDIDATE_PENALTY = 0.15
 # Deliberately excludes "&"/" und ": a raw List cell often holds several distinct
 # values ("Felsenheim, Dolomiten Sport"), but "&"/" und " inside such a value usually
 # joins a single entity's own name (e.g. company "Omlin & Partner Gmbh") rather than
@@ -104,6 +120,23 @@ _LIST_VARIANT_CONFIDENT_SCORE = 0.75
 # Anwesenheit/etc. inside a matrix cell) are recognized but skipped with a warning -
 # out of scope for this first version, see plan.
 _MATRIX_SUPPORTED_ROW_TYPES = {"text", "participant", "participants"}
+
+
+def _best_fuzzy_signature_match(signature: str, profile_table_roles: dict[str, dict], threshold: float) -> dict | None:
+    """Fallback for _resolve_table_role's profile lookup when no EXACT signature key
+    matches - a template revision that adds/removes one column, or a minor OCR/typo
+    difference in a header cell, would otherwise make a learned table-role mapping miss
+    entirely and fall all the way back to the keyword heuristics. Only returns a match
+    at or above `threshold` (see _TABLE_SIGNATURE_FUZZY_THRESHOLD's docstring for why
+    that's set conservatively high)."""
+    best_score = 0.0
+    best_entry: dict | None = None
+    for stored_signature, entry in profile_table_roles.items():
+        score = _similarity(signature, stored_signature)
+        if score > best_score:
+            best_score = score
+            best_entry = entry
+    return best_entry if best_score >= threshold else None
 
 
 @dataclass
@@ -248,8 +281,32 @@ def _classify_status(marker: str) -> str | None:
     return None
 
 
+def _token_jaccard(a: str, b: str) -> float:
+    """Word-order-independent similarity component: Jaccard index over the two
+    strings' whitespace-separated, umlaut-folded token sets (e.g. "Weber Timo" vs.
+    "Timo Weber" -> 1.0, where SequenceMatcher's character-run comparison scores
+    that pair poorly). Contributes nothing for single-token strings (Jaccard of two
+    1-element sets is only ever 0.0 or 1.0, same as an exact/non-exact
+    SequenceMatcher comparison there) - that case is handled separately by the
+    nickname-equivalence table in _name_score."""
+    tokens_a = set(_fold_umlauts(a.lower().strip()).split())
+    tokens_b = set(_fold_umlauts(b.lower().strip()).split())
+    if not tokens_a or not tokens_b:
+        return 0.0
+    return len(tokens_a & tokens_b) / len(tokens_a | tokens_b)
+
+
 def _similarity(a: str, b: str) -> float:
-    return SequenceMatcher(None, _fold_umlauts(a.lower().strip()), _fold_umlauts(b.lower().strip())).ratio()
+    # max() with the token-Jaccard component is a per-pair monotonic improvement -
+    # it can only raise a pair's own score, never lower it below what plain
+    # SequenceMatcher already gave it. Note this does NOT guarantee two different
+    # pairs' RELATIVE order is preserved (a pair whose Jaccard jumps more than
+    # another's can flip which of the two now scores higher) - call sites that pick
+    # a winner between competing pools by comparing their top scores (e.g.
+    # _resolve_table_role's list-vs-matrix decision) should be covered by a
+    # regression test rather than assumed unaffected.
+    sequence_ratio = SequenceMatcher(None, _fold_umlauts(a.lower().strip()), _fold_umlauts(b.lower().strip())).ratio()
+    return max(sequence_ratio, _token_jaccard(a, b))
 
 
 def _iter_block_items(document):
@@ -471,12 +528,54 @@ def parse_document(raw_bytes: bytes) -> ParsedDocx:
     return parse_docx(raw_bytes)
 
 
+_ROLE_AMBIGUITY_EPSILON = 0.08
+
+
+def _trial_resolve_list_confidence(
+    table: ParsedTable, definition: ListDefinition, existing_entries: list[ListEntry], participants_by_id: dict[int, Participant]
+) -> int:
+    """Bounded probe for the list-vs-matrix tie-break below: how many of this table's
+    rows would resolve confidently if it were actually a List against `definition` -
+    reuses _select_list_row_variant's own scoring (_score_list_variant) rather than a
+    separate metric, so "confident" means exactly what it already means everywhere
+    else list rows are scored."""
+    _, candidates, needs_manual, _ = _select_list_row_variant(table.rows, definition, existing_entries, participants_by_id, None)
+    if needs_manual:
+        return 0
+    confident, _total = _score_list_variant(candidates, definition, existing_entries, participants_by_id)
+    return confident
+
+
+def _trial_resolve_matrix_confidence(table: ParsedTable, matrix: dict) -> int:
+    """Bounded probe for the list-vs-matrix tie-break below: how many of this table's
+    data rows have a row-label that clears _MATRIX_ROW_MATCH_THRESHOLD against one of
+    `matrix`'s configured rows - the same row-resolution check analyze() itself
+    performs per Matrix row, just counted here instead of applied."""
+    matrix_rows = matrix["rows"]
+    confident = 0
+    for row_cells in table.rows:
+        row_label_raw = row_cells[0] if row_cells else ""
+        if not row_label_raw:
+            continue
+        best_score = max(
+            (_similarity(row_label_raw, str(row.get("label") or row.get("title") or "")) for row in matrix_rows),
+            default=0.0,
+        )
+        if best_score >= _MATRIX_ROW_MATCH_THRESHOLD:
+            confident += 1
+    return confident
+
+
 def _resolve_table_role(
     table: ParsedTable,
     overrides: dict[int, dict],
     profile_table_roles: dict[str, dict],
     list_definitions: list[tuple[int, str]],
     matrices: list[dict],
+    *,
+    list_definitions_by_id: dict[int, ListDefinition] | None = None,
+    list_entries_for: Callable[[int], list[ListEntry]] | None = None,
+    participants_by_id: dict[int, Participant] | None = None,
 ) -> tuple[str, int | None, str | None, bool]:
     """Fourth return value is True when the role came from an explicit source (this
     call's manual override, or a learned profile signature match) rather than a
@@ -492,6 +591,9 @@ def _resolve_table_role(
     if signature in profile_table_roles:
         entry = profile_table_roles[signature]
         return entry.get("role", "ignore"), entry.get("list_definition_id"), entry.get("matrix_key"), True
+    fuzzy_entry = _best_fuzzy_signature_match(signature, profile_table_roles, _TABLE_SIGNATURE_FUZZY_THRESHOLD)
+    if fuzzy_entry is not None:
+        return fuzzy_entry.get("role", "ignore"), fuzzy_entry.get("list_definition_id"), fuzzy_entry.get("matrix_key"), True
 
     role = table.known_role
     if role is None:
@@ -505,29 +607,75 @@ def _resolve_table_role(
     # whichever pool actually has the closer name, rather than an arbitrary priority
     # order between the two structurally different target kinds.
     if role is None and table.preceding_heading and (matrices or list_definitions):
-        best_role: str | None = None
-        best_key: int | str | None = None
-        best_score = 0.0
+        top_matrix_score = 0.0
+        top_matrix: dict | None = None
         for matrix in matrices:
             score = _similarity(table.preceding_heading, matrix["title"])
-            if score > best_score:
-                best_score = score
-                best_role = "matrix"
-                best_key = matrix["matrix_key"]
+            if score > top_matrix_score:
+                top_matrix_score = score
+                top_matrix = matrix
+        top_list_score = 0.0
+        top_list_id: int | None = None
         for list_id, name in list_definitions:
             score = _similarity(table.preceding_heading, name)
-            if score > best_score:
-                best_score = score
-                best_role = "list"
-                best_key = list_id
+            if score > top_list_score:
+                top_list_score = score
+                top_list_id = list_id
+
+        if top_matrix_score >= top_list_score:
+            best_role, best_key, best_score = "matrix", (top_matrix["matrix_key"] if top_matrix else None), top_matrix_score
+        else:
+            best_role, best_key, best_score = "list", top_list_id, top_list_score
+
+        # Ambiguous heading-only signal (both pools score within
+        # _ROLE_AMBIGUITY_EPSILON of each other) - break the tie by which target
+        # actually resolves more of this table's real rows, not by heading text
+        # similarity alone (same "build variants, score, pick best" idea
+        # _select_list_row_variant already applies to list-row grouping). Only runs
+        # when the caller supplied the extra context needed to trial-resolve against
+        # each candidate - callers that don't (or a table with no preceding_heading
+        # match at all) keep today's pure heading-score behavior unchanged.
+        if (
+            top_matrix is not None and top_list_id is not None
+            and abs(top_matrix_score - top_list_score) <= _ROLE_AMBIGUITY_EPSILON
+            and list_definitions_by_id is not None and list_entries_for is not None and participants_by_id is not None
+        ):
+            definition = list_definitions_by_id.get(top_list_id)
+            if definition is not None:
+                list_confidence = _trial_resolve_list_confidence(
+                    table, definition, list_entries_for(top_list_id), participants_by_id
+                )
+                matrix_confidence = _trial_resolve_matrix_confidence(table, top_matrix)
+                if list_confidence > matrix_confidence:
+                    best_role, best_key = "list", top_list_id
+                elif matrix_confidence > list_confidence:
+                    best_role, best_key = "matrix", top_matrix["matrix_key"]
+
         if best_role is not None and best_score >= _LIST_NAME_MATCH_THRESHOLD:
             if best_role == "matrix":
                 return "matrix", None, best_key, False
             return "list", best_key, None, False
 
     if role == "list":
-        # Synthetic list-shaped text section (see _classify_section_kind) with no
-        # confident name match - surfaced with no target yet rather than "ignore".
+        # Synthetic list-shaped text section (see _classify_section_kind) - still try
+        # to resolve WHICH List this belongs to via heading similarity before giving up
+        # with no target. The block above only runs this same match while role is still
+        # fully undetermined (role is None), so a table already known to be list-shaped
+        # (its heading equals the section's own title, e.g. a heading "Ämtli" matched
+        # exactly against an existing List named "Ämtli") previously fell straight
+        # through to "no target found" without ever trying at all - a real bug, not
+        # just a low-confidence miss. Scoped to list_definitions only (not matrices),
+        # since the shape is already known to be list-like, not a cross-table.
+        if table.preceding_heading and list_definitions:
+            best_list_score = 0.0
+            best_list_id: int | None = None
+            for list_id, name in list_definitions:
+                score = _similarity(table.preceding_heading, name)
+                if score > best_list_score:
+                    best_list_score = score
+                    best_list_id = list_id
+            if best_list_id is not None and best_list_score >= _LIST_NAME_MATCH_THRESHOLD:
+                return "list", best_list_id, None, False
         return "list", None, None, False
 
     if role is not None:
@@ -634,6 +782,57 @@ def _score_event_candidate(title: str, raw_date: date | None, event: Event) -> f
     return 0.2 * title_score
 
 
+def _event_match_reason(title: str, raw_date: date | None, event: Event) -> str:
+    """Short, human-readable justification for one WordImportEventCandidate, mirroring
+    the same signals _score_event_candidate itself weighs - shown in the wizard so a
+    reviewer can tell an exact-date-different-title match apart from a same-title-
+    different-date one instead of only seeing an opaque number."""
+    title_score = _similarity(title, event.title)
+    if raw_date is not None and raw_date == event.event_date:
+        return f"Datum exakt, Titel {round(title_score * 100)}% ähnlich"
+    if raw_date is not None:
+        day_diff = abs((event.event_date - raw_date).days)
+        return f"Datum {day_diff}d abweichend, Titel {round(title_score * 100)}% ähnlich"
+    return f"Titel {round(title_score * 100)}% ähnlich (kein Datum erkannt)"
+
+
+def _text_match_reason(raw_text: str, candidate_label: str, score: float) -> str:
+    """Generic reason string for candidates scored by plain _similarity (list entries,
+    matrix columns, attendance names) - shared instead of duplicated per call site."""
+    return f'"{raw_text}" zu "{candidate_label}": {round(score * 100)}% ähnlich'
+
+
+# Maps a folded, lowercased nickname/short form to its canonical full first name, so
+# _name_score can recognize e.g. "Sepp" and "Josef" as the same person's first token
+# even though they share no substring/token overlap for _similarity to find. Deliberately
+# a small, high-confidence starter set of common German/Swiss-German equivalences, not
+# exhaustive - a wrong equivalence here would silently conflate two different real
+# people, so only add more entries on confirmed real-document evidence.
+_NICKNAME_TO_CANONICAL: dict[str, str] = {
+    "sepp": "josef", "seppi": "josef", "josi": "josef",
+    "hans": "johannes", "hansi": "johannes",
+    "fritz": "friedrich", "fritzli": "friedrich",
+    "heinz": "heinrich", "heiri": "heinrich",
+    "res": "andreas", "resli": "andreas",
+    "ueli": "ulrich", "uli": "ulrich",
+    "hansueli": "hans-ulrich",
+    "koebi": "jakob", "kobi": "jakob", "jockel": "jakob",
+    "toni": "anton", "toeni": "anton",
+    "gret": "margaretha", "gretli": "margaretha", "margrit": "margaretha",
+    "trudi": "gertrud", "trudy": "gertrud",
+    "vreni": "verena", "vreneli": "verena", "vroni": "verena",
+    "hp": "hans-peter", "hanspeter": "hans-peter",
+    "wisel": "alois", "wysel": "alois",
+    "cheli": "karl", "chari": "karl", "carli": "karl",
+    "lisi": "elisabeth", "lisbeth": "elisabeth", "betti": "elisabeth",
+}
+
+
+def _canonical_first_token(token: str) -> str:
+    folded = _fold_umlauts(token.lower().strip())
+    return _NICKNAME_TO_CANONICAL.get(folded, folded)
+
+
 def _name_score(raw_name: str, display_name: str) -> float:
     # A raw name in a list/matrix cell is often just a first name (e.g. an informal
     # "Beisitzer: Nevio, Lino, Gian" column), while display_name is the full "Vorname
@@ -644,13 +843,43 @@ def _name_score(raw_name: str, display_name: str) -> float:
     # resolves as confidently as a full-name one.
     full_score = _similarity(raw_name, display_name)
     first_token = display_name.split(None, 1)[0] if display_name.strip() else display_name
-    return max(full_score, _similarity(raw_name, first_token))
+    first_token_score = _similarity(raw_name, first_token)
+
+    raw_parts = raw_name.split(None, 1)
+    raw_first_token = raw_parts[0] if raw_parts else raw_name
+    if _canonical_first_token(raw_first_token) != _canonical_first_token(first_token):
+        return max(full_score, first_token_score)
+    if len(raw_parts) <= 1:
+        # raw_name is itself just a (nicknamed) bare first name - same "Nevio" vs.
+        # "Nevio Kim Nguyen" bare-name case first_token_score exists for above, just
+        # with a nickname spelling difference the plain character comparison wouldn't
+        # otherwise resolve to a clean match.
+        return max(full_score, first_token_score, 1.0)
+    # raw_name carries its own surname/remainder too - the nickname only ever
+    # substitutes for the FIRST token, so the surname must still independently match
+    # display_name's remainder before this scores as a full match. Without this, "Sepp
+    # Muster" would wrongly score a perfect match against "Josef Meier" purely off the
+    # first-name nickname coincidence, ignoring the completely different surname.
+    display_parts = display_name.split(None, 1)
+    display_remainder = display_parts[1] if len(display_parts) > 1 else ""
+    surname_score = _similarity(raw_parts[1], display_remainder) if display_remainder else 0.0
+    return max(full_score, first_token_score, surname_score)
 
 
 def _match_names(
-    raw_text: str, participants: list[Participant], name_overrides: dict[str, int] | None = None
+    raw_text: str,
+    participants: list[Participant],
+    name_overrides: dict[str, int] | None = None,
+    rejected_candidates: dict | None = None,
+    match_threshold: float = _PARTICIPANT_MATCH_THRESHOLD,
 ) -> list[WordImportNameResolution]:
     overrides = name_overrides or {}
+    # See A.4 / WordImportProfile.mapping_config_json["rejected_candidates"] - a
+    # participant previously rejected for this exact raw name gets a score penalty
+    # (not a hard exclusion) so a genuinely recurring wrong guess needs a bigger margin
+    # over alternatives to win the auto-pick again, without ever disappearing from the
+    # candidate list a human can still pick manually.
+    rejected_by_name = rejected_candidates or {}
     names = [part.strip() for part in _NAME_SPLIT_PATTERN.split(raw_text) if part.strip()]
     resolutions: dict[int, int] = {}
 
@@ -668,25 +897,56 @@ def _match_names(
             resolutions[index] = override_id
             used_participant_ids.add(override_id)
 
-    scored_pairs: list[tuple[float, int, int]] = []
-    for index, name in enumerate(names):
-        if index in resolutions:
-            continue
-        for participant in participants:
-            score = _name_score(name, participant.display_name)
-            if score >= 0.4:
-                scored_pairs.append((score, index, participant.id))
-    scored_pairs.sort(key=lambda entry: entry[0], reverse=True)
-    for score, index, participant_id in scored_pairs:
-        if score < _PARTICIPANT_MATCH_THRESHOLD:
-            break
-        if index in resolutions or participant_id in used_participant_ids:
-            continue
-        resolutions[index] = participant_id
-        used_participant_ids.add(participant_id)
+    def _score(index: int, participant: Participant) -> float:
+        name = names[index]
+        rejected_ids = set((rejected_by_name.get(f"name:{_normalize(name)}") or {}).get("rejected") or [])
+        score = _name_score(name, participant.display_name)
+        if participant.id in rejected_ids:
+            score -= _REJECTED_CANDIDATE_PENALTY
+        return score
+
+    remaining_indices = [index for index in range(len(names)) if index not in resolutions]
+    remaining_participants = [participant for participant in participants if participant.id not in used_participant_ids]
+    # Globally optimal 1:1 assignment (Hungarian algorithm) over the remaining names x
+    # remaining participants, replacing the previous "collect all pairs >= 0.4, sort
+    # globally, greedily claim >= threshold" approximation - see optimal_assignment.py
+    # docstring for why a greedy pass can strand a name with a worse match than the
+    # optimal solution finds. The old 0.4 pre-filter is subsumed: the solver already
+    # considers the whole matrix at once, so a separate collection threshold below the
+    # real acceptance threshold serves no purpose here.
+    for assignment in solve_optimal_assignment(
+        remaining_indices, remaining_participants, _score, min_score=match_threshold
+    ):
+        resolutions[assignment.row] = assignment.col.id
+        used_participant_ids.add(assignment.col.id)
 
     return [
-        WordImportNameResolution(raw_name=name, participant_id=resolutions.get(index)) for index, name in enumerate(names)
+        WordImportNameResolution(
+            raw_name=name, participant_id=resolutions.get(index),
+            # Set to the SAME value as participant_id at construction time - this is the
+            # one and only place a WordImportNameResolution's suggestion is ever set; the
+            # wizard's edit handlers only touch participant_id afterward (object-spread
+            # preserves this field), so a divergence at commit() time means the human
+            # picked something other than what analyze() originally suggested here.
+            originally_suggested_participant_id=resolutions.get(index),
+            # Same top-3-above-0.4 shape as the attendance table's own candidates (see
+            # below) - even a name that never cleared match_threshold anywhere still
+            # carries its best near-misses, so the wizard's recurring-name clarifier has
+            # something to suggest instead of an empty search box.
+            candidates=[
+                WordImportAttendanceCandidate(
+                    participant_id=participant.id, score=round(score, 3),
+                    reason=_text_match_reason(name, participant.display_name, score),
+                )
+                for score, participant in sorted(
+                    ((_score(index, participant), participant) for participant in participants),
+                    key=lambda entry: entry[0],
+                    reverse=True,
+                )[:3]
+                if score >= 0.4
+            ],
+        )
+        for index, name in enumerate(names)
     ]
 
 
@@ -695,12 +955,14 @@ def _build_column_value(
     raw_text: str,
     participants: list[Participant],
     name_overrides: dict[str, int] | None = None,
+    rejected_candidates: dict | None = None,
+    match_threshold: float = _PARTICIPANT_MATCH_THRESHOLD,
 ) -> tuple[dict, list[WordImportNameResolution]]:
     if value_type == "text":
         text_value = raw_text.strip()
         return ({"text_value": text_value} if text_value else {}), []
     if value_type in ("participant", "participants"):
-        resolutions = _match_names(raw_text, participants, name_overrides)
+        resolutions = _match_names(raw_text, participants, name_overrides, rejected_candidates, match_threshold)
         matched_ids = [resolution.participant_id for resolution in resolutions if resolution.participant_id is not None]
         if value_type == "participant":
             return ({"participant_id": matched_ids[0]} if matched_ids else {}), resolutions
@@ -1097,6 +1359,39 @@ def _select_list_row_variant(
     return best_name, variants[best_name], False, available_strategies
 
 
+def _positional_matrix_column_resolution(
+    doc_column_labels: list[str], targets: list[dict]
+) -> dict[int, tuple[str | None, list[WordImportMatrixColumnCandidate]]]:
+    """Alternative to label-similarity matching for a Matrix's fixed, template-
+    configured columns: document column N maps straight to `targets[N]` in configured
+    order, no text comparison at all - for documents whose column headers are missing
+    or garbled (e.g. a borderless table pdfplumber only partially recovered) but whose
+    column COUNT and ORDER still matches the template. Only ever tried as a guarded
+    fallback (see call site) when label-matching already resolved fewer than half of
+    the table's labeled columns - a reordered-columns document would make this a wrong
+    guess, so it must never override an already-adequate label match."""
+    resolution: dict[int, tuple[str | None, list[WordImportMatrixColumnCandidate]]] = {}
+    for col_idx, label in enumerate(doc_column_labels):
+        if not label or col_idx >= len(targets):
+            continue
+        target = targets[col_idx]
+        column_key = str(target.get("id"))
+        column_label = str(target.get("title") or "")
+        resolution[col_idx] = (
+            column_key,
+            [
+                WordImportMatrixColumnCandidate(
+                    column_key=column_key, label=column_label, score=1.0, reason="Positionale Zuordnung (Spaltenreihenfolge)"
+                )
+            ],
+        )
+    return resolution
+
+
+def _count_confident_matrix_columns(resolution: dict[int, tuple[str | None, list]]) -> int:
+    return sum(1 for column_key, _candidates in resolution.values() if column_key is not None)
+
+
 class WordImportService:
     def analyze(
         self,
@@ -1107,6 +1402,7 @@ class WordImportService:
         protocol_date_hint: date | None,
         raw_bytes: bytes,
         table_role_overrides: dict[int, dict] | None = None,
+        in_memory_profile_hints: dict | None = None,
     ) -> WordImportAnalysis:
         # Isoliert statt parse_document(raw_bytes) direkt - siehe isolated_parse.py: ein
         # pathologisches/bösartig komprimiertes Dokument wird nach Timeout hart
@@ -1120,11 +1416,57 @@ class WordImportService:
                 WordImportProfile.tenant_id == tenant_id, WordImportProfile.template_id == template_id
             )
         ).scalar_one_or_none()
-        profile_config = profile.mapping_config_json if profile else {}
+        # See C.11 / WordImportQueueService's batch-consensus pass - in_memory_profile_hints
+        # (same shape as mapping_config_json) is merged on top of the persisted profile for
+        # THIS analyze() call only, never written back to WordImportProfile itself. Lets a
+        # same-batch upload's confidently-resolved decisions help sibling documents in that
+        # batch that failed to resolve the same raw text on their own, without waiting for
+        # any of them to actually be committed first (the DB profile only ever learns from
+        # real commits).
+        profile_config = dict(profile.mapping_config_json or {}) if profile else {}
+        if in_memory_profile_hints:
+            profile_config = {
+                "heading_to_target": {**profile_config.get("heading_to_target", {}), **in_memory_profile_hints.get("heading_to_target", {})},
+                "table_roles_by_signature": {
+                    **profile_config.get("table_roles_by_signature", {}), **in_memory_profile_hints.get("table_roles_by_signature", {})
+                },
+                "participant_name_overrides": {
+                    **profile_config.get("participant_name_overrides", {}), **in_memory_profile_hints.get("participant_name_overrides", {})
+                },
+                "rejected_candidates": profile_config.get("rejected_candidates", {}),
+            }
         heading_to_target = profile_config.get("heading_to_target", {})
         table_roles_by_signature = profile_config.get("table_roles_by_signature", {})
         participant_name_overrides = profile_config.get("participant_name_overrides", {})
+        # See A.4 / WordImportService.commit's _log_outcome - {"{prefix}:{context}":
+        # {"rejected": [ids], "chosen": id}}, consulted below (_rejected_ids_for) to
+        # demote a candidate that was already wrong for this exact context once before,
+        # rather than silently repeating the same mistake every time it recurs.
+        rejected_candidates = profile_config.get("rejected_candidates", {})
         profile_applied = bool(heading_to_target or table_roles_by_signature or participant_name_overrides)
+
+        def _rejected_ids_for(rejection_key: str) -> set:
+            return set((rejected_candidates.get(rejection_key) or {}).get("rejected") or [])
+
+        # See B.7 / word_import_thresholds.adaptive_threshold - resolved ONCE per
+        # analyze() call (not read from inside the otherwise DB-free scoring helpers
+        # further below, which stay pure/independently unit-testable) and threaded down
+        # as an explicit parameter at each call site, so the source of a threshold value
+        # is always traceable rather than a hidden DB read behind a "pure" function.
+        # "participant_match" (the attendance-roster signal) is used as the shared proxy
+        # for _PARTICIPANT_MATCH_THRESHOLD everywhere a name is matched (attendance,
+        # matrix/list/form names all resolve through the same underlying scoring) - a
+        # separate per-signal-type threshold for each name-matching context is not worth
+        # the added complexity without concrete evidence they should diverge.
+        participant_match_threshold = adaptive_threshold(
+            db, tenant_id=tenant_id, template_id=template_id, signal_type="participant_match", default=_PARTICIPANT_MATCH_THRESHOLD
+        )
+        # Feeds B.5's event Hungarian assignment min_score - the looser "is this row
+        # linked to an existing event AT ALL" gate, not the stricter matched-vs-changed
+        # distinction (_EVENT_MATCH_THRESHOLD stays a fixed constant, see B.7 plan).
+        event_change_threshold = adaptive_threshold(
+            db, tenant_id=tenant_id, template_id=template_id, signal_type="event_match", default=_EVENT_CHANGE_THRESHOLD
+        )
 
         list_definition_rows = list(
             db.execute(
@@ -1138,13 +1480,38 @@ class WordImportService:
         matrices_for_matching = _template_matrices(db, template_id=template_id, matrix_type_id=matrix_type_id)
         matrices_by_key = {matrix["matrix_key"]: matrix for matrix in matrices_for_matching}
 
+        # Hoisted ahead of the table-role resolution loop below (originally fetched much
+        # later in this method) so _resolve_table_role's optional list-vs-matrix
+        # ambiguity tie-break (see B.6) has real data to trial-resolve against instead of
+        # only ever falling back to pure heading-score comparison. list_entries_by_list_id
+        # is the same lazy per-list-id cache the Matrix "list" auto-source section further
+        # below already needs - declared once here and shared, not rebuilt twice.
+        participants = list(
+            db.execute(
+                select(Participant).where(Participant.tenant_id == tenant_id, Participant.is_active.is_(True))
+            ).scalars()
+        )
+        participants_by_id = {participant.id: participant for participant in participants}
+        list_entries_by_list_id: dict[int, list[ListEntry]] = {}
+
         table_roles: dict[int, str] = {}
         table_list_definitions: dict[int, int | None] = {}
         table_matrix_keys: dict[int, str | None] = {}
         table_role_explicit: dict[int, bool] = {}
         for table in parsed.tables:
+
+            def _list_entries_for(list_definition_id: int) -> list[ListEntry]:
+                if list_definition_id not in list_entries_by_list_id:
+                    list_entries_by_list_id[list_definition_id] = list(
+                        db.execute(select(ListEntry).where(ListEntry.list_definition_id == list_definition_id)).scalars()
+                    )
+                return list_entries_by_list_id[list_definition_id]
+
             role, list_definition_id, matrix_key, explicit = _resolve_table_role(
-                table, table_role_overrides or {}, table_roles_by_signature, list_definitions_for_matching, matrices_for_matching
+                table, table_role_overrides or {}, table_roles_by_signature, list_definitions_for_matching, matrices_for_matching,
+                list_definitions_by_id=list_definitions_by_id,
+                list_entries_for=_list_entries_for,
+                participants_by_id=participants_by_id,
             )
             table_roles[table.index] = role
             table_list_definitions[table.index] = list_definition_id
@@ -1185,6 +1552,7 @@ class WordImportService:
                     if table_roles.get(table.index) == "list"
                     else True
                 ),
+                role_is_explicit=table_role_explicit.get(table.index, False),
             )
             for table in parsed.tables
         ]
@@ -1287,11 +1655,6 @@ class WordImportService:
             ]
         else:
             period_events = all_events
-        participants = list(
-            db.execute(
-                select(Participant).where(Participant.tenant_id == tenant_id, Participant.is_active.is_(True))
-            ).scalars()
-        )
 
         text_mappings: list[WordImportTextMapping] = []
         for section in parsed.sections:
@@ -1341,7 +1704,10 @@ class WordImportService:
                 reverse=True,
             )
             event_candidates = [
-                WordImportEventCandidate(event_id=event.id, title=event.title, event_date=event.event_date, score=round(score, 3))
+                WordImportEventCandidate(
+                    event_id=event.id, title=event.title, event_date=event.event_date, score=round(score, 3),
+                    reason=_text_match_reason(search_text, event.title, score),
+                )
                 for score, event in scored_events
             ]
             matched_event_id: int | None = None
@@ -1372,7 +1738,7 @@ class WordImportService:
                     raw_value = parsed_field_values.get(row_id, "")
                     names: list[WordImportNameResolution] = []
                     if row_type in ("participant", "participants") and raw_value:
-                        names = _match_names(raw_value, participants, participant_name_overrides)
+                        names = _match_names(raw_value, participants, participant_name_overrides, rejected_candidates, participant_match_threshold)
                     fields_for_target.append(
                         WordImportFormFieldValue(
                             row_id=row_id,
@@ -1461,22 +1827,24 @@ class WordImportService:
         # would claim that participant before a later row with the actual exact match
         # ("Mario Rohrer" == "Mario Rohrer", 1.0) ever gets a chance - leaving the correct
         # row stranded on "Keinen verknüpfen" even though a perfect match existed.
-        scored_pairs: list[tuple[float, int, int]] = []
-        for row_index, (raw_name, _status) in enumerate(raw_attendance_rows):
-            if row_index in row_assignment:
-                continue
-            for participant in template_roster:
-                score = _similarity(raw_name, participant.display_name)
-                if score >= 0.4:
-                    scored_pairs.append((score, row_index, participant.id))
-        scored_pairs.sort(key=lambda entry: entry[0], reverse=True)
-        for score, row_index, participant_id in scored_pairs:
-            if score < _PARTICIPANT_MATCH_THRESHOLD:
-                break
-            if row_index in row_assignment or participant_id in used_participant_ids:
-                continue
-            row_assignment[row_index] = participant_id
-            used_participant_ids.add(participant_id)
+        def _attendance_score(row_index: int, participant: Participant) -> float:
+            raw_name = raw_attendance_rows[row_index][0]
+            score = _name_score(raw_name, participant.display_name)
+            if participant.id in _rejected_ids_for(f"name:{_normalize(raw_name)}"):
+                score -= _REJECTED_CANDIDATE_PENALTY
+            return score
+
+        remaining_row_indices = [
+            row_index for row_index in range(len(raw_attendance_rows)) if row_index not in row_assignment
+        ]
+        remaining_roster = [participant for participant in template_roster if participant.id not in used_participant_ids]
+        # Globally optimal assignment - see _match_names's identical use of
+        # solve_optimal_assignment for why this replaces the previous greedy pass.
+        for assignment in solve_optimal_assignment(
+            remaining_row_indices, remaining_roster, _attendance_score, min_score=participant_match_threshold
+        ):
+            row_assignment[assignment.row] = assignment.col.id
+            used_participant_ids.add(assignment.col.id)
 
         attendance_mappings: list[WordImportAttendanceMapping] = []
         for row_index, (raw_name, status) in enumerate(raw_attendance_rows):
@@ -1484,9 +1852,12 @@ class WordImportService:
             if suggested is None:
                 warnings.append(f'Kein passender Teilnehmer für "{raw_name}" gefunden.')
             candidates = [
-                participant_id
-                for score, participant_id in sorted(
-                    ((_similarity(raw_name, participant.display_name), participant.id) for participant in template_roster),
+                WordImportAttendanceCandidate(
+                    participant_id=participant.id, score=round(score, 3),
+                    reason=_text_match_reason(raw_name, participant.display_name, score),
+                )
+                for score, participant in sorted(
+                    ((_name_score(raw_name, participant.display_name), participant) for participant in template_roster),
                     key=lambda entry: entry[0],
                     reverse=True,
                 )[:3]
@@ -1511,12 +1882,24 @@ class WordImportService:
                 continue
             attendance_mappings.append(
                 WordImportAttendanceMapping(
-                    raw_name="", status="absent", suggested_participant_id=participant.id, candidates=[participant.id]
+                    raw_name="", status="absent", suggested_participant_id=participant.id,
+                    candidates=[
+                        WordImportAttendanceCandidate(
+                            participant_id=participant.id, score=1.0,
+                            reason="Nicht im Dokument erwähnt, aus Vorlagen-Roster übernommen",
+                        )
+                    ],
                 )
             )
 
         event_mappings: list[WordImportEventMapping] = []
-        row_index = 0
+        # Collected first (title, raw_date, non-exclusive candidate list) per row across
+        # every "events"-role table, THEN resolved against all_events in one single
+        # optimal assignment below - not per-row independently anymore. Without this,
+        # two different document rows could both auto-match the SAME existing Event
+        # (verified: nothing previously stopped that), which is almost always wrong for
+        # an events/Termine table, where each row names a distinct real occasion.
+        extracted_event_rows: list[tuple[str, date | None, list[WordImportEventCandidate]]] = []
         for table in parsed.tables:
             if table_roles.get(table.index) != "events":
                 continue
@@ -1524,40 +1907,76 @@ class WordImportService:
                 title, raw_date = _extract_event_row(cells)
                 if not title:
                     continue
+                event_rejected_ids = (
+                    _rejected_ids_for(f"event:{raw_date.isoformat()}|{_normalize(title)}") if raw_date is not None else set()
+                )
                 scored_events = sorted(
-                    ((_score_event_candidate(title, raw_date, event), event) for event in all_events),
+                    (
+                        (
+                            _score_event_candidate(title, raw_date, event)
+                            - (_REJECTED_CANDIDATE_PENALTY if event.id in event_rejected_ids else 0.0),
+                            event,
+                        )
+                        for event in all_events
+                    ),
                     key=lambda entry: entry[0],
                     reverse=True,
                 )
                 candidates = [
-                    WordImportEventCandidate(event_id=event.id, title=event.title, event_date=event.event_date, score=round(score, 3))
+                    WordImportEventCandidate(
+                        event_id=event.id, title=event.title, event_date=event.event_date, score=round(score, 3),
+                        reason=_event_match_reason(title, raw_date, event),
+                    )
                     for score, event in scored_events[:_CANDIDATE_LIMIT]
                 ]
-                best_score, best_event = (scored_events[0] if scored_events else (0.0, None))
-                if best_event is not None and raw_date == best_event.event_date and _similarity(title, best_event.title) >= _EVENT_MATCH_THRESHOLD:
-                    status: str = "matched"
-                elif best_event is not None and best_score >= _EVENT_CHANGE_THRESHOLD:
-                    status = "changed"
-                else:
-                    status = "new"
-                    best_event = None
-                event_mappings.append(
-                    WordImportEventMapping(
-                        row_index=row_index,
-                        raw_title=title,
-                        raw_date=raw_date,
-                        status=status,
-                        matched_event_id=best_event.id if best_event else None,
-                        matched_event_title=best_event.title if best_event else None,
-                        matched_event_date=best_event.event_date if best_event else None,
-                        candidates=candidates,
-                    )
+                extracted_event_rows.append((title, raw_date, candidates))
+
+        def _event_row_score(row_index: int, event: Event) -> float:
+            title, raw_date, _candidates = extracted_event_rows[row_index]
+            rejected_ids = (
+                _rejected_ids_for(f"event:{raw_date.isoformat()}|{_normalize(title)}") if raw_date is not None else set()
+            )
+            score = _score_event_candidate(title, raw_date, event)
+            return score - (_REJECTED_CANDIDATE_PENALTY if event.id in rejected_ids else 0.0)
+
+        # min_score is the loose "changed" threshold - it decides "is this row linked to
+        # an existing event AT ALL", not the finer matched-vs-changed distinction (that's
+        # still re-derived per row below, exactly as before, just against the one
+        # globally-assigned event instead of each row's own locally-best one).
+        auto_picked_event_by_row: dict[int, Event] = {
+            assignment.row: assignment.col
+            for assignment in solve_optimal_assignment(
+                list(range(len(extracted_event_rows))), all_events, _event_row_score, min_score=event_change_threshold
+            )
+        }
+        for row_index, (title, raw_date, candidates) in enumerate(extracted_event_rows):
+            best_event = auto_picked_event_by_row.get(row_index)
+            if best_event is not None and raw_date == best_event.event_date and _similarity(title, best_event.title) >= _EVENT_MATCH_THRESHOLD:
+                status: str = "matched"
+            elif best_event is not None:
+                status = "changed"
+            else:
+                status = "new"
+            event_mappings.append(
+                WordImportEventMapping(
+                    row_index=row_index,
+                    raw_title=title,
+                    raw_date=raw_date,
+                    status=status,
+                    matched_event_id=best_event.id if best_event else None,
+                    matched_event_title=best_event.title if best_event else None,
+                    matched_event_date=best_event.event_date if best_event else None,
+                    candidates=candidates,
                 )
-                row_index += 1
+            )
+        # The Matrix "events" row section further below continues this same counter
+        # (see its own comment there) - explicit assignment rather than relying on the
+        # loop variable's last value, which would incorrectly equal len(...)-1, not
+        # len(...), once the for-loop above completes.
+        row_index = len(extracted_event_rows)
         if any(mapping.status != "matched" for mapping in event_mappings):
             warnings.append("Neue oder abweichende Termine gefunden – bitte prüfen und übernehmen oder ablehnen.")
 
-        participants_by_id = {participant.id: participant for participant in participants}
         previous_protocol_id = (
             _nearest_previous_protocol_id(db, tenant_id=tenant_id, template_id=template_id, protocol_date=protocol_date)
             if protocol_date is not None
@@ -1610,10 +2029,12 @@ class WordImportService:
                 column_one_raw = row_candidate.column_one_raw
                 column_two_raw = row_candidate.column_two_raw
                 col1_value, col1_names = _build_column_value(
-                    definition.column_one_value_type, column_one_raw, participants, participant_name_overrides
+                    definition.column_one_value_type, column_one_raw, participants, participant_name_overrides, rejected_candidates,
+                    participant_match_threshold,
                 )
                 col2_value, col2_names = _build_column_value(
-                    definition.column_two_value_type, column_two_raw, participants, participant_name_overrides
+                    definition.column_two_value_type, column_two_raw, participants, participant_name_overrides, rejected_candidates,
+                    participant_match_threshold,
                 )
                 key = _value_key(definition.column_one_value_type, col1_value)
                 existing = existing_by_key.get(key)
@@ -1637,6 +2058,11 @@ class WordImportService:
                         column_one_display=_display_value(definition.column_one_value_type, entry.column_one_value_json or {}, participants_by_id),
                         column_two_display=_display_value(definition.column_two_value_type, entry.column_two_value_json or {}, participants_by_id),
                         score=round(score, 3),
+                        reason=_text_match_reason(
+                            column_one_raw,
+                            _display_value(definition.column_one_value_type, entry.column_one_value_json or {}, participants_by_id),
+                            score,
+                        ),
                     )
                     for score, entry in scored_entries
                     if score >= _LIST_ENTRY_CANDIDATE_MIN_SCORE
@@ -1649,6 +2075,7 @@ class WordImportService:
                             column_one_display=_display_value(definition.column_one_value_type, existing.column_one_value_json or {}, participants_by_id),
                             column_two_display=_display_value(definition.column_two_value_type, existing.column_two_value_json or {}, participants_by_id),
                             score=1.0,
+                            reason="Bereits mit dieser Dokumentzeile verknüpfter Eintrag",
                         ),
                     )
                 if existing is None:
@@ -1691,7 +2118,8 @@ class WordImportService:
                 )
 
         matrix_mappings: list[WordImportMatrixCellMapping] = []
-        list_entries_by_list_id: dict[int, list[ListEntry]] = {}
+        # Reuses the same lazy per-list-id cache the list-vs-matrix role tie-break
+        # above already declared and may have partially populated - not redeclared here.
         for table in parsed.tables:
             if table_roles.get(table.index) != "matrix":
                 continue
@@ -1720,49 +2148,99 @@ class WordImportService:
             # column_key or None, ranked candidates for a manual pick).
             column_resolution: dict[int, tuple[str | None, list[WordImportMatrixColumnCandidate]]] = {}
             if mode == "auto" and auto_type == "participants":
+                # Two sub-passes so solve_optimal_assignment's exclusivity only applies
+                # where columns actually compete for the same pool: a column resolved by
+                # a direct name match (_match_names, itself already Hungarian-backed
+                # internally) claims its participant immediately, then the remaining
+                # ambiguous columns are assigned optimally over the still-unclaimed
+                # participants - never re-opening an already-confident direct match.
+                unresolved_col_indices: list[int] = []
+                claimed_participant_ids: set[int] = set()
                 for col_idx, label in enumerate(doc_column_labels):
                     if not label:
                         continue
-                    names = _match_names(label, participants, participant_name_overrides)
+                    names = _match_names(label, participants, participant_name_overrides, rejected_candidates, participant_match_threshold)
                     participant_id = names[0].participant_id if names else None
                     if participant_id is not None:
                         participant = next((p for p in participants if p.id == participant_id), None)
                         column_key = f"gen-p-{participant_id}"
                         column_resolution[col_idx] = (
                             column_key,
-                            [WordImportMatrixColumnCandidate(column_key=column_key, label=participant.display_name if participant else label, score=1.0)],
-                        )
-                    else:
-                        scored = sorted(
-                            ((_similarity(label, p.display_name), p) for p in participants),
-                            key=lambda entry: entry[0],
-                            reverse=True,
-                        )[:_CANDIDATE_LIMIT]
-                        column_resolution[col_idx] = (
-                            None,
                             [
-                                WordImportMatrixColumnCandidate(column_key=f"gen-p-{p.id}", label=p.display_name, score=round(score, 3))
-                                for score, p in scored
-                                if score >= _LIST_ENTRY_CANDIDATE_MIN_SCORE
+                                WordImportMatrixColumnCandidate(
+                                    column_key=column_key, label=participant.display_name if participant else label, score=1.0,
+                                    reason="Direkter Namenstreffer",
+                                )
                             ],
                         )
+                        claimed_participant_ids.add(participant_id)
+                    else:
+                        unresolved_col_indices.append(col_idx)
+
+                def _participant_column_score(col_idx: int, participant: Participant) -> float:
+                    return _similarity(doc_column_labels[col_idx], participant.display_name)
+
+                remaining_participants = [p for p in participants if p.id not in claimed_participant_ids]
+                auto_picked_participant_by_col = {
+                    assignment.row: assignment.col
+                    for assignment in solve_optimal_assignment(
+                        unresolved_col_indices, remaining_participants, _participant_column_score,
+                        min_score=_MATRIX_COLUMN_MATCH_THRESHOLD,
+                    )
+                }
+                for col_idx in unresolved_col_indices:
+                    label = doc_column_labels[col_idx]
+                    scored = sorted(
+                        ((_similarity(label, p.display_name), p) for p in participants),
+                        key=lambda entry: entry[0],
+                        reverse=True,
+                    )[:_CANDIDATE_LIMIT]
+                    picked = auto_picked_participant_by_col.get(col_idx)
+                    column_resolution[col_idx] = (
+                        f"gen-p-{picked.id}" if picked is not None else None,
+                        [
+                            WordImportMatrixColumnCandidate(
+                                column_key=f"gen-p-{p.id}", label=p.display_name, score=round(score, 3),
+                                reason=_text_match_reason(label, p.display_name, score),
+                            )
+                            for score, p in scored
+                            if score >= _LIST_ENTRY_CANDIDATE_MIN_SCORE
+                        ],
+                    )
             elif mode == "auto" and auto_type == "events":
                 tag_filter = str(auto_source.get("event_tag_filter") or "").strip().lower()
                 candidate_events = [event for event in all_events if not tag_filter or (event.tag or "").lower() == tag_filter]
-                for col_idx, label in enumerate(doc_column_labels):
-                    if not label:
-                        continue
+                labeled_col_indices = [col_idx for col_idx, label in enumerate(doc_column_labels) if label]
+
+                def _event_column_score(col_idx: int, event: Event) -> float:
+                    return _similarity(doc_column_labels[col_idx], event.title)
+
+                # Cross-column exclusivity is a genuine behavior change from before (each
+                # column used to independently pick its own best event with no regard for
+                # what another column already claimed) - two columns claiming the same
+                # Event is almost never correct for a cross-table Matrix, so this is
+                # desirable, mirroring the same change made to Termine-table row matching.
+                auto_picked_event_by_col = {
+                    assignment.row: assignment.col
+                    for assignment in solve_optimal_assignment(
+                        labeled_col_indices, candidate_events, _event_column_score, min_score=_MATRIX_COLUMN_MATCH_THRESHOLD
+                    )
+                }
+                for col_idx in labeled_col_indices:
+                    label = doc_column_labels[col_idx]
                     scored = sorted(
                         ((_similarity(label, event.title), event) for event in candidate_events),
                         key=lambda entry: entry[0],
                         reverse=True,
                     )
-                    best_score, best_event = scored[0] if scored else (0.0, None)
-                    column_key = f"gen-e-{best_event.id}" if best_event is not None and best_score >= _MATRIX_COLUMN_MATCH_THRESHOLD else None
+                    picked = auto_picked_event_by_col.get(col_idx)
                     column_resolution[col_idx] = (
-                        column_key,
+                        f"gen-e-{picked.id}" if picked is not None else None,
                         [
-                            WordImportMatrixColumnCandidate(column_key=f"gen-e-{event.id}", label=event.title, score=round(score, 3))
+                            WordImportMatrixColumnCandidate(
+                                column_key=f"gen-e-{event.id}", label=event.title, score=round(score, 3),
+                                reason=_text_match_reason(label, event.title, score),
+                            )
                             for score, event in scored[:_CANDIDATE_LIMIT]
                             if score >= _LIST_ENTRY_CANDIDATE_MIN_SCORE
                         ],
@@ -1777,20 +2255,33 @@ class WordImportService:
                             db.execute(select(ListEntry).where(ListEntry.list_definition_id == list_id)).scalars()
                         )
                     entries = list_entries_by_list_id[list_id]
-                for col_idx, label in enumerate(doc_column_labels):
-                    if not label:
-                        continue
+                labeled_col_indices = [col_idx for col_idx, label in enumerate(doc_column_labels) if label]
+
+                def _list_column_score(col_idx: int, entry: ListEntry) -> float:
+                    return _similarity(doc_column_labels[col_idx], _entry_title(entry))
+
+                # Same exclusivity rationale as the "events" branch above.
+                auto_picked_entry_by_col = {
+                    assignment.row: assignment.col
+                    for assignment in solve_optimal_assignment(
+                        labeled_col_indices, entries, _list_column_score, min_score=_MATRIX_COLUMN_MATCH_THRESHOLD
+                    )
+                }
+                for col_idx in labeled_col_indices:
+                    label = doc_column_labels[col_idx]
                     scored = sorted(
                         ((_similarity(label, _entry_title(entry)), entry) for entry in entries),
                         key=lambda item: item[0],
                         reverse=True,
                     )
-                    best_score, best_entry = scored[0] if scored else (0.0, None)
-                    column_key = f"gen-l-{best_entry.id}" if best_entry is not None and best_score >= _MATRIX_COLUMN_MATCH_THRESHOLD else None
+                    picked = auto_picked_entry_by_col.get(col_idx)
                     column_resolution[col_idx] = (
-                        column_key,
+                        f"gen-l-{picked.id}" if picked is not None else None,
                         [
-                            WordImportMatrixColumnCandidate(column_key=f"gen-l-{entry.id}", label=_entry_title(entry), score=round(score, 3))
+                            WordImportMatrixColumnCandidate(
+                                column_key=f"gen-l-{entry.id}", label=_entry_title(entry), score=round(score, 3),
+                                reason=_text_match_reason(label, _entry_title(entry), score),
+                            )
                             for score, entry in scored[:_CANDIDATE_LIMIT]
                             if score >= _LIST_ENTRY_CANDIDATE_MIN_SCORE
                         ],
@@ -1811,11 +2302,28 @@ class WordImportService:
                     column_resolution[col_idx] = (
                         column_key,
                         [
-                            WordImportMatrixColumnCandidate(column_key=str(column.get("id")), label=str(column.get("title") or ""), score=round(score, 3))
+                            WordImportMatrixColumnCandidate(
+                                column_key=str(column.get("id")), label=str(column.get("title") or ""), score=round(score, 3),
+                                reason=_text_match_reason(label, str(column.get("title") or ""), score),
+                            )
                             for score, column in scored[:_CANDIDATE_LIMIT]
                             if score >= _LIST_ENTRY_CANDIDATE_MIN_SCORE
                         ],
                     )
+                # Positional fallback (see B.6(b) / _positional_matrix_column_resolution
+                # docstring) - only tried when label-similarity matching resolved fewer
+                # than half of this table's labeled columns, and only kept if it actually
+                # resolves MORE than the label-based attempt did. Guards against ever
+                # silently overriding an already-adequate label match with a guess.
+                labeled_col_count = sum(1 for label in doc_column_labels if label)
+                if labeled_col_count > 0 and _count_confident_matrix_columns(column_resolution) < labeled_col_count / 2:
+                    positional_resolution = _positional_matrix_column_resolution(doc_column_labels, matrix_columns)
+                    if _count_confident_matrix_columns(positional_resolution) > _count_confident_matrix_columns(column_resolution):
+                        column_resolution = positional_resolution
+                        warnings.append(
+                            f'Matrix "{matrix["title"]}": Spalten konnten über die Bezeichnung kaum zugeordnet werden – '
+                            "stattdessen anhand der Position übernommen, bitte prüfen."
+                        )
 
             matrix_has_unresolved_column = False
             for row_cells in table.rows:
@@ -1876,13 +2384,26 @@ class WordImportService:
                         if use_column_tag and matched_column is not None:
                             effective_tag = str(matched_column.get("event_tag_filter") or matched_column.get("title") or "").strip() or None
                         for extracted_date, extracted_participant_count in _extract_dates_with_counts(raw_cell_text):
+                            matrix_event_rejected_ids = _rejected_ids_for(
+                                f"event:{extracted_date.isoformat()}|{_normalize(column_title)}"
+                            )
                             scored_events = sorted(
-                                ((_score_event_candidate(column_title, extracted_date, event), event) for event in all_events),
+                                (
+                                    (
+                                        _score_event_candidate(column_title, extracted_date, event)
+                                        - (_REJECTED_CANDIDATE_PENALTY if event.id in matrix_event_rejected_ids else 0.0),
+                                        event,
+                                    )
+                                    for event in all_events
+                                ),
                                 key=lambda entry: entry[0],
                                 reverse=True,
                             )
                             candidates = [
-                                WordImportEventCandidate(event_id=event.id, title=event.title, event_date=event.event_date, score=round(score, 3))
+                                WordImportEventCandidate(
+                                    event_id=event.id, title=event.title, event_date=event.event_date, score=round(score, 3),
+                                    reason=_event_match_reason(column_title, extracted_date, event),
+                                )
                                 for score, event in scored_events[:_CANDIDATE_LIMIT]
                             ]
                             # Matrix cells never carry a real title to compare - a plain
@@ -1929,7 +2450,7 @@ class WordImportService:
                         matrix_has_unresolved_column = True
                     names: list[WordImportNameResolution] = []
                     if row_type in ("participant", "participants"):
-                        names = _match_names(raw_value, participants, participant_name_overrides)
+                        names = _match_names(raw_value, participants, participant_name_overrides, rejected_candidates, participant_match_threshold)
                         unmatched_names = [name.raw_name for name in names if name.participant_id is None]
                         if unmatched_names:
                             warnings.append(f'Nicht gefundene Teilnehmer in Matrix "{matrix["title"]}": {", ".join(unmatched_names)}')
@@ -2013,6 +2534,45 @@ class WordImportService:
             if participant.left_at is not None and target_date > participant.left_at:
                 participant.left_at = target_date
                 db.add(participant)
+
+        # Append-only quality log (see WordImportSuggestionOutcome) - one row per
+        # resolved decision where analyze() actually had a confident top suggestion to
+        # compare against the human's final choice. Flushed once at the very end of
+        # commit() alongside everything else (see db.add_all(outcome_rows) below).
+        outcome_rows: list[WordImportSuggestionOutcome] = []
+        # Negative-feedback half of the same original-vs-final comparison (see A.4 /
+        # WordImportProfile.mapping_config_json["rejected_candidates"] docstring further
+        # below) - keyed "{signal_prefix}:{normalized_context}" so analyze()'s read side
+        # can demote a specific candidate the NEXT time this same context recurs, instead
+        # of only ever reinforcing accepted matches like the other profile keys do.
+        rejected_candidate_updates: dict[str, dict] = {}
+
+        def _log_outcome(
+            signal_type: str, suggested_score: float | None, original_id, final_id, rejection_key: str | None = None
+        ) -> None:
+            if original_id is None:
+                # Nothing to compare against (e.g. analyze() found no candidate at all,
+                # status "new") - not a "wrong suggestion", so not a logged outcome.
+                return
+            accepted = original_id == final_id
+            outcome_rows.append(
+                WordImportSuggestionOutcome(
+                    tenant_id=tenant_id,
+                    template_id=payload.template_id,
+                    signal_type=signal_type,
+                    # 0.0 sentinel for signal types that don't carry a real per-decision
+                    # score yet (currently: name resolutions inside matrix/list/form
+                    # blocks, see WordImportNameResolution) - still records the far more
+                    # valuable accept/reject boolean without blocking on that gap.
+                    suggested_score=suggested_score if suggested_score is not None else 0.0,
+                    was_accepted=accepted,
+                )
+            )
+            if not accepted and rejection_key is not None:
+                entry = rejected_candidate_updates.setdefault(rejection_key, {"rejected": [], "chosen": None})
+                if original_id not in entry["rejected"]:
+                    entry["rejected"].append(original_id)
+                entry["chosen"] = final_id
 
         template = db.get(Template, payload.template_id)
         cycle_assignments: list[CycleAssignment] | None = None
@@ -2134,6 +2694,10 @@ class WordImportService:
                                 participant_id = new_participant.id
                                 created_form_participants[cache_key] = participant_id
                                 db.add(TemplateParticipant(template_id=payload.template_id, participant_id=participant_id, exclude_from_attendance=False))
+                        _log_outcome(
+                            "name_match", name.originally_suggested_score, name.originally_suggested_participant_id, participant_id,
+                            rejection_key=f"name:{_normalize(name.raw_name)}" if name.raw_name else None,
+                        )
                         resolved_names.append(name.model_copy(update={"participant_id": participant_id}))
                         if participant_id is not None:
                             form_name_updates[_normalize(name.raw_name)] = participant_id
@@ -2177,6 +2741,10 @@ class WordImportService:
                     # Also add to the template's roster so future protocols/imports for this
                     # template already list them, not just this one-off protocol.
                     db.add(TemplateParticipant(template_id=payload.template_id, participant_id=participant_id, exclude_from_attendance=False))
+                _log_outcome(
+                    "participant_match", entry.originally_suggested_score, entry.originally_suggested_participant_id, participant_id,
+                    rejection_key=f"name:{_normalize(entry.raw_name)}" if entry.raw_name else None,
+                )
                 if participant_id is None:
                     continue
                 if participant_id not in created_participants:
@@ -2187,11 +2755,21 @@ class WordImportService:
             if created_participants:
                 db.flush()
             for attendance_block in attendance_blocks:
-                entries = attendance_block.configuration_snapshot_json.get("attendance_entries", [])
-                present_ids = {entry.get("participant_id") for entry in entries}
-                for entry in entries:
-                    if entry.get("participant_id") in status_by_participant:
-                        entry["status"] = status_by_participant[entry["participant_id"]]
+                old_entries = attendance_block.configuration_snapshot_json.get("attendance_entries", [])
+                present_ids = {entry.get("participant_id") for entry in old_entries}
+                # Build entirely new dicts/list rather than mutating old_entries (and its
+                # entries) in place: those are the SAME objects SQLAlchemy's change-tracking
+                # uses as its "before" snapshot for this JSON column, since JSONB columns
+                # aren't Mutable-tracked here. Mutating them in place makes the reassigned
+                # value compare equal to that snapshot at flush time, so the ORM silently
+                # concludes nothing changed and never issues the UPDATE - status edits were
+                # accepted in the wizard but never actually reached the database.
+                new_entries = [
+                    {**entry, "status": status_by_participant[entry["participant_id"]]}
+                    if entry.get("participant_id") in status_by_participant
+                    else entry
+                    for entry in old_entries
+                ]
                 for missing_id, status in status_by_participant.items():
                     if missing_id in present_ids:
                         continue
@@ -2205,15 +2783,20 @@ class WordImportService:
                     if display_name is None:
                         existing_participant = _get_cached_participant(missing_id)
                         display_name = existing_participant.display_name if existing_participant else ""
-                    entries.append({"participant_id": missing_id, "participant_name": display_name, "status": status})
+                    new_entries.append({"participant_id": missing_id, "participant_name": display_name, "status": status})
                 attendance_block.configuration_snapshot_json = {
                     **attendance_block.configuration_snapshot_json,
-                    "attendance_entries": entries,
+                    "attendance_entries": new_entries,
                 }
 
         for event_commit in payload.events:
             if not event_commit.approved:
                 continue
+            _log_outcome(
+                "event_match", event_commit.originally_suggested_score,
+                event_commit.originally_suggested_event_id, event_commit.linked_event_id,
+                rejection_key=f"event:{event_commit.final_date.isoformat()}|{_normalize(event_commit.final_title)}",
+            )
             # tag/participant_count are only ever set for Matrix-sourced rows (see
             # WordImportEventCommit) - left out of the kwargs entirely for ordinary
             # Termine-table rows so neither is ever accidentally cleared/overwritten on
@@ -2254,6 +2837,11 @@ class WordImportService:
         for matrix_commit in payload.matrices:
             if not matrix_commit.approved:
                 continue
+            _log_outcome(
+                "matrix_column_match", matrix_commit.originally_suggested_score,
+                matrix_commit.originally_suggested_column_key, matrix_commit.column_key,
+                rejection_key=f"matrix_column:{matrix_commit.matrix_key}:{_normalize(matrix_commit.column_label)}",
+            )
             try:
                 template_element_id_str, sort_index_str = matrix_commit.matrix_key.split(":", 1)
                 block_key = (int(template_element_id_str), int(sort_index_str))
@@ -2280,6 +2868,11 @@ class WordImportService:
             block.configuration_snapshot_json = config
             db.add(block)
             for name_resolution in matrix_commit.names:
+                _log_outcome(
+                    "name_match", name_resolution.originally_suggested_score,
+                    name_resolution.originally_suggested_participant_id, name_resolution.participant_id,
+                    rejection_key=f"name:{_normalize(name_resolution.raw_name)}" if name_resolution.raw_name else None,
+                )
                 if name_resolution.participant_id is not None:
                     matrix_name_updates[_normalize(name_resolution.raw_name)] = name_resolution.participant_id
                     _widen_participant_window(name_resolution.participant_id, payload.protocol_date)
@@ -2302,7 +2895,17 @@ class WordImportService:
                     continue
                 definitions_cache[list_commit.list_definition_id] = definition
             approved_list_commits.append(list_commit)
+            _log_outcome(
+                "list_entry_match", list_commit.originally_suggested_score,
+                list_commit.originally_suggested_entry_id, list_commit.linked_entry_id,
+                rejection_key=f"list_entry:{list_commit.list_definition_id}:{_normalize(list_commit.column_one_raw)}",
+            )
             for name_resolution in list_commit.column_one_names + list_commit.column_two_names:
+                _log_outcome(
+                    "name_match", name_resolution.originally_suggested_score,
+                    name_resolution.originally_suggested_participant_id, name_resolution.participant_id,
+                    rejection_key=f"name:{_normalize(name_resolution.raw_name)}" if name_resolution.raw_name else None,
+                )
                 if name_resolution.participant_id is not None:
                     list_name_updates[_normalize(name_resolution.raw_name)] = name_resolution.participant_id
                     _widen_participant_window(name_resolution.participant_id, payload.protocol_date)
@@ -2319,22 +2922,25 @@ class WordImportService:
             # straight past _match_event_repeat_section in analyze().
             if tc.template_element_id is not None and tc.block_sort_index is not None and not tc.is_event_repeat
         }
-        table_role_updates = {
-            tc.header_signature: {
+        table_role_updates: dict[str, dict] = {}
+        for tc in payload.tables:
+            _log_outcome(
+                "table_role", tc.originally_suggested_score, tc.originally_suggested_role, tc.role,
+                rejection_key=f"table_role:{tc.header_signature}",
+            )
+            table_role_updates[tc.header_signature] = {
                 "role": tc.role,
                 "list_definition_id": tc.list_definition_id,
                 "matrix_key": tc.matrix_key,
                 "list_grouping_strategy": tc.list_grouping_strategy,
             }
-            for tc in payload.tables
-        }
         name_updates: dict[str, int] = {
             **attendance_name_updates,
             **list_name_updates,
             **form_name_updates,
             **matrix_name_updates,
         }
-        if heading_updates or table_role_updates or name_updates:
+        if heading_updates or table_role_updates or name_updates or rejected_candidate_updates:
             profile = db.execute(
                 select(WordImportProfile).where(
                     WordImportProfile.tenant_id == tenant_id, WordImportProfile.template_id == payload.template_id
@@ -2351,10 +2957,24 @@ class WordImportService:
             table_map.update(table_role_updates)
             name_map = dict(config.get("participant_name_overrides", {}))
             name_map.update(name_updates)
+            # Additive negative-feedback store (see A.4 plan / _log_outcome above) - one
+            # entry per "{signal_prefix}:{normalized_context}" key, merging newly rejected
+            # candidate ids into any list already recorded for that same context rather
+            # than overwriting it, so a context that's been wrong more than once across
+            # separate imports accumulates every distinct wrong candidate seen so far.
+            rejected_map = dict(config.get("rejected_candidates", {}))
+            for key, update in rejected_candidate_updates.items():
+                existing_entry = dict(rejected_map.get(key) or {"rejected": [], "chosen": None})
+                merged_rejected = list(existing_entry.get("rejected") or [])
+                for candidate_id in update["rejected"]:
+                    if candidate_id not in merged_rejected:
+                        merged_rejected.append(candidate_id)
+                rejected_map[key] = {"rejected": merged_rejected, "chosen": update["chosen"]}
             profile.mapping_config_json = {
                 "heading_to_target": heading_map,
                 "table_roles_by_signature": table_map,
                 "participant_name_overrides": name_map,
+                "rejected_candidates": rejected_map,
             }
 
         protocol_service.update_protocol(db, protocol_id, ProtocolUpdate(status="abgeschlossen"))
@@ -2412,6 +3032,9 @@ class WordImportService:
                     config["list_snapshot"] = list_snapshot
                     block.configuration_snapshot_json = config
                     db.add(block)
+
+        if outcome_rows:
+            db.add_all(outcome_rows)
 
         db.commit()
         return protocol_id

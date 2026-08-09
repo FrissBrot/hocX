@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections import Counter, defaultdict
 from datetime import date, datetime, timezone
 
 from sqlalchemy import select
@@ -10,9 +11,76 @@ from app.models import Template, WordImportDocument
 from app.schemas.word_import import WordImportAnalysis, WordImportCommit
 from app.services.file_service import FileService
 from app.services.protocol_service import ProtocolService
-from app.services.word_import_service import WordImportService
+from app.services.word_import_service import WordImportService, _normalize
 
 logger = logging.getLogger(__name__)
+
+# Low enough to be useful for a modest batch (e.g. one department's 5-10 monthly
+# protocols uploaded together), high enough that a single anomalous document's own
+# idiosyncratic (mis-)match can't skew every other document in the batch.
+_BATCH_CONSENSUS_MIN_DOCS = 3
+
+
+def _header_signature(header_cells: list[str]) -> str:
+    return _normalize(" | ".join(header_cells))
+
+
+def _build_batch_consensus_hint(analyses: list[WordImportAnalysis]) -> dict:
+    """Pure, DB-free: scans this batch's own already-computed analyses (NOT persisted
+    WordImportProfile data, and never the opaque review_draft_json) for names/table-
+    roles that were confidently resolved the same way in at least
+    _BATCH_CONSENSUS_MIN_DOCS of them, and returns them in the same shape
+    WordImportProfile.mapping_config_json uses - see
+    WordImportService.analyze's `in_memory_profile_hints` parameter, which merges this
+    on top of (never persists it into) the real profile for one re-analysis call.
+    "Confidently resolved" reuses signals analyze() itself already exposes rather than
+    re-scoring anything: an attendance row's suggested_participant_id being set at all
+    (already gated on _PARTICIPANT_MATCH_THRESHOLD/the adaptive equivalent), and a
+    table's role_is_explicit flag (came from an override/learned profile match, not a
+    heuristic guess)."""
+    name_votes: dict[str, Counter] = defaultdict(Counter)
+    table_role_votes: dict[str, Counter] = defaultdict(Counter)
+    for analysis in analyses:
+        for mapping in analysis.attendance_mappings:
+            if mapping.suggested_participant_id is not None and mapping.raw_name:
+                name_votes[_normalize(mapping.raw_name)][mapping.suggested_participant_id] += 1
+        for table in analysis.tables:
+            if table.role_is_explicit:
+                signature = _header_signature(table.header_cells)
+                table_role_votes[signature][(table.role, table.list_definition_id, table.matrix_key)] += 1
+
+    name_hints = {
+        key: votes.most_common(1)[0][0] for key, votes in name_votes.items() if votes.most_common(1)[0][1] >= _BATCH_CONSENSUS_MIN_DOCS
+    }
+    table_role_hints: dict[str, dict] = {}
+    for key, votes in table_role_votes.items():
+        winner, count = votes.most_common(1)[0]
+        if count >= _BATCH_CONSENSUS_MIN_DOCS:
+            role, list_definition_id, matrix_key = winner
+            table_role_hints[key] = {"role": role, "list_definition_id": list_definition_id, "matrix_key": matrix_key}
+
+    if not name_hints and not table_role_hints:
+        return {}
+    return {"participant_name_overrides": name_hints, "table_roles_by_signature": table_role_hints}
+
+
+def _needs_consensus_rerun(analysis: WordImportAnalysis, hint: dict) -> bool:
+    """True when this document itself failed to confidently resolve at least one name
+    or table role that the batch's consensus DOES have an answer for - a document that
+    already resolved everything on its own is never re-analyzed, so the batch consensus
+    can only ever fill gaps, never override an individual document's own confident
+    (possibly document-specific and correctly different) resolution."""
+    unresolved_names = {
+        _normalize(mapping.raw_name)
+        for mapping in analysis.attendance_mappings
+        if mapping.suggested_participant_id is None and mapping.raw_name
+    }
+    if unresolved_names & hint.get("participant_name_overrides", {}).keys():
+        return True
+    unresolved_signatures = {_header_signature(table.header_cells) for table in analysis.tables if not table.role_is_explicit}
+    if unresolved_signatures & hint.get("table_roles_by_signature", {}).keys():
+        return True
+    return False
 
 
 class WordImportQueueService:
@@ -42,6 +110,7 @@ class WordImportQueueService:
             raise ValueError("Vorlage nicht gefunden")
 
         documents: list[WordImportDocument] = []
+        analyses: list[WordImportAnalysis] = []
         errors: list[str] = []
         for filename, content in files:
             try:
@@ -76,11 +145,56 @@ class WordImportQueueService:
                 db.commit()
                 db.refresh(document)
                 documents.append(document)
+                analyses.append(analysis)
             except Exception as exc:
                 db.rollback()
                 detail = getattr(exc, "detail", None) or "Datei konnte nicht gelesen werden"
                 errors.append(f"{filename}: {detail}")
+
+        # Batch-consensus pass (see C.11 plan / _build_batch_consensus_hint) - a single,
+        # fixed second pass over documents that failed to confidently resolve something
+        # the rest of THIS batch agrees on, never fed back into itself for a third pass
+        # (no while-loop here by design, not an oversight - a batch consensus converging
+        # over multiple rounds is not a goal, and would risk instability).
+        if len(documents) > 1:
+            hint = _build_batch_consensus_hint(analyses)
+            if hint:
+                for document, analysis in zip(documents, analyses):
+                    if not _needs_consensus_rerun(analysis, hint):
+                        continue
+                    try:
+                        self._apply_batch_consensus(db, document=document, hint=hint)
+                    except Exception:
+                        db.rollback()
+                        logger.exception(
+                            "Batch-Konsens-Aktualisierung fehlgeschlagen für word_import_document id=%s", document.id
+                        )
         return documents, errors
+
+    def _apply_batch_consensus(self, db: Session, *, document: WordImportDocument, hint: dict) -> None:
+        stored_file = self.file_service.get_stored_file(db, document.stored_file_id)
+        if stored_file is None:
+            return
+        raw_bytes = self.file_service.read_stored_file_bytes(stored_file)
+        refreshed = self.word_import_service.analyze(
+            db,
+            tenant_id=document.tenant_id,
+            template_id=document.template_id,
+            protocol_date_hint=document.protocol_date,
+            raw_bytes=raw_bytes,
+            in_memory_profile_hints=hint,
+        )
+        document.protocol_date = refreshed.protocol_date
+        document.analysis_snapshot_json = refreshed.model_dump(mode="json")
+        document.display_name = self._compute_display_name(
+            db,
+            tenant_id=document.tenant_id,
+            template_id=document.template_id,
+            protocol_date=refreshed.protocol_date,
+            fallback=document.original_filename,
+        )
+        db.add(document)
+        db.commit()
 
     def list_documents(
         self, db: Session, *, tenant_id: int, status: str | None = None

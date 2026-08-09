@@ -8,6 +8,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
+import { useConfirm } from "@/contexts/confirm-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { formatDate, formatDateTime } from "@/lib/utils/format";
 import { AttendanceFineListItem, FinanceAccount } from "@/types/api";
@@ -29,6 +30,7 @@ type Props = {
 
 export function FinesView({ initialFines, accounts, isAdmin }: Props) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [fines, setFines] = useState<AttendanceFineListItem[]>(initialFines);
   const [statusFilter, setStatusFilter] = useState<"pending" | "collected" | "all">("pending");
   const [search, setSearch] = useState("");
@@ -108,7 +110,7 @@ export function FinesView({ initialFines, accounts, isAdmin }: Props) {
   }
 
   async function deleteFine(fine: AttendanceFineListItem) {
-    if (!confirm(`Busse von ${fine.participant_name_snapshot} löschen?`)) return;
+    if (!(await confirm({ message: `Busse von ${fine.participant_name_snapshot} löschen?`, tone: "danger", confirmLabel: "Löschen" }))) return;
     await browserApiFetch(`/api/fines/${fine.id}`, { method: "DELETE" });
     setFines((prev) => prev.filter((f) => f.id !== fine.id));
   }

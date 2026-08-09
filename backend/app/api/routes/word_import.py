@@ -18,14 +18,18 @@ from app.schemas.word_import import (
     WordImportDocumentUploadResult,
     WordImportDraftSave,
     WordImportDuplicateCandidate,
+    WordImportQualityBucket,
+    WordImportQualityStats,
 )
 from app.services.file_service import MAX_UPLOAD_BYTES, MAX_ZIP_TOTAL_BYTES, extract_word_import_files_from_zip
+from app.services.word_import_quality_service import WordImportQualityService
 from app.services.word_import_queue_service import WordImportQueueService
 from app.services.word_import_service import WordImportService
 
 router = APIRouter()
 service = WordImportService()
 queue_service = WordImportQueueService()
+quality_service = WordImportQualityService()
 
 # Ganzer Batch (Summe aller akzeptierten Dateien eines Upload-Requests, ausserhalb von
 # ZIPs - deren eigener Grenzwert ist MAX_ZIP_TOTAL_BYTES): grösszügiger als eine einzelne
@@ -309,3 +313,14 @@ def delete_word_import_document(
     if not deleted:
         raise HTTPException(status_code=404, detail="Dokument nicht gefunden")
     return {"message": "Dokument entfernt"}
+
+
+@router.get("/tools/word-import/quality-stats", response_model=WordImportQualityStats)
+def get_word_import_quality_stats(
+    template_id: int | None = None,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_writer(user)
+    buckets = quality_service.accept_rate_stats(db, tenant_id=user.current_tenant_id, template_id=template_id)
+    return WordImportQualityStats(buckets=[WordImportQualityBucket(**bucket) for bucket in buckets])

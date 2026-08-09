@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useConfirm } from "@/contexts/confirm-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { CycleConfigSummary } from "@/types/api";
 import { formatCycleName } from "@/lib/utils/cycle";
@@ -133,6 +134,7 @@ function CycleForm({
 }
 
 export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleConfigSummary[] }) {
+  const confirm = useConfirm();
   const [configs, setConfigs] = useState(initialConfigs);
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState<CycleConfigForm>(emptyForm);
@@ -212,9 +214,11 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
 
   async function handleDelete(id: number) {
     if (
-      !confirm(
-        "Zyklus-Konfiguration löschen? Nur möglich solange kein Template zugeordnet ist."
-      )
+      !(await confirm({
+        message: "Zyklus-Konfiguration löschen? Nur möglich solange kein Template zugeordnet ist.",
+        tone: "danger",
+        confirmLabel: "Löschen"
+      }))
     )
       return;
     setDeleteError(null);

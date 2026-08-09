@@ -10,6 +10,7 @@ from sqlalchemy import (
     Computed,
     Date,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -263,6 +264,26 @@ class WordImportProfile(Base, TimestampMixin, UpdatedAtMixin):
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     template_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("template.id", ondelete="SET NULL"))
     mapping_config_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
+
+
+class WordImportSuggestionOutcome(Base, TimestampMixin):
+    """Append-only log of one row per resolved matching decision at
+    WordImportService.commit() time (event/participant/table-role/list-entry/matrix-
+    column match) - never mutated after insert. Used to compute per-tenant accept-rate
+    quality stats (see WordImportQualityService) and, from that data, adaptive
+    per-tenant score thresholds (see word_import_thresholds.adaptive_threshold)."""
+
+    __tablename__ = "word_import_suggestion_outcome"
+    __table_args__ = (
+        Index("idx_word_import_suggestion_outcome_lookup", "tenant_id", "template_id", "signal_type"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    template_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("template.id", ondelete="SET NULL"))
+    signal_type: Mapped[str] = mapped_column(Text, nullable=False)
+    suggested_score: Mapped[float] = mapped_column(Float, nullable=False)
+    was_accepted: Mapped[bool] = mapped_column(Boolean, nullable=False)
 
 
 class WordImportDocument(Base, TimestampMixin):
