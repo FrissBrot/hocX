@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 
 import { browserApiFetch } from "@/lib/api/client";
 import { ToastProvider } from "@/contexts/toast-context";
+import { ConfirmProvider } from "@/contexts/confirm-context";
 import { AdminSessionInfo } from "@/types/api";
 
 const navLinks = [
@@ -29,6 +30,7 @@ export function AdminShell({ children, session }: { children: ReactNode; session
 
   return (
     <ToastProvider>
+    <ConfirmProvider>
     <main className="app-frame">
       <div className="shell">
         <aside className="sidebar">
@@ -82,6 +84,7 @@ export function AdminShell({ children, session }: { children: ReactNode; session
         </div>
       </div>
     </main>
+    </ConfirmProvider>
     </ToastProvider>
   );
 }

@@ -25,12 +25,27 @@ export type TablePreview = {
   // data (see word_import.py TablePreview docstring) - the wizard's manual picker
   // must only ever offer entries from this list.
   available_grouping_strategies: ListGroupingStrategy[];
+  // True when `role` came from an explicit source (manual override or a learned
+  // profile signature match) rather than a heuristic guess - used by the import
+  // queue's batch consensus to decide which tables are confident enough to vote on.
+  role_is_explicit: boolean;
 };
 
 export type WordImportNameResolution = {
   raw_name: string;
   participant_id: number | null;
   create_new: boolean;
+  // What analyze() originally suggested for this name - set once when the resolution
+  // is first built, never touched again by our own edit handlers (they only spread-
+  // update participant_id), so the backend can tell "still the algorithm's own
+  // suggestion" apart from "human picked something else" at commit time.
+  originally_suggested_participant_id: number | null;
+  originally_suggested_score: number | null;
+  // Ranked near-miss alternatives (best first), populated even when nothing cleared
+  // the auto-link threshold - see WordImportAttendanceCandidate, reused here so the
+  // wizard's recurring-name clarifier can suggest a participant for a name that
+  // recurs across many rows without ever having auto-resolved anywhere.
+  candidates: WordImportAttendanceCandidate[];
 };
 
 export type WordImportFormRow = {
@@ -74,11 +89,17 @@ export type WordImportTextTarget = {
   form_rows: WordImportFormRow[];
 };
 
+export type WordImportAttendanceCandidate = {
+  participant_id: number;
+  score: number;
+  reason: string;
+};
+
 export type WordImportAttendanceMapping = {
   raw_name: string;
   status: string;
   suggested_participant_id: number | null;
-  candidates: number[];
+  candidates: WordImportAttendanceCandidate[];
 };
 
 export type WordImportEventCandidate = {
@@ -86,6 +107,7 @@ export type WordImportEventCandidate = {
   title: string;
   event_date: string;
   score: number;
+  reason: string;
 };
 
 export type WordImportEventMapping = {
@@ -124,6 +146,7 @@ export type WordImportListEntryCandidate = {
   column_one_display: string;
   column_two_display: string;
   score: number;
+  reason: string;
 };
 
 export type WordImportListRowMapping = {
@@ -154,6 +177,7 @@ export type WordImportMatrixColumnCandidate = {
   column_key: string;
   label: string;
   score: number;
+  reason: string;
 };
 
 export type WordImportMatrixCellMapping = {
@@ -209,7 +233,15 @@ export type WordImportCommitPayload = {
     is_form_block: boolean;
     form_fields: WordImportFormFieldValue[];
   }[];
-  attendance: { raw_name: string; participant_id: number | null; participant_name: string; status: string; create_new: boolean }[];
+  attendance: {
+    raw_name: string;
+    participant_id: number | null;
+    participant_name: string;
+    status: string;
+    create_new: boolean;
+    originally_suggested_participant_id: number | null;
+    originally_suggested_score: number | null;
+  }[];
   events: {
     approved: boolean;
     linked_event_id: number | null;
@@ -217,6 +249,8 @@ export type WordImportCommitPayload = {
     final_date: string;
     tag: string | null;
     participant_count: number | null;
+    originally_suggested_event_id: number | null;
+    originally_suggested_score: number | null;
   }[];
   lists: {
     table_index: number;
@@ -227,6 +261,8 @@ export type WordImportCommitPayload = {
     column_two_names: WordImportNameResolution[];
     approved: boolean;
     linked_entry_id: number | null;
+    originally_suggested_entry_id: number | null;
+    originally_suggested_score: number | null;
   }[];
   matrices: {
     matrix_key: string;
@@ -237,6 +273,8 @@ export type WordImportCommitPayload = {
     raw_value: string;
     names: WordImportNameResolution[];
     approved: boolean;
+    originally_suggested_column_key: string | null;
+    originally_suggested_score: number | null;
   }[];
   tables: {
     header_signature: string;
@@ -244,6 +282,8 @@ export type WordImportCommitPayload = {
     list_definition_id: number | null;
     matrix_key: string | null;
     list_grouping_strategy: ListGroupingStrategy | null;
+    originally_suggested_role: TableRole | null;
+    originally_suggested_score: number | null;
   }[];
 };
 

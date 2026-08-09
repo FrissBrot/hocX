@@ -20,6 +20,7 @@ import {
   TableRole,
   TableRoleOverride,
   WordImportAnalysis,
+  WordImportAttendanceCandidate,
   WordImportEventCandidate,
   WordImportFormFieldValue,
   WordImportListEntryCandidate,
@@ -30,10 +31,11 @@ import {
 } from "@/lib/api/word-import";
 import { ParticipantSummary, TemplateSummary } from "@/types/api";
 
-type Step = "upload" | "review" | "done";
+type Step = "upload" | "structure" | "review" | "done";
 
 const STEPS: { key: Step; label: string }[] = [
   { key: "upload", label: "Datei wählen" },
+  { key: "structure", label: "Namen & Tabellen zuweisen" },
   { key: "review", label: "Prüfen & bestätigen" },
   { key: "done", label: "Fertig" },
 ];
@@ -85,7 +87,7 @@ const ATTENDANCE_PILL_OPTIONS = ATTENDANCE_OPTIONS.map((option) => ({
   variant: statusPillVariant(option.value),
 }));
 
-type Category = "tables" | "attendance" | "events" | "lists" | "matrices" | "texts";
+type Category = "tables" | "names" | "attendance" | "events" | "lists" | "matrices" | "texts";
 
 function UploadIcon() {
   return (
@@ -235,14 +237,34 @@ function MatrixIcon() {
   );
 }
 
+function NamesIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" width="16" height="16">
+      <circle cx="9" cy="9" r="3.2" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M4 19c0-3 2.2-5 5-5s5 2 5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="17.5" cy="16.5" r="2.8" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M19.5 18.6 21.5 20.6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 const CATEGORIES: { key: Category; label: string; Icon: typeof TableIcon }[] = [
   { key: "tables", label: "Tabellen", Icon: TableIcon },
+  { key: "names", label: "Namen klären", Icon: NamesIcon },
   { key: "attendance", label: "Anwesenheit", Icon: PeopleIcon },
   { key: "events", label: "Termine", Icon: CalendarIcon },
   { key: "lists", label: "Listen", Icon: ListIcon },
   { key: "matrices", label: "Matrizen", Icon: MatrixIcon },
   { key: "texts", label: "Texte", Icon: AlignIcon },
 ];
+
+// Categories shown in the wizard's own top-level "Namen & Tabellen zuweisen" step (see
+// Step/STEPS): table roles + recurring names, both of which change how the "Prüfen &
+// bestätigen" step even reads a row - e.g. a resolved name can flip a list/matrix row's
+// own approval, so anything that reaches full confidence as a consequence shows up in
+// the review step pre-approved instead of demanding a redundant manual confirm.
+const STRUCTURE_CATEGORIES: Category[] = ["tables", "names"];
+const DATA_CATEGORIES: Category[] = ["attendance", "events", "lists", "matrices", "texts"];
 
 function roleBadgeVariant(role: TableRole): BadgeVariant {
   switch (role) {
@@ -306,6 +328,15 @@ type TextDraft = {
   isEventRepeat: boolean;
   eventCandidates: WordImportEventCandidate[];
   linkedEventId: number | null;
+  // Records that the user explicitly chose "nicht verknüpfen" - without it, that choice
+  // is indistinguishable from "not yet decided" (both leave linkedEventId null), so the
+  // row would stay flagged as needing review forever. Mirrors AttendanceDraft.linkedNone.
+  linkedEventNone: boolean;
+  // Explicit "Ignorieren" for a text section that couldn't be matched to any template
+  // block at all (template_element_id stays null) - without it there was no way to
+  // confirm "yes, this one really has nowhere to go" and the row stayed flagged forever.
+  // See ListDraft.dismissed for the same idea elsewhere in this wizard.
+  dismissed: boolean;
   isFormBlock: boolean;
   formFields: WordImportFormFieldValue[];
   formFieldsByTarget: Record<string, WordImportFormFieldValue[]>;
@@ -313,7 +344,21 @@ type TextDraft = {
 // `linkedNone` records that the user explicitly chose "Keinen verknüpfen" - without it,
 // that choice is indistinguishable from "not yet decided" (both leave participant_id null),
 // so the row would stay flagged as needing review forever.
-type AttendanceDraft = { raw_name: string; status: string; participant_id: number | null; createNew: boolean; linkedNone: boolean };
+type AttendanceDraft = {
+  raw_name: string;
+  status: string;
+  participant_id: number | null;
+  createNew: boolean;
+  linkedNone: boolean;
+  // What analyze() originally suggested for this row - set once when a fresh analysis
+  // is applied, never touched by edit handlers afterward. Lets the backend learn from
+  // rows where the human picked someone other than the top auto-suggestion.
+  originallySuggestedParticipantId: number | null;
+  originallySuggestedScore: number | null;
+  // Ranked near-miss alternatives from analyze(), carried along purely for the
+  // recurring-name clarifier (see RecurringNameGroup) - never sent back to the server.
+  candidates: WordImportAttendanceCandidate[];
+};
 // Sentinel id for the "create as new participant" option in the attendance assignee menu -
 // distinct from `null` (which means "don't link this row to anyone").
 const CREATE_NEW_PARTICIPANT_ID = -1;
@@ -337,6 +382,10 @@ type EventDraft = {
   row_label: string | null;
   column_key: string | null;
   column_label: string | null;
+  // See AttendanceDraft.originallySuggestedParticipantId - same purpose, for the
+  // top-ranked event candidate this row started with.
+  originallySuggestedEventId: number | null;
+  originallySuggestedScore: number | null;
 };
 type ListDraft = {
   table_index: number;
@@ -353,10 +402,18 @@ type ListDraft = {
   column_two_source: FieldSource;
   has_snapshot_target: boolean;
   approved: boolean;
+  // Explicit "Ignorieren" decision on a row that couldn't be auto-resolved (see
+  // listStillOpen) - distinct from a row that's simply unapproved-by-default (new entry,
+  // nothing missing). Drives the third "Unvollständig" pill state below.
+  dismissed: boolean;
   // True when column_one_raw/column_two_raw's grouping value was inferred (fill-down/
   // exploded repeat) rather than literally present in this document row - see
   // WordImportListRowMapping.group_filled. Flags this row for a closer look.
   group_filled: boolean;
+  // See AttendanceDraft.originallySuggestedParticipantId - same purpose, for the
+  // matched_entry_id this row started with.
+  originallySuggestedEntryId: number | null;
+  originallySuggestedScore: number | null;
 };
 
 type MatrixDraft = {
@@ -372,6 +429,12 @@ type MatrixDraft = {
   raw_value: string;
   names: WordImportNameResolution[];
   approved: boolean;
+  // See ListDraft.dismissed - same purpose.
+  dismissed: boolean;
+  // See AttendanceDraft.originallySuggestedParticipantId - same purpose, for the
+  // matched column_key this cell started with.
+  originallySuggestedColumnKey: string | null;
+  originallySuggestedScore: number | null;
 };
 
 const NAME_COLUMN_TYPES = new Set(["participant", "participants"]);
@@ -388,6 +451,11 @@ type WordImportReviewDraft = {
   events: EventDraft[];
   lists: ListDraft[];
   matrices: MatrixDraft[];
+  // Which of the wizard's own steps the reviewer was on - so reloading mid-review (e.g.
+  // an accidental refresh) lands back on "Prüfen & bestätigen" instead of making them
+  // click through "Namen & Tabellen zuweisen" again. Only "structure"/"review" are ever
+  // written here (see the autosave effect); anything else falls back to "structure" below.
+  step: Step;
 };
 
 // Best-effort parse of the opaque JSON blob loaded from the server - only shape-checked
@@ -397,7 +465,7 @@ type WordImportReviewDraft = {
 // derived state without special-casing.
 function parseReviewDraft(raw: WordImportReviewDraftJson | null | undefined): WordImportReviewDraft | null {
   if (!raw || typeof raw !== "object") return null;
-  const { protocolDate, texts, attendance, events, lists, matrices } = raw as Record<string, unknown>;
+  const { protocolDate, texts, attendance, events, lists, matrices, step } = raw as Record<string, unknown>;
   if (
     typeof protocolDate !== "string" ||
     !Array.isArray(texts) ||
@@ -415,6 +483,7 @@ function parseReviewDraft(raw: WordImportReviewDraftJson | null | undefined): Wo
     events: events as EventDraft[],
     lists: lists as ListDraft[],
     matrices: matrices as MatrixDraft[],
+    step: step === "review" ? "review" : "structure",
   };
 }
 
@@ -459,9 +528,12 @@ function listStillOpen(entry: ListDraft): boolean {
 
 // Mirrors eventNeedsReview: once the reviewer has explicitly taken a stance via the
 // Übernehmen/Ignorieren pill, that IS the decision and the row leaves the sidebar's
-// open count for good, independent of whatever raw diff remains underneath it.
+// open count for good, independent of whatever raw diff remains underneath it. A row
+// that's blocked (listStillOpen) but not yet explicitly dismissed keeps counting as
+// open - see decisionState below, it shows as "Unvollständig" rather than "Ignorieren"
+// so a default that just hasn't been looked at yet doesn't read as an active decision.
 function listNeedsReview(entry: ListDraft): boolean {
-  if (entry.approved) return false;
+  if (entry.approved || entry.dismissed) return false;
   return listStillOpen(entry);
 }
 
@@ -477,10 +549,39 @@ function matrixStillOpen(entry: MatrixDraft): boolean {
   return false;
 }
 
-// Same approved short-circuit as listNeedsReview/eventNeedsReview.
+// Same approved/dismissed short-circuit as listNeedsReview.
 function matrixNeedsReview(entry: MatrixDraft): boolean {
-  if (entry.approved) return false;
+  if (entry.approved || entry.dismissed) return false;
   return matrixStillOpen(entry);
+}
+
+// Third pill state alongside "take"/"ignore": a row that's blocked because something
+// required (a matched name, a template column/list block) couldn't be resolved
+// automatically starts here instead of defaulting straight to "Ignorieren" - it still
+// counts as open in the sidebar (see listNeedsReview/matrixNeedsReview) until the
+// reviewer either fixes the missing link (auto-promotes to "take", see updateListName/
+// updateMatrixName/resolveMatrixColumn) or explicitly clicks it away to "Ignorieren".
+type RowDecision = "take" | "incomplete" | "ignore";
+
+function decisionState(approved: boolean, stillOpenForReview: boolean): RowDecision {
+  if (approved) return "take";
+  if (stillOpenForReview) return "incomplete";
+  return "ignore";
+}
+
+const DECISION_LABEL: Record<RowDecision, string> = {
+  take: "Übernehmen",
+  incomplete: "Unvollständig",
+  ignore: "Ignorieren",
+};
+
+// Clicking the pill always moves it towards a settled state: "Übernehmen" and
+// "Unvollständig" both collapse to an explicit "Ignorieren" (that's the one decision a
+// reviewer can make about a row they don't want to fix right now), and "Ignorieren"
+// flips back to "Übernehmen".
+function nextDecisionPatch(decision: RowDecision): { approved: boolean; dismissed: boolean } {
+  if (decision === "ignore") return { approved: true, dismissed: false };
+  return { approved: false, dismissed: true };
 }
 
 // Groups the flat matrices/events state back into a card-per-column layout mirroring
@@ -563,11 +664,106 @@ function buildMatrixCardGroups(
 }
 
 function textNeedsReview(text: TextDraft): boolean {
-  return text.template_element_id === null || (text.isEventRepeat && text.linkedEventId === null);
+  if (text.dismissed) return false;
+  return text.template_element_id === null || (text.isEventRepeat && text.linkedEventId === null && !text.linkedEventNone);
 }
 
 function attendanceNeedsReview(entry: AttendanceDraft): boolean {
   return entry.participant_id === null && !entry.createNew && !entry.linkedNone;
+}
+
+// Minimum recurring threshold: a name mentioned only once gets resolved through its
+// own row's normal picker just as fast as through the clarifier below, so only names
+// that actually save repeated work are surfaced there.
+const RECURRING_NAME_MIN_COUNT = 2;
+
+function normalizeRawName(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/ä/g, "a")
+    .replace(/ö/g, "o")
+    .replace(/ü/g, "u")
+    .replace(/ß/g, "ss")
+    .replace(/\s+/g, " ");
+}
+
+type RecurringNameCounts = { attendance: number; text: number; list: number; matrix: number };
+
+type RecurringNameGroup = {
+  key: string;
+  label: string;
+  total: number;
+  counts: RecurringNameCounts;
+  // Best score seen for each candidate participant across every occurrence of this
+  // name in the document, merged/deduped and capped to the top few - lets one click
+  // resolve every occurrence at once instead of re-searching per row.
+  candidates: WordImportAttendanceCandidate[];
+};
+
+// Scans every still-unresolved name across all four review categories and groups them
+// by normalized raw text, so a name that recurs many times (e.g. a nickname the
+// algorithm can't confidently place) surfaces once instead of needing the same manual
+// pick repeated 10 times across the document - see applyRecurringNameEverywhere below
+// for the matching bulk-apply half.
+function buildRecurringNameGroups(
+  attendance: AttendanceDraft[],
+  texts: TextDraft[],
+  lists: ListDraft[],
+  matrices: MatrixDraft[]
+): RecurringNameGroup[] {
+  const groups = new Map<
+    string,
+    { label: string; counts: RecurringNameCounts; candidateScores: Map<number, WordImportAttendanceCandidate> }
+  >();
+
+  function touch(rawName: string, kind: keyof RecurringNameCounts, candidates: WordImportAttendanceCandidate[]) {
+    const trimmed = rawName.trim();
+    const key = normalizeRawName(trimmed);
+    if (!key) return;
+    let group = groups.get(key);
+    if (!group) {
+      group = { label: trimmed, counts: { attendance: 0, text: 0, list: 0, matrix: 0 }, candidateScores: new Map() };
+      groups.set(key, group);
+    }
+    group.counts[kind] += 1;
+    for (const candidate of candidates) {
+      const existing = group.candidateScores.get(candidate.participant_id);
+      if (!existing || candidate.score > existing.score) group.candidateScores.set(candidate.participant_id, candidate);
+    }
+  }
+
+  attendance.forEach((row) => {
+    if (attendanceNeedsReview(row)) touch(row.raw_name, "attendance", row.candidates);
+  });
+  texts.forEach((text) => {
+    text.formFields.forEach((field) => {
+      field.names.forEach((name) => {
+        if (name.participant_id === null && !name.create_new) touch(name.raw_name, "text", name.candidates);
+      });
+    });
+  });
+  lists.forEach((row) => {
+    [...row.column_one_names, ...row.column_two_names].forEach((name) => {
+      if (name.participant_id === null) touch(name.raw_name, "list", name.candidates);
+    });
+  });
+  matrices.forEach((row) => {
+    row.names.forEach((name) => {
+      if (name.participant_id === null) touch(name.raw_name, "matrix", name.candidates);
+    });
+  });
+
+  return Array.from(groups.entries())
+    .map(([key, group]) => {
+      const total = group.counts.attendance + group.counts.text + group.counts.list + group.counts.matrix;
+      const candidates = Array.from(group.candidateScores.values())
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 3);
+      return { key, label: group.label, total, counts: group.counts, candidates };
+    })
+    .filter((group) => group.total >= RECURRING_NAME_MIN_COUNT)
+    .sort((a, b) => b.total - a.total || a.label.localeCompare(b.label));
 }
 
 function textSummaryLabel(text: TextDraft, target: WordImportTextTarget | undefined, linkedEvent: WordImportEventCandidate | undefined): string {
@@ -593,7 +789,7 @@ export function WordImportWizard({
   documentId?: number;
   onExitQueueMode?: () => void;
 }) {
-  const [step, setStep] = useState<Step>(documentId ? "review" : "upload");
+  const [step, setStep] = useState<Step>(documentId ? "structure" : "upload");
   const [templateId, setTemplateId] = useState<number | null>(templates[0]?.id ?? null);
   const [file, setFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -654,13 +850,17 @@ export function WordImportWizard({
       isHydratingRef.current = false;
       return;
     }
-    pendingDraftRef.current = { protocolDate, texts, attendance, events, lists, matrices };
+    // Only "structure"/"review" are meaningful to resume into (see WordImportReviewDraft.step)
+    // - "upload" can't happen once documentId is set, and "done" means already committed, at
+    // which point the backend refuses to save a draft anyway (see save_draft's status guard).
+    if (step !== "structure" && step !== "review") return;
+    pendingDraftRef.current = { protocolDate, texts, attendance, events, lists, matrices, step };
     draftTimeoutRef.current = setTimeout(flushDraftSave, 800);
     return () => {
       if (draftTimeoutRef.current) clearTimeout(draftTimeoutRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [documentId, protocolDate, texts, attendance, events, lists, matrices]);
+  }, [documentId, protocolDate, texts, attendance, events, lists, matrices, step]);
 
   // Flushes on unmount specifically (empty deps => cleanup runs only when the wizard goes
   // away entirely - the queue view unmounts it both on "Zurück zur Warteschlange" and on
@@ -694,8 +894,9 @@ export function WordImportWizard({
       .then((detail) => {
         setTemplateId(detail.template_id);
         setFileName(detail.original_filename);
-        applyAnalysis(detail.analysis, parseReviewDraft(detail.review_draft));
-        setStep("review");
+        const draft = parseReviewDraft(detail.review_draft);
+        applyAnalysis(detail.analysis, draft);
+        setStep(draft?.step ?? "structure");
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Dokument konnte nicht geladen werden"))
       .finally(() => setBusy(false));
@@ -1004,7 +1205,8 @@ export function WordImportWizard({
     const col2IsNames = NAME_COLUMN_TYPES.has(entry.column_two_type);
     const flagged = listNeedsReview(entry);
     const isOpen = flagged || expandedLists.has(index);
-    const isIgnored = !entry.approved && !flagged;
+    const decision = decisionState(entry.approved, flagged);
+    const isIgnored = decision === "ignore";
     const titleLabel = col1IsNames
       ? entry.column_one_names.map((name) => name.raw_name).join(", ") || entry.column_one_raw
       : entry.column_one_raw;
@@ -1036,13 +1238,14 @@ export function WordImportWizard({
               ))}
             <button
               type="button"
-              className={`word-import-decision-btn ${entry.approved ? "is-take" : "is-ignore"}`}
+              className={`word-import-decision-btn is-${decision}`}
               onClick={(clickEvent) => {
                 clickEvent.stopPropagation();
-                setLists((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, approved: !row.approved } : row)));
+                const patch = nextDecisionPatch(decision);
+                setLists((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
               }}
             >
-              <CheckIcon /> {entry.approved ? "Übernehmen" : "Ignorieren"}
+              <CheckIcon /> {DECISION_LABEL[decision]}
             </button>
           </div>
         </div>
@@ -1204,6 +1407,8 @@ export function WordImportWizard({
       isEventRepeat: mapping.is_event_repeat,
       eventCandidates: mapping.event_candidates,
       linkedEventId: mapping.matched_event_id,
+      linkedEventNone: false,
+      dismissed: false,
       isFormBlock: mapping.is_form_block,
       formFields: mapping.form_fields,
       formFieldsByTarget: mapping.form_fields_by_target,
@@ -1214,6 +1419,10 @@ export function WordImportWizard({
       participant_id: mapping.suggested_participant_id,
       createNew: false,
       linkedNone: false,
+      originallySuggestedParticipantId: mapping.suggested_participant_id,
+      originallySuggestedScore:
+        mapping.candidates.find((c) => c.participant_id === mapping.suggested_participant_id)?.score ?? null,
+      candidates: mapping.candidates,
     }));
     const freshEvents: EventDraft[] = result.event_mappings.map((mapping) => ({
       row_index: mapping.row_index,
@@ -1233,6 +1442,8 @@ export function WordImportWizard({
       row_label: mapping.row_label,
       column_key: mapping.column_key,
       column_label: mapping.column_label,
+      originallySuggestedEventId: mapping.status !== "new" ? mapping.matched_event_id : null,
+      originallySuggestedScore: mapping.candidates.find((c) => c.event_id === mapping.matched_event_id)?.score ?? null,
     }));
     const freshLists: ListDraft[] = result.list_mappings.map((mapping) => ({
       table_index: mapping.table_index,
@@ -1249,7 +1460,10 @@ export function WordImportWizard({
       column_two_source: "existing",
       has_snapshot_target: mapping.has_snapshot_target,
       approved: mapping.status === "matched" && mapping.has_snapshot_target,
+      dismissed: false,
       group_filled: mapping.group_filled,
+      originallySuggestedEntryId: mapping.status !== "new" ? mapping.matched_entry_id : null,
+      originallySuggestedScore: mapping.candidates.find((c) => c.entry_id === mapping.matched_entry_id)?.score ?? null,
     }));
     const freshMatrices: MatrixDraft[] = result.matrix_mappings.map((mapping) => ({
       table_index: mapping.table_index,
@@ -1266,17 +1480,27 @@ export function WordImportWizard({
       approved:
         mapping.column_key !== null &&
         !(NAME_COLUMN_TYPES.has(mapping.row_type) && mapping.names.some((name) => name.participant_id === null)),
+      dismissed: false,
+      originallySuggestedColumnKey: mapping.column_key,
+      originallySuggestedScore: mapping.column_candidates.find((c) => c.column_key === mapping.column_key)?.score ?? null,
     }));
-    // A saved draft is only applied per-category when its row count still matches the
-    // freshly derived one - a mismatch means the underlying document was reanalyzed since
-    // the draft was saved (new/removed rows), so the draft's indices no longer line up and
-    // falling back to the fresh suggestions is safer than silently misapplying old edits.
-    const eventsToUse = draft && draft.events.length === freshEvents.length ? draft.events : freshEvents;
-    setTexts(draft && draft.texts.length === freshTexts.length ? draft.texts : freshTexts);
-    setAttendance(draft && draft.attendance.length === freshAttendance.length ? draft.attendance : freshAttendance);
+    // A saved draft is always tied 1:1 to this exact analysis_snapshot_json (reanalyzing a
+    // document explicitly wipes review_draft_json server-side - see
+    // WordImportQueueService._reanalyze_document - specifically so a stale draft can never
+    // reach here), so it's safe to apply it wholesale whenever present. This used to be
+    // gated on the draft's row count still matching the freshly derived one, meant to catch
+    // exactly that "reanalyzed since saved" case - but the backend already rules that out,
+    // and the length check actively broke legitimate edits that change a category's row
+    // count on their own (e.g. linking an attendance row to a participant who was also
+    // present as an unlinked "not in document" placeholder de-dupes that placeholder away,
+    // see renderAttendanceRow) - the draft would then permanently fail the length check on
+    // every future reload and silently revert to the fresh, unedited suggestions.
+    const eventsToUse = draft ? draft.events : freshEvents;
+    setTexts(draft ? draft.texts : freshTexts);
+    setAttendance(draft ? draft.attendance : freshAttendance);
     setEvents(eventsToUse);
-    setLists(draft && draft.lists.length === freshLists.length ? draft.lists : freshLists);
-    setMatrices(draft && draft.matrices.length === freshMatrices.length ? draft.matrices : freshMatrices);
+    setLists(draft ? draft.lists : freshLists);
+    setMatrices(draft ? draft.matrices : freshMatrices);
     setActiveCategory("tables");
     setExpandedTexts(new Set());
     setExpandedEvents(new Set());
@@ -1291,7 +1515,7 @@ export function WordImportWizard({
     try {
       const result = await analyzeWordImport(file, templateId, null);
       applyAnalysis(result);
-      setStep("review");
+      setStep("structure");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Datei konnte nicht analysiert werden");
     } finally {
@@ -1385,6 +1609,12 @@ export function WordImportWizard({
                                 raw_name: rawName,
                                 participant_id: optionId === CREATE_NEW_PARTICIPANT_ID ? null : optionId,
                                 create_new: optionId === CREATE_NEW_PARTICIPANT_ID,
+                                // A brand-new name entry typed by the reviewer here, not
+                                // something analyze() suggested - nothing to compare
+                                // against, so there's no original suggestion.
+                                originally_suggested_participant_id: null,
+                                originally_suggested_score: null,
+                                candidates: field.names[0]?.candidates ?? [],
                               },
                             ],
                     }
@@ -1435,7 +1665,7 @@ export function WordImportWizard({
         const key = column === "one" ? "column_one_names" : "column_two_names";
         const updatedNames = row[key].map((name, i) => (i === nameIndex ? { ...name, participant_id: participantId } : name));
         const updatedRow = { ...row, [key]: updatedNames };
-        return { ...updatedRow, approved: !listStillOpen(updatedRow) };
+        return { ...updatedRow, approved: !listStillOpen(updatedRow), dismissed: false };
       })
     );
   }
@@ -1446,7 +1676,97 @@ export function WordImportWizard({
         if (index !== rowIndex) return row;
         const updatedNames = row.names.map((name, i) => (i === nameIndex ? { ...name, participant_id: participantId } : name));
         const updatedRow = { ...row, names: updatedNames };
-        return { ...updatedRow, approved: !matrixStillOpen(updatedRow) };
+        return { ...updatedRow, approved: !matrixStillOpen(updatedRow), dismissed: false };
+      })
+    );
+  }
+
+  // The recurring-name clarifier's bulk-apply half (see buildRecurringNameGroups) -
+  // applies one decision to every still-unresolved occurrence of `key` (normalized raw
+  // name) across all four categories at once, using each category's own existing
+  // single-row semantics (see updateFormFieldSingleName/updateListName/updateMatrixName
+  // above) so the result is indistinguishable from resolving every row by hand:
+  //   optionId === null                    -> "Keinen verknüpfen"
+  //   optionId === CREATE_NEW_PARTICIPANT_ID -> "Neuen Teilnehmer anlegen"
+  //   optionId === <id>                    -> link to that existing Participant
+  // List/Matrix names never supported "neuen Teilnehmer anlegen" even in their own
+  // per-row picker (no such option is offered there), so the createNew case simply
+  // leaves those entries at participant_id=null - already their unresolved state, i.e.
+  // a no-op for them, same as the plain "Keinen verknüpfen" case.
+  function applyRecurringNameEverywhere(key: string, optionId: number | null) {
+    const participantId = optionId === CREATE_NEW_PARTICIPANT_ID ? null : optionId;
+    const createNew = optionId === CREATE_NEW_PARTICIPANT_ID;
+
+    setAttendance((current) => {
+      const updated = current.map((row) =>
+        row.raw_name && normalizeRawName(row.raw_name) === key && attendanceNeedsReview(row)
+          ? { ...row, participant_id: participantId, createNew, linkedNone: optionId === null }
+          : row
+      );
+      // Same dedup as the single-row assignee picker (see renderAttendanceRow): linking a
+      // document row to a participant who was only present as a "not found in document"
+      // roster placeholder makes that placeholder redundant - drop it, otherwise the
+      // participant would be submitted twice. Only applies for a real existing-participant
+      // link, matching the single-row handler's own guard.
+      if (participantId === null) return updated;
+      return updated.filter((row) => !(row.raw_name === "" && row.participant_id === participantId));
+    });
+    setTexts((current) =>
+      current.map((text) => ({
+        ...text,
+        formFields: text.formFields.map((field) => {
+          if (field.row_type === "participant") {
+            const name = field.names[0];
+            if (!name || name.participant_id !== null || name.create_new || normalizeRawName(name.raw_name) !== key) return field;
+            return {
+              ...field,
+              names:
+                optionId === null
+                  ? []
+                  : [
+                      {
+                        raw_name: name.raw_name,
+                        participant_id: participantId,
+                        create_new: createNew,
+                        originally_suggested_participant_id: null,
+                        originally_suggested_score: null,
+                        candidates: name.candidates,
+                      },
+                    ],
+            };
+          }
+          if (field.row_type === "participants") {
+            return {
+              ...field,
+              names: field.names.map((name) =>
+                name.participant_id === null && !name.create_new && normalizeRawName(name.raw_name) === key
+                  ? { ...name, participant_id: participantId, create_new: createNew }
+                  : name
+              ),
+            };
+          }
+          return field;
+        }),
+      }))
+    );
+    setLists((current) =>
+      current.map((row) => {
+        const matches = (name: WordImportNameResolution) => name.participant_id === null && normalizeRawName(name.raw_name) === key;
+        const updated = {
+          ...row,
+          column_one_names: row.column_one_names.map((name) => (matches(name) ? { ...name, participant_id: participantId } : name)),
+          column_two_names: row.column_two_names.map((name) => (matches(name) ? { ...name, participant_id: participantId } : name)),
+        };
+        return { ...updated, approved: !listStillOpen(updated), dismissed: false };
+      })
+    );
+    setMatrices((current) =>
+      current.map((row) => {
+        const updatedNames = row.names.map((name) =>
+          name.participant_id === null && normalizeRawName(name.raw_name) === key ? { ...name, participant_id: participantId } : name
+        );
+        const updatedRow = { ...row, names: updatedNames };
+        return { ...updatedRow, approved: !matrixStillOpen(updatedRow), dismissed: false };
       })
     );
   }
@@ -1460,7 +1780,7 @@ export function WordImportWizard({
       current.map((row) => {
         if (row.matrix_key !== matrixKey || row.column_label_raw !== columnLabelRaw) return row;
         const updatedRow = { ...row, column_key: columnKey };
-        return { ...updatedRow, approved: !matrixStillOpen(updatedRow) };
+        return { ...updatedRow, approved: !matrixStillOpen(updatedRow), dismissed: false };
       })
     );
   }
@@ -1497,6 +1817,8 @@ export function WordImportWizard({
             : participants.find((participant) => participant.id === entry.participant_id)?.display_name ?? entry.raw_name,
           status: entry.status,
           create_new: entry.createNew,
+          originally_suggested_participant_id: entry.originallySuggestedParticipantId,
+          originally_suggested_score: entry.originallySuggestedScore,
         })),
         events: approvedEvents.map((entry) => {
           const resolved = resolveEventFinal(entry);
@@ -1507,6 +1829,8 @@ export function WordImportWizard({
             final_date: resolved.date,
             tag: entry.tag,
             participant_count: entry.participant_count,
+            originally_suggested_event_id: entry.originallySuggestedEventId,
+            originally_suggested_score: entry.originallySuggestedScore,
           };
         }),
         lists: approvedLists.map((entry) => ({
@@ -1518,6 +1842,8 @@ export function WordImportWizard({
           column_two_names: entry.column_two_names,
           approved: true,
           linked_entry_id: entry.linked_entry_id,
+          originally_suggested_entry_id: entry.originallySuggestedEntryId,
+          originally_suggested_score: entry.originallySuggestedScore,
         })),
         matrices: approvedMatrices.map((entry) => ({
           matrix_key: entry.matrix_key,
@@ -1529,6 +1855,8 @@ export function WordImportWizard({
           raw_value: entry.raw_value,
           names: entry.names,
           approved: true,
+          originally_suggested_column_key: entry.originallySuggestedColumnKey,
+          originally_suggested_score: entry.originallySuggestedScore,
         })),
         tables: analysis.tables.map((table) => ({
           header_signature: normalizeHeaderSignature(table.header_cells),
@@ -1536,6 +1864,8 @@ export function WordImportWizard({
           list_definition_id: tableRoles[table.index]?.list_definition_id ?? table.list_definition_id,
           matrix_key: tableRoles[table.index]?.matrix_key ?? table.matrix_key,
           list_grouping_strategy: tableRoles[table.index]?.list_grouping_strategy ?? table.grouping_strategy,
+          originally_suggested_role: table.role,
+          originally_suggested_score: table.role_is_explicit ? 1.0 : null,
         })),
       };
       const result = documentId ? await commitWordImportDocument(documentId, payload) : await commitWordImport(payload);
@@ -1550,7 +1880,7 @@ export function WordImportWizard({
           (events.length - approvedEvents.length) +
           (lists.filter((entry) => entry.has_snapshot_target).length - approvedLists.length) +
           (matrices.length - approvedMatrices.length) +
-          texts.filter((text) => textNeedsReview(text)).length,
+          texts.filter((text) => text.template_element_id === null || (text.isEventRepeat && text.linkedEventId === null)).length,
       });
       setCreatedProtocolId(result.id);
       setStep("done");
@@ -1580,8 +1910,31 @@ export function WordImportWizard({
   const textsOpen = texts.filter(textNeedsReview).length;
   const totalOpen = attendanceOpen + eventsOpen + listsOpen + matricesOpen + textsOpen;
 
+  // Each occurrence bundled here is already counted in attendanceOpen/listsOpen/
+  // matricesOpen (or, for form fields, not gated on totalOpen at all - see
+  // textNeedsReview) - this is a cross-cutting VIEW over the same rows, not additional
+  // work, so it's deliberately excluded from totalOpen to avoid double-counting.
+  const recurringNameGroups = buildRecurringNameGroups(attendance, texts, lists, matrices);
+  const namesOpen = recurringNameGroups.length;
+
+  // A table still needs a decision when its role implies a target that wasn't picked
+  // yet - mirrors the warning states already shown inline in the Tabellen tab (the
+  // grouping-strategy hint, the empty "– auswählen –" pickers) rather than introducing
+  // a new definition of "done". Gates the structure -> data phase transition below.
+  const tablesOpen = (analysis?.tables ?? []).filter((table) => {
+    const current = tableRoles[table.index] ?? { role: table.role, list_definition_id: table.list_definition_id };
+    if (current.role === "list") {
+      if (current.list_definition_id === null) return true;
+      if (table.needs_manual_grouping && !current.list_grouping_strategy) return true;
+    }
+    if (current.role === "matrix" && !current.matrix_key) return true;
+    return false;
+  }).length;
+  const structureReady = tablesOpen === 0 && namesOpen === 0;
+
   const categoryCounts: Record<Category, number> = {
     tables: analysis?.tables.length ?? 0,
+    names: namesOpen,
     attendance: attendanceOpen,
     events: eventsOpen,
     lists: listsOpen,
@@ -1590,6 +1943,7 @@ export function WordImportWizard({
   };
   const categoryVariants: Record<Category, BadgeVariant> = {
     tables: "neutral",
+    names: "warning",
     attendance: "warning",
     events: "warning",
     lists: "warning",
@@ -1613,7 +1967,7 @@ export function WordImportWizard({
 
       {error && <div className="form-error-banner">{error}</div>}
 
-      {step === "review" && !analysis && busy && <p className="muted">Dokument wird geladen…</p>}
+      {(step === "structure" || step === "review") && !analysis && busy && <p className="muted">Dokument wird geladen…</p>}
 
       {step === "upload" && (
         <div className="grid word-import-narrow">
@@ -1670,7 +2024,7 @@ export function WordImportWizard({
         </div>
       )}
 
-      {step === "review" && analysis && (
+      {(step === "structure" || step === "review") && analysis && (
         <div className="grid">
           {analysis.profile_applied && <p className="muted">Import-Vorlage aus einem früheren Import wurde angewendet.</p>}
 
@@ -1725,27 +2079,61 @@ export function WordImportWizard({
 
           <div className="word-import-layout">
             <nav className="word-import-nav">
-              {CATEGORIES.map(({ key, label, Icon }) => {
-                const count = categoryCounts[key];
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    className={`word-import-nav-item${activeCategory === key ? " word-import-nav-item-active" : ""}`}
-                    onClick={() => setActiveCategory(key)}
-                  >
-                    <span className="word-import-nav-item-icon">
-                      <Icon />
+              {CATEGORIES.filter(({ key }) => (step === "structure" ? STRUCTURE_CATEGORIES : DATA_CATEGORIES).includes(key)).map(
+                ({ key, label, Icon }) => {
+                  const count = categoryCounts[key];
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      className={`word-import-nav-item${activeCategory === key ? " word-import-nav-item-active" : ""}`}
+                      onClick={() => setActiveCategory(key)}
+                    >
+                      <span className="word-import-nav-item-icon">
+                        <Icon />
+                      </span>
+                      <span className="word-import-nav-item-label">{label}</span>
+                      {key === "tables" ? (
+                        <Badge variant="neutral">{count}</Badge>
+                      ) : count > 0 ? (
+                        <Badge variant={categoryVariants[key]}>{count} offen</Badge>
+                      ) : null}
+                    </button>
+                  );
+                }
+              )}
+              {step === "structure" ? (
+                <button
+                  type="button"
+                  className="word-import-nav-phase-btn"
+                  disabled={!structureReady}
+                  onClick={() => {
+                    setStep("review");
+                    setActiveCategory("attendance");
+                  }}
+                >
+                  Weiter zu den Daten →
+                  {!structureReady && (
+                    <span className="word-import-nav-phase-hint">
+                      erst {[tablesOpen > 0 ? `${tablesOpen} Tabelle${tablesOpen === 1 ? "" : "n"}` : null, namesOpen > 0 ? `${namesOpen} Name${namesOpen === 1 ? "" : "n"}` : null]
+                        .filter(Boolean)
+                        .join(" & ")}{" "}
+                      klären
                     </span>
-                    <span className="word-import-nav-item-label">{label}</span>
-                    {key === "tables" ? (
-                      <Badge variant="neutral">{count}</Badge>
-                    ) : count > 0 ? (
-                      <Badge variant={categoryVariants[key]}>{count} offen</Badge>
-                    ) : null}
-                  </button>
-                );
-              })}
+                  )}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="word-import-nav-phase-btn is-back"
+                  onClick={() => {
+                    setStep("structure");
+                    setActiveCategory(namesOpen > 0 ? "names" : "tables");
+                  }}
+                >
+                  ← Zurück zu Namen &amp; Tabellen
+                </button>
+              )}
             </nav>
 
             <div className="word-import-panel">
@@ -1868,6 +2256,74 @@ export function WordImportWizard({
                 </>
               )}
 
+              {activeCategory === "names" && (
+                <>
+                  <div>
+                    <h3 className="word-import-panel-title">Namen klären</h3>
+                    <p className="word-import-panel-desc">
+                      Diese Namen kommen mehrfach im Dokument vor und konnten nicht automatisch zugewiesen werden — einmal zuweisen
+                      gilt für alle Vorkommen (Anwesenheit, Listen, Matrizen, Texte), statt jede Stelle einzeln zu klären.
+                    </p>
+                  </div>
+                  {recurringNameGroups.length === 0 ? (
+                    <p className="muted">Keine wiederkehrenden, ungeklärten Namen gefunden.</p>
+                  ) : (
+                    <div className="grid" style={{ gap: "10px" }}>
+                      {recurringNameGroups.map((group) => {
+                        const whereParts: string[] = [];
+                        if (group.counts.attendance) whereParts.push(`${group.counts.attendance}× Anwesenheit`);
+                        if (group.counts.list) whereParts.push(`${group.counts.list}× Liste`);
+                        if (group.counts.matrix) whereParts.push(`${group.counts.matrix}× Matrix`);
+                        if (group.counts.text) whereParts.push(`${group.counts.text}× Text`);
+                        const menuOptions: AssigneeOption[] = [
+                          { id: CREATE_NEW_PARTICIPANT_ID, display_name: `🆕 Als neuen Teilnehmer anlegen: "${group.label}"` },
+                          ...participants,
+                        ];
+                        return (
+                          <div className="word-import-text-row word-import-flag" key={group.key}>
+                            <div className="word-import-text-row-head">
+                              <span className="word-import-text-row-title">
+                                {group.label}{" "}
+                                <span className="muted" style={{ fontWeight: 400 }}>
+                                  · {group.total}× im Dokument ({whereParts.join(", ")})
+                                </span>
+                              </span>
+                            </div>
+                            {group.candidates.length > 0 && (
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                                {group.candidates.map((candidate) => {
+                                  const candidateParticipant = participants.find((p) => p.id === candidate.participant_id);
+                                  if (!candidateParticipant) return null;
+                                  return (
+                                    <button
+                                      key={candidate.participant_id}
+                                      type="button"
+                                      className="word-import-decision-btn is-take"
+                                      onClick={() => applyRecurringNameEverywhere(group.key, candidate.participant_id)}
+                                    >
+                                      <CheckIcon /> {candidateParticipant.display_name} ({Math.round(candidate.score * 100)}%)
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                              <TodoAssigneeMenu
+                                label="Anderen Teilnehmer wählen…"
+                                nullLabel="Keinen verknüpfen (überall)"
+                                activeId={null}
+                                participants={menuOptions}
+                                onChange={(option) => applyRecurringNameEverywhere(group.key, option.id)}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+
               {activeCategory === "attendance" && (
                 <>
                   <div>
@@ -1917,7 +2373,7 @@ export function WordImportWizard({
                     {matrixCardGroups.map((group) => (
                       <div key={group.matrixKey} className="grid" style={{ gap: "8px" }}>
                         <strong>{group.matrixTitle}</strong>
-                        <div className="matrix-cards">
+                        <div className="matrix-cards matrix-cards-stacked">
                           {group.columns.map((column) => {
                             const resolvedLabel = column.columnKey
                               ? column.candidates.find((candidate) => candidate.column_key === column.columnKey)?.label ??
@@ -1952,12 +2408,25 @@ export function WordImportWizard({
                                     </div>
                                   </div>
                                 )}
-                                {column.rows.map((row) =>
-                                  row.kind === "cell" ? (
+                                {column.rows.map((row) => {
+                                  if (row.kind !== "cell") {
+                                    return (
+                                      <div className="matrix-card-row" key={`events-${row.rowId}`}>
+                                        <div className="matrix-card-row-label">{row.rowLabel}</div>
+                                        <div className="matrix-card-row-cell">
+                                          <div className="matrix-event-list">
+                                            {row.items.map(({ entry, index }) => renderEventRow(entry, index))}
+                                            {row.items.length === 0 && <span className="muted">Keine Termine</span>}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+                                  const cellFlagged = matrixNeedsReview(row.entry);
+                                  const cellDecision = decisionState(row.entry.approved, cellFlagged);
+                                  return (
                                     <div
-                                      className={`matrix-card-row${
-                                        !row.entry.approved && !matrixNeedsReview(row.entry) ? " matrix-card-row-muted" : ""
-                                      }`}
+                                      className={`matrix-card-row${cellDecision === "ignore" ? " matrix-card-row-muted" : ""}`}
                                       key={`cell-${row.index}`}
                                     >
                                       <div className="matrix-card-row-label">{row.entry.row_label}</div>
@@ -1986,32 +2455,23 @@ export function WordImportWizard({
                                         <div style={{ display: "flex", justifyContent: "flex-end" }}>
                                           <button
                                             type="button"
-                                            className={`word-import-decision-btn ${row.entry.approved ? "is-take" : "is-ignore"}`}
-                                            onClick={() =>
+                                            className={`word-import-decision-btn is-${cellDecision}`}
+                                            onClick={() => {
+                                              const patch = nextDecisionPatch(cellDecision);
                                               setMatrices((current) =>
                                                 current.map((item, itemIndex) =>
-                                                  itemIndex === row.index ? { ...item, approved: !item.approved } : item
+                                                  itemIndex === row.index ? { ...item, ...patch } : item
                                                 )
-                                              )
-                                            }
+                                              );
+                                            }}
                                           >
-                                            <CheckIcon /> {row.entry.approved ? "Übernehmen" : "Ignorieren"}
+                                            <CheckIcon /> {DECISION_LABEL[cellDecision]}
                                           </button>
                                         </div>
                                       </div>
                                     </div>
-                                  ) : (
-                                    <div className="matrix-card-row" key={`events-${row.rowId}`}>
-                                      <div className="matrix-card-row-label">{row.rowLabel}</div>
-                                      <div className="matrix-card-row-cell">
-                                        <div className="matrix-event-list">
-                                          {row.items.map(({ entry, index }) => renderEventRow(entry, index))}
-                                          {row.items.length === 0 && <span className="muted">Keine Termine</span>}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  )
-                                )}
+                                  );
+                                })}
                               </div>
                             );
                           })}
@@ -2038,34 +2498,77 @@ export function WordImportWizard({
                       const linkedEvent = text.eventCandidates.find((candidate) => candidate.event_id === text.linkedEventId);
                       const flagged = textNeedsReview(text);
                       const isOpen = flagged || expandedTexts.has(index);
+                      const isIgnoredEvent = text.isEventRepeat && text.linkedEventId === null && text.linkedEventNone;
+                      // A section with no matching template block at all has nothing else to
+                      // decide (unlike the event-repeat case above, which already has its own
+                      // "nicht verknüpfen" option) - offer the same explicit dismiss here so it
+                      // doesn't stay flagged forever with no way out.
+                      const isIgnorableNoTarget = text.template_element_id === null;
+                      const isDismissedNoTarget = isIgnorableNoTarget && text.dismissed;
                       const summaryLabel = textSummaryLabel(text, target, linkedEvent);
                       return (
-                        <div className={`word-import-text-row${flagged ? " word-import-flag" : ""}`} key={index}>
+                        <div
+                          className={`word-import-text-row${flagged ? " word-import-flag" : ""}${
+                            isIgnoredEvent || isDismissedNoTarget ? " word-import-text-row-muted" : ""
+                          }`}
+                          key={index}
+                        >
                           <div
                             className={`word-import-text-row-head${flagged ? "" : " word-import-text-row-head-clickable"}`}
                             onClick={() => !flagged && toggleTextExpanded(index)}
                           >
                             <span className="word-import-text-row-title">{text.extracted_heading}</span>
-                            {!isOpen &&
-                              (summaryLabel ? (
-                                <span className="word-import-text-row-summary">
-                                  <CheckIcon /> {summaryLabel}
-                                </span>
-                              ) : (
-                                <span className="word-import-text-row-summary is-unassigned">– nicht zugewiesen –</span>
-                              ))}
+                            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                              {!isOpen &&
+                                (isIgnoredEvent ? (
+                                  <span className="word-import-text-row-summary is-ignored">Nicht verknüpft – wird übersprungen</span>
+                                ) : isDismissedNoTarget ? (
+                                  <span className="word-import-text-row-summary is-ignored">Ignoriert – wird übersprungen</span>
+                                ) : summaryLabel ? (
+                                  <span className="word-import-text-row-summary">
+                                    <CheckIcon /> {summaryLabel}
+                                  </span>
+                                ) : (
+                                  <span className="word-import-text-row-summary is-unassigned">– nicht zugewiesen –</span>
+                                ))}
+                              {isIgnorableNoTarget && (
+                                <button
+                                  type="button"
+                                  className={`word-import-decision-btn ${text.dismissed ? "is-ignore" : "is-incomplete"}`}
+                                  onClick={(clickEvent) => {
+                                    clickEvent.stopPropagation();
+                                    setTexts((current) =>
+                                      current.map((row, rowIndex) => (rowIndex === index ? { ...row, dismissed: !row.dismissed } : row))
+                                    );
+                                  }}
+                                >
+                                  <CheckIcon /> {text.dismissed ? "Ignoriert" : "Ignorieren"}
+                                </button>
+                              )}
+                            </div>
                           </div>
                           {isOpen && (
                             <div className="grid" style={{ gap: "10px" }}>
-                              <select
-                                value={targetKey(text.template_element_id, text.block_sort_index)}
-                                onChange={(event) => {
-                                  const [elementIdRaw, blockSortRaw] = event.target.value.split(":");
-                                  const templateElementId = elementIdRaw ? Number(elementIdRaw) : null;
-                                  const blockSortIndex = blockSortRaw ? Number(blockSortRaw) : null;
-                                  const nextTarget = analysis.text_targets.find(
-                                    (candidate) => candidate.template_element_id === templateElementId && candidate.block_sort_index === blockSortIndex
-                                  );
+                              <TodoAssigneeMenu
+                                label={
+                                  target
+                                    ? `${target.label}${target.is_event_repeat ? " · pro Termin" : ""}${target.is_form_block ? " · Formular" : ""}`
+                                    : "– nicht zugewiesen –"
+                                }
+                                nullLabel="– nicht zugewiesen –"
+                                activeId={target ? analysis.text_targets.indexOf(target) : null}
+                                participants={analysis.text_targets.map(
+                                  (candidate, candidateIndex): AssigneeOption => ({
+                                    id: candidateIndex,
+                                    display_name: `${candidate.label}${candidate.is_event_repeat ? " · pro Termin" : ""}${
+                                      candidate.is_form_block ? " · Formular" : ""
+                                    }`,
+                                  })
+                                )}
+                                onChange={(option) => {
+                                  const nextTarget = option.id === null ? undefined : analysis.text_targets[option.id];
+                                  const templateElementId = nextTarget?.template_element_id ?? null;
+                                  const blockSortIndex = nextTarget?.block_sort_index ?? null;
                                   setTexts((current) =>
                                     current.map((row, rowIndex) =>
                                       rowIndex === index
@@ -2075,6 +2578,8 @@ export function WordImportWizard({
                                             block_sort_index: blockSortIndex,
                                             isEventRepeat: nextTarget?.is_event_repeat ?? false,
                                             linkedEventId: nextTarget?.is_event_repeat ? row.linkedEventId : null,
+                                            linkedEventNone: nextTarget?.is_event_repeat ? row.linkedEventNone : false,
+                                            dismissed: false,
                                             // Switching to a different target's own row structure - use
                                             // the values already parsed for this target during analyze()
                                             // (see WordImportTextMapping.form_fields_by_target, computed
@@ -2097,19 +2602,7 @@ export function WordImportWizard({
                                     )
                                   );
                                 }}
-                              >
-                                <option value="">– nicht zugewiesen –</option>
-                                {analysis.text_targets.map((candidate) => (
-                                  <option
-                                    key={targetKey(candidate.template_element_id, candidate.block_sort_index)}
-                                    value={targetKey(candidate.template_element_id, candidate.block_sort_index)}
-                                  >
-                                    {candidate.label}
-                                    {candidate.is_event_repeat ? " · pro Termin" : ""}
-                                    {candidate.is_form_block ? " · Formular" : ""}
-                                  </option>
-                                ))}
-                              </select>
+                              />
                               {text.isEventRepeat && (
                                 <label className="field-stack" style={{ gap: "0.25rem" }}>
                                   <span className="muted">Aufgrund welchem Termin wird dieser Block erstellt?</span>
@@ -2125,7 +2618,11 @@ export function WordImportWizard({
                                     )}
                                     onChange={(option) =>
                                       setTexts((current) =>
-                                        current.map((row, rowIndex) => (rowIndex === index ? { ...row, linkedEventId: option.id } : row))
+                                        current.map((row, rowIndex) =>
+                                          rowIndex === index
+                                            ? { ...row, linkedEventId: option.id, linkedEventNone: option.id === null }
+                                            : row
+                                        )
                                       )
                                     }
                                   />
@@ -2233,14 +2730,16 @@ export function WordImportWizard({
               >
                 {documentId ? "Zurück zur Warteschlange" : "Abbrechen"}
               </button>
-              <button
-                type="button"
-                className="button-primary"
-                disabled={busy || !protocolDate || totalOpen > 0}
-                onClick={() => void submitCommit()}
-              >
-                {busy ? "…" : "Protokoll erstellen"}
-              </button>
+              {step === "review" && (
+                <button
+                  type="button"
+                  className="button-primary"
+                  disabled={busy || !protocolDate || totalOpen > 0}
+                  onClick={() => void submitCommit()}
+                >
+                  {busy ? "…" : "Protokoll erstellen"}
+                </button>
+              )}
             </div>
           </div>
         </div>

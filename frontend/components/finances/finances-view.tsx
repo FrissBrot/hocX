@@ -4,6 +4,7 @@ import { useState } from "react";
 import { DateInput } from "@/components/ui/date-input";
 import { FinanceAccount, FinanceTransaction } from "@/types/api";
 import { browserApiFetch } from "@/lib/api/client";
+import { useConfirm } from "@/contexts/confirm-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { formatDate } from "@/lib/utils/format";
 
@@ -12,6 +13,7 @@ const PAGE_SIZE = 50;
 type Props = { initialAccounts: FinanceAccount[] };
 
 export function FinancesView({ initialAccounts }: Props) {
+  const confirm = useConfirm();
   const [accounts, setAccounts] = useState(initialAccounts);
   const [selected, setSelected] = useState<FinanceAccount | null>(null);
   const [transactions, setTransactions] = useState<FinanceTransaction[]>([]);
@@ -125,7 +127,7 @@ export function FinancesView({ initialAccounts }: Props) {
 
   async function deleteAccount(account: FinanceAccount, e: React.MouseEvent) {
     e.stopPropagation();
-    if (!confirm(`Konto "${account.name}" und alle Transaktionen löschen?`)) return;
+    if (!(await confirm({ message: `Konto "${account.name}" und alle Transaktionen löschen?`, tone: "danger", confirmLabel: "Löschen" }))) return;
     await browserApiFetch(`/api/finance/accounts/${account.id}`, { method: "DELETE" });
     setAccounts((prev) => prev.filter((a) => a.id !== account.id));
     if (selected?.id === account.id) { setSelected(null); setTransactions([]); }

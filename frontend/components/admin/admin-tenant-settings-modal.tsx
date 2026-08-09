@@ -6,6 +6,7 @@ import { Modal } from "@/components/ui/modal";
 import { Tabs } from "@/components/ui/tabs";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
+import { useConfirm } from "@/contexts/confirm-context";
 import { AdminTenantSummary, AdminTenantUser, UserSummary } from "@/types/api";
 
 type Props = {
@@ -33,6 +34,7 @@ export const ROLE_OPTIONS: { code: string; label: string }[] = [
 
 export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Props) {
   const showToast = useToast();
+  const confirm = useConfirm();
   const [tenantForm, setTenantForm] = useState<TenantFormState>(emptyTenantForm);
 
   const [tenantUsers, setTenantUsers] = useState<AdminTenantUser[]>([]);
@@ -111,7 +113,14 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
 
   async function removeUser(userId: number, displayName: string) {
     if (!tenant) return;
-    if (!window.confirm(`Zugriff von "${displayName}" auf diesen Mandanten entfernen? Der Benutzer-Account selbst bleibt bestehen.`)) return;
+    if (
+      !(await confirm({
+        message: `Zugriff von "${displayName}" auf diesen Mandanten entfernen? Der Benutzer-Account selbst bleibt bestehen.`,
+        tone: "danger",
+        confirmLabel: "Entfernen"
+      }))
+    )
+      return;
     try {
       await browserApiFetch(`/api/admin/tenants/${tenant.id}/users/${userId}`, { method: "DELETE" });
       setTenantUsers((current) => current.filter((u) => u.user_id !== userId));

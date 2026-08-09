@@ -47,6 +47,7 @@ from app.models.entities import (
     UserTenantRole,
     WordImportDocument,
     WordImportProfile,
+    WordImportSuggestionOutcome,
 )
 
 __all__ = [
@@ -98,4 +99,5 @@ __all__ = [
     "UserTenantRole",
     "WordImportDocument",
     "WordImportProfile",
+    "WordImportSuggestionOutcome",
 ]

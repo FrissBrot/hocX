@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 
+import { useConfirm } from "@/contexts/confirm-context";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { FilterTabs } from "@/components/ui/filter-tabs";
@@ -33,12 +34,28 @@ function UploadIcon() {
   );
 }
 
+function SpinnerIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg className="word-import-spinner" viewBox="0 0 24 24" fill="none" aria-hidden="true" width={size} height={size}>
+      <circle cx="12" cy="12" r="9.5" stroke="currentColor" strokeOpacity="0.2" strokeWidth="3" />
+      <path d="M21.5 12a9.5 9.5 0 0 0-9.5-9.5" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+type PendingUpload = {
+  id: string;
+  name: string;
+};
+
 export function WordImportQueueView({ templates, participants, initialDocuments }: Props) {
+  const confirm = useConfirm();
   const [documents, setDocuments] = useState<WordImportDocumentSummary[]>(initialDocuments);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("eingelesen");
   const [openDocumentId, setOpenDocumentId] = useState<number | null>(null);
   const [uploadTemplateId, setUploadTemplateId] = useState<number | null>(templates[0]?.id ?? null);
   const [uploading, setUploading] = useState(false);
+  const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -55,15 +72,29 @@ export function WordImportQueueView({ templates, participants, initialDocuments 
   async function handleFilesSelected(fileList: FileList | null) {
     const files = Array.from(fileList ?? []).filter((file) => /\.(docx|pdf|zip)$/i.test(file.name));
     if (!files.length || !uploadTemplateId) return;
+    const templateId = uploadTemplateId;
+    const queue: PendingUpload[] = files.map((file) => ({ id: crypto.randomUUID(), name: file.name }));
+    setPendingUploads((current) => [...queue, ...current]);
     setUploading(true);
     setUploadErrors([]);
+    setStatusFilter("eingelesen");
     try {
-      const result = await ingestWordImportDocuments(uploadTemplateId, files);
-      setDocuments((current) => [...result.documents, ...current]);
-      setUploadErrors(result.errors);
-      setStatusFilter("eingelesen");
-    } catch (err) {
-      setUploadErrors([err instanceof Error ? err.message : "Upload fehlgeschlagen"]);
+      // Ein Request pro Datei statt Batch, damit jede Datei sofort mit Spinner in der
+      // Tabelle erscheint und dort einzeln zu ihrem Ergebnis wechselt, statt dass die
+      // ganze Auswahl erst nach Abschluss aller Analysen sichtbar wird.
+      for (let index = 0; index < files.length; index++) {
+        const file = files[index];
+        const placeholderId = queue[index].id;
+        try {
+          const result = await ingestWordImportDocuments(templateId, [file]);
+          setDocuments((current) => [...result.documents, ...current]);
+          if (result.errors.length) setUploadErrors((current) => [...current, ...result.errors]);
+        } catch (err) {
+          setUploadErrors((current) => [...current, `${file.name}: ${err instanceof Error ? err.message : "Upload fehlgeschlagen"}`]);
+        } finally {
+          setPendingUploads((current) => current.filter((pending) => pending.id !== placeholderId));
+        }
+      }
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -71,7 +102,7 @@ export function WordImportQueueView({ templates, participants, initialDocuments 
   }
 
   async function handleDelete(document: WordImportDocumentSummary) {
-    if (!confirm(`"${document.display_name}" aus der Warteschlange entfernen?`)) return;
+    if (!(await confirm({ message: `"${document.display_name}" aus der Warteschlange entfernen?`, tone: "danger", confirmLabel: "Entfernen" }))) return;
     setDeletingId(document.id);
     try {
       await deleteWordImportDocument(document.id);
@@ -84,7 +115,7 @@ export function WordImportQueueView({ templates, participants, initialDocuments 
 
   async function handleBulkDelete() {
     if (!selectedIds.length) return;
-    if (!confirm(`${selectedIds.length} Dokument(e) aus der Warteschlange entfernen?`)) return;
+    if (!(await confirm({ message: `${selectedIds.length} Dokument(e) aus der Warteschlange entfernen?`, tone: "danger", confirmLabel: "Entfernen" }))) return;
     setBulkDeleting(true);
     try {
       await Promise.all(selectedIds.map((id) => deleteWordImportDocument(id)));
@@ -227,6 +258,23 @@ export function WordImportQueueView({ templates, participants, initialDocuments 
         ]}
         emptyMessage="Keine Dokumente in dieser Ansicht."
       >
+        {(statusFilter === "eingelesen" || statusFilter === "all") &&
+          pendingUploads.map((pending) => (
+            <tr key={pending.id} className="word-import-queue-pending-row">
+              <td />
+              <td>
+                <strong>{pending.name}</strong>
+              </td>
+              <td>{templates.find((template) => template.id === uploadTemplateId)?.name ?? ""}</td>
+              <td>&mdash;</td>
+              <td>
+                <span className="word-import-cell-with-spinner">
+                  <SpinnerIcon size={12} /> Wird analysiert…
+                </span>
+              </td>
+              <td />
+            </tr>
+          ))}
         {filtered.map((document) => (
           <tr key={document.id}>
             <td onClick={(event) => event.stopPropagation()}>

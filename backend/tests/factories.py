@@ -8,9 +8,11 @@ from app.core.security import CurrentUser
 from app.models.entities import (
     AttendanceFine,
     ElementType,
+    Event,
     FinanceAccount,
     ListDefinition,
     ListEntry,
+    Participant,
     Protocol,
     ProtocolElement,
     ProtocolElementBlock,
@@ -18,8 +20,10 @@ from app.models.entities import (
     ProtocolTodo,
     RenderType,
     Template,
+    TemplateParticipant,
     Tenant,
     TodoStatus,
+    WordImportProfile,
 )
 
 
@@ -182,6 +186,42 @@ def make_current_user(tenant_id: int, role: str = "writer", user_id: int = 1) ->
         current_role=role,
         available_tenants=[],
     )
+
+
+def make_participant(db, tenant_id: int, display_name: str = "Test Person") -> Participant:
+    participant = Participant(tenant_id=tenant_id, display_name=display_name)
+    db.add(participant)
+    db.flush()
+    return participant
+
+
+def make_template_participant(db, template_id: int, participant_id: int, exclude_from_attendance: bool = False) -> TemplateParticipant:
+    row = TemplateParticipant(template_id=template_id, participant_id=participant_id, exclude_from_attendance=exclude_from_attendance)
+    db.add(row)
+    db.flush()
+    return row
+
+
+def make_event(
+    db,
+    tenant_id: int,
+    title: str = "Test Event",
+    event_date: date = date(2026, 1, 1),
+    event_category_id: int = 1,
+) -> Event:
+    # event_category is global seeded reference data (not tenant-scoped), id 1 ("camp")
+    # already exists in every environment - no factory needed for it.
+    event = Event(tenant_id=tenant_id, title=title, event_date=event_date, event_category_id=event_category_id)
+    db.add(event)
+    db.flush()
+    return event
+
+
+def make_word_import_profile(db, tenant_id: int, template_id: int, mapping_config_json: dict | None = None) -> WordImportProfile:
+    profile = WordImportProfile(tenant_id=tenant_id, template_id=template_id, mapping_config_json=mapping_config_json or {})
+    db.add(profile)
+    db.flush()
+    return profile
 
 
 def make_fine(

@@ -40,6 +40,12 @@ class TablePreview(BaseModel):
     # table's real data (delimiters that don't occur in the cells never appear here) -
     # lets the wizard's manual picker only ever offer choices that exist for real.
     available_grouping_strategies: list[str] = Field(default_factory=list)
+    # True when `role` came from an explicit source (a manual override on this call, or
+    # a learned profile signature match) rather than a keyword/heading-similarity guess -
+    # mirrors _resolve_table_role's own 4th return value. Used by the import-queue's
+    # batch consensus pass (WordImportQueueService) to decide which tables are confident
+    # enough to vote on for sibling documents in the same upload batch.
+    role_is_explicit: bool = False
 
 
 class WordImportEventCandidate(BaseModel):
@@ -47,6 +53,22 @@ class WordImportEventCandidate(BaseModel):
     title: str
     event_date: date
     score: float = 0.0
+    # Short human-readable justification (e.g. "Datum exakt, Titel 92% ähnlich") - see
+    # word_import_service._event_match_reason. Empty string for candidates built before
+    # this field existed (e.g. an old cached analysis_snapshot_json), never null.
+    reason: str = ""
+
+
+class WordImportAttendanceCandidate(BaseModel):
+    """Shared candidate shape for any raw document name scored against the participant
+    roster - used both by the attendance table (its own suggested_participant_id) and,
+    via WordImportNameResolution.candidates below, by every other name-bearing mapping
+    (lists/matrices/form fields), so the wizard's cross-document "wiederkehrende Namen"
+    clarifier can rank a merged suggestion regardless of where the name occurred."""
+
+    participant_id: int
+    score: float = 0.0
+    reason: str = ""
 
 
 class WordImportNameResolution(BaseModel):
@@ -57,6 +79,19 @@ class WordImportNameResolution(BaseModel):
     # attendance table's create_new) - participant_id=None + create_new=True means
     # "create a new Participant named raw_name instead of linking an existing one".
     create_new: bool = False
+    # What analyze() originally auto-resolved this raw_name to, set once when this
+    # resolution is first built and never touched again by the frontend afterward (the
+    # wizard's edit handlers only ever update `participant_id` via object-spread, which
+    # preserves this field unchanged) - lets commit() tell "algorithm's own suggestion,
+    # unreviewed or confirmed" apart from "human explicitly picked something else",
+    # without needing a separate approve/reject UI. None if analyze() found no match at
+    # all (nothing to compare against, see WordImportService._log_outcome).
+    originally_suggested_participant_id: int | None = None
+    originally_suggested_score: float | None = None
+    # Ranked near-miss alternatives (best first) even when nothing cleared the auto-link
+    # threshold - lets the wizard's recurring-name clarifier suggest a participant for a
+    # name that recurs across many rows without ever having auto-resolved anywhere.
+    candidates: list[WordImportAttendanceCandidate] = Field(default_factory=list)
 
 
 class WordImportFormRow(BaseModel):
@@ -127,7 +162,7 @@ class WordImportAttendanceMapping(BaseModel):
     raw_name: str
     status: str = "present"
     suggested_participant_id: int | None = None
-    candidates: list[int] = Field(default_factory=list)
+    candidates: list[WordImportAttendanceCandidate] = Field(default_factory=list)
 
 
 class WordImportEventMapping(BaseModel):
@@ -173,6 +208,7 @@ class WordImportListEntryCandidate(BaseModel):
     column_one_display: str
     column_two_display: str
     score: float = 0.0
+    reason: str = ""
 
 
 class WordImportListRowMapping(BaseModel):
@@ -215,6 +251,7 @@ class WordImportMatrixColumnCandidate(BaseModel):
     column_key: str
     label: str
     score: float = 0.0
+    reason: str = ""
 
 
 class WordImportMatrixCellMapping(BaseModel):
@@ -283,6 +320,11 @@ class WordImportAttendanceCommit(BaseModel):
     participant_name: str
     status: str
     create_new: bool = False
+    # See WordImportNameResolution.originally_suggested_participant_id - same purpose,
+    # populated once from WordImportAttendanceMapping.suggested_participant_id when the
+    # wizard applies a fresh analysis, never updated afterward.
+    originally_suggested_participant_id: int | None = None
+    originally_suggested_score: float | None = None
 
 
 class WordImportEventCommit(BaseModel):
@@ -300,6 +342,11 @@ class WordImportEventCommit(BaseModel):
     # Mirrors WordImportEventMapping.participant_count - when set, the created/updated
     # Event's participant_count is set to this value. None leaves it untouched.
     participant_count: int | None = None
+    # See WordImportNameResolution.originally_suggested_participant_id - same purpose,
+    # populated once from WordImportEventMapping.matched_event_id (and its top
+    # candidate's score) when the wizard applies a fresh analysis.
+    originally_suggested_event_id: int | None = None
+    originally_suggested_score: float | None = None
 
 
 class WordImportListRowCommit(BaseModel):
@@ -315,6 +362,10 @@ class WordImportListRowCommit(BaseModel):
     column_two_names: list[WordImportNameResolution] = Field(default_factory=list)
     approved: bool
     linked_entry_id: int | None = None
+    # See WordImportNameResolution.originally_suggested_participant_id - same purpose,
+    # populated once from WordImportListRowMapping.matched_entry_id.
+    originally_suggested_entry_id: int | None = None
+    originally_suggested_score: float | None = None
 
 
 class WordImportMatrixCellCommit(BaseModel):
@@ -330,6 +381,10 @@ class WordImportMatrixCellCommit(BaseModel):
     raw_value: str
     names: list[WordImportNameResolution] = Field(default_factory=list)
     approved: bool
+    # See WordImportNameResolution.originally_suggested_participant_id - same purpose,
+    # populated once from the matched column_key of WordImportMatrixCellMapping.
+    originally_suggested_column_key: str | None = None
+    originally_suggested_score: float | None = None
 
 
 class WordImportTableRoleCommit(BaseModel):
@@ -342,6 +397,11 @@ class WordImportTableRoleCommit(BaseModel):
     # strategy re-picked on every import, same learning mechanism as role/
     # list_definition_id/matrix_key above.
     list_grouping_strategy: str | None = None
+    # See WordImportNameResolution.originally_suggested_participant_id - same purpose,
+    # populated once from the matching TablePreview.role when the wizard applies a
+    # fresh analysis (score is 1.0 when TablePreview.role_is_explicit, else omitted).
+    originally_suggested_role: TableRole | None = None
+    originally_suggested_score: float | None = None
 
 
 class WordImportCommit(BaseModel):
@@ -410,3 +470,18 @@ class WordImportDocumentUploadResult(BaseModel):
 class WordImportDocumentReanalyzeRequest(BaseModel):
     protocol_date: date | None = None
     table_roles: dict[int, dict] = Field(default_factory=dict)
+
+
+class WordImportQualityBucket(BaseModel):
+    """Accept-rate of one signal_type's suggestions within one 0.1-wide score band
+    (e.g. signal_type="event_match", score_bucket=0.8 covers suggested_score in
+    [0.8, 0.9)) - see WordImportQualityService.accept_rate_stats."""
+
+    signal_type: str
+    score_bucket: float
+    sample_count: int
+    accept_rate: float
+
+
+class WordImportQualityStats(BaseModel):
+    buckets: list[WordImportQualityBucket] = Field(default_factory=list)
