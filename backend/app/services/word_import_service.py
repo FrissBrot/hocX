@@ -959,10 +959,11 @@ def _name_score(raw_name: str, display_name: str) -> float:
     raw_first_token = raw_parts[0] if raw_parts else raw_name
     if _canonical_first_token(raw_first_token) != _canonical_first_token(first_token):
         return max(full_score, first_token_score)
-    if len(raw_parts) <= 1:
-        # raw_name is itself just a (possibly nicknamed) bare first name and its
-        # canonical first token already matches display_name's (see the guard above) -
-        # always exactly _BARE_FIRST_NAME_MATCH_SCORE, not a max() with full_score/
+    display_parts = display_name.split(None, 1)
+    if len(raw_parts) <= 1 or len(display_parts) <= 1:
+        # EITHER side being a bare (possibly nicknamed) first name means there's no
+        # surname on at least one side to independently confirm the match - always
+        # exactly _BARE_FIRST_NAME_MATCH_SCORE, not a max() with full_score/
         # first_token_score: those two are needed to RAISE a low nickname-spelling
         # score (e.g. "Sepp" vs. "Josef Muster", both similarity ~0) up to a confident
         # match, but for an EXACT-spelling bare first name ("Nevio" vs. "Nevio Kim
@@ -974,15 +975,24 @@ def _name_score(raw_name: str, display_name: str) -> float:
         # short of the certainty an actually-matched full name earns, both in the
         # reason string shown to the reviewer ("Xx% ähnlich" instead of a false "100%
         # ähnlich") and so a genuine full-name match still outranks it.
+        #
+        # Checking BOTH raw_parts and display_parts (not just raw_parts) fixes a real,
+        # separate bug: a participant whose OWN stored display_name is itself just a
+        # bare first name (no surname on record - plausible for an informally-tracked
+        # roster) could never be matched once the document happened to spell out a
+        # fuller mention ("Sepp Muster") alongside it. The surname branch below looked
+        # for a display-side remainder that was never there (display_parts has only one
+        # element), scored surname_score=0.0, and fell through to a low result under
+        # the matching threshold - asymmetric with the (already-handled) reverse case
+        # of a bare RAW name against a full display_name.
         return _BARE_FIRST_NAME_MATCH_SCORE
     # raw_name carries its own surname/remainder too - the nickname only ever
     # substitutes for the FIRST token, so the surname must still independently match
     # display_name's remainder before this scores as a full match. Without this, "Sepp
     # Muster" would wrongly score a perfect match against "Josef Meier" purely off the
     # first-name nickname coincidence, ignoring the completely different surname.
-    display_parts = display_name.split(None, 1)
-    display_remainder = display_parts[1] if len(display_parts) > 1 else ""
-    surname_score = _similarity(raw_parts[1], display_remainder) if display_remainder else 0.0
+    display_remainder = display_parts[1]
+    surname_score = _similarity(raw_parts[1], display_remainder)
     result = max(full_score, first_token_score, surname_score)
     # Same "must not claim a verified full-name match's certainty" principle as the
     # bare-first-name branch above - if the first tokens only agree via the NICKNAME
