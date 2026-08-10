@@ -1598,51 +1598,75 @@ export function WordImportWizard({
         mapping.candidates.find((c) => c.participant_id === mapping.suggested_participant_id)?.score ?? null,
       candidates: mapping.candidates,
     }));
-    const freshEvents: EventDraft[] = result.event_mappings.map((mapping) => ({
-      row_index: mapping.row_index,
-      raw_title: mapping.raw_title,
-      raw_date: mapping.raw_date,
-      status: mapping.status,
-      candidates: mapping.candidates,
-      linked_event_id: mapping.status !== "new" ? mapping.matched_event_id : null,
-      // See WordImportEventMapping.remembered_title_source/remembered_date_source -
-      // this exact conflict was already resolved identically in an earlier import, so
-      // it's pre-applied (and the row pre-approved below) instead of asking again.
-      title_source: mapping.remembered_title_source ?? "existing",
-      date_source: mapping.remembered_date_source ?? "existing",
-      approved: mapping.status === "matched" || mapping.remembered_title_source !== null || mapping.remembered_date_source !== null,
-      dismissed: false,
-      tag: mapping.tag,
-      participant_count: mapping.participant_count,
-      matrix_key: mapping.matrix_key,
-      matrix_title: mapping.matrix_title,
-      row_id: mapping.row_id,
-      row_label: mapping.row_label,
-      column_key: mapping.column_key,
-      column_label: mapping.column_label,
-      originallySuggestedEventId: mapping.status !== "new" ? mapping.matched_event_id : null,
-      originallySuggestedScore: mapping.candidates.find((c) => c.event_id === mapping.matched_event_id)?.score ?? null,
-    }));
-    const freshLists: ListDraft[] = result.list_mappings.map((mapping) => ({
-      table_index: mapping.table_index,
-      row_index: mapping.row_index,
-      column_one_raw: mapping.column_one_raw,
-      column_two_raw: mapping.column_two_raw,
-      column_one_type: mapping.column_one_type,
-      column_two_type: mapping.column_two_type,
-      column_one_names: mapping.column_one_names,
-      column_two_names: mapping.column_two_names,
-      status: mapping.status,
-      candidates: mapping.candidates,
-      linked_entry_id: mapping.status !== "new" ? mapping.matched_entry_id : null,
-      column_two_source: "existing",
-      has_snapshot_target: mapping.has_snapshot_target,
-      approved: mapping.status === "matched" && mapping.has_snapshot_target,
-      dismissed: false,
-      group_filled: mapping.group_filled,
-      originallySuggestedEntryId: mapping.status !== "new" ? mapping.matched_entry_id : null,
-      originallySuggestedScore: mapping.candidates.find((c) => c.entry_id === mapping.matched_entry_id)?.score ?? null,
-    }));
+    const freshEvents: EventDraft[] = result.event_mappings.map((mapping) => {
+      const draft: EventDraft = {
+        row_index: mapping.row_index,
+        raw_title: mapping.raw_title,
+        raw_date: mapping.raw_date,
+        status: mapping.status,
+        candidates: mapping.candidates,
+        linked_event_id: mapping.status !== "new" ? mapping.matched_event_id : null,
+        // See WordImportEventMapping.remembered_title_source/remembered_date_source -
+        // this exact conflict was already resolved identically in an earlier import, so
+        // it's pre-applied (and the row pre-approved below) instead of asking again.
+        title_source: mapping.remembered_title_source ?? "existing",
+        date_source: mapping.remembered_date_source ?? "existing",
+        approved: false,
+        dismissed: false,
+        tag: mapping.tag,
+        participant_count: mapping.participant_count,
+        matrix_key: mapping.matrix_key,
+        matrix_title: mapping.matrix_title,
+        row_id: mapping.row_id,
+        row_label: mapping.row_label,
+        column_key: mapping.column_key,
+        column_label: mapping.column_label,
+        originallySuggestedEventId: mapping.status !== "new" ? mapping.matched_event_id : null,
+        originallySuggestedScore: mapping.candidates.find((c) => c.event_id === mapping.matched_event_id)?.score ?? null,
+      };
+      // Real bug fixed here: this used to hinge on status === "matched", so a brand-
+      // new Termin with a perfectly clean, complete date/title always defaulted to
+      // "Ignorieren" - visually contradicting its own "🆕 Neu anlegen" summary label,
+      // which reads as a confirmed action, not a flagged problem. Matrix cells already
+      // used the "is this row actually resolved" signal (matrixStillOpen) instead of
+      // new-vs-existing status; this aligns Termine with that same, more consistent
+      // rule - eventStillOpen only returns true when something genuinely needs a
+      // decision (no date, or a real title/date conflict with an existing Termin).
+      draft.approved =
+        !eventStillOpen(draft) || mapping.remembered_title_source !== null || mapping.remembered_date_source !== null;
+      return draft;
+    });
+    const freshLists: ListDraft[] = result.list_mappings.map((mapping) => {
+      const draft: ListDraft = {
+        table_index: mapping.table_index,
+        row_index: mapping.row_index,
+        column_one_raw: mapping.column_one_raw,
+        column_two_raw: mapping.column_two_raw,
+        column_one_type: mapping.column_one_type,
+        column_two_type: mapping.column_two_type,
+        column_one_names: mapping.column_one_names,
+        column_two_names: mapping.column_two_names,
+        status: mapping.status,
+        candidates: mapping.candidates,
+        linked_entry_id: mapping.status !== "new" ? mapping.matched_entry_id : null,
+        column_two_source: "existing",
+        has_snapshot_target: mapping.has_snapshot_target,
+        approved: false,
+        dismissed: false,
+        group_filled: mapping.group_filled,
+        originallySuggestedEntryId: mapping.status !== "new" ? mapping.matched_entry_id : null,
+        originallySuggestedScore: mapping.candidates.find((c) => c.entry_id === mapping.matched_entry_id)?.score ?? null,
+      };
+      // Same fix/rationale as freshEvents above - a clean new list row (has_snapshot_
+      // target, no unmatched names) used to default to "Ignorieren" purely because
+      // status !== "matched", contradicting its own "➕ Neu" summary label. has_snapshot_
+      // target is kept as an explicit gate (not just folded into listStillOpen) since
+      // listStillOpen itself already treats "no snapshot target" as "nothing to
+      // review" (true either way it's silently skipped at commit) - approved would
+      // otherwise become true for a row that can never actually be written.
+      draft.approved = mapping.has_snapshot_target && !listStillOpen(draft);
+      return draft;
+    });
     const freshMatrices: MatrixDraft[] = result.matrix_mappings.map((mapping) => ({
       table_index: mapping.table_index,
       matrix_key: mapping.matrix_key,

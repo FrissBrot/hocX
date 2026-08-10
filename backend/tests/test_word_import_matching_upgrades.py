@@ -155,3 +155,17 @@ def test_name_score_nickname_plus_matching_surname_is_capped_but_ranks_above_bar
     assert nickname_plus_surname < 1.0
     assert bare < nickname_plus_surname < exact_full_match
     assert exact_full_match == 1.0
+
+
+def test_name_score_is_symmetric_when_the_roster_side_has_no_surname():
+    # Real bug: a participant whose OWN stored display_name is itself just a bare
+    # first name (no surname on record) could never be matched once the document
+    # spelled out a fuller mention - the surname branch looked for a display-side
+    # remainder that was never there, scored surname_score=0.0, and fell through to a
+    # score under the matching threshold. The reverse direction (bare RAW name against
+    # a full display_name) already worked; this is the missing mirror case.
+    assert svc._name_score("Sepp Muster", "Sepp") == svc._BARE_FIRST_NAME_MATCH_SCORE
+    assert svc._name_score("Josef Muster", "Sepp") == svc._BARE_FIRST_NAME_MATCH_SCORE
+    assert svc._name_score("Sepp Muster", "Sepp") >= svc._PARTICIPANT_MATCH_THRESHOLD
+    # Both sides bare must still work exactly as before (unaffected by this fix).
+    assert svc._name_score("Sepp", "Josef") == svc._BARE_FIRST_NAME_MATCH_SCORE
