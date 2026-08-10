@@ -6,6 +6,7 @@ import { PillMenu } from "@/components/ui/pill-menu";
 import { ATTENDANCE_OPTIONS } from "@/components/protocol/protocol-editor-shared";
 import { AssigneeOption, TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
 import { browserApiFetch } from "@/lib/api/client";
+import { useConfirm } from "@/contexts/confirm-context";
 import { formatDate } from "@/lib/utils/format";
 import {
   analyzeWordImport,
@@ -373,6 +374,9 @@ type EventDraft = {
   title_source: FieldSource;
   date_source: FieldSource;
   approved: boolean;
+  // See ListDraft.dismissed for the same idea elsewhere in this wizard - distinguishes
+  // an explicit "Ignorieren" from a still-open row that just hasn't been looked at.
+  dismissed: boolean;
   // Only set for rows extracted from a Matrix "events" row - see WordImportEventMapping.
   tag: string | null;
   participant_count: number | null;
@@ -500,17 +504,27 @@ function resolveListColumnTwoRaw(entry: ListDraft): string {
   return entry.column_two_source === "existing" && linked ? linked.column_two_display : entry.column_two_raw;
 }
 
-// An event row only needs a decision from the user when it's linked to an EXISTING
-// event whose title/date actually conflicts with the document - a row that will
-// simply create a new event is a perfectly fine default, not something "open".
-// Once the reviewer has explicitly taken the row (approved via the Übernehmen/
-// Ignorieren pill), that IS the decision - the conflict defaults to "existing
-// wins" (see title_source/date_source) and the row should stop being flagged.
-function eventNeedsReview(entry: EventDraft): boolean {
-  if (entry.approved) return false;
+// An event row is blocked either when it's linked to an EXISTING event whose title/
+// date actually conflicts with the document, or - real bug fixed here - when it will
+// create a BRAND NEW event with no usable date at all: WordImportEventCommit.final_date
+// is a required field backend-side (see resolveEventFinal's "" fallback), so approving
+// such a row used to send an empty date and 422 the whole commit instead of pointing
+// the reviewer at the one row that needs a date typed in (see the inline date field in
+// renderEventRow). Split from eventNeedsReview so it can be recomputed after an edit
+// (typing a date, or linking an existing event) without going through the `approved`/
+// `dismissed` short-circuit below - mirrors listStillOpen/listNeedsReview.
+function eventStillOpen(entry: EventDraft): boolean {
   const linked = entry.candidates.find((candidate) => candidate.event_id === entry.linked_event_id);
-  if (!linked) return false;
+  if (!linked) return !entry.raw_date;
   return linked.title !== entry.raw_title || linked.event_date !== (entry.raw_date ?? linked.event_date);
+}
+
+// Once the reviewer has explicitly taken the row (approved via the Übernehmen/
+// Ignorieren pill) or dismissed it, that IS the decision - the conflict defaults to
+// "existing wins" (see title_source/date_source) and the row should stop being flagged.
+function eventNeedsReview(entry: EventDraft): boolean {
+  if (entry.approved || entry.dismissed) return false;
+  return eventStillOpen(entry);
 }
 
 // Same idea for list rows: a brand-new entry is a fine default, but a name that
@@ -522,7 +536,9 @@ function listStillOpen(entry: ListDraft): boolean {
   if (!entry.has_snapshot_target) return false;
   const linked = entry.candidates.find((candidate) => candidate.entry_id === entry.linked_entry_id);
   const col2Differs = !!linked && linked.column_two_display !== entry.column_two_raw;
-  const hasUnmatchedName = [...entry.column_one_names, ...entry.column_two_names].some((name) => name.participant_id === null);
+  const hasUnmatchedName = [...entry.column_one_names, ...entry.column_two_names].some(
+    (name) => name.participant_id === null && !name.no_link
+  );
   return col2Differs || hasUnmatchedName;
 }
 
@@ -544,7 +560,7 @@ function listNeedsReview(entry: ListDraft): boolean {
 function matrixStillOpen(entry: MatrixDraft): boolean {
   if (entry.column_key === null) return true;
   if (NAME_COLUMN_TYPES.has(entry.row_type)) {
-    return entry.names.some((name) => name.participant_id === null);
+    return entry.names.some((name) => name.participant_id === null && !name.no_link);
   }
   return false;
 }
@@ -663,9 +679,22 @@ function buildMatrixCardGroups(
   return order.map((key) => groups.get(key)!);
 }
 
+// Real bug fixed here: unlike Anwesenheit/Liste/Matrix, an unresolved participant name
+// inside a form block's field (e.g. "Wer geht") never blocked the commit at all - it
+// just silently stayed on "Keinen verknüpfen", visually identical to a reviewer's own
+// deliberate choice. Mirrors listStillOpen's hasUnmatchedName check.
+function formFieldsStillOpen(text: TextDraft): boolean {
+  if (!text.isFormBlock) return false;
+  return text.formFields.some((field) => field.names.some((name) => name.participant_id === null && !name.create_new && !name.no_link));
+}
+
 function textNeedsReview(text: TextDraft): boolean {
   if (text.dismissed) return false;
-  return text.template_element_id === null || (text.isEventRepeat && text.linkedEventId === null && !text.linkedEventNone);
+  return (
+    text.template_element_id === null ||
+    (text.isEventRepeat && text.linkedEventId === null && !text.linkedEventNone) ||
+    formFieldsStillOpen(text)
+  );
 }
 
 function attendanceNeedsReview(entry: AttendanceDraft): boolean {
@@ -739,18 +768,22 @@ function buildRecurringNameGroups(
   texts.forEach((text) => {
     text.formFields.forEach((field) => {
       field.names.forEach((name) => {
-        if (name.participant_id === null && !name.create_new) touch(name.raw_name, "text", name.candidates);
+        if (name.participant_id === null && !name.create_new && !name.no_link) touch(name.raw_name, "text", name.candidates);
       });
     });
   });
   lists.forEach((row) => {
     [...row.column_one_names, ...row.column_two_names].forEach((name) => {
-      if (name.participant_id === null) touch(name.raw_name, "list", name.candidates);
+      // no_link excludes an explicit "Keinen verknüpfen" decision from still counting as
+      // open - without it, a name that only ever occurs in lists/matrices/plural form
+      // fields (never in Anwesenheit, where "Keinen verknüpfen" already worked via
+      // linkedNone) could never leave this count, permanently blocking structureReady.
+      if (name.participant_id === null && !name.no_link) touch(name.raw_name, "list", name.candidates);
     });
   });
   matrices.forEach((row) => {
     row.names.forEach((name) => {
-      if (name.participant_id === null) touch(name.raw_name, "matrix", name.candidates);
+      if (name.participant_id === null && !name.no_link) touch(name.raw_name, "matrix", name.candidates);
     });
   });
 
@@ -812,9 +845,9 @@ export function WordImportWizard({
   const [expandedEvents, setExpandedEvents] = useState<Set<number>>(new Set());
   const [expandedAttendance, setExpandedAttendance] = useState<Set<number>>(new Set());
   const [expandedLists, setExpandedLists] = useState<Set<number>>(new Set());
-  const [doneSummary, setDoneSummary] = useState<{ attendance: number; events: number; lists: number; matrices: number; skipped: number } | null>(
-    null
-  );
+  const [doneSummary, setDoneSummary] = useState<
+    { attendance: number; events: number; lists: number; matrices: number; skipped: number; warnings: string[] } | null
+  >(null);
   // Participants eligible for THIS template's attendance tracking (excludes people marked
   // "keine Anwesenheitskontrolle" for the template, mirroring the backend's own attendance
   // matching pool) - falls back to the full tenant participant list until loaded so the
@@ -831,8 +864,28 @@ export function WordImportWizard({
   const draftTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const documentIdRef = useRef(documentId);
   documentIdRef.current = documentId;
+  const confirm = useConfirm();
+  // Real bug fixed here: "Neu analysieren" (and changing a single table's role, which
+  // reanalyzes the same way) used to silently discard every manual review decision with
+  // no warning at all, in both standalone and queue mode. progressHydratingRef mirrors
+  // isHydratingRef but is consumed by its own effect below (kept separate so the two
+  // never race over which one resets it first) - applyAnalysis sets both together and
+  // clears hasReviewProgressRef, the one below then flips hasReviewProgressRef back to
+  // true the next time the reviewer actually touches Anwesenheit/Termine/Listen/
+  // Matrizen/Texte state, which is what reanalyzeWithRoles below checks before wiping.
+  const progressHydratingRef = useRef(false);
+  const hasReviewProgressRef = useRef(false);
+  // See updateTableRole's docstring - closes a click-race React state can't close on its
+  // own since it only reflects the last completed render.
+  const reanalyzeBusyRef = useRef(false);
+  // Bumped every time applyAnalysis runs (initial load AND every reanalysis) - lets a
+  // debounced draft save scheduled BEFORE a reanalysis detect that a NEWER analysis
+  // generation has since started and skip itself, instead of landing AFTER the
+  // reanalysis's server-side review_draft_json reset and resurrecting a draft that
+  // belongs to the analysis generation before it (real race fixed here).
+  const draftGenerationRef = useRef(0);
 
-  function flushDraftSave() {
+  function flushDraftSave(expectedGeneration?: number) {
     const id = documentIdRef.current;
     const draft = pendingDraftRef.current;
     if (!id || !draft) return;
@@ -841,6 +894,7 @@ export function WordImportWizard({
       draftTimeoutRef.current = null;
     }
     pendingDraftRef.current = null;
+    if (expectedGeneration !== undefined && expectedGeneration !== draftGenerationRef.current) return;
     void saveWordImportDocumentDraft(id, draft as unknown as WordImportReviewDraftJson).catch(() => {});
   }
 
@@ -854,13 +908,26 @@ export function WordImportWizard({
     // - "upload" can't happen once documentId is set, and "done" means already committed, at
     // which point the backend refuses to save a draft anyway (see save_draft's status guard).
     if (step !== "structure" && step !== "review") return;
+    const generation = draftGenerationRef.current;
     pendingDraftRef.current = { protocolDate, texts, attendance, events, lists, matrices, step };
-    draftTimeoutRef.current = setTimeout(flushDraftSave, 800);
+    draftTimeoutRef.current = setTimeout(() => flushDraftSave(generation), 800);
     return () => {
       if (draftTimeoutRef.current) clearTimeout(draftTimeoutRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documentId, protocolDate, texts, attendance, events, lists, matrices, step]);
+
+  // See hasReviewProgressRef's declaration above - runs in both standalone and queue
+  // mode (unlike the draft-autosave effect above, which is queue-only), consuming its
+  // own hydration flag so the two effects never race over who resets it first.
+  useEffect(() => {
+    if (progressHydratingRef.current) {
+      progressHydratingRef.current = false;
+      return;
+    }
+    hasReviewProgressRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [texts, attendance, events, lists, matrices]);
 
   // Flushes on unmount specifically (empty deps => cleanup runs only when the wizard goes
   // away entirely - the queue view unmounts it both on "Zurück zur Warteschlange" and on
@@ -903,6 +970,20 @@ export function WordImportWizard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documentId]);
 
+  // Real bug fixed here: every expandable row header below was a plain <div onClick>
+  // with no role/tabIndex/keyboard handler - a keyboard-only or screen-reader user could
+  // never expand an already-resolved (unflagged, so not force-expanded) row to double-
+  // check or correct it. Shared here so all four row kinds (Termine/Anwesenheit/Listen/
+  // Texte) get the same Enter/Space activation as a native clickable element.
+  function rowHeadKeyDown(toggle: () => void) {
+    return (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        toggle();
+      }
+    };
+  }
+
   function toggleTextExpanded(index: number) {
     setExpandedTexts((current) => {
       const next = new Set(current);
@@ -943,6 +1024,26 @@ export function WordImportWizard({
     setEvents((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
   }
 
+  // Like updateListName/updateMatrixName: recomputes approved/dismissed after a genuine
+  // data edit (date typed in, event re-linked, doc-vs-existing source flipped). Real bug
+  // fixed here - see eventStillOpen's docstring, which already claimed this recompute
+  // existed ("split out so it can be recomputed after an edit") but no call site ever
+  // did it: typing the missing date on a blocked new-event row left approved/dismissed
+  // both false, and decisionState(false, false) reads as "Ignorieren" - the exact
+  // opposite of what the reviewer just did, and the Termin was silently never created.
+  // Deliberately NOT used by the Übernehmen/Ignorieren pill itself (still plain
+  // updateEventAt there, see renderEventRow), which must set approved/dismissed exactly
+  // as chosen, not have it recomputed out from under the click.
+  function updateEventField(index: number, patch: Partial<EventDraft>) {
+    setEvents((current) =>
+      current.map((row, rowIndex) => {
+        if (rowIndex !== index) return row;
+        const updated = { ...row, ...patch };
+        return { ...updated, approved: !eventStillOpen(updated), dismissed: false };
+      })
+    );
+  }
+
   // One shared row for a Termin under review, used both in the flat "Termine" tab and
   // inside a Matrix card's "events" row - identical interaction everywhere: collapsed by
   // default, click the row to expand the link-picker and (if the linked event's title/date
@@ -953,22 +1054,27 @@ export function WordImportWizard({
   // data wins unless explicitly swapped to the doc's.
   function renderEventRow(entry: EventDraft, index: number) {
     const linked = entry.candidates.find((candidate) => candidate.event_id === entry.linked_event_id);
-    const hasDiff = eventNeedsReview(entry);
-    const isOpen = expandedEvents.has(index);
+    const flagged = eventNeedsReview(entry);
+    const isOpen = flagged || expandedEvents.has(index);
     const titleDiffers = !!linked && linked.title !== entry.raw_title;
     const dateDiffers = !!linked && linked.event_date !== (entry.raw_date ?? linked.event_date);
-    // Explicitly ignored (and not sitting on an unresolved conflict, which stays flagged red
-    // instead - that still needs attention) - grey the row out like an unlinked attendance
-    // row, so "this won't be imported" reads the same way everywhere in the wizard.
-    const isIgnored = !entry.approved && !hasDiff;
+    const missingDate = !linked && !entry.raw_date;
+    const decision = decisionState(entry.approved, flagged);
+    const isIgnored = decision === "ignore";
     return (
       <div
-        className={`word-import-text-row${hasDiff ? " word-import-flag" : ""}${isIgnored ? " word-import-text-row-muted" : ""}`}
+        className={`word-import-text-row${flagged ? " word-import-flag" : ""}${isIgnored ? " word-import-text-row-muted" : ""}`}
         key={entry.row_index}
       >
-        <div className="word-import-text-row-head word-import-text-row-head-clickable" onClick={() => toggleEventExpanded(index)}>
+        <div
+          className="word-import-text-row-head word-import-text-row-head-clickable"
+          role="button"
+          tabIndex={0}
+          onClick={() => toggleEventExpanded(index)}
+          onKeyDown={rowHeadKeyDown(() => toggleEventExpanded(index))}
+        >
           <span className="word-import-text-row-title">
-            {entry.raw_title} ({formatDate(entry.raw_date) || "?"})
+            {entry.raw_title} ({entry.raw_date ? formatDate(entry.raw_date) : "kein Datum"})
             {entry.participant_count !== null && <span className="muted"> · {entry.participant_count} TN</span>}
           </span>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -984,18 +1090,41 @@ export function WordImportWizard({
               ))}
             <button
               type="button"
-              className={`word-import-decision-btn ${entry.approved ? "is-take" : "is-ignore"}`}
+              className={`word-import-decision-btn is-${decision}`}
               onClick={(clickEvent) => {
                 clickEvent.stopPropagation();
-                updateEventAt(index, { approved: !entry.approved });
+                const patch = nextDecisionPatch(decision);
+                // A brand-new event with no date can never validly be "übernommen" -
+                // final_date is required backend-side (see resolveEventFinal's "" ->
+                // 422 for the whole commit) and there is no per-row error to point at
+                // the cause. missingDate is exactly what keeps eventStillOpen true, so
+                // this row must stay capped at "Ignorieren" (reachable via the normal
+                // incomplete->ignore step) until a date is typed into the field above -
+                // real bug fixed here: "Unvollständig"->"Ignorieren"->"Übernehmen" used
+                // to reach "Übernehmen" regardless.
+                if (patch.approved && missingDate) return;
+                updateEventAt(index, patch);
               }}
             >
-              <CheckIcon /> {entry.approved ? "Übernehmen" : "Ignorieren"}
+              <CheckIcon /> {DECISION_LABEL[decision]}
             </button>
           </div>
         </div>
         {isOpen && (
           <div className="grid" style={{ gap: "10px" }}>
+            {missingDate && (
+              <div className="word-import-alert word-import-alert-block">
+                <WarningIcon />
+                <span className="word-import-alert-date">
+                  Kein Datum im Dokument erkannt - ohne Datum kann kein neuer Termin angelegt werden.
+                  <InlineDateField
+                    className="input word-import-alert-date-input"
+                    value={entry.raw_date ?? ""}
+                    onChange={(value) => updateEventField(index, { raw_date: value || null })}
+                  />
+                </span>
+              </div>
+            )}
             <TodoAssigneeMenu
               label={linked ? `${linked.title} (${formatDate(linked.event_date)})` : "🆕 Neu anlegen"}
               nullLabel="🆕 Neu anlegen"
@@ -1007,7 +1136,7 @@ export function WordImportWizard({
                 })
               )}
               onChange={(option) =>
-                updateEventAt(index, { linked_event_id: option.id, title_source: "existing", date_source: "existing" })
+                updateEventField(index, { linked_event_id: option.id, title_source: "existing", date_source: "existing" })
               }
             />
             {linked && (titleDiffers || dateDiffers) && (
@@ -1021,7 +1150,7 @@ export function WordImportWizard({
                         <input
                           type="radio"
                           checked={entry.title_source === "doc"}
-                          onChange={() => updateEventAt(index, { title_source: "doc" })}
+                          onChange={() => updateEventField(index, { title_source: "doc" })}
                         />
                         <span>
                           <span className="field-radio-option-label">Aus Dokument</span>
@@ -1032,7 +1161,7 @@ export function WordImportWizard({
                         <input
                           type="radio"
                           checked={entry.title_source === "existing"}
-                          onChange={() => updateEventAt(index, { title_source: "existing" })}
+                          onChange={() => updateEventField(index, { title_source: "existing" })}
                         />
                         <span>
                           <span className="field-radio-option-label">Bestehend</span>
@@ -1047,7 +1176,7 @@ export function WordImportWizard({
                         <input
                           type="radio"
                           checked={entry.date_source === "doc"}
-                          onChange={() => updateEventAt(index, { date_source: "doc" })}
+                          onChange={() => updateEventField(index, { date_source: "doc" })}
                         />
                         <span>
                           <span className="field-radio-option-label">Aus Dokument</span>
@@ -1058,7 +1187,7 @@ export function WordImportWizard({
                         <input
                           type="radio"
                           checked={entry.date_source === "existing"}
-                          onChange={() => updateEventAt(index, { date_source: "existing" })}
+                          onChange={() => updateEventField(index, { date_source: "existing" })}
                         />
                         <span>
                           <span className="field-radio-option-label">Bestehend</span>
@@ -1117,7 +1246,10 @@ export function WordImportWizard({
       >
         <div
           className="word-import-text-row-head word-import-text-row-head-clickable"
+          role="button"
+          tabIndex={0}
           onClick={() => toggleAttendanceExpanded(index)}
+          onKeyDown={rowHeadKeyDown(() => toggleAttendanceExpanded(index))}
         >
           <span className="word-import-text-row-title">
             {entry.raw_name || <span className="muted">– nicht im Dokument (Standard: abwesend) –</span>}
@@ -1215,7 +1347,13 @@ export function WordImportWizard({
         className={`word-import-text-row${flagged ? " word-import-flag" : ""}${isIgnored ? " word-import-text-row-muted" : ""}`}
         key={key}
       >
-        <div className="word-import-text-row-head word-import-text-row-head-clickable" onClick={() => toggleListExpanded(index)}>
+        <div
+          className="word-import-text-row-head word-import-text-row-head-clickable"
+          role="button"
+          tabIndex={0}
+          onClick={() => toggleListExpanded(index)}
+          onKeyDown={rowHeadKeyDown(() => toggleListExpanded(index))}
+        >
           <span className="word-import-text-row-title">
             {titleLabel}
             {!col2IsNames && entry.column_two_raw && <span className="muted"> · {entry.column_two_raw}</span>}
@@ -1386,16 +1524,49 @@ export function WordImportWizard({
   }
 
   function applyAnalysis(result: WordImportAnalysis, draft?: WordImportReviewDraft | null) {
+    // See draftGenerationRef's declaration - every applyAnalysis call starts a new
+    // draft generation, invalidating any still-pending save scheduled before it. Also
+    // drops any already-pending draft outright (not just its timer) - the autosave
+    // effect's hydration early-return below never overwrites pendingDraftRef, so
+    // without this an unmount right after a reanalysis (before any other edit re-
+    // populates it) would still flush the STALE pre-reanalysis draft on cleanup, which
+    // calls flushDraftSave() with no generation to check against.
+    draftGenerationRef.current += 1;
+    pendingDraftRef.current = null;
+    if (draftTimeoutRef.current) {
+      clearTimeout(draftTimeoutRef.current);
+      draftTimeoutRef.current = null;
+    }
     // Suppresses the draft-autosave effect for the state update this triggers - loading or
     // reanalyzing a document isn't itself a reviewer edit worth saving back.
     isHydratingRef.current = true;
+    // Same idea for hasReviewProgressRef (see its declaration) - this state update is a
+    // fresh baseline, not itself a reviewer edit worth protecting against the NEXT
+    // reanalysis. EXCEPT when a saved draft is being restored here (documentId load
+    // effect below): that draft IS real, already-invested review progress the reviewer
+    // would lose if they click "Neu analysieren" without ever having touched anything
+    // else first - seeding this to true in that case is what makes the very next
+    // reanalyze correctly ask for confirmation instead of silently wiping it.
+    progressHydratingRef.current = true;
+    hasReviewProgressRef.current = !!draft;
     setAnalysis(result);
     setProtocolDate(draft ? draft.protocolDate : result.protocol_date ?? "");
     setTableRoles(
       Object.fromEntries(
         result.tables.map((table) => [
           table.index,
-          { role: table.role, list_definition_id: table.list_definition_id, matrix_key: table.matrix_key },
+          {
+            role: table.role,
+            list_definition_id: table.list_definition_id,
+            matrix_key: table.matrix_key,
+            // Real bug fixed here: omitting this meant a manually forced grouping
+            // strategy snapped back to "Automatisch" right after being applied, and -
+            // worse - updateTableRole builds its NEXT reanalyze payload from this same
+            // tableRoles state, so the forced strategy silently reverted to
+            // auto-scoring on the very next reanalysis triggered by any OTHER table's
+            // role changing.
+            list_grouping_strategy: table.grouping_strategy,
+          },
         ])
       )
     );
@@ -1418,7 +1589,10 @@ export function WordImportWizard({
       status: mapping.status,
       participant_id: mapping.suggested_participant_id,
       createNew: false,
-      linkedNone: false,
+      // See WordImportAttendanceMapping.remembered_no_link - this raw name (e.g. a
+      // table's own "Total" footer row) was already explicitly resolved as "Keinen
+      // verknüpfen" before, so it starts pre-resolved instead of flagged for review.
+      linkedNone: mapping.remembered_no_link,
       originallySuggestedParticipantId: mapping.suggested_participant_id,
       originallySuggestedScore:
         mapping.candidates.find((c) => c.participant_id === mapping.suggested_participant_id)?.score ?? null,
@@ -1431,9 +1605,13 @@ export function WordImportWizard({
       status: mapping.status,
       candidates: mapping.candidates,
       linked_event_id: mapping.status !== "new" ? mapping.matched_event_id : null,
-      title_source: "existing",
-      date_source: "existing",
-      approved: mapping.status === "matched",
+      // See WordImportEventMapping.remembered_title_source/remembered_date_source -
+      // this exact conflict was already resolved identically in an earlier import, so
+      // it's pre-applied (and the row pre-approved below) instead of asking again.
+      title_source: mapping.remembered_title_source ?? "existing",
+      date_source: mapping.remembered_date_source ?? "existing",
+      approved: mapping.status === "matched" || mapping.remembered_title_source !== null || mapping.remembered_date_source !== null,
+      dismissed: false,
       tag: mapping.tag,
       participant_count: mapping.participant_count,
       matrix_key: mapping.matrix_key,
@@ -1501,7 +1679,12 @@ export function WordImportWizard({
     setEvents(eventsToUse);
     setLists(draft ? draft.lists : freshLists);
     setMatrices(draft ? draft.matrices : freshMatrices);
-    setActiveCategory("tables");
+    // Real bug fixed here: always "tables" regardless of the restored draft's own
+    // step - a draft resumed at step "review" landed on the Structure step's own
+    // "Erkannte Tabellen" panel body (activeCategory isn't gated on step, so nothing
+    // in the nav even showed as active) instead of the data category the normal
+    // structure->review transition uses (see "Weiter zu den Daten" above).
+    setActiveCategory(draft?.step === "review" ? "attendance" : "tables");
     setExpandedTexts(new Set());
     setExpandedEvents(new Set());
     setExpandedAttendance(new Set());
@@ -1524,8 +1707,41 @@ export function WordImportWizard({
   }
 
   async function reanalyzeWithRoles(nextTableRoles: Record<number, TableRoleOverride>) {
-    if (!templateId) return;
-    if (!documentId && !file) return;
+    // Real bug fixed here: reanalyzeBusyRef is set to true by the caller (updateTableRole/
+    // reanalyze) BEFORE calling this - either early return below used to leave it stuck at
+    // true forever (both callers guard on it and bail out immediately), permanently
+    // deadlocking every future reanalyze trigger for this wizard instance. Currently latent
+    // (both conditions require state the callers themselves already ensure can't happen),
+    // but a real leak in an otherwise careful guard.
+    if (!templateId) {
+      reanalyzeBusyRef.current = false;
+      setPendingTableIndex(null);
+      return;
+    }
+    if (!documentId && !file) {
+      reanalyzeBusyRef.current = false;
+      setPendingTableIndex(null);
+      return;
+    }
+    // Real bug fixed here: this used to always wipe every already-reviewed Anwesenheit/
+    // Termine/Listen/Matrizen/Texte decision back to fresh auto-suggestions with zero
+    // warning (see hasReviewProgressRef's declaration). Only asks when there's actually
+    // something at stake - a routine table-role pick during initial setup, before any
+    // real review happened, still goes through with no interruption.
+    if (hasReviewProgressRef.current) {
+      const proceed = await confirm({
+        title: "Neu analysieren?",
+        message:
+          "Bereits geprüfte Einträge (Anwesenheit, Termine, Listen, Matrizen, Texte) werden dabei durch frische Vorschläge ersetzt und gehen verloren. Fortfahren?",
+        confirmLabel: "Neu analysieren",
+        tone: "danger",
+      });
+      if (!proceed) {
+        reanalyzeBusyRef.current = false;
+        setPendingTableIndex(null);
+        return;
+      }
+    }
     setTableRoles(nextTableRoles);
     setBusy(true);
     setError(null);
@@ -1539,6 +1755,7 @@ export function WordImportWizard({
     } finally {
       setBusy(false);
       setPendingTableIndex(null);
+      reanalyzeBusyRef.current = false;
     }
   }
 
@@ -1546,14 +1763,23 @@ export function WordImportWizard({
   // interpreted, so it has to go back through the server-side parser rather than just
   // updating local state - otherwise the attendance/events/lists/matrices tabs would keep
   // showing stale rows derived from the table's previous role.
+  //
+  // Real bug fixed here: `busy` (React state) is only current as of the last render, so
+  // two clicks on two DIFFERENT tables' role pills within the same tick could both read
+  // `busy === false` and both fire, each computed from the same stale `tableRoles`
+  // snapshot - whichever reanalysis resolves last silently reverts the other one's
+  // change with no error. reanalyzeBusyRef is set synchronously, closing that window.
   function updateTableRole(tableIndex: number, patch: Partial<TableRoleOverride>) {
-    if (busy) return;
+    if (reanalyzeBusyRef.current) return;
+    reanalyzeBusyRef.current = true;
     const current = tableRoles[tableIndex] ?? { role: "ignore" as TableRole, list_definition_id: null, matrix_key: null };
     setPendingTableIndex(tableIndex);
     void reanalyzeWithRoles({ ...tableRoles, [tableIndex]: { ...current, ...patch } });
   }
 
   async function reanalyze() {
+    if (reanalyzeBusyRef.current) return;
+    reanalyzeBusyRef.current = true;
     await reanalyzeWithRoles(tableRoles);
   }
 
@@ -1609,6 +1835,10 @@ export function WordImportWizard({
                                 raw_name: rawName,
                                 participant_id: optionId === CREATE_NEW_PARTICIPANT_ID ? null : optionId,
                                 create_new: optionId === CREATE_NEW_PARTICIPANT_ID,
+                                // Only ever reached for optionId !== null - the null
+                                // ("Keinen verknüpfen") case takes the names: [] branch
+                                // above instead, so no_link is never true here.
+                                no_link: false,
                                 // A brand-new name entry typed by the reviewer here, not
                                 // something analyze() suggested - nothing to compare
                                 // against, so there's no original suggestion.
@@ -1642,6 +1872,11 @@ export function WordImportWizard({
                               ...name,
                               participant_id: optionId === CREATE_NEW_PARTICIPANT_ID ? null : optionId,
                               create_new: optionId === CREATE_NEW_PARTICIPANT_ID,
+                              // See WordImportNameResolution.no_link - explicit "Keinen
+                              // verknüpfen" here must be distinguishable from never having
+                              // been reviewed, otherwise the recurring-name clarifier can
+                              // never count this name as resolved.
+                              no_link: optionId === null,
                             }
                           : name
                       ),
@@ -1663,7 +1898,9 @@ export function WordImportWizard({
       current.map((row, index) => {
         if (index !== rowIndex) return row;
         const key = column === "one" ? "column_one_names" : "column_two_names";
-        const updatedNames = row[key].map((name, i) => (i === nameIndex ? { ...name, participant_id: participantId } : name));
+        const updatedNames = row[key].map((name, i) =>
+          i === nameIndex ? { ...name, participant_id: participantId, no_link: participantId === null } : name
+        );
         const updatedRow = { ...row, [key]: updatedNames };
         return { ...updatedRow, approved: !listStillOpen(updatedRow), dismissed: false };
       })
@@ -1674,7 +1911,9 @@ export function WordImportWizard({
     setMatrices((current) =>
       current.map((row, index) => {
         if (index !== rowIndex) return row;
-        const updatedNames = row.names.map((name, i) => (i === nameIndex ? { ...name, participant_id: participantId } : name));
+        const updatedNames = row.names.map((name, i) =>
+          i === nameIndex ? { ...name, participant_id: participantId, no_link: participantId === null } : name
+        );
         const updatedRow = { ...row, names: updatedNames };
         return { ...updatedRow, approved: !matrixStillOpen(updatedRow), dismissed: false };
       })
@@ -1728,6 +1967,10 @@ export function WordImportWizard({
                         raw_name: name.raw_name,
                         participant_id: participantId,
                         create_new: createNew,
+                        // Only reached for optionId !== null (the null case takes the
+                        // names: [] branch above), so never true here - see
+                        // WordImportNameResolution.no_link.
+                        no_link: false,
                         originally_suggested_participant_id: null,
                         originally_suggested_score: null,
                         candidates: name.candidates,
@@ -1740,7 +1983,7 @@ export function WordImportWizard({
               ...field,
               names: field.names.map((name) =>
                 name.participant_id === null && !name.create_new && normalizeRawName(name.raw_name) === key
-                  ? { ...name, participant_id: participantId, create_new: createNew }
+                  ? { ...name, participant_id: participantId, create_new: createNew, no_link: optionId === null }
                   : name
               ),
             };
@@ -1752,18 +1995,31 @@ export function WordImportWizard({
     setLists((current) =>
       current.map((row) => {
         const matches = (name: WordImportNameResolution) => name.participant_id === null && normalizeRawName(name.raw_name) === key;
+        // Only rows that actually contain this recurring name may have their
+        // approved/dismissed state recomputed below - otherwise every OTHER row's
+        // explicit "Ignorieren" decision would be silently reverted to "Übernehmen" by
+        // clarifying an unrelated name (real bug: listStillOpen/matrixStillOpen were
+        // being recomputed for the whole table on every call, not just affected rows).
+        if (!row.column_one_names.some(matches) && !row.column_two_names.some(matches)) return row;
         const updated = {
           ...row,
-          column_one_names: row.column_one_names.map((name) => (matches(name) ? { ...name, participant_id: participantId } : name)),
-          column_two_names: row.column_two_names.map((name) => (matches(name) ? { ...name, participant_id: participantId } : name)),
+          column_one_names: row.column_one_names.map((name) =>
+            matches(name) ? { ...name, participant_id: participantId, no_link: optionId === null } : name
+          ),
+          column_two_names: row.column_two_names.map((name) =>
+            matches(name) ? { ...name, participant_id: participantId, no_link: optionId === null } : name
+          ),
         };
         return { ...updated, approved: !listStillOpen(updated), dismissed: false };
       })
     );
     setMatrices((current) =>
       current.map((row) => {
+        const matches = (name: WordImportNameResolution) => name.participant_id === null && normalizeRawName(name.raw_name) === key;
+        // See the same guard in setLists above - same bug, same fix.
+        if (!row.names.some(matches)) return row;
         const updatedNames = row.names.map((name) =>
-          name.participant_id === null && normalizeRawName(name.raw_name) === key ? { ...name, participant_id: participantId } : name
+          matches(name) ? { ...name, participant_id: participantId, no_link: optionId === null } : name
         );
         const updatedRow = { ...row, names: updatedNames };
         return { ...updatedRow, approved: !matrixStillOpen(updatedRow), dismissed: false };
@@ -1780,6 +2036,15 @@ export function WordImportWizard({
       current.map((row) => {
         if (row.matrix_key !== matrixKey || row.column_label_raw !== columnLabelRaw) return row;
         const updatedRow = { ...row, column_key: columnKey };
+        // Real bug fixed here: every cell in an unresolved column starts blocked
+        // (column_key === null), so picking the column genuinely affects all of them -
+        // but a reviewer may have already explicitly clicked "Ignorieren" on some cell
+        // (e.g. a garbage/footer row) BEFORE resolving the column. Recomputing
+        // approved/dismissed unconditionally silently reverted that explicit decision
+        // back to "Übernehmen". Once a row has an explicit decision (approved OR
+        // dismissed), only its column_key updates here - only still-undecided
+        // ("Unvollständig") rows auto-promote.
+        if (row.approved || row.dismissed) return updatedRow;
         return { ...updatedRow, approved: !matrixStillOpen(updatedRow), dismissed: false };
       })
     );
@@ -1790,7 +2055,11 @@ export function WordImportWizard({
     setBusy(true);
     setError(null);
     try {
-      const approvedAttendance = attendance.filter((entry) => entry.participant_id !== null || entry.createNew);
+      // linkedNone rows are included too (not just linked/createNew ones) - an explicit
+      // "Keinen verknüpfen" decision must reach the backend so it can be remembered (see
+      // WordImportService.commit's no_link_name_updates) instead of silently vanishing;
+      // commit() itself still skips writing any attendance entry for participant_id=null.
+      const approvedAttendance = attendance.filter((entry) => entry.participant_id !== null || entry.createNew || entry.linkedNone);
       const approvedEvents = events.filter((entry) => entry.approved);
       const approvedLists = lists
         .filter((entry) => entry.approved && entry.has_snapshot_target)
@@ -1808,6 +2077,7 @@ export function WordImportWizard({
           linked_event_id: text.isEventRepeat ? text.linkedEventId : null,
           is_form_block: text.isFormBlock,
           form_fields: text.isFormBlock ? text.formFields : [],
+          dismissed: text.dismissed,
         })),
         attendance: approvedAttendance.map((entry) => ({
           raw_name: entry.raw_name,
@@ -1827,6 +2097,8 @@ export function WordImportWizard({
             linked_event_id: entry.linked_event_id,
             final_title: resolved.title,
             final_date: resolved.date,
+            raw_title: entry.raw_title,
+            raw_date: entry.raw_date,
             tag: entry.tag,
             participant_count: entry.participant_count,
             originally_suggested_event_id: entry.originallySuggestedEventId,
@@ -1874,13 +2146,28 @@ export function WordImportWizard({
         events: approvedEvents.length,
         lists: approvedLists.length,
         matrices: approvedMatrices.length,
+        // Minor accuracy fix: the lists/texts terms used to diverge from the exact
+        // filters approvedLists/approvedAttendance etc. are built from above (lists
+        // dropped the list_definition_id > 0 condition; texts counted a row the
+        // reviewer explicitly dismissed - or an event-repeat explicitly left
+        // unlinked via "nicht verknüpfen" - as if it were still an unresolved
+        // oversight rather than a deliberate, correct decision).
         skipped:
           attendance.length -
           approvedAttendance.length +
           (events.length - approvedEvents.length) +
-          (lists.filter((entry) => entry.has_snapshot_target).length - approvedLists.length) +
+          (lists.filter(
+            (entry) => entry.has_snapshot_target && (tableRoles[entry.table_index]?.list_definition_id ?? 0) > 0
+          ).length -
+            approvedLists.length) +
           (matrices.length - approvedMatrices.length) +
-          texts.filter((text) => text.template_element_id === null || (text.isEventRepeat && text.linkedEventId === null)).length,
+          texts.filter(
+            (text) =>
+              !text.dismissed &&
+              !text.linkedEventNone &&
+              (text.template_element_id === null || (text.isEventRepeat && text.linkedEventId === null))
+          ).length,
+        warnings: result.warnings,
       });
       setCreatedProtocolId(result.id);
       setStep("done");
@@ -2063,6 +2350,49 @@ export function WordImportWizard({
                   value={protocolDate}
                   onChange={setProtocolDate}
                 />
+              </span>
+            </div>
+          )}
+
+          {analysis.warnings.length > 0 && (
+            // Real bug fixed here: analyze() has always produced these (e.g. a Matrix-
+            // Zeile that couldn't be assigned to any row and is silently skipped, or an
+            // unresolved table), but the frontend never rendered them anywhere - some
+            // describe data that's dropped entirely and therefore has no row of its own
+            // in the wizard to flag, making the loss invisible to the reviewer.
+            <details className="word-import-alert word-import-alert-block">
+              <summary style={{ cursor: "pointer" }}>
+                <WarningIcon /> {analysis.warnings.length} Hinweis{analysis.warnings.length === 1 ? "" : "e"} zur Analyse
+              </summary>
+              <ul style={{ margin: "8px 0 0", paddingLeft: "18px" }}>
+                {analysis.warnings.map((warning, index) => (
+                  <li key={index}>{warning}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+
+          {/* Real bug fixed here: the queue's own duplicate hint only ever compares
+              against other WordImportDocument rows, so this standalone wizard (which
+              never creates one, see commitWordImport) was completely blind to an
+              already-existing protocol for the same template+date - the same old
+              protocol could be imported twice with zero warning. Queue mode already
+              has its own duplicate hint in the table view, so this only needs to show
+              up here. */}
+          {!documentId && analysis.duplicate_protocols.length > 0 && (
+            <div className="word-import-alert">
+              <WarningIcon />
+              <span>
+                Mögliches Duplikat: Für dieses Datum existiert bereits{" "}
+                {analysis.duplicate_protocols.map((duplicate, index) => (
+                  <span key={duplicate.id}>
+                    {index > 0 && ", "}
+                    <a className="row-text-action" href={`/protocols/${duplicate.id}`} target="_blank" rel="noreferrer">
+                      „{duplicate.title || duplicate.protocol_number}“
+                    </a>
+                  </span>
+                ))}
+                . Bitte prüfen, ob dieses Dokument nicht bereits importiert wurde.
               </span>
             </div>
           )}
@@ -2458,6 +2788,15 @@ export function WordImportWizard({
                                             className={`word-import-decision-btn is-${cellDecision}`}
                                             onClick={() => {
                                               const patch = nextDecisionPatch(cellDecision);
+                                              // A cell whose column was never resolved has no
+                                              // column_key to write to at commit time -
+                                              // submitCommit's approvedMatrices filter already
+                                              // drops such a cell even if "approved" here, so
+                                              // letting the pill reach "Übernehmen" anyway just
+                                              // shows a false confirmation for a cell that gets
+                                              // silently discarded (real bug fixed here, same
+                                              // shape as the dateless-Termin guard above).
+                                              if (patch.approved && row.entry.column_key === null) return;
                                               setMatrices((current) =>
                                                 current.map((item, itemIndex) =>
                                                   itemIndex === row.index ? { ...item, ...patch } : item
@@ -2499,12 +2838,16 @@ export function WordImportWizard({
                       const flagged = textNeedsReview(text);
                       const isOpen = flagged || expandedTexts.has(index);
                       const isIgnoredEvent = text.isEventRepeat && text.linkedEventId === null && text.linkedEventNone;
-                      // A section with no matching template block at all has nothing else to
-                      // decide (unlike the event-repeat case above, which already has its own
-                      // "nicht verknüpfen" option) - offer the same explicit dismiss here so it
-                      // doesn't stay flagged forever with no way out.
+                      // A section with no matching template block at all, or a form block
+                      // with a name that couldn't be auto-matched, has nothing else to decide
+                      // (unlike the event-repeat case above, which already has its own "nicht
+                      // verknüpfen" option) - offer the same explicit dismiss here so it
+                      // doesn't stay flagged forever with no way out. Dismissing skips the
+                      // WHOLE section, same row-level granularity Liste/Matrix rows already
+                      // use for an unresolved name.
                       const isIgnorableNoTarget = text.template_element_id === null;
-                      const isDismissedNoTarget = isIgnorableNoTarget && text.dismissed;
+                      const canDismiss = isIgnorableNoTarget || formFieldsStillOpen(text);
+                      const isDismissedNoTarget = canDismiss && text.dismissed;
                       const summaryLabel = textSummaryLabel(text, target, linkedEvent);
                       return (
                         <div
@@ -2515,7 +2858,10 @@ export function WordImportWizard({
                         >
                           <div
                             className={`word-import-text-row-head${flagged ? "" : " word-import-text-row-head-clickable"}`}
+                            role={flagged ? undefined : "button"}
+                            tabIndex={flagged ? undefined : 0}
                             onClick={() => !flagged && toggleTextExpanded(index)}
+                            onKeyDown={flagged ? undefined : rowHeadKeyDown(() => toggleTextExpanded(index))}
                           >
                             <span className="word-import-text-row-title">{text.extracted_heading}</span>
                             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -2531,7 +2877,7 @@ export function WordImportWizard({
                                 ) : (
                                   <span className="word-import-text-row-summary is-unassigned">– nicht zugewiesen –</span>
                                 ))}
-                              {isIgnorableNoTarget && (
+                              {canDismiss && (
                                 <button
                                   type="button"
                                   className={`word-import-decision-btn ${text.dismissed ? "is-ignore" : "is-incomplete"}`}
@@ -2760,6 +3106,16 @@ export function WordImportWizard({
                   <> {doneSummary.skipped} Einträge wurden übersprungen und können manuell nachgetragen werden.</>
                 )}
               </p>
+              {doneSummary && doneSummary.warnings.length > 0 && (
+                <div className="word-import-alert word-import-alert-block" style={{ marginTop: "10px" }}>
+                  <WarningIcon />
+                  <ul style={{ margin: 0, paddingLeft: "18px" }}>
+                    {doneSummary.warnings.map((warning, index) => (
+                      <li key={index}>{warning}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           </div>
           <div className="wizard-footer">

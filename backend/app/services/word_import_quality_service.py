@@ -20,7 +20,13 @@ class WordImportQualityService:
         templates; score_bucket is a 0.1-wide floor bucket of suggested_score (0.0,
         0.1, ..., 0.9) - the same bucketing word_import_thresholds.adaptive_threshold
         uses to learn per-tenant score thresholds from this same data."""
-        bucket_expr = func.floor(WordImportSuggestionOutcome.suggested_score * 10) / 10.0
+        # Capped at 0.9 (a score of exactly 1.0 lands in the same top bucket as 0.9-0.99)
+        # to mirror word_import_thresholds.adaptive_threshold's Python-side bucketing
+        # (`min(int(score * 10), 9)`) - without this cap, a perfect-score outcome got its
+        # own separate 1.0 bucket here that adaptive_threshold could never learn a
+        # matching threshold for, silently desyncing this dashboard from what the
+        # learning logic actually uses.
+        bucket_expr = func.least(func.floor(WordImportSuggestionOutcome.suggested_score * 10) / 10.0, 0.9)
         filters = [WordImportSuggestionOutcome.tenant_id == tenant_id]
         if template_id is not None:
             filters.append(WordImportSuggestionOutcome.template_id == template_id)

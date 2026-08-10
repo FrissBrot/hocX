@@ -35,6 +35,12 @@ export type WordImportNameResolution = {
   raw_name: string;
   participant_id: number | null;
   create_new: boolean;
+  // True when the reviewer explicitly resolved this name as "Keinen verknüpfen" -
+  // participant_id stays null either way, so this is what lets buildRecurringNameGroups
+  // (and listStillOpen/matrixStillOpen) tell "still needs a decision" apart from
+  // "reviewer already decided there's no participant here". See backend
+  // WordImportNameResolution.no_link.
+  no_link: boolean;
   // What analyze() originally suggested for this name - set once when the resolution
   // is first built, never touched again by our own edit handlers (they only spread-
   // update participant_id), so the backend can tell "still the algorithm's own
@@ -100,6 +106,10 @@ export type WordImportAttendanceMapping = {
   status: string;
   suggested_participant_id: number | null;
   candidates: WordImportAttendanceCandidate[];
+  // Set when suggested_participant_id is null AND this exact raw name was already
+  // explicitly resolved as "Keinen verknüpfen" in an earlier commit - the wizard
+  // pre-applies that same decision instead of re-flagging it every import.
+  remembered_no_link: boolean;
 };
 
 export type WordImportEventCandidate = {
@@ -134,6 +144,13 @@ export type WordImportEventMapping = {
   row_label: string | null;
   column_key: string | null;
   column_label: string | null;
+  // Set when status === "changed" AND this same (matched event, raw_title) pair already
+  // got a resolution decision in an earlier commit - deliberately NOT keyed on raw_date,
+  // so a yearly-recurring Termin whose document mention always names a different/stale
+  // date still reuses the same decision. The wizard pre-applies it instead of asking the
+  // reviewer to reconfirm an already-resolved recurring conflict every import.
+  remembered_title_source: "doc" | "existing" | null;
+  remembered_date_source: "doc" | "existing" | null;
 };
 
 export type WordImportListDefinitionOption = {
@@ -195,6 +212,13 @@ export type WordImportMatrixCellMapping = {
   names: WordImportNameResolution[];
 };
 
+export type WordImportDuplicateProtocol = {
+  id: number;
+  protocol_number: string;
+  title: string | null;
+  protocol_date: string;
+};
+
 export type WordImportAnalysis = {
   protocol_date: string | null;
   tables: TablePreview[];
@@ -208,6 +232,7 @@ export type WordImportAnalysis = {
   matrix_mappings: WordImportMatrixCellMapping[];
   profile_applied: boolean;
   warnings: string[];
+  duplicate_protocols: WordImportDuplicateProtocol[];
 };
 
 export type TableRoleOverride = {
@@ -247,6 +272,8 @@ export type WordImportCommitPayload = {
     linked_event_id: number | null;
     final_title: string;
     final_date: string;
+    raw_title: string;
+    raw_date: string | null;
     tag: string | null;
     participant_count: number | null;
     originally_suggested_event_id: number | null;
@@ -301,8 +328,10 @@ export async function analyzeWordImport(
   return browserApiFetch<WordImportAnalysis>("/api/tools/word-import/analyze", { method: "POST", body: formData });
 }
 
-export async function commitWordImport(payload: WordImportCommitPayload): Promise<{ id: number }> {
-  return browserApiFetch<{ id: number }>("/api/tools/word-import/commit", {
+export type WordImportCommitResult = { id: number; warnings: string[] };
+
+export async function commitWordImport(payload: WordImportCommitPayload): Promise<WordImportCommitResult> {
+  return browserApiFetch<WordImportCommitResult>("/api/tools/word-import/commit", {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -379,8 +408,8 @@ export async function reanalyzeWordImportDocument(
   });
 }
 
-export async function commitWordImportDocument(documentId: number, payload: WordImportCommitPayload): Promise<{ id: number }> {
-  return browserApiFetch<{ id: number }>(`/api/tools/word-import/documents/${documentId}/commit`, {
+export async function commitWordImportDocument(documentId: number, payload: WordImportCommitPayload): Promise<WordImportCommitResult> {
+  return browserApiFetch<WordImportCommitResult>(`/api/tools/word-import/documents/${documentId}/commit`, {
     method: "POST",
     body: JSON.stringify(payload),
   });

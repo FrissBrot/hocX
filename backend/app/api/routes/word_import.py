@@ -12,6 +12,7 @@ from app.models import Template, WordImportDocument
 from app.schemas.word_import import (
     WordImportAnalysis,
     WordImportCommit,
+    WordImportCommitResult,
     WordImportDocumentDetail,
     WordImportDocumentReanalyzeRequest,
     WordImportDocumentSummary,
@@ -99,7 +100,7 @@ async def analyze_word_import(
         raise HTTPException(status_code=400, detail="Datei konnte nicht gelesen werden") from exc
 
 
-@router.post("/tools/word-import/commit", response_model=dict[str, int], status_code=status.HTTP_201_CREATED)
+@router.post("/tools/word-import/commit", response_model=WordImportCommitResult, status_code=status.HTTP_201_CREATED)
 def commit_word_import(
     payload: WordImportCommit,
     db: Session = Depends(get_db),
@@ -107,14 +108,14 @@ def commit_word_import(
 ):
     require_writer(user)
     try:
-        protocol_id = service.commit(db, tenant_id=user.current_tenant_id, user_id=user.user_id, payload=payload)
+        result = service.commit(db, tenant_id=user.current_tenant_id, user_id=user.user_id, payload=payload)
     except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Protokoll konnte nicht erstellt werden") from exc
-    return {"id": protocol_id}
+    return result
 
 
 def _to_summary(
@@ -274,7 +275,7 @@ def reanalyze_word_import_document(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@router.post("/tools/word-import/documents/{document_id}/commit", response_model=dict[str, int], status_code=status.HTTP_201_CREATED)
+@router.post("/tools/word-import/documents/{document_id}/commit", response_model=WordImportCommitResult, status_code=status.HTTP_201_CREATED)
 def commit_word_import_document(
     document_id: int,
     payload: WordImportCommit,
@@ -286,7 +287,7 @@ def commit_word_import_document(
     if document is None:
         raise HTTPException(status_code=404, detail="Dokument nicht gefunden")
     try:
-        protocol_id = queue_service.commit_document(
+        result = queue_service.commit_document(
             db, document=document, tenant_id=user.current_tenant_id, user_id=user.user_id, payload=payload
         )
     except ValueError as exc:
@@ -295,7 +296,7 @@ def commit_word_import_document(
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Protokoll konnte nicht erstellt werden") from exc
-    return {"id": protocol_id}
+    return result
 
 
 @router.delete("/tools/word-import/documents/{document_id}", response_model=dict[str, str])

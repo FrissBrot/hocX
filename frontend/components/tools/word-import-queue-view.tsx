@@ -60,6 +60,7 @@ export function WordImportQueueView({ templates, participants, initialDocuments 
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [deleteErrors, setDeleteErrors] = useState<string[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -104,10 +105,17 @@ export function WordImportQueueView({ templates, participants, initialDocuments 
   async function handleDelete(document: WordImportDocumentSummary) {
     if (!(await confirm({ message: `"${document.display_name}" aus der Warteschlange entfernen?`, tone: "danger", confirmLabel: "Entfernen" }))) return;
     setDeletingId(document.id);
+    setDeleteErrors([]);
     try {
+      // Real bug fixed here: this had no error handling at all - a rejection (e.g. the
+      // document was imported by someone else in the meantime, which the backend
+      // rejects, see word_import_queue_service.py's delete_document status guard) just
+      // silently reset the spinner with no indication anything went wrong.
       await deleteWordImportDocument(document.id);
       setDocuments((current) => current.filter((doc) => doc.id !== document.id));
       setSelectedIds((current) => current.filter((id) => id !== document.id));
+    } catch (err) {
+      setDeleteErrors([`${document.display_name}: ${err instanceof Error ? err.message : "Entfernen fehlgeschlagen"}`]);
     } finally {
       setDeletingId(null);
     }
@@ -117,10 +125,27 @@ export function WordImportQueueView({ templates, participants, initialDocuments 
     if (!selectedIds.length) return;
     if (!(await confirm({ message: `${selectedIds.length} Dokument(e) aus der Warteschlange entfernen?`, tone: "danger", confirmLabel: "Entfernen" }))) return;
     setBulkDeleting(true);
+    setDeleteErrors([]);
     try {
-      await Promise.all(selectedIds.map((id) => deleteWordImportDocument(id)));
-      setDocuments((current) => current.filter((doc) => !selectedIds.includes(doc.id)));
-      setSelectedIds([]);
+      // Real bug fixed here: Promise.all rejects as a whole the moment ONE deletion
+      // fails - since the others had already succeeded server-side by then, the table
+      // kept showing all N selected rows as still present (setDocuments/setSelectedIds
+      // never ran) until a manual reload. Promise.allSettled lets the successful ones
+      // through and only reports the ones that actually failed.
+      const results = await Promise.allSettled(selectedIds.map((id) => deleteWordImportDocument(id)));
+      const failedIds = new Set<number>();
+      const errors: string[] = [];
+      results.forEach((result, index) => {
+        if (result.status === "rejected") {
+          const id = selectedIds[index];
+          failedIds.add(id);
+          const name = documents.find((doc) => doc.id === id)?.display_name ?? `Dokument #${id}`;
+          errors.push(`${name}: ${result.reason instanceof Error ? result.reason.message : "Entfernen fehlgeschlagen"}`);
+        }
+      });
+      setDocuments((current) => current.filter((doc) => !selectedIds.includes(doc.id) || failedIds.has(doc.id)));
+      setSelectedIds((current) => current.filter((id) => failedIds.has(id)));
+      setDeleteErrors(errors);
     } finally {
       setBulkDeleting(false);
     }
@@ -234,6 +259,14 @@ export function WordImportQueueView({ templates, participants, initialDocuments 
           </div>
         )}
       </div>
+
+      {deleteErrors.length > 0 && (
+        <div className="form-error-banner">
+          {deleteErrors.map((message, index) => (
+            <div key={index}>{message}</div>
+          ))}
+        </div>
+      )}
 
       <DataTable
         className="data-table-lg"

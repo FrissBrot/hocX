@@ -35,6 +35,15 @@ def adaptive_threshold(db: Session, *, tenant_id: int, template_id: int, signal_
             WordImportSuggestionOutcome.tenant_id == tenant_id,
             WordImportSuggestionOutcome.template_id == template_id,
             WordImportSuggestionOutcome.signal_type == signal_type,
+            # Excludes WordImportService.commit()'s 0.0 sentinel (logged whenever the
+            # client couldn't report the real originally-suggested score - e.g. the
+            # actual top suggestion fell outside the capped candidate list it was shown,
+            # see _log_outcome). Those rows are frequent and, being explicit accepts of
+            # an unknown-but-not-actually-near-zero score, can reach a high acceptance
+            # rate purely from that pollution - left in, bucket 0 could "learn" a 0.0
+            # threshold and disable this signal's matching gate entirely. A genuine
+            # fuzzy-matched candidate score is never exactly 0.0 in practice.
+            WordImportSuggestionOutcome.suggested_score > 0,
         )
     ).all()
     if len(rows) < _MIN_SAMPLE_SIZE:
