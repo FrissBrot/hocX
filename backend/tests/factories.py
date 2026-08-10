@@ -7,6 +7,7 @@ from sqlalchemy import select
 from app.core.security import CurrentUser
 from app.models.entities import (
     AttendanceFine,
+    ElementDefinition,
     ElementType,
     Event,
     FinanceAccount,
@@ -20,6 +21,7 @@ from app.models.entities import (
     ProtocolTodo,
     RenderType,
     Template,
+    TemplateElement,
     TemplateParticipant,
     Tenant,
     TodoStatus,
@@ -215,6 +217,51 @@ def make_event(
     db.add(event)
     db.flush()
     return event
+
+
+def element_type_id(db, code: str) -> int:
+    return db.scalar(select(ElementType.id).where(ElementType.code == code))
+
+
+def make_element_definition(
+    db,
+    tenant_id: int,
+    title: str,
+    blocks: list[dict],
+    element_type_id_: int = 1,
+    render_type_id: int = 2,
+) -> ElementDefinition:
+    definition = ElementDefinition(
+        tenant_id=tenant_id,
+        element_type_id=element_type_id_,
+        render_type_id=render_type_id,
+        title=title,
+        is_editable=True,
+        configuration_json={"blocks": blocks},
+    )
+    db.add(definition)
+    db.flush()
+    return definition
+
+
+def make_template_element(
+    db,
+    template_id: int,
+    element_definition_id: int,
+    sort_index: int,
+    section_name: str,
+    configuration_json: dict | None = None,
+) -> TemplateElement:
+    entity = TemplateElement(
+        template_id=template_id,
+        element_definition_id=element_definition_id,
+        sort_index=sort_index,
+        section_name=section_name,
+        configuration_json=configuration_json or {},
+    )
+    db.add(entity)
+    db.flush()
+    return entity
 
 
 def make_word_import_profile(db, tenant_id: int, template_id: int, mapping_config_json: dict | None = None) -> WordImportProfile:

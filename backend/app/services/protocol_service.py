@@ -1664,6 +1664,7 @@ class ProtocolService:
         *,
         protocol_element_id: int,
         event_id: int,
+        block_sort_index: int | None = None,
     ) -> ProtocolElementBlock:
         """Manually add an auto-generated event block to an existing protocol element."""
         protocol_element = db.get(ProtocolElement, protocol_element_id)
@@ -1699,7 +1700,15 @@ class ProtocolService:
             effective = dict(block_config)
             if not block_config.get("repeat_source") and legacy_repeat_config.get("repeat_source"):
                 effective = {**legacy_repeat_config, **block_config}
-            if str(effective.get("repeat_source") or "") == "event":
+            if str(effective.get("repeat_source") or "") != "event":
+                continue
+            if block_sort_index is None:
+                # No specific target requested (e.g. the manual "add event block" UI
+                # action) - keep the old behavior of using the first event-repeat block
+                # template found on this element.
+                event_block_template = block
+                break
+            if block.get("sort_index") == block_sort_index:
                 event_block_template = block
                 break
 

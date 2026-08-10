@@ -48,6 +48,8 @@ from app.schemas.word_import import (
     WordImportAttendanceCandidate,
     WordImportAttendanceMapping,
     WordImportCommit,
+    WordImportCommitResult,
+    WordImportDuplicateProtocol,
     WordImportEventCandidate,
     WordImportEventMapping,
     WordImportFormFieldValue,
@@ -84,11 +86,38 @@ _DATE_TEXT_PATTERN = re.compile(r"(\d{1,2})\.?\s+(" + "|".join(_GERMAN_MONTHS) +
 _EVENT_MATCH_THRESHOLD = 0.8
 _EVENT_CHANGE_THRESHOLD = 0.45
 _LIST_NAME_MATCH_THRESHOLD = 0.5
+# The lower bar for matching a document section's heading to a template element -
+# looser than _LIST_NAME_MATCH_THRESHOLD's table-heading gate since a section heading
+# is free text (not a fixed table header), and a False negative here means the section
+# falls back to plain, unmapped free text rather than being silently misfiled.
+_SECTION_ELEMENT_MATCH_THRESHOLD = 0.35
+# _classify_section_kind's ratio-of-lines-matching-a-shape gate for recognizing a
+# tab-aligned paragraph section as an implicit Termine/list table.
+_SECTION_KIND_RATIO_THRESHOLD = 0.6
 _PARTICIPANT_MATCH_THRESHOLD = 0.6
 _CANDIDATE_LIMIT = 5
 _LIST_ENTRY_CANDIDATE_MIN_SCORE = 0.3
+# Shared "top-3 candidates above this score" cutoff for both attendance and generic
+# (_match_names) name candidate lists - kept as one named constant instead of the same
+# 0.4 literal duplicated at both call sites, which could silently drift out of sync.
+_NAME_CANDIDATE_MIN_SCORE = 0.4
 _MATRIX_ROW_MATCH_THRESHOLD = 0.5
 _MATRIX_COLUMN_MATCH_THRESHOLD = 0.6
+# See _name_score's bare-first-name branch - clears the FIXED matching thresholds
+# above with margin to spare, but is deliberately not 1.0 so it never claims the same
+# certainty as an actually verified full-name match. Not guaranteed to clear a learned
+# ADAPTIVE threshold (word_import_thresholds.adaptive_threshold can return up to 0.9
+# for a tenant whose own history supports a stricter bar) or a _REJECTED_CANDIDATE_
+# PENALTY-demoted score (0.85 - 0.15 = 0.70) - both are expected, not a bug: a bare
+# first name genuinely IS less certain, and a tenant/context with real evidence it
+# needs a stricter bar (or a specific past rejection) should be able to say so.
+_BARE_FIRST_NAME_MATCH_SCORE = 0.85
+# See _name_score's final branch - a nickname-matched first name ("Sepp" for "Josef")
+# PLUS an independently exact-matching surname is stronger evidence than a bare
+# nickname-matched first name alone (_BARE_FIRST_NAME_MATCH_SCORE), so it must score
+# higher than that - but the first name is still only nickname-inferred, not literally
+# spelled the same, so it must stay short of 1.0 too (same false-certainty concern).
+_NICKNAME_SURNAME_MATCH_SCORE = 0.925
 # Deliberately much stricter than the other thresholds above - a fuzzy signature match
 # redirects an ENTIRE table's rows to a learned role/target, a much larger blast radius
 # than a single name/event mismatch, so this only tolerates a near-identical header
@@ -122,6 +151,19 @@ _LIST_VARIANT_CONFIDENT_SCORE = 0.75
 _MATRIX_SUPPORTED_ROW_TYPES = {"text", "participant", "participants"}
 
 
+def _signature_similarity(a: str, b: str) -> float:
+    """Like _similarity, but WITHOUT the token-Jaccard (word-order-independent)
+    component - a table signature is a "|"-joined sequence of column headers, where
+    order is exactly what makes two tables structurally different (swapped columns).
+    _token_jaccard splits on whitespace only, so it treats the literal "|" separators
+    as tokens too and ends up comparing SETS of {header, "|", header, ...} tokens - two
+    signatures with the same columns in a different order (or even just two disjoint
+    single-column signatures, degenerately "|" vs "| |") then collide at a false 1.0.
+    Plain SequenceMatcher ratio over the whole joined string is naturally order-
+    sensitive and is all a signature match should ever use."""
+    return SequenceMatcher(None, _fold_umlauts(a.lower().strip()), _fold_umlauts(b.lower().strip())).ratio()
+
+
 def _best_fuzzy_signature_match(signature: str, profile_table_roles: dict[str, dict], threshold: float) -> dict | None:
     """Fallback for _resolve_table_role's profile lookup when no EXACT signature key
     matches - a template revision that adds/removes one column, or a minor OCR/typo
@@ -132,7 +174,7 @@ def _best_fuzzy_signature_match(signature: str, profile_table_roles: dict[str, d
     best_score = 0.0
     best_entry: dict | None = None
     for stored_signature, entry in profile_table_roles.items():
-        score = _similarity(signature, stored_signature)
+        score = _signature_similarity(signature, stored_signature)
         if score > best_score:
             best_score = score
             best_entry = entry
@@ -272,10 +314,14 @@ def _classify_status(marker: str) -> str | None:
     lowered = marker.strip().lower()
     if not lowered:
         return None
-    if any(keyword in lowered for keyword in _EXCUSED_KEYWORDS):
-        return "excused"
+    # ABSENT checked before EXCUSED: "unentschuldigt" contains "entschuldigt" as a
+    # literal substring, so checking EXCUSED_KEYWORDS first (as this used to) misread
+    # every "Unentschuldigt" marker/column as "excused" instead of "absent" - the more
+    # specific match must win. _LATE_KEYWORDS has no such overlap with the others.
     if any(keyword in lowered for keyword in _ABSENT_KEYWORDS):
         return "absent"
+    if any(keyword in lowered for keyword in _EXCUSED_KEYWORDS):
+        return "excused"
     if any(keyword in lowered for keyword in _LATE_KEYWORDS):
         return "late"
     return None
@@ -548,9 +594,14 @@ def _trial_resolve_list_confidence(
 
 def _trial_resolve_matrix_confidence(table: ParsedTable, matrix: dict) -> int:
     """Bounded probe for the list-vs-matrix tie-break below: how many of this table's
-    data rows have a row-label that clears _MATRIX_ROW_MATCH_THRESHOLD against one of
-    `matrix`'s configured rows - the same row-resolution check analyze() itself
-    performs per Matrix row, just counted here instead of applied."""
+    data rows have a row-label that clears _LIST_VARIANT_CONFIDENT_SCORE against one of
+    `matrix`'s configured rows. Deliberately the LIST side's threshold, not
+    _MATRIX_ROW_MATCH_THRESHOLD (0.5, used for real Matrix row resolution elsewhere,
+    where this function is never called) - the two trial-confidence counts are compared
+    directly against each other right below, and comparing counts gathered at two
+    different thresholds systematically favours whichever side's bar was lower. Both
+    probes are tie-break-only (no other caller) so aligning this one's threshold to the
+    other's doesn't affect anything except the comparison itself."""
     matrix_rows = matrix["rows"]
     confident = 0
     for row_cells in table.rows:
@@ -561,7 +612,7 @@ def _trial_resolve_matrix_confidence(table: ParsedTable, matrix: dict) -> int:
             (_similarity(row_label_raw, str(row.get("label") or row.get("title") or "")) for row in matrix_rows),
             default=0.0,
         )
-        if best_score >= _MATRIX_ROW_MATCH_THRESHOLD:
+        if best_score >= _LIST_VARIANT_CONFIDENT_SCORE:
             confident += 1
     return confident
 
@@ -746,15 +797,45 @@ def _classify_section_kind(lines: list[str]) -> str:
     if len(lines) < 2:
         return "text"
     dated = sum(1 for line in lines if _starts_with_date(line))
-    if dated / len(lines) >= 0.6:
+    if dated / len(lines) >= _SECTION_KIND_RATIO_THRESHOLD:
         return "events"
     two_col = sum(1 for line in lines if _split_two_columns(line) is not None)
-    if two_col / len(lines) >= 0.6:
+    if two_col / len(lines) >= _SECTION_KIND_RATIO_THRESHOLD:
         return "list"
     return "text"
 
 
 _EVENT_REPEAT_MATCH_THRESHOLD = 0.5
+
+
+def _title_prefix_pattern(element_title: str) -> str:
+    """Builds a regex matching element_title at the start of a RAW (un-normalized)
+    heading, tolerating exactly the transforms _normalize/_fold_umlauts apply: case,
+    ä/ö/ü either folded or not, ß either folded to "ss" or not, and any whitespace run
+    where the title has one. Matching directly against the raw string (rather than
+    slicing it by a length measured on the separately-normalized title) is what keeps
+    the cut position correct even when folding changes length (ß -> "ss", one raw
+    character becoming two) - see _strip_title_prefix."""
+    parts: list[str] = []
+    chars = element_title.strip()
+    i = 0
+    while i < len(chars):
+        ch = chars[i]
+        if ch.isspace():
+            i += 1
+            while i < len(chars) and chars[i].isspace():
+                i += 1
+            parts.append(r"\s+")
+            continue
+        folded = _fold_umlauts(ch.lower())
+        if folded != ch.lower():
+            # ä/ö/ü (1:1) or ß (1:2, "ss") - accept either the original character or
+            # its folded form(s), case-insensitively handled by the outer re.IGNORECASE.
+            parts.append(f"(?:{re.escape(ch)}|{re.escape(folded)})")
+        else:
+            parts.append(re.escape(ch))
+        i += 1
+    return "".join(parts)
 
 
 def _strip_title_prefix(heading: str, element_title: str) -> str:
@@ -763,10 +844,11 @@ def _strip_title_prefix(heading: str, element_title: str) -> str:
     element title isolates the Anlass name for the event-candidate search below. Falls
     back to the full heading if the title isn't actually a prefix of it (still a usable,
     if noisier, search string rather than no match at all)."""
-    normalized_heading = _normalize(heading)
-    normalized_title = _normalize(element_title)
-    if normalized_title and normalized_heading.startswith(normalized_title):
-        return heading[len(element_title):].strip(" :-–")
+    if not element_title.strip():
+        return heading
+    match = re.match(_title_prefix_pattern(element_title), heading.strip(), re.IGNORECASE)
+    if match:
+        return heading.strip()[match.end():].strip(" :-–")
     return heading
 
 
@@ -777,9 +859,23 @@ def _score_event_candidate(title: str, raw_date: date | None, event: Event) -> f
     day_diff = abs((event.event_date - raw_date).days)
     if day_diff == 0:
         return 0.5 + 0.5 * title_score
+    # Title carries the same 0.5 weight as the >3-days fallback below in both branches,
+    # with day-proximity only ever ADDING a bonus on top (max +0.3 at day_diff==1,
+    # tapering to +0 at day_diff==3) - never subtracting from it. A previous version
+    # weighted title at 0.4 here vs. 0.5 in the fallback, which made a 3-day shift score
+    # BELOW a 3-year shift for an identical title (non-monotonic in day_diff) and could
+    # push a genuinely moved event under _EVENT_CHANGE_THRESHOLD (0.45) while an event
+    # moved even further would still clear it.
     if day_diff <= 3:
-        return 0.3 * max(0.0, 1 - day_diff / 3) + 0.4 * title_score
-    return 0.2 * title_score
+        return 0.5 * title_score + 0.3 * max(0.0, 1 - day_diff / 3)
+    # No day-difference credit beyond +-3 days, but an (near-)exact title match must
+    # still be able to clear _EVENT_CHANGE_THRESHOLD (0.45) - otherwise a genuinely
+    # rescheduled event (moved by more than a few days, e.g. postponed by a week) can
+    # never be recognized as "changed" no matter how exact the title match is, and
+    # silently becomes a duplicate "new" Event instead of updating the existing one.
+    # The previous `0.2 * title_score` here maxed out at 0.2, structurally unreachable
+    # past the threshold regardless of title similarity.
+    return 0.5 * title_score
 
 
 def _event_match_reason(title: str, raw_date: date | None, event: Event) -> str:
@@ -794,6 +890,20 @@ def _event_match_reason(title: str, raw_date: date | None, event: Event) -> str:
         day_diff = abs((event.event_date - raw_date).days)
         return f"Datum {day_diff}d abweichend, Titel {round(title_score * 100)}% ähnlich"
     return f"Titel {round(title_score * 100)}% ähnlich (kein Datum erkannt)"
+
+
+# Identifies one recurring "document text vs. existing Event" conflict (see
+# WordImportEventMapping.remembered_title_source/remembered_date_source and
+# WordImportService.commit's event_conflict_updates). Deliberately keyed on (event,
+# raw title) WITHOUT the raw date: a yearly-recurring Termin (e.g. "Bruderklausentag")
+# whose document mention always names last year's/a stale date shows a DIFFERENT raw
+# date every time it's imported, so a date-inclusive key would never re-match and the
+# reviewer would have to re-decide the exact same "keep existing date" choice every
+# single year. Timo confirmed this is the actual case he wants covered: "der
+# Unterschied ist ja genau der selbe, wie beim letzten Import" - same Event, same
+# title text, differs only in the date value each time.
+def _event_conflict_key(event_id: int, raw_title: str) -> str:
+    return f"{event_id}|{_normalize(raw_title)}"
 
 
 def _text_match_reason(raw_text: str, candidate_label: str, score: float) -> str:
@@ -850,11 +960,21 @@ def _name_score(raw_name: str, display_name: str) -> float:
     if _canonical_first_token(raw_first_token) != _canonical_first_token(first_token):
         return max(full_score, first_token_score)
     if len(raw_parts) <= 1:
-        # raw_name is itself just a (nicknamed) bare first name - same "Nevio" vs.
-        # "Nevio Kim Nguyen" bare-name case first_token_score exists for above, just
-        # with a nickname spelling difference the plain character comparison wouldn't
-        # otherwise resolve to a clean match.
-        return max(full_score, first_token_score, 1.0)
+        # raw_name is itself just a (possibly nicknamed) bare first name and its
+        # canonical first token already matches display_name's (see the guard above) -
+        # always exactly _BARE_FIRST_NAME_MATCH_SCORE, not a max() with full_score/
+        # first_token_score: those two are needed to RAISE a low nickname-spelling
+        # score (e.g. "Sepp" vs. "Josef Muster", both similarity ~0) up to a confident
+        # match, but for an EXACT-spelling bare first name ("Nevio" vs. "Nevio Kim
+        # Nguyen") first_token_score is already 1.0 on its own, and max() with it just
+        # let 1.0 win - the "100% ähnlich" a bare first name must never claim, and the
+        # real bug fixed here: a same-first-name namesake ("Nevio Muster" vs. "Nevio
+        # Berger") could never be told apart at that score, unlike an actual full-name
+        # match. Deliberately NOT 1.0 in either direction - this must stay visibly
+        # short of the certainty an actually-matched full name earns, both in the
+        # reason string shown to the reviewer ("Xx% ähnlich" instead of a false "100%
+        # ähnlich") and so a genuine full-name match still outranks it.
+        return _BARE_FIRST_NAME_MATCH_SCORE
     # raw_name carries its own surname/remainder too - the nickname only ever
     # substitutes for the FIRST token, so the surname must still independently match
     # display_name's remainder before this scores as a full match. Without this, "Sepp
@@ -863,7 +983,20 @@ def _name_score(raw_name: str, display_name: str) -> float:
     display_parts = display_name.split(None, 1)
     display_remainder = display_parts[1] if len(display_parts) > 1 else ""
     surname_score = _similarity(raw_parts[1], display_remainder) if display_remainder else 0.0
-    return max(full_score, first_token_score, surname_score)
+    result = max(full_score, first_token_score, surname_score)
+    # Same "must not claim a verified full-name match's certainty" principle as the
+    # bare-first-name branch above - if the first tokens only agree via the NICKNAME
+    # table (e.g. "Sepp"/"Josef"), not because they're actually spelled the same, an
+    # exact-matching surname alone used to be enough for a full 1.0 via surname_score,
+    # identical to a genuinely fully-spelled-out match. Capped at
+    # _NICKNAME_SURNAME_MATCH_SCORE (still clearly above the bare-first-name-only cap,
+    # since a matching surname is real corroborating evidence), not floored: a literal
+    # first-name match (raw_name and display_name's first token are the same word,
+    # case/umlaut aside) still earns full confidence via `result` unchanged.
+    literal_first_match = _fold_umlauts(raw_first_token.lower()) == _fold_umlauts(first_token.lower())
+    if not literal_first_match:
+        return min(result, _NICKNAME_SURNAME_MATCH_SCORE)
+    return result
 
 
 def _match_names(
@@ -943,7 +1076,7 @@ def _match_names(
                     key=lambda entry: entry[0],
                     reverse=True,
                 )[:3]
-                if score >= 0.4
+                if score >= _NAME_CANDIDATE_MIN_SCORE
             ],
         )
         for index, name in enumerate(names)
@@ -1001,6 +1134,13 @@ def _parse_form_fields(text: str, rows: list[dict]) -> dict[str, str]:
         if best_row_id is not None and best_score >= _FORM_FIELD_MATCH_THRESHOLD and best_row_id not in values:
             values[best_row_id] = raw_value.strip()
     return values
+
+
+# The three value-bearing keys _resolved_value_json ever produces - see its call site in
+# commit()'s form-block section, which strips these off a row before merging the fresh
+# result back in, so an empty/unresolved resolution actually clears the field instead of
+# leaving a stale template default value in place.
+_FORM_ROW_VALUE_KEYS = ("text_value", "participant_id", "participant_ids")
 
 
 def _resolved_value_json(value_type: str, raw_text: str, names: list) -> dict:
@@ -1283,6 +1423,22 @@ def _build_list_row_variants(rows: list[list[str]], definition: ListDefinition) 
     return variants
 
 
+def _column_display_score(value_type: str, raw_text: str, display_text: str) -> float:
+    """Like _similarity, but routes participant-typed columns through _name_score
+    instead - _name_score understands bare-first-name and nickname matching (raw
+    "Nevio" vs. display "Nevio Kim Nguyen" or "Sepp" vs. "Josef Muster"), which plain
+    character-based _similarity does not. Real bug fixed here: the list grouping-
+    variant scorer and the per-row candidate ranker both used to compare a
+    participant column's raw cell text against a full display_name via plain
+    _similarity even though the SAME cell, one step later, resolves correctly via
+    _build_column_value's own _match_names/_name_score call - variant selection was
+    effectively blind for participant-keyed lists (every variant scored ~0 confident),
+    and the reviewer's candidate list was empty/wrong for the same reason."""
+    if value_type in ("participant", "participants"):
+        return _name_score(raw_text, display_text)
+    return _similarity(raw_text, display_text)
+
+
 def _score_list_variant(
     candidates: list[ListRowCandidate],
     definition: ListDefinition,
@@ -1290,17 +1446,18 @@ def _score_list_variant(
     participants_by_id: dict[int, Participant],
 ) -> tuple[int, int]:
     """Scores one variant's candidate rows against the list's live entries: how many
-    resolve confidently, i.e. the best _similarity() against any existing entry's
-    column_one display value clears _LIST_VARIANT_CONFIDENT_SCORE. This is the "meiste
-    Zuweisungen" signal used to pick the best grouping interpretation of an ambiguous
-    document table - reuses the exact same _similarity/_display_value comparison the
-    main per-row candidate list below already does, just condensed to a best-score
-    count instead of a full sorted candidate list."""
+    resolve confidently, i.e. the best _column_display_score() against any existing
+    entry's column_one display value clears _LIST_VARIANT_CONFIDENT_SCORE. This is the
+    "meiste Zuweisungen" signal used to pick the best grouping interpretation of an
+    ambiguous document table - reuses the exact same comparison the main per-row
+    candidate list below already does, just condensed to a best-score count instead of
+    a full sorted candidate list."""
     confident = 0
     for candidate in candidates:
         best_score = 0.0
         for entry in existing_entries:
-            score = _similarity(
+            score = _column_display_score(
+                definition.column_one_value_type,
                 candidate.column_one_raw,
                 _display_value(definition.column_one_value_type, entry.column_one_value_json or {}, participants_by_id),
             )
@@ -1351,9 +1508,22 @@ def _select_list_row_variant(
         for name, candidates in variants.items()
     }
 
-    def _rank(name: str) -> tuple[int, int, int]:
+    def _rank(name: str) -> tuple[float, int, int]:
         confident, total = scored[name]
-        return (confident, -_variant_preference_rank(name), total)
+        rate = confident / total if total else 0.0
+        # confident*rate (== confident**2/total), not the raw confident count alone -
+        # real bug fixed here: an eager splitting variant (e.g. "explode:space", which
+        # matches almost any multi-word text column) can produce far more candidate
+        # ROWS than a modest variant like "flat", so even a low proportion of
+        # genuinely confident matches among them could out-COUNT a smaller variant
+        # with a much higher proportion of confident matches - rewarding volume over
+        # quality. Rate ALONE would overcorrect the other way though: a single-row
+        # variant that happens to match 1-for-1 (rate 1.0 off just one row) must not
+        # beat a variant that confidently matched 2-for-2 (also rate 1.0, but on twice
+        # the evidence) - multiplying by confident keeps that larger, equally-confident
+        # match winning. confident is kept as the final tiebreak.
+        quality = confident * rate
+        return (quality, -_variant_preference_rank(name), confident)
 
     best_name = max(scored, key=_rank)
     return best_name, variants[best_name], False, available_strategies
@@ -1434,6 +1604,8 @@ class WordImportService:
                     **profile_config.get("participant_name_overrides", {}), **in_memory_profile_hints.get("participant_name_overrides", {})
                 },
                 "rejected_candidates": profile_config.get("rejected_candidates", {}),
+                "event_conflict_resolutions": profile_config.get("event_conflict_resolutions", {}),
+                "no_link_names": profile_config.get("no_link_names", []),
             }
         heading_to_target = profile_config.get("heading_to_target", {})
         table_roles_by_signature = profile_config.get("table_roles_by_signature", {})
@@ -1443,6 +1615,19 @@ class WordImportService:
         # demote a candidate that was already wrong for this exact context once before,
         # rather than silently repeating the same mistake every time it recurs.
         rejected_candidates = profile_config.get("rejected_candidates", {})
+        # See _event_conflict_key / WordImportService.commit's event_conflict_updates -
+        # {"{event_id}|{title}": {"title_source": ..., "date_source": ...}}, consulted
+        # below so a Termine row whose document text conflicts with an existing Event's
+        # title/date, but whose title already got a resolution decision on this same
+        # Event before, doesn't force the reviewer to re-decide the same conflict every
+        # import - even when only the raw date differs each time (e.g. a yearly-
+        # recurring Termin whose document mention always names a different/stale date).
+        event_conflict_resolutions = profile_config.get("event_conflict_resolutions", {})
+        # See WordImportService.commit's no_link_name_updates - normalized raw names
+        # (e.g. a table's own "Total" footer row) the reviewer already explicitly
+        # resolved as "Keinen verknüpfen" (not a real participant) before, so the same
+        # row appearing again in a later import doesn't need to be re-flagged.
+        no_link_names = set(profile_config.get("no_link_names", []))
         profile_applied = bool(heading_to_target or table_roles_by_signature or participant_name_overrides)
 
         def _rejected_ids_for(rejection_key: str) -> set:
@@ -1608,6 +1793,17 @@ class WordImportService:
                     if not block_config.get("repeat_source") and legacy_repeat_config.get("repeat_source")
                     else block_config
                 )
+                if str(effective_repeat.get("repeat_source") or "") == "todo":
+                    # One live block instance exists per open Todo (see
+                    # ProtocolService._todo_repeat_contexts), all sharing this one
+                    # block_sort_index - unlike event-repeat blocks there is no candidate
+                    # mechanism here to tell which Todo instance a document section
+                    # belongs to. Offering it as an ordinary (template_element_id,
+                    # block_sort_index) target would make every section mapped here
+                    # collide on whichever one instance commit()'s block_by_key happens
+                    # to keep, silently discarding the rest - so these are simply not
+                    # offered as import targets at all.
+                    continue
                 is_event_repeat_block = str(effective_repeat.get("repeat_source") or "") == "event"
                 if is_event_repeat_block:
                     event_repeat_block_keys.add((template_element.id, sort_index))
@@ -1674,7 +1870,7 @@ class WordImportService:
                     if score > best_score:
                         best_score = score
                         best_element_id = candidate_element_id
-                if best_element_id is not None and best_score >= 0.35:
+                if best_element_id is not None and best_score >= _SECTION_ELEMENT_MATCH_THRESHOLD:
                     template_element_id = best_element_id
                     block_sort_index = min(sort_index for sort_index, _ in element_targets[best_element_id])
                     confidence = round(best_score, 2)
@@ -1796,15 +1992,38 @@ class WordImportService:
         for table in parsed.tables:
             if table_roles.get(table.index) != "attendance":
                 continue
+            # Real bug fixed here: a table with separate "Anwesend:"/"Entschuldigt:"/
+            # "Unentschuldigt:" columns (Timo's actual template - confirmed against his
+            # real 17.11.2025 document) marks a row's status with a bare "X" in the
+            # matching column - the marker cell itself never contains a status *word*,
+            # only its COLUMN does. _classify_status(marker) below only ever recognizes
+            # a marker whose own text says "entschuldigt"/"abwesend"/etc. (a single free-
+            # text "Status" column), so every "X" fell through unclassified and every
+            # row silently defaulted to "present", regardless of which column its X was
+            # actually in. Column headers are checked first here; only when NONE of them
+            # carry a recognizable status keyword (the plain "Status"-column shape this
+            # table format was originally written for) does the loop fall back to
+            # classifying the marker text itself, so that shape keeps working unchanged.
+            header_status_by_col = {
+                col_index: status
+                for col_index, header in enumerate(table.header_cells)
+                if col_index > 0 and (status := _classify_status(header)) is not None
+            }
             for cells in table.rows:
                 if not cells or not cells[0]:
                     continue
                 status = "present"
-                for marker in cells[1:]:
-                    classified = _classify_status(marker)
-                    if classified:
-                        status = classified
-                        break
+                if header_status_by_col:
+                    for col_index, marker in enumerate(cells[1:], start=1):
+                        if marker.strip() and col_index in header_status_by_col:
+                            status = header_status_by_col[col_index]
+                            break
+                else:
+                    for marker in cells[1:]:
+                        classified = _classify_status(marker)
+                        if classified:
+                            status = classified
+                            break
                 raw_attendance_rows.append((cells[0], status))
 
         # Two document rows must never end up auto-suggested to the same participant -
@@ -1849,7 +2068,13 @@ class WordImportService:
         attendance_mappings: list[WordImportAttendanceMapping] = []
         for row_index, (raw_name, status) in enumerate(raw_attendance_rows):
             suggested = row_assignment.get(row_index)
-            if suggested is None:
+            # See WordImportProfile.mapping_config_json["no_link_names"] / commit's
+            # no_link_name_updates - a raw name (e.g. a table's own "Total" footer row,
+            # never a real participant) the reviewer already explicitly resolved as
+            # "Keinen verknüpfen" before doesn't need to be re-flagged and re-decided on
+            # every later import that happens to contain the same row again.
+            remembered_no_link = suggested is None and _normalize(raw_name) in no_link_names
+            if suggested is None and not remembered_no_link:
                 warnings.append(f'Kein passender Teilnehmer für "{raw_name}" gefunden.')
             candidates = [
                 WordImportAttendanceCandidate(
@@ -1857,15 +2082,22 @@ class WordImportService:
                     reason=_text_match_reason(raw_name, participant.display_name, score),
                 )
                 for score, participant in sorted(
-                    ((_name_score(raw_name, participant.display_name), participant) for participant in template_roster),
+                    # _attendance_score, not bare _name_score - applies the same
+                    # rejection-penalty _rejected_ids_for lookup the solver above
+                    # already uses for `suggested`, so the ranking shown to the
+                    # reviewer can't disagree with the actual decision, and a rejected
+                    # candidate's demoted score (not the raw one) is what gets logged
+                    # as suggested_score/learned from by adaptive_threshold.
+                    ((_attendance_score(row_index, participant), participant) for participant in template_roster),
                     key=lambda entry: entry[0],
                     reverse=True,
                 )[:3]
-                if score >= 0.4
+                if score >= _NAME_CANDIDATE_MIN_SCORE
             ]
             attendance_mappings.append(
                 WordImportAttendanceMapping(
-                    raw_name=raw_name, status=status, suggested_participant_id=suggested, candidates=candidates
+                    raw_name=raw_name, status=status, suggested_participant_id=suggested, candidates=candidates,
+                    remembered_no_link=remembered_no_link,
                 )
             )
 
@@ -1957,6 +2189,11 @@ class WordImportService:
                 status = "changed"
             else:
                 status = "new"
+            remembered_resolution = (
+                event_conflict_resolutions.get(_event_conflict_key(best_event.id, title))
+                if status == "changed" and best_event is not None
+                else None
+            )
             event_mappings.append(
                 WordImportEventMapping(
                     row_index=row_index,
@@ -1967,6 +2204,8 @@ class WordImportService:
                     matched_event_title=best_event.title if best_event else None,
                     matched_event_date=best_event.event_date if best_event else None,
                     candidates=candidates,
+                    remembered_title_source=(remembered_resolution or {}).get("title_source"),
+                    remembered_date_source=(remembered_resolution or {}).get("date_source"),
                 )
             )
         # The Matrix "events" row section further below continues this same counter
@@ -2038,13 +2277,31 @@ class WordImportService:
                 )
                 key = _value_key(definition.column_one_value_type, col1_value)
                 existing = existing_by_key.get(key)
+                # Diff/display against the nearest earlier protocol's frozen snapshot value
+                # for this same entry when available (a list drifts over time - comparing
+                # an old document to *today's* live value would show a spurious "changed"
+                # status, AND offer today's value as "Bestehend", for entries nothing
+                # actually changed about back then), otherwise fall back to the live value.
+                baseline_col2 = None
+                if existing is not None:
+                    baseline_col2 = (previous_entries.get(existing.id) or {}).get("column_two_value")
+                    if baseline_col2 is None:
+                        baseline_col2 = existing.column_two_value_json or {}
+                # See A.4 / WordImportService.commit's rejection_key=f"list_entry:..." -
+                # written on every commit but never read back until now, so a reviewer's
+                # earlier correction (rejecting a wrong auto-suggested entry for this exact
+                # list+raw text) never actually demoted that entry the next time the same
+                # text recurred.
+                rejected_entry_ids = _rejected_ids_for(f"list_entry:{list_definition_id}:{_normalize(column_one_raw)}")
                 scored_entries = sorted(
                     (
                         (
-                            _similarity(
+                            _column_display_score(
+                                definition.column_one_value_type,
                                 column_one_raw,
                                 _display_value(definition.column_one_value_type, entry.column_one_value_json or {}, participants_by_id),
-                            ),
+                            )
+                            - (_REJECTED_CANDIDATE_PENALTY if entry.id in rejected_entry_ids else 0.0),
                             entry,
                         )
                         for entry in existing_entries
@@ -2067,13 +2324,21 @@ class WordImportService:
                     for score, entry in scored_entries
                     if score >= _LIST_ENTRY_CANDIDATE_MIN_SCORE
                 ][:_CANDIDATE_LIMIT]
-                if existing is not None and not any(candidate.entry_id == existing.id for candidate in candidates):
+                if existing is not None:
+                    # Always (re)built explicitly rather than only inserted when absent -
+                    # if the matched entry's live value already happened to score high
+                    # enough to appear in `candidates` above via the generic scored-entries
+                    # comprehension, that copy still shows today's LIVE value; replacing it
+                    # here ensures the one candidate the wizard defaults "Bestehend" to
+                    # (linked_entry_id == matched_entry_id, see column_two_source=="existing"
+                    # in the frontend) always reflects baseline_col2, not live data.
+                    candidates = [candidate for candidate in candidates if candidate.entry_id != existing.id]
                     candidates.insert(
                         0,
                         WordImportListEntryCandidate(
                             entry_id=existing.id,
                             column_one_display=_display_value(definition.column_one_value_type, existing.column_one_value_json or {}, participants_by_id),
-                            column_two_display=_display_value(definition.column_two_value_type, existing.column_two_value_json or {}, participants_by_id),
+                            column_two_display=_display_value(definition.column_two_value_type, baseline_col2, participants_by_id),
                             score=1.0,
                             reason="Bereits mit dieser Dokumentzeile verknüpfter Eintrag",
                         ),
@@ -2082,14 +2347,6 @@ class WordImportService:
                     status = "new"
                     matched_entry_id = None
                 else:
-                    # Diff against the nearest earlier protocol's frozen snapshot value for
-                    # this same entry when available (a list drifts over time - comparing an
-                    # old document to *today's* live value would show spurious "changed"
-                    # rows for entries nothing actually changed about back then), otherwise
-                    # fall back to the live value.
-                    baseline_col2 = (previous_entries.get(existing.id) or {}).get("column_two_value")
-                    if baseline_col2 is None:
-                        baseline_col2 = existing.column_two_value_json or {}
                     baseline_col2_key = _value_key(definition.column_two_value_type, baseline_col2)
                     new_col2_key = _value_key(definition.column_two_value_type, col2_value)
                     status = "matched" if baseline_col2_key == new_col2_key else "changed"
@@ -2178,7 +2435,12 @@ class WordImportService:
                         unresolved_col_indices.append(col_idx)
 
                 def _participant_column_score(col_idx: int, participant: Participant) -> float:
-                    return _similarity(doc_column_labels[col_idx], participant.display_name)
+                    # _name_score, not _similarity - a document column header naming a
+                    # participant is exactly the same "raw name vs. full display_name"
+                    # shape _match_names/_name_score already handle (bare first names,
+                    # nicknames), unlike plain character-based _similarity used here
+                    # before.
+                    return _name_score(doc_column_labels[col_idx], participant.display_name)
 
                 remaining_participants = [p for p in participants if p.id not in claimed_participant_ids]
                 auto_picked_participant_by_col = {
@@ -2191,7 +2453,7 @@ class WordImportService:
                 for col_idx in unresolved_col_indices:
                     label = doc_column_labels[col_idx]
                     scored = sorted(
-                        ((_similarity(label, p.display_name), p) for p in participants),
+                        ((_name_score(label, p.display_name), p) for p in participants),
                         key=lambda entry: entry[0],
                         reverse=True,
                     )[:_CANDIDATE_LIMIT]
@@ -2287,20 +2549,43 @@ class WordImportService:
                         ],
                     )
             else:
-                for col_idx, label in enumerate(doc_column_labels):
-                    if not label:
-                        continue
+                # Fixed, template-configured columns - the most common Matrix shape.
+                # Previously a plain per-column best-score argmax with no exclusivity and
+                # no memory of past corrections, unlike the three "auto" branches above:
+                # two document columns could both resolve to the same column_key (silent
+                # overwrite at commit, second write wins), and a reviewer's earlier
+                # correction for this exact (matrix, document column label) was written to
+                # WordImportProfile.mapping_config_json["rejected_candidates"] but never
+                # read back. Both fixed the same way as the "events"/"list" branches above:
+                # solve_optimal_assignment for exclusivity, _REJECTED_CANDIDATE_PENALTY
+                # applied via the same rejected_candidates the rest of analyze() already
+                # threads through.
+                labeled_col_indices = [col_idx for col_idx, label in enumerate(doc_column_labels) if label]
+
+                def _fixed_column_score(col_idx: int, column: dict) -> float:
+                    label = doc_column_labels[col_idx]
+                    score = _similarity(label, str(column.get("title") or ""))
+                    rejected_ids = _rejected_ids_for(f"matrix_column:{matrix_key}:{_normalize(label)}")
+                    if str(column.get("id")) in rejected_ids:
+                        score -= _REJECTED_CANDIDATE_PENALTY
+                    return score
+
+                auto_picked_column_by_col = {
+                    assignment.row: assignment.col
+                    for assignment in solve_optimal_assignment(
+                        labeled_col_indices, matrix_columns, _fixed_column_score, min_score=_MATRIX_COLUMN_MATCH_THRESHOLD
+                    )
+                }
+                for col_idx in labeled_col_indices:
+                    label = doc_column_labels[col_idx]
                     scored = sorted(
                         ((_similarity(label, str(column.get("title") or "")), column) for column in matrix_columns),
                         key=lambda entry: entry[0],
                         reverse=True,
                     )
-                    best_score, best_column = scored[0] if scored else (0.0, None)
-                    column_key = (
-                        str(best_column.get("id")) if best_column is not None and best_score >= _MATRIX_COLUMN_MATCH_THRESHOLD else None
-                    )
+                    picked = auto_picked_column_by_col.get(col_idx)
                     column_resolution[col_idx] = (
-                        column_key,
+                        str(picked.get("id")) if picked is not None else None,
                         [
                             WordImportMatrixColumnCandidate(
                                 column_key=str(column.get("id")), label=str(column.get("title") or ""), score=round(score, 3),
@@ -2406,12 +2691,17 @@ class WordImportService:
                                 )
                                 for score, event in scored_events[:_CANDIDATE_LIMIT]
                             ]
-                            # Matrix cells never carry a real title to compare - a plain
-                            # exact date match is the only meaningful signal here (unlike
-                            # ordinary Termine rows, whose title-similarity gate a bare
-                            # date coincidence would too easily satisfy by chance).
-                            exact_date_match = next((event for event in all_events if event.event_date == extracted_date), None)
-                            matched_event = exact_date_match
+                            # Exact date match is still required (unlike ordinary Termine
+                            # rows, matrix cells never carry a real title to compare, so a
+                            # bare date coincidence needs less benefit of the doubt) - but
+                            # among events sharing that date, pick the highest-scored one
+                            # from scored_events above (already rejection-penalized and
+                            # column_title/tag-aware via _score_event_candidate) rather
+                            # than an arbitrary DB-order pick that ignored that scoring
+                            # entirely. scored_events is already sorted best-first.
+                            matched_event = next(
+                                (event for _score, event in scored_events if event.event_date == extracted_date), None
+                            )
                             status = "matched" if matched_event is not None else "new"
                             event_mappings.append(
                                 WordImportEventMapping(
@@ -2492,6 +2782,28 @@ class WordImportService:
         if protocol_date is None:
             warnings.append("Kein Datum im Dokument erkannt – bitte manuell angeben.")
 
+        duplicate_protocols: list[WordImportDuplicateProtocol] = []
+        if protocol_date is not None:
+            # Real bug fixed here: the queue's own duplicate hint only ever compares
+            # against other WordImportDocument rows (see
+            # WordImportQueueService.duplicates_for_document), so this standalone
+            # analyze() path - which never creates one - was completely blind to an
+            # already-existing Protocol for the same template+date, letting the same
+            # old protocol be imported twice with zero warning. Checking the Protocol
+            # table directly catches a duplicate regardless of how the existing one was
+            # created (manually, or via either import path).
+            existing_protocols = db.execute(
+                select(Protocol).where(
+                    Protocol.tenant_id == tenant_id,
+                    Protocol.template_id == template_id,
+                    Protocol.protocol_date == protocol_date,
+                )
+            ).scalars()
+            duplicate_protocols = [
+                WordImportDuplicateProtocol(id=row.id, protocol_number=row.protocol_number, title=row.title, protocol_date=row.protocol_date)
+                for row in existing_protocols
+            ]
+
         return WordImportAnalysis(
             protocol_date=protocol_date,
             tables=tables_preview,
@@ -2505,9 +2817,10 @@ class WordImportService:
             matrix_mappings=matrix_mappings,
             profile_applied=profile_applied,
             warnings=warnings,
+            duplicate_protocols=duplicate_protocols,
         )
 
-    def commit(self, db: Session, *, tenant_id: int, user_id: int | None, payload: WordImportCommit) -> int:
+    def commit(self, db: Session, *, tenant_id: int, user_id: int | None, payload: WordImportCommit) -> WordImportCommitResult:
         protocol_service = ProtocolService()
         event_service = EventService()
         participant_service = ParticipantService()
@@ -2521,7 +2834,13 @@ class WordImportService:
 
         def _get_cached_participant(participant_id: int) -> Participant | None:
             if participant_id not in participant_cache:
-                participant_cache[participant_id] = db.get(Participant, participant_id)
+                participant = db.get(Participant, participant_id)
+                if participant is not None and participant.tenant_id != tenant_id:
+                    # participant_id is client-supplied (attendance/list/matrix/form name
+                    # resolutions) - without this check a request could widen another
+                    # tenant's Participant's joined_at/left_at window.
+                    raise ValueError("Teilnehmer gehört nicht zu diesem Mandanten")
+                participant_cache[participant_id] = participant
             return participant_cache[participant_id]
 
         def _widen_participant_window(participant_id: int, target_date: date) -> None:
@@ -2593,448 +2912,643 @@ class WordImportService:
             created_by=user_id,
         )
 
-        rows = list(
-            db.execute(
-                select(ProtocolElementBlock, ProtocolElement.template_element_id, ProtocolElement.id)
-                .join(ProtocolElement, ProtocolElement.id == ProtocolElementBlock.protocol_element_id)
-                .where(ProtocolElement.protocol_id == protocol_id)
-            ).all()
-        )
-        block_by_key: dict[tuple[int, int], ProtocolElementBlock] = {}
-        # (template_element_id, event_id) -> the event-repeat block instance already
-        # auto-generated for that Event by create_from_template's own repeat logic
-        # above (only events currently within its window get one there) - reused
-        # instead of creating a duplicate block for the same Event.
-        event_block_by_key: dict[tuple[int, int], ProtocolElementBlock] = {}
-        protocol_element_id_by_template_element_id: dict[int, int] = {}
-        attendance_blocks: list[ProtocolElementBlock] = []
-        for block, template_element_id, protocol_element_id in rows:
-            config = block.configuration_snapshot_json or {}
-            source_sort_index = config.get("source_sort_index")
-            if template_element_id is not None and source_sort_index is not None:
-                block_by_key[(template_element_id, source_sort_index)] = block
-            if template_element_id is not None:
-                protocol_element_id_by_template_element_id[template_element_id] = protocol_element_id
-                if config.get("repeat_source_type") == "event" and config.get("repeat_source_id") is not None:
-                    event_block_by_key[(template_element_id, int(config["repeat_source_id"]))] = block
-            if config and "attendance_entries" in config:
-                attendance_blocks.append(block)
+        # Surfaced on the response instead of only ever being empty (see
+        # WordImportCommitResult) - every `continue` below that used to silently drop
+        # content now also records why, so the reviewer isn't left thinking the import
+        # fully succeeded when part of it didn't.
+        commit_warnings: list[str] = []
+        # ProtocolElementBlock.id -> the FIRST text_commit's own extracted_heading that
+        # already claimed this target - a second section resolving to the identical
+        # block (e.g. two similarly-titled headings both best-matching the same
+        # element) would otherwise overwrite the first's content with no warning at all
+        # (last write wins).
+        claimed_text_blocks: dict[int, str] = {}
 
-        def _get_or_create_event_repeat_block(template_element_id: int, event_id: int) -> ProtocolElementBlock | None:
-            key = (template_element_id, event_id)
-            block = event_block_by_key.get(key)
-            if block is not None:
+        def _populate() -> None:
+            rows = list(
+                db.execute(
+                    select(ProtocolElementBlock, ProtocolElement.template_element_id, ProtocolElement.id)
+                    .join(ProtocolElement, ProtocolElement.id == ProtocolElementBlock.protocol_element_id)
+                    .where(ProtocolElement.protocol_id == protocol_id)
+                ).all()
+            )
+            block_by_key: dict[tuple[int, int], ProtocolElementBlock] = {}
+            # (template_element_id, block_sort_index, event_id) -> the event-repeat block
+            # instance already auto-generated for that Event by create_from_template's own
+            # repeat logic above (only events currently within its window get one there) -
+            # reused instead of creating a duplicate block for the same Event. Keyed by
+            # block_sort_index too (not just template_element_id/event_id): an element can
+            # have more than one event-repeat block template (analyze() registers each as
+            # its own text_target with its own block_sort_index) - without it, two such
+            # blocks for the same element+Event would collide on one dict entry and one
+            # document section's content would silently overwrite the other's.
+            event_block_by_key: dict[tuple[int, int, int], ProtocolElementBlock] = {}
+            protocol_element_id_by_template_element_id: dict[int, int] = {}
+            attendance_blocks: list[ProtocolElementBlock] = []
+            for block, template_element_id, protocol_element_id in rows:
+                config = block.configuration_snapshot_json or {}
+                source_sort_index = config.get("source_sort_index")
+                if template_element_id is not None and source_sort_index is not None:
+                    block_by_key[(template_element_id, source_sort_index)] = block
+                if template_element_id is not None:
+                    protocol_element_id_by_template_element_id[template_element_id] = protocol_element_id
+                    if (
+                        config.get("repeat_source_type") == "event"
+                        and config.get("repeat_source_id") is not None
+                        and source_sort_index is not None
+                    ):
+                        event_block_by_key[(template_element_id, int(source_sort_index), int(config["repeat_source_id"]))] = block
+                if config and "attendance_entries" in config:
+                    attendance_blocks.append(block)
+
+            def _get_or_create_event_repeat_block(
+                template_element_id: int, block_sort_index: int, event_id: int
+            ) -> ProtocolElementBlock | None:
+                key = (template_element_id, block_sort_index, event_id)
+                block = event_block_by_key.get(key)
+                if block is not None:
+                    return block
+                protocol_element_id = protocol_element_id_by_template_element_id.get(template_element_id)
+                if protocol_element_id is None:
+                    return None
+                try:
+                    block = protocol_service.add_event_block_to_element(
+                        db, protocol_element_id=protocol_element_id, event_id=event_id, block_sort_index=block_sort_index
+                    )
+                except ValueError:
+                    return None
+                event_block_by_key[key] = block
                 return block
-            protocol_element_id = protocol_element_id_by_template_element_id.get(template_element_id)
-            if protocol_element_id is None:
-                return None
-            try:
-                block = protocol_service.add_event_block_to_element(
-                    db, protocol_element_id=protocol_element_id, event_id=event_id
-                )
-            except ValueError:
-                return None
-            event_block_by_key[key] = block
-            return block
 
-        # Same shape/purpose as attendance_name_updates/list_name_updates below - learned
-        # from form-block participant(s) rows (e.g. "Organisation"/"Wer geht" on a
-        # Scharanlässe-style block) so a repeated import of similarly-worded old
-        # protocols reuses the same name resolution without re-asking.
-        form_name_updates: dict[str, int] = {}
-        # normalized raw_name -> newly created Participant.id, deduplicates a name typed
-        # as "create new" appearing in more than one form-field row within this same
-        # commit (e.g. the same person listed under both "Organisation" and "Wer geht").
-        created_form_participants: dict[str, int] = {}
-        for text_commit in payload.texts:
-            if text_commit.template_element_id is None:
-                continue
-            if text_commit.is_event_repeat:
-                if text_commit.linked_event_id is None:
-                    # No Anlass chosen for this Rückblick-style section - never falls
-                    # back to block_sort_index, which would silently write into an
-                    # arbitrary other Event's block (see event_block_by_key above).
+            # Deliberately runs BEFORE the text loop below: an event-repeat ("Rückblick")
+            # block's title_snapshot/repeat_context tokens ({title}/{date}/...) are
+            # rendered from the linked Event's CURRENT title/date at the moment its block
+            # is created (see _get_or_create_event_repeat_block ->
+            # add_event_block_to_element). Running this loop first means an event whose
+            # title/date this same commit is also updating gets its repeat blocks
+            # snapshotted with the NEW values instead of the about-to-be-stale ones.
+            #
+            # Additive memory of "this exact document text conflicted with this exact
+            # existing Event, and the reviewer chose X" (see _event_conflict_key /
+            # WordImportEventMapping.remembered_title_source) - merged into
+            # WordImportProfile.mapping_config_json["event_conflict_resolutions"] below,
+            # same append-only-per-key pattern as rejected_candidate_updates above.
+            event_conflict_updates: dict[str, dict] = {}
+            for event_commit in payload.events:
+                if not event_commit.approved:
                     continue
-                block = _get_or_create_event_repeat_block(text_commit.template_element_id, text_commit.linked_event_id)
-            elif text_commit.block_sort_index is not None:
-                block = block_by_key.get((text_commit.template_element_id, text_commit.block_sort_index))
-            else:
-                continue
-            if block is None:
-                continue
-            if text_commit.is_form_block:
-                config = dict(block.configuration_snapshot_json or {})
-                fields_by_row_id = {field.row_id: field for field in text_commit.form_fields}
-                updated_rows = []
-                for row in config.get("rows") or []:
-                    row_id = str(row.get("id"))
-                    field = fields_by_row_id.get(row_id)
-                    if field is None:
-                        updated_rows.append(row)
-                        continue
-                    resolved_names = []
-                    for name in field.names:
-                        participant_id = name.participant_id
-                        if participant_id is None and name.create_new:
-                            cache_key = _normalize(name.raw_name)
-                            participant_id = created_form_participants.get(cache_key)
-                            if participant_id is None:
-                                new_participant = participant_service.create_participant(
-                                    db,
-                                    ParticipantCreate(
-                                        display_name=name.raw_name.strip(),
-                                        # Scoped to exactly this protocol's date, same as a
-                                        # newly created attendance participant above.
-                                        joined_at=payload.protocol_date,
-                                        left_at=payload.protocol_date,
-                                    ),
-                                    tenant_id=tenant_id,
-                                )
-                                db.flush()
-                                participant_id = new_participant.id
-                                created_form_participants[cache_key] = participant_id
-                                db.add(TemplateParticipant(template_id=payload.template_id, participant_id=participant_id, exclude_from_attendance=False))
-                        _log_outcome(
-                            "name_match", name.originally_suggested_score, name.originally_suggested_participant_id, participant_id,
-                            rejection_key=f"name:{_normalize(name.raw_name)}" if name.raw_name else None,
-                        )
-                        resolved_names.append(name.model_copy(update={"participant_id": participant_id}))
-                        if participant_id is not None:
-                            form_name_updates[_normalize(name.raw_name)] = participant_id
-                            _widen_participant_window(participant_id, payload.protocol_date)
-                    updated_rows.append({**row, **_resolved_value_json(field.row_type, field.raw_value, resolved_names)})
-                config["rows"] = updated_rows
-                block.configuration_snapshot_json = config
-                db.add(block)
-            else:
-                protocol_text = db.execute(
-                    select(ProtocolText).where(ProtocolText.protocol_element_block_id == block.id)
-                ).scalar_one_or_none()
-                if protocol_text is not None:
-                    protocol_text.content = text_commit.content
-
-        # Learned here (not straight from payload.attendance) so create_new rows contribute
-        # their newly-created participant_id, and roster-only rows (raw_name == "", added in
-        # analyze() for template participants missing from the document) don't pollute the
-        # profile with a bogus ""-key override.
-        attendance_name_updates: dict[str, int] = {}
-        if payload.attendance and attendance_blocks:
-            status_by_participant: dict[int, str] = {}
-            created_participants: dict[int, str] = {}
-            for entry in payload.attendance:
-                participant_id = entry.participant_id
-                if participant_id is None and entry.create_new:
-                    new_participant = participant_service.create_participant(
+                # Keyed on the DOCUMENT's raw title/date (not final_title/final_date, the
+                # reviewer's resolved choice) - analyze() looks this key up again next time
+                # using ITS OWN raw_date/title extracted straight from a future document
+                # (see _rejected_ids_for(f"event:...") call sites above), which can only
+                # ever match the document-side values. Keying on final_* here meant the
+                # written key could never be hit again: a rejected wrong auto-match kept
+                # being suggested forever, never actually demoted.
+                _log_outcome(
+                    "event_match", event_commit.originally_suggested_score,
+                    event_commit.originally_suggested_event_id, event_commit.linked_event_id,
+                    rejection_key=(
+                        f"event:{event_commit.raw_date.isoformat()}|{_normalize(event_commit.raw_title)}"
+                        if event_commit.raw_date is not None
+                        else None
+                    ),
+                )
+                # tag/participant_count are only ever set for Matrix-sourced rows (see
+                # WordImportEventCommit) - left out of the kwargs entirely for ordinary
+                # Termine-table rows so neither is ever accidentally cleared/overwritten on
+                # an existing Event's unrelated, independently-maintained value.
+                extra_kwargs: dict = {}
+                if event_commit.tag is not None:
+                    extra_kwargs["tag"] = event_commit.tag
+                if event_commit.participant_count is not None:
+                    extra_kwargs["participant_count"] = event_commit.participant_count
+                if event_commit.linked_event_id is None:
+                    event_service.create_event(
                         db,
-                        ParticipantCreate(
-                            display_name=(entry.participant_name or entry.raw_name).strip(),
-                            # Scoped to exactly this protocol's date, so the person shows up
-                            # only here and not in other protocols' rosters until someone
-                            # widens their membership window by hand.
-                            joined_at=payload.protocol_date,
-                            left_at=payload.protocol_date,
+                        EventCreate(
+                            title=event_commit.final_title,
+                            event_date=event_commit.final_date,
+                            cycle_assignments=cycle_assignments,
+                            **extra_kwargs,
                         ),
                         tenant_id=tenant_id,
                     )
-                    participant_id = new_participant.id
-                    created_participants[participant_id] = new_participant.display_name
-                    # Also add to the template's roster so future protocols/imports for this
-                    # template already list them, not just this one-off protocol.
-                    db.add(TemplateParticipant(template_id=payload.template_id, participant_id=participant_id, exclude_from_attendance=False))
-                _log_outcome(
-                    "participant_match", entry.originally_suggested_score, entry.originally_suggested_participant_id, participant_id,
-                    rejection_key=f"name:{_normalize(entry.raw_name)}" if entry.raw_name else None,
-                )
-                if participant_id is None:
-                    continue
-                if participant_id not in created_participants:
-                    _widen_participant_window(participant_id, payload.protocol_date)
-                status_by_participant[participant_id] = entry.status
-                if entry.raw_name:
-                    attendance_name_updates[_normalize(entry.raw_name)] = participant_id
-            if created_participants:
-                db.flush()
-            for attendance_block in attendance_blocks:
-                old_entries = attendance_block.configuration_snapshot_json.get("attendance_entries", [])
-                present_ids = {entry.get("participant_id") for entry in old_entries}
-                # Build entirely new dicts/list rather than mutating old_entries (and its
-                # entries) in place: those are the SAME objects SQLAlchemy's change-tracking
-                # uses as its "before" snapshot for this JSON column, since JSONB columns
-                # aren't Mutable-tracked here. Mutating them in place makes the reassigned
-                # value compare equal to that snapshot at flush time, so the ORM silently
-                # concludes nothing changed and never issues the UPDATE - status edits were
-                # accepted in the wizard but never actually reached the database.
-                new_entries = [
-                    {**entry, "status": status_by_participant[entry["participant_id"]]}
-                    if entry.get("participant_id") in status_by_participant
-                    else entry
-                    for entry in old_entries
-                ]
-                for missing_id, status in status_by_participant.items():
-                    if missing_id in present_ids:
-                        continue
-                    # create_from_template built attendance_entries from the roster query
-                    # BEFORE this method ran (and that query filters by participant_eligible_on)
-                    # - so this participant is missing here either because they were just
-                    # created above, or because their old joined_at/left_at window excluded
-                    # protocol_date and only got widened to include it a few lines up. Either
-                    # way: append instead of status-patch.
-                    display_name = created_participants.get(missing_id)
-                    if display_name is None:
-                        existing_participant = _get_cached_participant(missing_id)
-                        display_name = existing_participant.display_name if existing_participant else ""
-                    new_entries.append({"participant_id": missing_id, "participant_name": display_name, "status": status})
-                attendance_block.configuration_snapshot_json = {
-                    **attendance_block.configuration_snapshot_json,
-                    "attendance_entries": new_entries,
-                }
-
-        for event_commit in payload.events:
-            if not event_commit.approved:
-                continue
-            _log_outcome(
-                "event_match", event_commit.originally_suggested_score,
-                event_commit.originally_suggested_event_id, event_commit.linked_event_id,
-                rejection_key=f"event:{event_commit.final_date.isoformat()}|{_normalize(event_commit.final_title)}",
-            )
-            # tag/participant_count are only ever set for Matrix-sourced rows (see
-            # WordImportEventCommit) - left out of the kwargs entirely for ordinary
-            # Termine-table rows so neither is ever accidentally cleared/overwritten on
-            # an existing Event's unrelated, independently-maintained value.
-            extra_kwargs: dict = {}
-            if event_commit.tag is not None:
-                extra_kwargs["tag"] = event_commit.tag
-            if event_commit.participant_count is not None:
-                extra_kwargs["participant_count"] = event_commit.participant_count
-            if event_commit.linked_event_id is None:
-                event_service.create_event(
-                    db,
-                    EventCreate(
-                        title=event_commit.final_title,
-                        event_date=event_commit.final_date,
-                        cycle_assignments=cycle_assignments,
-                        **extra_kwargs,
-                    ),
-                    tenant_id=tenant_id,
-                )
-            else:
-                event_service.update_event(
-                    db,
-                    event_commit.linked_event_id,
-                    EventUpdate(
-                        title=event_commit.final_title,
-                        event_date=event_commit.final_date,
-                        cycle_assignments=cycle_assignments,
-                        **extra_kwargs,
-                    ),
-                )
-
-        # Unlike lists, matrix cells are written straight into the live protocol's own
-        # Matrix block's configuration_snapshot_json - there is no separate persisted
-        # entity, and (see WordImportService plan) no freeze/refresh step touches matrix
-        # blocks on the "abgeschlossen" transition below, so this can run immediately.
-        matrix_name_updates: dict[str, int] = {}
-        for matrix_commit in payload.matrices:
-            if not matrix_commit.approved:
-                continue
-            _log_outcome(
-                "matrix_column_match", matrix_commit.originally_suggested_score,
-                matrix_commit.originally_suggested_column_key, matrix_commit.column_key,
-                rejection_key=f"matrix_column:{matrix_commit.matrix_key}:{_normalize(matrix_commit.column_label)}",
-            )
-            try:
-                template_element_id_str, sort_index_str = matrix_commit.matrix_key.split(":", 1)
-                block_key = (int(template_element_id_str), int(sort_index_str))
-            except (ValueError, AttributeError):
-                continue
-            block = block_by_key.get(block_key)
-            if block is None:
-                continue
-            config = dict(block.configuration_snapshot_json or {})
-            columns = [dict(column) for column in (config.get("columns") or [])]
-            target_column = next((column for column in columns if str(column.get("id")) == matrix_commit.column_key), None)
-            if target_column is None:
-                target_column = {
-                    "id": matrix_commit.column_key,
-                    "title": matrix_commit.column_label,
-                    "sort_index": len(columns),
-                    "row_values": {},
-                }
-                columns.append(target_column)
-            row_values = dict(target_column.get("row_values") or {})
-            row_values[matrix_commit.row_id] = _resolved_value_json(matrix_commit.row_type, matrix_commit.raw_value, matrix_commit.names)
-            target_column["row_values"] = row_values
-            config["columns"] = columns
-            block.configuration_snapshot_json = config
-            db.add(block)
-            for name_resolution in matrix_commit.names:
-                _log_outcome(
-                    "name_match", name_resolution.originally_suggested_score,
-                    name_resolution.originally_suggested_participant_id, name_resolution.participant_id,
-                    rejection_key=f"name:{_normalize(name_resolution.raw_name)}" if name_resolution.raw_name else None,
-                )
-                if name_resolution.participant_id is not None:
-                    matrix_name_updates[_normalize(name_resolution.raw_name)] = name_resolution.participant_id
-                    _widen_participant_window(name_resolution.participant_id, payload.protocol_date)
-
-        # Lists are never written to the live ListEntry table (see WordImportListRowMapping
-        # / WordImportListRowCommit docstrings) - collect the approved rows here and only
-        # patch the protocol's own block snapshot(s) further below, *after* the status
-        # transition to "abgeschlossen" has run its live-refreshing freeze step (otherwise
-        # that freeze would immediately overwrite these historical values with today's data).
-        list_name_updates: dict[str, int] = {}
-        approved_list_commits: list[WordImportListRowCommit] = []
-        definitions_cache: dict[int, ListDefinition] = {}
-        for list_commit in payload.lists:
-            if not list_commit.approved:
-                continue
-            definition = definitions_cache.get(list_commit.list_definition_id)
-            if definition is None:
-                definition = db.get(ListDefinition, list_commit.list_definition_id)
-                if definition is None:
-                    continue
-                definitions_cache[list_commit.list_definition_id] = definition
-            approved_list_commits.append(list_commit)
-            _log_outcome(
-                "list_entry_match", list_commit.originally_suggested_score,
-                list_commit.originally_suggested_entry_id, list_commit.linked_entry_id,
-                rejection_key=f"list_entry:{list_commit.list_definition_id}:{_normalize(list_commit.column_one_raw)}",
-            )
-            for name_resolution in list_commit.column_one_names + list_commit.column_two_names:
-                _log_outcome(
-                    "name_match", name_resolution.originally_suggested_score,
-                    name_resolution.originally_suggested_participant_id, name_resolution.participant_id,
-                    rejection_key=f"name:{_normalize(name_resolution.raw_name)}" if name_resolution.raw_name else None,
-                )
-                if name_resolution.participant_id is not None:
-                    list_name_updates[_normalize(name_resolution.raw_name)] = name_resolution.participant_id
-                    _widen_participant_window(name_resolution.participant_id, payload.protocol_date)
-
-        heading_updates = {
-            _normalize(tc.extracted_heading): {
-                "template_element_id": tc.template_element_id,
-                "block_sort_index": tc.block_sort_index,
-            }
-            for tc in payload.texts
-            # Event-repeat headings (e.g. "Rückblick Elternabend") name a specific
-            # Anlass, not a stable structural target - memoizing them would make a
-            # differently-named Rückblick heading next time wrongly short-circuit
-            # straight past _match_event_repeat_section in analyze().
-            if tc.template_element_id is not None and tc.block_sort_index is not None and not tc.is_event_repeat
-        }
-        table_role_updates: dict[str, dict] = {}
-        for tc in payload.tables:
-            _log_outcome(
-                "table_role", tc.originally_suggested_score, tc.originally_suggested_role, tc.role,
-                rejection_key=f"table_role:{tc.header_signature}",
-            )
-            table_role_updates[tc.header_signature] = {
-                "role": tc.role,
-                "list_definition_id": tc.list_definition_id,
-                "matrix_key": tc.matrix_key,
-                "list_grouping_strategy": tc.list_grouping_strategy,
-            }
-        name_updates: dict[str, int] = {
-            **attendance_name_updates,
-            **list_name_updates,
-            **form_name_updates,
-            **matrix_name_updates,
-        }
-        if heading_updates or table_role_updates or name_updates or rejected_candidate_updates:
-            profile = db.execute(
-                select(WordImportProfile).where(
-                    WordImportProfile.tenant_id == tenant_id, WordImportProfile.template_id == payload.template_id
-                )
-            ).scalar_one_or_none()
-            if profile is None:
-                profile = WordImportProfile(tenant_id=tenant_id, template_id=payload.template_id, mapping_config_json={})
-                db.add(profile)
-                db.flush()
-            config = dict(profile.mapping_config_json or {})
-            heading_map = dict(config.get("heading_to_target", {}))
-            heading_map.update(heading_updates)
-            table_map = dict(config.get("table_roles_by_signature", {}))
-            table_map.update(table_role_updates)
-            name_map = dict(config.get("participant_name_overrides", {}))
-            name_map.update(name_updates)
-            # Additive negative-feedback store (see A.4 plan / _log_outcome above) - one
-            # entry per "{signal_prefix}:{normalized_context}" key, merging newly rejected
-            # candidate ids into any list already recorded for that same context rather
-            # than overwriting it, so a context that's been wrong more than once across
-            # separate imports accumulates every distinct wrong candidate seen so far.
-            rejected_map = dict(config.get("rejected_candidates", {}))
-            for key, update in rejected_candidate_updates.items():
-                existing_entry = dict(rejected_map.get(key) or {"rejected": [], "chosen": None})
-                merged_rejected = list(existing_entry.get("rejected") or [])
-                for candidate_id in update["rejected"]:
-                    if candidate_id not in merged_rejected:
-                        merged_rejected.append(candidate_id)
-                rejected_map[key] = {"rejected": merged_rejected, "chosen": update["chosen"]}
-            profile.mapping_config_json = {
-                "heading_to_target": heading_map,
-                "table_roles_by_signature": table_map,
-                "participant_name_overrides": name_map,
-                "rejected_candidates": rejected_map,
-            }
-
-        protocol_service.update_protocol(db, protocol_id, ProtocolUpdate(status="abgeschlossen"))
-
-        if approved_list_commits:
-            blocks_by_list_id: dict[int, list[ProtocolElementBlock]] = {}
-            for block in db.execute(
-                select(ProtocolElementBlock)
-                .join(ProtocolElement, ProtocolElement.id == ProtocolElementBlock.protocol_element_id)
-                .where(ProtocolElement.protocol_id == protocol_id)
-            ).scalars():
-                linked_list_id = (block.configuration_snapshot_json or {}).get("linked_list_id")
-                if linked_list_id:
-                    blocks_by_list_id.setdefault(int(linked_list_id), []).append(block)
-
-            synthetic_id = 0
-            for list_commit in approved_list_commits:
-                target_blocks = blocks_by_list_id.get(list_commit.list_definition_id)
-                if not target_blocks:
-                    # Chosen template has no block linked to this list - no snapshot slot
-                    # exists in this protocol, so nothing is written (never falls back to
-                    # live, see WordImportListRowMapping.has_snapshot_target).
-                    continue
-                definition = definitions_cache[list_commit.list_definition_id]
-                col1_value = _resolved_value_json(definition.column_one_value_type, list_commit.column_one_raw, list_commit.column_one_names)
-                col2_value = _resolved_value_json(definition.column_two_value_type, list_commit.column_two_raw, list_commit.column_two_names)
-                for block in target_blocks:
-                    config = dict(block.configuration_snapshot_json or {})
-                    list_snapshot = dict(config.get("list_snapshot") or {})
-                    entries = list(list_snapshot.get("entries") or [])
-                    target_index = (
-                        next(
-                            (i for i, entry in enumerate(entries) if isinstance(entry, dict) and entry.get("id") == list_commit.linked_entry_id),
-                            None,
-                        )
-                        if list_commit.linked_entry_id is not None
-                        else None
+                else:
+                    existing_event = db.get(Event, event_commit.linked_event_id)
+                    if existing_event is None or existing_event.tenant_id != tenant_id:
+                        # linked_event_id is client-supplied - without this check a
+                        # request could retitle/redate/re-cycle another tenant's Event.
+                        raise ValueError("Verknüpfter Termin gehört nicht zu diesem Mandanten")
+                    if (
+                        existing_event.title != event_commit.raw_title or existing_event.event_date != event_commit.raw_date
+                    ):
+                        event_conflict_updates[_event_conflict_key(event_commit.linked_event_id, event_commit.raw_title)] = {
+                            "title_source": "doc" if event_commit.final_title == event_commit.raw_title else "existing",
+                            "date_source": "doc" if event_commit.final_date == event_commit.raw_date else "existing",
+                        }
+                    event_service.update_event(
+                        db,
+                        event_commit.linked_event_id,
+                        EventUpdate(
+                            title=event_commit.final_title,
+                            event_date=event_commit.final_date,
+                            cycle_assignments=cycle_assignments,
+                            **extra_kwargs,
+                        ),
                     )
-                    if target_index is not None:
-                        entries[target_index] = {**entries[target_index], "column_one_value": col1_value, "column_two_value": col2_value}
-                    else:
-                        # No live counterpart (or it wasn't found in this block's frozen
-                        # entries) - append a snapshot-only row with a synthetic negative id,
-                        # never a real ListEntry id, so it can never collide with one.
-                        synthetic_id -= 1
-                        entries.append(
-                            {
-                                "id": list_commit.linked_entry_id if list_commit.linked_entry_id is not None else synthetic_id,
-                                "sort_index": len(entries),
-                                "column_one_value": col1_value,
-                                "column_two_value": col2_value,
-                            }
-                        )
-                    list_snapshot["entries"] = entries
-                    config["list_snapshot"] = list_snapshot
+
+            # Same shape/purpose as attendance_name_updates/list_name_updates below - learned
+            # from form-block participant(s) rows (e.g. "Organisation"/"Wer geht" on a
+            # Scharanlässe-style block) so a repeated import of similarly-worded old
+            # protocols reuses the same name resolution without re-asking.
+            form_name_updates: dict[str, int] = {}
+            # normalized raw_name -> newly created Participant.id. Shared across BOTH the
+            # form-field "create new" path below and the attendance "create new" path
+            # further down - deduplicates a name typed as "create new" appearing more than
+            # once within this same commit, e.g. a person named in the Anwesenheit table
+            # who is ALSO mentioned by name in a free-text form field like "Wer geht" (a
+            # real, previously unhandled case: each path used its own private cache, so the
+            # second path would try to INSERT the same tenant+display_name Participant a
+            # second time and crash the whole commit on the unique-name constraint).
+            created_participants_by_name: dict[str, int] = {}
+            for text_commit in payload.texts:
+                if text_commit.template_element_id is None or text_commit.dismissed:
+                    # dismissed mirrors the wizard's row-level "Ignorieren" (see
+                    # TextDraft.dismissed) - skips this section entirely, same as an
+                    # unapproved list/matrix/event row never being committed. Previously
+                    # had no effect here: a form block with an "ignored" unresolved name
+                    # was written anyway (with just that name silently unlinked).
+                    continue
+                if text_commit.is_event_repeat:
+                    if text_commit.linked_event_id is None or text_commit.block_sort_index is None:
+                        # No Anlass chosen (or no target block resolved) for this
+                        # Rückblick-style section - never falls back to a bare
+                        # template_element_id lookup, which would silently write into an
+                        # arbitrary other Event's block (see event_block_by_key above).
+                        continue
+                    block = _get_or_create_event_repeat_block(
+                        text_commit.template_element_id, text_commit.block_sort_index, text_commit.linked_event_id
+                    )
+                elif text_commit.block_sort_index is not None:
+                    block = block_by_key.get((text_commit.template_element_id, text_commit.block_sort_index))
+                else:
+                    continue
+                if block is None:
+                    commit_warnings.append(
+                        f'Abschnitt "{text_commit.extracted_heading}" konnte keinem Block zugeordnet werden '
+                        "und wurde übersprungen."
+                    )
+                    continue
+                # Keyed on the actually-resolved block's own id (not just
+                # (template_element_id, block_sort_index)) - two event-repeat sections
+                # sharing a block_sort_index but targeting DIFFERENT events resolve to
+                # DIFFERENT block instances and must not warn; two ordinary sections
+                # sharing a block_sort_index resolve to the SAME instance and should.
+                claimed_by = claimed_text_blocks.get(block.id)
+                if claimed_by is not None:
+                    commit_warnings.append(
+                        f'Abschnitt "{text_commit.extracted_heading}" zielt auf denselben Block wie '
+                        f'"{claimed_by}" - nur einer der beiden wurde übernommen.'
+                    )
+                claimed_text_blocks[block.id] = text_commit.extracted_heading
+                if text_commit.is_form_block:
+                    config = dict(block.configuration_snapshot_json or {})
+                    fields_by_row_id = {field.row_id: field for field in text_commit.form_fields}
+                    updated_rows = []
+                    for row in config.get("rows") or []:
+                        row_id = str(row.get("id"))
+                        field = fields_by_row_id.get(row_id)
+                        if field is None:
+                            updated_rows.append(row)
+                            continue
+                        resolved_names = []
+                        for name in field.names:
+                            participant_id = name.participant_id
+                            if participant_id is None and name.create_new:
+                                cache_key = _normalize(name.raw_name)
+                                participant_id = created_participants_by_name.get(cache_key)
+                                if participant_id is None:
+                                    new_participant = participant_service.create_participant(
+                                        db,
+                                        ParticipantCreate(
+                                            display_name=name.raw_name.strip(),
+                                            # Scoped to exactly this protocol's date, same as a
+                                            # newly created attendance participant above.
+                                            joined_at=payload.protocol_date,
+                                            left_at=payload.protocol_date,
+                                        ),
+                                        tenant_id=tenant_id,
+                                    )
+                                    db.flush()
+                                    participant_id = new_participant.id
+                                    created_participants_by_name[cache_key] = participant_id
+                                    db.add(TemplateParticipant(template_id=payload.template_id, participant_id=participant_id, exclude_from_attendance=False))
+                            # "participant_match", not the unused "name_match" signal_type
+                            # this used to log under - participant_match_threshold's own
+                            # docstring already claims form/list/matrix names resolve
+                            # through "the same underlying scoring" as attendance and
+                            # share its adaptive threshold; logging them under a
+                            # different, never-consumed signal_type meant that claim
+                            # wasn't actually true - these outcomes never fed the
+                            # threshold they were supposed to help learn.
+                            _log_outcome(
+                                "participant_match", name.originally_suggested_score, name.originally_suggested_participant_id, participant_id,
+                                rejection_key=f"name:{_normalize(name.raw_name)}" if name.raw_name else None,
+                            )
+                            resolved_names.append(name.model_copy(update={"participant_id": participant_id}))
+                            if participant_id is not None:
+                                form_name_updates[_normalize(name.raw_name)] = participant_id
+                                _widen_participant_window(participant_id, payload.protocol_date)
+                        # Explicitly drop the row's OLD value keys before merging in the
+                        # freshly resolved ones, rather than merging _resolved_value_json's
+                        # result straight over `row` - that used to leave the template's
+                        # default text_value/participant_id/participant_ids in place
+                        # whenever the resolved value was genuinely empty (cleared field, or
+                        # every name failed to resolve), silently keeping stale data instead
+                        # of clearing it like the list/matrix commit paths below already do
+                        # for the identical case.
+                        base_row = {k: v for k, v in row.items() if k not in _FORM_ROW_VALUE_KEYS}
+                        updated_rows.append({**base_row, **_resolved_value_json(field.row_type, field.raw_value, resolved_names)})
+                    config["rows"] = updated_rows
                     block.configuration_snapshot_json = config
                     db.add(block)
+                else:
+                    protocol_text = db.execute(
+                        select(ProtocolText).where(ProtocolText.protocol_element_block_id == block.id)
+                    ).scalar_one_or_none()
+                    if protocol_text is not None:
+                        protocol_text.content = text_commit.content
+                    else:
+                        # The resolved block exists but isn't a text-capable render (e.g.
+                        # the template changed between analyze() and commit()) -
+                        # block_sort_index is client-supplied and never re-validated
+                        # against which blocks can actually hold a ProtocolText.
+                        commit_warnings.append(
+                            f'Abschnitt "{text_commit.extracted_heading}" konnte nicht geschrieben werden '
+                            "(Zielblock unterstützt keinen Text)."
+                        )
 
-        if outcome_rows:
-            db.add_all(outcome_rows)
+            # Learned here (not straight from payload.attendance) so create_new rows contribute
+            # their newly-created participant_id, and roster-only rows (raw_name == "", added in
+            # analyze() for template participants missing from the document) don't pollute the
+            # profile with a bogus ""-key override.
+            attendance_name_updates: dict[str, int] = {}
+            # Negative counterpart to attendance_name_updates - a raw name explicitly
+            # resolved as "Keinen verknüpfen" (never a real participant, e.g. a table's own
+            # "Total" footer row) rather than just left undecided. Only entries the reviewer
+            # actually took a stance on ever reach payload.attendance at all with
+            # participant_id=None (see the wizard's approvedAttendance filter) - an
+            # unresolved row is never sent, so its absence here can't be confused with an
+            # explicit no-link decision.
+            no_link_name_updates: set[str] = set()
+            if payload.attendance and attendance_blocks:
+                status_by_participant: dict[int, str] = {}
+                created_participants: dict[int, str] = {}
+                for entry in payload.attendance:
+                    participant_id = entry.participant_id
+                    if participant_id is None and entry.create_new:
+                        # Same name may already have been created above while resolving a
+                        # form-block name row (e.g. also listed under "Wer geht") - reuse
+                        # that Participant instead of a second INSERT, which would violate
+                        # the tenant+display_name unique constraint and abort the whole
+                        # commit (see created_participants_by_name docstring above).
+                        cache_key = _normalize(entry.raw_name)
+                        participant_id = created_participants_by_name.get(cache_key)
+                        if participant_id is None:
+                            new_participant = participant_service.create_participant(
+                                db,
+                                ParticipantCreate(
+                                    display_name=(entry.participant_name or entry.raw_name).strip(),
+                                    # Scoped to exactly this protocol's date, so the person shows up
+                                    # only here and not in other protocols' rosters until someone
+                                    # widens their membership window by hand.
+                                    joined_at=payload.protocol_date,
+                                    left_at=payload.protocol_date,
+                                ),
+                                tenant_id=tenant_id,
+                            )
+                            participant_id = new_participant.id
+                            created_participants_by_name[cache_key] = participant_id
+                            # Also add to the template's roster so future protocols/imports for
+                            # this template already list them, not just this one-off protocol.
+                            db.add(TemplateParticipant(template_id=payload.template_id, participant_id=participant_id, exclude_from_attendance=False))
+                        created_participants[participant_id] = entry.participant_name or entry.raw_name
+                    if entry.raw_name:
+                        # raw_name == "" marks a roster-only placeholder row (a template
+                        # participant never mentioned in the document at all, added in
+                        # analyze() with a hardcoded candidates=[score=1.0] so it still
+                        # shows up for review - see its append site above). That 1.0 isn't
+                        # a real similarity score from any matching decision, and the
+                        # reviewer almost never touches these rows - logging them anyway
+                        # inflated bucket 9's sample count/accept-rate with synthetic,
+                        # not-actually-representative-of-matching-quality "accepts".
+                        _log_outcome(
+                            "participant_match", entry.originally_suggested_score, entry.originally_suggested_participant_id,
+                            participant_id, rejection_key=f"name:{_normalize(entry.raw_name)}",
+                        )
+                    if participant_id is None:
+                        if entry.raw_name.strip():
+                            no_link_name_updates.add(_normalize(entry.raw_name))
+                        continue
+                    if participant_id not in created_participants:
+                        _widen_participant_window(participant_id, payload.protocol_date)
+                    status_by_participant[participant_id] = entry.status
+                    if entry.raw_name:
+                        attendance_name_updates[_normalize(entry.raw_name)] = participant_id
+                if created_participants:
+                    db.flush()
+                for attendance_block in attendance_blocks:
+                    old_entries = attendance_block.configuration_snapshot_json.get("attendance_entries", [])
+                    present_ids = {entry.get("participant_id") for entry in old_entries}
+                    # Build entirely new dicts/list rather than mutating old_entries (and its
+                    # entries) in place: those are the SAME objects SQLAlchemy's change-tracking
+                    # uses as its "before" snapshot for this JSON column, since JSONB columns
+                    # aren't Mutable-tracked here. Mutating them in place makes the reassigned
+                    # value compare equal to that snapshot at flush time, so the ORM silently
+                    # concludes nothing changed and never issues the UPDATE - status edits were
+                    # accepted in the wizard but never actually reached the database.
+                    new_entries = [
+                        {**entry, "status": status_by_participant[entry["participant_id"]]}
+                        if entry.get("participant_id") in status_by_participant
+                        else entry
+                        for entry in old_entries
+                    ]
+                    for missing_id, status in status_by_participant.items():
+                        if missing_id in present_ids:
+                            continue
+                        # create_from_template built attendance_entries from the roster query
+                        # BEFORE this method ran (and that query filters by participant_eligible_on)
+                        # - so this participant is missing here either because they were just
+                        # created above, or because their old joined_at/left_at window excluded
+                        # protocol_date and only got widened to include it a few lines up. Either
+                        # way: append instead of status-patch.
+                        display_name = created_participants.get(missing_id)
+                        if display_name is None:
+                            existing_participant = _get_cached_participant(missing_id)
+                            display_name = existing_participant.display_name if existing_participant else ""
+                        new_entries.append({"participant_id": missing_id, "participant_name": display_name, "status": status})
+                    attendance_block.configuration_snapshot_json = {
+                        **attendance_block.configuration_snapshot_json,
+                        "attendance_entries": new_entries,
+                    }
 
-        db.commit()
-        return protocol_id
+            # Unlike lists, matrix cells are written straight into the live protocol's own
+            # Matrix block's configuration_snapshot_json - there is no separate persisted
+            # entity, and (see WordImportService plan) no freeze/refresh step touches matrix
+            # blocks on the "abgeschlossen" transition below, so this can run immediately.
+            matrix_name_updates: dict[str, int] = {}
+            for matrix_commit in payload.matrices:
+                if not matrix_commit.approved:
+                    continue
+                _log_outcome(
+                    "matrix_column_match", matrix_commit.originally_suggested_score,
+                    matrix_commit.originally_suggested_column_key, matrix_commit.column_key,
+                    rejection_key=f"matrix_column:{matrix_commit.matrix_key}:{_normalize(matrix_commit.column_label)}",
+                )
+                try:
+                    template_element_id_str, sort_index_str = matrix_commit.matrix_key.split(":", 1)
+                    block_key = (int(template_element_id_str), int(sort_index_str))
+                except (ValueError, AttributeError):
+                    commit_warnings.append(
+                        f'Matrix-Zelle "{matrix_commit.row_id}"/"{matrix_commit.column_label}" hatte einen '
+                        "ungültigen Matrix-Schlüssel und wurde übersprungen."
+                    )
+                    continue
+                block = block_by_key.get(block_key)
+                if block is None:
+                    commit_warnings.append(
+                        f'Matrix-Zelle "{matrix_commit.row_id}"/"{matrix_commit.column_label}" konnte keinem Block '
+                        "zugeordnet werden und wurde übersprungen."
+                    )
+                    continue
+                config = dict(block.configuration_snapshot_json or {})
+                columns = [dict(column) for column in (config.get("columns") or [])]
+                target_column = next((column for column in columns if str(column.get("id")) == matrix_commit.column_key), None)
+                if target_column is None:
+                    target_column = {
+                        "id": matrix_commit.column_key,
+                        "title": matrix_commit.column_label,
+                        "sort_index": len(columns),
+                        "row_values": {},
+                    }
+                    columns.append(target_column)
+                row_values = dict(target_column.get("row_values") or {})
+                row_values[matrix_commit.row_id] = _resolved_value_json(matrix_commit.row_type, matrix_commit.raw_value, matrix_commit.names)
+                target_column["row_values"] = row_values
+                config["columns"] = columns
+                block.configuration_snapshot_json = config
+                db.add(block)
+                for name_resolution in matrix_commit.names:
+                    # See the form-block name_match -> participant_match note above.
+                    _log_outcome(
+                        "participant_match", name_resolution.originally_suggested_score,
+                        name_resolution.originally_suggested_participant_id, name_resolution.participant_id,
+                        rejection_key=f"name:{_normalize(name_resolution.raw_name)}" if name_resolution.raw_name else None,
+                    )
+                    if name_resolution.participant_id is not None:
+                        matrix_name_updates[_normalize(name_resolution.raw_name)] = name_resolution.participant_id
+                        _widen_participant_window(name_resolution.participant_id, payload.protocol_date)
+
+            # Lists are never written to the live ListEntry table (see WordImportListRowMapping
+            # / WordImportListRowCommit docstrings) - collect the approved rows here and only
+            # patch the protocol's own block snapshot(s) further below, *after* the status
+            # transition to "abgeschlossen" has run its live-refreshing freeze step (otherwise
+            # that freeze would immediately overwrite these historical values with today's data).
+            list_name_updates: dict[str, int] = {}
+            approved_list_commits: list[WordImportListRowCommit] = []
+            definitions_cache: dict[int, ListDefinition] = {}
+            for list_commit in payload.lists:
+                if not list_commit.approved:
+                    continue
+                definition = definitions_cache.get(list_commit.list_definition_id)
+                if definition is None:
+                    definition = db.get(ListDefinition, list_commit.list_definition_id)
+                    if definition is None:
+                        continue
+                    if definition.tenant_id != tenant_id:
+                        # list_definition_id is client-supplied - without this check a
+                        # request could read/target another tenant's list definition.
+                        raise ValueError("Liste gehört nicht zu diesem Mandanten")
+                    definitions_cache[list_commit.list_definition_id] = definition
+                approved_list_commits.append(list_commit)
+                _log_outcome(
+                    "list_entry_match", list_commit.originally_suggested_score,
+                    list_commit.originally_suggested_entry_id, list_commit.linked_entry_id,
+                    rejection_key=f"list_entry:{list_commit.list_definition_id}:{_normalize(list_commit.column_one_raw)}",
+                )
+                for name_resolution in list_commit.column_one_names + list_commit.column_two_names:
+                    # See the form-block name_match -> participant_match note above.
+                    _log_outcome(
+                        "participant_match", name_resolution.originally_suggested_score,
+                        name_resolution.originally_suggested_participant_id, name_resolution.participant_id,
+                        rejection_key=f"name:{_normalize(name_resolution.raw_name)}" if name_resolution.raw_name else None,
+                    )
+                    if name_resolution.participant_id is not None:
+                        list_name_updates[_normalize(name_resolution.raw_name)] = name_resolution.participant_id
+                        _widen_participant_window(name_resolution.participant_id, payload.protocol_date)
+
+            heading_updates = {
+                _normalize(tc.extracted_heading): {
+                    "template_element_id": tc.template_element_id,
+                    "block_sort_index": tc.block_sort_index,
+                }
+                for tc in payload.texts
+                # Event-repeat headings (e.g. "Rückblick Elternabend") name a specific
+                # Anlass, not a stable structural target - memoizing them would make a
+                # differently-named Rückblick heading next time wrongly short-circuit
+                # straight past _match_event_repeat_section in analyze().
+                if tc.template_element_id is not None and tc.block_sort_index is not None and not tc.is_event_repeat
+            }
+            table_role_updates: dict[str, dict] = {}
+            for tc in payload.tables:
+                _log_outcome(
+                    "table_role", tc.originally_suggested_score, tc.originally_suggested_role, tc.role,
+                    rejection_key=f"table_role:{tc.header_signature}",
+                )
+                table_role_updates[tc.header_signature] = {
+                    "role": tc.role,
+                    "list_definition_id": tc.list_definition_id,
+                    "matrix_key": tc.matrix_key,
+                    "list_grouping_strategy": tc.list_grouping_strategy,
+                }
+            name_updates: dict[str, int] = {
+                **attendance_name_updates,
+                **list_name_updates,
+                **form_name_updates,
+                **matrix_name_updates,
+            }
+            if (
+                heading_updates or table_role_updates or name_updates or rejected_candidate_updates
+                or event_conflict_updates or no_link_name_updates
+            ):
+                profile = db.execute(
+                    select(WordImportProfile).where(
+                        WordImportProfile.tenant_id == tenant_id, WordImportProfile.template_id == payload.template_id
+                    )
+                ).scalar_one_or_none()
+                if profile is None:
+                    profile = WordImportProfile(tenant_id=tenant_id, template_id=payload.template_id, mapping_config_json={})
+                    db.add(profile)
+                    db.flush()
+                config = dict(profile.mapping_config_json or {})
+                heading_map = dict(config.get("heading_to_target", {}))
+                heading_map.update(heading_updates)
+                table_map = dict(config.get("table_roles_by_signature", {}))
+                table_map.update(table_role_updates)
+                name_map = dict(config.get("participant_name_overrides", {}))
+                name_map.update(name_updates)
+                # Additive negative-feedback store (see A.4 plan / _log_outcome above) - one
+                # entry per "{signal_prefix}:{normalized_context}" key, merging newly rejected
+                # candidate ids into any list already recorded for that same context rather
+                # than overwriting it, so a context that's been wrong more than once across
+                # separate imports accumulates every distinct wrong candidate seen so far.
+                rejected_map = dict(config.get("rejected_candidates", {}))
+                for key, update in rejected_candidate_updates.items():
+                    existing_entry = dict(rejected_map.get(key) or {"rejected": [], "chosen": None})
+                    merged_rejected = list(existing_entry.get("rejected") or [])
+                    for candidate_id in update["rejected"]:
+                        if candidate_id not in merged_rejected:
+                            merged_rejected.append(candidate_id)
+                    rejected_map[key] = {"rejected": merged_rejected, "chosen": update["chosen"]}
+                event_conflict_map = dict(config.get("event_conflict_resolutions", {}))
+                event_conflict_map.update(event_conflict_updates)
+                # A name that now got a real positive link (name_map) can't stay remembered
+                # as "Keinen verknüpfen" too - drop it from the negative set so a reviewer
+                # changing their mind about a name isn't stuck with the old decision forever.
+                no_link_set = set(config.get("no_link_names", [])) | no_link_name_updates
+                no_link_set -= set(name_map.keys())
+                profile.mapping_config_json = {
+                    "heading_to_target": heading_map,
+                    "table_roles_by_signature": table_map,
+                    "participant_name_overrides": name_map,
+                    "rejected_candidates": rejected_map,
+                    "event_conflict_resolutions": event_conflict_map,
+                    "no_link_names": sorted(no_link_set),
+                }
+
+            protocol_service.update_protocol(db, protocol_id, ProtocolUpdate(status="abgeschlossen"))
+
+            if approved_list_commits:
+                blocks_by_list_id: dict[int, list[ProtocolElementBlock]] = {}
+                for block in db.execute(
+                    select(ProtocolElementBlock)
+                    .join(ProtocolElement, ProtocolElement.id == ProtocolElementBlock.protocol_element_id)
+                    .where(ProtocolElement.protocol_id == protocol_id)
+                ).scalars():
+                    linked_list_id = (block.configuration_snapshot_json or {}).get("linked_list_id")
+                    if linked_list_id:
+                        blocks_by_list_id.setdefault(int(linked_list_id), []).append(block)
+
+                synthetic_id = 0
+                for list_commit in approved_list_commits:
+                    target_blocks = blocks_by_list_id.get(list_commit.list_definition_id)
+                    if not target_blocks:
+                        # Chosen template has no block linked to this list - no snapshot slot
+                        # exists in this protocol, so nothing is written (never falls back to
+                        # live, see WordImportListRowMapping.has_snapshot_target).
+                        continue
+                    definition = definitions_cache[list_commit.list_definition_id]
+                    col1_value = _resolved_value_json(definition.column_one_value_type, list_commit.column_one_raw, list_commit.column_one_names)
+                    col2_value = _resolved_value_json(definition.column_two_value_type, list_commit.column_two_raw, list_commit.column_two_names)
+                    for block in target_blocks:
+                        config = dict(block.configuration_snapshot_json or {})
+                        list_snapshot = dict(config.get("list_snapshot") or {})
+                        entries = list(list_snapshot.get("entries") or [])
+                        target_index = (
+                            next(
+                                (i for i, entry in enumerate(entries) if isinstance(entry, dict) and entry.get("id") == list_commit.linked_entry_id),
+                                None,
+                            )
+                            if list_commit.linked_entry_id is not None
+                            else None
+                        )
+                        if target_index is not None:
+                            entries[target_index] = {**entries[target_index], "column_one_value": col1_value, "column_two_value": col2_value}
+                        else:
+                            # No live counterpart (or it wasn't found in this block's frozen
+                            # entries) - append a snapshot-only row with a synthetic negative id,
+                            # never a real ListEntry id, so it can never collide with one.
+                            synthetic_id -= 1
+                            # Live ListEntry.sort_index values are assigned in steps of 10 (see
+                            # structured-list-table.tsx), so len(entries) (e.g. 5 for a 5-entry
+                            # list, vs. existing 10/20/30/40/50) used to sort the appended row
+                            # BEFORE every existing entry instead of after it, in both the
+                            # exporter and the list table. +10 past the current max instead.
+                            next_sort_index = (
+                                max(
+                                    (entry.get("sort_index", 0) for entry in entries if isinstance(entry, dict)),
+                                    default=0,
+                                )
+                                + 10
+                            )
+                            entries.append(
+                                {
+                                    "id": list_commit.linked_entry_id if list_commit.linked_entry_id is not None else synthetic_id,
+                                    "sort_index": next_sort_index,
+                                    "column_one_value": col1_value,
+                                    "column_two_value": col2_value,
+                                }
+                            )
+                        list_snapshot["entries"] = entries
+                        config["list_snapshot"] = list_snapshot
+                        block.configuration_snapshot_json = config
+                        db.add(block)
+
+            if outcome_rows:
+                db.add_all(outcome_rows)
+
+            db.commit()
+
+        try:
+            _populate()
+        except Exception:
+            # create_from_template() (and several helpers it/we call further
+            # below, e.g. create_participant/add_event_block_to_element) commit
+            # internally, so a failure anywhere in _populate() would otherwise
+            # leave this already-committed, now-incomplete Protocol behind -
+            # roll back whatever is still pending and delete it so retrying the
+            # same document doesn't pile up orphaned protocols.
+            db.rollback()
+            protocol_service.delete_protocol(db, protocol_id)
+            raise
+        return WordImportCommitResult(id=protocol_id, warnings=commit_warnings)

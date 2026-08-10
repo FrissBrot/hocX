@@ -79,6 +79,16 @@ class WordImportNameResolution(BaseModel):
     # attendance table's create_new) - participant_id=None + create_new=True means
     # "create a new Participant named raw_name instead of linking an existing one".
     create_new: bool = False
+    # True when the reviewer explicitly resolved this name as "Keinen verknüpfen" (as
+    # opposed to simply never having looked at it) - participant_id stays None either
+    # way, so without this flag the wizard's recurring-name clarifier (see
+    # buildRecurringNameGroups) can't tell "still needs a decision" apart from "reviewer
+    # already decided there's no participant here", and would keep counting an explicit
+    # no-link decision as still open forever (dead end: RECURRING_NAME_MIN_COUNT-heavy
+    # tables review step gate never clears). Purely a frontend/review bookkeeping flag -
+    # commit() only ever looks at participant_id, which already means "don't link" in
+    # both cases.
+    no_link: bool = False
     # What analyze() originally auto-resolved this raw_name to, set once when this
     # resolution is first built and never touched again by the frontend afterward (the
     # wizard's edit handlers only ever update `participant_id` via object-spread, which
@@ -163,6 +173,12 @@ class WordImportAttendanceMapping(BaseModel):
     status: str = "present"
     suggested_participant_id: int | None = None
     candidates: list[WordImportAttendanceCandidate] = Field(default_factory=list)
+    # Set when suggested_participant_id is None AND this exact raw name was already
+    # explicitly resolved as "Keinen verknüpfen" (not a real participant - e.g. a
+    # table's own "Total" footer row) in an earlier commit (see WordImportService.commit's
+    # no_link_name_updates). Lets the wizard pre-apply that same decision instead of
+    # re-flagging an already-resolved non-participant row every import.
+    remembered_no_link: bool = False
 
 
 class WordImportEventMapping(BaseModel):
@@ -196,6 +212,15 @@ class WordImportEventMapping(BaseModel):
     row_label: str | None = None
     column_key: str | None = None
     column_label: str | None = None
+    # Set when status == "changed" (raw_title/raw_date conflicts with an existing
+    # matched Event) AND this same (event, raw_title) pair already got a resolution
+    # decision in an earlier commit (see WordImportService._event_conflict_key / commit's
+    # event_conflict_updates - deliberately NOT keyed on raw_date, so a yearly-recurring
+    # Termin whose document mention always names a different/stale date still reuses the
+    # same decision). Lets the wizard pre-apply that same decision and skip asking the
+    # reviewer to reconfirm an already-resolved recurring conflict.
+    remembered_title_source: Literal["doc", "existing"] | None = None
+    remembered_date_source: Literal["doc", "existing"] | None = None
 
 
 class WordImportListDefinitionOption(BaseModel):
@@ -278,6 +303,22 @@ class WordImportMatrixCellMapping(BaseModel):
     names: list[WordImportNameResolution] = Field(default_factory=list)
 
 
+class WordImportDuplicateProtocol(BaseModel):
+    """An existing Protocol (of any origin - manually created, or from an earlier
+    import, standalone or via the queue) already using this template+date - see
+    WordImportService.analyze's duplicate_protocols. Real bug fixed here: the queue's
+    own duplicate hint (WordImportDuplicateCandidate) only ever compares against other
+    WordImportDocument rows, so the standalone wizard (/tools/word-import, which never
+    creates a WordImportDocument at all) was completely blind to an already-existing
+    Protocol for the same date - this checks the Protocol table directly instead, so it
+    catches a duplicate regardless of how the original was created."""
+
+    id: int
+    protocol_number: str
+    title: str | None = None
+    protocol_date: date
+
+
 class WordImportAnalysis(BaseModel):
     protocol_date: date | None = None
     tables: list[TablePreview] = Field(default_factory=list)
@@ -291,6 +332,7 @@ class WordImportAnalysis(BaseModel):
     matrix_mappings: list[WordImportMatrixCellMapping] = Field(default_factory=list)
     profile_applied: bool = False
     warnings: list[str] = Field(default_factory=list)
+    duplicate_protocols: list[WordImportDuplicateProtocol] = Field(default_factory=list)
 
 
 class WordImportTextCommit(BaseModel):
@@ -310,6 +352,11 @@ class WordImportTextCommit(BaseModel):
     # target block's configuration_snapshot_json["rows"] instead of a ProtocolText.
     is_form_block: bool = False
     form_fields: list[WordImportFormFieldValue] = Field(default_factory=list)
+    # Mirrors TextDraft.dismissed in the wizard ("Ignorieren" on a section without a
+    # resolved template target, or a form block with an unresolved name) - skips writing
+    # this section's block entirely, same row-level "Ignorieren" granularity the list/
+    # matrix/event commit rows already have via their own `approved` flag.
+    dismissed: bool = False
 
 
 class WordImportAttendanceCommit(BaseModel):
@@ -335,6 +382,12 @@ class WordImportEventCommit(BaseModel):
     linked_event_id: int | None = None
     final_title: str
     final_date: date
+    # The document's own raw title/date, BEFORE the doc-vs-existing decision (see
+    # final_title/final_date above) - not used to write the Event, only to key a
+    # remembered resolution for this exact conflict (see WordImportService.commit /
+    # _event_conflict_key) so an identical recurring conflict auto-resolves next time.
+    raw_title: str
+    raw_date: date | None = None
     # Mirrors WordImportEventMapping.tag - when set (Matrix-sourced row), the created/
     # updated Event's tag is set to this value so it appears in the right Matrix column.
     # None for ordinary Termine-table rows, whose tag is left untouched.
@@ -413,6 +466,18 @@ class WordImportCommit(BaseModel):
     lists: list[WordImportListRowCommit] = Field(default_factory=list)
     matrices: list[WordImportMatrixCellCommit] = Field(default_factory=list)
     tables: list[WordImportTableRoleCommit] = Field(default_factory=list)
+
+
+class WordImportCommitResult(BaseModel):
+    """Previously commit() returned just the new Protocol's id - several failure modes
+    inside it (an unresolvable event-repeat/matrix block, a malformed matrix_key, two
+    document sections resolving to the same block, a resolved block missing its
+    ProtocolText row) were silently swallowed with a bare `continue`, so content could
+    go missing with zero indication to the reviewer. `warnings` surfaces those same
+    skips instead of only ever being empty."""
+
+    id: int
+    warnings: list[str] = Field(default_factory=list)
 
 
 class WordImportDuplicateCandidate(BaseModel):

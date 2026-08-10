@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Template, WordImportDocument
-from app.schemas.word_import import WordImportAnalysis, WordImportCommit
+from app.schemas.word_import import WordImportAnalysis, WordImportCommit, WordImportCommitResult
 from app.services.file_service import FileService
 from app.services.protocol_service import ProtocolService
 from app.services.word_import_service import WordImportService, _normalize
@@ -280,23 +280,23 @@ class WordImportQueueService:
         tenant_id: int,
         user_id: int | None,
         payload: WordImportCommit,
-    ) -> int:
+    ) -> WordImportCommitResult:
         if document.status == "importiert":
             raise ValueError("Dokument wurde bereits importiert")
         if payload.template_id != document.template_id:
             raise ValueError("Vorlage stimmt nicht mit dem Dokument überein")
 
-        protocol_id = self.word_import_service.commit(db, tenant_id=tenant_id, user_id=user_id, payload=payload)
+        result = self.word_import_service.commit(db, tenant_id=tenant_id, user_id=user_id, payload=payload)
 
         document.status = "importiert"
-        document.protocol_id = protocol_id
+        document.protocol_id = result.id
         document.imported_by = user_id
         document.imported_at = datetime.now(timezone.utc)
         db.add(document)
         db.commit()
 
         self._refresh_pending_siblings(db, tenant_id=tenant_id, template_id=document.template_id, exclude_id=document.id)
-        return protocol_id
+        return result
 
     def delete_document(self, db: Session, *, tenant_id: int, document_id: int) -> bool:
         document = self.get_document(db, tenant_id=tenant_id, document_id=document_id)
@@ -326,7 +326,11 @@ class WordImportQueueService:
         for sibling in siblings:
             try:
                 self._reanalyze_document(
-                    db, document=sibling, protocol_date=sibling.protocol_date, table_role_overrides=None
+                    db,
+                    document=sibling,
+                    protocol_date=sibling.protocol_date,
+                    table_role_overrides=None,
+                    reset_draft=False,
                 )
                 db.commit()
             except Exception:
@@ -340,6 +344,7 @@ class WordImportQueueService:
         document: WordImportDocument,
         protocol_date: date | None,
         table_role_overrides: dict[int, dict] | None,
+        reset_draft: bool = True,
     ) -> WordImportAnalysis:
         stored_file = self.file_service.get_stored_file(db, document.stored_file_id)
         if stored_file is None:
@@ -355,10 +360,17 @@ class WordImportQueueService:
         )
         document.protocol_date = analysis.protocol_date
         document.analysis_snapshot_json = analysis.model_dump(mode="json")
-        # Row indices/candidates the old draft refers to no longer match the freshly
-        # regenerated mappings above - keeping it around would silently misapply stale
-        # edits (e.g. an "approved" flag landing on an unrelated row) on next reload.
-        document.review_draft_json = {}
+        if reset_draft:
+            # Row indices/candidates the old draft refers to no longer match the freshly
+            # regenerated mappings above - keeping it around would silently misapply stale
+            # edits (e.g. an "approved" flag landing on an unrelated row) on next reload.
+            # Only true for an explicit, user-triggered reanalysis (table role override
+            # or a manual re-read) - _refresh_pending_siblings below reanalyzes the SAME
+            # unchanged document bytes purely to pick up a just-learned WordImportProfile
+            # entry, so row structure can't have changed and wiping a reviewer's
+            # in-progress draft there would be pure collateral damage from someone else's
+            # unrelated commit (see reset_draft=False there).
+            document.review_draft_json = {}
         document.display_name = self._compute_display_name(
             db,
             tenant_id=document.tenant_id,

@@ -21,8 +21,9 @@ export default async function WordImportQueuePage() {
           <div>
             <h1 className="page-title">Import</h1>
             <p className="muted">
-              Alte .docx-Protokolle sammeln, prüfen und importieren — jeder bestätigte Import verbessert die Vorschläge für
-              die restlichen Dokumente in der Warteschlange.
+              Alte .docx-Protokolle sammeln, prüfen und importieren — jeder bestätigte Import analysiert die restlichen,
+              noch offenen Dokumente in der Warteschlange automatisch neu, um deren Vorschläge zu verbessern. Bereits
+              vorgenommene manuelle Korrekturen an diesen Dokumenten bleiben dabei erhalten.
             </p>
           </div>
         </div>
