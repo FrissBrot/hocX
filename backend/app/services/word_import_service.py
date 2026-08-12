@@ -185,6 +185,14 @@ def _best_fuzzy_signature_match(signature: str, profile_table_roles: dict[str, d
 class ParsedSection:
     heading: str
     text: str
+    # Same content as `text`, but as Markdown - bold/italic runs wrapped in
+    # **/* markers and real paragraph breaks turned into blank lines (see
+    # _paragraph_to_markdown) - what RichTextEditor/tiptap-markdown expects for a
+    # ProtocolText's `content` (see WordImportTextCommit.content). `text` itself
+    # stays plain because it's also used for heading/date/form-field matching
+    # (_reclassify_text_only_sections, _parse_form_fields), which key off exact
+    # plain-text line shapes that Markdown markers would corrupt.
+    markdown_text: str = ""
 
 
 @dataclass
@@ -355,6 +363,68 @@ def _similarity(a: str, b: str) -> float:
     return max(sequence_ratio, _token_jaccard(a, b))
 
 
+# Characters that would otherwise be misread as Markdown syntax by tiptap-markdown's
+# parser (see RichTextEditor.tsx's Markdown extension) if they occur literally in a
+# Word run's own text - escaped so a stray "*"/"_"/"[" etc. already in the source
+# document can never be mistaken for one of the **bold**/*italic* markers
+# _paragraph_to_markdown itself adds around actually-formatted runs.
+_MARKDOWN_ESCAPE_PATTERN = re.compile(r"([\\*_`\[\]])")
+
+
+def _markdown_escape(text: str) -> str:
+    return _MARKDOWN_ESCAPE_PATTERN.sub(r"\\\1", text)
+
+
+def _run_format_segments(paragraph: DocxParagraph) -> list[tuple[str, bool, bool]]:
+    """Merges consecutive runs that share the same bold/italic state into one segment
+    each. Word frequently splits a single visually-uniform span across several
+    adjacent <w:r> runs (spell-check boundaries, tracked edits, ...) with no actual
+    formatting difference between them - wrapping each such run in its own **/*
+    markers independently would litter the output with touching marker pairs
+    ("**foo****bar**") that Markdown either merges wrong or fails to parse as
+    emphasis at all (CommonMark forbids a marker immediately next to whitespace)."""
+    segments: list[tuple[str, bool, bool]] = []
+    for run in paragraph.runs:
+        text = run.text
+        if not text:
+            continue
+        bold, italic = bool(run.bold), bool(run.italic)
+        if segments and segments[-1][1] == bold and segments[-1][2] == italic:
+            segments[-1] = (segments[-1][0] + text, bold, italic)
+        else:
+            segments.append((text, bold, italic))
+    return segments
+
+
+def _wrap_markdown_segment(text: str, bold: bool, italic: bool) -> str:
+    """Wraps one already-escaped run segment in **/*** markers, keeping any leading/
+    trailing whitespace outside the markers - CommonMark ignores an emphasis marker
+    that touches whitespace, so "** foo **" would render as literal asterisks
+    instead of bold text."""
+    if not (bold or italic) or not text.strip():
+        return text
+    leading = text[: len(text) - len(text.lstrip())]
+    trailing = text[len(text.rstrip()):]
+    core = text.strip()
+    marker = "***" if bold and italic else ("**" if bold else "*")
+    return f"{leading}{marker}{core}{marker}{trailing}"
+
+
+def _paragraph_to_markdown(paragraph: DocxParagraph) -> str:
+    """Renders one Word paragraph as Markdown: bold/italic runs wrapped in **/*
+    markers, and a manual line break (<w:br/>, embedded by python-docx's own
+    Run.text as a literal "\\n") turned into the same "\\\\\\n" hard-break syntax
+    tiptap-markdown's own serializer writes (see hard-break.js) - so pasting the
+    imported text into RichTextEditor renders it exactly as it looked in the
+    source document instead of collapsing every break into one run-on line."""
+    parts: list[str] = []
+    for raw_text, bold, italic in _run_format_segments(paragraph):
+        lines = raw_text.replace("\t", " ").split("\n")
+        wrapped_lines = [_wrap_markdown_segment(_markdown_escape(line), bold, italic) for line in lines]
+        parts.append("\\\n".join(wrapped_lines))
+    return "".join(parts)
+
+
 def _iter_block_items(document):
     for child in document.element.body.iterchildren():
         if child.tag == qn("w:p"):
@@ -386,6 +456,7 @@ def parse_docx(raw_bytes: bytes) -> ParsedDocx:
     tables: list[ParsedTable] = []
     current_heading: str | None = None
     current_lines: list[str] = []
+    current_markdown_lines: list[str] = []
     table_index = 0
     for item in items:
         if isinstance(item, DocxParagraph):
@@ -394,11 +465,17 @@ def parse_docx(raw_bytes: bytes) -> ParsedDocx:
                 continue
             if _is_heading(item):
                 if current_heading is not None and current_lines:
-                    sections.append(ParsedSection(heading=current_heading, text="\n".join(current_lines)))
+                    sections.append(ParsedSection(
+                        heading=current_heading,
+                        text="\n".join(current_lines),
+                        markdown_text="\n\n".join(current_markdown_lines),
+                    ))
                 current_heading = text
                 current_lines = []
+                current_markdown_lines = []
             elif current_heading is not None:
                 current_lines.append(text)
+                current_markdown_lines.append(_paragraph_to_markdown(item).strip())
         else:
             raw_rows = [[cell.text.strip() for cell in row.cells] for row in item.rows]
             if raw_rows:
@@ -413,7 +490,11 @@ def parse_docx(raw_bytes: bytes) -> ParsedDocx:
                 )
                 table_index += 1
     if current_heading is not None and current_lines:
-        sections.append(ParsedSection(heading=current_heading, text="\n".join(current_lines)))
+        sections.append(ParsedSection(
+            heading=current_heading,
+            text="\n".join(current_lines),
+            markdown_text="\n\n".join(current_markdown_lines),
+        ))
 
     sections, tables = _reclassify_text_only_sections(sections, tables, table_index)
     return ParsedDocx(protocol_date=protocol_date, title_hint=title_hint, sections=sections, tables=tables)
@@ -539,7 +620,8 @@ def parse_pdf(raw_bytes: bytes) -> ParsedDocx:
                 is_heading = len(text) <= 120 and not _starts_with_date(text) and avg_size >= heading_min_size
                 if is_heading:
                     if current_heading is not None and current_lines:
-                        sections.append(ParsedSection(heading=current_heading, text="\n".join(current_lines)))
+                        joined = "\n".join(current_lines)
+                        sections.append(ParsedSection(heading=current_heading, text=joined, markdown_text=joined))
                     current_heading = text
                     current_lines = []
                 elif current_heading is not None:
@@ -556,7 +638,8 @@ def parse_pdf(raw_bytes: bytes) -> ParsedDocx:
                 )
                 table_index += 1
     if current_heading is not None and current_lines:
-        sections.append(ParsedSection(heading=current_heading, text="\n".join(current_lines)))
+        joined = "\n".join(current_lines)
+        sections.append(ParsedSection(heading=current_heading, text=joined, markdown_text=joined))
 
     if not non_empty_texts and table_index == 0:
         raise ValueError("PDF enthält keinen erkennbaren Text (evtl. eingescannt) – Texterkennung wird nicht unterstützt.")
@@ -1964,7 +2047,7 @@ class WordImportService:
             text_mappings.append(
                 WordImportTextMapping(
                     extracted_heading=section.heading,
-                    extracted_text=section.text,
+                    extracted_text=section.markdown_text,
                     template_element_id=template_element_id,
                     block_sort_index=block_sort_index,
                     confidence=confidence,

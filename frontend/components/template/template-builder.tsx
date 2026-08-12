@@ -8,6 +8,7 @@ import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
+import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { formatDateRange } from "@/lib/utils/format";
 import {
@@ -425,6 +426,7 @@ function BehaviorIconRow({
 export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: TemplateBuilderProps) {
   const router = useRouter();
   const showToast = useToast();
+  const confirm = useConfirm();
   const [templates, setTemplates] = useState(initialTemplates);
   const [form, setForm] = useState(initialTemplateCreate);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -470,6 +472,12 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
   }
 
   async function deleteTemplate(templateId: number) {
+    const ok = await confirm({
+      message: "Vorlage endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+      tone: "danger",
+      confirmLabel: "Löschen"
+    });
+    if (!ok) return;
     try {
       await browserApiFetch(`/api/templates/${templateId}`, { method: "DELETE" });
       setTemplates((current) => current.filter((template) => template.id !== templateId));
@@ -645,6 +653,7 @@ export function TemplateEditor({
 }: TemplateEditorProps) {
   const router = useRouter();
   const showToast = useToast();
+  const confirm = useConfirm();
   const [template, setTemplate] = useState(initialTemplate);
   const [elements, setElements] = useState(initialElements);
   const [templateMeta, setTemplateMeta] = useState({
@@ -1455,6 +1464,12 @@ export function TemplateEditor({
   }
 
   async function deleteTemplateItem(templateElementId: number) {
+    const ok = await confirm({
+      message: "Element aus der Vorlage entfernen? Dies kann nicht rückgängig gemacht werden.",
+      tone: "danger",
+      confirmLabel: "Löschen"
+    });
+    if (!ok) return;
     try {
       await browserApiFetch(`/api/template-elements/${templateElementId}`, { method: "DELETE" });
       setElements((current) => current.filter((item) => item.id !== templateElementId));

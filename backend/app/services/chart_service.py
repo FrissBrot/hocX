@@ -37,6 +37,7 @@ rcParams["font.family"] = "DejaVu Sans"
 
 # Semantic fixed colors (these convey meaning and don't change with template)
 C_PRESENT  = "#16a34a"   # green  – anwesend
+C_LATE     = "#0ea5e9"   # blue   – verspätet
 C_EXCUSED  = "#f59e0b"   # amber  – entschuldigt
 C_ABSENT   = "#dc2626"   # red    – abwesend
 C_INCOME   = "#16a34a"   # green  – einnahmen
@@ -156,8 +157,8 @@ def _fetch_attendance_data(db: Session, tenant_id: int) -> tuple[list[dict], lis
         .order_by(Protocol.protocol_date)
     ).all()
 
-    participant_stats: dict[str, dict[str, int]] = defaultdict(lambda: {"present": 0, "absent": 0, "excused": 0})
-    monthly_att: dict[str, dict[str, int]] = defaultdict(lambda: {"present": 0, "absent": 0, "excused": 0})
+    participant_stats: dict[str, dict[str, int]] = defaultdict(lambda: {"present": 0, "late": 0, "absent": 0, "excused": 0})
+    monthly_att: dict[str, dict[str, int]] = defaultdict(lambda: {"present": 0, "late": 0, "absent": 0, "excused": 0})
 
     for proto_date, config in rows:
         entries = (config or {}).get("attendance_entries", [])
@@ -165,8 +166,12 @@ def _fetch_attendance_data(db: Session, tenant_id: int) -> tuple[list[dict], lis
         for entry in entries:
             name = entry.get("participant_name") or "Unbekannt"
             status = entry.get("status") or "absent"
+            # Four-value status, matching export_service's counting: "late" is its own
+            # bucket, not lumped into "absent" (a late arrival is not the same as a no-show).
             if status == "present":
                 participant_stats[name]["present"] += 1
+            elif status == "late":
+                participant_stats[name]["late"] += 1
             elif status == "excused":
                 participant_stats[name]["excused"] += 1
             else:
@@ -174,6 +179,8 @@ def _fetch_attendance_data(db: Session, tenant_id: int) -> tuple[list[dict], lis
             if month_key:
                 if status == "present":
                     monthly_att[month_key]["present"] += 1
+                elif status == "late":
+                    monthly_att[month_key]["late"] += 1
                 elif status == "excused":
                     monthly_att[month_key]["excused"] += 1
                 else:
@@ -181,7 +188,10 @@ def _fetch_attendance_data(db: Session, tenant_id: int) -> tuple[list[dict], lis
 
     by_time = [{"month": m, **v} for m, v in sorted(monthly_att.items())]
     by_participant = sorted(
-        [{"name": n, **v, "total": v["present"] + v["absent"] + v["excused"]} for n, v in participant_stats.items()],
+        [
+            {"name": n, **v, "total": v["present"] + v["late"] + v["absent"] + v["excused"]}
+            for n, v in participant_stats.items()
+        ],
         key=lambda x: x["total"],
         reverse=True,
     )[:15]
@@ -304,19 +314,24 @@ def generate_chart_png(
             return _empty_chart("Keine Anwesenheitsdaten")
         labels  = [_fmt_month(d["month"]) for d in by_time]
         present = [d["present"] for d in by_time]
+        late    = [d["late"]    for d in by_time]
         excused = [d["excused"] for d in by_time]
         absent  = [d["absent"]  for d in by_time]
+        bottom_late    = present
+        bottom_excused = [p + l for p, l in zip(present, late)]
+        bottom_absent  = [p + l + e for p, l, e in zip(present, late, excused)]
         xs = range(len(labels))
         fig, ax = plt.subplots(figsize=(A4_W, CHART_H))
         bar_w = 0.6
         b1 = ax.bar(xs, present, bar_w, color=C_PRESENT, label="Anwesend")
-        b2 = ax.bar(xs, excused, bar_w, bottom=present, color=C_EXCUSED, label="Entschuldigt")
-        b3 = ax.bar(xs, absent,  bar_w, bottom=[p + e for p, e in zip(present, excused)], color=C_ABSENT, label="Abwesend")
+        b2 = ax.bar(xs, late,    bar_w, bottom=bottom_late,    color=C_LATE,    label="Verspätet")
+        b3 = ax.bar(xs, excused, bar_w, bottom=bottom_excused, color=C_EXCUSED, label="Entschuldigt")
+        b4 = ax.bar(xs, absent,  bar_w, bottom=bottom_absent,  color=C_ABSENT,  label="Abwesend")
         ax.set_xticks(list(xs))
         ax.set_xticklabels(labels, rotation=40, ha="right", fontsize=6.5)
         ax.set_xlim(-0.6, len(xs) - 0.4)
         _setup_ax(ax)
-        _legend(ax, handles=[b1, b2, b3], ncol=3)
+        _legend(ax, handles=[b1, b2, b3, b4], ncol=4)
         fig.tight_layout(pad=0.4)
         return _fig_to_bytes(fig)
 
@@ -326,21 +341,26 @@ def generate_chart_png(
             return _empty_chart("Keine Anwesenheitsdaten")
         names   = [textwrap.shorten(d["name"], 22) for d in by_participant]
         present = [d["present"] for d in by_participant]
+        late    = [d["late"]    for d in by_participant]
         excused = [d["excused"] for d in by_participant]
         absent  = [d["absent"]  for d in by_participant]
+        left_late    = present
+        left_excused = [p + l for p, l in zip(present, late)]
+        left_absent  = [p + l + e for p, l, e in zip(present, late, excused)]
         ys = range(len(names))
         h = max(CHART_H, len(names) * 0.32)
         fig, ax = plt.subplots(figsize=(A4_W, h))
         bar_h = 0.55
         b1 = ax.barh(list(ys), present, bar_h, color=C_PRESENT, label="Anwesend")
-        b2 = ax.barh(list(ys), excused, bar_h, left=present, color=C_EXCUSED, label="Entschuldigt")
-        b3 = ax.barh(list(ys), absent,  bar_h, left=[p + e for p, e in zip(present, excused)], color=C_ABSENT, label="Abwesend")
+        b2 = ax.barh(list(ys), late,    bar_h, left=left_late,    color=C_LATE,    label="Verspätet")
+        b3 = ax.barh(list(ys), excused, bar_h, left=left_excused, color=C_EXCUSED, label="Entschuldigt")
+        b4 = ax.barh(list(ys), absent,  bar_h, left=left_absent,  color=C_ABSENT,  label="Abwesend")
         ax.set_yticks(list(ys))
         ax.set_yticklabels(names, fontsize=6.5)
         ax.invert_yaxis()
         ax.set_ylim(len(ys) - 0.5, -0.5)
         _setup_ax_horizontal(ax)
-        _legend(ax, handles=[b1, b2, b3], ncol=3)
+        _legend(ax, handles=[b1, b2, b3, b4], ncol=4)
         fig.tight_layout(pad=0.4)
         return _fig_to_bytes(fig)
 

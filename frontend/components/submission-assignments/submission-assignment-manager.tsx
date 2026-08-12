@@ -7,6 +7,7 @@ import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
+import { useConfirm } from "@/contexts/confirm-context";
 import {
   AssignmentSummary,
   EventSummary,
@@ -309,6 +310,7 @@ function VerifiedIcon() {
 
 export function SubmissionAssignmentManager({ initialAssignments, availableLists, availableEvents, availableParticipants }: Props) {
   const showToast = useToast();
+  const confirm = useConfirm();
   const [assignments, setAssignments] = useState(initialAssignments);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -522,6 +524,11 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
   }
 
   async function deleteAssignment(id: number) {
+    const ok = await confirm({
+      message: "Abgabe wirklich löschen? Alle zugehörigen Elemente und Verweise werden entfernt.",
+      tone: "danger",
+    });
+    if (!ok) return;
     try {
       await browserApiFetch(`/api/submission-assignments/${id}`, { method: "DELETE" });
       setAssignments((current) => current.filter((item) => item.id !== id));

@@ -30,7 +30,11 @@ class AccessService:
         if user.current_role != "reader" or user.current_tenant_id is None:
             return False
         if not self._is_restricted_reader(db, user):
-            return True
+            # Unrestricted reader: full read access, but only within their own tenant - this
+            # used to return True unconditionally, letting any reader in any tenant read any
+            # other tenant's template by just knowing/guessing the id (same class of bug as
+            # the admin/writer/kassier branch above).
+            return self.repository.tenant_id_for_template(db, template_id=template_id) == user.current_tenant_id
         template_ids = self.repository.list_template_ids(db, user_id=user.user_id, tenant_id=user.current_tenant_id)
         return template_id in template_ids
 
@@ -41,7 +45,8 @@ class AccessService:
         if user.current_role != "reader" or user.current_tenant_id is None:
             return False
         if not self._is_restricted_reader(db, user):
-            return True
+            # See can_read_template above - same cross-tenant gap, same fix.
+            return self.repository.tenant_id_for_protocol(db, protocol_id=protocol_id) == user.current_tenant_id
         protocol_ids = self.repository.list_protocol_ids(db, user_id=user.user_id, tenant_id=user.current_tenant_id)
         return protocol_id in protocol_ids
 

@@ -23,7 +23,7 @@ def test_update_transaction_is_scoped_to_owning_tenant(db):
     tenant_b = make_tenant(db, "Tenant B")
     account = make_finance_account(db, tenant_a.id)
     tx = repo.create_transaction(
-        db, account.id,
+        db, account.id, tenant_a.id,
         payload=FinanceTransactionCreate(amount=10, description="test", transaction_date="2026-01-01"),
     )
 
@@ -44,7 +44,7 @@ def test_delete_transaction_is_scoped_to_owning_tenant(db):
     from app.schemas.finance import FinanceTransactionCreate
 
     tx = repo.create_transaction(
-        db, account.id,
+        db, account.id, tenant_a.id,
         payload=FinanceTransactionCreate(amount=10, description="test", transaction_date="2026-01-01"),
     )
 

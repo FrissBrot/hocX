@@ -1,6 +1,6 @@
 "use client";
 
-import { Dispatch, Fragment, ReactNode, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
+import { Dispatch, Fragment, ReactNode, SetStateAction, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/contexts/toast-context";
@@ -18,6 +18,7 @@ import { EventOverviewModal } from "@/components/protocol/planning/event-overvie
 import { CheckboxCandidateModal, CandidateItem } from "@/components/protocol/planning/checkbox-candidate-modal";
 import { EventDetailForm } from "@/components/protocol/planning/event-detail-form";
 import { PlanningIconTrigger } from "@/components/protocol/planning/planning-icon-trigger";
+import { usePopoverPosition, usePopoverDismiss } from "@/components/ui/popover";
 import { fetchCycleEvents } from "@/lib/api/cycle-events";
 import { TagInput } from "@/components/ui/tag-input";
 import { ChartBlock, bumpStatsCharts } from "@/components/protocol/chart-block";
@@ -476,31 +477,6 @@ export function visibleBlockTitle(block: {
   return blockTitle || displayTitle || title || null;
 }
 
-export function smartPopoverStyle(
-  rect: DOMRect,
-  minWidth: number,
-  align: "start" | "end" = "start",
-  estimatedHeight = 320,
-): React.CSSProperties {
-  const gap = 6;
-  const margin = 8;
-  const spaceBelow = window.innerHeight - rect.bottom - margin;
-  const spaceAbove = rect.top - margin;
-  const showAbove = spaceBelow < estimatedHeight && spaceAbove > spaceBelow;
-  return {
-    position: "fixed",
-    ...(showAbove
-      ? { bottom: window.innerHeight - rect.top + gap, maxHeight: spaceAbove }
-      : { top: rect.bottom + gap, maxHeight: spaceBelow }),
-    ...(align === "end"
-      ? { right: window.innerWidth - rect.right }
-      : { left: rect.left }),
-    minWidth: Math.max(rect.width, minWidth),
-    zIndex: 9999,
-    overflowY: "auto",
-  };
-}
-
 export function TodoMiniMenu({
   label,
   compact = false,
@@ -513,37 +489,13 @@ export function TodoMiniMenu({
   children: (close: () => void) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>({});
   const triggerRef = useRef<HTMLButtonElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    if (triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect();
-      setPopoverStyle(smartPopoverStyle(rect, 220, align));
-    }
-  }, [open, align]);
-
-  useEffect(() => {
-    function onPointerDown(event: MouseEvent) {
-      const target = event.target as Node;
-      if (!triggerRef.current?.contains(target) && !(document.getElementById("due-date-portal")?.contains(target))) {
-        setOpen(false);
-      }
-    }
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, []);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const popoverStyle = usePopoverPosition(open, triggerRef, align, 6, { minWidth: 220 });
+  usePopoverDismiss(open, () => setOpen(false), [triggerRef, panelRef]);
 
   const popover = open && typeof document !== "undefined" ? createPortal(
-    <div id="due-date-portal" className="mini-menu-popover-portal" style={popoverStyle} role="menu">
+    <div ref={panelRef} id="due-date-portal" className="mini-menu-popover-portal" style={popoverStyle} role="menu">
       {children(() => setOpen(false))}
     </div>,
     document.body

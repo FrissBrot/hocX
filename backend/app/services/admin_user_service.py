@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -68,6 +70,11 @@ class PlatformAdminService:
             admin.display_name = payload.display_name
         if payload.password:
             admin.password_hash = hash_password(payload.password)
+            # Password change invalidates all existing sessions
+            admin.session_revoke_at = datetime.now(UTC)
+        if payload.is_active is False:
+            # Deactivation invalidates all existing sessions
+            admin.session_revoke_at = datetime.now(UTC)
         if payload.is_active is not None:
             admin.is_active = payload.is_active
         db.add(admin)

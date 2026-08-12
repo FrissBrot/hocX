@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import shutil
 import tempfile
 import zipfile
@@ -25,6 +26,7 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.security import hash_password
 from app.models import (
     AppUser,
     AttendanceFine,
@@ -65,6 +67,7 @@ from app.models import (
 from app.services.document_template_service import DocumentTemplateService
 from app.services.tenant_transfer_common import (
     LOOKUP_COLUMNS,
+    REDACTED_PASSWORD_HASH_MARKER,
     USER_ID_COLUMNS,
     LookupCodeCache,
     UserEmailCache,
@@ -236,9 +239,21 @@ class TenantImportService:
             if self.user_cache.id_for(email) is not None:
                 continue
             old_default_tenant_id = row.get("default_tenant_id")
-            new_user = build_row(AppUser, row, {
+            overrides: dict[str, Any] = {
                 "default_tenant_id": new_tenant_id if old_default_tenant_id is not None and old_default_tenant_id == old_tenant_id else None,
-            })
+            }
+            if row.get("password_hash") == REDACTED_PASSWORD_HASH_MARKER or not row.get("password_hash"):
+                # This row was only a metadata reference (e.g. created_by) in the exporting
+                # tenant, not an actual member of it - TenantExportService.export deliberately
+                # stripped its real password_hash before it ever left that installation (see
+                # REDACTED_PASSWORD_HASH_MARKER). Give the freshly created account a random,
+                # cryptographically secure, properly-hashed password instead: the column is
+                # NOT NULL so it can't be left empty, and reusing/forwarding a foreign hash
+                # would be exactly the leak the export-side redaction was meant to prevent.
+                # The account exists (so every USER_ID_COLUMNS reference below still resolves)
+                # but cannot log in until a tenant admin sets a real password (UserUpdate.password).
+                overrides["password_hash"] = hash_password(secrets.token_urlsafe(32))
+            new_user = build_row(AppUser, row, overrides)
             self.db.add(new_user)
             self.db.flush()
             self.user_cache.set_id(email, new_user.id)

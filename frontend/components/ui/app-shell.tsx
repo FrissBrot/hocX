@@ -11,7 +11,7 @@ import { SessionInfo, TenantMembership } from "@/types/api";
 
 import { buildNav, formatRoleLabel } from "@/components/ui/app-shell-nav";
 import { NavIcon } from "@/components/ui/nav-icons";
-import { ToastProvider } from "@/contexts/toast-context";
+import { ToastProvider, useToast } from "@/contexts/toast-context";
 import { ConfirmProvider } from "@/contexts/confirm-context";
 import { ProfileModal } from "@/components/ui/profile-modal";
 import { TenantSelectorModal } from "@/components/ui/tenant-selector-modal";
@@ -44,6 +44,20 @@ function readStoredThemePreference(): "light" | "dark" | "auto" {
 }
 
 export function AppShell({ children, initialSession = null }: { children: ReactNode; initialSession?: SessionInfo | null }) {
+  return (
+    <ToastProvider>
+      <ConfirmProvider>
+        <AppShellInner initialSession={initialSession}>{children}</AppShellInner>
+      </ConfirmProvider>
+    </ToastProvider>
+  );
+}
+
+// Split out from AppShell so useToast() (which requires being rendered *inside*
+// ToastProvider) is actually available here - AppShell itself only sets up the
+// provider and isn't a descendant of it.
+function AppShellInner({ children, initialSession = null }: { children: ReactNode; initialSession?: SessionInfo | null }) {
+  const showToast = useToast();
   const pathname = usePathname();
   const router = useRouter();
   const avatarTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -164,15 +178,19 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
   }
 
   async function switchTenant(membership: TenantMembership) {
-    const result = await browserApiFetch<SessionInfo>(`/api/auth/select-tenant/${membership.tenant_id}`, { method: "POST" });
-    setTenantModalOpen(false);
-    if (result.bridge_redirect_url && attemptBridgeRedirect(result.bridge_redirect_url)) {
-      return;
+    try {
+      const result = await browserApiFetch<SessionInfo>(`/api/auth/select-tenant/${membership.tenant_id}`, { method: "POST" });
+      setTenantModalOpen(false);
+      if (result.bridge_redirect_url && attemptBridgeRedirect(result.bridge_redirect_url)) {
+        return;
+      }
+      // Hard reload, not router.refresh() - a soft refresh only re-fetches server data, it doesn't
+      // reliably reset every client component's own state for the new tenant context, which is
+      // why the switch sometimes only visibly "took" after an extra click/navigation.
+      window.location.reload();
+    } catch {
+      showToast("Mandant konnte nicht gewechselt werden.", "error");
     }
-    // Hard reload, not router.refresh() - a soft refresh only re-fetches server data, it doesn't
-    // reliably reset every client component's own state for the new tenant context, which is
-    // why the switch sometimes only visibly "took" after an extra click/navigation.
-    window.location.reload();
   }
 
   function openTenantSettings(membership: TenantMembership) {
@@ -197,27 +215,33 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
   }
 
   async function saveProfile() {
-    await browserApiFetch("/api/users/me", {
-      method: "PATCH",
-      body: JSON.stringify({
-        preferred_language: language
-      })
-    });
-    const refreshed = await browserApiFetch<SessionInfo>("/api/auth/session");
-    setSession(refreshed);
-    setProfileModalOpen(false);
-    router.refresh();
+    try {
+      await browserApiFetch("/api/users/me", {
+        method: "PATCH",
+        body: JSON.stringify({
+          preferred_language: language
+        })
+      });
+      const refreshed = await browserApiFetch<SessionInfo>("/api/auth/session");
+      setSession(refreshed);
+      setProfileModalOpen(false);
+      router.refresh();
+    } catch {
+      showToast("Profil konnte nicht gespeichert werden.", "error");
+    }
   }
 
   async function logout() {
-    await browserApiFetch("/api/auth/logout", { method: "POST" });
-    window.sessionStorage.removeItem("hocx-tenant-prompted");
-    redirectToLogin(router);
+    try {
+      await browserApiFetch("/api/auth/logout", { method: "POST" });
+      window.sessionStorage.removeItem("hocx-tenant-prompted");
+      redirectToLogin(router);
+    } catch {
+      showToast("Abmelden fehlgeschlagen. Bitte erneut versuchen.", "error");
+    }
   }
 
   return (
-    <ToastProvider>
-    <ConfirmProvider>
     <main className={`app-frame${isProtocolWriting ? " app-frame-writing" : ""}`}>
       <div className="shell">
         <aside
@@ -367,7 +391,5 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
         onLogout={() => void logout()}
       />
     </main>
-    </ConfirmProvider>
-    </ToastProvider>
   );
 }

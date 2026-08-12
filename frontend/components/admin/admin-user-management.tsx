@@ -9,6 +9,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { Tabs } from "@/components/ui/tabs";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
+import { useConfirm } from "@/contexts/confirm-context";
 import { AdminTenantSummary, UserSummary } from "@/types/api";
 
 type Props = {
@@ -56,6 +57,7 @@ function emptyUserForm(allTenants: AdminTenantSummary[]): UserFormState {
 
 export function AdminUserManagement({ initialUsers, allTenants }: Props) {
   const showToast = useToast();
+  const confirm = useConfirm();
   const [users, setUsers] = useState(initialUsers);
   const [search, setSearch] = useState("");
   const [userModalOpen, setUserModalOpen] = useState(false);
@@ -191,6 +193,12 @@ export function AdminUserManagement({ initialUsers, allTenants }: Props) {
 
   async function mergeUsers() {
     if (!mergeSourceUserId || !mergeTargetUserId) return;
+    const ok = await confirm({
+      message: "Benutzer wirklich zusammenführen? Der Quellbenutzer wird danach unwiderruflich gelöscht.",
+      tone: "danger",
+      confirmLabel: "Jetzt mergen",
+    });
+    if (!ok) return;
     try {
       const merged = await browserApiFetch<UserSummary>("/api/admin/users/merge", {
         method: "POST",

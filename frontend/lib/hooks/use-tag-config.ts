@@ -26,10 +26,12 @@ export function useTagConfig() {
   const renameTag = useCallback(async (oldTag: string, newTag: string): Promise<void> => {
     const nt = newTag.trim();
     if (!nt || nt === oldTag) return;
+    // No .catch() here on purpose: if the backend rejects the rename, the error
+    // must propagate to the caller instead of us renaming the tag only locally.
     await browserApiFetch("/api/events/rename-tag", {
       method: "POST",
       body: JSON.stringify({ old_tag: oldTag, new_tag: nt }),
-    }).catch(() => {});
+    });
     setTagConfig((prev) => {
       const next = { ...prev };
       const oldCfg = next[oldTag];

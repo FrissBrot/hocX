@@ -203,13 +203,34 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: int) -> None
                 await collab.refresh_lock(protocol_id, field_key, user.user_id)
 
             elif msg_type == "field_update" and can_edit and field_key:
-                await collab.publish(protocol_id, {
-                    "type": "field_update",
-                    "field_key": field_key,
-                    "patch": payload.get("patch"),
-                    "user_id": user.user_id,
-                    "display_name": user.display_name,
-                })
+                # Only "block-*" keys participate in the lock system at all (see
+                # focused-element-editor.tsx's lockField calls) - a few field_keys
+                # (e.g. "element-titles", "track-changes-toggle") are pure "something
+                # changed, go refetch" pings with no corresponding lock and stay
+                # unguarded, same as before. For a "block-*" key, require the sender to
+                # actually hold that lock (or, for matrix blocks, a cell lock nested
+                # under it - see holds_lock_for_broadcast) before broadcasting: this is
+                # the fix for the audit finding that field_update was broadcast
+                # unconditionally, letting a client that never acquired (or lost) the
+                # lock push a change that looked, to every other open tab, exactly like
+                # a legitimate edit from the lock holder. Rejected updates are reported
+                # only to the sender, not broadcast.
+                if field_key.startswith("block-") and not await collab.holds_lock_for_broadcast(
+                    protocol_id, field_key, user.user_id
+                ):
+                    await websocket.send_json({
+                        "type": "field_update_rejected",
+                        "field_key": field_key,
+                        "reason": "lock_not_held",
+                    })
+                else:
+                    await collab.publish(protocol_id, {
+                        "type": "field_update",
+                        "field_key": field_key,
+                        "patch": payload.get("patch"),
+                        "user_id": user.user_id,
+                        "display_name": user.display_name,
+                    })
 
             elif msg_type == "status_changed" and can_edit:
                 await collab.publish(protocol_id, {

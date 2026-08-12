@@ -34,6 +34,7 @@ export function TagInput({
   const [editingTag, setEditingTag] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState("");
   const [saving, setSaving] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -72,15 +73,23 @@ export function TagInput({
   async function handleRenameConfirm() {
     if (!editingTag || !renameVal.trim() || !onTagRename) return;
     setSaving(true);
+    setRenameError(null);
     const oldTag = editingTag;
     const newTag = renameVal.trim();
-    await onTagRename(oldTag, newTag);
-    // Update current value if it contained the renamed tag
-    if (tags.includes(oldTag)) {
-      onChange(tags.map((t) => (t === oldTag ? newTag : t)).join(","));
+    try {
+      await onTagRename(oldTag, newTag);
+      // Update current value if it contained the renamed tag
+      if (tags.includes(oldTag)) {
+        onChange(tags.map((t) => (t === oldTag ? newTag : t)).join(","));
+      }
+      setEditingTag(null);
+    } catch {
+      // Rename failed server-side - keep the edit panel open so the user
+      // can retry, instead of silently pretending it worked.
+      setRenameError("Umbenennen fehlgeschlagen. Bitte erneut versuchen.");
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    setEditingTag(null);
   }
 
   useEffect(() => {
@@ -154,17 +163,20 @@ export function TagInput({
             <div className="tag-edit-panel">
               <div className="tag-edit-header">
                 <span className="tag-edit-title">Tag bearbeiten</span>
-                <button type="button" className="tag-edit-cancel" onPointerDown={(e) => { e.preventDefault(); setEditingTag(null); }}>✕</button>
+                <button type="button" className="tag-edit-cancel" onPointerDown={(e) => { e.preventDefault(); setEditingTag(null); setRenameError(null); }}>✕</button>
               </div>
               {onTagRename && (
                 <input
                   className="tag-edit-rename"
                   value={renameVal}
-                  onChange={(e) => setRenameVal(e.target.value)}
+                  onChange={(e) => { setRenameVal(e.target.value); setRenameError(null); }}
                   onKeyDown={(e) => { if (e.key === "Enter") void handleRenameConfirm(); }}
                   placeholder="Neuer Name…"
                   autoFocus
                 />
+              )}
+              {renameError && (
+                <div style={{ color: "var(--danger, #EF4444)", fontSize: 12, padding: "2px 4px" }}>{renameError}</div>
               )}
               {onTagColorChange && (
                 <div className="tag-color-swatches">
@@ -226,6 +238,7 @@ export function TagInput({
                     e.preventDefault();
                     setEditingTag(s);
                     setRenameVal(s);
+                    setRenameError(null);
                   }}
                 >
                   ✎

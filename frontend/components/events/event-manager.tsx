@@ -8,10 +8,11 @@ import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
-import { Popover } from "@/components/ui/popover";
+import { computePopoverPosition, Popover, usePopoverDismiss } from "@/components/ui/popover";
 import { SearchInput } from "@/components/ui/search-input";
 import { EventDetailForm } from "@/components/protocol/planning/event-detail-form";
 import { browserApiFetch } from "@/lib/api/client";
+import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { useTableSort } from "@/lib/hooks/use-table-sort";
@@ -137,6 +138,7 @@ function emptyForm(): EventFormState {
 
 export function EventManager({ initialEvents, documentTemplates = [], availableParticipants = [] }: Props) {
   const showToast = useToast();
+  const confirm = useConfirm();
   const [events, setEvents] = useState(initialEvents);
   const [hasMore, setHasMore] = useState(initialEvents.length === PAGE_SIZE);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -185,16 +187,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
   const [templateDropdownOpen, setTemplateDropdownOpen] = useState(false);
   const templateDropdownRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!templateDropdownOpen) return;
-    function handleClick(e: MouseEvent) {
-      if (templateDropdownRef.current && !templateDropdownRef.current.contains(e.target as Node)) {
-        setTemplateDropdownOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [templateDropdownOpen]);
+  usePopoverDismiss(templateDropdownOpen, () => setTemplateDropdownOpen(false), [templateDropdownRef]);
   const [exportTagFilters, setExportTagFilters] = useState<string[]>([]);
   const [exportTagSearch, setExportTagSearch] = useState("");
   const [exportDateMode, setExportDateMode] = useState<"all" | "next-session" | "until-event">("all");
@@ -280,28 +273,20 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
       .catch(() => setCycleConfigs([]));
   }, []);
 
+  const eventContextMenuRef = useRef<HTMLDivElement | null>(null);
+
+  usePopoverDismiss(!!eventContextMenu, () => setEventContextMenu(null), [eventContextMenuRef]);
+
+  // Closing on scroll is specific to this point-anchored context menu (it doesn't reposition
+  // itself the way an anchored popover would), so it stays a separate effect alongside the
+  // shared outside-click/Escape dismissal above rather than being folded into usePopoverDismiss.
   useEffect(() => {
     if (!eventContextMenu) return;
-    function onPointerDown(event: MouseEvent) {
-      const target = event.target as Node;
-      if (!document.getElementById("event-context-menu-portal")?.contains(target)) {
-        setEventContextMenu(null);
-      }
-    }
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setEventContextMenu(null);
-    }
     function onScroll() {
       setEventContextMenu(null);
     }
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
     document.addEventListener("scroll", onScroll, true);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-      document.removeEventListener("scroll", onScroll, true);
-    };
+    return () => document.removeEventListener("scroll", onScroll, true);
   }, [eventContextMenu]);
 
   async function ensureCyclesLoaded() {
@@ -510,6 +495,12 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
   }
 
   async function deleteEvent(eventId: number) {
+    const ok = await confirm({
+      message: "Termin endgültig löschen? Das entfernt ihn aus allen Protokollen.",
+      tone: "danger",
+      confirmLabel: "Löschen"
+    });
+    if (!ok) return;
     try {
       await browserApiFetch(`/api/events/${eventId}`, { method: "DELETE" });
       setEvents((current) => current.filter((event) => event.id !== eventId));
@@ -1297,9 +1288,10 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
 
       {eventContextMenu && typeof document !== "undefined" && createPortal(
         <div
+          ref={eventContextMenuRef}
           id="event-context-menu-portal"
           className="mini-menu-popover-portal"
-          style={{ position: "fixed", top: eventContextMenu.y, left: eventContextMenu.x, zIndex: 9999, minWidth: 220 }}
+          style={computePopoverPosition(new DOMRect(eventContextMenu.x, eventContextMenu.y, 0, 0), "start", 6, { minWidth: 220, estimatedHeight: 80 })}
           role="menu"
         >
           <button

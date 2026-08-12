@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 
+from fastapi import HTTPException
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -59,6 +60,20 @@ class ProtocolService:
 
     def get_protocol(self, db: Session, protocol_id: int):
         return self.repository.get(db, protocol_id)
+
+    def get_protocol_or_404_not_frozen(self, db: Session, protocol_id: int | None):
+        """Shared guard for every write path that touches a protocol's content (element
+        blocks, config snapshots, text blocks, tracked-change accepts, todos, ...): 404s if
+        the protocol is missing, 409s if it's already abgeschlossen (permanently frozen -
+        the only routes allowed to still touch it past this point are the status-revert
+        endpoint and internal service code, both of which call the repository directly
+        instead of going through this guard)."""
+        protocol = self.get_protocol(db, protocol_id) if protocol_id else None
+        if protocol is None:
+            raise HTTPException(status_code=404, detail="Protocol not found")
+        if protocol.status == "abgeschlossen":
+            raise HTTPException(status_code=409, detail="Protocol is already abgeschlossen")
+        return protocol
 
     def _attendance_type_id(self, db: Session) -> int | None:
         return db.scalar(select(ElementType.id).where(ElementType.code == "attendance"))
@@ -1574,6 +1589,53 @@ class ProtocolService:
         db.commit()
         list_snapshot_service.clear_tracked_changes_for_protocol(db, protocol_id)
 
+    # Full lifecycle in order. Verified against the DB's own
+    # ck_protocol_status CHECK constraint (see models/entities.py) - these are the only
+    # four values a protocol.status can ever hold.
+    _STATUS_ORDER = ["geplant", "vorbereitet", "durchgeführt", "abgeschlossen"]
+
+    def _validate_status_transition(self, previous_status: str, new_status: str) -> None:
+        """Rejects anything that isn't a real state-machine move. Design decision (see audit
+        finding "Statusübergänge sind keine validierte Zustandsmaschine"): forward jumps of
+        more than one stage ARE legitimate here - word_import_service.commit() deliberately
+        creates a protocol and takes it straight from 'geplant' to 'abgeschlossen' for
+        historical imports, and the frontend's own step-by-step buttons are just the single-
+        step special case of the same forward move. So forward skips are allowed, but
+        _run_status_transition_hooks below replays every intermediate stage's hook (in
+        particular _clear_tracked_changes) so a skip can no longer leave stale tracked-change
+        markers behind the way the un-validated string field used to. Backward moves are only
+        ever issued by the single-step /protocols/{id}/revert-status endpoint (see
+        api/routes/protocols.py _PREVIOUS_STATUS) - no caller anywhere needs to jump back more
+        than one stage, so that direction is rejected with 409 instead of silently allowed."""
+        if previous_status not in self._STATUS_ORDER or new_status not in self._STATUS_ORDER:
+            raise HTTPException(status_code=400, detail=f"Unknown protocol status '{new_status}'")
+        prev_idx = self._STATUS_ORDER.index(previous_status)
+        new_idx = self._STATUS_ORDER.index(new_status)
+        if new_idx < prev_idx - 1:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Cannot move protocol status from '{previous_status}' back to '{new_status}' in one step",
+            )
+
+    def _run_status_transition_hooks(self, db: Session, protocol_id: int, previous_status: str, updated):
+        """Replays every stage-change hook between previous_status and updated.status, in
+        order - so a validated forward skip (e.g. geplant -> abgeschlossen for Word-Import)
+        still fires every hook a step-by-step transition would have fired instead of silently
+        skipping them. No-op for backward moves (single-step revert only reuses already-frozen
+        data, nothing to (re-)run)."""
+        prev_idx = self._STATUS_ORDER.index(previous_status)
+        new_idx = self._STATUS_ORDER.index(updated.status)
+        if new_idx > prev_idx:
+            for idx in range(prev_idx, new_idx):
+                stage_from, stage_to = self._STATUS_ORDER[idx], self._STATUS_ORDER[idx + 1]
+                if stage_from == "vorbereitet" and stage_to == "durchgeführt":
+                    self._clear_tracked_changes(db, protocol_id)
+                if stage_to == "abgeschlossen":
+                    self._freeze_responsible_titles(db, protocol_id)
+                    list_snapshot_service.freeze_list_snapshots_for_protocol(db, protocol_id)
+                    self._maybe_auto_create_next_protocol(db, updated)
+        return self.repository.get(db, protocol_id) or updated
+
     def update_protocol(self, db: Session, protocol_id: int, payload: ProtocolUpdate):
         protocol = self.repository.get(db, protocol_id)
         if protocol is None:
@@ -1581,19 +1643,16 @@ class ProtocolService:
         previous_status = protocol.status
         values = payload.model_dump(exclude_unset=True)
         document_template_id = values.pop("document_template_id", None) if "document_template_id" in values else None
+        new_status = values.get("status")
+        if new_status is not None and new_status != previous_status:
+            self._validate_status_transition(previous_status, new_status)
         if not values:
             if "document_template_id" in payload.model_fields_set:
                 return self.document_template_service.snapshot_template_for_protocol(db, protocol, document_template_id)
             return protocol
         updated = self.repository.update(db, protocol, values)
-        if previous_status == "vorbereitet" and updated.status == "durchgeführt":
-            self._clear_tracked_changes(db, protocol_id)
-            updated = self.repository.get(db, protocol_id) or updated
-        if previous_status != "abgeschlossen" and updated.status == "abgeschlossen":
-            self._freeze_responsible_titles(db, protocol_id)
-            list_snapshot_service.freeze_list_snapshots_for_protocol(db, protocol_id)
-            self._maybe_auto_create_next_protocol(db, updated)
-            updated = self.repository.get(db, protocol_id) or updated
+        if new_status is not None and new_status != previous_status:
+            updated = self._run_status_transition_hooks(db, protocol_id, previous_status, updated)
         if "document_template_id" in payload.model_fields_set:
             return self.document_template_service.snapshot_template_for_protocol(db, updated, document_template_id)
         return updated
@@ -1923,79 +1982,3 @@ class ProtocolService:
         db.refresh(todo)
         db.refresh(session_block)
         return session_block, todo
-
-    def _carry_over_session_todos(
-        self,
-        db: Session,
-        *,
-        new_protocol_id: int,
-        tenant_id: int,
-        template_id: int,
-        protocol_date: date,
-    ) -> None:
-        """Copy open session todos from the latest previous protocol to the new one."""
-        closed_status_ids = list(db.scalars(select(TodoStatus.id).where(TodoStatus.code.in_(["done", "cancelled"]))))
-        previous_protocol_id = db.scalar(
-            select(Protocol.id)
-            .where(
-                Protocol.tenant_id == tenant_id,
-                Protocol.template_id == template_id,
-                Protocol.id != new_protocol_id,
-                Protocol.protocol_date <= protocol_date,
-            )
-            .order_by(Protocol.protocol_date.desc(), Protocol.id.desc())
-            .limit(1)
-        )
-        if previous_protocol_id is None:
-            return
-
-        # Find open todos from session blocks in the previous protocol
-        rows = db.execute(
-            select(ProtocolTodo, ProtocolElementBlock.block_title_snapshot)
-            .join(ProtocolElementBlock, ProtocolElementBlock.id == ProtocolTodo.protocol_element_block_id)
-            .join(ProtocolElement, ProtocolElement.id == ProtocolElementBlock.protocol_element_id)
-            .where(
-                ProtocolElement.protocol_id == previous_protocol_id,
-                ProtocolElement.section_name_snapshot == self._SESSION_ELEMENT_NAME,
-            )
-        ).all()
-        if not rows:
-            return
-
-        # Filter to open todos
-        open_rows = [
-            (todo, block_title)
-            for todo, block_title in rows
-            if not closed_status_ids or todo.todo_status_id not in closed_status_ids
-        ]
-        if not open_rows:
-            return
-
-        session_element = self._get_or_create_session_element(db, protocol_id=new_protocol_id)
-        for todo, block_title in open_rows:
-            block = self._get_or_create_session_block(
-                db,
-                session_element=session_element,
-                tag=block_title or self._SESSION_ELEMENT_NAME,
-            )
-            sort_index = int(
-                db.scalar(
-                    select(func.count(ProtocolTodo.id))
-                    .where(ProtocolTodo.protocol_element_block_id == block.id)
-                ) or 0
-            ) * 10
-            db.add(ProtocolTodo(
-                protocol_element_block_id=block.id,
-                sort_index=sort_index,
-                task=todo.task,
-                assigned_user_id=todo.assigned_user_id,
-                assigned_participant_id=todo.assigned_participant_id,
-                todo_status_id=todo.todo_status_id,
-                due_date=todo.due_date,
-                due_event_id=todo.due_event_id,
-                due_marker=todo.due_marker,
-                reference_link=todo.reference_link,
-                tags=todo.tags,
-                created_by=todo.created_by,
-            ))
-        db.flush()

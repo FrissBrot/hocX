@@ -1,11 +1,17 @@
+/* Shared color tokens (--bg, --panel, --border, --text, --muted, --accent, --danger)
+   are kept in sync by hand with frontend/app/globals.css, which is the source of
+   truth. This app is a separate Next.js deployment without a shared CSS package or
+   build step, so there is no automated mechanism enforcing that — when the main
+   frontend's palette changes, update the values here too. --c0..--c3 are specific
+   to this app's colored cards and have no equivalent in the main frontend. */
 :root {
-  --bg: #f7f7f8;
+  --bg: #f6f7f9;
   --panel: #ffffff;
-  --border: #dcdce2;
-  --text: #1b1b1f;
-  --muted: #6b6b76;
-  --accent: #2f6fed;
-  --danger: #d1453d;
+  --border: #e4e7ec;
+  --text: #101828;
+  --muted: #667085;
+  --accent: #2f6df6;
+  --danger: #dc2626;
   --c0: #22c55e;
   --c1: #a78bfa;
   --c2: #2f6fed;
@@ -14,13 +20,13 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #131316;
-    --panel: #1c1c21;
-    --border: #303038;
-    --text: #f1f1f4;
-    --muted: #9a9aa5;
-    --accent: #6d9bff;
-    --danger: #ff6b64;
+    --bg: #0e1420;
+    --panel: #161d2c;
+    --border: #262e40;
+    --text: #e7eaf0;
+    --muted: #8b94a7;
+    --accent: #5b8def;
+    --danger: #f87171;
     --c0: #22c55e;
     --c1: #a78bfa;
     --c2: #6d9bff;

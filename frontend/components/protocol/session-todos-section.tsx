@@ -3,6 +3,7 @@
 import { TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
 import { DateInput } from "@/components/ui/date-input";
 import { browserApiFetch } from "@/lib/api/client";
+import { useToast } from "@/contexts/toast-context";
 import { formatDate, formatDateRange } from "@/lib/utils/format";
 import { EventSummary, ParticipantSummary, ProtocolSummary, ProtocolTodo, TodoListItem } from "@/types/api";
 import { TODO_STATUS, TodoMenuOption, TodoMiniMenu, TrackedTaskText, formatShortDate } from "@/components/protocol/protocol-editor-shared";
@@ -42,6 +43,7 @@ export function SessionTodosSection({
   onPendingDone: (todoId: number) => void;
   onAcceptTrackedChange?: (blockId: number, todoId: number) => void;
 }) {
+  const showToast = useToast();
   if (todos.length === 0 && pendingTodos.length === 0) return null;
   if (!sectionTag) return null;
 
@@ -75,11 +77,15 @@ export function SessionTodosSection({
                   disabled={isReadOnly || isResolved}
                   onClick={async () => {
                     if (isReadOnly || isResolved) return;
-                    await browserApiFetch(`/api/protocol-todos/${todo.id}`, {
-                      method: "PATCH",
-                      body: JSON.stringify({ closed_in_protocol_id: protocol.id }),
-                    });
-                    onPendingUpdate({ id: todo.id, closed_in_protocol_id: protocol.id });
+                    try {
+                      await browserApiFetch(`/api/protocol-todos/${todo.id}`, {
+                        method: "PATCH",
+                        body: JSON.stringify({ closed_in_protocol_id: protocol.id }),
+                      });
+                      onPendingUpdate({ id: todo.id, closed_in_protocol_id: protocol.id });
+                    } catch (error) {
+                      showToast(error instanceof Error ? error.message : "Todo konnte nicht geschlossen werden", "error");
+                    }
                   }}
                 >
                   {isResolved ? "✓" : "○"}
@@ -100,11 +106,15 @@ export function SessionTodosSection({
                         participants={participants}
                         activeId={todo.assigned_participant_id}
                         onChange={async (option) => {
-                          await browserApiFetch(`/api/protocol-todos/${todo.id}`, {
-                            method: "PATCH",
-                            body: JSON.stringify({ assigned_participant_id: option.id }),
-                          });
-                          onPendingUpdate({ id: todo.id, assigned_participant_id: option.id, assigned_participant_name: option.display_name });
+                          try {
+                            await browserApiFetch(`/api/protocol-todos/${todo.id}`, {
+                              method: "PATCH",
+                              body: JSON.stringify({ assigned_participant_id: option.id }),
+                            });
+                            onPendingUpdate({ id: todo.id, assigned_participant_id: option.id, assigned_participant_name: option.display_name });
+                          } catch (error) {
+                            showToast(error instanceof Error ? error.message : "Zuweisung konnte nicht geändert werden", "error");
+                          }
                         }}
                       />
                     </div>

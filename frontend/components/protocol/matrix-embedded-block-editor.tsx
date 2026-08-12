@@ -2,6 +2,7 @@
 
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
+import { useConfirm } from "@/contexts/confirm-context";
 import { Badge } from "@/components/ui/badge";
 import { DateInput } from "@/components/ui/date-input";
 import { LightboxImage } from "@/components/ui/lightbox-image";
@@ -66,6 +67,7 @@ export function MatrixEmbeddedBlockEditor({
   onTagColorChange: (tag: string, color: string) => Promise<void>;
   onTagRename: (oldTag: string, newTag: string) => Promise<void>;
 }) {
+  const confirm = useConfirm();
   const elementTypeId = Number(embeddedBlock.element_type_id ?? 0);
   const embeddedConfig = asObject(embeddedBlock.configuration_snapshot_json);
   const sortedEvents = [...availableEvents].sort((left, right) => compareIsoDate(left.event_date, right.event_date));
@@ -967,7 +969,16 @@ export function MatrixEmbeddedBlockEditor({
                               type="button"
                               className="button-ghost button-icon button-icon-danger"
                               title="Termin löschen"
-                              onClick={() => void deleteEvent(eventRow.id)}
+                              aria-label="Termin löschen"
+                              onClick={async () => {
+                                const ok = await confirm({
+                                  message: `Termin "${eventRow.title}" endgültig löschen? Das entfernt ihn aus allen Protokollen.`,
+                                  tone: "danger",
+                                  confirmLabel: "Löschen"
+                                });
+                                if (!ok) return;
+                                await deleteEvent(eventRow.id);
+                              }}
                             >
                               x
                             </button>

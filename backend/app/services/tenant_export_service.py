@@ -66,6 +66,7 @@ from app.models import (
 from app.services.file_service import _safe_storage_path
 from app.services.tenant_transfer_common import (
     LOOKUP_COLUMNS,
+    REDACTED_PASSWORD_HASH_MARKER,
     USER_ID_COLUMNS,
     LookupCodeCache,
     UserEmailCache,
@@ -99,14 +100,29 @@ class TenantExportService:
             self._export_full(db, tenant_id, tables, include_abgabebox=scope == "full_abgabebox")
 
         # Bundled last, once every USER_ID_COLUMNS lookup above has recorded which app_user
-        # ids actually got referenced - includes password_hash so the target can create a
-        # working login for anyone who doesn't already have an account there (see
-        # TenantImportService._import_app_users). Deliberately not scoped by tenant_id (that
-        # column doesn't exist on app_user - it's a systemwide table), just by "was this user
+        # ids actually got referenced. Deliberately not scoped by tenant_id (that column
+        # doesn't exist on app_user - it's a systemwide table), just by "was this user
         # referenced anywhere in what we just exported".
+        #
+        # password_hash is only kept for users who are actual MEMBERS of the exported tenant
+        # (a user_tenant_role row for this tenant_id, collected below from the row already
+        # produced by _export_structure) - they're the real target audience of a tenant
+        # transfer, and it makes sense for their login to travel with them (see
+        # TenantImportService._import_app_users). Everyone else here is a pure metadata
+        # reference (e.g. created_by on a template/protocol/stored_file) with no membership
+        # in this tenant - their password_hash is replaced with an unusable placeholder so a
+        # tenant export (handed to a potentially different, untrusted installation) never
+        # bundles a foreign tenant's users' real credentials.
         referenced_user_ids = self._user_cache.referenced_ids()
         users = db.query(AppUser).filter(AppUser.id.in_(referenced_user_ids)).all() if referenced_user_ids else []
-        tables["app_user"] = [row_to_dict(u) for u in users]
+        member_emails = {row["user_id"] for row in tables.get("user_tenant_role", []) if row.get("user_id")}
+        user_rows = []
+        for u in users:
+            row = row_to_dict(u)
+            if u.email not in member_emails:
+                row["password_hash"] = REDACTED_PASSWORD_HASH_MARKER
+            user_rows.append(row)
+        tables["app_user"] = user_rows
 
         manifest = {
             "format_version": FORMAT_VERSION,

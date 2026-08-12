@@ -21,7 +21,11 @@ export default async function ParticipantsPage() {
   return (
     <AppShell initialSession={session}>
       <section className="panel">
-        <ParticipantManager initialParticipants={participants ?? []} templates={templates ?? []} />
+        <ParticipantManager
+          initialParticipants={participants ?? []}
+          templates={templates ?? []}
+          tenantId={session.current_tenant?.id ?? null}
+        />
       </section>
     </AppShell>
   );

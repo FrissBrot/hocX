@@ -155,6 +155,10 @@ class DocumentTemplateService:
     def list_document_template_parts(self, db: Session, tenant_id: int) -> list[DocumentTemplatePartRead]:
         return [DocumentTemplatePartRead.model_validate(item) for item in self.part_repository.list(db, tenant_id)]
 
+    def get_document_template_part(self, db: Session, part_id: int) -> DocumentTemplatePartRead | None:
+        part = self.part_repository.get(db, part_id)
+        return DocumentTemplatePartRead.model_validate(part) if part else None
+
     def _generate_template_code(self, db: Session, *, tenant_id: int, name: str, exclude_id: int | None = None) -> str:
         base = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "vorlage"
         existing_codes = {

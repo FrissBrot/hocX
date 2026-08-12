@@ -9,6 +9,7 @@ import { FilterTabs } from "@/components/ui/filter-tabs";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
+import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { formatDate, formatDateTime } from "@/lib/utils/format";
 import { AttendanceFineListItem, FinanceAccount } from "@/types/api";
@@ -31,6 +32,7 @@ type Props = {
 export function FinesView({ initialFines, accounts, isAdmin }: Props) {
   const router = useRouter();
   const confirm = useConfirm();
+  const showToast = useToast();
   const [fines, setFines] = useState<AttendanceFineListItem[]>(initialFines);
   const [statusFilter, setStatusFilter] = useState<"pending" | "collected" | "all">("pending");
   const [search, setSearch] = useState("");
@@ -104,6 +106,8 @@ export function FinesView({ initialFines, accounts, isAdmin }: Props) {
     try {
       const updated = await browserApiFetch<AttendanceFineListItem>(`/api/fines/${fine.id}/collect`, { method: "POST" });
       if (updated) setFines((prev) => prev.map((f) => f.id === updated.id ? { ...f, ...updated } : f));
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Busse konnte nicht kassiert werden", "error");
     } finally {
       setBusy((b) => ({ ...b, [fine.id]: false }));
     }
@@ -111,8 +115,12 @@ export function FinesView({ initialFines, accounts, isAdmin }: Props) {
 
   async function deleteFine(fine: AttendanceFineListItem) {
     if (!(await confirm({ message: `Busse von ${fine.participant_name_snapshot} löschen?`, tone: "danger", confirmLabel: "Löschen" }))) return;
-    await browserApiFetch(`/api/fines/${fine.id}`, { method: "DELETE" });
-    setFines((prev) => prev.filter((f) => f.id !== fine.id));
+    try {
+      await browserApiFetch(`/api/fines/${fine.id}`, { method: "DELETE" });
+      setFines((prev) => prev.filter((f) => f.id !== fine.id));
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Busse konnte nicht gelöscht werden", "error");
+    }
   }
 
   async function reopenFine(fine: AttendanceFineListItem) {
@@ -120,6 +128,8 @@ export function FinesView({ initialFines, accounts, isAdmin }: Props) {
     try {
       const updated = await browserApiFetch<AttendanceFineListItem>(`/api/fines/${fine.id}/reopen`, { method: "POST" });
       if (updated) setFines((prev) => prev.map((f) => f.id === updated.id ? { ...f, ...updated } : f));
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Busse konnte nicht zurückgesetzt werden", "error");
     } finally {
       setBusy((b) => ({ ...b, [fine.id]: false }));
     }

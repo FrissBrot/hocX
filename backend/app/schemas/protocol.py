@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.event import EventRead
+
+# Mirrors the DB's ck_protocol_status CHECK constraint (models/entities.py) and
+# ProtocolService._STATUS_ORDER - the full, ordered protocol lifecycle.
+ProtocolStatus = Literal["geplant", "vorbereitet", "durchgeführt", "abgeschlossen"]
 
 
 def _validate_reference_link(value: str | None) -> str | None:
@@ -34,7 +39,7 @@ class ProtocolUpdate(BaseModel):
     title: str | None = None
     protocol_date: date | None = None
     event_id: int | None = None
-    status: str | None = None
+    status: ProtocolStatus | None = None
     document_template_id: int | None = None
     session_notes: str | None = None
     track_changes_enabled: bool | None = None

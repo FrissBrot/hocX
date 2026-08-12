@@ -14,6 +14,7 @@ import { DocumentTemplate, DocumentTemplatePart } from "@/types/api";
 type Props = {
   initialTemplates: DocumentTemplate[];
   initialParts: DocumentTemplatePart[];
+  tenantId: number | null;
 };
 
 type PartFormState = {
@@ -191,9 +192,9 @@ function templateFormFromTemplate(template: DocumentTemplate): TemplateFormState
   };
 }
 
-function buildTemplatePayload(form: TemplateFormState) {
+function buildTemplatePayload(form: TemplateFormState, tenantId: number | null) {
   return {
-    tenant_id: 1,
+    tenant_id: tenantId,
     name: form.name,
     description: form.description || null,
     version: Number(form.version),
@@ -1059,7 +1060,7 @@ function TemplateForm({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function DocumentTemplateManager({ initialTemplates, initialParts }: Props) {
+export function DocumentTemplateManager({ initialTemplates, initialParts, tenantId }: Props) {
   const showToast = useToast();
   const [parts, setParts] = useState(initialParts);
   const [templates, setTemplates] = useState(initialTemplates);
@@ -1138,7 +1139,7 @@ export function DocumentTemplateManager({ initialTemplates, initialParts }: Prop
     event.preventDefault();
     try {
       const created = await browserApiFetch<DocumentTemplate>("/api/document-templates", {
-        method: "POST", body: JSON.stringify(buildTemplatePayload(templateForm)),
+        method: "POST", body: JSON.stringify(buildTemplatePayload(templateForm, tenantId)),
       });
       setTemplates((cur) => [created, ...cur.filter((t) => t.id !== created.id)]);
       setTemplateForm(initialTemplateForm);
@@ -1155,7 +1156,7 @@ export function DocumentTemplateManager({ initialTemplates, initialParts }: Prop
     if (!selectedTemplate) return;
     try {
       const updated = await browserApiFetch<DocumentTemplate>(`/api/document-templates/${selectedTemplate.id}`, {
-        method: "PATCH", body: JSON.stringify(buildTemplatePayload(selectedTemplateForm)),
+        method: "PATCH", body: JSON.stringify(buildTemplatePayload(selectedTemplateForm, tenantId)),
       });
       setTemplates((cur) => cur.map((t) => (t.id === updated.id ? updated : t)));
       selectTemplate(updated);

@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from app.models import ElementDefinition, TemplateElement
+from app.models import ElementDefinition, Template, TemplateElement
 from app.repositories.template_element_repository import TemplateElementRepository
 from app.schemas.template import TemplateElementBehaviorUpdate, TemplateElementCreate, TemplateElementRead, TemplateElementUpdate
 from app.services.block_behavior import BEHAVIOR_FIELDS, resolve_block_behavior, resolve_element_wide_behavior
@@ -64,6 +64,14 @@ class TemplateElementService:
             next_sort_index = (max(existing_sort_indexes) if existing_sort_indexes else 0) + 10
         definition = db.get(ElementDefinition, payload.element_definition_id)
         if definition is None:
+            raise ValueError("Element definition not found")
+        template = db.get(Template, template_id)
+        # Route already confirmed template.tenant_id == the caller's tenant before calling
+        # here; this closes the remaining gap where an admin could link a *different*
+        # tenant's ElementDefinition id into their own (rightfully owned) template. Same
+        # "404, no existence leak" convention as the rest of this file - no distinct error
+        # for "wrong tenant" vs "doesn't exist".
+        if template is None or definition.tenant_id != template.tenant_id:
             raise ValueError("Element definition not found")
         entity = TemplateElement(
             template_id=template_id,

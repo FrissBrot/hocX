@@ -20,7 +20,7 @@ def test_finance_transactions_pagination_has_no_overlap_and_correct_running_bala
     base_date = date(2026, 1, 1)
     for i, amount in enumerate(amounts):
         repo.create_transaction(
-            db, account.id,
+            db, account.id, tenant.id,
             payload=FinanceTransactionCreate(amount=amount, description=f"tx{i}", transaction_date=base_date + timedelta(days=i)),
         )
 

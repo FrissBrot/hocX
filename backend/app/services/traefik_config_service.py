@@ -79,6 +79,17 @@ def _abgabebox_routers(domain: str, domain_id: int) -> dict:
             "middlewares": ["abgabebox-upload-ratelimit@docker"],
             "tls": {"certResolver": "letsencrypt"},
         },
+        f"{base}-public-get": {
+            # Same rate-limit as docker-compose.yml's abgabebox-public-get router, but for
+            # a tenant's own custom domain - protects the unauthenticated listing/detail
+            # GET endpoints from unbounded enumeration.
+            "rule": f"Host(`{domain}`) && PathPrefix(`/api/public`) && Method(`GET`)",
+            "entryPoints": ["websecure"],
+            "service": "hocx-abgabebox-backend@docker",
+            "priority": 200,
+            "middlewares": ["abgabebox-public-ratelimit@docker"],
+            "tls": {"certResolver": "letsencrypt"},
+        },
     }
 
 

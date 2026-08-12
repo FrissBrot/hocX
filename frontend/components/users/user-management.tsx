@@ -8,6 +8,7 @@ import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
+import { useConfirm } from "@/contexts/confirm-context";
 import { TenantSummary, UserSummary } from "@/types/api";
 
 type Props = {
@@ -65,6 +66,7 @@ function emptyUserForm(manageableTenants: TenantSummary[]): UserFormState {
 
 export function UserManagement({ initialUsers, manageableTenants }: Props) {
   const showToast = useToast();
+  const confirm = useConfirm();
   const [users, setUsers] = useState(initialUsers);
   const [userTab, setUserTab] = useState<"active" | "nologin">("active");
   const [search, setSearch] = useState("");
@@ -225,7 +227,12 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
     }
   }
 
-  async function deleteUser(userId: number) {
+  async function deleteUser(userId: number, displayName: string) {
+    const ok = await confirm({
+      message: `Benutzer "${displayName}" endgültig löschen? Der Zugriff auf alle Mandanten geht sofort verloren.`,
+      tone: "danger",
+    });
+    if (!ok) return;
     try {
       await browserApiFetch(`/api/users/${userId}`, { method: "DELETE" });
       setUsers((current) => current.filter((user) => user.id !== userId));
@@ -298,7 +305,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
                     className="button-inline button-danger"
                     onClick={(event) => {
                       event.stopPropagation();
-                      void deleteUser(user.id);
+                      void deleteUser(user.id, user.display_name);
                     }}
                   >
                     Löschen

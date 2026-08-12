@@ -100,10 +100,12 @@ def create_transaction(
     if repo.get_account(db, account_id, user.current_tenant_id) is None:
         raise HTTPException(status_code=404, detail="Account not found")
     try:
-        created = repo.create_transaction(db, account_id, payload)
+        created = repo.create_transaction(db, account_id, user.current_tenant_id, payload)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Transaction could not be created") from exc
+    if created is None:
+        raise HTTPException(status_code=404, detail="Protocol not found")
     audit.log(
         db, action="finance_transaction.created", actor=user, entity_type="finance_transaction", entity_id=created.id,
         details={"account_id": account_id, "amount": float(created.amount), "description": created.description},

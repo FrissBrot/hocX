@@ -2,6 +2,7 @@
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { browserApiFetch } from "@/lib/api/client";
+import { useToast } from "@/contexts/toast-context";
 import { formatDateRange } from "@/lib/utils/format";
 import { NavIcon } from "@/components/ui/nav-icons";
 import { EventSummary, ParticipantSummary, ProtocolSummary } from "@/types/api";
@@ -30,6 +31,7 @@ type ActivePanel = "notes" | "todo" | null;
 
 export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
   function SessionPanel({ protocol, participants, dueEvents = [], currentSectionName, onSessionNotesChange, onQuickTodoCreated }, ref) {
+    const showToast = useToast();
     const [active, setActive] = useState<ActivePanel>(null);
     const [notes, setNotes] = useState(protocol.session_notes ?? "");
     const [notesSaveState, setNotesSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -177,6 +179,8 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
         setTodoSaved(true);
         window.setTimeout(() => setTodoSaved(false), 2000);
         todoInputRef.current?.focus();
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : "Todo konnte nicht erstellt werden", "error");
       } finally {
         setCreatingTodo(false);
       }

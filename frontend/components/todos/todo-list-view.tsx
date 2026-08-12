@@ -10,9 +10,11 @@ import { TagInput } from "@/components/ui/tag-input";
 import { TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
 import { TodoDueMenu, DuePatch } from "@/components/todos/todo-due-menu";
 import { browserApiFetch } from "@/lib/api/client";
+import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { formatDate } from "@/lib/utils/format";
 import { Modal } from "@/components/ui/modal";
+import { usePopoverDismiss } from "@/components/ui/popover";
 import { DocumentTemplate, EventSummary, ParticipantSummary, TodoBlock, TodoListItem } from "@/types/api";
 
 const SCOPE_OPTIONS: FilterTabOption<"all" | "my">[] = [
@@ -36,6 +38,7 @@ type Props = {
 
 export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [], participants = [], documentTemplates = [], events = [] }: Props) {
   const router = useRouter();
+  const showToast = useToast();
   const [scope, setScope] = useState<"all" | "my">(allTodos !== null ? "all" : "my");
   const [statusFilter, setStatusFilter] = useState<"open" | "done" | "all">("open");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
@@ -71,16 +74,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
   const [participantSearch, setParticipantSearch] = useState("");
   const [participantSuggestions, setParticipantSuggestions] = useState<ParticipantSummary[]>([]);
 
-  useEffect(() => {
-    if (!templateDropdownOpen) return;
-    function handleClick(e: MouseEvent) {
-      if (templateDropdownRef.current && !templateDropdownRef.current.contains(e.target as Node)) {
-        setTemplateDropdownOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [templateDropdownOpen]);
+  usePopoverDismiss(templateDropdownOpen, () => setTemplateDropdownOpen(false), [templateDropdownRef]);
 
   useEffect(() => {
     if (!participantSearch.trim()) { setParticipantSuggestions([]); return; }
@@ -305,21 +299,30 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
   }
 
   async function updateTodoAssignee(todoId: number, participantId: number | null, participantName: string | null) {
+    const previous = [...todos.all, ...todos.my].find((t) => t.id === todoId) ?? null;
+    function applyUpdate(list: TodoListItem[]) {
+      return list.map((t) => t.id === todoId ? { ...t, assigned_participant_id: participantId, assigned_participant_name: participantName } : t);
+    }
+    setTodos((prev) => ({ all: applyUpdate(prev.all), my: applyUpdate(prev.my) }));
     try {
       await browserApiFetch(`/api/protocol-todos/${todoId}`, {
         method: "PATCH",
         body: JSON.stringify({ assigned_participant_id: participantId }),
       });
-      function applyUpdate(list: TodoListItem[]) {
-        return list.map((t) => t.id === todoId ? { ...t, assigned_participant_id: participantId, assigned_participant_name: participantName } : t);
+    } catch (error) {
+      if (previous) {
+        const previousTodo = previous;
+        function restore(list: TodoListItem[]) {
+          return list.map((t) => (t.id === todoId ? previousTodo : t));
+        }
+        setTodos((prev) => ({ all: restore(prev.all), my: restore(prev.my) }));
       }
-      setTodos((prev) => ({ all: applyUpdate(prev.all), my: applyUpdate(prev.my) }));
-    } catch {
-      // keep current state on error
+      showToast(error instanceof Error ? error.message : "Zuweisung konnte nicht gespeichert werden", "error");
     }
   }
 
   async function updateTodoFields(todoId: number, patch: { task?: string; tags?: string[] }) {
+    const previous = [...todos.all, ...todos.my].find((t) => t.id === todoId) ?? null;
     function applyUpdate(list: TodoListItem[]) {
       return list.map((t) => (t.id === todoId ? { ...t, ...patch } : t));
     }
@@ -329,12 +332,20 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
         method: "PATCH",
         body: JSON.stringify(patch),
       });
-    } catch {
-      // keep optimistic local state on error, matches updateTodoAssignee/updateTodoDue
+    } catch (error) {
+      if (previous) {
+        const previousTodo = previous;
+        function restore(list: TodoListItem[]) {
+          return list.map((t) => (t.id === todoId ? previousTodo : t));
+        }
+        setTodos((prev) => ({ all: restore(prev.all), my: restore(prev.my) }));
+      }
+      showToast(error instanceof Error ? error.message : "Todo konnte nicht gespeichert werden", "error");
     }
   }
 
   async function updateTodoDue(todoId: number, patch: DuePatch) {
+    const previous = [...todos.all, ...todos.my].find((t) => t.id === todoId) ?? null;
     try {
       const updated = await browserApiFetch<TodoListItem>(`/api/protocol-todos/${todoId}`, {
         method: "PATCH",
@@ -351,8 +362,15 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
         } : t);
       }
       setTodos((prev) => ({ all: applyUpdate(prev.all), my: applyUpdate(prev.my) }));
-    } catch {
-      // keep current state on error
+    } catch (error) {
+      if (previous) {
+        const previousTodo = previous;
+        function restore(list: TodoListItem[]) {
+          return list.map((t) => (t.id === todoId ? previousTodo : t));
+        }
+        setTodos((prev) => ({ all: restore(prev.all), my: restore(prev.my) }));
+      }
+      showToast(error instanceof Error ? error.message : "Fälligkeitsdatum konnte nicht gespeichert werden", "error");
     }
   }
 
