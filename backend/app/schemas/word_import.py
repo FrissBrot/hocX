@@ -157,6 +157,19 @@ class WordImportTextMapping(BaseModel):
     # template_element_id was None) would have no parsed values to show and silently
     # fall back to blank fields, exactly like the event_candidates bug fixed earlier.
     form_fields_by_target: dict[str, list[WordImportFormFieldValue]] = Field(default_factory=dict)
+    # Set when the resolved target block has a `sync_target_field` configured (see
+    # block_field_sync.SYNC_TARGET_FIELDS) - the block's content also gets written into this
+    # column of the linked Event once matched_event_id is known. Only ever set alongside
+    # is_event_repeat=True - "Pro Todo" blocks aren't import targets at all (see
+    # event_repeat_block_keys in analyze(), todo-repeat blocks are skipped there because
+    # there's no candidate mechanism to resolve a section to a specific Todo instance).
+    sync_target_field: str | None = None
+    # "empty": Event field has no value yet, written without asking. "match": Event field
+    # already equals the extracted text, nothing to resolve. "conflict": Event field holds a
+    # different existing value - the wizard must ask which one wins (see
+    # WordImportTextCommit.sync_field_source, default "existing").
+    sync_field_status: Literal["empty", "match", "conflict"] | None = None
+    sync_field_existing_value: str | None = None
 
 
 class WordImportTextTarget(BaseModel):
@@ -357,6 +370,12 @@ class WordImportTextCommit(BaseModel):
     # this section's block entirely, same row-level "Ignorieren" granularity the list/
     # matrix/event commit rows already have via their own `approved` flag.
     dismissed: bool = False
+    # Reviewer's pick for WordImportTextMapping.sync_field_status == "conflict" - "doc" keeps
+    # the extracted text (written into both the block and the Event field), "existing" keeps
+    # the Event's current field value (written into both instead, so block and Event field
+    # stay identical post-commit). None/unset when there was no conflict to resolve - commit()
+    # then just writes `content` through as usual.
+    sync_field_source: Literal["doc", "existing"] | None = None
 
 
 class WordImportAttendanceCommit(BaseModel):

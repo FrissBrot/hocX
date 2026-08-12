@@ -324,12 +324,16 @@ def put_protocol_text(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
-    _, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
+    block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     _ensure_block_not_locked_by_other(protocol.id, protocol_element_block_id, user)
     track_changes_active = bool(protocol.status == "geplant" and protocol.track_changes_enabled)
     try:
         result = autosave_service.save_text_block(
-            db, protocol_element_block_id, payload.content, track_changes_active=track_changes_active
+            db,
+            protocol_element_block_id,
+            payload.content,
+            track_changes_active=track_changes_active,
+            block_config=block.configuration_snapshot_json,
         )
     except SQLAlchemyError as exc:
         db.rollback()

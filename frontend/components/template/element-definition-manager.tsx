@@ -41,6 +41,7 @@ type BlockFormState = {
   title_as_subtitle: boolean;
   element_type_id: string;
   repeat_source: "none" | "event" | "todo";
+  sync_target_field: string;
   event_tag_filter: string;
   event_title_filter: string;
   event_description_filter: string;
@@ -129,6 +130,20 @@ const ALL_EVENT_FIELDS = [
   { field: "spezial_text3", defaultLabel: "Spezial Text 3", type: "text" },
 ] as const;
 
+const EVENT_SYNC_FIELDS = [
+  { value: "description", label: "Beschreibung" },
+  { value: "location", label: "Standort" },
+  { value: "spezial_text1", label: "Spezial Text 1" },
+  { value: "spezial_text2", label: "Spezial Text 2" },
+  { value: "spezial_text3", label: "Spezial Text 3" },
+] as const;
+
+const TODO_SYNC_FIELDS = [
+  { value: "task", label: "Aufgabentext" },
+  { value: "reference_link", label: "Referenz-Link" },
+  { value: "due_marker", label: "Fälligkeits-Marker" },
+] as const;
+
 type EventFieldConfig = { field: string; label: string; enabled: boolean };
 
 function defaultEventFields(): EventFieldConfig[] {
@@ -157,6 +172,7 @@ const initialBlockForm: BlockFormState = {
   title_as_subtitle: true,
   element_type_id: "1",
   repeat_source: "none",
+  sync_target_field: "",
   event_tag_filter: "",
   event_title_filter: "",
   event_description_filter: "",
@@ -429,6 +445,7 @@ function blockFormFromBlock(block: ElementDefinitionBlock): BlockFormState {
     title_as_subtitle: Boolean(block.configuration_json?.title_as_subtitle ?? true),
     element_type_id: String(block.element_type_id),
     repeat_source: (String(block.configuration_json?.repeat_source ?? "none") as "none" | "event" | "todo"),
+    sync_target_field: String(block.configuration_json?.sync_target_field ?? ""),
     event_tag_filter: String(block.configuration_json?.event_tag_filter ?? ""),
     event_title_filter: String(block.configuration_json?.event_title_filter ?? ""),
     event_description_filter: String(block.configuration_json?.event_description_filter ?? ""),
@@ -583,6 +600,7 @@ function blockPayload(form: BlockFormState): ElementDefinitionBlock {
       block_type_code: blockKindForElementType(form.element_type_id),
       title_as_subtitle: form.title_as_subtitle,
       repeat_source: form.repeat_source,
+      sync_target_field: form.sync_target_field || null,
       event_tag_filter: form.event_tag_filter || null,
       event_title_filter: form.event_title_filter || null,
       event_description_filter: form.event_description_filter || null,
@@ -2086,6 +2104,24 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 </div>
               </>
             ) : null}
+            {createBlockForm.element_type_id === "1" && createBlockForm.repeat_source !== "none" ? (
+              <label className="field-stack">
+                <span className="field-label">In {createBlockForm.repeat_source === "event" ? "Termin" : "Todo"}-Feld speichern (optional)</span>
+                <select
+                  value={createBlockForm.sync_target_field}
+                  onChange={(event) => setCreateBlockForm((current) => ({ ...current, sync_target_field: event.target.value }))}
+                >
+                  <option value="">— Nicht speichern —</option>
+                  {(createBlockForm.repeat_source === "event" ? EVENT_SYNC_FIELDS : TODO_SYNC_FIELDS).map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+                <span className="field-help">
+                  Der Blockinhalt wird beim Speichern zusätzlich in dieses Feld des verknüpften {createBlockForm.repeat_source === "event" ? "Termins" : "Todos"} geschrieben (immer überschrieben).
+                  {createBlockForm.repeat_source === "event" ? " Beim Word-Import wird das Feld ebenfalls berücksichtigt: ist es leer, wird es befüllt; enthält es bereits einen abweichenden Wert, entscheidet die Reviewerin/der Reviewer im Import-Assistenten." : ""}
+                </span>
+              </label>
+            ) : null}
           </SettingsSection>
           {createBlockForm.element_type_id === "2" ? (
             <SettingsSection
@@ -2639,6 +2675,24 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                   Verfuegbare Platzhalter: {"{title}"}, {"{task}"}, {"{description}"}, {"{due_date}"}, {"{participant}"} und {"{id}"}.
                 </div>
               </>
+            ) : null}
+            {blockForm.element_type_id === "1" && blockForm.repeat_source !== "none" ? (
+              <label className="field-stack">
+                <span className="field-label">In {blockForm.repeat_source === "event" ? "Termin" : "Todo"}-Feld speichern (optional)</span>
+                <select
+                  value={blockForm.sync_target_field}
+                  onChange={(event) => setBlockForm((current) => ({ ...current, sync_target_field: event.target.value }))}
+                >
+                  <option value="">— Nicht speichern —</option>
+                  {(blockForm.repeat_source === "event" ? EVENT_SYNC_FIELDS : TODO_SYNC_FIELDS).map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+                <span className="field-help">
+                  Der Blockinhalt wird beim Speichern zusätzlich in dieses Feld des verknüpften {blockForm.repeat_source === "event" ? "Termins" : "Todos"} geschrieben (immer überschrieben).
+                  {blockForm.repeat_source === "event" ? " Beim Word-Import wird das Feld ebenfalls berücksichtigt: ist es leer, wird es befüllt; enthält es bereits einen abweichenden Wert, entscheidet die Reviewerin/der Reviewer im Import-Assistenten." : ""}
+                </span>
+              </label>
             ) : null}
             </SettingsSection>
             {blockForm.element_type_id === "2" ? (

@@ -65,6 +65,7 @@ from app.schemas.word_import import (
     WordImportTextMapping,
     WordImportTextTarget,
 )
+from app.services import block_field_sync
 from app.services.event_service import EventService
 from app.services.participant_service import ParticipantService
 from app.services.protocol_service import ProtocolService
@@ -1862,6 +1863,11 @@ class WordImportService:
         # resolution (profile / title-similarity / manual) has picked the block exactly
         # like for any other element.
         event_repeat_block_keys: set[tuple[int, int]] = set()
+        # (template_element_id, block_sort_index) -> configured sync_target_field (see
+        # block_field_sync.SYNC_TARGET_FIELDS), only ever populated for event-repeat blocks -
+        # used below to detect a conflict between the extracted text and the linked Event's
+        # current field value once a section is matched to one of these.
+        sync_field_by_key: dict[tuple[int, int], str] = {}
         # (template_element_id, block_sort_index) -> that form block's raw configured rows
         # (id/label/row_type, straight from ElementDefinition), used below both to build
         # WordImportTextTarget.form_rows and, once a section is matched to such a target,
@@ -1900,6 +1906,9 @@ class WordImportService:
                 is_event_repeat_block = str(effective_repeat.get("repeat_source") or "") == "event"
                 if is_event_repeat_block:
                     event_repeat_block_keys.add((template_element.id, sort_index))
+                    sync_field = str(block_config.get("sync_target_field") or "")
+                    if sync_field in block_field_sync.SYNC_TARGET_FIELDS["event"]:
+                        sync_field_by_key[(template_element.id, sort_index)] = sync_field
                 is_form_block = block.get("element_type_id") == form_type_id
                 form_rows: list[dict] = []
                 if is_form_block:
@@ -2006,6 +2015,20 @@ class WordImportService:
                 if matched_event_id is None:
                     warnings.append(f'Rückblick "{section.heading}" konnte keinem Anlass zugeordnet werden – bitte manuell wählen.')
 
+            sync_target_field = sync_field_by_key.get((template_element_id, block_sort_index)) if is_event_repeat else None
+            sync_field_status = None
+            sync_field_existing_value = None
+            if sync_target_field and matched_event_id is not None and best_event is not None:
+                existing_value = str(getattr(best_event, sync_target_field, "") or "").strip()
+                doc_value = (section.markdown_text or "").strip()
+                if not existing_value:
+                    sync_field_status = "empty"
+                elif existing_value == doc_value:
+                    sync_field_status = "match"
+                else:
+                    sync_field_status = "conflict"
+                    sync_field_existing_value = existing_value
+
             is_form_block = (
                 template_element_id is not None
                 and block_sort_index is not None
@@ -2057,6 +2080,9 @@ class WordImportService:
                     is_form_block=is_form_block,
                     form_fields=form_fields,
                     form_fields_by_target=form_fields_by_target,
+                    sync_target_field=sync_target_field,
+                    sync_field_status=sync_field_status,
+                    sync_field_existing_value=sync_field_existing_value,
                 )
             )
 
@@ -3270,7 +3296,29 @@ class WordImportService:
                         select(ProtocolText).where(ProtocolText.protocol_element_block_id == block.id)
                     ).scalar_one_or_none()
                     if protocol_text is not None:
-                        protocol_text.content = text_commit.content
+                        final_content = text_commit.content
+                        sync_field = str((block.configuration_snapshot_json or {}).get("sync_target_field") or "")
+                        if sync_field and text_commit.is_event_repeat and text_commit.linked_event_id is not None:
+                            if text_commit.sync_field_source == "existing":
+                                linked_event = db.get(Event, text_commit.linked_event_id)
+                                if linked_event is not None:
+                                    # Reviewer chose to keep the Event's current value over the
+                                    # document text - re-read it fresh here (not trusting a
+                                    # round-tripped value from analyze()) so a concurrent edit
+                                    # to the Event between analyze() and commit() can't be
+                                    # silently overwritten with a stale value.
+                                    final_content = str(getattr(linked_event, sync_field, "") or "")
+                            # protocol_text mirrors whatever wins so the block and the Event
+                            # field never diverge right after import, same guarantee manual
+                            # editing gives via autosave_service.save_text_block.
+                            block_field_sync.apply_text_sync(
+                                db,
+                                repeat_source_type="event",
+                                repeat_source_id=text_commit.linked_event_id,
+                                sync_target_field=sync_field,
+                                content=final_content,
+                            )
+                        protocol_text.content = final_content
                     else:
                         # The resolved block exists but isn't a text-capable render (e.g.
                         # the template changed between analyze() and commit()) -
