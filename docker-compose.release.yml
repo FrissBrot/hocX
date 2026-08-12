@@ -67,6 +67,14 @@ services:
       - ./storage:/app/storage
       - ./storage/abgabebox-uploads:/app/abgabebox-storage
       - ./infra/traefik/dynamic:/app/traefik_dynamic
+    healthcheck:
+      # Kein curl im python:3.13-slim-Image (siehe Audit) - urllib aus der Stdlib genuegt fuer
+      # einen simplen Liveness-Check gegen den Health-Endpoint aus app/main.py.
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.rule=Host(`${TRAEFIK_DOMAIN}`) && (PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`))"
@@ -119,6 +127,17 @@ services:
       INTERNAL_API_URL: ${INTERNAL_API_URL}
     depends_on:
       - backend
+    healthcheck:
+      # Anders als der dev-Container (der auf der node:22-bookworm "deps"-Stage laeuft) hat das
+      # hier gebaute Release-Image nur die node:22-bookworm-slim "run"-Stage - kein curl/wget
+      # (verifiziert gegen ghcr.io/.../hocx-frontend), aber node selbst ist immer da.
+      # "/" liefert bei fehlender Session ein 307 nach /login statt eines 200 - als reiner
+      # Liveness-Check reicht "hat ueberhaupt geantwortet, kein 5xx/Verbindungsfehler".
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/', res => process.exit(res.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.rule=Host(`${TRAEFIK_DOMAIN}`)"
@@ -141,6 +160,13 @@ services:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
       INTERNAL_API_URL: ${INTERNAL_API_URL}
       HOCX_SITE_VARIANT: marketing
+    healthcheck:
+      # Kein curl/wget im Release-Image, siehe frontend oben.
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/', res => process.exit(res.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website.rule=Host(`${TRAEFIK_WEB_DOMAIN}`)"
@@ -173,6 +199,14 @@ services:
         condition: service_started
     volumes:
       - ./storage/abgabebox-uploads:/app/storage
+    healthcheck:
+      # Kein curl im python:3.13-slim-Image (siehe Audit) - urllib aus der Stdlib genuegt fuer
+      # einen simplen Liveness-Check gegen den Health-Endpoint aus app/main.py.
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && PathPrefix(`/api`)"
@@ -207,6 +241,13 @@ services:
       NEXT_PUBLIC_FRIENDLY_CAPTCHA_SITEKEY: ${FRIENDLY_CAPTCHA_SITEKEY}
     depends_on:
       - abgabebox-backend
+    healthcheck:
+      # Kein curl/wget im Release-Image, siehe frontend oben.
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/', res => process.exit(res.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`)"

@@ -1019,9 +1019,9 @@ export function FocusedElementEditor({
       if (sourceField) {
         let text = "";
         if (sourceField === "display_name") text = participant.display_name;
-        else if (sourceField === "first_name") text = String((participant as any).first_name ?? "");
-        else if (sourceField === "last_name") text = String((participant as any).last_name ?? "");
-        else if (sourceField === "email") text = String((participant as any).email ?? "");
+        else if (sourceField === "first_name") text = String(participant.first_name ?? "");
+        else if (sourceField === "last_name") text = String(participant.last_name ?? "");
+        else if (sourceField === "email") text = String(participant.email ?? "");
         row_values[rowId] = matrixRowCellValue(row, text);
       } else if (rowType === "participant") {
         row_values[rowId] = { participant_id: participant.id };
@@ -1043,7 +1043,7 @@ export function FocusedElementEditor({
         if (sourceField === "title") text = event.title;
         else if (sourceField === "event_date") text = formatDate(event.event_date);
         else if (sourceField === "tag") text = String(event.tag ?? "");
-        else if (sourceField === "participant_count") text = String((event as any).participant_count ?? "");
+        else if (sourceField === "participant_count") text = String(event.participant_count ?? "");
         row_values[rowId] = matrixRowCellValue(row, text);
       } else if (rowType === "event") {
         row_values[rowId] = { event_id: event.id };
@@ -1852,7 +1852,7 @@ export function FocusedElementEditor({
                             const isDateField = ef.field === "event_date" || ef.field === "event_end_date";
                             const isNumberField = ef.field === "participant_count";
                             const currentIds: number[] = isParticipantsField
-                              ? ((linkedEvent as any)[ef.field] ?? []) as number[]
+                              ? ((linkedEvent as unknown as Record<string, unknown>)[ef.field] as number[] | undefined ?? [])
                               : [];
                             const participantSummary = isParticipantsField
                               ? currentIds.length === 0
@@ -1892,7 +1892,7 @@ export function FocusedElementEditor({
                                     data-form-input
                                     type={isDateField ? "date" : isNumberField ? "number" : "text"}
                                     disabled={!blockEditable}
-                                    value={eventFieldDrafts[draftKey] ?? ((linkedEvent as any)[ef.field] ?? "")}
+                                    value={eventFieldDrafts[draftKey] ?? String((linkedEvent as unknown as Record<string, unknown>)[ef.field] ?? "")}
                                     onChange={(e) => setEventFieldDrafts((d) => ({ ...d, [draftKey]: e.target.value }))}
                                     onBlur={(e) => {
                                       const val = e.target.value;
@@ -2501,6 +2501,7 @@ export function FocusedElementEditor({
                                 type="button"
                                 className="button-ghost button-icon"
                                 title="Terminzeile hinzufügen"
+                                aria-label="Terminzeile hinzufügen"
                                 disabled={showNewEventRow || creatingNewEventRow}
                                 onClick={() => {
                                   setOpenNewEventRows((current) => ({ ...current, [block.id]: true }));
@@ -2598,6 +2599,7 @@ export function FocusedElementEditor({
                                     type="button"
                                     className="button-ghost button-icon button-icon-danger"
                                     title="Neue Terminzeile verwerfen"
+                                    aria-label="Neue Terminzeile verwerfen"
                                     disabled={creatingNewEventRow}
                                     onClick={() => resetNewEventRow(block.id)}
                                   >
@@ -3084,6 +3086,7 @@ export function FocusedElementEditor({
                                   type="button"
                                   className="fine-action-btn fine-collect-btn"
                                   title="Busse kassieren"
+                                  aria-label="Busse kassieren"
                                   onClick={async () => {
                                     try {
                                       const updated = await browserApiFetch<AttendanceFine>(
@@ -3111,7 +3114,7 @@ export function FocusedElementEditor({
                                     });
                                     if (!ok) return;
                                     try {
-                                      await browserApiFetch(`/api/fines/${fine.id}/delete`, { method: "POST" });
+                                      await browserApiFetch(`/api/fines/${fine.id}`, { method: "DELETE" });
                                       setPendingFines((prev) => prev.filter((f) => f.id !== fine.id));
                                     } catch (error) {
                                       showToast(error instanceof Error ? error.message : "Busse konnte nicht gelöscht werden", "error");
@@ -3156,6 +3159,7 @@ export function FocusedElementEditor({
                               type="button"
                               className="fine-action-btn fine-collect-btn"
                               title="Busse kassieren"
+                              aria-label="Busse kassieren"
                               onClick={async () => {
                                 try {
                                   const updated = await browserApiFetch<AttendanceFine>(
@@ -3183,7 +3187,7 @@ export function FocusedElementEditor({
                                 });
                                 if (!ok) return;
                                 try {
-                                  await browserApiFetch(`/api/fines/${fine.id}/delete`, { method: "POST" });
+                                  await browserApiFetch(`/api/fines/${fine.id}`, { method: "DELETE" });
                                   setProtocolFines((prev) => prev.filter((f) => f.id !== fine.id));
                                 } catch (error) {
                                   showToast(error instanceof Error ? error.message : "Busse konnte nicht gelöscht werden", "error");

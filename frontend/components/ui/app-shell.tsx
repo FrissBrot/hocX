@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { Route } from "next";
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -273,7 +274,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
                     const isActive = pathname === link.href || pathname.startsWith(`${link.href}/`);
                     return (
                       <Link
-                        href={link.href as any}
+                        href={link.href as Route}
                         key={link.href}
                         className={isActive ? "nav-link nav-link-active" : "nav-link"}
                         onClick={() => setMobileNavOpen(false)}

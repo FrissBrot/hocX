@@ -20,6 +20,13 @@ export type ElementPublic = {
   window_end: string | null;
 };
 
+// Deliberately not shared with frontend/lib/api/server.ts's backendFetch: this is a
+// separately deployed Next.js app (own package.json/Dockerfile, see audit finding
+// E-Niedrig-4) with genuinely simpler requirements - these are unauthenticated public
+// endpoints, so there's no session cookie to forward and no login-loop retry logic
+// needed (see backendFetch's own comment for why that retry exists there). Pulling both
+// into a shared package would need a monorepo workspace for two intentionally isolated
+// services; not worth it for ~6 lines that differ in what they actually need to do.
 async function fetchJson<T>(url: string): Promise<T | null> {
   const response = await fetch(url, { cache: "no-store" });
   if (!response.ok) {

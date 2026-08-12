@@ -3,7 +3,7 @@ import tempfile
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -71,8 +71,8 @@ def list_error_logs(
     tenant_id: int | None = None,
     error_type: str | None = None,
     source: str | None = None,
-    limit: int = 50,
-    offset: int = 0,
+    limit: int = Query(50, gt=0),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
 ):
     return error_log_service.list_errors(
@@ -243,7 +243,11 @@ def grant_tenant_user_role(
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(get_current_admin),
 ):
-    result = tenant_user_service.grant_or_update_role(db, tenant_id, user_id, payload.role_code)
+    try:
+        result = tenant_user_service.grant_or_update_role(db, tenant_id, user_id, payload.role_code)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Role could not be granted") from exc
     audit.log(
         db, action="admin.tenant_user_role_granted", actor_email=current_admin.email, tenant_id=tenant_id,
         entity_type="user", entity_id=user_id, details={"role_code": payload.role_code},
@@ -258,7 +262,12 @@ def remove_tenant_user(
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(get_current_admin),
 ):
-    if not tenant_user_service.remove_user(db, tenant_id, user_id):
+    try:
+        removed = tenant_user_service.remove_user(db, tenant_id, user_id)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Membership could not be removed") from exc
+    if not removed:
         raise HTTPException(status_code=404, detail="Membership not found")
     audit.log(
         db, action="admin.tenant_user_removed", actor_email=current_admin.email, tenant_id=tenant_id,

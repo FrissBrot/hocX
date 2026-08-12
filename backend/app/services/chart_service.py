@@ -26,6 +26,14 @@ from app.models.entities import (
     TodoStatus,
 )
 
+# Name of the list_definition that holds the tenant's group tags (event.tag values that
+# count as "groups" for stats/charts). Duplicated as a literal in three subqueries
+# (here and twice in app/api/routes/statistics.py) before this constant was introduced -
+# import GROUPS_LIST_NAME from here rather than re-hardcoding the string, so the three
+# copies can't drift apart again. Does NOT fix the underlying fragility of matching by
+# a user-renameable list name - that's a separate, larger concern.
+GROUPS_LIST_NAME = "Gruppen"
+
 # ── Print-tuned defaults ──────────────────────────────────────────────────────
 
 DPI = 300          # crisp at print resolution
@@ -266,11 +274,11 @@ def _fetch_groups_data(db: Session, tenant_id: int, cycle_key: str | None = None
                   SELECT le.column_one_value_json->>'text_value'
                   FROM list_definition ld
                   JOIN list_entry le ON le.list_definition_id = ld.id
-                  WHERE ld.tenant_id = :tid AND ld.name = 'Gruppen'
+                  WHERE ld.tenant_id = :tid AND ld.name = :groups_list_name
               )
             GROUP BY e.tag, ec.cycle_config_id, ec.cycle_year
         """),
-        {"tid": tenant_id},
+        {"tid": tenant_id, "groups_list_name": GROUPS_LIST_NAME},
     ).all()
 
     if cycle_key and cycle_key != "all":

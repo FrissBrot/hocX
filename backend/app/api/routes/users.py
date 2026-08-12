@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user
-from app.schemas.user import UserCreate, UserRead, UserSelfUpdate, UserUpdate
+from app.schemas.user import UserCreate, UserPasswordChange, UserRead, UserSelfUpdate, UserUpdate
 from app.services.audit_service import AuditService
 from app.services.user_service import UserService
 
@@ -56,6 +56,21 @@ def patch_me(
         raise HTTPException(status_code=400, detail="Profile could not be updated") from exc
 
 
+@router.post("/me/password", response_model=UserRead)
+def change_my_password(
+    payload: UserPasswordChange,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    try:
+        current = service.change_own_password(db, user, payload)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Password could not be changed") from exc
+    audit.log(db, action="user.password_changed", actor=user, entity_type="user", entity_id=user.user_id)
+    return current
+
+
 @router.get("/{user_id}", response_model=UserRead)
 def get_user(
     user_id: int,
@@ -88,7 +103,7 @@ def patch_user(
     return current
 
 
-@router.delete("/{user_id}", response_model=dict[str, str])
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_user(
     user_id: int,
     db: Session = Depends(get_db),
@@ -101,4 +116,3 @@ def delete_user(
         raise HTTPException(status_code=400, detail="User could not be deleted") from exc
     if not deleted:
         raise HTTPException(status_code=404, detail="User not found")
-    return {"message": "User deleted"}

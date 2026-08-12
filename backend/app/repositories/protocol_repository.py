@@ -50,12 +50,15 @@ class ProtocolRepository:
         )
         return int(db.scalar(statement) or 0) + 1
 
-    def update(self, db: Session, protocol: Protocol, values: dict) -> Protocol:
+    def update(self, db: Session, protocol: Protocol, values: dict, *, commit: bool = True) -> Protocol:
         for key, value in values.items():
             setattr(protocol, key, value)
         db.add(protocol)
-        db.commit()
-        db.refresh(protocol)
+        if commit:
+            db.commit()
+            db.refresh(protocol)
+        else:
+            db.flush()
         return protocol
 
     def delete(self, db: Session, protocol: Protocol) -> None:

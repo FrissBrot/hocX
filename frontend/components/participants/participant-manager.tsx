@@ -109,6 +109,8 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
       const next = await browserApiFetch<ParticipantSummary[]>(`/api/participants?skip=${participants.length}&limit=${PAGE_SIZE}`);
       setParticipants((current) => [...current, ...(next ?? [])]);
       setHasMore((next ?? []).length === PAGE_SIZE);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Weitere Teilnehmende konnten nicht geladen werden", "error");
     } finally {
       setIsLoadingMore(false);
     }
@@ -164,8 +166,12 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
     try {
       const assignedTemplates = await browserApiFetch<TemplateSummary[]>(`/api/participants/${participant.id}/templates`);
       setAssignedTemplateIds(assignedTemplates.map((template) => template.id));
-    } catch {
+    } catch (error) {
       setAssignedTemplateIds([]);
+      showToast(
+        error instanceof Error ? error.message : "Zugewiesene Vorlagen konnten nicht geladen werden",
+        "error"
+      );
     }
     setShowModal(true);
   }

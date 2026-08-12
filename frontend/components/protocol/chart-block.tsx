@@ -16,6 +16,49 @@ export function bumpStatsCharts() {
   window.dispatchEvent(new Event(STATS_BUMP_EVENT));
 }
 
+// Every ChartBlock instance shows the same /api/statistics/overview data (there's no
+// per-block query param), so a page with several chart blocks previously fired one
+// identical request per block, per 15s tick. This module-level cache + a single shared
+// poll timer (ref-counted across mounted instances) makes concurrent instances share one
+// in-flight request/interval instead of each running its own.
+let _statsCache: StatisticsOverview | null = null;
+let _statsCacheVersion = -1;
+let _statsInFlight: { version: number; promise: Promise<StatisticsOverview | null> } | null = null;
+let _statsPollInterval: ReturnType<typeof setInterval> | null = null;
+let _statsPollRefCount = 0;
+
+function acquireStatsPolling() {
+  _statsPollRefCount++;
+  if (!_statsPollInterval) {
+    _statsPollInterval = setInterval(() => bumpStatsCharts(), 15_000);
+  }
+}
+
+function releaseStatsPolling() {
+  _statsPollRefCount = Math.max(0, _statsPollRefCount - 1);
+  if (_statsPollRefCount === 0 && _statsPollInterval) {
+    clearInterval(_statsPollInterval);
+    _statsPollInterval = null;
+  }
+}
+
+function fetchStatsOverview(version: number): Promise<StatisticsOverview | null> {
+  if (_statsCacheVersion === version) return Promise.resolve(_statsCache);
+  if (_statsInFlight?.version === version) return _statsInFlight.promise;
+  const promise = browserApiFetch<StatisticsOverview>(`/api/statistics/overview?_t=${version}`)
+    .then((d) => {
+      _statsCache = d ?? null;
+      _statsCacheVersion = version;
+      return _statsCache;
+    })
+    .catch(() => _statsCache)
+    .finally(() => {
+      if (_statsInFlight?.version === version) _statsInFlight = null;
+    });
+  _statsInFlight = { version, promise };
+  return promise;
+}
+
 const CHART_OPTIONS = [
   { value: "attendance_over_time", label: "Anwesenheit über Zeit" },
   { value: "attendance_by_participant", label: "Anwesenheit pro Mitglied" },
@@ -53,28 +96,33 @@ type Props = {
 };
 
 export function ChartBlock({ blockId, config, editable, onSave }: Props) {
-  const [data, setData] = useState<StatisticsOverview | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<StatisticsOverview | null>(_statsCacheVersion >= 0 ? _statsCache : null);
+  const [loading, setLoading] = useState(_statsCacheVersion < 0);
   const [tick, setTick] = useState(() => _statsVersion);
   const chartType = config.chart_type ?? "";
   const cycleKey = config.cycle_key ?? "all";
 
   useEffect(() => {
-    const refresh = () => setTick((t) => t + 1);
+    const refresh = () => setTick(_statsVersion);
     window.addEventListener(STATS_BUMP_EVENT, refresh);
-    const poll = setInterval(refresh, 15_000);
+    acquireStatsPolling();
     return () => {
       window.removeEventListener(STATS_BUMP_EVENT, refresh);
-      clearInterval(poll);
+      releaseStatsPolling();
     };
   }, []);
 
   useEffect(() => {
-    if (!data) setLoading(true);
-    browserApiFetch<StatisticsOverview>(`/api/statistics/overview?_t=${tick}`)
-      .then((d) => setData(d ?? null))
-      .finally(() => setLoading(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    let cancelled = false;
+    if (_statsCacheVersion !== tick) setLoading(true);
+    fetchStatsOverview(tick).then((d) => {
+      if (cancelled) return;
+      setData(d);
+      setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [tick]);
 
   function save(partial: Partial<Config>) {

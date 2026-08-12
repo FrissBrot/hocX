@@ -6,6 +6,10 @@ const publicApiUrl = "";
 export const browserApiBaseUrl = publicApiUrl;
 
 export async function backendFetch<T>(path: string, init?: RequestInit): Promise<T | null> {
+  // Not shared with abgabebox-frontend/lib/api.ts's fetchJson (see that file's comment,
+  // audit finding E-Niedrig-4): that app's public endpoints need neither the session-cookie
+  // forwarding nor the retry below, so keeping them separate avoids forcing a shared
+  // package on two otherwise-independently-deployed Next.js apps.
   // Ein einzelner Retry bei einem echten Netzwerkfehler (nicht bei einer regulären HTTP-
   // Fehlerantwort): Node's fetch-Verbindungspool zum Backend-Container reused Sockets, die das
   // Backend zeitgleich schon als idle geschlossen haben kann ("ECONNRESET"/"socket hang up") -

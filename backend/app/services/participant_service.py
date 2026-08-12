@@ -2,6 +2,7 @@ import csv
 import secrets
 from io import StringIO
 
+from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -115,7 +116,28 @@ class ParticipantService:
     def get_participant(self, db: Session, participant_id: int) -> Participant | None:
         return self.repository.get(db, participant_id)
 
+    def _ensure_app_user_belongs_to_tenant(self, db: Session, app_user_id: int, *, tenant_id: int) -> None:
+        app_user = self.user_repository.get(db, app_user_id)
+        if app_user is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App user not found")
+        has_membership = bool(
+            db.scalar(
+                select(UserTenantRole.user_id).where(
+                    UserTenantRole.user_id == app_user_id,
+                    UserTenantRole.tenant_id == tenant_id,
+                    UserTenantRole.is_active.is_(True),
+                )
+            )
+        )
+        if not has_membership:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="App user does not belong to the current tenant",
+            )
+
     def create_participant(self, db: Session, payload: ParticipantCreate, *, tenant_id: int) -> Participant:
+        if payload.app_user_id is not None:
+            self._ensure_app_user_belongs_to_tenant(db, payload.app_user_id, tenant_id=tenant_id)
         participant = Participant(
             tenant_id=tenant_id,
             app_user_id=payload.app_user_id,

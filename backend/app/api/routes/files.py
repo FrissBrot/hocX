@@ -94,9 +94,12 @@ def get_stored_file_content(
     file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File missing on filesystem")
+    # SECURITY: set nosniff so a browser never MIME-sniffs the content and renders it
+    # inline against our wishes, mirroring submission_assignments.get_submission_file_content.
     return FileResponse(
         path=file_path,
         media_type=stored_file.mime_type,
         filename=stored_file.original_name,
         content_disposition_type="inline" if stored_file.mime_type == "application/pdf" else "attachment",
+        headers={"X-Content-Type-Options": "nosniff"},
     )

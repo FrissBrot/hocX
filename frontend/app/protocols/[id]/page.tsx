@@ -31,14 +31,17 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
     redirect("/protocols");
   }
 
-  const documentTemplates = (await backendFetchWithSession<DocumentTemplate[]>("/api/document-templates")) ?? [];
-  const templates = (await backendFetchWithSession<TemplateSummary[]>("/api/templates")) ?? [];
-  const events = (await backendFetchWithSession<EventSummary[]>("/api/events")) ?? [];
-  const lists = (await backendFetchWithSession<StructuredListDefinition[]>("/api/lists")) ?? [];
-  const elements = (await backendFetchWithSession<ProtocolElement[]>(`/api/protocols/${id}/elements`)) ?? [];
   const participantsQuery = protocol.protocol_date ? `?as_of=${encodeURIComponent(protocol.protocol_date)}` : "";
-  const participants =
-    (await backendFetchWithSession<ParticipantSummary[]>(`/api/templates/${protocol.template_id}/participants${participantsQuery}`)) ?? [];
+  const [documentTemplates, templates, events, lists, elements, participants] = await Promise.all([
+    backendFetchWithSession<DocumentTemplate[]>("/api/document-templates").then((v) => v ?? []),
+    backendFetchWithSession<TemplateSummary[]>("/api/templates").then((v) => v ?? []),
+    backendFetchWithSession<EventSummary[]>("/api/events").then((v) => v ?? []),
+    backendFetchWithSession<StructuredListDefinition[]>("/api/lists").then((v) => v ?? []),
+    backendFetchWithSession<ProtocolElement[]>(`/api/protocols/${id}/elements`).then((v) => v ?? []),
+    backendFetchWithSession<ParticipantSummary[]>(
+      `/api/templates/${protocol.template_id}/participants${participantsQuery}`
+    ).then((v) => v ?? []),
+  ]);
   const linkedListIds = Array.from(
     new Set(
       elements.flatMap((element) =>

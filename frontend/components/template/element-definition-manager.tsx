@@ -13,6 +13,7 @@ import { useToast } from "@/contexts/toast-context";
 import { useTagConfig } from "@/lib/hooks/use-tag-config";
 import { browserApiFetch } from "@/lib/api/client";
 import { formatDateRange } from "@/lib/utils/format";
+import { ELEMENT_TYPE_OPTIONS } from "@/lib/constants/element-types";
 import { ElementDefinition, ElementDefinitionBlock, EventSummary, ParticipantSummary, StructuredListDefinition, StructuredListEntry } from "@/types/api";
 
 type ElementDefinitionManagerProps = {
@@ -105,6 +106,7 @@ type BlockFormState = {
     id: string;
     title: string;
     event_tag_filter?: string;
+    title_placeholder?: string;
   }>;
 };
 
@@ -230,20 +232,7 @@ function defaultMatrixColumn(id = "matrix-column-1") {
   };
 }
 
-const elementTypeOptions = [
-  { value: "1", label: "Text", description: "Editierbarer Text mit Markdown (fett, kursiv, Listen)" },
-  { value: "2", label: "Todo", description: "Checkliste oder Aufgabenliste" },
-  { value: "3", label: "Bild", description: "Bild-Upload mit Vorschau" },
-  { value: "6", label: "Tabelle", description: "Zeilen mit Labels und typisierten Werten wie Text, Person oder Termin" },
-  { value: "7", label: "Terminliste", description: "Gefilterte Liste von Terminen in Tabellenform" },
-  { value: "9", label: "Anwesenheit", description: "Anwesenheitsliste für alle Vorlagen-Teilnehmenden" },
-  { value: "10", label: "Sitzungsdatum", description: "Setzt das nächste Sitzungsdatum direkt im Protokoll" },
-  { value: "11", label: "Matrix", description: "Flexible Matrix mit freien Werten, Personen und automatischen Terminzeilen" },
-  { value: "12", label: "Kontostand", description: "Zeigt den aktuellen Kontostand eines Finanzkontos" },
-  { value: "13", label: "Transaktionen", description: "Tabelle mit Transaktionen eines Finanzkontos" },
-  { value: "14", label: "Bussenliste", description: "Liste der ausstehenden Bussen aus der Anwesenheitskontrolle" },
-  { value: "15", label: "Diagramm", description: "Statistik-Diagramm aus vordefinierten Daten (Anwesenheit, Finanzen, Bussen, Gruppen)" },
-];
+const elementTypeOptions = ELEMENT_TYPE_OPTIONS;
 
 const elementTypeCategories: Array<{ title: string; description: string; types: string[] }> = [
   {
@@ -947,6 +936,8 @@ export function ElementDefinitionManager({
           );
         }
       }
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Vorschau konnte nicht geladen werden", "error");
     } finally {
       setMatrixPreviewLoading(false);
     }
@@ -988,8 +979,12 @@ export function ElementDefinitionManager({
     if (!listId || listEntryOptionsByListId[listId]) {
       return;
     }
-    const entries = await browserApiFetch<StructuredListEntry[]>(`/api/lists/${listId}/entries`);
-    setListEntryOptionsByListId((current) => ({ ...current, [listId]: entries ?? [] }));
+    try {
+      const entries = await browserApiFetch<StructuredListEntry[]>(`/api/lists/${listId}/entries`);
+      setListEntryOptionsByListId((current) => ({ ...current, [listId]: entries ?? [] }));
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Listeneinträge konnten nicht geladen werden", "error");
+    }
   }
 
   function describeListValue(value: Record<string, unknown> | null | undefined, valueType: string): string {
@@ -1365,7 +1360,16 @@ export function ElementDefinitionManager({
     return Boolean(updated);
   }
 
-  async function closeMatrixDesigner() {
+  // Closing (X / Escape / backdrop click) only closes the designer - it no longer silently
+  // saves. Edits made here live in the same blockForm/createBlockForm state as every other
+  // field in the surrounding "Block bearbeiten"/"Block anlegen" form, so nothing is lost:
+  // they're picked up by that form's own explicit "Speichern"/"anlegen" submit exactly like a
+  // title or description edit would be. Use "Übernehmen" below to save immediately instead.
+  function closeMatrixDesigner() {
+    setMatrixDesignerMode(null);
+  }
+
+  async function saveMatrixDesigner() {
     if (matrixDesignerMode === "edit") {
       const saved = await persistEditedBlock("Matrix wurde gespeichert");
       if (!saved) {
@@ -1445,7 +1449,12 @@ export function ElementDefinitionManager({
     });
   }
 
-  async function closeTableDesigner() {
+  // See closeMatrixDesigner above for why closing no longer auto-saves.
+  function closeTableDesigner() {
+    setTableDesignerMode(null);
+  }
+
+  async function saveTableDesigner() {
     if (tableDesignerMode === "edit") {
       const saved = await persistEditedBlock("Tabelle wurde gespeichert");
       if (!saved) {
@@ -2156,7 +2165,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                       <span className="field-label">Transaktionen anzeigen</span>
                       <select
                         value={createBlockForm.finance_filter_type}
-                        onChange={(e) => setCreateBlockForm((c) => ({ ...c, finance_filter_type: e.target.value as any }))}
+                        onChange={(e) => setCreateBlockForm((c) => ({ ...c, finance_filter_type: e.target.value as BlockFormState["finance_filter_type"] }))}
                       >
                         <option value="all">Alle Transaktionen</option>
                         <option value="since_last_session">Seit letzter Sitzung</option>
@@ -2403,7 +2412,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                       >
                         <td>
                           <strong>{field.label || `Zeile ${index + 1}`}</strong>
-                          <div className="muted">{valueTypeLabel(field.row_type as any)}</div>
+                          <div className="muted">{valueTypeLabel(field.row_type as Parameters<typeof valueTypeLabel>[0])}</div>
                         </td>
                         <td>{tableRowPreviewValue(field)}</td>
                       </tr>
@@ -2440,7 +2449,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                   ))}
                   {createBlockForm.table_fields.map((field) => (
                     <span key={`create-matrix-row-pill-${field.id}`} className="pill">
-                      {field.label || "Ohne Zeilenname"} · {matrixEmbeddedBlockLabel(field.row_type) !== "Wert" ? matrixEmbeddedBlockLabel(field.row_type) : valueTypeLabel(field.row_type as any)}
+                      {field.label || "Ohne Zeilenname"} · {matrixEmbeddedBlockLabel(field.row_type) !== "Wert" ? matrixEmbeddedBlockLabel(field.row_type) : valueTypeLabel(field.row_type as Parameters<typeof valueTypeLabel>[0])}
                     </span>
                   ))}
                 </div>
@@ -2710,7 +2719,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                         <span className="field-label">Transaktionen anzeigen</span>
                         <select
                           value={blockForm.finance_filter_type}
-                          onChange={(e) => setBlockForm((c) => ({ ...c, finance_filter_type: e.target.value as any }))}
+                          onChange={(e) => setBlockForm((c) => ({ ...c, finance_filter_type: e.target.value as BlockFormState["finance_filter_type"] }))}
                         >
                           <option value="all">Alle Transaktionen</option>
                           <option value="since_last_session">Seit letzter Sitzung</option>
@@ -2965,7 +2974,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                       >
                         <td>
                           <strong>{field.label || `Zeile ${index + 1}`}</strong>
-                          <div className="muted">{valueTypeLabel(field.row_type as any)}</div>
+                          <div className="muted">{valueTypeLabel(field.row_type as Parameters<typeof valueTypeLabel>[0])}</div>
                         </td>
                         <td>{tableRowPreviewValue(field)}</td>
                       </tr>
@@ -3002,7 +3011,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                     ))}
                     {blockForm.table_fields.map((field) => (
                       <span key={`edit-matrix-row-pill-${field.id}`} className="pill">
-                        {field.label || "Ohne Zeilenname"} · {matrixEmbeddedBlockLabel(field.row_type) !== "Wert" ? matrixEmbeddedBlockLabel(field.row_type) : valueTypeLabel(field.row_type as any)}
+                        {field.label || "Ohne Zeilenname"} · {matrixEmbeddedBlockLabel(field.row_type) !== "Wert" ? matrixEmbeddedBlockLabel(field.row_type) : valueTypeLabel(field.row_type as Parameters<typeof valueTypeLabel>[0])}
                       </span>
                     ))}
                   </div>
@@ -3087,12 +3096,17 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
 
       <Modal
         open={matrixDesignerMode !== null && !!matrixDesignerForm}
-        onClose={() => {
-          void closeMatrixDesigner();
-        }}
+        onClose={closeMatrixDesigner}
         title="Matrix konfigurieren"
         description="Füge Spalten und Zeilen direkt als Matrix hinzu. Klick auf eine Zeile oder eine Zelle, um Datentypen und Inhalte zu setzen."
         size="fullscreen"
+        headerActions={
+          matrixDesignerMode === "edit" ? (
+            <button type="button" className="button-inline" onClick={() => { void saveMatrixDesigner(); }}>
+              Übernehmen
+            </button>
+          ) : undefined
+        }
       >
         {matrixDesignerForm ? (
           <div className="matrix-designer-layout">
@@ -3239,7 +3253,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                         onClick={() => setSelectedMatrixRowId(row.id)}
                       >
                         <strong>{row.label || `Zeile ${rowIndex + 1}`}</strong>
-                        <span className="muted">{matrixEmbeddedBlockLabel(row.row_type) !== "Wert" ? matrixEmbeddedBlockLabel(row.row_type) : valueTypeLabel(row.row_type as any)}</span>
+                        <span className="muted">{matrixEmbeddedBlockLabel(row.row_type) !== "Wert" ? matrixEmbeddedBlockLabel(row.row_type) : valueTypeLabel(row.row_type as Parameters<typeof valueTypeLabel>[0])}</span>
                       </button>
                       {matrixDesignerForm.matrix_mode !== "auto" && matrixDesignerColumns.map((column, columnIndex) => (
                         <button
@@ -3254,13 +3268,13 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                               ? matrixEmbeddedBlockLabel(row.row_type)
                               : row.row_type === "events"
                               ? (column.event_tag_filter || (row.row_config?.event_tag_filter as string | undefined) || "Alle Termine")
-                              : valueTypeLabel(row.row_type as any)}
+                              : valueTypeLabel(row.row_type as Parameters<typeof valueTypeLabel>[0])}
                           </span>
                         </button>
                       ))}
                       {matrixDesignerForm.matrix_mode === "auto" && matrixPreviewColumns && matrixPreviewColumns.map((col) => (
                         <div key={`pv-${row.id}-${col.id}`} className="matrix-designer-cell matrix-designer-cell-preview">
-                          <span className="muted">{row.auto_source_field || valueTypeLabel(row.row_type as any)}</span>
+                          <span className="muted">{row.auto_source_field || valueTypeLabel(row.row_type as Parameters<typeof valueTypeLabel>[0])}</span>
                         </div>
                       ))}
                       {matrixDesignerForm.matrix_mode === "auto" && !matrixPreviewColumns && (
@@ -3604,7 +3618,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                     <label className="field-stack">
                       <span className="field-label">Platzhalter (im Protokoll)</span>
                       <input
-                        value={(selectedMatrixColumn as any).title_placeholder ?? ""}
+                        value={selectedMatrixColumn.title_placeholder ?? ""}
                         onChange={(e) => updateMatrixDesignerForm((c) => ({ ...c, matrix_columns: c.matrix_columns.map((col) => col.id === selectedMatrixColumn.id ? { ...col, title_placeholder: e.target.value } : col) }))}
                         placeholder="z. B. Name des Teilnehmers"
                       />
@@ -3631,12 +3645,17 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
 
       <Modal
         open={tableDesignerMode !== null && !!tableDesignerForm}
-        onClose={() => {
-          void closeTableDesigner();
-        }}
+        onClose={closeTableDesigner}
         title="Tabelle konfigurieren"
         description="Verwalte die Zeilen dieser Tabelle. Klick auf eine Zeile, um Alias, Datentyp und Inhalt zu setzen."
         size="fullscreen"
+        headerActions={
+          tableDesignerMode === "edit" ? (
+            <button type="button" className="button-inline" onClick={() => { void saveTableDesigner(); }}>
+              Übernehmen
+            </button>
+          ) : undefined
+        }
       >
         {tableDesignerForm ? (
           <div className="matrix-designer-layout">
@@ -3671,7 +3690,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                       }}
                     >
                       <strong>{row.label || `Zeile ${index + 1}`}</strong>
-                      <span className="muted">{valueTypeLabel(row.row_type as any)}</span>
+                      <span className="muted">{valueTypeLabel(row.row_type as Parameters<typeof valueTypeLabel>[0])}</span>
                     </button>
                   ))}
                 </div>

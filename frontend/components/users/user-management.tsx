@@ -10,31 +10,18 @@ import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
 import { TenantSummary, UserSummary } from "@/types/api";
+import {
+  addOrUpsertMembership,
+  buildTenantNameMap,
+  emptyUserForm,
+  removeMembershipEntry,
+  userFormToPayload,
+  UserFormState
+} from "@/components/users/user-form-shared";
 
 type Props = {
   initialUsers: UserSummary[];
   manageableTenants: TenantSummary[];
-};
-
-type MembershipEntry = {
-  tenant_id: number;
-  role_code: string;
-};
-
-type UserFormState = {
-  id?: number;
-  first_name: string;
-  last_name: string;
-  display_name: string;
-  email: string;
-  password: string;
-  preferred_language: string;
-  is_active: boolean;
-  login_enabled: boolean;
-  is_participant_account: boolean;
-  memberships: MembershipEntry[];
-  selectedTenantId: string;
-  selectedRoleCode: string;
 };
 
 function buildInitialMemberships(user: UserSummary, manageableTenants: TenantSummary[]) {
@@ -47,23 +34,6 @@ function buildInitialMemberships(user: UserSummary, manageableTenants: TenantSum
     }));
 }
 
-function emptyUserForm(manageableTenants: TenantSummary[]): UserFormState {
-  return {
-    first_name: "",
-    last_name: "",
-    display_name: "",
-    email: "",
-    password: "",
-    preferred_language: "de",
-    is_active: true,
-    login_enabled: true,
-    is_participant_account: false,
-    memberships: manageableTenants[0] ? [{ tenant_id: manageableTenants[0].id, role_code: "reader" }] : [],
-    selectedTenantId: manageableTenants[0] ? String(manageableTenants[0].id) : "",
-    selectedRoleCode: "reader"
-  };
-}
-
 export function UserManagement({ initialUsers, manageableTenants }: Props) {
   const showToast = useToast();
   const confirm = useConfirm();
@@ -71,7 +41,9 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
   const [userTab, setUserTab] = useState<"active" | "nologin">("active");
   const [search, setSearch] = useState("");
   const [userModalOpen, setUserModalOpen] = useState(false);
-  const [userForm, setUserForm] = useState<UserFormState>(() => emptyUserForm(manageableTenants));
+  const [userForm, setUserForm] = useState<UserFormState>(() =>
+    emptyUserForm(manageableTenants, { prefillMembership: true })
+  );
   const [formError, setFormError] = useState<string | null>(null);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [loginModalUser, setLoginModalUser] = useState<UserSummary | null>(null);
@@ -79,10 +51,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState<string | null>(null);
 
-  const tenantNameById = useMemo(
-    () => new Map(manageableTenants.map((tenant) => [tenant.id, tenant.name])),
-    [manageableTenants]
-  );
+  const tenantNameById = useMemo(() => buildTenantNameMap(manageableTenants), [manageableTenants]);
   const activeUsers = useMemo(() => users.filter((user) => user.login_enabled), [users]);
   const usersWithoutLogin = useMemo(() => users.filter((user) => !user.login_enabled), [users]);
   const tabUsers = userTab === "active" ? activeUsers : usersWithoutLogin;
@@ -118,8 +87,8 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
       login_enabled: user.login_enabled,
       is_participant_account: user.is_participant_account,
       memberships,
-      selectedTenantId: manageableTenants[0] ? String(manageableTenants[0].id) : "",
-      selectedRoleCode: "reader"
+      pickerTenantId: manageableTenants[0] ? String(manageableTenants[0].id) : "",
+      pickerRoleCode: "reader"
     });
     setFormError(null);
     setUserModalOpen(true);
@@ -160,27 +129,20 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
   }
 
   function upsertMembership() {
-    if (!userForm.selectedTenantId) {
+    if (!userForm.pickerTenantId) {
       return;
     }
-    const tenantId = Number(userForm.selectedTenantId);
-    setUserForm((current) => {
-      const nextMemberships = current.memberships.some((membership) => membership.tenant_id === tenantId)
-        ? current.memberships.map((membership) =>
-            membership.tenant_id === tenantId ? { tenant_id: tenantId, role_code: current.selectedRoleCode } : membership
-          )
-        : [...current.memberships, { tenant_id: tenantId, role_code: current.selectedRoleCode }];
-      return {
-        ...current,
-        memberships: nextMemberships.sort((left, right) => left.tenant_id - right.tenant_id)
-      };
-    });
+    const tenantId = Number(userForm.pickerTenantId);
+    setUserForm((current) => ({
+      ...current,
+      memberships: addOrUpsertMembership(current.memberships, tenantId, current.pickerRoleCode, "upsert")
+    }));
   }
 
   function removeMembership(tenantId: number) {
     setUserForm((current) => ({
       ...current,
-      memberships: current.memberships.filter((membership) => membership.tenant_id !== tenantId)
+      memberships: removeMembershipEntry(current.memberships, tenantId)
     }));
   }
 
@@ -189,21 +151,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
     setFormError(null);
 
     try {
-      const payload = {
-        first_name: userForm.first_name,
-        last_name: userForm.last_name,
-        display_name: userForm.display_name,
-        email: userForm.email,
-        preferred_language: userForm.preferred_language,
-        is_active: userForm.is_active,
-        login_enabled: userForm.login_enabled,
-        memberships: userForm.memberships.map((membership) => ({
-          tenant_id: membership.tenant_id,
-          role_code: membership.role_code,
-          is_active: true
-        })),
-        ...(userForm.password ? { password: userForm.password } : {})
-      };
+      const payload = userFormToPayload(userForm);
 
       const updated = userForm.id
         ? await browserApiFetch<UserSummary>(`/api/users/${userForm.id}`, {
@@ -411,7 +359,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
             <div className="role-picker">
               <label className="field-stack">
                 <span className="field-label">Mandant</span>
-                <select value={userForm.selectedTenantId} onChange={(event) => setUserForm((current) => ({ ...current, selectedTenantId: event.target.value }))}>
+                <select value={userForm.pickerTenantId} onChange={(event) => setUserForm((current) => ({ ...current, pickerTenantId: event.target.value }))}>
                   {manageableTenants.map((tenant) => (
                     <option key={tenant.id} value={tenant.id}>
                       {tenant.name}
@@ -421,7 +369,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
               </label>
               <label className="field-stack">
                 <span className="field-label">Rolle</span>
-                <select value={userForm.selectedRoleCode} onChange={(event) => setUserForm((current) => ({ ...current, selectedRoleCode: event.target.value }))}>
+                <select value={userForm.pickerRoleCode} onChange={(event) => setUserForm((current) => ({ ...current, pickerRoleCode: event.target.value }))}>
                   <option value="reader">Reader</option>
                   <option value="kassier">Kassier</option>
                   <option value="writer">Writer</option>
@@ -429,7 +377,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
                 </select>
               </label>
               <div className="role-picker-action">
-                <button type="button" className="button-inline" onClick={upsertMembership} disabled={!userForm.selectedTenantId}>
+                <button type="button" className="button-inline" onClick={upsertMembership} disabled={!userForm.pickerTenantId}>
                   Rolle zuweisen
                 </button>
               </div>

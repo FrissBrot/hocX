@@ -7,12 +7,20 @@ from sqlalchemy.orm import Session
 
 from fastapi import HTTPException, status
 
-from app.core.security import CurrentUser, hash_password, require_admin
+from app.core.security import CurrentUser, hash_password, require_admin, verify_password
 from app.models import AppUser, Participant, UserTenantRole
 from app.services.access_service import AccessService
 from app.services.tenant_service import build_tenant_profile_image_url
 from app.repositories.user_repository import UserRepository
-from app.schemas.user import TenantMembershipRead, TenantMembershipWrite, UserCreate, UserRead, UserSelfUpdate, UserUpdate
+from app.schemas.user import (
+    TenantMembershipRead,
+    TenantMembershipWrite,
+    UserCreate,
+    UserPasswordChange,
+    UserRead,
+    UserSelfUpdate,
+    UserUpdate,
+)
 
 
 class UserService:
@@ -262,7 +270,41 @@ class UserService:
                 membership for membership in next_memberships if membership.tenant_id in admin_tenant_ids
             ]
 
+        self._guard_last_tenant_admin(db, user_id, next_memberships, role_ids)
         self.repository.replace_memberships(db, user_id=user_id, memberships=next_memberships)
+
+    def _guard_last_tenant_admin(
+        self,
+        db: Session,
+        user_id: int,
+        next_memberships: list[UserTenantRole],
+        role_ids: dict[str, int],
+    ) -> None:
+        """Mirrors AdminTenantUserService's last-admin protection: this is the second,
+        deliberately independent path (see class docstring) that can strip a user's admin
+        membership - it must not be able to leave a tenant without any active admin either."""
+        admin_role_id = role_ids.get("admin")
+        if admin_role_id is None:
+            return
+        tenant_ids_still_admin = {
+            m.tenant_id for m in next_memberships if m.role_id == admin_role_id and m.is_active
+        }
+        tenant_ids_was_admin = {
+            m.tenant_id
+            for m in self.repository.list_memberships(db, user_id=user_id)
+            if m.role_id == admin_role_id and m.is_active
+        }
+        for tenant_id in tenant_ids_was_admin - tenant_ids_still_admin:
+            remaining_admins = [
+                m
+                for m in self.repository.list_memberships(db, tenant_id=tenant_id)
+                if m.role_id == admin_role_id and m.is_active and m.user_id != user_id
+            ]
+            if not remaining_admins:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Der letzte Administrator eines Mandanten kann nicht entfernt oder herabgestuft werden",
+                )
 
     def update_user(self, db: Session, user_id: int, payload: UserUpdate, actor: CurrentUser):
         require_admin(actor)
@@ -386,6 +428,29 @@ class UserService:
         if values:
             self.repository.update(db, user, values)
             db.commit()
+        return self._read_model(db, user)
+
+    def change_own_password(self, db: Session, actor: CurrentUser, payload: UserPasswordChange) -> UserRead:
+        """Self-service password change while logged in. Requires the current password as
+        confirmation (unlike the tenant-admin password-set path in _update_user_core, which
+        an admin can use without knowing the target's old password). On success the new hash
+        is stored and session_revoke_at is bumped so other active sessions using the old
+        password are logged out - the same pattern already used there."""
+        user = self.repository.get(db, actor.user_id)
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        if not user.password_hash or not verify_password(payload.current_password, user.password_hash):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Aktuelles Passwort ist nicht korrekt")
+
+        self.repository.update(
+            db,
+            user,
+            {
+                "password_hash": hash_password(payload.new_password),
+                "session_revoke_at": datetime.now(UTC),
+            },
+        )
+        db.commit()
         return self._read_model(db, user)
 
     def merge_users(self, db: Session, *, source_user_id: int, target_user_id: int) -> UserRead:

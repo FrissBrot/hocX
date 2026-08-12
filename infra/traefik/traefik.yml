@@ -1,5 +1,11 @@
 api:
-  dashboard: true
+  # Was `true` with no router ever defined for it anywhere in this repo (verified: no
+  # reference to api@internal or the dashboard port) - unreachable today only because
+  # nothing routes to it, which is a trap for whoever adds a router later without
+  # realizing the dashboard has no auth in front of it (see audit finding F-Niedrig-1).
+  # Disabled outright since it's unused; re-enable deliberately with an authed router
+  # (e.g. basicauth/forwardauth middleware) if the dashboard is ever actually needed.
+  dashboard: false
 
 entryPoints:
   web:

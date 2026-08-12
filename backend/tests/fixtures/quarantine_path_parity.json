@@ -1,0 +1,8 @@
+{
+  "_comment": "Shared contract for the quarantine->regular-storage path transform, duplicated by design (security isolation, see audit C-Niedrig-3) in backend/app/services/submission_service.py::_move_from_quarantine and abgabebox-backend/app/storage.py::move_from_quarantine. Both strip the leading 'quarantine' path segment and keep everything after it. Tested here against backend's copy (see test_submission_service_quarantine_parity.py); abgabebox-backend has no test harness yet, so its copy isn't independently verified against this fixture - if you add one, point it at this same file.",
+  "cases": [
+    {"input": "quarantine/tenant-1/assignment-2/abc.pdf", "expected": "tenant-1/assignment-2/abc.pdf"},
+    {"input": "quarantine/tenant-42/assignment-7/de305d54-75b4-431b-adb2-eb6b9e546014.docx", "expected": "tenant-42/assignment-7/de305d54-75b4-431b-adb2-eb6b9e546014.docx"},
+    {"input": "quarantine/tenant-1/assignment-2/sub/nested/file.txt", "expected": "tenant-1/assignment-2/sub/nested/file.txt"}
+  ]
+}

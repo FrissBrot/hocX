@@ -35,6 +35,80 @@ from app.repositories.protocol_repository import ProtocolRepository
 from app.schemas.protocol import NextSessionAttendanceEntry, NextSessionRead, ProtocolCreateFromTemplate, ProtocolUpdate
 
 
+def _matrix_row_type(row: dict) -> str:
+    """Resolves a matrix row's type across schema generations: new schema uses `row_type`
+    directly; old schema used `embedded_element_type_id` (takes precedence when present) or
+    fell back to `value_type`, defaulting to "text" if none is set."""
+    if row.get("row_type"):
+        return str(row["row_type"])
+    if row.get("embedded_element_type_id"):
+        return str(row["embedded_element_type_id"])
+    return str(row.get("value_type") or "text")
+
+
+def _matrix_row_config(row: dict) -> dict:
+    """Resolves a matrix row's config across schema generations: new schema stores a
+    `row_config` dict directly; old schema spread relevant keys (event_tag_filter,
+    event_title_filter, use_column_title_as_tag, hide_past_events) onto the row itself,
+    alongside an `embedded_configuration_json` dict."""
+    if isinstance(row.get("row_config"), dict):
+        return row["row_config"]
+    cfg: dict = {}
+    old_embedded = row.get("embedded_configuration_json")
+    if isinstance(old_embedded, dict):
+        cfg.update(old_embedded)
+    for k in ("event_tag_filter", "event_title_filter", "use_column_title_as_tag", "hide_past_events"):
+        if k in row:
+            cfg.setdefault(k, row[k])
+    return cfg
+
+
+def _matrix_build_row_values(column: dict, rows: list[dict]) -> dict:
+    """Builds a matrix column's per-row preset cell values: new schema stores explicit
+    per-row overrides in `row_overrides`; rows without an override fall back to the row's
+    own template_value/template_participant_id/template_participant_ids/template_event_id,
+    picked based on the row's type."""
+    overrides = column.get("row_overrides") or {}
+    result: dict = {}
+    for row in rows:
+        row_id = str(row.get("id") or "")
+        if row_id in overrides and isinstance(overrides[row_id], dict):
+            result[row_id] = overrides[row_id]
+        else:
+            row_type = row.get("row_type") or "text"
+            template_value = row.get("template_value") or ""
+            if row_type == "text" and str(template_value).strip():
+                result[row_id] = {"text_value": str(template_value)}
+            elif row_type == "participant" and row.get("template_participant_id"):
+                result[row_id] = {"participant_id": row["template_participant_id"]}
+            elif row_type == "participants" and row.get("template_participant_ids"):
+                result[row_id] = {"participant_ids": row["template_participant_ids"]}
+            elif row_type == "event" and row.get("template_event_id"):
+                result[row_id] = {"event_id": row["template_event_id"]}
+    return result
+
+
+def _matrix_auto_cell_value(row: dict, col_value: dict) -> dict:
+    """Maps a list entry column value to a matrix cell value based on the row's row_type."""
+    row_type = row.get("row_type") or "text"
+    ids = col_value.get("participant_ids") or []
+    pid = col_value.get("participant_id")
+    eid = col_value.get("event_id")
+    if ids:
+        if row_type == "participants":
+            return {"participant_ids": ids}
+        if row_type == "participant":
+            return {"participant_id": ids[0]}
+    if pid is not None:
+        if row_type == "participants":
+            return {"participant_ids": [pid]}
+        return {"participant_id": pid}
+    if eid is not None:
+        return {"event_id": eid}
+    text = str(col_value.get("text_value") or "").strip()
+    return {"text_value": text} if text else {}
+
+
 class ProtocolService:
     def __init__(self, repository: ProtocolRepository | None = None) -> None:
         self.repository = repository or ProtocolRepository()
@@ -872,6 +946,35 @@ class ProtocolService:
             )
         return [None]
 
+    def _transform_field_row(self, row: dict, *, repeat_context: dict | None) -> dict:
+        """Transforms a single raw ElementDefinition field-row (a "form"-block row, list or
+        matrix) into the runtime row schema stored on ProtocolElementBlock
+        configuration_snapshot_json: text_value/participant_id/participant_ids/event_id/
+        linked_list_*, resolving the row_type vs. (legacy) value_type fallback. Shared by
+        create_from_template's form_type_id branch and _build_event_repeat_form_snapshot
+        (event-repeat "add block" flow) - both need byte-identical behavior since the
+        latter is just a smaller, later invocation of the same transform for one freshly
+        added block."""
+        row_value_type = row.get("row_type") or row.get("value_type") or "text"
+        row_config = row.get("row_config") or {}
+        return {
+            "id": row.get("id"),
+            "label": (
+                self._render_context_text(row.get("label") or "", repeat_context) or ""
+                if row_value_type == "list_entry"
+                else self._render_context_text(row.get("label") or row.get("title") or "Feld", repeat_context) or "Feld"
+            ),
+            "value_type": row_value_type,
+            "sort_index": row.get("sort_index"),
+            "text_value": self._render_context_text(row.get("template_value") or "", repeat_context) or "" if row_value_type == "text" else "",
+            "participant_id": self._coerce_optional_int(row.get("template_participant_id")) if row_value_type == "participant" else None,
+            "participant_ids": self._coerce_int_list(row.get("template_participant_ids")) if row_value_type == "participants" else [],
+            "event_id": self._coerce_optional_int(row.get("template_event_id")) if row_value_type == "event" else None,
+            "linked_list_id": self._coerce_optional_int(row_config.get("linked_list_id")) if row_value_type == "list_entry" else None,
+            "linked_list_entry_id": self._coerce_optional_int(row_config.get("linked_list_entry_id")) if row_value_type == "list_entry" else None,
+            "list_fixed_column": row_config.get("list_fixed_column") if row_value_type == "list_entry" else None,
+        }
+
     def create_from_template(self, db: Session, payload: ProtocolCreateFromTemplate, *, tenant_id: int, created_by: int | None) -> int:
         template = db.get(Template, payload.template_id)
         if template is None:
@@ -1143,28 +1246,7 @@ class ProtocolService:
                     field_rows = (
                         []
                         if linked_list_id
-                        else [
-                            {
-                                "id": row.get("id"),
-                                "label": (
-                                    self._render_context_text(row.get("label") or "", repeat_context) or ""
-                                    if row_value_type == "list_entry"
-                                    else self._render_context_text(row.get("label") or row.get("title") or "Feld", repeat_context) or "Feld"
-                                ),
-                                "value_type": row_value_type,
-                                "sort_index": row.get("sort_index"),
-                                "text_value": self._render_context_text(row.get("template_value") or "", repeat_context) or "" if row_value_type == "text" else "",
-                                "participant_id": self._coerce_optional_int(row.get("template_participant_id")) if row_value_type == "participant" else None,
-                                "participant_ids": self._coerce_int_list(row.get("template_participant_ids")) if row_value_type == "participants" else [],
-                                "event_id": self._coerce_optional_int(row.get("template_event_id")) if row_value_type == "event" else None,
-                                "linked_list_id": self._coerce_optional_int((row.get("row_config") or {}).get("linked_list_id")) if row_value_type == "list_entry" else None,
-                                "linked_list_entry_id": self._coerce_optional_int((row.get("row_config") or {}).get("linked_list_entry_id")) if row_value_type == "list_entry" else None,
-                                "list_fixed_column": (row.get("row_config") or {}).get("list_fixed_column") if row_value_type == "list_entry" else None,
-                            }
-                            for row in _form_raw_rows
-                            # New schema uses row_type; old schema uses value_type
-                            for row_value_type in [row.get("row_type") or row.get("value_type") or "text"]
-                        ]
+                        else [self._transform_field_row(row, repeat_context=repeat_context) for row in _form_raw_rows]
                     )
                     _last_completed_rows = last_completed_payload.get("rows") or []
                     _last_completed_rows_by_entry = {
@@ -1221,28 +1303,6 @@ class ProtocolService:
                     # Backward compat: support both old matrix_columns and new columns
                     _raw_columns = _matrix_cfg.get("columns") or _matrix_cfg.get("matrix_columns") or []
 
-                    def _matrix_row_type(row: dict) -> str:
-                        # New schema: row_type field
-                        if row.get("row_type"):
-                            return str(row["row_type"])
-                        # Old schema: embedded_element_type_id takes precedence
-                        if row.get("embedded_element_type_id"):
-                            return str(row["embedded_element_type_id"])
-                        # Old schema: value_type
-                        return str(row.get("value_type") or "text")
-
-                    def _matrix_row_config(row: dict) -> dict:
-                        if isinstance(row.get("row_config"), dict):
-                            return row["row_config"]
-                        cfg: dict = {}
-                        old_embedded = row.get("embedded_configuration_json")
-                        if isinstance(old_embedded, dict):
-                            cfg.update(old_embedded)
-                        for k in ("event_tag_filter", "event_title_filter", "use_column_title_as_tag", "hide_past_events"):
-                            if k in row:
-                                cfg.setdefault(k, row[k])
-                        return cfg
-
                     matrix_rows = [
                         {
                             "id": row.get("id"),
@@ -1267,27 +1327,6 @@ class ProtocolService:
                         for row in _raw_rows
                     ]
 
-                    def _build_row_values(column: dict, rows: list) -> dict:
-                        # New schema: row_overrides contains per-row preset values
-                        overrides = column.get("row_overrides") or {}
-                        result: dict = {}
-                        for row in rows:
-                            row_id = str(row.get("id") or "")
-                            if row_id in overrides and isinstance(overrides[row_id], dict):
-                                result[row_id] = overrides[row_id]
-                            else:
-                                row_type = row.get("row_type") or "text"
-                                template_value = row.get("template_value") or ""
-                                if row_type == "text" and str(template_value).strip():
-                                    result[row_id] = {"text_value": str(template_value)}
-                                elif row_type == "participant" and row.get("template_participant_id"):
-                                    result[row_id] = {"participant_id": row["template_participant_id"]}
-                                elif row_type == "participants" and row.get("template_participant_ids"):
-                                    result[row_id] = {"participant_ids": row["template_participant_ids"]}
-                                elif row_type == "event" and row.get("template_event_id"):
-                                    result[row_id] = {"event_id": row["template_event_id"]}
-                        return result
-
                     # auto_source: new schema or backward compat from matrix_column_source*
                     _old_src_type = _matrix_cfg.get("matrix_column_source") or ""
                     _auto_source = _matrix_cfg.get("auto_source") or (
@@ -1298,26 +1337,6 @@ class ProtocolService:
                         }
                         if _old_src_type else None
                     )
-
-                    def _auto_cell_value(row: dict, col_value: dict) -> dict:
-                        """Map a list entry column value to a matrix cell value based on row_type."""
-                        row_type = row.get("row_type") or "text"
-                        ids = col_value.get("participant_ids") or []
-                        pid = col_value.get("participant_id")
-                        eid = col_value.get("event_id")
-                        if ids:
-                            if row_type == "participants":
-                                return {"participant_ids": ids}
-                            if row_type == "participant":
-                                return {"participant_id": ids[0]}
-                        if pid is not None:
-                            if row_type == "participants":
-                                return {"participant_ids": [pid]}
-                            return {"participant_id": pid}
-                        if eid is not None:
-                            return {"event_id": eid}
-                        text = str(col_value.get("text_value") or "").strip()
-                        return {"text_value": text} if text else {}
 
                     _matrix_mode = _matrix_cfg.get("mode") or "manual"
                     if _matrix_mode == "auto" and isinstance(_auto_source, dict) and _auto_source.get("type") == "list":
@@ -1340,9 +1359,9 @@ class ProtocolService:
                                 _row_id = str(_row.get("id") or "")
                                 _src_field = _row.get("auto_source_field") or ""
                                 if _src_field == "column_one":
-                                    _row_values[_row_id] = _auto_cell_value(_row, _col1)
+                                    _row_values[_row_id] = _matrix_auto_cell_value(_row, _col1)
                                 elif _src_field == "column_two":
-                                    _row_values[_row_id] = _auto_cell_value(_row, _col2)
+                                    _row_values[_row_id] = _matrix_auto_cell_value(_row, _col2)
                             matrix_columns.append({
                                 "id": f"gen-l-{_entry.id}",
                                 "title": _title,
@@ -1357,7 +1376,7 @@ class ProtocolService:
                                 "title": self._render_context_text(column.get("title") or "", repeat_context) or "",
                                 "event_tag_filter": column.get("event_tag_filter"),
                                 "sort_index": column.get("sort_index"),
-                                "row_values": _build_row_values(column, matrix_rows),
+                                "row_values": _matrix_build_row_values(column, matrix_rows),
                             }
                             for column in _raw_columns
                         ]
@@ -1529,7 +1548,7 @@ class ProtocolService:
             db.add(refreshed_template)
             db.commit()
 
-    def _freeze_responsible_titles(self, db: Session, protocol_id: int) -> None:
+    def _freeze_responsible_titles(self, db: Session, protocol_id: int, *, commit: bool = True) -> None:
         """Called right when a protocol transitions to abgeschlossen: resolves each
         list-linked responsible name one last time and bakes it into section_name_snapshot
         for good, so it keeps showing what the user last saw instead of reverting to the
@@ -1551,9 +1570,12 @@ class ProtocolService:
             db.add(element)
             changed = True
         if changed:
-            db.commit()
+            if commit:
+                db.commit()
+            else:
+                db.flush()
 
-    def _clear_tracked_changes(self, db: Session, protocol_id: int) -> None:
+    def _clear_tracked_changes(self, db: Session, protocol_id: int, *, commit: bool = True) -> None:
         """Called once at vorbereitet -> durchgefuehrt (mirrors _freeze_responsible_titles):
         this is the point where every track-changes mark ever made on this protocol -
         regardless of the toggle's on/off history - permanently disappears. Todos created
@@ -1586,8 +1608,11 @@ class ProtocolService:
                 protocol_text.tracked_baseline_content = None
                 db.add(protocol_text)
 
-        db.commit()
-        list_snapshot_service.clear_tracked_changes_for_protocol(db, protocol_id)
+        if commit:
+            db.commit()
+        else:
+            db.flush()
+        list_snapshot_service.clear_tracked_changes_for_protocol(db, protocol_id, commit=commit)
 
     # Full lifecycle in order. Verified against the DB's own
     # ck_protocol_status CHECK constraint (see models/entities.py) - these are the only
@@ -1622,18 +1647,33 @@ class ProtocolService:
         order - so a validated forward skip (e.g. geplant -> abgeschlossen for Word-Import)
         still fires every hook a step-by-step transition would have fired instead of silently
         skipping them. No-op for backward moves (single-step revert only reuses already-frozen
-        data, nothing to (re-)run)."""
+        data, nothing to (re-)run).
+
+        The status change itself (already applied via repository.update(..., commit=False))
+        and every hook below run uncommitted until the single db.commit() at the end, so a
+        failure mid-sequence rolls back the whole transition instead of leaving the protocol
+        with a new status but an incomplete freeze. _maybe_auto_create_next_protocol is a
+        best-effort follow-up outside that atomic unit - its own failure shouldn't undo an
+        already-successful, already-committed status transition."""
         prev_idx = self._STATUS_ORDER.index(previous_status)
         new_idx = self._STATUS_ORDER.index(updated.status)
+        crossed_into_abgeschlossen = False
         if new_idx > prev_idx:
             for idx in range(prev_idx, new_idx):
                 stage_from, stage_to = self._STATUS_ORDER[idx], self._STATUS_ORDER[idx + 1]
                 if stage_from == "vorbereitet" and stage_to == "durchgeführt":
-                    self._clear_tracked_changes(db, protocol_id)
+                    self._clear_tracked_changes(db, protocol_id, commit=False)
                 if stage_to == "abgeschlossen":
-                    self._freeze_responsible_titles(db, protocol_id)
-                    list_snapshot_service.freeze_list_snapshots_for_protocol(db, protocol_id)
-                    self._maybe_auto_create_next_protocol(db, updated)
+                    self._freeze_responsible_titles(db, protocol_id, commit=False)
+                    list_snapshot_service.freeze_list_snapshots_for_protocol(db, protocol_id, commit=False)
+                    crossed_into_abgeschlossen = True
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        if crossed_into_abgeschlossen:
+            self._maybe_auto_create_next_protocol(db, updated)
         return self.repository.get(db, protocol_id) or updated
 
     def update_protocol(self, db: Session, protocol_id: int, payload: ProtocolUpdate):
@@ -1650,8 +1690,9 @@ class ProtocolService:
             if "document_template_id" in payload.model_fields_set:
                 return self.document_template_service.snapshot_template_for_protocol(db, protocol, document_template_id)
             return protocol
-        updated = self.repository.update(db, protocol, values)
-        if new_status is not None and new_status != previous_status:
+        has_status_transition = new_status is not None and new_status != previous_status
+        updated = self.repository.update(db, protocol, values, commit=not has_status_transition)
+        if has_status_transition:
             updated = self._run_status_transition_hooks(db, protocol_id, previous_status, updated)
         if "document_template_id" in payload.model_fields_set:
             return self.document_template_service.snapshot_template_for_protocol(db, updated, document_template_id)
@@ -1676,27 +1717,7 @@ class ProtocolService:
         field_rows = (
             []
             if linked_list_id
-            else [
-                {
-                    "id": row.get("id"),
-                    "label": (
-                        self._render_context_text(row.get("label") or "", repeat_context) or ""
-                        if row_value_type == "list_entry"
-                        else self._render_context_text(row.get("label") or row.get("title") or "Feld", repeat_context) or "Feld"
-                    ),
-                    "value_type": row_value_type,
-                    "sort_index": row.get("sort_index"),
-                    "text_value": self._render_context_text(row.get("template_value") or "", repeat_context) or "" if row_value_type == "text" else "",
-                    "participant_id": self._coerce_optional_int(row.get("template_participant_id")) if row_value_type == "participant" else None,
-                    "participant_ids": self._coerce_int_list(row.get("template_participant_ids")) if row_value_type == "participants" else [],
-                    "event_id": self._coerce_optional_int(row.get("template_event_id")) if row_value_type == "event" else None,
-                    "linked_list_id": self._coerce_optional_int((row.get("row_config") or {}).get("linked_list_id")) if row_value_type == "list_entry" else None,
-                    "linked_list_entry_id": self._coerce_optional_int((row.get("row_config") or {}).get("linked_list_entry_id")) if row_value_type == "list_entry" else None,
-                    "list_fixed_column": (row.get("row_config") or {}).get("list_fixed_column") if row_value_type == "list_entry" else None,
-                }
-                for row in raw_rows
-                for row_value_type in [row.get("row_type") or row.get("value_type") or "text"]
-            ]
+            else [self._transform_field_row(row, repeat_context=repeat_context) for row in raw_rows]
         )
         for field_row in field_rows:
             if field_row.get("linked_list_id") and field_row.get("linked_list_entry_id"):

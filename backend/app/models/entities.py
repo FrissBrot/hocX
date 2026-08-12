@@ -286,7 +286,7 @@ class WordImportSuggestionOutcome(Base, TimestampMixin):
     was_accepted: Mapped[bool] = mapped_column(Boolean, nullable=False)
 
 
-class WordImportDocument(Base, TimestampMixin):
+class WordImportDocument(Base, TimestampMixin, UpdatedAtMixin):
     __tablename__ = "word_import_document"
     __table_args__ = (
         CheckConstraint("status IN ('eingelesen', 'importiert')", name="ck_word_import_document_status"),

@@ -243,7 +243,12 @@ def _carry_or_stash_previous(new_snapshot: dict, old_snapshot: Any, *, keep_undo
 
 
 def refresh_block_list_snapshot(
-    db: Session, block: ProtocolElementBlock, *, keep_undo: bool, track_changes_active: bool = False
+    db: Session,
+    block: ProtocolElementBlock,
+    *,
+    keep_undo: bool,
+    track_changes_active: bool = False,
+    commit: bool = True,
 ) -> ProtocolElementBlock:
     """Recomputes list_snapshot (whole-list) and/or every row's list_snapshot (row-link)
     from current live data and writes it back onto the block. When track_changes_active,
@@ -292,8 +297,11 @@ def refresh_block_list_snapshot(
     if changed:
         block.configuration_snapshot_json = config
         db.add(block)
-        db.commit()
-        db.refresh(block)
+        if commit:
+            db.commit()
+            db.refresh(block)
+        else:
+            db.flush()
     return block
 
 
@@ -392,7 +400,7 @@ def undo_block_list_snapshot(db: Session, block: ProtocolElementBlock) -> Protoc
     return block
 
 
-def clear_tracked_changes_for_protocol(db: Session, protocol_id: int) -> None:
+def clear_tracked_changes_for_protocol(db: Session, protocol_id: int, *, commit: bool = True) -> None:
     """Called once at vorbereitet -> durchgefuehrt: strips every '_tracked'/'_tracked_before'
     marker and drops every '_tracked: removed' phantom entry from every list-linked block's
     list_snapshot, permanently - mirrors freeze_list_snapshots_for_protocol's shape. Never
@@ -450,16 +458,19 @@ def clear_tracked_changes_for_protocol(db: Session, protocol_id: int) -> None:
         if changed:
             block.configuration_snapshot_json = config
             db.add(block)
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
 
 
-def freeze_list_snapshots_for_protocol(db: Session, protocol_id: int) -> None:
+def freeze_list_snapshots_for_protocol(db: Session, protocol_id: int, *, commit: bool = True) -> None:
     """Called once at durchgefuehrt -> abgeschlossen (mirrors _freeze_responsible_titles):
     resolve every list-linked block one last time and drop any leftover undo point, since
     abgeschlossen protocols are permanently read-only and never show the refresh/undo UI
     again."""
     for block in list_linked_blocks_for_protocol(db, protocol_id):
-        refresh_block_list_snapshot(db, block, keep_undo=False)
+        refresh_block_list_snapshot(db, block, keep_undo=False, commit=commit)
         config = dict(block.configuration_snapshot_json or {})
         changed = False
         list_snapshot = config.get("list_snapshot")
@@ -480,5 +491,8 @@ def freeze_list_snapshots_for_protocol(db: Session, protocol_id: int) -> None:
         if changed:
             block.configuration_snapshot_json = config
             db.add(block)
-            db.commit()
-            db.refresh(block)
+            if commit:
+                db.commit()
+                db.refresh(block)
+            else:
+                db.flush()

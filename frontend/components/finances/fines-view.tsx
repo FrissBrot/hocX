@@ -11,15 +11,11 @@ import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
+import { FINE_TYPE_LABEL } from "@/lib/constants/fine-types";
 import { formatDate, formatDateTime } from "@/lib/utils/format";
 import { AttendanceFineListItem, FinanceAccount } from "@/types/api";
 
 const PAGE_SIZE = 50;
-
-const FINE_TYPE_LABEL: Record<string, string> = {
-  late: "Verspätet",
-  absent: "Unentschuldigt",
-};
 
 type SortKey = "participant_name_snapshot" | "protocol_number" | "fine_type" | "amount" | "status";
 
