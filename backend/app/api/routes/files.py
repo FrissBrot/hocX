@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from app.core.db import get_db
 from app.core.config import settings
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
-from app.models import ProtocolElementBlock
+from app.models import ProtocolElementBlock, ProtocolImage
 from app.schemas.protocol import ProtocolImageRead
 from app.services.access_service import AccessService
 from app.services.file_service import FileService, _safe_storage_path
@@ -37,6 +37,7 @@ async def upload_image(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
+    access_service.ensure_can_read_protocol_block(db, user, protocol_element_block_id)
     protocol_element_block = db.get(ProtocolElementBlock, protocol_element_block_id)
     if protocol_element_block is None:
         raise HTTPException(status_code=404, detail="Protocol element block not found")
@@ -61,6 +62,10 @@ def delete_image(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
+    protocol_image = db.get(ProtocolImage, image_id)
+    if protocol_image is None:
+        raise HTTPException(status_code=404, detail="Image not found")
+    access_service.ensure_can_read_protocol_block(db, user, protocol_image.protocol_element_block_id)
     try:
         deleted = service.delete_protocol_image(db, image_id)
     except SQLAlchemyError as exc:

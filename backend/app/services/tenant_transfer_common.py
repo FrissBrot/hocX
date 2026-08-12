@@ -44,6 +44,18 @@ LOOKUP_COLUMNS: dict[str, dict[str, type]] = {
     "user_tenant_role": {"role_id": Role},
 }
 
+REDACTED_PASSWORD_HASH_MARKER = "REDACTED:not-a-tenant-member"
+"""Placeholder written into app_user.password_hash by TenantExportService for exported
+users who are only referenced as metadata (e.g. created_by on a template/protocol) but
+are NOT actual members of the exported tenant (no user_tenant_role row for it). A tenant
+export is meant to be handed to a completely different, potentially untrusted hocX
+installation - bundling a real password_hash for someone who isn't even part of the
+transferred tenant would leak their credentials to that installation's operators.
+TenantImportService recognizes this marker and, when it has to create a brand new
+account for such a row, generates a random unusable hash instead of ever writing this
+literal string to the password_hash column (which is NOT NULL and expects a real
+pbkdf2_sha256-formatted hash)."""
+
 USER_ID_COLUMNS: dict[str, list[str]] = {
     "participant": ["app_user_id"],
     "template": ["created_by"],

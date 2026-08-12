@@ -24,6 +24,42 @@ def protocol_channel(protocol_id: int) -> str:
     return f"hocx:protocol:{protocol_id}:events"
 
 
+def _parse_lock_payload(raw: str | None) -> dict | None:
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def get_lock_holder_sync(redis_client, protocol_id: int, field_key: str) -> dict | None:
+    """Sync counterpart of CollaborationService.get_lock_holder, for REST write endpoints
+    (protocol_elements.py) which run in a plain sync request handler with no event loop to
+    await the async Redis client in. Same key format (_lock_key) as everything else here."""
+    return _parse_lock_payload(redis_client.get(_lock_key(protocol_id, field_key)))
+
+
+def conflicting_lock_holder_sync(redis_client, protocol_id: int, field_key: str, user_id: int) -> dict | None:
+    """For REST writes: returns the lock holder info if `field_key` - or, for matrix blocks
+    which lock per-cell (`block-<id>-cell-<row>-<col>`) rather than the whole block
+    (`block-<id>`), any cell lock nested under it - is currently held by a *different* user
+    than `user_id`. Returns None (write allowed) when unlocked entirely or already owned by
+    the caller. Deliberately does NOT require the caller to hold a lock at all: several
+    legitimate write paths (matrix row/column edits, attendance batch edits, API-only
+    writers) never call lock_request in the first place, and requiring one here would break
+    those single-player workflows instead of the two-editors-collide case this guards."""
+    holder = get_lock_holder_sync(redis_client, protocol_id, field_key)
+    if holder is not None and int(holder.get("user_id", -1)) != user_id:
+        return holder
+    prefix = _lock_key(protocol_id, f"{field_key}-cell-")
+    for key in redis_client.scan_iter(match=f"{prefix}*"):
+        data = _parse_lock_payload(redis_client.get(key))
+        if data is not None and int(data.get("user_id", -1)) != user_id:
+            return data
+    return None
+
+
 class CollaborationService:
     """Ephemeral Redis-backed presence, field locks and pub/sub for live protocol editing.
 
@@ -78,6 +114,27 @@ class CollaborationService:
         await self.redis.set(key, payload, ex=LOCK_TTL_SECONDS)
         await self.redis.sadd(_lock_index_key(protocol_id, connection_id), field_key)
         return None
+
+    async def get_lock_holder(self, protocol_id: int, field_key: str) -> dict | None:
+        """Non-mutating lock lookup - unlike refresh_lock, doesn't touch the TTL. Used to
+        verify ownership before honoring a field_update broadcast."""
+        return _parse_lock_payload(await self.redis.get(_lock_key(protocol_id, field_key)))
+
+    async def holds_lock_for_broadcast(self, protocol_id: int, field_key: str, user_id: int) -> bool:
+        """Whether `user_id` may broadcast a field_update for `field_key`: either they hold
+        that exact lock, or - for matrix blocks, which lock per-cell
+        (`block-<id>-cell-<row>-<col>`) rather than the whole block while still saving and
+        broadcasting under the whole-block key `block-<id>` - they hold at least one cell
+        lock nested under it."""
+        holder = await self.get_lock_holder(protocol_id, field_key)
+        if holder is not None and int(holder.get("user_id", -1)) == user_id:
+            return True
+        prefix = _lock_key(protocol_id, f"{field_key}-cell-")
+        async for key in self.redis.scan_iter(match=f"{prefix}*"):
+            data = _parse_lock_payload(await self.redis.get(key))
+            if data is not None and int(data.get("user_id", -1)) == user_id:
+                return True
+        return False
 
     async def refresh_lock(self, protocol_id: int, field_key: str, user_id: int) -> bool:
         key = _lock_key(protocol_id, field_key)

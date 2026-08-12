@@ -17,6 +17,7 @@ export default async function SettingsPage() {
           <DocumentTemplateManager
             initialTemplates={documentTemplates ?? []}
             initialParts={documentTemplateParts ?? []}
+            tenantId={session.current_tenant?.id ?? null}
           />
         </div>
       </section>

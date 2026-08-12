@@ -6,6 +6,7 @@ import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
+import { useConfirm } from "@/contexts/confirm-context";
 import { PlatformAdminSummary } from "@/types/api";
 
 type Props = {
@@ -15,6 +16,7 @@ type Props = {
 
 export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props) {
   const showToast = useToast();
+  const confirm = useConfirm();
   const [admins, setAdmins] = useState(initialAdmins);
   const [modalOpen, setModalOpen] = useState(false);
   const [email, setEmail] = useState("");
@@ -40,6 +42,14 @@ export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props)
   }
 
   async function toggleActive(admin: PlatformAdminSummary) {
+    if (admin.is_active) {
+      const ok = await confirm({
+        message: `"${admin.display_name}" deaktivieren? Der Account verliert damit sofort den Zugriff auf das Platform-Admin-Panel.`,
+        tone: "danger",
+        confirmLabel: "Deaktivieren",
+      });
+      if (!ok) return;
+    }
     try {
       const updated = await browserApiFetch<PlatformAdminSummary>(`/api/admin/admins/${admin.id}`, {
         method: "PATCH",

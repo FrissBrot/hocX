@@ -164,9 +164,24 @@ def create_template_element(
         raise HTTPException(status_code=404, detail="Template not found")
     try:
         return template_element_service.create_template_element(db, template_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Template element could not be created") from exc
+
+
+def _ensure_template_element_in_tenant(db: Session, user: CurrentUser, template_element_id: int) -> None:
+    """Same tenant check create_template_element/list_template_elements above already do via
+    their template_id path param - here the id in the path is the *element's* id, so we have
+    to resolve its owning template ourselves before allowing a write. 404 (not 403) on
+    mismatch, matching this file's existing convention of not confirming a foreign id exists."""
+    entity = template_element_service.repository.get(db, template_element_id)
+    if entity is None:
+        raise HTTPException(status_code=404, detail="Template element not found")
+    template = service.get_template(db, entity.template_id)
+    if template is None or template.tenant_id != user.current_tenant_id:
+        raise HTTPException(status_code=404, detail="Template element not found")
 
 
 @router.patch("/template-elements/{template_element_id}", response_model=TemplateElementRead)
@@ -177,6 +192,7 @@ def patch_template_element(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_admin(user)
+    _ensure_template_element_in_tenant(db, user, template_element_id)
     try:
         template_element = template_element_service.update_template_element(db, template_element_id, payload)
     except SQLAlchemyError as exc:
@@ -195,6 +211,7 @@ def patch_template_element_behavior(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_admin(user)
+    _ensure_template_element_in_tenant(db, user, template_element_id)
     try:
         template_element = template_element_service.update_block_behavior(db, template_element_id, payload)
     except ValueError as exc:
@@ -214,6 +231,7 @@ def delete_template_element(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_admin(user)
+    _ensure_template_element_in_tenant(db, user, template_element_id)
     deleted = template_element_service.delete_template_element(db, template_element_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Template element not found")

@@ -128,6 +128,9 @@ async def patch_document_template_part(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_admin(user)
+    current = service.get_document_template_part(db, part_id)
+    if current is None or current.tenant_id != user.current_tenant_id:
+        raise HTTPException(status_code=404, detail="Document template part not found")
     payload = DocumentTemplatePartUpdate(
         code=code,
         name=name,
@@ -153,6 +156,9 @@ def delete_document_template_part(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_admin(user)
+    current = service.get_document_template_part(db, part_id)
+    if current is None or current.tenant_id != user.current_tenant_id:
+        raise HTTPException(status_code=404, detail="Document template part not found")
     try:
         deleted = service.delete_document_template_part(db, part_id)
     except SQLAlchemyError as exc:

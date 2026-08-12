@@ -4,8 +4,9 @@ from datetime import date
 
 from sqlalchemy import select
 
-from app.core.security import CurrentUser
+from app.core.security import CurrentUser, hash_password
 from app.models.entities import (
+    AppUser,
     AttendanceFine,
     ElementDefinition,
     ElementType,
@@ -20,11 +21,13 @@ from app.models.entities import (
     ProtocolText,
     ProtocolTodo,
     RenderType,
+    Role,
     Template,
     TemplateElement,
     TemplateParticipant,
     Tenant,
     TodoStatus,
+    UserTenantRole,
     WordImportProfile,
 )
 
@@ -168,6 +171,45 @@ def make_protocol_todo(
     db.add(todo)
     db.flush()
     return todo
+
+
+def role_id_by_code(db, code: str) -> int:
+    """Roles (admin/writer/reader/kassier) are pre-seeded reference data, same as
+    ElementType/TodoStatus - never created by tests, only looked up."""
+    return db.scalar(select(Role.id).where(Role.code == code))
+
+
+def make_app_user(
+    db,
+    email: str = "test@example.com",
+    password: str = "correct horse battery staple",
+    is_active: bool = True,
+    first_name: str = "Test",
+    last_name: str = "User",
+) -> AppUser:
+    user = AppUser(
+        email=email,
+        password_hash=hash_password(password),
+        first_name=first_name,
+        last_name=last_name,
+        display_name=f"{first_name} {last_name}",
+        is_active=is_active,
+    )
+    db.add(user)
+    db.flush()
+    return user
+
+
+def make_user_tenant_role(db, user_id: int, tenant_id: int, role_code: str = "writer", is_active: bool = True) -> UserTenantRole:
+    membership = UserTenantRole(
+        user_id=user_id,
+        tenant_id=tenant_id,
+        role_id=role_id_by_code(db, role_code),
+        is_active=is_active,
+    )
+    db.add(membership)
+    db.flush()
+    return membership
 
 
 def make_current_user(tenant_id: int, role: str = "writer", user_id: int = 1) -> CurrentUser:

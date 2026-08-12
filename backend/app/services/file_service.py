@@ -187,7 +187,7 @@ class FileService:
         stored_file = StoredFile(
             tenant_id=tenant_id,
             original_name=file.filename or generated_name,
-            mime_type=file.content_type,
+            mime_type=mime,
             storage_path=str(relative_path),
             latex_path=None,
             file_size_bytes=len(content),

@@ -8,7 +8,7 @@ from app.models import PlatformAdmin
 from app.schemas.admin import AdminLoginRequest, AdminSessionRead
 from app.schemas.oidc import PlatformOidcConfigPublic
 from app.services.admin_auth_service import AdminAuthService
-from app.services.platform_oidc_service import PlatformOidcService
+from app.services.platform_oidc_service import PlatformOidcService, sanitize_redirect_to
 
 router = APIRouter()
 service = AdminAuthService()
@@ -40,8 +40,10 @@ def get_oidc_public_config(db: Session = Depends(get_db)):
 
 @router.get("/oidc/authorize")
 def oidc_authorize(request: Request, redirect_to: str = "/", db: Session = Depends(get_db)):
+    # Validated again inside build_authorize_url (defense in depth) - sanitizing here too since
+    # this route is the first point that ever sees the client-controlled query param.
     base = str(request.base_url).rstrip("/")
-    url = oidc_service.build_authorize_url(db, base, redirect_to)
+    url = oidc_service.build_authorize_url(db, base, sanitize_redirect_to(redirect_to))
     return RedirectResponse(url, status_code=302)
 
 
@@ -54,6 +56,7 @@ def oidc_callback(code: str, state: str, request: Request, db: Session = Depends
         raise HTTPException(status_code=403, detail="Admin account not available")
     # Cookie must be set directly on the returned Response - see issue_admin_session_cookie /
     # the equivalent customer-facing note in core.security.issue_session_cookie for why.
-    redirect = RedirectResponse(url=redirect_to, status_code=302)
+    # sanitize_redirect_to again here (defense in depth) right before the final redirect.
+    redirect = RedirectResponse(url=sanitize_redirect_to(redirect_to), status_code=302)
     issue_admin_session_cookie(redirect, admin.id)
     return redirect

@@ -2,6 +2,11 @@ services:
   traefik:
     image: traefik:v3.1
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       - frontend
       - backend
@@ -24,6 +29,11 @@ services:
   db:
     image: postgres:16
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     env_file:
       - .env
     environment:
@@ -45,6 +55,11 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -55,6 +70,11 @@ services:
     build:
       context: ./backend
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     env_file:
       - .env
     environment:
@@ -148,6 +168,11 @@ services:
       context: ./frontend
       target: deps
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     env_file:
       - .env
     environment:
@@ -174,6 +199,11 @@ services:
       context: ./frontend
       target: deps
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     env_file:
       - .env
     environment:
@@ -200,6 +230,11 @@ services:
     build:
       context: ./abgabebox-backend
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     env_file:
       - .env
     environment:
@@ -237,10 +272,29 @@ services:
       - "traefik.http.middlewares.abgabebox-upload-ratelimit.ratelimit.average=5"
       - "traefik.http.middlewares.abgabebox-upload-ratelimit.ratelimit.burst=3"
       - "traefik.http.middlewares.abgabebox-upload-ratelimit.ratelimit.period=1m"
+      # Dedizierter Router fuer die oeffentlichen, unauthentifizierten GET-Endpunkte
+      # (assignments/elements listing+detail) - ohne dieses Limit liessen sich Mandanten-
+      # Slugs, Auftraege und Elemente unbegrenzt durchprobieren/enumerieren. Grosszuegiger
+      # als der Upload-Limit, da normales Blaettern/Neuladen der Abgabebox-Seite mehrere
+      # GETs pro Sekunde ausloesen kann.
+      - "traefik.http.routers.abgabebox-public-get.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && PathPrefix(`/api/public`) && Method(`GET`)"
+      - "traefik.http.routers.abgabebox-public-get.entrypoints=websecure"
+      - "traefik.http.routers.abgabebox-public-get.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.abgabebox-public-get.priority=200"
+      - "traefik.http.routers.abgabebox-public-get.service=abgabebox-backend"
+      - "traefik.http.routers.abgabebox-public-get.middlewares=abgabebox-public-ratelimit"
+      - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.average=30"
+      - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.burst=20"
+      - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.period=1m"
 
   clamav:
     image: clamav/clamav:latest
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
       - clamav_db:/var/lib/clamav
     healthcheck:
@@ -255,6 +309,11 @@ services:
       context: ./abgabebox-frontend
       target: deps
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     env_file:
       - .env
     environment:
@@ -273,7 +332,7 @@ services:
       - ./abgabebox-frontend:/app
       - /app/node_modules
       - /app/.next
-    command: sh -c "npm run build && npm start"
+    command: sh -c "npm run build && rm -rf .next/standalone/public .next/standalone/.next/static && cp -r public .next/standalone/public && cp -r .next/static .next/standalone/.next/static && HOSTNAME=0.0.0.0 PORT=3000 node .next/standalone/server.js"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.abgabebox-frontend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`)"
@@ -287,6 +346,11 @@ services:
     build:
       context: ./docs-site
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.hocx-docs.rule=Host(`${TRAEFIK_DOCS_DOMAIN}`)"

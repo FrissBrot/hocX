@@ -8,6 +8,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
+import { useConfirm } from "@/contexts/confirm-context";
 import { TenantDomain, TenantSummary } from "@/types/api";
 
 type Props = {
@@ -25,6 +26,7 @@ type TenantFormState = {
 
 export function TenantSettingsManager({ initialTenant }: Props) {
   const showToast = useToast();
+  const confirm = useConfirm();
   const tenantId = initialTenant.id;
 
   const [activeTab, setActiveTab] = useState<Tab>("general");
@@ -89,7 +91,13 @@ export function TenantSettingsManager({ initialTenant }: Props) {
     setWizardOpen(true);
   }
 
-  async function deleteDomain(domainId: number) {
+  async function deleteDomain(domainId: number, hostname: string) {
+    const ok = await confirm({
+      message: `Domain "${hostname}" wirklich entfernen? Der Zugriff über diese Adresse endet sofort.`,
+      tone: "danger",
+      confirmLabel: "Entfernen",
+    });
+    if (!ok) return;
     setDomainBusyId(domainId);
     try {
       await browserApiFetch<{ message: string }>(`/api/tenants/${tenantId}/domains/${domainId}`, { method: "DELETE" });
@@ -199,7 +207,7 @@ export function TenantSettingsManager({ initialTenant }: Props) {
                         type="button"
                         className="button-inline button-danger"
                         disabled={domainBusyId === d.id}
-                        onClick={() => deleteDomain(d.id)}
+                        onClick={() => deleteDomain(d.id, d.domain)}
                       >
                         {domainBusyId === d.id ? "…" : "Entfernen"}
                       </button>

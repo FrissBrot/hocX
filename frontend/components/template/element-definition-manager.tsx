@@ -8,6 +8,7 @@ import { Modal } from "@/components/ui/modal";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { SearchInput } from "@/components/ui/search-input";
 import { TagInput } from "@/components/ui/tag-input";
+import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { useTagConfig } from "@/lib/hooks/use-tag-config";
 import { browserApiFetch } from "@/lib/api/client";
@@ -21,6 +22,7 @@ type ElementDefinitionManagerProps = {
   availableEvents?: EventSummary[];
   availableLists?: StructuredListDefinition[];
   availableAccounts?: { id: number; name: string; currency_label: string }[];
+  tenantId: number | null;
 };
 
 type DefinitionFormState = {
@@ -824,9 +826,11 @@ export function ElementDefinitionManager({
   availableEvents,
   availableLists,
   availableAccounts = [],
+  tenantId,
 }: ElementDefinitionManagerProps) {
   const { tagConfig, updateTagColor, renameTag } = useTagConfig();
   const showToast = useToast();
+  const confirm = useConfirm();
   const [definitions, setDefinitions] = useState(initialDefinitions);
   const [selectedDefinitionId, setSelectedDefinitionId] = useState<number | null>(initialDefinitions[0]?.id ?? null);
   const [definitionForm, setDefinitionForm] = useState<DefinitionFormState>(
@@ -1263,7 +1267,7 @@ export function ElementDefinitionManager({
       const created = await browserApiFetch<ElementDefinition>("/api/element-definitions", {
         method: "POST",
         body: JSON.stringify({
-          tenant_id: 1,
+          tenant_id: tenantId,
           title: createDefinitionForm.title,
           description: createDefinitionForm.description || null,
           is_active: true,
@@ -1301,6 +1305,12 @@ export function ElementDefinitionManager({
   }
 
   async function deleteDefinition(definitionId: number) {
+    const ok = await confirm({
+      message: "Element endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+      tone: "danger",
+      confirmLabel: "Löschen"
+    });
+    if (!ok) return;
     try {
       await browserApiFetch(`/api/element-definitions/${definitionId}`, { method: "DELETE" });
       const nextDefinitions = definitions.filter((definition) => definition.id !== definitionId);
@@ -1467,6 +1477,12 @@ export function ElementDefinitionManager({
 
   async function deleteBlock(blockId: number) {
     if (!selectedDefinition) return;
+    const ok = await confirm({
+      message: "Block endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+      tone: "danger",
+      confirmLabel: "Löschen"
+    });
+    if (!ok) return;
     const nextBlocks = resequenceBlocks(selectedDefinition.blocks.filter((block) => block.id !== blockId));
     await saveBlocks(nextBlocks, "Block wurde gelöscht");
   }

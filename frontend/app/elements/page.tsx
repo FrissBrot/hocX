@@ -25,6 +25,7 @@ export default async function ElementsPage() {
           availableEvents={events}
           availableLists={lists}
           availableAccounts={accounts}
+          tenantId={session.current_tenant?.id ?? null}
         />
       </section>
     </AppShell>

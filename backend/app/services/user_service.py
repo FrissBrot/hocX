@@ -413,7 +413,11 @@ class UserService:
                 detail="Users cannot be merged because both are already linked to participants in the same tenant",
             )
 
-        role_priority = {"reader": 1, "writer": 2, "admin": 3}
+        # kassier = reader + full finance/fines access (see main.py role descriptions); writer
+        # and admin already include finance access too (require_finance_access, access_service),
+        # so every permission kassier grants is a strict subset of writer's - the roles form a
+        # single linear scale reader < kassier < writer < admin, not an orthogonal add-on.
+        role_priority = {"reader": 1, "kassier": 2, "writer": 3, "admin": 4}
 
         merged_memberships: dict[int, TenantMembershipWrite] = {}
         for membership in self._memberships_for_user(db, target_user_id) + self._memberships_for_user(db, source_user_id):

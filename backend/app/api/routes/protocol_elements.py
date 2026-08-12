@@ -21,7 +21,7 @@ from app.schemas.protocol import (
 from app.services import list_snapshot_service
 from app.services.autosave_service import AutosaveService
 from app.services.access_service import AccessService
-from app.services.collaboration_service import protocol_channel
+from app.services.collaboration_service import conflicting_lock_holder_sync, protocol_channel
 from app.services.protocol_element_service import ProtocolElementService
 from app.services.protocol_service import ProtocolService
 from app.services.responsible_label_service import resolve_display_section_title
@@ -50,20 +50,38 @@ def _broadcast_block_update(protocol_id: int, block: ProtocolElementBlock, user:
 
 
 def _block_and_protocol_or_404(db: Session, user: CurrentUser, protocol_element_block_id: int):
-    """Shared guard for the three list-snapshot routes below: resolves the block + its
+    """Shared guard for the list-snapshot/text/config routes below: resolves the block + its
     protocol, 404s if either is missing/inaccessible, 409s if the protocol is already
-    abgeschlossen (permanently frozen, refresh/undo no longer apply)."""
+    abgeschlossen (permanently frozen, edits/refresh/undo no longer apply). The 404/409
+    protocol check itself lives on ProtocolService so app/api/routes/todos.py can share the
+    exact same logic for todos, which hang off a protocol_id rather than a block."""
     access_service.ensure_can_read_protocol_block(db, user, protocol_element_block_id)
     block = db.get(ProtocolElementBlock, protocol_element_block_id)
     if block is None:
         raise HTTPException(status_code=404, detail="Protocol element block not found")
     protocol_id = access_service.repository.protocol_id_for_block(db, protocol_element_block_id=protocol_element_block_id)
-    protocol = protocol_service.get_protocol(db, protocol_id)
-    if protocol is None:
-        raise HTTPException(status_code=404, detail="Protocol not found")
-    if protocol.status == "abgeschlossen":
-        raise HTTPException(status_code=409, detail="Protocol is already abgeschlossen")
+    protocol = protocol_service.get_protocol_or_404_not_frozen(db, protocol_id)
     return block, protocol
+
+
+def _ensure_block_not_locked_by_other(protocol_id: int, protocol_element_block_id: int, user: CurrentUser) -> None:
+    """The collaboration WS layer's Redis field lock (field_key `block-<id>`, same format
+    collaboration_ws.py's field_update handler now itself enforces before broadcasting) used
+    to be purely cosmetic here - a client that skipped the WS lock entirely (or never opened
+    it at all) could still PATCH/PUT straight through with no server-side check. This closes
+    that gap for the two endpoints that do the actual field write (config PATCH, text PUT):
+    reject with 409 only if a *different* user demonstrably holds the lock right now. A write
+    proceeds normally when nobody holds it - most writes never acquire a lock at all (matrix
+    row/column edits, attendance batch edits, anything outside the click-to-edit text/config
+    fields) and must keep working - or when the caller itself is the holder."""
+    holder = conflicting_lock_holder_sync(
+        get_redis_sync(), protocol_id, f"block-{protocol_element_block_id}", user.user_id
+    )
+    if holder is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Wird gerade von {holder.get('display_name', 'einer anderen Person')} bearbeitet",
+        )
 
 
 def _block_to_read(block) -> ProtocolElementBlockRead:
@@ -145,7 +163,8 @@ def patch_protocol_element_block(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
-    access_service.ensure_can_read_protocol_block(db, user, protocol_element_block_id)
+    _, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
+    _ensure_block_not_locked_by_other(protocol.id, protocol_element_block_id, user)
     try:
         protocol_element_block = service.update_protocol_element_block(db, protocol_element_block_id, payload)
     except SQLAlchemyError as exc:
@@ -286,7 +305,7 @@ def accept_text_tracked_changes(
 ):
     """'Ausblenden' for a text block's red tracked-change highlight (whole block)."""
     require_writer(user)
-    access_service.ensure_can_read_protocol_block(db, user, protocol_element_block_id)
+    _block_and_protocol_or_404(db, user, protocol_element_block_id)
     try:
         result = autosave_service.accept_tracked_changes(db, protocol_element_block_id)
     except SQLAlchemyError as exc:
@@ -305,10 +324,9 @@ def put_protocol_text(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
-    access_service.ensure_can_read_protocol_block(db, user, protocol_element_block_id)
-    protocol_id = access_service.repository.protocol_id_for_block(db, protocol_element_block_id=protocol_element_block_id)
-    protocol = protocol_service.get_protocol(db, protocol_id) if protocol_id else None
-    track_changes_active = bool(protocol and protocol.status == "geplant" and protocol.track_changes_enabled)
+    _, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
+    _ensure_block_not_locked_by_other(protocol.id, protocol_element_block_id, user)
+    track_changes_active = bool(protocol.status == "geplant" and protocol.track_changes_enabled)
     try:
         result = autosave_service.save_text_block(
             db, protocol_element_block_id, payload.content, track_changes_active=track_changes_active

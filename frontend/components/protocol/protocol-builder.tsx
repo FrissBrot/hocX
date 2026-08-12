@@ -10,6 +10,7 @@ import { Menu, MenuItem, Popover } from "@/components/ui/popover";
 import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
+import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { usePdfExport, PdfExportResult } from "@/lib/hooks/use-pdf-export";
@@ -52,6 +53,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
     setHasMore(initialProtocols.length === PAGE_SIZE);
   }, [initialProtocols]);
   const showToast = useToast();
+  const confirm = useConfirm();
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [availableTemplates, setAvailableTemplates] = useState(templates);
   const { busyByProtocol: pdfBusyByProtocol, generatePdf, openOrGeneratePdf } = usePdfExport();
@@ -146,6 +148,12 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
   }
 
   async function deleteProtocol(protocolId: number) {
+    const ok = await confirm({
+      message: "Protokoll endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+      tone: "danger",
+      confirmLabel: "Löschen"
+    });
+    if (!ok) return;
     try {
       await browserApiFetch<{ message: string }>(`/api/protocols/${protocolId}`, { method: "DELETE" });
       setProtocols((current) => current.filter((protocol) => protocol.id !== protocolId));

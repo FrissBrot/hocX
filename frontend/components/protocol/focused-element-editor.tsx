@@ -2,6 +2,8 @@
 
 import { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 
+import { useConfirm } from "@/contexts/confirm-context";
+import { useToast } from "@/contexts/toast-context";
 import { Badge } from "@/components/ui/badge";
 import { TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
 import { StructuredListTable, TrackedEntryInfo } from "@/components/lists/structured-list-table";
@@ -213,6 +215,8 @@ export function FocusedElementEditor({
   updateTagColor: (tag: string, color: string) => Promise<void>;
   renameTag: (oldTag: string, newTag: string) => Promise<void>;
 }) {
+  const confirm = useConfirm();
+  const showToast = useToast();
   const sectionRef = useRef<HTMLElement | null>(null);
   const didMountRef = useRef(false);
 
@@ -2755,7 +2759,16 @@ export function FocusedElementEditor({
                                         type="button"
                                         className="button-ghost button-icon button-icon-danger"
                                         title="Termin löschen"
-                                        onClick={() => void deleteEventFromBlock(block.id, eventRow.id)}
+                                        aria-label="Termin löschen"
+                                        onClick={async () => {
+                                          const ok = await confirm({
+                                            message: `Termin "${eventRow.title}" endgültig löschen? Das entfernt ihn aus allen Protokollen.`,
+                                            tone: "danger",
+                                            confirmLabel: "Löschen"
+                                          });
+                                          if (!ok) return;
+                                          await deleteEventFromBlock(block.id, eventRow.id);
+                                        }}
                                       >
                                         x
                                       </button>
@@ -2805,48 +2818,62 @@ export function FocusedElementEditor({
                 const hasFineConfig = fineAccountId > 0 && (fineAmountLate > 0 || fineAmountAbsent > 0);
 
                 async function handleAttendanceChange(participant: ParticipantSummary, newStatus: string) {
+                  const previousEntries = attendanceEntries;
                   const nextEntries = attendanceEntries.filter((entry) => Number(entry.participant_id) !== participant.id);
                   nextEntries.push({ participant_id: participant.id, participant_name: participant.display_name, status: newStatus });
-                  await saveBlockConfiguration(block.id, { ...blockConfig, attendance_entries: nextEntries });
+                  try {
+                    await saveBlockConfiguration(block.id, { ...blockConfig, attendance_entries: nextEntries });
 
-                  if (hasFineConfig) {
-                    const existingFine = protocolFines.find(
-                      (f) => f.participant_id === participant.id && (f.fine_type === "late" || f.fine_type === "absent") && f.status === "pending"
-                    );
+                    if (hasFineConfig) {
+                      const existingFine = protocolFines.find(
+                        (f) => f.participant_id === participant.id && (f.fine_type === "late" || f.fine_type === "absent") && f.status === "pending"
+                      );
 
-                    if (newStatus === "late" && fineAmountLate > 0) {
-                      if (!existingFine || existingFine.fine_type !== "late") {
+                      if (newStatus === "late" && fineAmountLate > 0) {
+                        if (!existingFine || existingFine.fine_type !== "late") {
+                          if (existingFine) {
+                            await browserApiFetch(`/api/fines/${existingFine.id}`, { method: "DELETE" });
+                            setProtocolFines((prev) => prev.filter((f) => f.id !== existingFine.id));
+                          }
+                          const created = await browserApiFetch<AttendanceFine>("/api/fines", {
+                            method: "POST",
+                            body: JSON.stringify({ protocol_id: protocol.id, participant_id: participant.id, participant_name_snapshot: participant.display_name, fine_type: "late", amount: fineAmountLate, account_id: fineAccountId }),
+                          });
+                          if (created) setProtocolFines((prev) => [...prev.filter((f) => !(f.participant_id === participant.id && f.status === "pending")), created]);
+                        }
+                      } else if (newStatus === "absent" && fineAmountAbsent > 0) {
+                        if (!existingFine || existingFine.fine_type !== "absent") {
+                          if (existingFine) {
+                            await browserApiFetch(`/api/fines/${existingFine.id}`, { method: "DELETE" });
+                            setProtocolFines((prev) => prev.filter((f) => f.id !== existingFine.id));
+                          }
+                          const created = await browserApiFetch<AttendanceFine>("/api/fines", {
+                            method: "POST",
+                            body: JSON.stringify({ protocol_id: protocol.id, participant_id: participant.id, participant_name_snapshot: participant.display_name, fine_type: "absent", amount: fineAmountAbsent, account_id: fineAccountId }),
+                          });
+                          if (created) setProtocolFines((prev) => [...prev.filter((f) => !(f.participant_id === participant.id && f.status === "pending")), created]);
+                        }
+                      } else {
                         if (existingFine) {
                           await browserApiFetch(`/api/fines/${existingFine.id}`, { method: "DELETE" });
                           setProtocolFines((prev) => prev.filter((f) => f.id !== existingFine.id));
                         }
-                        const created = await browserApiFetch<AttendanceFine>("/api/fines", {
-                          method: "POST",
-                          body: JSON.stringify({ protocol_id: protocol.id, participant_id: participant.id, participant_name_snapshot: participant.display_name, fine_type: "late", amount: fineAmountLate, account_id: fineAccountId }),
-                        });
-                        if (created) setProtocolFines((prev) => [...prev.filter((f) => !(f.participant_id === participant.id && f.status === "pending")), created]);
-                      }
-                    } else if (newStatus === "absent" && fineAmountAbsent > 0) {
-                      if (!existingFine || existingFine.fine_type !== "absent") {
-                        if (existingFine) {
-                          await browserApiFetch(`/api/fines/${existingFine.id}`, { method: "DELETE" });
-                          setProtocolFines((prev) => prev.filter((f) => f.id !== existingFine.id));
-                        }
-                        const created = await browserApiFetch<AttendanceFine>("/api/fines", {
-                          method: "POST",
-                          body: JSON.stringify({ protocol_id: protocol.id, participant_id: participant.id, participant_name_snapshot: participant.display_name, fine_type: "absent", amount: fineAmountAbsent, account_id: fineAccountId }),
-                        });
-                        if (created) setProtocolFines((prev) => [...prev.filter((f) => !(f.participant_id === participant.id && f.status === "pending")), created]);
-                      }
-                    } else {
-                      if (existingFine) {
-                        await browserApiFetch(`/api/fines/${existingFine.id}`, { method: "DELETE" });
-                        setProtocolFines((prev) => prev.filter((f) => f.id !== existingFine.id));
                       }
                     }
-                  }
 
-                  bumpStatsCharts();
+                    bumpStatsCharts();
+                  } catch (error) {
+                    // The sequence can fail partway through (attendance saved but fine update
+                    // failed, or vice versa) - roll the attendance status back to what it was
+                    // before this change so the UI doesn't show a state that never fully applied.
+                    await saveBlockConfiguration(block.id, { ...blockConfig, attendance_entries: previousEntries }).catch(() => {});
+                    showToast(
+                      error instanceof Error
+                        ? `Anwesenheit/Busse eventuell nicht synchron: ${error.message}`
+                        : "Anwesenheit/Busse eventuell nicht synchron. Bitte prüfen.",
+                      "error"
+                    );
+                  }
                 }
 
                 const { present: nPresent, late: nLate, excused: nExcused, absent: nAbsent } =
@@ -3058,11 +3085,15 @@ export function FocusedElementEditor({
                                   className="fine-action-btn fine-collect-btn"
                                   title="Busse kassieren"
                                   onClick={async () => {
-                                    const updated = await browserApiFetch<AttendanceFine>(
-                                      `/api/fines/${fine.id}/collect`,
-                                      { method: "POST", body: JSON.stringify({ collecting_protocol_id: protocol.id }) }
-                                    );
-                                    if (updated) setPendingFines((prev) => prev.map((f) => f.id === updated.id ? { ...f, ...updated } : f));
+                                    try {
+                                      const updated = await browserApiFetch<AttendanceFine>(
+                                        `/api/fines/${fine.id}/collect`,
+                                        { method: "POST", body: JSON.stringify({ collecting_protocol_id: protocol.id }) }
+                                      );
+                                      if (updated) setPendingFines((prev) => prev.map((f) => f.id === updated.id ? { ...f, ...updated } : f));
+                                    } catch (error) {
+                                      showToast(error instanceof Error ? error.message : "Busse konnte nicht kassiert werden", "error");
+                                    }
                                   }}
                                 >✓</button>
                               ) : <span />}
@@ -3071,9 +3102,20 @@ export function FocusedElementEditor({
                                   type="button"
                                   className="fine-action-btn fine-delete-btn"
                                   title="Busse löschen"
+                                  aria-label="Busse löschen"
                                   onClick={async () => {
-                                    await browserApiFetch(`/api/fines/${fine.id}/delete`, { method: "POST" });
-                                    setPendingFines((prev) => prev.filter((f) => f.id !== fine.id));
+                                    const ok = await confirm({
+                                      message: "Busse endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+                                      tone: "danger",
+                                      confirmLabel: "Löschen"
+                                    });
+                                    if (!ok) return;
+                                    try {
+                                      await browserApiFetch(`/api/fines/${fine.id}/delete`, { method: "POST" });
+                                      setPendingFines((prev) => prev.filter((f) => f.id !== fine.id));
+                                    } catch (error) {
+                                      showToast(error instanceof Error ? error.message : "Busse konnte nicht gelöscht werden", "error");
+                                    }
                                   }}
                                 >✕</button>
                               ) : <span />}
@@ -3115,11 +3157,15 @@ export function FocusedElementEditor({
                               className="fine-action-btn fine-collect-btn"
                               title="Busse kassieren"
                               onClick={async () => {
-                                const updated = await browserApiFetch<AttendanceFine>(
-                                  `/api/fines/${fine.id}/collect`,
-                                  { method: "POST", body: JSON.stringify({ collecting_protocol_id: protocol.id }) }
-                                );
-                                if (updated) setProtocolFines((prev) => prev.map((f) => f.id === updated.id ? updated : f));
+                                try {
+                                  const updated = await browserApiFetch<AttendanceFine>(
+                                    `/api/fines/${fine.id}/collect`,
+                                    { method: "POST", body: JSON.stringify({ collecting_protocol_id: protocol.id }) }
+                                  );
+                                  if (updated) setProtocolFines((prev) => prev.map((f) => f.id === updated.id ? updated : f));
+                                } catch (error) {
+                                  showToast(error instanceof Error ? error.message : "Busse konnte nicht kassiert werden", "error");
+                                }
                               }}
                             >✓</button>
                           ) : <span />}
@@ -3128,9 +3174,20 @@ export function FocusedElementEditor({
                               type="button"
                               className="fine-action-btn fine-delete-btn"
                               title="Busse löschen"
+                              aria-label="Busse löschen"
                               onClick={async () => {
-                                await browserApiFetch(`/api/fines/${fine.id}/delete`, { method: "POST" });
-                                setProtocolFines((prev) => prev.filter((f) => f.id !== fine.id));
+                                const ok = await confirm({
+                                  message: "Busse endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+                                  tone: "danger",
+                                  confirmLabel: "Löschen"
+                                });
+                                if (!ok) return;
+                                try {
+                                  await browserApiFetch(`/api/fines/${fine.id}/delete`, { method: "POST" });
+                                  setProtocolFines((prev) => prev.filter((f) => f.id !== fine.id));
+                                } catch (error) {
+                                  showToast(error instanceof Error ? error.message : "Busse konnte nicht gelöscht werden", "error");
+                                }
                               }}
                             >✕</button>
                           ) : <span />}
@@ -3267,8 +3324,17 @@ export function FocusedElementEditor({
       async function handleToggle(item: CandidateItem, nextChecked: boolean) {
         if (item.id.startsWith("block-")) {
           const blockId = Number(item.id.slice("block-".length));
-          if (nextChecked) await unhideEventBlock(blockId);
-          else await removeEventBlock(blockId);
+          if (nextChecked) {
+            await unhideEventBlock(blockId);
+          } else {
+            const ok = await confirm({
+              message: "Termin abwählen? Der Inhalt dieses Blocks (z.B. eingegebener Text) geht dabei verloren und wird beim erneuten Anhaken NICHT wiederhergestellt.",
+              tone: "danger",
+              confirmLabel: "Abwählen"
+            });
+            if (!ok) return;
+            await removeEventBlock(blockId);
+          }
         } else if (item.id.startsWith("event-") && nextChecked) {
           const eventId = Number(item.id.slice("event-".length));
           await addEventBlockToElement(element.id, eventId);

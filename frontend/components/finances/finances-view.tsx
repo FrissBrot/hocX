@@ -5,6 +5,7 @@ import { DateInput } from "@/components/ui/date-input";
 import { FinanceAccount, FinanceTransaction } from "@/types/api";
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
+import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { formatDate } from "@/lib/utils/format";
 
@@ -14,6 +15,7 @@ type Props = { initialAccounts: FinanceAccount[] };
 
 export function FinancesView({ initialAccounts }: Props) {
   const confirm = useConfirm();
+  const showToast = useToast();
   const [accounts, setAccounts] = useState(initialAccounts);
   const [selected, setSelected] = useState<FinanceAccount | null>(null);
   const [transactions, setTransactions] = useState<FinanceTransaction[]>([]);
@@ -120,6 +122,8 @@ export function FinancesView({ initialAccounts }: Props) {
         if (created) setAccounts((prev) => [...prev, created]);
       }
       setShowAccountForm(false);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Konto konnte nicht gespeichert werden", "error");
     } finally {
       setSavingAccount(false);
     }
@@ -128,9 +132,13 @@ export function FinancesView({ initialAccounts }: Props) {
   async function deleteAccount(account: FinanceAccount, e: React.MouseEvent) {
     e.stopPropagation();
     if (!(await confirm({ message: `Konto "${account.name}" und alle Transaktionen löschen?`, tone: "danger", confirmLabel: "Löschen" }))) return;
-    await browserApiFetch(`/api/finance/accounts/${account.id}`, { method: "DELETE" });
-    setAccounts((prev) => prev.filter((a) => a.id !== account.id));
-    if (selected?.id === account.id) { setSelected(null); setTransactions([]); }
+    try {
+      await browserApiFetch(`/api/finance/accounts/${account.id}`, { method: "DELETE" });
+      setAccounts((prev) => prev.filter((a) => a.id !== account.id));
+      if (selected?.id === account.id) { setSelected(null); setTransactions([]); }
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Konto konnte nicht gelöscht werden", "error");
+    }
   }
 
   // ── Transaction CRUD ─────────────────────────────────────────────────────────
@@ -169,6 +177,8 @@ export function FinancesView({ initialAccounts }: Props) {
       await Promise.all([reloadFirstPage(selected.id), refreshAccounts(selected.id)]);
       setShowTxForm(false);
       setEditingTx(null);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Transaktion konnte nicht gespeichert werden", "error");
     } finally {
       setSavingTx(false);
     }
@@ -176,8 +186,13 @@ export function FinancesView({ initialAccounts }: Props) {
 
   async function deleteTx(tx: FinanceTransaction) {
     if (!selected) return;
-    await browserApiFetch(`/api/finance/transactions/${tx.id}`, { method: "DELETE" });
-    await Promise.all([reloadFirstPage(selected.id), refreshAccounts(selected.id)]);
+    if (!(await confirm({ message: "Transaktion löschen?", tone: "danger", confirmLabel: "Löschen" }))) return;
+    try {
+      await browserApiFetch(`/api/finance/transactions/${tx.id}`, { method: "DELETE" });
+      await Promise.all([reloadFirstPage(selected.id), refreshAccounts(selected.id)]);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Transaktion konnte nicht gelöscht werden", "error");
+    }
   }
 
   const currency = selected?.currency_label ?? "";

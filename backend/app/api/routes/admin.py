@@ -86,12 +86,21 @@ def error_log_filter_options(db: Session = Depends(get_db)):
 
 
 @router.post("/tenants", response_model=AdminTenantRead, status_code=201)
-def create_tenant(payload: AdminTenantCreate, db: Session = Depends(get_db)):
+def create_tenant(
+    payload: AdminTenantCreate,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(get_current_admin),
+):
     try:
-        return tenant_service.create_tenant(db, payload)
+        tenant = tenant_service.create_tenant(db, payload)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Tenant could not be created") from exc
+    audit.log(
+        db, action="admin.tenant_created", actor_email=current_admin.email, tenant_id=tenant.id,
+        entity_type="tenant", entity_id=tenant.id, details={"name": payload.name},
+    )
+    return tenant
 
 
 @router.get("/tenants/{tenant_id}", response_model=AdminTenantRead)
@@ -109,6 +118,7 @@ async def update_tenant(
     public_slug: str | None = Form(default=None),
     profile_image: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(get_current_admin),
 ):
     try:
         tenant = await tenant_service.update_tenant(db, tenant_id, TenantUpdate(name=name, public_slug=public_slug), profile_image)
@@ -117,6 +127,11 @@ async def update_tenant(
         raise HTTPException(status_code=400, detail="Tenant could not be updated") from exc
     if tenant is None:
         raise HTTPException(status_code=404, detail="Tenant not found")
+    audit.log(
+        db, action="admin.tenant_updated", actor_email=current_admin.email, tenant_id=tenant_id,
+        entity_type="tenant", entity_id=tenant_id,
+        details={"name": name, "public_slug": public_slug, "profile_image_changed": profile_image is not None},
+    )
     return tenant
 
 
@@ -133,7 +148,12 @@ def delete_tenant(tenant_id: int, db: Session = Depends(get_db), current_admin: 
 
 
 @router.post("/tenants/{tenant_id}/clone", response_model=AdminTenantRead, status_code=201)
-def clone_tenant(tenant_id: int, payload: TenantCloneRequest, db: Session = Depends(get_db)):
+def clone_tenant(
+    tenant_id: int,
+    payload: TenantCloneRequest,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(get_current_admin),
+):
     try:
         if payload.mode == "full":
             new_tenant = clone_service.clone_full(db, tenant_id, payload.new_name)
@@ -148,6 +168,11 @@ def clone_tenant(tenant_id: int, payload: TenantCloneRequest, db: Session = Depe
     result = tenant_service.get_tenant(db, new_tenant.id)
     if result is None:
         raise HTTPException(status_code=500, detail="Cloned tenant could not be reloaded")
+    audit.log(
+        db, action="admin.tenant_cloned", actor_email=current_admin.email, tenant_id=new_tenant.id,
+        entity_type="tenant", entity_id=new_tenant.id,
+        details={"source_tenant_id": tenant_id, "new_name": payload.new_name, "mode": payload.mode},
+    )
     return result
 
 
@@ -211,14 +236,34 @@ def list_tenant_users(tenant_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/tenants/{tenant_id}/users/{user_id}", response_model=AdminTenantUserRead)
-def grant_tenant_user_role(tenant_id: int, user_id: int, payload: AdminTenantUserGrant, db: Session = Depends(get_db)):
-    return tenant_user_service.grant_or_update_role(db, tenant_id, user_id, payload.role_code)
+def grant_tenant_user_role(
+    tenant_id: int,
+    user_id: int,
+    payload: AdminTenantUserGrant,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(get_current_admin),
+):
+    result = tenant_user_service.grant_or_update_role(db, tenant_id, user_id, payload.role_code)
+    audit.log(
+        db, action="admin.tenant_user_role_granted", actor_email=current_admin.email, tenant_id=tenant_id,
+        entity_type="user", entity_id=user_id, details={"role_code": payload.role_code},
+    )
+    return result
 
 
 @router.delete("/tenants/{tenant_id}/users/{user_id}", status_code=204)
-def remove_tenant_user(tenant_id: int, user_id: int, db: Session = Depends(get_db)):
+def remove_tenant_user(
+    tenant_id: int,
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(get_current_admin),
+):
     if not tenant_user_service.remove_user(db, tenant_id, user_id):
         raise HTTPException(status_code=404, detail="Membership not found")
+    audit.log(
+        db, action="admin.tenant_user_removed", actor_email=current_admin.email, tenant_id=tenant_id,
+        entity_type="user", entity_id=user_id,
+    )
 
 
 @router.get("/oidc-config", response_model=PlatformOidcConfigRead)
@@ -227,8 +272,17 @@ def get_platform_oidc_config(db: Session = Depends(get_db)):
 
 
 @router.put("/oidc-config", response_model=PlatformOidcConfigRead)
-def update_platform_oidc_config(payload: PlatformOidcConfigWrite, db: Session = Depends(get_db)):
-    return oidc_service.upsert_config(db, payload)
+def update_platform_oidc_config(
+    payload: PlatformOidcConfigWrite,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(get_current_admin),
+):
+    result = oidc_service.upsert_config(db, payload)
+    audit.log(
+        db, action="admin.oidc_config_updated", actor_email=current_admin.email,
+        details={"enabled": payload.enabled, "issuer_url": payload.issuer_url},
+    )
+    return result
 
 
 @router.get("/tenants/{tenant_id}/profile-image")
@@ -248,12 +302,21 @@ def list_users(db: Session = Depends(get_db)):
 
 
 @router.post("/users", response_model=UserRead, status_code=201)
-def create_user(payload: UserCreate, db: Session = Depends(get_db)):
+def create_user(
+    payload: UserCreate,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(get_current_admin),
+):
     try:
-        return user_service.create_user(db, payload)
+        result = user_service.create_user(db, payload)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="User could not be created") from exc
+    audit.log(
+        db, action="admin.user_created", actor_email=current_admin.email,
+        entity_type="user", entity_id=result.id, details={"email": payload.email},
+    )
+    return result
 
 
 @router.get("/users/{user_id}", response_model=UserRead)
@@ -265,7 +328,12 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
 
 
 @router.patch("/users/{user_id}", response_model=UserRead)
-def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db)):
+def update_user(
+    user_id: int,
+    payload: UserUpdate,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(get_current_admin),
+):
     try:
         user = user_service.update_user(db, user_id, payload)
     except SQLAlchemyError as exc:
@@ -273,6 +341,11 @@ def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db)
         raise HTTPException(status_code=400, detail="User could not be updated") from exc
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
+    audit.log(
+        db, action="admin.user_updated", actor_email=current_admin.email,
+        entity_type="user", entity_id=user_id,
+        details={"password_changed": bool(payload.password), "is_active": payload.is_active},
+    )
     return user
 
 
@@ -296,12 +369,21 @@ def list_admins(db: Session = Depends(get_db)):
 
 
 @router.post("/admins", response_model=PlatformAdminRead, status_code=201)
-def create_admin(payload: PlatformAdminCreate, db: Session = Depends(get_db)):
+def create_admin(
+    payload: PlatformAdminCreate,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(get_current_admin),
+):
     try:
-        return admin_account_service.create_admin(db, payload)
+        result = admin_account_service.create_admin(db, payload)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Admin account could not be created (email already in use?)") from exc
+    audit.log(
+        db, action="admin.admin_created", actor_email=current_admin.email,
+        entity_type="platform_admin", entity_id=result.id, details={"email": payload.email},
+    )
+    return result
 
 
 @router.patch("/admins/{admin_id}", response_model=PlatformAdminRead)
@@ -314,4 +396,9 @@ def update_admin(
     admin = admin_account_service.update_admin(db, admin_id, payload, current_admin_id=current_admin.admin_id)
     if admin is None:
         raise HTTPException(status_code=404, detail="Admin account not found")
+    audit.log(
+        db, action="admin.admin_updated", actor_email=current_admin.email,
+        entity_type="platform_admin", entity_id=admin_id,
+        details={"password_changed": bool(payload.password), "is_active": payload.is_active},
+    )
     return admin

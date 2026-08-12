@@ -6,7 +6,7 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models.entities import AttendanceFine, FinanceAccount, FinanceTransaction
+from app.models.entities import AttendanceFine, FinanceAccount, FinanceTransaction, Protocol
 from app.schemas.finance import (
     FinanceAccountCreate,
     FinanceAccountRead,
@@ -172,7 +172,13 @@ class FinanceRepository:
             .where(FinanceTransaction.id == tx_id, FinanceAccount.tenant_id == tenant_id)
         )
 
-    def create_transaction(self, db: Session, account_id: int, payload: FinanceTransactionCreate) -> FinanceTransactionRead:
+    def create_transaction(self, db: Session, account_id: int, tenant_id: int, payload: FinanceTransactionCreate) -> FinanceTransactionRead | None:
+        """Returns None if protocol_id is set but doesn't belong to tenant_id - the caller
+        (route) turns that into a 404, matching FinesRepository.create_fine's convention."""
+        if payload.protocol_id is not None:
+            protocol = db.get(Protocol, payload.protocol_id)
+            if protocol is None or protocol.tenant_id != tenant_id:
+                return None
         tx = FinanceTransaction(
             account_id=account_id,
             amount=payload.amount,

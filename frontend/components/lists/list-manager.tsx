@@ -1,11 +1,13 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useMemo, useRef, useState } from "react";
 
 import { StructuredListTable } from "@/components/lists/structured-list-table";
 import { Modal } from "@/components/ui/modal";
+import { usePopoverDismiss } from "@/components/ui/popover";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
+import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import {
   DocumentTemplate,
@@ -75,6 +77,7 @@ export function ListManager({
   documentTemplates = [],
 }: ListManagerProps) {
   const showToast = useToast();
+  const confirm = useConfirm();
   const [lists, setLists] = useState(initialLists);
   const [entriesByList, setEntriesByList] = useState(initialEntriesByList);
   const [selectedListId, setSelectedListId] = useState<number | null>(initialLists[0]?.id ?? null);
@@ -105,28 +108,9 @@ export function ListManager({
   const [listDropdownSearch, setListDropdownSearch] = useState("");
   const listDropdownRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!templateDropdownOpen) return;
-    function handleClick(e: MouseEvent) {
-      if (templateDropdownRef.current && !templateDropdownRef.current.contains(e.target as Node)) {
-        setTemplateDropdownOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [templateDropdownOpen]);
+  usePopoverDismiss(templateDropdownOpen, () => setTemplateDropdownOpen(false), [templateDropdownRef]);
 
-  useEffect(() => {
-    if (!listDropdownOpen) return;
-    function handleClick(e: MouseEvent) {
-      if (listDropdownRef.current && !listDropdownRef.current.contains(e.target as Node)) {
-        setListDropdownOpen(false);
-        setListDropdownSearch("");
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [listDropdownOpen]);
+  usePopoverDismiss(listDropdownOpen, () => { setListDropdownOpen(false); setListDropdownSearch(""); }, [listDropdownRef]);
 
   const listDropdownFiltered = useMemo(() => {
     if (!listDropdownSearch.trim()) return lists;
@@ -277,6 +261,12 @@ export function ListManager({
   }
 
   async function deleteDefinition(listId: number) {
+    const ok = await confirm({
+      message: "Liste endgültig löschen? Alle Einträge dieser Liste gehen dabei unwiderruflich verloren.",
+      tone: "danger",
+      confirmLabel: "Löschen"
+    });
+    if (!ok) return;
     try {
       await browserApiFetch(`/api/lists/${listId}`, { method: "DELETE" });
       const remainingLists = lists.filter((item) => item.id !== listId);
@@ -334,6 +324,12 @@ export function ListManager({
   }
 
   async function deleteEntry(listId: number, entryId: number) {
+    const ok = await confirm({
+      message: "Eintrag endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+      tone: "danger",
+      confirmLabel: "Löschen"
+    });
+    if (!ok) return;
     try {
       await browserApiFetch(`/api/list-entries/${entryId}`, { method: "DELETE" });
       setEntriesByList((current) => ({

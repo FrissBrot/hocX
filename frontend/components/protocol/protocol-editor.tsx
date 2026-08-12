@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 
 import { SessionPanel, SessionPanelHandle } from "@/components/protocol/session-panel";
@@ -12,6 +13,7 @@ import { NavIcon } from "@/components/ui/nav-icons";
 import { QuickActionsPill } from "@/components/protocol/quick-actions-pill";
 import { bumpStatsCharts } from "@/components/protocol/chart-block";
 import { CollaborationPresenceBar } from "@/components/protocol/collaboration-presence";
+import { computePopoverPosition, usePopoverDismiss } from "@/components/ui/popover";
 import { useProtocolCollaboration } from "@/lib/hooks/use-protocol-collaboration";
 import { useTagConfig } from "@/lib/hooks/use-tag-config";
 import { usePdfExport } from "@/lib/hooks/use-pdf-export";
@@ -46,7 +48,6 @@ import {
   protocolStatusLabel,
   resequenceProtocolElements,
   sectionIconKey,
-  smartPopoverStyle,
   tallyAttendance,
   trimSectionName,
   visibleBlockTitle,
@@ -94,29 +95,20 @@ export function ProtocolEditor({
   const [events, setEvents] = useState(availableEvents);
   const [lists, setLists] = useState(availableLists);
   const [eventContextMenu, setEventContextMenu] = useState<{ x: number; y: number; eventRow: EventSummary; blockId: number } | null>(null);
+  const eventContextMenuRef = useRef<HTMLDivElement | null>(null);
 
+  usePopoverDismiss(!!eventContextMenu, () => setEventContextMenu(null), [eventContextMenuRef]);
+
+  // Closing on scroll is specific to this point-anchored context menu (it doesn't reposition
+  // itself the way an anchored popover would), so it stays a separate effect alongside the
+  // shared outside-click/Escape dismissal above rather than being folded into usePopoverDismiss.
   useEffect(() => {
     if (!eventContextMenu) return;
-    function onPointerDown(nativeEvent: MouseEvent) {
-      const target = nativeEvent.target as Node;
-      if (!document.getElementById("event-context-menu-portal")?.contains(target)) {
-        setEventContextMenu(null);
-      }
-    }
-    function onKeyDown(nativeEvent: KeyboardEvent) {
-      if (nativeEvent.key === "Escape") setEventContextMenu(null);
-    }
     function onScroll() {
       setEventContextMenu(null);
     }
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
     document.addEventListener("scroll", onScroll, true);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-      document.removeEventListener("scroll", onScroll, true);
-    };
+    return () => document.removeEventListener("scroll", onScroll, true);
   }, [eventContextMenu]);
 
   const currentTemplate = availableTemplates.find((t) => t.id === protocol.template_id) ?? null;
@@ -159,6 +151,7 @@ export function ProtocolEditor({
   const [sessionNotes, setSessionNotes] = useState(protocol.session_notes ?? "");
   const [transitioningStatus, setTransitioningStatus] = useState(false);
   const showToast = useToast();
+  const confirm = useConfirm();
   const elementSaveTimerRef = useRef<number | null>(null);
   const isRestoringRef = useRef(true);
   const [showSavedIndicator, setShowSavedIndicator] = useState(false);
@@ -861,6 +854,12 @@ export function ProtocolEditor({
   }
 
   async function deleteTodo(protocolElementBlockId: number, todoId: number) {
+    const ok = await confirm({
+      message: "Todo endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+      tone: "danger",
+      confirmLabel: "Löschen"
+    });
+    if (!ok) return;
     setStatus(protocolElementBlockId, "saving");
     try {
       await browserApiFetch(`/api/protocol-todos/${todoId}`, { method: "DELETE" });
@@ -917,6 +916,12 @@ export function ProtocolEditor({
   }
 
   async function deleteImage(protocolElementBlockId: number, imageId: number) {
+    const ok = await confirm({
+      message: "Bild endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+      tone: "danger",
+      confirmLabel: "Löschen"
+    });
+    if (!ok) return;
     setStatus(protocolElementBlockId, "saving");
     try {
       await browserApiFetch(`/api/protocol-images/${imageId}`, { method: "DELETE" });
@@ -1188,6 +1193,12 @@ export function ProtocolEditor({
   }
 
   async function deleteListEntryFromBlock(protocolElementBlockId: number, listDefinitionId: number, entryId: number) {
+    const ok = await confirm({
+      message: "Eintrag endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+      tone: "danger",
+      confirmLabel: "Löschen"
+    });
+    if (!ok) return;
     setStatus(protocolElementBlockId, "saving");
     try {
       await browserApiFetch(`/api/list-entries/${entryId}`, { method: "DELETE" });
@@ -1733,9 +1744,10 @@ export function ProtocolEditor({
 
       {eventContextMenu && typeof document !== "undefined" && createPortal(
         <div
+          ref={eventContextMenuRef}
           id="event-context-menu-portal"
           className="mini-menu-popover-portal"
-          style={smartPopoverStyle(new DOMRect(eventContextMenu.x, eventContextMenu.y, 0, 0), 220, "start", 80)}
+          style={computePopoverPosition(new DOMRect(eventContextMenu.x, eventContextMenu.y, 0, 0), "start", 6, { minWidth: 220, estimatedHeight: 80 })}
           role="menu"
         >
           <button type="button" className="mini-menu-option" onClick={() => void toggleEventCancelledFromContextMenu()}>

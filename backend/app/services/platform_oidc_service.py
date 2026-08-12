@@ -17,6 +17,30 @@ from app.models import PlatformAdmin, PlatformOidcConfig
 from app.schemas.oidc import PlatformOidcConfigPublic, PlatformOidcConfigRead, PlatformOidcConfigWrite
 
 
+# ── Redirect target validation (open-redirect hardening) ────────────────────────────────────
+
+def sanitize_redirect_to(redirect_to: str | None) -> str:
+    """Only ever allow a same-origin relative path as an SSO redirect target - never a
+    client-supplied absolute URL. Without this, `redirect_to` (attacker-controlled query param)
+    would let `?redirect_to=https://evil.example` phish an admin straight off the platform right
+    after a legitimate login. Applied both where redirect_to first enters the flow and again at
+    the final redirect (defense in depth), matching how auth.py's /bridge endpoint deliberately
+    never accepts a client-controlled redirect target at all."""
+    if not redirect_to:
+        return "/"
+    # Browsers strip embedded tab/newline/CR before navigating, so strip them first too -
+    # otherwise "/\t/evil.example" would pass a naive leading-slash check.
+    candidate = redirect_to.strip().replace("\t", "").replace("\n", "").replace("\r", "")
+    # Reject "//host/..." and "/\host" (backslash is treated like a forward slash by browsers) -
+    # both are protocol-relative URLs that redirect off-site despite starting with "/".
+    if not candidate.startswith("/") or candidate.startswith("//") or candidate.startswith("/\\"):
+        return "/"
+    parsed = urllib.parse.urlparse(candidate)
+    if parsed.scheme or parsed.netloc:
+        return "/"
+    return candidate
+
+
 # ── State token (CSRF protection + carries PKCE verifier/nonce across the redirect) ─────────
 
 def _make_state(redirect_to: str, code_verifier: str, nonce: str) -> str:
@@ -115,7 +139,7 @@ class PlatformOidcService:
         code_verifier = secrets.token_urlsafe(64)[:128]
         code_challenge = base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode()).digest()).decode().rstrip("=")
         nonce = secrets.token_urlsafe(16)
-        state = _make_state(redirect_to, code_verifier, nonce)
+        state = _make_state(sanitize_redirect_to(redirect_to), code_verifier, nonce)
 
         params = urllib.parse.urlencode({
             "response_type": "code",
@@ -135,7 +159,10 @@ class PlatformOidcService:
         issue_admin_session_cookie), matching the existing pattern used by the customer-facing
         auth flows for the same FastAPI Response-on-RedirectResponse reason."""
         state_data = _verify_state(state)
-        redirect_to: str = state_data.get("r", "/")
+        # Defense in depth: the state token is HMAC-signed so this value can't be tampered with
+        # in transit, but re-validating here guards against a future bug upstream (e.g. a new
+        # caller of _make_state that forgets to sanitize) still producing an open redirect.
+        redirect_to: str = sanitize_redirect_to(state_data.get("r", "/"))
         code_verifier: str = state_data["v"]
         expected_nonce: str = state_data["n"]
 

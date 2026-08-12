@@ -8,6 +8,7 @@ import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
+import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { formatDate } from "@/lib/utils/format";
@@ -45,6 +46,7 @@ function parseCsvForPreview(text: string): CsvPreviewRow[] {
 type ParticipantManagerProps = {
   initialParticipants: ParticipantSummary[];
   templates: TemplateSummary[];
+  tenantId: number | null;
 };
 
 type ParticipantFormState = {
@@ -82,8 +84,9 @@ function membershipStatus(participant: ParticipantSummary): string | null {
   return null;
 }
 
-export function ParticipantManager({ initialParticipants, templates }: ParticipantManagerProps) {
+export function ParticipantManager({ initialParticipants, templates, tenantId }: ParticipantManagerProps) {
   const showToast = useToast();
+  const confirm = useConfirm();
   const [participants, setParticipants] = useState(initialParticipants);
   const [selectedParticipant, setSelectedParticipant] = useState<ParticipantSummary | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -201,7 +204,7 @@ export function ParticipantManager({ initialParticipants, templates }: Participa
       } else {
         updatedParticipant = await browserApiFetch<ParticipantSummary>("/api/participants", {
           method: "POST",
-          body: JSON.stringify({ tenant_id: 1, ...payload }),
+          body: JSON.stringify({ tenant_id: tenantId, ...payload }),
         });
         participantId = updatedParticipant.id;
         setParticipants((current) => [updatedParticipant, ...current]);
@@ -224,6 +227,12 @@ export function ParticipantManager({ initialParticipants, templates }: Participa
   }
 
   async function deleteParticipant(participantId: number) {
+    const ok = await confirm({
+      message: "Teilnehmer endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+      tone: "danger",
+      confirmLabel: "Löschen"
+    });
+    if (!ok) return;
     try {
       await browserApiFetch(`/api/participants/${participantId}`, { method: "DELETE" });
       setParticipants((current) => current.filter((participant) => participant.id !== participantId));

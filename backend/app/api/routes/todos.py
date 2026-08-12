@@ -12,12 +12,14 @@ from app.models.entities import Event, Protocol, ProtocolElement, ProtocolElemen
 from app.schemas.protocol import ProtocolTodoCreate, ProtocolTodoRead, ProtocolTodoUpdate, TodoListItem
 from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
+from app.services.protocol_service import ProtocolService
 from app.services.protocol_todo_service import ProtocolTodoService
 
 router = APIRouter()
 service = ProtocolTodoService()
 access_service = AccessService()
 audit = AuditService()
+protocol_service = ProtocolService()
 
 
 @router.post("/todos", response_model=TodoListItem, status_code=status.HTTP_201_CREATED)
@@ -102,9 +104,10 @@ def create_todo(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
+    access_service.ensure_can_read_protocol_block(db, user, protocol_element_block_id)
     protocol_id = access_service.repository.protocol_id_for_block(db, protocol_element_block_id=protocol_element_block_id)
-    protocol = db.get(Protocol, protocol_id) if protocol_id else None
-    track_changes_active = bool(protocol and protocol.status == "geplant" and protocol.track_changes_enabled)
+    protocol = protocol_service.get_protocol_or_404_not_frozen(db, protocol_id)
+    track_changes_active = bool(protocol.status == "geplant" and protocol.track_changes_enabled)
     try:
         todo = service.create_todo(db, protocol_element_block_id, payload, track_changes_active=track_changes_active)
     except (SQLAlchemyError, ValueError) as exc:
@@ -176,12 +179,26 @@ def patch_todo(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
+    # Deliberately not gated by the collaboration Redis lock the way
+    # protocol_elements.py's block PATCH/text PUT now are: unlike protocol element blocks,
+    # individual todos have no corresponding field_key in the collaboration lock domain
+    # today (session-todos-section.tsx/todo-list-view.tsx never call lockField for a todo
+    # edit - only the focused-element-editor's per-block/per-cell text and config fields
+    # do). Adding a check here would either be a permanent no-op (no lock is ever held
+    # under a "todo-<id>" key) or would have to piggyback on the parent block's lock, which
+    # would reject normal todo edits any time someone else merely has that block's text
+    # field focused - a worse false-positive than the gap it would close. Two people
+    # editing the same todo concurrently therefore remains last-write-wins, same as before
+    # this pass; a real fix would need the frontend to start locking todos as its own
+    # field_key first.
     require_writer(user)
     access_service.ensure_can_read_todo(db, user, todo_id)
     existing = service.repository.get(db, todo_id)
     previous_status_id = existing.todo_status_id if existing else None
     protocol_id = access_service.repository.protocol_id_for_todo(db, todo_id=todo_id)
-    protocol = db.get(Protocol, protocol_id) if protocol_id else None
+    # Standalone todos (protocol_id None, not tied to any block) have no "abgeschlossen"
+    # concept and stay editable; block-linked todos are rejected once their protocol froze.
+    protocol = protocol_service.get_protocol_or_404_not_frozen(db, protocol_id) if protocol_id else None
     track_changes_active = bool(protocol and protocol.status == "geplant" and protocol.track_changes_enabled)
     try:
         todo = service.update_todo(db, todo_id, payload, track_changes_active=track_changes_active)
@@ -209,6 +226,11 @@ def accept_todo_tracked_change(
     stops marking it as changed/added/pending-delete."""
     require_writer(user)
     access_service.ensure_can_read_todo(db, user, todo_id)
+    protocol_id = access_service.repository.protocol_id_for_todo(db, todo_id=todo_id)
+    # Standalone todos (protocol_id None) have no tracked-change concept in practice, but
+    # guard consistently with patch/delete above rather than special-casing this endpoint.
+    if protocol_id:
+        protocol_service.get_protocol_or_404_not_frozen(db, protocol_id)
     try:
         result = service.accept_tracked_change(db, todo_id)
     except SQLAlchemyError as exc:
@@ -233,7 +255,8 @@ def delete_todo(
     require_writer(user)
     access_service.ensure_can_read_todo(db, user, todo_id)
     protocol_id = access_service.repository.protocol_id_for_todo(db, todo_id=todo_id)
-    protocol = db.get(Protocol, protocol_id) if protocol_id else None
+    # Standalone todos (protocol_id None) stay deletable regardless of any protocol status.
+    protocol = protocol_service.get_protocol_or_404_not_frozen(db, protocol_id) if protocol_id else None
     track_changes_active = bool(protocol and protocol.status == "geplant" and protocol.track_changes_enabled)
     try:
         result = service.delete_todo(db, todo_id, track_changes_active=track_changes_active)

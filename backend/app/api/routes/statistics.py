@@ -30,6 +30,7 @@ router = APIRouter()
 class AttendanceStat(BaseModel):
     name: str
     present: int
+    late: int
     absent: int
     excused: int
     total: int
@@ -38,6 +39,7 @@ class AttendanceStat(BaseModel):
 class AttendanceMonth(BaseModel):
     month: str
     present: int
+    late: int
     absent: int
     excused: int
     total: int
@@ -214,7 +216,11 @@ def get_statistics_overview(
             .join(ProtocolElementBlock, ProtocolElementBlock.protocol_element_id == ProtocolElement.id)
             .where(
                 Protocol.tenant_id == tenant_id,
-                Protocol.status.in_(["vorbereitet", "durchgeführt", "abgeschlossen"]),
+                # "vorbereitet" protocols haven't happened yet - attendance is still being
+                # tracked/editable and only becomes final at the vorbereitet -> durchgeführt
+                # transition (see list_snapshot_service.clear_tracked_changes_for_protocol),
+                # so it must not feed the statistics. Matches chart_service.py's filter.
+                Protocol.status.in_(["durchgeführt", "abgeschlossen"]),
                 ProtocolElementBlock.element_type_id == attendance_type_id,
             )
             .order_by(Protocol.protocol_date)
@@ -222,9 +228,9 @@ def get_statistics_overview(
         attendance_blocks = [(r.protocol_date, r.configuration_snapshot_json) for r in rows]
 
     # Per-participant aggregation
-    participant_stats: dict[str, dict[str, int]] = defaultdict(lambda: {"present": 0, "absent": 0, "excused": 0})
+    participant_stats: dict[str, dict[str, int]] = defaultdict(lambda: {"present": 0, "late": 0, "absent": 0, "excused": 0})
     # Per-month aggregation
-    monthly_att: dict[str, dict[str, int]] = defaultdict(lambda: {"present": 0, "absent": 0, "excused": 0, "total": 0})
+    monthly_att: dict[str, dict[str, int]] = defaultdict(lambda: {"present": 0, "late": 0, "absent": 0, "excused": 0, "total": 0})
 
     for proto_date, config in attendance_blocks:
         entries = config.get("attendance_entries", []) if config else []
@@ -232,8 +238,12 @@ def get_statistics_overview(
         for entry in entries:
             name = entry.get("participant_name") or "Unbekannt"
             status = entry.get("status") or "absent"
+            # Four-value status, matching export_service's counting: "late" is its own
+            # bucket, not lumped into "absent" (a late arrival is not the same as a no-show).
             if status == "present":
                 participant_stats[name]["present"] += 1
+            elif status == "late":
+                participant_stats[name]["late"] += 1
             elif status == "excused":
                 participant_stats[name]["excused"] += 1
             else:
@@ -242,6 +252,8 @@ def get_statistics_overview(
                 monthly_att[month_key]["total"] += 1
                 if status == "present":
                     monthly_att[month_key]["present"] += 1
+                elif status == "late":
+                    monthly_att[month_key]["late"] += 1
                 elif status == "excused":
                     monthly_att[month_key]["excused"] += 1
                 else:
@@ -252,9 +264,10 @@ def get_statistics_overview(
             AttendanceStat(
                 name=name,
                 present=s["present"],
+                late=s["late"],
                 absent=s["absent"],
                 excused=s["excused"],
-                total=s["present"] + s["absent"] + s["excused"],
+                total=s["present"] + s["late"] + s["absent"] + s["excused"],
             )
             for name, s in participant_stats.items()
         ],
@@ -265,6 +278,7 @@ def get_statistics_overview(
         AttendanceMonth(
             month=m,
             present=v["present"],
+            late=v["late"],
             absent=v["absent"],
             excused=v["excused"],
             total=v["total"],
