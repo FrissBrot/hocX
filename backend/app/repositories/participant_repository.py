@@ -30,18 +30,22 @@ class ParticipantRepository:
     def get(self, db: Session, participant_id: int) -> Participant | None:
         return db.get(Participant, participant_id)
 
-    def create(self, db: Session, participant: Participant) -> Participant:
+    def create(self, db: Session, participant: Participant, *, commit: bool = True) -> Participant:
         db.add(participant)
-        db.commit()
-        db.refresh(participant)
+        db.flush()
+        if commit:
+            db.commit()
+            db.refresh(participant)
         return participant
 
-    def update(self, db: Session, participant: Participant, values: dict) -> Participant:
+    def update(self, db: Session, participant: Participant, values: dict, *, commit: bool = True) -> Participant:
         for key, value in values.items():
             setattr(participant, key, value)
         db.add(participant)
-        db.commit()
-        db.refresh(participant)
+        db.flush()
+        if commit:
+            db.commit()
+            db.refresh(participant)
         return participant
 
     def delete(self, db: Session, participant: Participant) -> None:

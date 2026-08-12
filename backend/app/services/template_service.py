@@ -3,7 +3,7 @@ from datetime import date
 
 from sqlalchemy.orm import Session
 
-from app.models import Participant, Template, TemplateElement
+from app.models import CycleConfig, DocumentTemplate, Event, Participant, Template, TemplateElement
 from app.repositories.template_element_repository import TemplateElementRepository
 from app.repositories.template_repository import TemplateRepository
 from app.schemas.participant import TemplateParticipantAssignmentRead
@@ -41,6 +41,32 @@ class TemplateService:
     def get_template(self, db: Session, template_id: int):
         return self.repository.get(db, template_id)
 
+    def _validate_tenant_refs(
+        self,
+        db: Session,
+        *,
+        tenant_id: int,
+        next_event_id: int | None = None,
+        last_event_id: int | None = None,
+        cycle_config_id: int | None = None,
+        document_template_id: int | None = None,
+    ) -> None:
+        """next_event_id/last_event_id/cycle_config_id/document_template_id are all
+        client-supplied on template create/update - without this, a writer could point a
+        template at another tenant's Event/CycleConfig/DocumentTemplate, which then leaks
+        into every protocol created from it (title/date snapshots, LaTeX layout, ...)."""
+        for label, model, value in (
+            ("next_event_id", Event, next_event_id),
+            ("last_event_id", Event, last_event_id),
+            ("cycle_config_id", CycleConfig, cycle_config_id),
+            ("document_template_id", DocumentTemplate, document_template_id),
+        ):
+            if value is None:
+                continue
+            row = db.get(model, value)
+            if row is None or row.tenant_id != tenant_id:
+                raise ValueError(f"{label} does not belong to current tenant")
+
     def create_template(self, db: Session, payload: TemplateCreate, *, tenant_id: int, created_by: int | None):
         document_template_id = payload.document_template_id
         if document_template_id is None:
@@ -51,6 +77,13 @@ class TemplateService:
             }
             if document_template_id not in available_document_template_ids:
                 document_template_id = self.document_template_service.default_document_template_id(db, tenant_id)
+        self._validate_tenant_refs(
+            db,
+            tenant_id=tenant_id,
+            next_event_id=payload.next_event_id,
+            last_event_id=payload.last_event_id,
+            cycle_config_id=payload.cycle_config_id,
+        )
         template = Template(
             tenant_id=tenant_id,
             document_template_id=document_template_id,
@@ -75,6 +108,14 @@ class TemplateService:
         values = payload.model_dump(exclude_unset=True)
         if not values:
             return template
+        self._validate_tenant_refs(
+            db,
+            tenant_id=template.tenant_id,
+            next_event_id=values.get("next_event_id"),
+            last_event_id=values.get("last_event_id"),
+            cycle_config_id=values.get("cycle_config_id"),
+            document_template_id=values.get("document_template_id"),
+        )
         return self.repository.update(db, template, values)
 
     def delete_template(self, db: Session, template_id: int) -> bool:

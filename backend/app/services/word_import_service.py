@@ -3092,7 +3092,8 @@ class WordImportService:
                     return None
                 try:
                     block = protocol_service.add_event_block_to_element(
-                        db, protocol_element_id=protocol_element_id, event_id=event_id, block_sort_index=block_sort_index
+                        db, protocol_element_id=protocol_element_id, event_id=event_id,
+                        tenant_id=tenant_id, block_sort_index=block_sort_index,
                     )
                 except ValueError:
                     return None
@@ -3299,15 +3300,18 @@ class WordImportService:
                         final_content = text_commit.content
                         sync_field = str((block.configuration_snapshot_json or {}).get("sync_target_field") or "")
                         if sync_field and text_commit.is_event_repeat and text_commit.linked_event_id is not None:
-                            if text_commit.sync_field_source == "existing":
-                                linked_event = db.get(Event, text_commit.linked_event_id)
-                                if linked_event is not None:
-                                    # Reviewer chose to keep the Event's current value over the
-                                    # document text - re-read it fresh here (not trusting a
-                                    # round-tripped value from analyze()) so a concurrent edit
-                                    # to the Event between analyze() and commit() can't be
-                                    # silently overwritten with a stale value.
-                                    final_content = str(getattr(linked_event, sync_field, "") or "")
+                            linked_event = db.get(Event, text_commit.linked_event_id)
+                            if linked_event is not None and linked_event.tenant_id != tenant_id:
+                                # linked_event_id is client-supplied - without this check a
+                                # request could read/overwrite another tenant's Event fields.
+                                raise ValueError("Verknüpfter Termin gehört nicht zu diesem Mandanten")
+                            if linked_event is not None and text_commit.sync_field_source == "existing":
+                                # Reviewer chose to keep the Event's current value over the
+                                # document text - re-read it fresh here (not trusting a
+                                # round-tripped value from analyze()) so a concurrent edit
+                                # to the Event between analyze() and commit() can't be
+                                # silently overwritten with a stale value.
+                                final_content = str(getattr(linked_event, sync_field, "") or "")
                             # protocol_text mirrors whatever wins so the block and the Event
                             # field never diverge right after import, same guarantee manual
                             # editing gives via autosave_service.save_text_block.

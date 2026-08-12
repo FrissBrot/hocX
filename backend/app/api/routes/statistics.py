@@ -3,7 +3,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import select, text
+from sqlalchemy import or_, select, text
 from sqlalchemy.orm import Session
 
 from app.core.cycle_utils import format_cycle_name
@@ -290,11 +290,15 @@ def get_statistics_overview(
     # ── Todos ────────────────────────────────────────────────────────────────
     todos = db.execute(
         select(TodoStatus.code, ProtocolTodo.completed_at)
-        .join(ProtocolElementBlock, ProtocolElementBlock.id == ProtocolTodo.protocol_element_block_id)
-        .join(ProtocolElement, ProtocolElement.id == ProtocolElementBlock.protocol_element_id)
-        .join(Protocol, Protocol.id == ProtocolElement.protocol_id)
+        # LEFT JOINs - protocol_element_block_id is nullable (standalone todos and
+        # submission-assignment/Abgabebox-generated todos have no block), and an INNER JOIN
+        # here silently dropped both kinds from the statistics/PDF chart entirely. Those
+        # todos carry their own ProtocolTodo.tenant_id instead, checked in the WHERE below.
+        .outerjoin(ProtocolElementBlock, ProtocolElementBlock.id == ProtocolTodo.protocol_element_block_id)
+        .outerjoin(ProtocolElement, ProtocolElement.id == ProtocolElementBlock.protocol_element_id)
+        .outerjoin(Protocol, Protocol.id == ProtocolElement.protocol_id)
         .join(TodoStatus, TodoStatus.id == ProtocolTodo.todo_status_id)
-        .where(Protocol.tenant_id == tenant_id)
+        .where(or_(Protocol.tenant_id == tenant_id, ProtocolTodo.tenant_id == tenant_id))
     ).all()
 
     todo_open = sum(1 for t in todos if t.code not in ("done", "cancelled") and not t.completed_at)

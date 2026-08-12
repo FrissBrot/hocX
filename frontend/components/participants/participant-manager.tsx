@@ -253,6 +253,12 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
     if (!selectedParticipantIds.length) {
       return;
     }
+    const ok = await confirm({
+      message: `${selectedParticipantIds.length} Teilnehmer endgültig löschen? Dies kann nicht rückgängig gemacht werden.`,
+      tone: "danger",
+      confirmLabel: "Löschen"
+    });
+    if (!ok) return;
     try {
       await browserApiFetch("/api/participants", {
         method: "DELETE",

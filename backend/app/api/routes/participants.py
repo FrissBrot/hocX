@@ -61,6 +61,8 @@ def create_participant(
     require_writer(user)
     try:
         return participant_service.create_participant(db, payload, tenant_id=user.current_tenant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Participant could not be created") from exc
@@ -79,6 +81,8 @@ def patch_participant(
         raise HTTPException(status_code=404, detail="Participant not found")
     try:
         updated = participant_service.update_participant(db, participant_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Participant could not be updated") from exc

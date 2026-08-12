@@ -181,6 +181,8 @@ def patch_protocol(
         raise HTTPException(status_code=404, detail="Protocol not found")
     try:
         protocol = service.update_protocol(db, protocol_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Protocol could not be updated") from exc
@@ -314,6 +316,7 @@ def delete_protocol(
     existing = service.get_protocol(db, protocol_id)
     if existing is None or existing.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Protocol not found")
+    audit_details = {"protocol_number": existing.protocol_number, "title": existing.title, "status": existing.status}
     try:
         deleted = service.delete_protocol(db, protocol_id)
     except SQLAlchemyError as exc:
@@ -321,6 +324,8 @@ def delete_protocol(
         raise HTTPException(status_code=400, detail="Protocol could not be deleted") from exc
     if not deleted:
         raise HTTPException(status_code=404, detail="Protocol not found")
+    audit.log(db, action="protocol.deleted", actor=user, entity_type="protocol", entity_id=protocol_id,
+              details=audit_details)
     return {"message": "Protocol deleted"}
 
 

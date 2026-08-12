@@ -11,7 +11,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib import rcParams
-from sqlalchemy import text, select
+from sqlalchemy import or_, text, select
 from sqlalchemy.orm import Session
 
 from app.models.entities import (
@@ -248,11 +248,14 @@ def _fetch_fines_data(db: Session, tenant_id: int) -> tuple[list[dict], list[dic
 def _fetch_todo_data(db: Session, tenant_id: int) -> dict:
     todos = db.execute(
         select(TodoStatus.code, ProtocolTodo.completed_at)
-        .join(ProtocolElementBlock, ProtocolElementBlock.id == ProtocolTodo.protocol_element_block_id)
-        .join(ProtocolElement, ProtocolElement.id == ProtocolElementBlock.protocol_element_id)
-        .join(Protocol, Protocol.id == ProtocolElement.protocol_id)
+        # LEFT JOINs - see statistics.py's identical fix: protocol_element_block_id is
+        # nullable (standalone/Abgabebox-generated todos), an INNER JOIN here dropped them
+        # from the chart entirely. Those carry their own ProtocolTodo.tenant_id instead.
+        .outerjoin(ProtocolElementBlock, ProtocolElementBlock.id == ProtocolTodo.protocol_element_block_id)
+        .outerjoin(ProtocolElement, ProtocolElement.id == ProtocolElementBlock.protocol_element_id)
+        .outerjoin(Protocol, Protocol.id == ProtocolElement.protocol_id)
         .join(TodoStatus, TodoStatus.id == ProtocolTodo.todo_status_id)
-        .where(Protocol.tenant_id == tenant_id)
+        .where(or_(Protocol.tenant_id == tenant_id, ProtocolTodo.tenant_id == tenant_id))
     ).all()
     done = sum(1 for t in todos if t.code in ("done", "cancelled") or t.completed_at)
     open_ = len(todos) - done
