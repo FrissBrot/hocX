@@ -269,6 +269,8 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
         return list.map((t) => t.id === todo.id ? { ...t, todo_status_id: nextId, todo_status_code: next } : t);
       }
       setTodos((prev) => ({ all: applyUpdate(prev.all), my: applyUpdate(prev.my) }));
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Status konnte nicht geändert werden", "error");
     } finally {
       setBusy((b) => ({ ...b, [todo.id]: false }));
     }
@@ -293,6 +295,8 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
       setCreateTask("");
       setCreateTags("");
       setShowCreate(false);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Todo konnte nicht erstellt werden", "error");
     } finally {
       setCreating(false);
     }

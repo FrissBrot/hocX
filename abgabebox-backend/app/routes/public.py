@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app import element_resolver, repository, scanner
 from app.captcha import verify_captcha
 from app.config import settings
-from app.db import get_db
+from app.db import get_db, tenant_upload_lock
 from app.schemas import AssignmentDetailPublic, AssignmentPublic, ElementPublic, UploadResult
 from app.storage import move_from_quarantine, save_to_quarantine, tenant_storage_bytes
 
@@ -62,6 +62,38 @@ def _content_matches_extension(content: bytes, extension: str) -> bool:
     if extension in ("doc", "xls", "ppt"):
         return head.startswith(_OLE_SIGNATURE)
     return False
+
+
+# H11 (2026-08-12 Audit): hard per-request cap, independent of whatever a tenant's
+# assignment.max_file_size_mb / max_files_per_element happen to be configured to (validated only
+# up to 100 MB / 20 files each in the main backend, see backend/app/schemas/submission.py) - this
+# is the worst-case legitimate total (20 x 100 MB) either of those two DB-driven settings could
+# ever combine to, so it can never reject a real upload while still giving this route its own
+# fixed ceiling instead of an unbounded one. The abgabebox-upload-body-limit Traefik middleware
+# (docker-compose.yml) enforces the same number one layer earlier, before this application code -
+# or even Starlette's multipart parser - ever runs; keep both numbers in sync.
+MAX_UPLOAD_REQUEST_BYTES = 20 * 100 * 1024 * 1024  # 2000 MB
+
+
+async def _read_upload_within_limit(file: UploadFile, max_bytes: int) -> bytes | None:
+    """Defense in depth for H11: rejects an oversized upload using Starlette's already-known
+    `.size` (populated by the multipart parser before the route runs) instead of unconditionally
+    buffering the whole thing into a second `bytes` object first just to measure it - a file
+    already known to be oversized never gets that extra full copy. Same pattern as
+    backend/app/api/routes/word_import.py's _read_upload_within_limit, deliberately duplicated
+    rather than imported to keep this public-facing service's dependency surface isolated from
+    the main backend (see storage.py's move_from_quarantine docstring for the same rationale
+    elsewhere in this file).
+
+    This alone does NOT stop Starlette from buffering the entire request body to disk before the
+    route (and therefore this function) ever runs - that's what the Traefik maxRequestBodyBytes
+    middleware above is for. Returns None if too large."""
+    if file.size is not None and file.size > max_bytes:
+        return None
+    content = await file.read()
+    if len(content) > max_bytes:
+        return None
+    return content
 
 
 def _get_tenant_or_404(db: Session, tenant_slug: str) -> dict:
@@ -179,15 +211,22 @@ async def upload(
     max_bytes = assignment["max_file_size_mb"] * 1024 * 1024
 
     contents: list[tuple[bytes, str, str | None]] = []
+    total_bytes_read = 0
     for upload_file in files:
         suffix = Path(upload_file.filename or "").suffix.lower().lstrip(".")
         if allowed_types and suffix not in allowed_types:
             _log("validation_failed", f"Dateityp nicht erlaubt: .{suffix}")
             raise HTTPException(status_code=400, detail=f"Dateityp '.{suffix}' nicht erlaubt")
-        content = await upload_file.read()
-        if len(content) > max_bytes:
-            _log("validation_failed", f"Datei zu gross: {upload_file.filename} ({len(content) // 1024} KB, max. {assignment['max_file_size_mb']} MB)")
+        # H11: bounded read (see _read_upload_within_limit above) instead of an unconditional
+        # `await upload_file.read()` on the whole body.
+        content = await _read_upload_within_limit(upload_file, max_bytes)
+        if content is None:
+            _log("validation_failed", f"Datei zu gross: {upload_file.filename} (max. {assignment['max_file_size_mb']} MB)")
             raise HTTPException(status_code=400, detail=f"Datei zu gross (max. {assignment['max_file_size_mb']} MB)")
+        total_bytes_read += len(content)
+        if total_bytes_read > MAX_UPLOAD_REQUEST_BYTES:
+            _log("validation_failed", f"Upload insgesamt zu gross ({total_bytes_read // 1024 // 1024} MB)")
+            raise HTTPException(status_code=400, detail="Upload insgesamt zu gross")
         if not _content_matches_extension(content, suffix):
             _log("validation_failed", f"Dateiinhalt passt nicht zur Endung: .{suffix}")
             raise HTTPException(status_code=400, detail=f"Dateiinhalt passt nicht zur angegebenen Endung '.{suffix}'")
@@ -198,9 +237,6 @@ async def upload(
 
     incoming_bytes = sum(len(content) for content, _, _ in contents)
     quota_bytes = settings.tenant_storage_quota_mb * 1024 * 1024
-    if tenant_storage_bytes(tenant["id"]) + incoming_bytes > quota_bytes:
-        _log("validation_failed", f"Speicherlimit des Mandanten erreicht (max. {settings.tenant_storage_quota_mb} MB)")
-        raise HTTPException(status_code=400, detail="Speicherlimit erreicht - bitte den Verein kontaktieren")
 
     def _slugify(text: str) -> str:
         text = text.lower()
@@ -212,28 +248,38 @@ async def upload(
     assignment_slug = _slugify(assignment["title"])
     element_slug = _slugify(element.get("label") or element_ref)
 
-    # Step 1: Save ALL files to quarantine first — nothing ever enters regular storage unscanned.
+    # H12: quota check + Step 1 (writing to quarantine, which is what actually changes what
+    # tenant_storage_bytes() sees) both happen inside a per-tenant advisory lock so two
+    # near-simultaneous uploads for the same tenant can't both pass the check before either has
+    # written its bytes to disk (TOCTOU) - see db.tenant_upload_lock for the full rationale,
+    # including why this is a cross-process Postgres lock and not an in-process asyncio.Lock.
     quarantine_files: list[dict] = []
-    for i, (content, original_name, mime_type) in enumerate(contents):
-        suffix = Path(original_name).suffix.lower()
-        try:
-            q_path, checksum = save_to_quarantine(
-                content, tenant_id=tenant["id"], assignment_id=assignment["id"], suffix=suffix
-            )
-        except Exception as exc:
-            _log("upload_error", f"Quarantäne-Speicherung fehlgeschlagen: {exc}")
-            raise HTTPException(status_code=500, detail="Datei konnte nicht gespeichert werden") from exc
-        counter = f"_{i+1}" if len(contents) > 1 else ""
-        display_name = f"{assignment_slug}_{element_slug}_{date_str}{counter}{suffix}"
-        quarantine_files.append({
-            "tenant_id": tenant["id"],
-            "original_name": display_name,
-            "mime_type": mime_type,
-            "storage_path": q_path,
-            "file_size_bytes": len(content),
-            "checksum_sha256": checksum,
-            "_content": content,
-        })
+    with tenant_upload_lock(tenant["id"]):
+        if tenant_storage_bytes(tenant["id"]) + incoming_bytes > quota_bytes:
+            _log("validation_failed", f"Speicherlimit des Mandanten erreicht (max. {settings.tenant_storage_quota_mb} MB)")
+            raise HTTPException(status_code=400, detail="Speicherlimit erreicht - bitte den Verein kontaktieren")
+
+        # Step 1: Save ALL files to quarantine first — nothing ever enters regular storage unscanned.
+        for i, (content, original_name, mime_type) in enumerate(contents):
+            suffix = Path(original_name).suffix.lower()
+            try:
+                q_path, checksum = save_to_quarantine(
+                    content, tenant_id=tenant["id"], assignment_id=assignment["id"], suffix=suffix
+                )
+            except Exception as exc:
+                _log("upload_error", f"Quarantäne-Speicherung fehlgeschlagen: {exc}")
+                raise HTTPException(status_code=500, detail="Datei konnte nicht gespeichert werden") from exc
+            counter = f"_{i+1}" if len(contents) > 1 else ""
+            display_name = f"{assignment_slug}_{element_slug}_{date_str}{counter}{suffix}"
+            quarantine_files.append({
+                "tenant_id": tenant["id"],
+                "original_name": display_name,
+                "mime_type": mime_type,
+                "storage_path": q_path,
+                "file_size_bytes": len(content),
+                "checksum_sha256": checksum,
+                "_content": content,
+            })
 
     _log("quarantined", "In Quarantäne gespeichert, Scan wird gestartet")
 

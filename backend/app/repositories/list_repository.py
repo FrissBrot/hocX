@@ -40,9 +40,30 @@ class ListRepository:
         return definition
 
     def update_definition(self, db: Session, definition: ListDefinition, values: dict) -> ListDefinition:
+        # A column's value_type change (e.g. "text" -> "participant") invalidates the shape
+        # of every existing entry's value for that column (list_service._normalize_value
+        # produces "text_value"/"participant_id"/"participant_ids"/"event_id" keys depending
+        # on value_type - there's no generic semantic conversion between them). Rather than
+        # leaving entries in the old, now-invalid shape, clear them to {} - a valid "empty"
+        # value for every value_type - before applying the type change.
+        value_columns_to_clear = []
+        if "column_one_value_type" in values and values["column_one_value_type"] != definition.column_one_value_type:
+            value_columns_to_clear.append(ListEntry.column_one_value_json)
+        if "column_two_value_type" in values and values["column_two_value_type"] != definition.column_two_value_type:
+            value_columns_to_clear.append(ListEntry.column_two_value_json)
+
         for key, value in values.items():
             setattr(definition, key, value)
         db.add(definition)
+
+        if value_columns_to_clear:
+            db.execute(
+                update(ListEntry)
+                .where(ListEntry.list_definition_id == definition.id)
+                .values(**{column.key: {} for column in value_columns_to_clear})
+            )
+            db.flush()
+
         if _COLUMN_STRUCTURE_FIELDS & values.keys():
             db.flush()
             self._bump_content_version(db, definition.id)

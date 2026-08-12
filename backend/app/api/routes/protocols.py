@@ -147,6 +147,9 @@ def excuse_participant(
     protocol = service.get_protocol(db, protocol_id)
     if protocol is None or protocol.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Protocol not found")
+    # Frozen (abgeschlossen) protocols must never have their attendance/fines touched after
+    # the fact - matches the guard every other write path on a protocol's content goes through.
+    service.get_protocol_or_404_not_frozen(db, protocol_id)
     try:
         updated = service.set_attendance_excused(db, protocol_id, participant_id, payload.excused)
     except SQLAlchemyError as exc:
@@ -285,6 +288,9 @@ def create_quick_todo(
     existing = service.get_protocol(db, protocol_id)
     if existing is None or existing.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Protocol not found")
+    # Same freeze guard as todos.py's create_todo/patch_todo/delete_todo - a frozen
+    # (abgeschlossen) protocol must not gain new blocks/todos after the fact.
+    service.get_protocol_or_404_not_frozen(db, protocol_id)
     try:
         block, todo = service.create_quick_todo(
             db,

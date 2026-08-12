@@ -4,7 +4,15 @@ from fastapi import UploadFile
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from app.models import Participant, Protocol, SubmissionAssignment, Template, Tenant, UserTenantRole
+from app.models import (
+    Participant,
+    Protocol,
+    SubmissionAssignment,
+    Template,
+    Tenant,
+    UserTenantRole,
+    WordImportDocument,
+)
 from app.schemas.admin import AdminTenantCreate, AdminTenantRead
 from app.schemas.user import TenantUpdate
 from app.services.document_template_service import DocumentTemplateService
@@ -104,10 +112,15 @@ class AdminTenantService:
           list_definition.
         - template: takes template_element/_block with it, clearing their restrict into
           element_definition, and its own restrict into document_template.
+        - word_import_document: has its own (non-nullable) restricts straight into template
+          and stored_file - it doesn't cascade from protocol/submission_assignment/template
+          (its protocol_id link is SET NULL, not CASCADE), so it must be cleared explicitly
+          before the template delete below and before tenant cascades into stored_file.
         """
         tenant = db.get(Tenant, tenant_id)
         if tenant is None:
             return False
+        db.execute(delete(WordImportDocument).where(WordImportDocument.tenant_id == tenant_id))
         db.execute(delete(Protocol).where(Protocol.tenant_id == tenant_id))
         db.execute(delete(SubmissionAssignment).where(SubmissionAssignment.tenant_id == tenant_id))
         db.execute(delete(Template).where(Template.tenant_id == tenant_id))

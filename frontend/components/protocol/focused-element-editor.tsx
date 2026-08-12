@@ -292,13 +292,18 @@ export function FocusedElementEditor({
       .then((result) => {
         if (!cancelled) setEventBlockCandidates(result.items);
       })
+      .catch((error) => {
+        if (!cancelled) {
+          showToast(error instanceof Error ? error.message : "Termine konnten nicht geladen werden", "error");
+        }
+      })
       .finally(() => {
         if (!cancelled) setEventBlockCandidatesLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [showEventBlockPicker, eventBlockScope, protocol.id, eventBlockCandidatesRefreshKey]);
+  }, [showEventBlockPicker, eventBlockScope, protocol.id, eventBlockCandidatesRefreshKey, showToast]);
   const eventAutosaveTimers = useRef<Record<number, number>>({});
   const newEventCreateTimers = useRef<Record<number, number>>({});
   const upcomingEvents = useMemo(

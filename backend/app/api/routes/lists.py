@@ -1,3 +1,4 @@
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -5,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, require_writer
+from app.models import ElementDefinition, ProtocolElementBlock
 from app.schemas.list_definition import (
     ListDefinitionCreate,
     ListDefinitionRead,
@@ -17,6 +19,43 @@ from app.services.list_service import ListService
 
 router = APIRouter()
 service = ListService()
+
+
+def _config_references_list(config: dict | None, list_definition_id: int) -> bool:
+    """True if a block/row config's `linked_list_id` (whole-list "Gekoppelte Liste" mode)
+    or any `rows[].linked_list_id` (row-link "Zeile aus Liste" mode) points at this list.
+    Mirrors the shape read by list_snapshot_service.py and word_import_service.py's
+    _template_linked_list_ids - there's no FK for this JSONB link."""
+    if not isinstance(config, dict):
+        return False
+    linked_list_id = config.get("linked_list_id")
+    if linked_list_id and int(linked_list_id) == list_definition_id:
+        return True
+    rows = config.get("rows")
+    if isinstance(rows, list):
+        for row in rows:
+            row_linked_list_id = row.get("linked_list_id") if isinstance(row, dict) else None
+            if row_linked_list_id and int(row_linked_list_id) == list_definition_id:
+                return True
+    return False
+
+
+def _list_definition_in_use(db: Session, list_definition_id: int) -> bool:
+    """Whether any template element block config or protocol block snapshot still links
+    to this list. Deleting a still-linked list would leave open protocols permanently
+    frozen on stale data and break new protocols during snapshot construction (see H7,
+    2026-08-12 audit)."""
+    for configuration_json in db.scalars(select(ElementDefinition.configuration_json)):
+        for block in (configuration_json or {}).get("blocks", []):
+            block_config = block.get("configuration_json") if isinstance(block, dict) else None
+            if _config_references_list(block_config, list_definition_id):
+                return True
+
+    for configuration_snapshot_json in db.scalars(select(ProtocolElementBlock.configuration_snapshot_json)):
+        if _config_references_list(configuration_snapshot_json, list_definition_id):
+            return True
+
+    return False
 
 
 @router.get("/lists", response_model=list[ListDefinitionRead])
@@ -73,6 +112,11 @@ def delete_definition(
     current = service.get_definition(db, list_definition_id)
     if current is None or current.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Liste nicht gefunden")
+    if _list_definition_in_use(db, list_definition_id):
+        raise HTTPException(
+            status_code=409,
+            detail="Liste ist noch mit einem Template-Baustein oder Protokoll verknuepft und kann nicht geloescht werden",
+        )
     try:
         deleted = service.delete_definition(db, list_definition_id)
     except SQLAlchemyError as exc:

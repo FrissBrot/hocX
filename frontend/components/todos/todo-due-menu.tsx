@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Popover } from "@/components/ui/popover";
 import { browserApiFetch } from "@/lib/api/client";
+import { useToast } from "@/contexts/toast-context";
 import { formatDate, formatDateRange } from "@/lib/utils/format";
 
 type DueEvent = {
@@ -32,6 +33,7 @@ type Props = {
 };
 
 export function TodoDueMenu({ todoId, label, onApply }: Props) {
+  const showToast = useToast();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<DueEventsResponse | null>(null);
@@ -44,8 +46,11 @@ export function TodoDueMenu({ todoId, label, onApply }: Props) {
     setLoading(true);
     browserApiFetch<DueEventsResponse>(`/api/protocol-todos/${todoId}/due-events`)
       .then((res) => setData(res))
+      .catch((error) => {
+        showToast(error instanceof Error ? error.message : "Termine konnten nicht geladen werden", "error");
+      })
       .finally(() => setLoading(false));
-  }, [open, todoId, data]);
+  }, [open, todoId, data, showToast]);
 
   function pick(patch: DuePatch) {
     onApply(patch);

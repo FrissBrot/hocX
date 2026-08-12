@@ -247,7 +247,14 @@ class PlatformOidcService:
             claims = jwt.decode(
                 id_token,
                 key=signing_key,
-                algorithms=[header.get("alg", "RS256")],
+                # Never derive the accepted algorithm from the token's own (attacker-controlled)
+                # header - that's the classic RS256->HS256 key-confusion attack: an attacker
+                # forges a token with alg=HS256 and signs it with the RSA public key (known via
+                # JWKS) treated as an HMAC secret, which jwt.decode would then happily "verify"
+                # as if it were the real RSA signature. The JWKS keys fetched above are RSA
+                # public keys (kty=RSA), so only RS256 is ever acceptable here, hard-coded
+                # server-side regardless of what the token claims.
+                algorithms=["RS256"],
                 audience=cfg.client_id,
                 issuer=discovery.get("issuer", cfg.issuer_url),
                 options={"require": ["exp", "iat", "sub"]},
