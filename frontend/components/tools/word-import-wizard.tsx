@@ -341,6 +341,14 @@ type TextDraft = {
   isFormBlock: boolean;
   formFields: WordImportFormFieldValue[];
   formFieldsByTarget: Record<string, WordImportFormFieldValue[]>;
+  // See WordImportTextMapping.sync_target_field/sync_field_status - only set alongside
+  // isEventRepeat. syncFieldSource is the reviewer's pick for a "conflict" status
+  // ("doc" keeps the extracted text, "existing" keeps the Event's current value),
+  // defaulting to "existing" like the analogous title/date conflict picker below.
+  syncTargetField: string | null;
+  syncFieldStatus: "empty" | "match" | "conflict" | null;
+  syncFieldExistingValue: string | null;
+  syncFieldSource: FieldSource;
 };
 // `linkedNone` records that the user explicitly chose "Keinen verknüpfen" - without it,
 // that choice is indistinguishable from "not yet decided" (both leave participant_id null),
@@ -1583,6 +1591,10 @@ export function WordImportWizard({
       isFormBlock: mapping.is_form_block,
       formFields: mapping.form_fields,
       formFieldsByTarget: mapping.form_fields_by_target,
+      syncTargetField: mapping.sync_target_field,
+      syncFieldStatus: mapping.sync_field_status,
+      syncFieldExistingValue: mapping.sync_field_existing_value,
+      syncFieldSource: "existing",
     }));
     const freshAttendance: AttendanceDraft[] = result.attendance_mappings.map((mapping) => ({
       raw_name: mapping.raw_name,
@@ -2102,6 +2114,7 @@ export function WordImportWizard({
           is_form_block: text.isFormBlock,
           form_fields: text.isFormBlock ? text.formFields : [],
           dismissed: text.dismissed,
+          sync_field_source: text.syncFieldStatus === "conflict" ? text.syncFieldSource : null,
         })),
         attendance: approvedAttendance.map((entry) => ({
           raw_name: entry.raw_name,
@@ -2997,6 +3010,48 @@ export function WordImportWizard({
                                     }
                                   />
                                 </label>
+                              )}
+                              {text.syncFieldStatus === "conflict" && (
+                                <div className="word-import-alert word-import-alert-block">
+                                  <WarningIcon />
+                                  <div className="grid" style={{ gap: "10px" }}>
+                                    <span>
+                                      Das Feld &quot;{text.syncTargetField}&quot; des verknüpften Termins enthält bereits einen abweichenden Wert. Welcher Wert soll übernommen werden?
+                                    </span>
+                                    <div className="word-import-diff-options">
+                                      <label className="field-radio-option">
+                                        <input
+                                          type="radio"
+                                          checked={text.syncFieldSource === "doc"}
+                                          onChange={() =>
+                                            setTexts((current) =>
+                                              current.map((row, rowIndex) => (rowIndex === index ? { ...row, syncFieldSource: "doc" } : row))
+                                            )
+                                          }
+                                        />
+                                        <span>
+                                          <span className="field-radio-option-label">Aus Dokument</span>
+                                          <strong>{text.content}</strong>
+                                        </span>
+                                      </label>
+                                      <label className="field-radio-option">
+                                        <input
+                                          type="radio"
+                                          checked={text.syncFieldSource === "existing"}
+                                          onChange={() =>
+                                            setTexts((current) =>
+                                              current.map((row, rowIndex) => (rowIndex === index ? { ...row, syncFieldSource: "existing" } : row))
+                                            )
+                                          }
+                                        />
+                                        <span>
+                                          <span className="field-radio-option-label">Bestehend</span>
+                                          <strong>{text.syncFieldExistingValue}</strong>
+                                        </span>
+                                      </label>
+                                    </div>
+                                  </div>
+                                </div>
                               )}
                               {text.isFormBlock ? (
                                 <div className="grid" style={{ gap: "0.5rem" }}>

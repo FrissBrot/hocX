@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 
 from app.models import ProtocolText
 from app.repositories.protocol_element_repository import ProtocolTextRepository
+from app.services import block_field_sync
 
 
 class AutosaveService:
@@ -9,7 +10,13 @@ class AutosaveService:
         self.text_repository = text_repository or ProtocolTextRepository()
 
     def save_text_block(
-        self, db: Session, protocol_element_block_id: int, content: str, *, track_changes_active: bool = False
+        self,
+        db: Session,
+        protocol_element_block_id: int,
+        content: str,
+        *,
+        track_changes_active: bool = False,
+        block_config: dict | None = None,
     ) -> dict[str, str | int | bool | None]:
         protocol_text = self.text_repository.get_by_protocol_element_block_id(db, protocol_element_block_id)
         if protocol_text is None:
@@ -30,6 +37,14 @@ class AutosaveService:
                 protocol_text.tracked_dirty = True
             protocol_text.content = content
         saved = self.text_repository.save(db, protocol_text)
+        if block_config:
+            block_field_sync.apply_text_sync(
+                db,
+                repeat_source_type=block_config.get("repeat_source_type"),
+                repeat_source_id=block_config.get("repeat_source_id"),
+                sync_target_field=block_config.get("sync_target_field"),
+                content=content,
+            )
         return self._result(saved, protocol_element_block_id)
 
     def accept_tracked_changes(self, db: Session, protocol_element_block_id: int) -> dict[str, str | int | bool | None] | None:

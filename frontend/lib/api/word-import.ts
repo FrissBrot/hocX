@@ -84,6 +84,16 @@ export type WordImportTextMapping = {
   // lets the wizard show real parsed values after a manual target switch instead of
   // blank fields.
   form_fields_by_target: Record<string, WordImportFormFieldValue[]>;
+  // Set when the resolved target block has a "DB-Speicherziel" (sync_target_field)
+  // configured in the template - see backend WordImportTextMapping. Only ever set
+  // alongside is_event_repeat (todo-repeat blocks aren't import targets at all).
+  sync_target_field: string | null;
+  // "empty": linked Event's field has no value yet, written without asking. "match":
+  // field already equals the extracted text. "conflict": field holds a different
+  // existing value - the wizard must ask which one wins (see WordImportCommitPayload
+  // texts[].sync_field_source), default "existing".
+  sync_field_status: "empty" | "match" | "conflict" | null;
+  sync_field_existing_value: string | null;
 };
 
 export type WordImportTextTarget = {
@@ -257,6 +267,11 @@ export type WordImportCommitPayload = {
     linked_event_id: number | null;
     is_form_block: boolean;
     form_fields: WordImportFormFieldValue[];
+    // Reviewer's pick when sync_field_status === "conflict" - "doc" keeps the extracted
+    // text (written into both the block and the Event field), "existing" keeps the
+    // Event's current value (written into both instead). Omit/null when there was no
+    // conflict to resolve.
+    sync_field_source?: "doc" | "existing" | null;
   }[];
   attendance: {
     raw_name: string;
