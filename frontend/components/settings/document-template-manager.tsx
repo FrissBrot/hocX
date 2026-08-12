@@ -101,7 +101,7 @@ const imageSlotDefinitions = [
   { key: "title_footer_image", label: "Bild — Titelblatt Footer",      help: "Bild unten links auf dem Titelblatt (.png, .jpg, .svg)" },
 ] as const;
 
-const imagePartTypes = new Set(imageSlotDefinitions.map((d) => d.key));
+const imagePartTypes: Set<string> = new Set(imageSlotDefinitions.map((d) => d.key));
 
 const partTypeGroups = [
   { label: "Bilder",      defs: imageSlotDefinitions },
@@ -111,7 +111,7 @@ const partTypeGroups = [
 
 const partTypeDefinitions = [...latexSlotDefinitions, ...fontSlotDefinitions, ...imageSlotDefinitions] as const;
 const partTypeOptions = partTypeDefinitions.map((entry) => entry.key);
-const fontPartTypes = new Set(fontSlotDefinitions.map((entry) => entry.key));
+const fontPartTypes: Set<string> = new Set(fontSlotDefinitions.map((entry) => entry.key));
 
 const initialPartForm: PartFormState = {
   name: "", part_type: "title_header_image", description: "", version: "1", is_active: true, file: null,
@@ -180,14 +180,14 @@ function templateFormFromTemplate(template: DocumentTemplate): TemplateFormState
     element_bullet_list: slots.element_bullet_list ? String(slots.element_bullet_list) : "",
     element_attendance: slots.element_attendance ? String(slots.element_attendance) : "",
     element_session_date: slots.element_session_date ? String(slots.element_session_date) : "",
-    title_header_image: (config.title_assets as any)?.header_image_part_id ? String((config.title_assets as any).header_image_part_id) : "",
-    title_footer_image: (config.title_assets as any)?.footer_image_part_id ? String((config.title_assets as any).footer_image_part_id) : "",
-    title_text_line1: (config.title_text as any)?.line1 ?? "",
-    title_text_line2: (config.title_text as any)?.line2 ?? "",
-    title_org_name: (config.title_text as any)?.org_name ?? "",
-    title_location: (config.title_text as any)?.location ?? "",
-    title_footer_contact: (config.title_text as any)?.footer_contact ?? "",
-    title_footer_color: (config.title_text as any)?.footer_color ?? "444444",
+    title_header_image: config.title_assets?.header_image_part_id ? String(config.title_assets.header_image_part_id) : "",
+    title_footer_image: config.title_assets?.footer_image_part_id ? String(config.title_assets.footer_image_part_id) : "",
+    title_text_line1: config.title_text?.line1 ?? "",
+    title_text_line2: config.title_text?.line2 ?? "",
+    title_org_name: config.title_text?.org_name ?? "",
+    title_location: config.title_text?.location ?? "",
+    title_footer_contact: config.title_text?.footer_contact ?? "",
+    title_footer_color: config.title_text?.footer_color ?? "444444",
     show_metadata: !(options.hide_metadata ?? true),
   };
 }
@@ -1219,8 +1219,8 @@ export function DocumentTemplateManager({ initialTemplates, initialParts, tenant
               </select>
             </label>
             <label className="field-stack">
-              <span className="field-label">{imagePartTypes.has(partForm.part_type as any) ? "Bilddatei" : fontPartTypes.has(partForm.part_type as any) ? "Font-Datei" : "LaTeX-Datei"}</span>
-              <input type="file" accept={imagePartTypes.has(partForm.part_type as any) ? ".png,.jpg,.jpeg,.svg" : fontPartTypes.has(partForm.part_type as any) ? ".ttf,.otf" : ".tex"}
+              <span className="field-label">{imagePartTypes.has(partForm.part_type) ? "Bilddatei" : fontPartTypes.has(partForm.part_type) ? "Font-Datei" : "LaTeX-Datei"}</span>
+              <input type="file" accept={imagePartTypes.has(partForm.part_type) ? ".png,.jpg,.jpeg,.svg" : fontPartTypes.has(partForm.part_type) ? ".ttf,.otf" : ".tex"}
                 onChange={(e) => setPartForm((f) => ({ ...f, file: e.target.files?.[0] ?? null }))} required />
             </label>
           </div>

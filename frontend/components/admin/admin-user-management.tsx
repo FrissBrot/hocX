@@ -11,49 +11,19 @@ import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
 import { AdminTenantSummary, UserSummary } from "@/types/api";
+import {
+  addOrUpsertMembership,
+  buildTenantNameMap,
+  emptyUserForm,
+  removeMembershipEntry,
+  userFormToPayload,
+  UserFormState
+} from "@/components/users/user-form-shared";
 
 type Props = {
   initialUsers: UserSummary[];
   allTenants: AdminTenantSummary[];
 };
-
-type MembershipEntry = {
-  tenant_id: number;
-  role_code: string;
-};
-
-type UserFormState = {
-  id?: number;
-  first_name: string;
-  last_name: string;
-  display_name: string;
-  email: string;
-  password: string;
-  preferred_language: string;
-  is_active: boolean;
-  login_enabled: boolean;
-  is_participant_account: boolean;
-  memberships: MembershipEntry[];
-  addTenantId: string;
-  addRoleCode: string;
-};
-
-function emptyUserForm(allTenants: AdminTenantSummary[]): UserFormState {
-  return {
-    first_name: "",
-    last_name: "",
-    display_name: "",
-    email: "",
-    password: "",
-    preferred_language: "de",
-    is_active: true,
-    login_enabled: true,
-    is_participant_account: false,
-    memberships: [],
-    addTenantId: allTenants[0] ? String(allTenants[0].id) : "",
-    addRoleCode: "reader"
-  };
-}
 
 export function AdminUserManagement({ initialUsers, allTenants }: Props) {
   const showToast = useToast();
@@ -67,7 +37,7 @@ export function AdminUserManagement({ initialUsers, allTenants }: Props) {
   const [mergeSourceUserId, setMergeSourceUserId] = useState<number | null>(null);
   const [mergeTargetUserId, setMergeTargetUserId] = useState("");
 
-  const tenantNameById = useMemo(() => new Map(allTenants.map((tenant) => [tenant.id, tenant.name])), [allTenants]);
+  const tenantNameById = useMemo(() => buildTenantNameMap(allTenants), [allTenants]);
 
   // Nur Benutzer mit freigeschaltetem Login und echter (nicht automatisch generierter
   // Teilnehmer-Platzhalter-) E-Mail sind hier relevant - Schattenaccounts ohne Login
@@ -107,8 +77,8 @@ export function AdminUserManagement({ initialUsers, allTenants }: Props) {
       login_enabled: user.login_enabled,
       is_participant_account: user.is_participant_account,
       memberships: user.memberships.map((membership) => ({ tenant_id: membership.tenant_id, role_code: membership.role_code })),
-      addTenantId: remainingTenants[0] ? String(remainingTenants[0].id) : "",
-      addRoleCode: "reader"
+      pickerTenantId: remainingTenants[0] ? String(remainingTenants[0].id) : "",
+      pickerRoleCode: "reader"
     });
     setFormError(null);
     setUserModalOpen(true);
@@ -124,20 +94,18 @@ export function AdminUserManagement({ initialUsers, allTenants }: Props) {
   }
 
   function addMembership() {
-    if (!userForm.addTenantId) return;
-    const tenantId = Number(userForm.addTenantId);
+    if (!userForm.pickerTenantId) return;
+    const tenantId = Number(userForm.pickerTenantId);
     setUserForm((current) => ({
       ...current,
-      memberships: [...current.memberships, { tenant_id: tenantId, role_code: current.addRoleCode }].sort(
-        (a, b) => a.tenant_id - b.tenant_id
-      )
+      memberships: addOrUpsertMembership(current.memberships, tenantId, current.pickerRoleCode, "add")
     }));
   }
 
   function removeMembership(tenantId: number) {
     setUserForm((current) => ({
       ...current,
-      memberships: current.memberships.filter((membership) => membership.tenant_id !== tenantId)
+      memberships: removeMembershipEntry(current.memberships, tenantId)
     }));
   }
 
@@ -148,21 +116,7 @@ export function AdminUserManagement({ initialUsers, allTenants }: Props) {
     setFormError(null);
 
     try {
-      const payload = {
-        first_name: userForm.first_name,
-        last_name: userForm.last_name,
-        display_name: userForm.display_name,
-        email: userForm.email,
-        preferred_language: userForm.preferred_language,
-        is_active: userForm.is_active,
-        login_enabled: userForm.login_enabled,
-        memberships: userForm.memberships.map((membership) => ({
-          tenant_id: membership.tenant_id,
-          role_code: membership.role_code,
-          is_active: true
-        })),
-        ...(userForm.password ? { password: userForm.password } : {})
-      };
+      const payload = userFormToPayload(userForm);
 
       const saved = userForm.id
         ? await browserApiFetch<UserSummary>(`/api/admin/users/${userForm.id}`, {
@@ -386,7 +340,7 @@ export function AdminUserManagement({ initialUsers, allTenants }: Props) {
                         <div className="role-picker">
                           <label className="field-stack">
                             <span className="field-label">Mandant</span>
-                            <select value={userForm.addTenantId} onChange={(event) => setUserForm((current) => ({ ...current, addTenantId: event.target.value }))}>
+                            <select value={userForm.pickerTenantId} onChange={(event) => setUserForm((current) => ({ ...current, pickerTenantId: event.target.value }))}>
                               {remainingTenantsToAdd.map((tenant) => (
                                 <option key={tenant.id} value={tenant.id}>
                                   {tenant.name}
@@ -396,7 +350,7 @@ export function AdminUserManagement({ initialUsers, allTenants }: Props) {
                           </label>
                           <label className="field-stack">
                             <span className="field-label">Rolle</span>
-                            <select value={userForm.addRoleCode} onChange={(event) => setUserForm((current) => ({ ...current, addRoleCode: event.target.value }))}>
+                            <select value={userForm.pickerRoleCode} onChange={(event) => setUserForm((current) => ({ ...current, pickerRoleCode: event.target.value }))}>
                               {ROLE_OPTIONS.map((r) => (
                                 <option key={r.code} value={r.code}>
                                   {r.label}

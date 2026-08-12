@@ -22,6 +22,7 @@ flowchart LR
 | [Listen](listen.md) | Frei konfigurierbare Listen (z. B. Vorstand, Inventar) |
 | [Todos](todos.md) | Aufgaben aus Protokollen nachverfolgen |
 | [Abgabebox](abgabebox.md) | Öffentlicher, anmeldefreier Datei-Upload für Externe |
+| [Word-Import](word-import.md) | Altprotokolle (.docx/.pdf) als neue Protokolle importieren |
 
 ## Rollen
 

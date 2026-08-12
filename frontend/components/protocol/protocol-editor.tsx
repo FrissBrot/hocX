@@ -667,7 +667,7 @@ export function ProtocolEditor({
         });
         return next;
       });
-    } catch {
+    } catch (err: unknown) {
       setBlockStatus((current) => {
         const next = { ...current };
         resequenced.forEach((element) => {
@@ -677,6 +677,7 @@ export function ProtocolEditor({
         });
         return next;
       });
+      showToast(err instanceof Error ? err.message : "Reihenfolge konnte nicht gespeichert werden", "error");
     }
   }
 
@@ -752,8 +753,9 @@ export function ProtocolEditor({
       }));
       setStatus(blockId, "saved");
       collab.sendFieldUpdate(`block-${blockId}`, { configuration_snapshot_json: updated.configuration_snapshot_json });
-    } catch {
+    } catch (err: unknown) {
       setStatus(blockId, "error");
+      showToast(err instanceof Error ? err.message : "Änderung konnte nicht gespeichert werden", "error");
     }
   }
 
@@ -783,8 +785,9 @@ export function ProtocolEditor({
           tracked_dirty: result.tracked_dirty,
           tracked_baseline_content: result.tracked_baseline_content,
         });
-      } catch {
+      } catch (err: unknown) {
         setStatus(protocolElementBlockId, "error");
+        showToast(err instanceof Error ? err.message : "Text konnte nicht gespeichert werden", "error");
       }
     }, 700);
   }
@@ -831,8 +834,9 @@ export function ProtocolEditor({
       setNewTodoTask((current) => ({ ...current, [protocolElementBlockId]: "" }));
       setNewTodoTags((current) => ({ ...current, [protocolElementBlockId]: "" }));
       setStatus(protocolElementBlockId, "saved");
-    } catch {
+    } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
+      showToast(err instanceof Error ? err.message : "Todo konnte nicht erstellt werden", "error");
     }
   }
 
@@ -848,8 +852,9 @@ export function ProtocolEditor({
         [protocolElementBlockId]: (current[protocolElementBlockId] ?? []).map((todo) => (todo.id === todoId ? updated : todo))
       }));
       setStatus(protocolElementBlockId, "saved");
-    } catch {
+    } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
+      showToast(err instanceof Error ? err.message : "Todo konnte nicht gespeichert werden", "error");
     }
   }
 
@@ -868,8 +873,9 @@ export function ProtocolEditor({
         [protocolElementBlockId]: (current[protocolElementBlockId] ?? []).filter((todo) => todo.id !== todoId)
       }));
       setStatus(protocolElementBlockId, "saved");
-    } catch {
+    } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
+      showToast(err instanceof Error ? err.message : "Todo konnte nicht gelöscht werden", "error");
     }
   }
 
@@ -910,8 +916,9 @@ export function ProtocolEditor({
       }));
       setSelectedFiles((current) => ({ ...current, [protocolElementBlockId]: null }));
       setStatus(protocolElementBlockId, "saved");
-    } catch {
+    } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
+      showToast(err instanceof Error ? err.message : "Bild konnte nicht hochgeladen werden", "error");
     }
   }
 
@@ -930,8 +937,9 @@ export function ProtocolEditor({
         [protocolElementBlockId]: (current[protocolElementBlockId] ?? []).filter((image) => image.id !== imageId)
       }));
       setStatus(protocolElementBlockId, "saved");
-    } catch {
+    } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
+      showToast(err instanceof Error ? err.message : "Bild konnte nicht gelöscht werden", "error");
     }
   }
 
@@ -976,8 +984,9 @@ export function ProtocolEditor({
       }
       setStatus(protocolElementBlockId, "saved");
       return created;
-    } catch {
+    } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
+      showToast(err instanceof Error ? err.message : "Termin konnte nicht erstellt werden", "error");
       return null;
     }
   }
@@ -992,8 +1001,9 @@ export function ProtocolEditor({
       setEvents((current) => current.map((event) => (event.id === eventId ? updated : event)));
       setStatus(protocolElementBlockId, "saved");
       return true;
-    } catch {
+    } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
+      showToast(err instanceof Error ? err.message : "Termin konnte nicht gespeichert werden", "error");
       return false;
     }
   }
@@ -1004,8 +1014,9 @@ export function ProtocolEditor({
       await browserApiFetch(`/api/events/${eventId}`, { method: "DELETE" });
       setEvents((current) => current.filter((event) => event.id !== eventId));
       setStatus(protocolElementBlockId, "saved");
-    } catch {
+    } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
+      showToast(err instanceof Error ? err.message : "Termin konnte nicht gelöscht werden", "error");
     }
   }
 
@@ -1157,8 +1168,9 @@ export function ProtocolEditor({
       setStatus(protocolElementBlockId, "saved");
       void syncBlockListSnapshot(protocolElementBlockId);
       return true;
-    } catch {
+    } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
+      showToast(err instanceof Error ? err.message : "Eintrag konnte nicht erstellt werden", "error");
       return false;
     }
   }
@@ -1186,8 +1198,9 @@ export function ProtocolEditor({
       setStatus(protocolElementBlockId, "saved");
       void syncBlockListSnapshot(protocolElementBlockId);
       return true;
-    } catch {
+    } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
+      showToast(err instanceof Error ? err.message : "Eintrag konnte nicht gespeichert werden", "error");
       return false;
     }
   }
@@ -1208,8 +1221,9 @@ export function ProtocolEditor({
       }));
       setStatus(protocolElementBlockId, "saved");
       void syncBlockListSnapshot(protocolElementBlockId);
-    } catch {
+    } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
+      showToast(err instanceof Error ? err.message : "Eintrag konnte nicht gelöscht werden", "error");
     }
   }
 
@@ -1223,22 +1237,40 @@ export function ProtocolEditor({
         method: "PATCH",
         body: JSON.stringify({ is_visible_snapshot: true, configuration_snapshot_json: newConfig }),
       });
-    } catch {
+    } catch (err: unknown) {
       updateBlockInState(blockId, (b) => ({ ...b, is_visible_snapshot: false, configuration_snapshot_json: block.configuration_snapshot_json }));
+      showToast(err instanceof Error ? err.message : "Termin konnte nicht eingeblendet werden", "error");
     }
   }
 
   async function removeEventBlock(blockId: number) {
+    // Optimistic removal, rolled back on failure by re-inserting the removed block into its
+    // original element at its original position - mirrors the rollback pattern used for todo
+    // updates in todos/todo-list-view.tsx.
+    let removedFrom: { elementId: number; block: ProtocolElement["blocks"][number]; index: number } | null = null;
     setElements((current) =>
-      current.map((element) => ({
-        ...element,
-        blocks: element.blocks.filter((b) => b.id !== blockId),
-      }))
+      current.map((element) => {
+        const index = element.blocks.findIndex((b) => b.id === blockId);
+        if (index === -1) return element;
+        removedFrom = { elementId: element.id, block: element.blocks[index], index };
+        return { ...element, blocks: element.blocks.filter((b) => b.id !== blockId) };
+      })
     );
     try {
       await browserApiFetch(`/api/protocol-element-blocks/${blockId}`, { method: "DELETE" });
-    } catch {
-      // block stays removed in UI — not critical to revert
+    } catch (err: unknown) {
+      if (removedFrom) {
+        const { elementId, block, index } = removedFrom;
+        setElements((current) =>
+          current.map((element) => {
+            if (element.id !== elementId) return element;
+            const blocks = [...element.blocks];
+            blocks.splice(Math.min(index, blocks.length), 0, block);
+            return { ...element, blocks };
+          })
+        );
+      }
+      showToast(err instanceof Error ? err.message : "Termin konnte nicht entfernt werden", "error");
     }
   }
 
@@ -1286,7 +1318,8 @@ export function ProtocolEditor({
         )
       );
       return newBlock;
-    } catch {
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : "Termin konnte nicht hinzugefügt werden", "error");
       return null;
     }
   }

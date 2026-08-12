@@ -1,19 +1,60 @@
+import asyncio
 import traceback as traceback_module
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
 from app.config import settings
 from app.db import SessionLocal
 from app.repository import insert_error_log
 from app.routes import public
+from app.storage import cleanup_stale_quarantine_files
 
 Path(settings.storage_root).mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title=settings.app_name, version="0.1.0")
+
+async def quarantine_cleanup_loop() -> None:
+    """Periodic sweep that deletes stale orphaned files under quarantine/ - see
+    storage.cleanup_stale_quarantine_files for why this is filesystem-age-based only (the
+    restricted DB role this service runs as has no SELECT on submission_upload_file/stored_file
+    to check for orphan status the way the main backend's rescan loops do).
+
+    Runs in every uvicorn worker (--workers 2, no single-instance process in this deployment),
+    so each tick is guarded by a Postgres advisory lock - only the worker that acquires it runs
+    the sweep, the other skips that tick. Same pattern as the main backend's
+    domain_health_check_loop/abgabebox_rescan_loop (backend/app/main.py). Advisory locks are a
+    plain Postgres function call, not a table grant, so this works fine under the restricted role
+    even though it has no SELECT/UPDATE/DELETE on any table.
+    """
+    interval_seconds = settings.quarantine_cleanup_interval_minutes * 60
+    max_age_seconds = settings.quarantine_max_age_minutes * 60
+    while True:
+        db = SessionLocal()
+        try:
+            acquired = db.execute(text("SELECT pg_try_advisory_lock(202600007)")).scalar()
+            if acquired:
+                try:
+                    cleanup_stale_quarantine_files(max_age_seconds)
+                finally:
+                    db.execute(text("SELECT pg_advisory_unlock(202600007)"))
+        finally:
+            db.close()
+        await asyncio.sleep(interval_seconds)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    cleanup_task = asyncio.create_task(quarantine_cleanup_loop())
+    yield
+    cleanup_task.cancel()
+
+
+app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -62,6 +103,14 @@ async def logged_http_exception_handler(request: Request, exc: HTTPException):
     if exc.status_code >= 400 and exc.__cause__ is not None:
         _record_error(request, exc.__cause__, exc.status_code)
     return await http_exception_handler(request, exc)
+
+
+@app.get("/api/health")
+def health() -> dict[str, str]:
+    """Liveness probe for the Compose healthcheck - same shape as the main backend's
+    /api/health. Doesn't touch the DB: this service has no other unauthenticated,
+    dependency-free route a healthcheck could use instead."""
+    return {"status": "ok", "service": settings.app_name}
 
 
 app.include_router(public.router, prefix="/api", tags=["public"])

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.cycle_utils import format_cycle_name
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, require_reader
+from app.services.chart_service import GROUPS_LIST_NAME
 from app.models.entities import (
     AttendanceFine,
     CycleConfig,
@@ -144,11 +145,11 @@ def get_statistics_overview(
                   SELECT le.column_one_value_json->>'text_value'
                   FROM list_definition ld
                   JOIN list_entry le ON le.list_definition_id = ld.id
-                  WHERE ld.tenant_id = :tenant_id AND ld.name = 'Gruppen'
+                  WHERE ld.tenant_id = :tenant_id AND ld.name = :groups_list_name
               )
             ORDER BY ec.cycle_config_id, ec.cycle_year
         """),
-        {"tenant_id": tenant_id},
+        {"tenant_id": tenant_id, "groups_list_name": GROUPS_LIST_NAME},
     ).all()
     cycles: list[CycleInfo] = []
     seen_cycles: set[tuple[int, int]] = set()
@@ -184,12 +185,12 @@ def get_statistics_overview(
                   FROM list_definition ld
                   JOIN list_entry le ON le.list_definition_id = ld.id
                   WHERE ld.tenant_id = :tenant_id
-                    AND ld.name = 'Gruppen'
+                    AND ld.name = :groups_list_name
               )
             GROUP BY e.tag, ec.cycle_config_id, ec.cycle_year
             ORDER BY e.tag, ec.cycle_year
         """),
-        {"tenant_id": tenant_id},
+        {"tenant_id": tenant_id, "groups_list_name": GROUPS_LIST_NAME},
     ).all()
 
     groups_stats = [

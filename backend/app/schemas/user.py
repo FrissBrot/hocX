@@ -70,6 +70,15 @@ class UserSelfUpdate(BaseModel):
     default_tenant_id: int | None = None
 
 
+class UserPasswordChange(BaseModel):
+    """Self-service password change while logged in - requires the current password as
+    confirmation. There is deliberately no "forgot password" email flow (no mail
+    infrastructure exists in this project); that stays out of scope here."""
+
+    current_password: str
+    new_password: str = Field(min_length=12)
+
+
 class UserRead(UserBase):
     id: int
     memberships: list[TenantMembershipRead] = Field(default_factory=list)

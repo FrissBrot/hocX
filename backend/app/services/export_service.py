@@ -1983,23 +1983,6 @@ Status: {protocol_status}
         }
         return "".join(_MAP.get(c, c) for c in str(value))
 
-    def _escape_latex_text(self, value: str) -> str:
-        """Escape LaTeX special chars. Underscores are also escaped here as a safety net
-        for any unpaired underscores that fall through the markdown italic parser."""
-        _MAP = {
-            "\\": "\\textbackslash{}",
-            "&": "\\&",
-            "%": "\\%",
-            "$": "\\$",
-            "#": "\\#",
-            "_": "\\_",
-            "{": "\\{",
-            "}": "\\}",
-            "~": "\\textasciitilde{}",
-            "^": "\\textasciicircum{}",
-        }
-        return "".join(_MAP.get(c, c) for c in str(value))
-
     def _inline_markdown_to_latex(self, text: str) -> str:
         """Convert inline markdown (bold/italic) to LaTeX with proper escaping."""
         parts: list[str] = []
@@ -2007,7 +1990,7 @@ Status: {protocol_status}
         while i < len(text):
             # Markdown backslash escape: \* \_ \\ etc. → literal character
             if text[i] == "\\" and i + 1 < len(text) and text[i + 1] in ("*", "_", "\\", "{", "}", "`"):
-                parts.append(self._escape_latex_text(text[i + 1]))
+                parts.append(self._escape_latex(text[i + 1]))
                 i += 2
                 continue
             if text[i:i+2] == "**":
@@ -2036,7 +2019,7 @@ Status: {protocol_status}
             j = i + 1
             while j < len(text) and text[j] not in ("*", "_", "\\"):
                 j += 1
-            parts.append(self._escape_latex_text(text[i:j]))
+            parts.append(self._escape_latex(text[i:j]))
             i = j
         return "".join(parts)
 

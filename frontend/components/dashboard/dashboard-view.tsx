@@ -4,13 +4,9 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { browserApiFetch } from "@/lib/api/client";
+import { FINE_TYPE_LABEL } from "@/lib/constants/fine-types";
 import { formatDate } from "@/lib/utils/format";
 import { AttendanceFineListItem, NextSessionAttendanceEntry, NextSessionInfo, TodoListItem } from "@/types/api";
-
-const FINE_TYPE_LABEL: Record<string, string> = {
-  late: "Verspätet",
-  absent: "Unentschuldigt",
-};
 
 type Props = {
   todos: TodoListItem[];

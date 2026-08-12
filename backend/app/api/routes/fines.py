@@ -80,23 +80,6 @@ def create_fine(
     return result
 
 
-@router.post("/fines/{fine_id}/delete", status_code=status.HTTP_204_NO_CONTENT)
-def delete_fine_post(
-    fine_id: int,
-    db: Session = Depends(get_db),
-    user: CurrentUser = Depends(get_current_user),
-):
-    require_finance_access(user)
-    try:
-        deleted = repo.delete_fine(db, fine_id, user.current_tenant_id)
-    except SQLAlchemyError as exc:
-        db.rollback()
-        raise HTTPException(status_code=400, detail="Fine could not be deleted") from exc
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Fine not found or already collected")
-    audit.log(db, action="fine.deleted", actor=user, entity_type="attendance_fine", entity_id=fine_id)
-
-
 @router.delete("/fines/{fine_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_fine(
     fine_id: int,

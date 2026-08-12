@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { Route } from "next";
 import { ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -47,7 +48,7 @@ export function AdminShell({ children, session }: { children: ReactNode; session
               {navLinks.map((link) => {
                 const isActive = pathname === link.href || (link.href !== "/admin" && pathname.startsWith(`${link.href}/`));
                 return (
-                  <Link href={link.href as any} key={link.href} className={isActive ? "nav-link nav-link-active" : "nav-link"}>
+                  <Link href={link.href as Route} key={link.href} className={isActive ? "nav-link nav-link-active" : "nav-link"}>
                     {link.label}
                   </Link>
                 );

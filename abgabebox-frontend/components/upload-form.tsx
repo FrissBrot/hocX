@@ -109,6 +109,9 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
         { method: "POST", body: formData }
       );
       if (!response.ok) {
+        if (response.status === 429) {
+          throw new Error("Zu viele Versuche – bitte kurz warten und dann nochmals versuchen");
+        }
         const body = await response.json().catch(() => null);
         throw new Error(body?.detail ?? "Upload fehlgeschlagen");
       }

@@ -141,8 +141,8 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
       const url = result.content_url ?? null;
       setExportUrl(url);
       if (url) triggerDownload(url);
-    } catch {
-      // keep accessible on error
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "PDF-Export fehlgeschlagen", "error");
     } finally {
       setExportBusy(false);
     }
@@ -171,8 +171,8 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
         setTodos((cur) => ({ ...cur, my: [...cur.my, ...next] }));
         setHasMoreMy(next.length === PAGE_SIZE);
       }
-    } catch {
-      // keep current list on error
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Weitere Todos konnten nicht geladen werden", "error");
     } finally {
       setIsLoadingMore(false);
     }

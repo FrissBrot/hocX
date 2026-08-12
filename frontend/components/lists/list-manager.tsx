@@ -192,8 +192,8 @@ export function ListManager({
       const url = result.content_url ?? null;
       setExportUrl(url);
       if (url) triggerDownload(url);
-    } catch {
-      // keep accessible
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "PDF-Export fehlgeschlagen", "error");
     } finally {
       setExportBusy(false);
     }

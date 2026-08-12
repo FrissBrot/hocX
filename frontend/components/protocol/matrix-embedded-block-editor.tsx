@@ -758,6 +758,7 @@ export function MatrixEmbeddedBlockEditor({
                         type="button"
                         className="button-ghost button-icon"
                         title="Terminzeile hinzufügen"
+                        aria-label="Terminzeile hinzufügen"
                         disabled={showNewEmbeddedEventRow || creatingEmbeddedEvent}
                         onClick={() => {
                           setShowNewEmbeddedEventRow(true);
@@ -858,6 +859,7 @@ export function MatrixEmbeddedBlockEditor({
                             type="button"
                             className="button-ghost button-icon button-icon-danger"
                             title="Neue Terminzeile verwerfen"
+                            aria-label="Neue Terminzeile verwerfen"
                             disabled={creatingEmbeddedEvent}
                             onClick={resetNewEmbeddedEventRow}
                           >

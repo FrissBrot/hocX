@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.cycle_utils import format_cycle_name
 from app.models import Event, Protocol
-from app.models.entities import EventCycle
+from app.models.entities import CycleConfig, EventCycle
 from app.repositories.event_repository import EventRepository
 from app.schemas.event import CycleAssignment, EventCreate, EventUpdate
 from app.schemas.protocol import ProtocolCycleInfo
@@ -86,7 +86,7 @@ class EventService:
         )
         created = self.repository.create(db, event)
         if payload.cycle_assignments:
-            self._set_cycle_assignments(db, created.id, payload.cycle_assignments)
+            self._set_cycle_assignments(db, created.id, payload.cycle_assignments, tenant_id=tenant_id)
             db.refresh(created)
         return created
 
@@ -104,7 +104,7 @@ class EventService:
         if values:
             event = self.repository.update(db, event, values)
         if payload.cycle_assignments is not None:
-            self._set_cycle_assignments(db, event.id, payload.cycle_assignments)
+            self._set_cycle_assignments(db, event.id, payload.cycle_assignments, tenant_id=event.tenant_id)
             db.refresh(event)
         return event
 
@@ -115,7 +115,20 @@ class EventService:
         self.repository.delete(db, event)
         return True
 
-    def _set_cycle_assignments(self, db: Session, event_id: int, assignments: list[CycleAssignment]) -> None:
+    def _set_cycle_assignments(
+        self, db: Session, event_id: int, assignments: list[CycleAssignment], *, tenant_id: int
+    ) -> None:
+        cycle_config_ids = {a.cycle_config_id for a in assignments}
+        if cycle_config_ids:
+            owned_ids = {
+                row[0]
+                for row in db.query(CycleConfig.id)
+                .filter(CycleConfig.id.in_(cycle_config_ids), CycleConfig.tenant_id == tenant_id)
+                .all()
+            }
+            foreign_ids = cycle_config_ids - owned_ids
+            if foreign_ids:
+                raise ValueError(f"Unknown cycle_config_id: {sorted(foreign_ids)}")
         db.query(EventCycle).filter(EventCycle.event_id == event_id).delete(synchronize_session=False)
         for a in assignments:
             db.add(EventCycle(event_id=event_id, cycle_config_id=a.cycle_config_id, cycle_year=a.cycle_year))

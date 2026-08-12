@@ -4,9 +4,14 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, PlainSerializer
+from pydantic import BaseModel, Field, PlainSerializer
 
 FinanceDecimal = Annotated[Decimal, PlainSerializer(lambda v: float(v), return_type=float, when_used="json")]
+
+# Fines are always a charge against a participant, never a rebate - unlike
+# FinanceTransactionCreate.amount (app/schemas/finance.py), where a negative amount
+# intentionally represents an expense. gt=0 rejects zero/negative fine amounts at the API boundary.
+PositiveFineAmount = Annotated[Decimal, PlainSerializer(lambda v: float(v), return_type=float, when_used="json"), Field(gt=0)]
 
 
 class AttendanceFineCreate(BaseModel):
@@ -14,7 +19,7 @@ class AttendanceFineCreate(BaseModel):
     participant_id: int | None = None
     participant_name_snapshot: str
     fine_type: Literal["late", "absent"]
-    amount: FinanceDecimal
+    amount: PositiveFineAmount
     account_id: int
 
 

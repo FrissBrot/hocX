@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 
 import { listElements } from "@/lib/api";
+import { formatDate } from "@/lib/format";
 
 const COLORS = 4;
 
@@ -40,8 +41,8 @@ export default async function AssignmentElementsPage({
               </div>
               {element.window_start || element.window_end ? (
                 <div className="window">
-                  {element.window_start ? `${element.window_start} – ` : ""}
-                  {element.window_end}
+                  {element.window_start ? `${formatDate(element.window_start)} – ` : ""}
+                  {formatDate(element.window_end)}
                 </div>
               ) : null}
             </Link>

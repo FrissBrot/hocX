@@ -14,7 +14,7 @@ from app.schemas.protocol import (
     ProtocolElementRead,
     ProtocolElementUpdate,
 )
-from app.services.responsible_label_service import resolve_display_section_title
+from app.services.responsible_label_service import resolve_display_section_titles_batch
 
 
 class ProtocolElementService:
@@ -33,6 +33,7 @@ class ProtocolElementService:
         show_when_empty_by_id = {row[0].id: row[1] for row in element_rows}
         block_rows = self.repository.list_blocks_for_elements(db, [element.id for element in elements])
         blocks_by_element: dict[int, list[ProtocolElementBlockRead]] = {}
+        section_titles_by_element_id = resolve_display_section_titles_batch(db, elements, protocol_status or "")
 
         for row in block_rows:
             block = row.ProtocolElementBlock
@@ -87,7 +88,7 @@ class ProtocolElementService:
                 protocol_id=element.protocol_id,
                 template_element_id=element.template_element_id,
                 sort_index=element.sort_index,
-                section_name_snapshot=resolve_display_section_title(db, element, protocol_status or ""),
+                section_name_snapshot=section_titles_by_element_id[element.id],
                 section_order_snapshot=element.section_order_snapshot,
                 is_required_snapshot=element.is_required_snapshot,
                 is_visible_snapshot=element.is_visible_snapshot,

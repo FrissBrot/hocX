@@ -253,6 +253,24 @@ class TenantImportService:
                 # The account exists (so every USER_ID_COLUMNS reference below still resolves)
                 # but cannot log in until a tenant admin sets a real password (UserUpdate.password).
                 overrides["password_hash"] = hash_password(secrets.token_urlsafe(32))
+            # DECISION (audit finding, evaluated deliberately - not left unnoticed): if this row
+            # is a real member of the exported tenant, `overrides` above does NOT touch
+            # password_hash, so build_row copies the source's real bcrypt hash unchanged onto the
+            # new account on this installation. That is intentional for a genuine tenant move
+            # (operator exports a tenant off one installation and imports it on another): the
+            # member keeps the password they already know and can log in immediately, exactly
+            # like restoring a backup would. A forced reset here would actively hurt that
+            # legitimate case for no clear security gain - the hash isn't being exposed to a new
+            # party, it just now exists on two installations that the same tenant owns/operates.
+            # A deeper mitigation (e.g. a `must_change_password` flag forcing a reset on next
+            # login) was considered and rejected as out of scope for this pass: it needs a new
+            # nullable-then-backfilled column, an Alembic migration, and a frontend gate on first
+            # login after import - real work, and overkill for a Mittel-severity finding whose
+            # actual exposure (same secret duplicated across installations the same operator
+            # controls) is much smaller than a credential leaked to an outside party. If a
+            # password-change-while-logged-in endpoint lands (see user_service.py), an operator
+            # can already tell freshly imported members to rotate their password by convention
+            # without any code change here.
             new_user = build_row(AppUser, row, overrides)
             self.db.add(new_user)
             self.db.flush()

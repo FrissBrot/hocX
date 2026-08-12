@@ -12,8 +12,6 @@ export type CandidateItem = {
   checked: boolean;
   disabled?: boolean;
   groupLabel?: string;
-  /** Set to false to hide the onRemove button for this specific item (e.g. candidates that don't exist yet). */
-  removable?: boolean;
   /** Set to false to hide the edit icon for this specific item. */
   editable?: boolean;
 };
@@ -28,9 +26,6 @@ type CheckboxCandidateModalProps = {
   loading?: boolean;
   emptyMessage?: string;
   onToggle: (item: CandidateItem, nextChecked: boolean) => void | Promise<void>;
-  /** Optional destructive action per item (e.g. "endgültig löschen"), separate from the checked/unchecked toggle. */
-  onRemove?: (item: CandidateItem) => void | Promise<void>;
-  removeLabel?: string;
   /** Renders an inline edit form inside the card when the item's edit icon is clicked. */
   renderEditForm?: (item: CandidateItem, close: () => void) => React.ReactNode;
   /** Rendered above the search/list — for scope toggles, "+ Neu anlegen", etc. */
@@ -55,8 +50,6 @@ export function CheckboxCandidateModal({
   loading = false,
   emptyMessage = "Keine Elemente gefunden.",
   onToggle,
-  onRemove,
-  removeLabel = "Endgültig löschen",
   renderEditForm,
   topActions,
 }: CheckboxCandidateModalProps) {
@@ -126,36 +119,19 @@ export function CheckboxCandidateModal({
                       }
                     }}
                   >
-                    {(renderEditForm && item.editable !== false) || (onRemove && item.removable !== false) ? (
+                    {renderEditForm && item.editable !== false ? (
                       <div className="candidate-card-toolbar">
-                        {renderEditForm && item.editable !== false ? (
-                          <button
-                            type="button"
-                            className="button-ghost button-icon candidate-card-edit"
-                            title="Termin bearbeiten"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingItem(item);
-                            }}
-                          >
-                            ✎
-                          </button>
-                        ) : (
-                          <span />
-                        )}
-                        {onRemove && item.removable !== false ? (
-                          <button
-                            type="button"
-                            className="button-ghost button-icon button-icon-danger"
-                            title={removeLabel}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void onRemove(item);
-                            }}
-                          >
-                            x
-                          </button>
-                        ) : null}
+                        <button
+                          type="button"
+                          className="button-ghost button-icon candidate-card-edit"
+                          title="Termin bearbeiten"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingItem(item);
+                          }}
+                        >
+                          ✎
+                        </button>
                       </div>
                     ) : null}
                     <div className="candidate-card-body">

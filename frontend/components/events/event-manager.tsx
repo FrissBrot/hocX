@@ -256,8 +256,8 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
       const url = result.content_url ?? null;
       setExportUrl(url);
       if (url) triggerDownload(url);
-    } catch {
-      // keep button accessible on error
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "PDF-Export fehlgeschlagen", "error");
     } finally {
       setExportBusy(false);
     }
@@ -303,8 +303,9 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
         )
       );
       setAvailableCycles(cycleGroups.flat());
-    } catch {
+    } catch (error) {
       cyclesLoadedRef.current = false;
+      showToast(error instanceof Error ? error.message : "Zyklen konnten nicht geladen werden", "error");
     } finally {
       setCyclesLoading(false);
     }
@@ -536,8 +537,8 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
       const next = await browserApiFetch<EventSummary[]>(`/api/events?skip=${events.length}&limit=${PAGE_SIZE}`);
       setEvents((current) => [...current, ...next]);
       setHasMore(next.length === PAGE_SIZE);
-    } catch {
-      // keep current list on error
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Weitere Termine konnten nicht geladen werden", "error");
     } finally {
       setIsLoadingMore(false);
     }

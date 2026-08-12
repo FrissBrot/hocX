@@ -11,6 +11,7 @@ import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { formatDateRange } from "@/lib/utils/format";
+import { ELEMENT_TYPE_LABELS } from "@/lib/constants/element-types";
 import {
   CycleConfigSummary,
   DocumentTemplate,
@@ -362,21 +363,6 @@ const BEHAVIOR_ICON_FIELDS: Array<{ field: TemplateElementBehaviorField; label: 
   { field: "export_visible", label: "Im Export sichtbar", icon: <BehaviorExportIcon /> },
 ];
 
-const ELEMENT_TYPE_LABELS: Record<number, string> = {
-  1: "Text",
-  2: "Todo",
-  3: "Bild",
-  6: "Tabelle",
-  7: "Terminliste",
-  9: "Anwesenheit",
-  10: "Sitzungsdatum",
-  11: "Matrix",
-  12: "Kontostand",
-  13: "Transaktionen",
-  14: "Bussenliste",
-  15: "Diagramm",
-};
-
 function blockDisplayLabel(block: TemplateElementBlock): string {
   const title = block.block_title?.trim() || block.title?.trim();
   if (title) {
@@ -484,6 +470,20 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
       showToast(`Deleted template #${templateId}`, "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Template deletion failed", "error");
+    }
+  }
+
+  async function toggleTemplateArchived(template: TemplateSummary) {
+    const nextStatus = template.status === "archived" ? "active" : "archived";
+    try {
+      const updated = await browserApiFetch<TemplateSummary>(`/api/templates/${template.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      setTemplates((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      showToast(nextStatus === "archived" ? "Vorlage archiviert" : "Vorlage aus dem Archiv zurückgeholt", "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Status konnte nicht geändert werden", "error");
     }
   }
 
@@ -608,6 +608,16 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
                 >
                   Duplizieren
                 </button>
+                <button
+                  type="button"
+                  className="button-inline button-ghost"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void toggleTemplateArchived(template);
+                  }}
+                >
+                  {template.status === "archived" ? "Aus Archiv zurückholen" : "Archivieren"}
+                </button>
                 <button type="button" className="button-inline button-danger" onClick={(event) => {
                   event.stopPropagation();
                   void deleteTemplate(template.id);
@@ -693,6 +703,10 @@ export function TemplateEditor({
   const [responsibilitySearch, setResponsibilitySearch] = useState("");
   const [manualLinkListId, setManualLinkListId] = useState("");
   const [manualLinkEntryId, setManualLinkEntryId] = useState("");
+  // Guards applyResponsibilityNameMode/autoAssignResponsiblesFromList, both of which await a
+  // sequential per-element PATCH loop - without this, a second click while the first sequence
+  // is still running could interleave two overlapping save sequences against the same elements.
+  const [bulkAssignBusy, setBulkAssignBusy] = useState(false);
   const [participantAssignments, setParticipantAssignments] = useState<TemplateParticipantAssignmentState[]>(
     () => normalizeTemplateParticipantAssignments(initialAssignedParticipants)
   );
@@ -751,6 +765,11 @@ export function TemplateEditor({
   );
   const templateDropExpandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const templateDragPreviewRef = useRef<HTMLElement | null>(null);
+  // Monotonic sequence guard for persistTemplateOrder: fast repeated drag/drop or position
+  // edits can start a new reorder before an in-flight one's PATCH requests resolve. Only the
+  // response belonging to the most-recently-started call is allowed to commit `elements`, so a
+  // slow, now-stale response can never clobber a newer order that already landed.
+  const templateOrderSeqRef = useRef(0);
   const filteredResponsibilityParticipants = useMemo(() => {
     const query = responsibilitySearch.trim().toLowerCase();
     return [...availableParticipants]
@@ -850,6 +869,9 @@ export function TemplateEditor({
       const entries = await browserApiFetch<StructuredListEntry[]>(`/api/lists/${listDefinitionId}/entries`);
       setListEntriesByListId((current) => ({ ...current, [listDefinitionId]: entries ?? [] }));
       return entries ?? [];
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Listeneinträge konnten nicht geladen werden", "error");
+      return [];
     } finally {
       setLoadingResponsibleListId((current) => (current === listDefinitionId ? null : current));
     }
@@ -918,6 +940,7 @@ export function TemplateEditor({
   }
 
   async function applyResponsibilityNameMode(nextMode: ResponsibleNameMode) {
+    if (bulkAssignBusy) return;
     setResponsibilityNameMode(nextMode);
     const itemsToUpdate = orderedElements.filter((item) => {
       const currentResponsibility = parseResponsibilityConfig(item.configuration_json);
@@ -927,6 +950,7 @@ export function TemplateEditor({
       showToast("Namensformat für Verantwortliche gesetzt", "success");
       return;
     }
+    setBulkAssignBusy(true);
     try {
       for (const item of itemsToUpdate) {
         await saveElementResponsibility(item.id, (current) => ({
@@ -937,15 +961,19 @@ export function TemplateEditor({
       showToast("Namensformat für Verantwortliche gespeichert", "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Namensformat konnte nicht gespeichert werden", "error");
+    } finally {
+      setBulkAssignBusy(false);
     }
   }
 
   async function autoAssignResponsiblesFromList(listDefinitionId: number, targetItems: TemplateElement[] = orderedElements) {
+    if (bulkAssignBusy) return;
     const listMeta = eligibleResponsibleLists.find((item) => item.definition.id === listDefinitionId);
     if (!listMeta) {
       return;
     }
     setResponsibilityAutoListId(String(listDefinitionId));
+    setBulkAssignBusy(true);
     try {
       const entries = await ensureResponsibleListEntries(listDefinitionId);
       let matchedElementCount = 0;
@@ -1002,6 +1030,8 @@ export function TemplateEditor({
       }
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Automatische Zuordnung konnte nicht gespeichert werden", "error");
+    } finally {
+      setBulkAssignBusy(false);
     }
   }
 
@@ -1256,6 +1286,7 @@ export function TemplateEditor({
   }
 
   async function persistTemplateOrder(nextOrdered: TemplateElement[], successMessage: string) {
+    const seq = ++templateOrderSeqRef.current;
     const previousElements = elements;
     const previousSortIndexById = new Map(previousElements.map((item) => [item.id, item.sort_index]));
     const resequenced = resequenceTemplateElements(nextOrdered);
@@ -1283,6 +1314,11 @@ export function TemplateEditor({
           })
         )
       );
+      // A newer reorder has since started and already applied its own optimistic + server
+      // state - let it own `elements` from here on, this stale response must not overwrite it.
+      if (seq !== templateOrderSeqRef.current) {
+        return true;
+      }
       setElements((current) => {
         const byId = new Map(current.map((item) => [item.id, item]));
         for (const updated of updatedItems) {
@@ -1294,7 +1330,9 @@ export function TemplateEditor({
       router.refresh();
       return true;
     } catch (error) {
-      setElements(previousElements);
+      if (seq === templateOrderSeqRef.current) {
+        setElements(previousElements);
+      }
       showToast(error instanceof Error ? error.message : "Template-Reihenfolge konnte nicht gespeichert werden", "error");
       return false;
     }
@@ -1700,6 +1738,7 @@ export function TemplateEditor({
                 <span className="field-label">Namensanzeige</span>
                 <select
                   value={responsibilityNameMode}
+                  disabled={bulkAssignBusy}
                   onChange={(event) => void applyResponsibilityNameMode(event.target.value as ResponsibleNameMode)}
                 >
                   <option value="display_name">Anzeigename</option>
@@ -1712,6 +1751,7 @@ export function TemplateEditor({
                 <span className="field-label">Initiale Zuordnung aus Liste</span>
                 <select
                   value={responsibilityAutoListId}
+                  disabled={bulkAssignBusy}
                   onChange={(event) => {
                     const nextValue = event.target.value;
                     setResponsibilityAutoListId(nextValue);
@@ -1733,10 +1773,10 @@ export function TemplateEditor({
                 <button
                   type="button"
                   className="button-ghost button-inline"
-                  disabled={!responsibilityAutoListId}
+                  disabled={!responsibilityAutoListId || bulkAssignBusy}
                   onClick={() => responsibilityAutoListId && void autoAssignResponsiblesFromList(Number(responsibilityAutoListId))}
                 >
-                  Erneut abgleichen
+                  {bulkAssignBusy ? "…" : "Erneut abgleichen"}
                 </button>
               </div>
             </div>

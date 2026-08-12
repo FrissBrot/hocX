@@ -90,6 +90,7 @@ nav:
       - Listen: benutzer/listen.md
       - Todos: benutzer/todos.md
       - Abgabebox: benutzer/abgabebox.md
+      - Word-Import: benutzer/word-import.md
   - Technik & Betrieb:
       - Übersicht: technik/index.md
       - Big Picture: technik/big-picture.md

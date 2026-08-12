@@ -107,6 +107,14 @@ services:
       # Generiert die Router fuer Mandanten-Custom-Domains, gemeinsam mit Traefik (ro-Mount oben)
       - ./infra/traefik/dynamic:/app/traefik_dynamic
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --timeout-keep-alive 75"
+    healthcheck:
+      # Kein curl im python:3.13-slim-Image (siehe Audit) - urllib aus der Stdlib genuegt fuer
+      # einen simplen Liveness-Check gegen den Health-Endpoint aus app/main.py.
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     labels:
       - "traefik.enable=true"
       # Main API router (all non-auth paths)
@@ -186,6 +194,16 @@ services:
       - /app/.next
       - ./.git:/app/.git:ro
     command: sh -c "export HOCX_VERSION=dev-$(git -C /app rev-parse --short HEAD 2>/dev/null || echo unknown) && npm run build && rm -rf .next/standalone/public .next/standalone/.next/static && cp -r public .next/standalone/public && cp -r .next/static .next/standalone/.next/static && HOSTNAME=0.0.0.0 PORT=3000 node .next/standalone/server.js"
+    healthcheck:
+      # "/" liefert bei fehlender Session ein 307 nach /login statt eines 200 - curl -f
+      # akzeptiert das (nur >=400 gilt als Fehler), reicht als reiner Liveness-Check.
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      # Grosszuegig, da der dev-Start hier "npm run build" im Vordergrund vor dem
+      # eigentlichen Server-Start ausfuehrt (siehe command oben).
+      start_period: 120s
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.hocx-frontend.rule=Host(`${TRAEFIK_DOMAIN}`)"
@@ -216,6 +234,14 @@ services:
       - ./frontend/.next:/app/.next
       - ./.git:/app/.git:ro
     command: sh -c "export HOCX_VERSION=dev-$(git -C /app rev-parse --short HEAD 2>/dev/null || echo unknown) && npm run build && rm -rf .next/standalone/public .next/standalone/.next/static && cp -r public .next/standalone/public && cp -r .next/static .next/standalone/.next/static && HOSTNAME=0.0.0.0 PORT=3000 node .next/standalone/server.js"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      # Grosszuegig, da der dev-Start hier "npm run build" im Vordergrund vor dem
+      # eigentlichen Server-Start ausfuehrt (siehe command oben).
+      start_period: 120s
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.hocx-website.rule=Host(`${TRAEFIK_WEB_DOMAIN}`)"
@@ -253,6 +279,13 @@ services:
       - ./abgabebox-backend:/app
       - ./storage/abgabebox-uploads:/app/storage
     command: sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"
+    healthcheck:
+      # Kein curl im python:3.13-slim-Image (siehe Audit), analog zum Haupt-Backend oben.
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.abgabebox-backend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && PathPrefix(`/api`)"
@@ -333,6 +366,14 @@ services:
       - /app/node_modules
       - /app/.next
     command: sh -c "npm run build && rm -rf .next/standalone/public .next/standalone/.next/static && cp -r public .next/standalone/public && cp -r .next/static .next/standalone/.next/static && HOSTNAME=0.0.0.0 PORT=3000 node .next/standalone/server.js"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      # Grosszuegig, da der dev-Start hier "npm run build" im Vordergrund vor dem
+      # eigentlichen Server-Start ausfuehrt (siehe command oben).
+      start_period: 120s
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.abgabebox-frontend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`)"
@@ -351,6 +392,12 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.hocx-docs.rule=Host(`${TRAEFIK_DOCS_DOMAIN}`)"
