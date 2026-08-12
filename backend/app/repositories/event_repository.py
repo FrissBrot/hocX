@@ -36,18 +36,22 @@ class EventRepository:
     def get(self, db: Session, event_id: int) -> Event | None:
         return db.get(Event, event_id)
 
-    def create(self, db: Session, event: Event) -> Event:
+    def create(self, db: Session, event: Event, *, commit: bool = True) -> Event:
         db.add(event)
-        db.commit()
-        db.refresh(event)
+        db.flush()
+        if commit:
+            db.commit()
+            db.refresh(event)
         return event
 
-    def update(self, db: Session, event: Event, values: dict) -> Event:
+    def update(self, db: Session, event: Event, values: dict, *, commit: bool = True) -> Event:
         for key, value in values.items():
             setattr(event, key, value)
         db.add(event)
-        db.commit()
-        db.refresh(event)
+        db.flush()
+        if commit:
+            db.commit()
+            db.refresh(event)
         return event
 
     def delete(self, db: Session, event: Event) -> None:

@@ -981,6 +981,12 @@ class ProtocolService:
             raise ValueError("Template not found")
         if template.tenant_id != tenant_id:
             raise ValueError("Template does not belong to current tenant")
+        if payload.event_id is not None:
+            # event_id is client-supplied - without this check a writer could link a
+            # freshly created protocol to another tenant's Event.
+            linked_event = db.get(Event, payload.event_id)
+            if linked_event is None or linked_event.tenant_id != tenant_id:
+                raise ValueError("Event does not belong to current tenant")
 
         selected_document_template_id = template.document_template_id
         document_template = db.get(DocumentTemplate, selected_document_template_id) if selected_document_template_id else None
@@ -1683,6 +1689,12 @@ class ProtocolService:
         previous_status = protocol.status
         values = payload.model_dump(exclude_unset=True)
         document_template_id = values.pop("document_template_id", None) if "document_template_id" in values else None
+        if values.get("event_id") is not None:
+            # event_id is client-supplied - without this check a writer could re-link an
+            # existing protocol to another tenant's Event (see create_from_template above).
+            linked_event = db.get(Event, values["event_id"])
+            if linked_event is None or linked_event.tenant_id != protocol.tenant_id:
+                raise ValueError("Event does not belong to current tenant")
         new_status = values.get("status")
         if new_status is not None and new_status != previous_status:
             self._validate_status_transition(previous_status, new_status)
@@ -1702,6 +1714,7 @@ class ProtocolService:
         protocol = self.repository.get(db, protocol_id)
         if protocol is None:
             return False
+        self.get_protocol_or_404_not_frozen(db, protocol_id)
         self.repository.delete(db, protocol)
         return True
 
@@ -1744,6 +1757,7 @@ class ProtocolService:
         *,
         protocol_element_id: int,
         event_id: int,
+        tenant_id: int,
         block_sort_index: int | None = None,
     ) -> ProtocolElementBlock:
         """Manually add an auto-generated event block to an existing protocol element."""
@@ -1752,7 +1766,9 @@ class ProtocolService:
             raise ValueError("Protocol element not found")
 
         event = db.get(Event, event_id)
-        if event is None:
+        if event is None or event.tenant_id != tenant_id:
+            # event_id is client-supplied - without this check a writer in one tenant could
+            # embed another tenant's Event title/date/description into their own protocol.
             raise ValueError("Event not found")
 
         # Load element definition from the template element

@@ -149,8 +149,16 @@ class ParticipantService:
             joined_at=payload.joined_at,
             left_at=payload.left_at,
         )
-        created = self.repository.create(db, participant)
-        created = self._ensure_linked_user(db, created)
+        try:
+            created = self.repository.create(db, participant, commit=False)
+            created = self._ensure_linked_user(db, created)
+        except Exception:
+            # Repository used to commit the new row immediately, before this and the
+            # linked-user creation could still fail - leaving a Participant permanently
+            # in the DB (unlinked, or worse half-linked) despite the client seeing an
+            # error response. Roll back everything so a failure here is all-or-nothing.
+            db.rollback()
+            raise
         db.commit()
         db.refresh(created)
         return created
@@ -162,8 +170,12 @@ class ParticipantService:
         values = payload.model_dump(exclude_unset=True)
         if not values:
             return participant
-        updated = self.repository.update(db, participant, values)
-        self._sync_linked_user_if_unambiguous(db, updated)
+        try:
+            updated = self.repository.update(db, participant, values, commit=False)
+            self._sync_linked_user_if_unambiguous(db, updated)
+        except Exception:
+            db.rollback()
+            raise
         db.commit()
         db.refresh(updated)
         return updated
@@ -225,10 +237,16 @@ class ParticipantService:
                     email=email,
                     is_active=True,
                 )
-                db.add(participant)
-                db.flush()
-                db.refresh(participant)
-                linked = self._ensure_linked_user(db, participant)
+                # SAVEPOINT per row - a failed flush/constraint leaves the outer session in
+                # "pending rollback" without one, which used to fail every subsequent row too
+                # and made the final commit discard the entire batch, contradicting the
+                # best-effort partial-import contract this function is designed for
+                # (imported/duplicates/errors reported separately).
+                with db.begin_nested():
+                    db.add(participant)
+                    db.flush()
+                    db.refresh(participant)
+                    linked = self._ensure_linked_user(db, participant)
                 imported.append(linked)
                 existing_names.add(display_name.lower())
             except Exception as exc:  # noqa: BLE001

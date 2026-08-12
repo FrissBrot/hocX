@@ -133,6 +133,8 @@ def patch_protocol_element(
 ):
     require_writer(user)
     access_service.ensure_can_read_protocol_element(db, user, protocol_element_id)
+    protocol_id = access_service.repository.protocol_id_for_element(db, protocol_element_id=protocol_element_id)
+    protocol_service.get_protocol_or_404_not_frozen(db, protocol_id)
     try:
         protocol_element = service.update_protocol_element(db, protocol_element_id, payload)
     except SQLAlchemyError as exc:
@@ -234,7 +236,7 @@ def delete_protocol_element_block(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
-    access_service.ensure_can_read_protocol_block(db, user, protocol_element_block_id)
+    _block_and_protocol_or_404(db, user, protocol_element_block_id)
     try:
         found = service.delete_protocol_element_block(db, protocol_element_block_id)
     except SQLAlchemyError as exc:
@@ -253,11 +255,14 @@ def create_protocol_element_block_from_event(
 ):
     require_writer(user)
     access_service.ensure_can_read_protocol_element(db, user, protocol_element_id)
+    protocol_id = access_service.repository.protocol_id_for_element(db, protocol_element_id=protocol_element_id)
+    protocol_service.get_protocol_or_404_not_frozen(db, protocol_id)
     try:
         protocol_block = protocol_service.add_event_block_to_element(
             db,
             protocol_element_id=protocol_element_id,
             event_id=payload.event_id,
+            tenant_id=user.current_tenant_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

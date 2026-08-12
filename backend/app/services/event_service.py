@@ -84,10 +84,18 @@ class EventService:
             spezial_text2=payload.spezial_text2,
             spezial_text3=payload.spezial_text3,
         )
-        created = self.repository.create(db, event)
-        if payload.cycle_assignments:
-            self._set_cycle_assignments(db, created.id, payload.cycle_assignments, tenant_id=tenant_id)
-            db.refresh(created)
+        try:
+            created = self.repository.create(db, event, commit=False)
+            if payload.cycle_assignments:
+                self._set_cycle_assignments(db, created.id, payload.cycle_assignments, tenant_id=tenant_id, commit=False)
+        except Exception:
+            # Repository used to commit the new Event immediately, before cycle assignment
+            # validation (foreign cycle_config_id) could still fail - leaving an Event
+            # permanently in the DB despite the client seeing an error response.
+            db.rollback()
+            raise
+        db.commit()
+        db.refresh(created)
         return created
 
     def update_event(self, db: Session, event_id: int, payload: EventUpdate) -> Event | None:
@@ -101,11 +109,16 @@ class EventService:
             raise ValueError("Event end date must be on or after the start date")
         if "participant_count" in values and values["participant_count"] is not None:
             values["participant_count"] = max(0, int(values["participant_count"]))
-        if values:
-            event = self.repository.update(db, event, values)
-        if payload.cycle_assignments is not None:
-            self._set_cycle_assignments(db, event.id, payload.cycle_assignments, tenant_id=event.tenant_id)
-            db.refresh(event)
+        try:
+            if values:
+                event = self.repository.update(db, event, values, commit=False)
+            if payload.cycle_assignments is not None:
+                self._set_cycle_assignments(db, event.id, payload.cycle_assignments, tenant_id=event.tenant_id, commit=False)
+        except Exception:
+            db.rollback()
+            raise
+        db.commit()
+        db.refresh(event)
         return event
 
     def delete_event(self, db: Session, event_id: int) -> bool:
@@ -116,7 +129,7 @@ class EventService:
         return True
 
     def _set_cycle_assignments(
-        self, db: Session, event_id: int, assignments: list[CycleAssignment], *, tenant_id: int
+        self, db: Session, event_id: int, assignments: list[CycleAssignment], *, tenant_id: int, commit: bool = True
     ) -> None:
         cycle_config_ids = {a.cycle_config_id for a in assignments}
         if cycle_config_ids:
@@ -132,7 +145,8 @@ class EventService:
         db.query(EventCycle).filter(EventCycle.event_id == event_id).delete(synchronize_session=False)
         for a in assignments:
             db.add(EventCycle(event_id=event_id, cycle_config_id=a.cycle_config_id, cycle_year=a.cycle_year))
-        db.commit()
+        if commit:
+            db.commit()
 
     _CSV_ALIASES = {
         "event_date": ["event_date", "startdatum", "start_datum", "datum", "date", "startdate"],

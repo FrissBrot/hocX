@@ -58,6 +58,8 @@ def create_template(
     require_admin(user)
     try:
         return service.create_template(db, payload, tenant_id=user.current_tenant_id, created_by=user.user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Template could not be created") from exc
@@ -86,6 +88,8 @@ def patch_template(
         raise HTTPException(status_code=404, detail="Template not found")
     try:
         template = service.update_template(db, template_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Template could not be updated") from exc

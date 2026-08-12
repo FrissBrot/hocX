@@ -269,7 +269,10 @@ class DocumentTemplateService:
             return protocol
 
         document_template = self.repository.get(db, document_template_id)
-        if document_template is None:
+        if document_template is None or document_template.tenant_id != protocol.tenant_id:
+            # document_template_id is client-supplied on PATCH /protocols/{id} - without
+            # this check a writer could copy another tenant's private LaTeX layout/branding
+            # into their own protocol.
             raise ValueError("Document template not found")
         source_dir = Path(document_template.filesystem_path)
         if not source_dir.exists():
