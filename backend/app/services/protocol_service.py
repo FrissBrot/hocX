@@ -2,6 +2,7 @@ from datetime import date, timedelta
 
 from fastapi import HTTPException
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -30,7 +31,11 @@ from app.services.access_service import AccessService
 from app.services.block_behavior import resolve_block_behavior
 from app.repositories.participant_repository import participant_eligible_on
 from app.services import list_snapshot_service
-from app.services.responsible_label_service import resolve_display_section_title, resolve_responsible_label
+from app.services.responsible_label_service import (
+    resolve_display_section_title,
+    resolve_responsible_label,
+    resolve_responsible_labels_batch,
+)
 from app.repositories.protocol_repository import ProtocolRepository
 from app.schemas.protocol import NextSessionAttendanceEntry, NextSessionRead, ProtocolCreateFromTemplate, ProtocolUpdate
 
@@ -1007,43 +1012,76 @@ class ProtocolService:
                 "{cycle_year_start}": str(counts["cycle_year_start"]),
                 "{cycle_year_end}": str(counts["cycle_year_end"]),
             }
-        if payload.protocol_number:
-            protocol_number = payload.protocol_number
-        else:
-            protocol_number = None
+
+        def _pick_protocol_number(current_counts: dict[str, int]) -> tuple[str | None, dict[str, int]]:
+            if payload.protocol_number:
+                return payload.protocol_number, current_counts
             for bump in range(100):
-                bumped = {**counts, "n": counts["n"] + bump, "n_year": counts["n_year"] + bump, "n_month": counts["n_month"] + bump, "n_cycle": counts["n_cycle"] + bump, "n_cycle_all": counts["n_cycle_all"] + bump}
+                bumped = {**current_counts, "n": current_counts["n"] + bump, "n_year": current_counts["n_year"] + bump, "n_month": current_counts["n_month"] + bump, "n_cycle": current_counts["n_cycle"] + bump, "n_cycle_all": current_counts["n_cycle_all"] + bump}
                 candidate = self._format_pattern(template.protocol_number_pattern, counts=bumped, protocol_date=payload.protocol_date)
                 if not candidate:
                     break
                 exists = db.scalar(select(Protocol.id).where(Protocol.tenant_id == tenant_id, Protocol.protocol_number == candidate))
                 if not exists:
-                    protocol_number = candidate
-                    counts = bumped
-                    break
-        title = payload.title or self._format_pattern(
-            template.title_pattern,
-            counts=counts,
-            protocol_date=payload.protocol_date,
-        )
-        if not protocol_number:
-            raise ValueError("Protocol number is required or must be derivable from the template pattern")
-        protocol = Protocol(
-            tenant_id=tenant_id,
-            template_id=template.id,
-            template_version=template.version,
-            document_template_id=selected_document_template_id,
-            document_template_version=document_template.version if document_template else None,
-            document_template_path_snapshot=None,
-            protocol_number=protocol_number,
-            title=title,
-            protocol_date=payload.protocol_date,
-            event_id=payload.event_id,
-            status="geplant",
-            created_by=created_by,
-        )
-        db.add(protocol)
-        db.flush()
+                    return candidate, bumped
+            return None, current_counts
+
+        # Auto-derived numbers race: the exists-check above only sees already-committed rows, so
+        # two concurrent create_from_template calls for the same template can both land on the
+        # same "next" number before either commits. Rather than let the loser hit the DB's
+        # uq_protocol_tenant_number constraint and surface a generic 400, retry with a freshly
+        # re-queried number a few times. An explicit payload.protocol_number is a deliberate
+        # user choice rather than an auto-pick, so it is never retried - a collision there is a
+        # real conflict and should fail immediately, same as before.
+        max_attempts = 1 if payload.protocol_number else 5
+        protocol: Protocol | None = None
+        for attempt in range(max_attempts):
+            protocol_number, counts = _pick_protocol_number(counts)
+            title = payload.title or self._format_pattern(
+                template.title_pattern,
+                counts=counts,
+                protocol_date=payload.protocol_date,
+            )
+            if not protocol_number:
+                raise ValueError("Protocol number is required or must be derivable from the template pattern")
+            protocol = Protocol(
+                tenant_id=tenant_id,
+                template_id=template.id,
+                template_version=template.version,
+                document_template_id=selected_document_template_id,
+                document_template_version=document_template.version if document_template else None,
+                document_template_path_snapshot=None,
+                protocol_number=protocol_number,
+                title=title,
+                protocol_date=payload.protocol_date,
+                event_id=payload.event_id,
+                status="geplant",
+                created_by=created_by,
+            )
+            try:
+                # SAVEPOINT scoped to just this insert attempt (same pattern as
+                # ParticipantService.import_csv's per-row retry) - a unique-constraint collision
+                # only unwinds the failed Protocol row, not the template/document_template/
+                # cycle_cfg already read above, so the retry can immediately re-query fresh
+                # counts and try again without disturbing anything else in the session.
+                with db.begin_nested():
+                    db.add(protocol)
+                    db.flush()
+                break
+            except IntegrityError:
+                protocol = None
+                if attempt == max_attempts - 1:
+                    raise
+                # Re-fetch counts so the retry sees whatever the winning concurrent
+                # transaction just committed.
+                counts = self._sequence_counts(
+                    db,
+                    tenant_id=tenant_id,
+                    template_id=template.id,
+                    protocol_date=payload.protocol_date,
+                    reset_month=cycle_cfg.reset_month if cycle_cfg else 12,
+                    reset_day=cycle_cfg.reset_day if cycle_cfg else 31,
+                )
 
         text_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "text"))
         todo_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "todo"))
@@ -1565,13 +1603,12 @@ class ProtocolService:
                 ProtocolElement.responsible_assignments_snapshot.is_not(None),
             )
         ).all()
+        titled_elements = [element for element in elements if element.element_title_snapshot]
+        labels_by_element_id = resolve_responsible_labels_batch(db, titled_elements)
+
         changed = False
-        for element in elements:
-            if not element.element_title_snapshot:
-                continue
-            label = resolve_responsible_label(
-                db, element.responsible_assignments_snapshot, element.responsible_name_display_mode, live=True
-            )
+        for element in titled_elements:
+            label = labels_by_element_id.get(element.id, "")
             element.section_name_snapshot = f"{element.element_title_snapshot} ({label})" if label else element.element_title_snapshot
             db.add(element)
             changed = True

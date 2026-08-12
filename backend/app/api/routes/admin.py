@@ -66,6 +66,21 @@ def list_domains(db: Session = Depends(get_db)):
     return domain_service.list_domains(db)
 
 
+@router.delete("/domains/{domain_id}", status_code=204)
+def delete_domain(
+    domain_id: int,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(get_current_admin),
+):
+    domain = domain_service.delete_domain(db, domain_id)
+    if domain is None:
+        raise HTTPException(status_code=404, detail="Domain not found")
+    audit.log(
+        db, action="admin.domain_deleted", actor_email=current_admin.email, tenant_id=domain.tenant_id,
+        entity_type="tenant_domain", entity_id=domain_id, details={"domain": domain.domain, "purpose": domain.purpose},
+    )
+
+
 @router.get("/error-logs", response_model=SystemErrorLogPage)
 def list_error_logs(
     tenant_id: int | None = None,

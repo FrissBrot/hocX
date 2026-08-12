@@ -3312,6 +3312,34 @@ class WordImportService:
                                 # to the Event between analyze() and commit() can't be
                                 # silently overwritten with a stale value.
                                 final_content = str(getattr(linked_event, sync_field, "") or "")
+                            elif linked_event is not None:
+                                # sync_field_status/sync_field_source were computed once
+                                # during analyze() against the ORIGINAL extracted document
+                                # text - the wizard then lets the reviewer freely edit this
+                                # block's text before committing, and content here is that
+                                # (possibly edited) text. Re-check for a conflict fresh,
+                                # against the Event's CURRENT field value, using the text
+                                # actually being committed - not the stale analyze()-time
+                                # comparison - so an edit made after analyze() ran (or a
+                                # concurrent change to the Event in between) can't silently
+                                # overwrite a value the conflict UI never actually evaluated.
+                                fresh_existing_value = str(getattr(linked_event, sync_field, "") or "").strip()
+                                fresh_conflict = bool(fresh_existing_value) and fresh_existing_value != final_content.strip()
+                                if fresh_conflict and text_commit.sync_field_source != "doc":
+                                    # No explicit "overwrite with document text" resolution
+                                    # covers this conflict (either analyze() saw "empty"/
+                                    # "match" and the text was edited afterward, or the
+                                    # Event's field changed since analyze() ran) - mirror the
+                                    # "existing" branch above and keep the Event's current
+                                    # value rather than silently clobbering it with unconfirmed
+                                    # text, same validate-at-commit-time approach event_commit
+                                    # already applies to title/date conflicts.
+                                    final_content = str(getattr(linked_event, sync_field, "") or "")
+                                    commit_warnings.append(
+                                        f'Abschnitt "{text_commit.extracted_heading}": Feld "{sync_field}" des '
+                                        "verknüpften Termins wurde nicht überschrieben, da der aktuelle Wert vom "
+                                        "eingelesenen Text abweicht und dieser Konflikt nicht bestätigt wurde."
+                                    )
                             # protocol_text mirrors whatever wins so the block and the Event
                             # field never diverge right after import, same guarantee manual
                             # editing gives via autosave_service.save_text_block.

@@ -107,6 +107,75 @@ def resolve_responsible_label(
     return ", ".join(names)
 
 
+def resolve_responsible_labels_batch(db: Session, elements: list[ProtocolElement]) -> dict[int, str]:
+    """Batch equivalent of calling resolve_responsible_label(..., live=True) once per element:
+    collects every list_entry_id/list_definition_id/participant_id referenced across all
+    elements' responsible_assignments_snapshot up front and loads ListEntry/ListDefinition/
+    Participant with one IN(...) query per table, instead of the per-element (and
+    per-assignment) db.get() calls the single-element path would otherwise issue. Unlike
+    resolve_display_section_titles_batch(), this always resolves live (no protocol_status
+    gate) and returns the bare label rather than "title (label)" - used by
+    protocol_service._freeze_responsible_titles(), which builds its own snapshot string."""
+    list_entry_ids: set[int] = set()
+    list_definition_ids: set[int] = set()
+    for element in elements:
+        for assignment in element.responsible_assignments_snapshot or []:
+            if not isinstance(assignment, dict):
+                continue
+            list_entry_id = assignment.get("list_entry_id")
+            list_definition_id = assignment.get("list_definition_id")
+            if list_entry_id:
+                try:
+                    list_entry_ids.add(int(list_entry_id))
+                except (TypeError, ValueError):
+                    pass
+            if list_definition_id:
+                try:
+                    list_definition_ids.add(int(list_definition_id))
+                except (TypeError, ValueError):
+                    pass
+
+    entries_by_id: dict[int, ListEntry] = (
+        {row.id: row for row in db.scalars(select(ListEntry).where(ListEntry.id.in_(list_entry_ids)))}
+        if list_entry_ids
+        else {}
+    )
+    definitions_by_id: dict[int, ListDefinition] = (
+        {row.id: row for row in db.scalars(select(ListDefinition).where(ListDefinition.id.in_(list_definition_ids)))}
+        if list_definition_ids
+        else {}
+    )
+
+    resolved_ids_by_element_id: dict[int, list[int]] = {
+        element.id: _resolve_ids_for_assignments(
+            element.responsible_assignments_snapshot,
+            live=True,
+            db=None,
+            entries_by_id=entries_by_id,
+            definitions_by_id=definitions_by_id,
+        )
+        for element in elements
+    }
+    participant_ids = {pid for ids in resolved_ids_by_element_id.values() for pid in ids}
+    participants_by_id: dict[int, Participant] = (
+        {row.id: row for row in db.scalars(select(Participant).where(Participant.id.in_(participant_ids)))}
+        if participant_ids
+        else {}
+    )
+
+    labels_by_element_id: dict[int, str] = {}
+    for element in elements:
+        mode = element.responsible_name_display_mode or "display_name"
+        names: list[str] = []
+        for pid in resolved_ids_by_element_id.get(element.id, []):
+            participant = participants_by_id.get(pid)
+            name = _responsible_participant_name(participant, mode=mode, fallback_id=pid)
+            if name:
+                names.append(name)
+        labels_by_element_id[element.id] = ", ".join(names)
+    return labels_by_element_id
+
+
 def resolve_display_section_title(db: Session, element: ProtocolElement, protocol_status: str) -> str:
     """The title shown for a ProtocolElement: live-resolved from a linked list entry's
     current value while the protocol is not yet finalized, otherwise the frozen

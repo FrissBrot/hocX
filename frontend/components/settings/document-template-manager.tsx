@@ -8,6 +8,7 @@ import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
+import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { DocumentTemplate, DocumentTemplatePart } from "@/types/api";
 
@@ -1062,6 +1063,7 @@ function TemplateForm({
 
 export function DocumentTemplateManager({ initialTemplates, initialParts, tenantId }: Props) {
   const showToast = useToast();
+  const confirm = useConfirm();
   const [parts, setParts] = useState(initialParts);
   const [templates, setTemplates] = useState(initialTemplates);
   const [activePanel, setActivePanel] = useState<"parts" | "layouts">("layouts");
@@ -1126,6 +1128,8 @@ export function DocumentTemplateManager({ initialTemplates, initialParts, tenant
   }
 
   async function deletePart(partId: number) {
+    const part = parts.find((p) => p.id === partId);
+    if (!(await confirm({ message: `Part${part ? ` "${part.name}"` : ""} wirklich löschen?`, tone: "danger", confirmLabel: "Löschen" }))) return;
     try {
       await browserApiFetch<{ message: string }>(`/api/document-template-parts/${partId}`, { method: "DELETE" });
       setParts((cur) => cur.filter((p) => p.id !== partId));
@@ -1167,6 +1171,8 @@ export function DocumentTemplateManager({ initialTemplates, initialParts, tenant
   }
 
   async function deleteTemplate(templateId: number) {
+    const template = templates.find((t) => t.id === templateId);
+    if (!(await confirm({ message: `Layout${template ? ` "${template.name}"` : ""} wirklich löschen?`, tone: "danger", confirmLabel: "Löschen" }))) return;
     try {
       await browserApiFetch<{ message: string }>(`/api/document-templates/${templateId}`, { method: "DELETE" });
       const remaining = templates.filter((t) => t.id !== templateId);

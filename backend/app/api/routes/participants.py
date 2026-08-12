@@ -189,7 +189,7 @@ def list_participant_templates(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_reader(user)
     participant = participant_service.get_participant(db, participant_id)
     if participant is None or participant.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Participant not found")

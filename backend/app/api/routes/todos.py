@@ -125,6 +125,7 @@ def get_todo_due_events(
 ):
     """Return upcoming events for due-date selection, filtered by the template's todo_due_event_tag."""
     require_reader(user)
+    access_service.ensure_can_read_todo(db, user, todo_id)
     today = date.today()
 
     todo = db.get(ProtocolTodo, todo_id)

@@ -296,15 +296,27 @@ services:
       - "traefik.http.services.abgabebox-backend.loadbalancer.server.port=8000"
       # Dedizierter Router nur fuer den Upload-POST, mit Rate-Limit gegen Spam/DoS
       # (analog auth-ratelimit) - da dieser Endpoint komplett unauthentifiziert ist.
+      # H11 (2026-08-12 Audit): zusaetzlich ein Body-Limit, analog word-import-body-limit
+      # oben beim Haupt-Backend - `content = await upload_file.read()` in
+      # abgabebox-backend/app/routes/public.py liest den kompletten Body, bevor irgendeine
+      # Groessenpruefung greift, und Starlette puffert den kompletten Body ohnehin schon vorher
+      # auf Platte, unabhaengig von jeder nachgelagerten Anwendungslogik-Pruefung - dieses
+      # Traefik-Limit weist ueberdimensionierte Requests VOR dem Backend-Worker ab. Deckt sich
+      # mit dem im Worst-Case durch die Assignment-eigenen Grenzen (max_files_per_element<=20,
+      # max_file_size_mb<=100, siehe backend/app/schemas/submission.py) legitim moeglichen
+      # Gesamtvolumen und mit MAX_UPLOAD_REQUEST_BYTES in
+      # abgabebox-backend/app/routes/public.py - bei Aenderung dort synchron halten.
       - "traefik.http.routers.abgabebox-upload.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && PathPrefix(`/api/public`) && Method(`POST`)"
       - "traefik.http.routers.abgabebox-upload.entrypoints=websecure"
       - "traefik.http.routers.abgabebox-upload.tls.certresolver=letsencrypt"
       - "traefik.http.routers.abgabebox-upload.priority=200"
       - "traefik.http.routers.abgabebox-upload.service=abgabebox-backend"
-      - "traefik.http.routers.abgabebox-upload.middlewares=abgabebox-upload-ratelimit"
+      - "traefik.http.routers.abgabebox-upload.middlewares=abgabebox-upload-ratelimit,abgabebox-upload-body-limit"
       - "traefik.http.middlewares.abgabebox-upload-ratelimit.ratelimit.average=5"
       - "traefik.http.middlewares.abgabebox-upload-ratelimit.ratelimit.burst=3"
       - "traefik.http.middlewares.abgabebox-upload-ratelimit.ratelimit.period=1m"
+      # 2000 MB = 20 Dateien x 100 MB (max_files_per_element/max_file_size_mb Obergrenzen)
+      - "traefik.http.middlewares.abgabebox-upload-body-limit.buffering.maxRequestBodyBytes=2097152000"
       # Dedizierter Router fuer die oeffentlichen, unauthentifizierten GET-Endpunkte
       # (assignments/elements listing+detail) - ohne dieses Limit liessen sich Mandanten-
       # Slugs, Auftraege und Elemente unbegrenzt durchprobieren/enumerieren. Grosszuegiger

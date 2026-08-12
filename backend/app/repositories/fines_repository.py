@@ -159,7 +159,16 @@ class FinesRepository:
         actor_user_id: int,
         collecting_protocol_id: int | None = None,
     ) -> AttendanceFineRead | None:
-        fine = db.get(AttendanceFine, fine_id)
+        # SELECT ... FOR UPDATE locks this row for the rest of the transaction, so two
+        # near-simultaneous collect requests for the same fine (double-click, two
+        # finance-responsible users) can't both read status == "pending" under Postgres'
+        # default READ COMMITTED isolation and each create a FinanceTransaction (H13 audit
+        # finding). The second request's SELECT blocks here until the first commits (releasing
+        # the lock), then re-reads the now-"collected" row and correctly returns None below -
+        # a plain db.get() has no such lock and both requests would otherwise race through.
+        fine = db.execute(
+            select(AttendanceFine).where(AttendanceFine.id == fine_id).with_for_update()
+        ).scalar_one_or_none()
         if fine is None or fine.status != "pending":
             return None
         protocol = db.get(Protocol, fine.protocol_id)

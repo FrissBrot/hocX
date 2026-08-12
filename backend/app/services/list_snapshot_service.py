@@ -272,6 +272,14 @@ def refresh_block_list_snapshot(
             _carry_or_stash_previous(new_snapshot, old_list_snapshot, keep_undo=keep_undo)
             config["list_snapshot"] = new_snapshot
             changed = True
+        else:
+            # Source list itself was deleted - mirror compute_row_list_snapshot's
+            # entry_exists=False marker for the same case (see its docstring) instead of
+            # silently leaving the stale old snapshot in place forever.
+            deleted_marker = {"synced_version": 0, "entry_exists": False}
+            if config.get("list_snapshot") != deleted_marker:
+                config["list_snapshot"] = deleted_marker
+                changed = True
 
     rows = config.get("rows")
     if isinstance(rows, list):

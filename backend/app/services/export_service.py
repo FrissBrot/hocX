@@ -16,7 +16,7 @@ from app.core.config import settings
 from app.models import AttendanceFine, DocumentTemplate, ElementType, Event, FinanceAccount, FinanceTransaction, ListDefinition, ListEntry, Participant, Protocol as ProtocolModel, ProtocolElement, ProtocolExportCache, StoredFile, Tenant
 from app.repositories.export_repository import ExportRepository
 from app.services.event_cycle_service import list_cycle_event_ids, resolve_protocol_cycle
-from app.services.responsible_label_service import resolve_display_section_title
+from app.services.responsible_label_service import resolve_display_section_titles_batch
 from app.schemas.protocol import ProtocolExportRead
 
 
@@ -608,10 +608,13 @@ Status: {protocol_status}
         image_export_dir.mkdir(parents=True, exist_ok=True)
         protocol_status = db.scalar(select(ProtocolModel.status).where(ProtocolModel.id == protocol_id)) or ""
 
-        for element in self.repository.list_protocol_elements(db, protocol_id):
+        elements = self.repository.list_protocol_elements(db, protocol_id)
+        section_titles_by_element_id = resolve_display_section_titles_batch(db, elements, protocol_status)
+
+        for element in elements:
             if not element.export_visible_snapshot:
                 continue
-            display_section_name = resolve_display_section_title(db, element, protocol_status)
+            display_section_name = section_titles_by_element_id[element.id]
             if self._trim_section_name(display_section_name or "").lower() == "sitzungsnotizen":
                 continue
 
