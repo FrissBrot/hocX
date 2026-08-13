@@ -260,36 +260,54 @@ class ProtocolService:
             cycle_end = date(protocol_date.year + 1, reset_month, reset_day)
         return cycle_start, cycle_end
 
-    def _sequence_counts(self, db: Session, *, tenant_id: int, template_id: int, protocol_date: date, reset_month: int, reset_day: int) -> dict[str, int]:
+    def _sequence_counts(
+        self,
+        db: Session,
+        *,
+        tenant_id: int,
+        template_id: int,
+        protocol_date: date,
+        reset_month: int,
+        reset_day: int,
+        exclude_protocol_id: int | None = None,
+    ) -> dict[str, int]:
+        """Counts are rank-based, not creation-order-based: a protocol's number reflects how
+        many protocols in its scope already have a protocol_date on or before its own date, so
+        the number always matches chronological order within the scope regardless of the order
+        protocols were created/imported in. exclude_protocol_id lets a protocol that already
+        exists recompute its own rank (see _renumber_later_siblings) without counting itself."""
         cycle_start, cycle_end = self._cycle_bounds(protocol_date, reset_month=reset_month, reset_day=reset_day)
+        base_filters = [Protocol.tenant_id == tenant_id, Protocol.template_id == template_id]
+        if exclude_protocol_id is not None:
+            base_filters.append(Protocol.id != exclude_protocol_id)
         # Single query with conditional aggregation for per-template counts.
         row = db.execute(
             select(
-                func.count(Protocol.id).label("overall"),
+                func.count(Protocol.id).filter(Protocol.protocol_date <= protocol_date).label("overall"),
                 func.count(Protocol.id).filter(
                     func.extract("year", Protocol.protocol_date) == protocol_date.year,
+                    Protocol.protocol_date <= protocol_date,
                 ).label("yearly"),
                 func.count(Protocol.id).filter(
                     func.extract("year", Protocol.protocol_date) == protocol_date.year,
                     func.extract("month", Protocol.protocol_date) == protocol_date.month,
+                    Protocol.protocol_date <= protocol_date,
                 ).label("monthly"),
                 func.count(Protocol.id).filter(
                     Protocol.protocol_date >= cycle_start,
-                    Protocol.protocol_date <= cycle_end,
+                    Protocol.protocol_date <= protocol_date,
                 ).label("cycle"),
-            ).where(
-                Protocol.tenant_id == tenant_id,
-                Protocol.template_id == template_id,
-            )
+            ).where(*base_filters)
         ).one()
         # Cross-template cycle count: all protocols for this tenant within cycle bounds.
-        cycle_all = db.scalar(
-            select(func.count(Protocol.id)).where(
-                Protocol.tenant_id == tenant_id,
-                Protocol.protocol_date >= cycle_start,
-                Protocol.protocol_date <= cycle_end,
-            )
-        ) or 0
+        cycle_all_filters = [
+            Protocol.tenant_id == tenant_id,
+            Protocol.protocol_date >= cycle_start,
+            Protocol.protocol_date <= protocol_date,
+        ]
+        if exclude_protocol_id is not None:
+            cycle_all_filters.append(Protocol.id != exclude_protocol_id)
+        cycle_all = db.scalar(select(func.count(Protocol.id)).where(*cycle_all_filters)) or 0
         return {
             "n": row.overall + 1,
             "n_year": row.yearly + 1,
@@ -299,6 +317,83 @@ class ProtocolService:
             "cycle_year_start": cycle_start.year,
             "cycle_year_end": cycle_end.year,
         }
+
+    def _renumber_later_siblings(
+        self,
+        db: Session,
+        *,
+        tenant_id: int,
+        template: Template,
+        protocol_date: date,
+        reset_month: int,
+        reset_day: int,
+    ) -> None:
+        """Makes room for a protocol about to be auto-numbered at protocol_date (called before
+        that protocol is inserted) by shifting every later-dated, still-open ("geplant" etc.,
+        not abgeschlossen) sibling of the same template up by one rank, so numbers keep matching
+        chronological order (see _sequence_counts) however out-of-order protocols get imported.
+        abgeschlossen protocols are frozen and are deliberately left untouched even if that
+        leaves a gap or a collision with a still-open sibling's freshly computed number - a
+        manual edge case, not something to silently paper over by renumbering finalized ones."""
+        if not template.protocol_number_pattern and not template.title_pattern:
+            return
+        # Processed latest-first: the latest sibling's new slot never collides with anything
+        # (nothing ranks after it), which frees the slot the next-latest sibling needs, and so
+        # on down the chain - processing earliest-first would instead have each sibling try to
+        # move into a slot its later neighbor is still occupying and get skipped as a "collision".
+        siblings = db.execute(
+            select(Protocol)
+            .where(
+                Protocol.tenant_id == tenant_id,
+                Protocol.template_id == template.id,
+                Protocol.protocol_date > protocol_date,
+                Protocol.status != "abgeschlossen",
+            )
+            .order_by(Protocol.protocol_date.desc(), Protocol.id.desc())
+        ).scalars().all()
+        if not siblings:
+            return
+        new_cycle_start, new_cycle_end = self._cycle_bounds(protocol_date, reset_month=reset_month, reset_day=reset_day)
+        for sibling in siblings:
+            counts = self._sequence_counts(
+                db,
+                tenant_id=tenant_id,
+                template_id=template.id,
+                protocol_date=sibling.protocol_date,
+                reset_month=reset_month,
+                reset_day=reset_day,
+                exclude_protocol_id=sibling.id,
+            )
+            # The protocol_date protocol isn't in the DB yet, so _sequence_counts can't see it -
+            # it always ranks before this sibling (protocol_date is strictly earlier), so it
+            # must be added into whichever of the sibling's scopes it actually falls into.
+            counts["n"] += 1
+            if protocol_date.year == sibling.protocol_date.year:
+                counts["n_year"] += 1
+                if protocol_date.month == sibling.protocol_date.month:
+                    counts["n_month"] += 1
+            if sibling.protocol_date <= new_cycle_end:
+                counts["n_cycle"] += 1
+                counts["n_cycle_all"] += 1
+            if template.protocol_number_pattern:
+                candidate = self._format_pattern(template.protocol_number_pattern, counts=counts, protocol_date=sibling.protocol_date)
+                if candidate and candidate != sibling.protocol_number:
+                    collision = db.scalar(
+                        select(Protocol.id).where(
+                            Protocol.tenant_id == tenant_id, Protocol.protocol_number == candidate, Protocol.id != sibling.id
+                        )
+                    )
+                    if not collision:
+                        sibling.protocol_number = candidate
+            if template.title_pattern:
+                candidate_title = self._format_pattern(template.title_pattern, counts=counts, protocol_date=sibling.protocol_date)
+                if candidate_title:
+                    sibling.title = candidate_title
+            # Flushed per-sibling (not once after the loop) so each subsequent collision check
+            # sees this update rather than the stale pre-cascade protocol_number/title - without
+            # this, autoflush=False sessions (like the test fixture) can spuriously "collide"
+            # with a sibling whose number was already reassigned earlier in this same loop.
+            db.flush()
 
     def _format_pattern(self, pattern: str | None, *, counts: dict[str, int], protocol_date: date) -> str | None:
         if not pattern:
@@ -1026,6 +1121,26 @@ class ProtocolService:
                     return candidate, bumped
             return None, current_counts
 
+        if not payload.protocol_number:
+            # Auto-derived number/title: slot this protocol into its true chronological position
+            # within the template's numbering scope by shifting later, still-open siblings out of
+            # the way *before* picking this protocol's own number below - otherwise a still-open
+            # sibling sitting on the number this protocol should rightfully get would just look
+            # like an ordinary collision and push this protocol to the next free number instead.
+            # An explicit payload.protocol_number is a deliberate manual choice, so it never
+            # triggers a renumbering cascade.
+            # Renumbering siblings never changes this protocol's own counts: every shifted
+            # sibling has a later protocol_date, so none of them counted towards this
+            # protocol's rank in the first place - the `counts` computed above still holds.
+            self._renumber_later_siblings(
+                db,
+                tenant_id=tenant_id,
+                template=template,
+                protocol_date=payload.protocol_date,
+                reset_month=cycle_cfg.reset_month if cycle_cfg else 12,
+                reset_day=cycle_cfg.reset_day if cycle_cfg else 31,
+            )
+
         # Auto-derived numbers race: the exists-check above only sees already-committed rows, so
         # two concurrent create_from_template calls for the same template can both land on the
         # same "next" number before either commits. Rather than let the loser hit the DB's
@@ -1082,6 +1197,7 @@ class ProtocolService:
                     reset_month=cycle_cfg.reset_month if cycle_cfg else 12,
                     reset_day=cycle_cfg.reset_day if cycle_cfg else 31,
                 )
+
 
         text_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "text"))
         todo_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "todo"))
