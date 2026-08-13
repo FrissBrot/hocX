@@ -590,6 +590,7 @@ export function StructuredListTable({
                     type="button"
                     className="button-ghost button-icon"
                     title="Listenzeile hinzufuegen"
+                    aria-label="Listenzeile hinzufuegen"
                     disabled={showNewRow || creatingNewRow}
                     onClick={() => {
                       setShowNewRow(true);
@@ -624,6 +625,7 @@ export function StructuredListTable({
                         type="button"
                         className="button-ghost button-icon button-icon-danger"
                         title="Neue Listenzeile verwerfen"
+                        aria-label="Neue Listenzeile verwerfen"
                         disabled={creatingNewRow}
                         onClick={resetNewRow}
                       >
@@ -725,6 +727,7 @@ export function StructuredListTable({
                                   type="button"
                                   className="button-ghost button-icon button-icon-danger"
                                   title="Listenzeile loeschen"
+                                  aria-label="Listenzeile loeschen"
                                   onClick={() => void onDeleteEntry(entry.id)}
                                 >
                                   x

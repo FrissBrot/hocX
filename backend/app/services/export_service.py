@@ -1927,6 +1927,10 @@ Status: {protocol_status}
             compiler,
             "-interaction=nonstopmode",
             "-halt-on-error",
+            # Explicit, not just relied on via the Debian package's default policy - LaTeX
+            # source here ultimately derives from tenant-controlled template content, and
+            # \write18 shell-escape would let compiled TeX run arbitrary shell commands.
+            "-no-shell-escape",
             f"-output-directory={main_tex_path.parent.as_posix()}",
             main_tex_path.as_posix(),
         ]

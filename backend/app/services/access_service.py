@@ -21,6 +21,12 @@ class AccessService:
             )
         )
 
+    def is_restricted_reader(self, db: Session, user: CurrentUser) -> bool:
+        """Public counterpart to _is_restricted_reader for callers outside this service (e.g.
+        routes deciding what to pass down to a listing helper) - avoids reaching across the
+        module boundary into a name-mangled internal."""
+        return self._is_restricted_reader(db, user)
+
     def can_read_template(self, db: Session, user: CurrentUser, template_id: int) -> bool:
         if user.current_role in {"admin", "writer", "kassier"}:
             # Privileged roles still only get full access within their OWN tenant - this used

@@ -186,7 +186,10 @@ def test_update_user_allows_demoting_admin_when_another_admin_remains(db):
 # --- tenant isolation boundary --------------------------------------------------------------
 
 
-def test_get_user_forbidden_when_target_user_not_in_actors_tenant(db):
+def test_get_user_not_found_when_target_user_not_in_actors_tenant(db):
+    """Returns None (-> 404 at the route), not a 403: a 403 here would let a tenant-admin
+    distinguish "exists in another tenant" from "doesn't exist at all", a user-enumeration
+    channel across tenant boundaries."""
     tenant_a = make_tenant(db, "Tenant A")
     tenant_b = make_tenant(db, "Tenant B")
     actor_user = make_app_user(db, email="actor@example.com")
@@ -197,9 +200,7 @@ def test_get_user_forbidden_when_target_user_not_in_actors_tenant(db):
     actor = _admin_actor(tenant_a.id, user_id=actor_user.id)
     service = UserService()
 
-    with pytest.raises(HTTPException) as exc_info:
-        service.get_user(db, other_user.id, actor)
-    assert exc_info.value.status_code == 403
+    assert service.get_user(db, other_user.id, actor) is None
 
 
 def test_get_user_hides_memberships_in_tenants_actor_does_not_administer(db):

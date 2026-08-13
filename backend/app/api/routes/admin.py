@@ -9,7 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.background import BackgroundTask
 
-from app.core.admin_security import CurrentAdmin, get_current_admin
+from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_write
 from app.core.config import settings
 from app.core.db import get_db
 from app.schemas.admin import (
@@ -81,7 +81,7 @@ def list_domains(
 def delete_domain(
     domain_id: int,
     db: Session = Depends(get_db),
-    current_admin: CurrentAdmin = Depends(get_current_admin),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
     domain = domain_service.delete_domain(db, domain_id)
     if domain is None:
@@ -115,7 +115,7 @@ def error_log_filter_options(db: Session = Depends(get_db)):
 def create_tenant(
     payload: AdminTenantCreate,
     db: Session = Depends(get_db),
-    current_admin: CurrentAdmin = Depends(get_current_admin),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
     try:
         tenant = tenant_service.create_tenant(db, payload)
@@ -144,7 +144,7 @@ async def update_tenant(
     public_slug: str | None = Form(default=None),
     profile_image: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
-    current_admin: CurrentAdmin = Depends(get_current_admin),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
     try:
         tenant = await tenant_service.update_tenant(db, tenant_id, TenantUpdate(name=name, public_slug=public_slug), profile_image)
@@ -162,7 +162,7 @@ async def update_tenant(
 
 
 @router.delete("/tenants/{tenant_id}", status_code=204)
-def delete_tenant(tenant_id: int, db: Session = Depends(get_db), current_admin: CurrentAdmin = Depends(get_current_admin)):
+def delete_tenant(tenant_id: int, db: Session = Depends(get_db), current_admin: CurrentAdmin = Depends(require_admin_write)):
     try:
         deleted = tenant_service.delete_tenant(db, tenant_id)
     except SQLAlchemyError as exc:
@@ -178,7 +178,7 @@ def clone_tenant(
     tenant_id: int,
     payload: TenantCloneRequest,
     db: Session = Depends(get_db),
-    current_admin: CurrentAdmin = Depends(get_current_admin),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
     try:
         if payload.mode == "full":
@@ -230,7 +230,7 @@ async def import_tenant(
     new_name: str = Form(...),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_admin: CurrentAdmin = Depends(get_current_admin),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
     with tempfile.NamedTemporaryFile(prefix="hocx-import-upload-", suffix=".zip", delete=False) as tmp:
         tmp_path = Path(tmp.name)
@@ -267,7 +267,7 @@ def grant_tenant_user_role(
     user_id: int,
     payload: AdminTenantUserGrant,
     db: Session = Depends(get_db),
-    current_admin: CurrentAdmin = Depends(get_current_admin),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
     try:
         result = tenant_user_service.grant_or_update_role(db, tenant_id, user_id, payload.role_code)
@@ -286,7 +286,7 @@ def remove_tenant_user(
     tenant_id: int,
     user_id: int,
     db: Session = Depends(get_db),
-    current_admin: CurrentAdmin = Depends(get_current_admin),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
     try:
         removed = tenant_user_service.remove_user(db, tenant_id, user_id)
@@ -310,7 +310,7 @@ def get_platform_oidc_config(db: Session = Depends(get_db)):
 def update_platform_oidc_config(
     payload: PlatformOidcConfigWrite,
     db: Session = Depends(get_db),
-    current_admin: CurrentAdmin = Depends(get_current_admin),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
     result = oidc_service.upsert_config(db, payload)
     audit.log(
@@ -344,7 +344,7 @@ def list_users(
 def create_user(
     payload: UserCreate,
     db: Session = Depends(get_db),
-    current_admin: CurrentAdmin = Depends(get_current_admin),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
     try:
         result = user_service.create_user(db, payload)
@@ -371,7 +371,7 @@ def update_user(
     user_id: int,
     payload: UserUpdate,
     db: Session = Depends(get_db),
-    current_admin: CurrentAdmin = Depends(get_current_admin),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
     try:
         user = user_service.update_user(db, user_id, payload)
@@ -389,7 +389,7 @@ def update_user(
 
 
 @router.post("/users/merge", response_model=UserRead)
-def merge_users(payload: AdminUserMergeRequest, db: Session = Depends(get_db), current_admin: CurrentAdmin = Depends(get_current_admin)):
+def merge_users(payload: AdminUserMergeRequest, db: Session = Depends(get_db), current_admin: CurrentAdmin = Depends(require_admin_write)):
     try:
         result = user_service.merge_users(db, source_user_id=payload.source_user_id, target_user_id=payload.target_user_id)
     except SQLAlchemyError as exc:
@@ -411,7 +411,7 @@ def list_admins(db: Session = Depends(get_db)):
 def create_admin(
     payload: PlatformAdminCreate,
     db: Session = Depends(get_db),
-    current_admin: CurrentAdmin = Depends(get_current_admin),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
     try:
         result = admin_account_service.create_admin(db, payload)
@@ -430,7 +430,7 @@ def update_admin(
     admin_id: int,
     payload: PlatformAdminUpdate,
     db: Session = Depends(get_db),
-    current_admin: CurrentAdmin = Depends(get_current_admin),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
     admin = admin_account_service.update_admin(db, admin_id, payload, current_admin_id=current_admin.admin_id)
     if admin is None:

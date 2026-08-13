@@ -45,7 +45,7 @@ def list_templates(
         query=q,
         status=status_filter,
         user_id=user.user_id,
-        restrict_to_assigned=access_service._is_restricted_reader(db, user),
+        restrict_to_assigned=access_service.is_restricted_reader(db, user),
     )
 
 

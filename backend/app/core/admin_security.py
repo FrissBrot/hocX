@@ -25,6 +25,7 @@ class CurrentAdmin:
     admin_id: int
     email: str
     display_name: str
+    role: str = "owner"
 
 
 def _sign_payload(payload: bytes) -> str:
@@ -98,10 +99,20 @@ def get_optional_current_admin(
         token_iat = int(session_data.get("iat", 0))
         if int(admin.session_revoke_at.timestamp()) > token_iat:
             return None
-    return CurrentAdmin(admin_id=admin.id, email=admin.email, display_name=admin.display_name)
+    return CurrentAdmin(admin_id=admin.id, email=admin.email, display_name=admin.display_name, role=admin.role)
 
 
 def get_current_admin(admin: CurrentAdmin | None = Depends(get_optional_current_admin)) -> CurrentAdmin:
     if admin is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Admin authentication required")
+    return admin
+
+
+def require_admin_write(admin: CurrentAdmin = Depends(get_current_admin)) -> CurrentAdmin:
+    """Gate for every mutating admin-panel route. 'support'-role admins get the same read
+    access as 'owner' but no create/update/delete anywhere in the panel - there was previously
+    no role distinction at all, so any active admin account had full, uniform control over
+    every tenant."""
+    if admin.role != "owner":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Read-only admin account")
     return admin

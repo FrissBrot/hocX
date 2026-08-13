@@ -1,17 +1,28 @@
 from __future__ import annotations
 
 from datetime import datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, PlainSerializer
 
-FinanceDecimal = Annotated[Decimal, PlainSerializer(lambda v: float(v), return_type=float, when_used="json")]
+_CENTS = Decimal("0.01")
+
+
+def _decimal_to_json_float(value: Decimal) -> float:
+    """Quantizes to the DB's actual precision (Numeric(15,2)) before the JSON boundary, so a
+    Decimal with stray extra digits (e.g. from any future intermediate computation) can't leak
+    visible floating-point noise (like 3.499999999999998) into the API response instead of the
+    clean 2-decimal value every caller expects."""
+    return float(value.quantize(_CENTS, rounding=ROUND_HALF_UP))
+
+
+FinanceDecimal = Annotated[Decimal, PlainSerializer(_decimal_to_json_float, return_type=float, when_used="json")]
 
 # Fines are always a charge against a participant, never a rebate - unlike
 # FinanceTransactionCreate.amount (app/schemas/finance.py), where a negative amount
 # intentionally represents an expense. gt=0 rejects zero/negative fine amounts at the API boundary.
-PositiveFineAmount = Annotated[Decimal, PlainSerializer(lambda v: float(v), return_type=float, when_used="json"), Field(gt=0)]
+PositiveFineAmount = Annotated[Decimal, PlainSerializer(_decimal_to_json_float, return_type=float, when_used="json"), Field(gt=0)]
 
 
 class AttendanceFineCreate(BaseModel):

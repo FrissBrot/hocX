@@ -333,8 +333,9 @@ class EventService:
                     if end_date_raw
                     else None
                 )
-                if event_end_date and event_end_date < event_date:
-                    raise ValueError(f"CSV row {row_number}: Enddatum liegt vor dem Startdatum")
+                self._validate_end_after_start(
+                    event_date, event_end_date, error_message=f"CSV row {row_number}: Enddatum liegt vor dem Startdatum"
+                )
                 participant_count = self._parse_participant_count(value_for("participant_count"), row_number=row_number)
                 entry.update(
                     {
@@ -374,8 +375,7 @@ class EventService:
         spezial_text2: str | None = None,
         spezial_text3: str | None = None,
     ) -> Event:
-        if event_end_date and event_end_date < event_date:
-            raise ValueError("Event end date must be on or after the start date")
+        self._validate_end_after_start(event_date, event_end_date, error_message="Event end date must be on or after the start date")
         return Event(
             tenant_id=tenant_id,
             event_date=event_date,
@@ -408,6 +408,10 @@ class EventService:
             .replace("-", "")
             .replace("_", "")
         )
+
+    def _validate_end_after_start(self, event_date: date, event_end_date: date | None, *, error_message: str) -> None:
+        if event_end_date and event_end_date < event_date:
+            raise ValueError(error_message)
 
     def _parse_csv_date(self, value: str, *, row_number: int, field_label: str) -> date:
         normalized = value.strip()

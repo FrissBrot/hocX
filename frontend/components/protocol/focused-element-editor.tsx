@@ -1059,8 +1059,8 @@ export function FocusedElementEditor({
 
   function buildMatrixColumnForListEntry(rows: Array<Record<string, any>>, entry: StructuredListEntry) {
     const titleText =
-      String((entry.column_one_value as any)?.text_value ?? "").trim() ||
-      String((entry.column_two_value as any)?.text_value ?? "").trim() ||
+      String(asObject(entry.column_one_value).text_value ?? "").trim() ||
+      String(asObject(entry.column_two_value).text_value ?? "").trim() ||
       `Eintrag ${entry.id}`;
     const row_values: Record<string, Record<string, unknown>> = {};
     rows.forEach((row) => {

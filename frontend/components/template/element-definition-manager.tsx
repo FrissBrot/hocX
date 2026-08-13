@@ -16,6 +16,7 @@ import { formatDateRange } from "@/lib/utils/format";
 import { ELEMENT_TYPE_OPTIONS } from "@/lib/constants/element-types";
 import { EVENT_SYNC_FIELDS, TODO_SYNC_FIELDS } from "@/lib/constants/event-sync-fields";
 import { ElementDefinition, ElementDefinitionBlock, EventSummary, ParticipantSummary, StructuredListDefinition, StructuredListEntry } from "@/types/api";
+import { asObject } from "@/components/protocol/protocol-editor-shared";
 
 type ElementDefinitionManagerProps = {
   initialDefinitions: ElementDefinition[];
@@ -458,17 +459,17 @@ function blockFormFromBlock(block: ElementDefinitionBlock): BlockFormState {
     matrix_mode: ((block.configuration_json?.mode ?? "manual") === "auto" ? "auto" : "manual") as "manual" | "auto",
     auto_source_type: (() => {
       const autoSrc = block.configuration_json?.auto_source;
-      if (autoSrc && typeof autoSrc === "object" && (autoSrc as any).type) return (autoSrc as any).type as "" | "participants" | "events" | "list";
+      if (autoSrc && typeof autoSrc === "object" && asObject(autoSrc).type) return asObject(autoSrc).type as "" | "participants" | "events" | "list";
       return (String(block.configuration_json?.matrix_column_source ?? "") as "" | "participants" | "events" | "list");
     })(),
     auto_source_list_id: (() => {
       const autoSrc = block.configuration_json?.auto_source;
-      if (autoSrc && typeof autoSrc === "object" && (autoSrc as any).list_id != null) return String((autoSrc as any).list_id);
+      if (autoSrc && typeof autoSrc === "object" && asObject(autoSrc).list_id != null) return String(asObject(autoSrc).list_id);
       return block.configuration_json?.matrix_column_source_list_id != null ? String(block.configuration_json.matrix_column_source_list_id) : "";
     })(),
     auto_source_event_tag: (() => {
       const autoSrc = block.configuration_json?.auto_source;
-      if (autoSrc && typeof autoSrc === "object") return String((autoSrc as any).event_tag_filter ?? "");
+      if (autoSrc && typeof autoSrc === "object") return String(asObject(autoSrc).event_tag_filter ?? "");
       return String(block.configuration_json?.matrix_column_source_event_tag ?? "");
     })(),
     todo_block_title_filter: String(block.configuration_json?.todo_block_title_filter ?? ""),
@@ -934,8 +935,8 @@ export function ElementDefinitionManager({
             (entries ?? []).map((entry) => ({
               id: `prev-l-${entry.id}`,
               title:
-                String((entry.column_one_value as any)?.text_value ?? "").trim() ||
-                String((entry.column_two_value as any)?.text_value ?? "").trim() ||
+                String(asObject(entry.column_one_value).text_value ?? "").trim() ||
+                String(asObject(entry.column_two_value).text_value ?? "").trim() ||
                 `Eintrag ${entry.id}`,
             }))
           );
@@ -953,7 +954,10 @@ export function ElementDefinitionManager({
   const selectedMatrixEmbeddedConfig = selectedMatrixRow
     ? (typeof selectedMatrixRow.row_config === "object" && selectedMatrixRow.row_config
         ? selectedMatrixRow.row_config as Record<string, unknown>
-        : matrixEmbeddedBlockConfiguration(String((selectedMatrixRow as any).embedded_element_type_id ?? ""), (selectedMatrixRow as any).embedded_configuration_json))
+        : matrixEmbeddedBlockConfiguration(
+            String(asObject(selectedMatrixRow).embedded_element_type_id ?? ""),
+            asObject(selectedMatrixRow).embedded_configuration_json
+          ))
     : {};
   const selectedMatrixColumn =
     matrixDesignerColumns.find((column) => column.id === selectedMatrixColumnId) ?? matrixDesignerColumns[0] ?? null;

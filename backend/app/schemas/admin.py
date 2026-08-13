@@ -17,6 +17,7 @@ class AdminSelfRead(BaseModel):
     id: int
     email: str
     display_name: str
+    role: Literal["owner", "support"] = "owner"
 
 
 class AdminSessionRead(BaseModel):
@@ -29,12 +30,14 @@ class PlatformAdminCreate(BaseModel):
     display_name: str
     password: str = Field(min_length=12)
     is_active: bool = True
+    role: Literal["owner", "support"] = "owner"
 
 
 class PlatformAdminUpdate(BaseModel):
     display_name: str | None = None
     password: str | None = Field(default=None, min_length=12)
     is_active: bool | None = None
+    role: Literal["owner", "support"] | None = None
 
 
 class PlatformAdminRead(BaseModel):
@@ -42,6 +45,7 @@ class PlatformAdminRead(BaseModel):
     email: str
     display_name: str
     is_active: bool
+    role: Literal["owner", "support"]
     created_at: datetime
     updated_at: datetime
 

@@ -1,13 +1,24 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated
 
 from pydantic import BaseModel, PlainSerializer
 
+_CENTS = Decimal("0.01")
+
+
+def _decimal_to_json_float(value: Decimal) -> float:
+    """Quantizes to the DB's actual precision (Numeric(15,2)) before the JSON boundary, so a
+    Decimal with stray extra digits (e.g. from any future intermediate computation) can't leak
+    visible floating-point noise (like 3.499999999999998) into the API response instead of the
+    clean 2-decimal value every caller expects."""
+    return float(value.quantize(_CENTS, rounding=ROUND_HALF_UP))
+
+
 # Decimal that serializes as a JSON number (float) so the frontend receives 3.50, not "3.50"
-FinanceDecimal = Annotated[Decimal, PlainSerializer(lambda v: float(v), return_type=float, when_used="json")]
+FinanceDecimal = Annotated[Decimal, PlainSerializer(_decimal_to_json_float, return_type=float, when_used="json")]
 
 
 class FinanceAccountCreate(BaseModel):

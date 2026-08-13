@@ -170,7 +170,10 @@ class UserService:
             if membership.is_active
         }
         if user_id not in tenant_user_ids:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not manageable in current tenant")
+            # 404, not 403: a 403 here would confirm to a tenant-admin that a given user_id
+            # exists in some *other* tenant, just not theirs - a user-enumeration channel across
+            # tenant boundaries. Reporting "not found" either way closes that.
+            return None
         return self._scope_memberships(self._read_model(db, user), self._admin_tenant_ids_for_actor(actor))
 
     def admin_get_user(self, db: Session, user_id: int) -> UserRead | None:
@@ -332,7 +335,8 @@ class UserService:
             if membership.is_active
         }
         if user_id not in manageable_ids:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not manageable in current tenant")
+            # 404, not 403 - see get_user's comment above on why (avoids cross-tenant user-id enumeration).
+            return None
         return self._update_user_core(db, user, payload, actor)
 
     def admin_update_user(self, db: Session, user_id: int, payload: UserUpdate) -> UserRead | None:
@@ -430,7 +434,8 @@ class UserService:
             if membership.is_active
         }
         if user_id not in manageable_ids:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not manageable in current tenant")
+            # 404, not 403 - see get_user's comment above on why (avoids cross-tenant user-id enumeration).
+            return False
         self.repository.delete(db, user)
         db.commit()
         return True
