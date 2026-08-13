@@ -192,6 +192,7 @@ class WordImportQueueService:
             template_id=document.template_id,
             protocol_date=refreshed.protocol_date,
             fallback=document.original_filename,
+            exclude_document_id=document.id,
         )
         db.add(document)
         db.commit()
@@ -377,15 +378,43 @@ class WordImportQueueService:
             template_id=document.template_id,
             protocol_date=analysis.protocol_date,
             fallback=document.original_filename,
+            exclude_document_id=document.id,
         )
         db.add(document)
         return analysis
 
     def _compute_display_name(
-        self, db: Session, *, tenant_id: int, template_id: int, protocol_date: date | None, fallback: str
+        self,
+        db: Session,
+        *,
+        tenant_id: int,
+        template_id: int,
+        protocol_date: date | None,
+        fallback: str,
+        exclude_document_id: int | None = None,
     ) -> str:
         if protocol_date is None:
             return fallback
+        # Other documents still sitting in the queue ("eingelesen", not yet committed) for the
+        # same template aren't real Protocol rows yet, so preview_title's own DB counts can't
+        # see them - without passing their dates in as extra_dates, every document uploaded
+        # together in one batch would preview with the identical number (all "1." etc.) until
+        # the first one actually gets committed. exclude_document_id skips the document being
+        # previewed itself when it already exists as a row (reanalyze / batch-consensus paths).
+        sibling_query = select(WordImportDocument.protocol_date).where(
+            WordImportDocument.tenant_id == tenant_id,
+            WordImportDocument.template_id == template_id,
+            WordImportDocument.status == "eingelesen",
+            WordImportDocument.protocol_date.is_not(None),
+        )
+        if exclude_document_id is not None:
+            sibling_query = sibling_query.where(WordImportDocument.id != exclude_document_id)
+        extra_dates = [d for (d,) in db.execute(sibling_query).all()]
         return self.protocol_service.preview_title(
-            db, tenant_id=tenant_id, template_id=template_id, protocol_date=protocol_date, fallback=fallback
+            db,
+            tenant_id=tenant_id,
+            template_id=template_id,
+            protocol_date=protocol_date,
+            fallback=fallback,
+            extra_dates=extra_dates,
         )
