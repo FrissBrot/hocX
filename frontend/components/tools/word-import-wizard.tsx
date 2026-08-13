@@ -527,19 +527,20 @@ function resolveListColumnTwoRaw(entry: ListDraft): string {
   return entry.column_two_source === "existing" && linked ? linked.column_two_display : entry.column_two_raw;
 }
 
-// An event row is blocked either when it's linked to an EXISTING event whose title/
-// date actually conflicts with the document, or - real bug fixed here - when it will
-// create a BRAND NEW event with no usable date at all: WordImportEventCommit.final_date
-// is a required field backend-side (see resolveEventFinal's "" fallback), so approving
-// such a row used to send an empty date and 422 the whole commit instead of pointing
-// the reviewer at the one row that needs a date typed in (see the inline date field in
-// renderEventRow). Split from eventNeedsReview so it can be recomputed after an edit
-// (typing a date, or linking an existing event) without going through the `approved`/
-// `dismissed` short-circuit below - mirrors listStillOpen/listNeedsReview.
+// A found link is the decision: once a Termin IS matched, any title/date conflict
+// with the document falls back to "existing wins" (title_source/date_source) without
+// blocking - the reviewer can still open the row and repoint it before committing, but
+// nothing forces a confirmation click. Only a BRAND NEW event (no match at all) means
+// something new is about to be created, which always needs an explicit decision -
+// including the case where it has no usable date yet: WordImportEventCommit.final_date
+// is required backend-side (see resolveEventFinal's "" fallback), so approving a
+// dateless row would send an empty date and 422 the whole commit (see missingDate in
+// renderEventRow, which additionally caps such a row at "Ignorieren"). Split from
+// eventNeedsReview so it can be recomputed after an edit (typing a date, or linking an
+// existing event) without going through the `approved`/`dismissed` short-circuit below
+// - mirrors listStillOpen/listNeedsReview.
 function eventStillOpen(entry: EventDraft): boolean {
-  const linked = entry.candidates.find((candidate) => candidate.event_id === entry.linked_event_id);
-  if (!linked) return !entry.raw_date;
-  return linked.title !== entry.raw_title || linked.event_date !== (entry.raw_date ?? linked.event_date);
+  return entry.linked_event_id === null;
 }
 
 // Once the reviewer has explicitly taken the row (approved via the Übernehmen/
@@ -550,19 +551,20 @@ function eventNeedsReview(entry: EventDraft): boolean {
   return eventStillOpen(entry);
 }
 
-// Same idea for list rows: a brand-new entry is a fine default, but a name that
-// couldn't be matched to any participant, or a column-2 value that conflicts with
-// the existing entry, needs an explicit decision. Split out from listNeedsReview so
+// Mirrors eventStillOpen: a found link is the decision, so a matched entry auto-takes
+// even if its column-2 value conflicts with the document (falls back to "existing
+// wins" via column_two_source, still reachable/editable by opening the row). A
+// brand-new entry (no match at all) always needs an explicit decision before it's
+// committed, same as a name that couldn't be matched to any participant - neither
+// case had an automatic assignment made for it. Split out from listNeedsReview so
 // the "is this row actually resolved" fact can be recomputed after an edit (see
 // updateListName) without going through the `approved` short-circuit below.
 function listStillOpen(entry: ListDraft): boolean {
   if (!entry.has_snapshot_target) return false;
-  const linked = entry.candidates.find((candidate) => candidate.entry_id === entry.linked_entry_id);
-  const col2Differs = !!linked && linked.column_two_display !== entry.column_two_raw;
   const hasUnmatchedName = [...entry.column_one_names, ...entry.column_two_names].some(
     (name) => name.participant_id === null && !name.no_link
   );
-  return col2Differs || hasUnmatchedName;
+  return entry.linked_entry_id === null || hasUnmatchedName;
 }
 
 // Mirrors eventNeedsReview: once the reviewer has explicitly taken a stance via the
@@ -1424,9 +1426,14 @@ export function WordImportWizard({
               )}
               onChange={(option) =>
                 setLists((current) =>
-                  current.map((row, rowIndex) =>
-                    rowIndex === index ? { ...row, linked_entry_id: option.id, column_two_source: "doc" } : row
-                  )
+                  current.map((row, rowIndex) => {
+                    if (rowIndex !== index) return row;
+                    const updatedRow = { ...row, linked_entry_id: option.id, column_two_source: "doc" as FieldSource };
+                    // Mirrors updateEventField: picking a link here IS the decision, so
+                    // recompute approved right away instead of leaving it false and
+                    // having decisionState(false, false) misread the row as "Ignorieren".
+                    return { ...updatedRow, approved: !listStillOpen(updatedRow), dismissed: false };
+                  })
                 )
               }
             />
@@ -1651,14 +1658,12 @@ export function WordImportWizard({
         originallySuggestedEventId: mapping.status !== "new" ? mapping.matched_event_id : null,
         originallySuggestedScore: mapping.candidates.find((c) => c.event_id === mapping.matched_event_id)?.score ?? null,
       };
-      // Real bug fixed here: this used to hinge on status === "matched", so a brand-
-      // new Termin with a perfectly clean, complete date/title always defaulted to
-      // "Ignorieren" - visually contradicting its own "🆕 Neu anlegen" summary label,
-      // which reads as a confirmed action, not a flagged problem. Matrix cells already
-      // used the "is this row actually resolved" signal (matrixStillOpen) instead of
-      // new-vs-existing status; this aligns Termine with that same, more consistent
-      // rule - eventStillOpen only returns true when something genuinely needs a
-      // decision (no date, or a real title/date conflict with an existing Termin).
+      // A matched/changed Termin auto-approves - the link itself is the decision, see
+      // eventStillOpen. A brand-new Termin (no link found) stays unapproved so the
+      // reviewer must explicitly confirm creating it - unless this exact resolution
+      // was already made identically in an earlier import (see WordImportEventMapping.
+      // remembered_title_source/remembered_date_source above), in which case it's
+      // pre-applied instead of asking again.
       draft.approved =
         !eventStillOpen(draft) || mapping.remembered_title_source !== null || mapping.remembered_date_source !== null;
       return draft;
@@ -1684,13 +1689,14 @@ export function WordImportWizard({
         originallySuggestedEntryId: mapping.status !== "new" ? mapping.matched_entry_id : null,
         originallySuggestedScore: mapping.candidates.find((c) => c.entry_id === mapping.matched_entry_id)?.score ?? null,
       };
-      // Same fix/rationale as freshEvents above - a clean new list row (has_snapshot_
-      // target, no unmatched names) used to default to "Ignorieren" purely because
-      // status !== "matched", contradicting its own "➕ Neu" summary label. has_snapshot_
-      // target is kept as an explicit gate (not just folded into listStillOpen) since
-      // listStillOpen itself already treats "no snapshot target" as "nothing to
-      // review" (true either way it's silently skipped at commit) - approved would
-      // otherwise become true for a row that can never actually be written.
+      // Same rationale as freshEvents above - a matched/changed list row auto-approves
+      // since the link is the decision, while a brand-new row (no match found) or one
+      // with an unresolved participant name stays unapproved until the reviewer
+      // explicitly confirms it. has_snapshot_target is kept as an explicit gate (not
+      // just folded into listStillOpen) since listStillOpen itself already treats "no
+      // snapshot target" as "nothing to review" (true either way it's silently skipped
+      // at commit) - approved would otherwise become true for a row that can never
+      // actually be written.
       draft.approved = mapping.has_snapshot_target && !listStillOpen(draft);
       return draft;
     });
