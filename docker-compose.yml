@@ -186,7 +186,10 @@ services:
       context: ./frontend
       target: deps
     restart: unless-stopped
-    mem_limit: 512m
+    # 512m reichte fuer den "next build"-TypeScript-Check nicht (Cgroup-OOM-Kill,
+    # Restart-Loop, verifiziert beim Deploy vom 2026-08-13). 1536m als Ceiling, analog
+    # zum bereits akzeptierten Wert bei clamav.
+    mem_limit: 1536m
     cpus: 1.0
     logging:
       driver: json-file
@@ -229,7 +232,9 @@ services:
       context: ./frontend
       target: deps
     restart: unless-stopped
-    mem_limit: 256m
+    # Gleiche Codebasis/gleicher Build wie frontend, daher gleiches OOM-Risiko bei
+    # "next build" - 256m reichte nicht, siehe Kommentar bei frontend.
+    mem_limit: 1536m
     cpus: 0.5
     logging:
       driver: json-file
