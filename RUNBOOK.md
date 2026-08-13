@@ -156,3 +156,31 @@ Fehlern mit Exit-Code ≠ 0 ab (wichtig für Cron-Fehlerbenachrichtigung/Monitor
   ```
 - **Manuell testen**: erst `./scripts/cleanup_storage.sh --dry-run` (zeigt betroffene
   Dateien, löscht nichts), danach bei Bedarf ohne Flag für den echten Lauf.
+
+## 8. hocx.tweber.ch ist faktisches Prod, nicht Dev
+
+Die Tabelle in Abschnitt "Drei Umgebungen" oben führt `hocx.tweber.ch` als "Dev" -
+das beschreibt korrekt, *wie* die Umgebung technisch betrieben wird (lokaler Build aus
+Source, kein GHCR-Image, kein `HOCX_VERSION`-Pinning), sagt aber nichts darüber aus, *wer*
+davon abhängt. In Wirklichkeit laufen dort echte Mandanten mit echten Daten - die Instanz
+wird faktisch wie Prod genutzt, auch wenn sie technisch wie Dev aufgesetzt ist. Ein
+Update dort ohne Vorsicht (kein vorheriges Backup, kein Health-Check danach) ist damit
+ein echtes Ausfallrisiko für echte Nutzer, nicht nur für einen Wegwerf-Testaccount.
+
+**Deshalb gilt für jedes Update von hocx.tweber.ch** (der lokale Source-Build-Mechanismus
+selbst bleibt unverändert - das ist eine bewusste, hier nicht revidierte Entscheidung,
+keine Pipeline-Umstellung auf GHCR-Images ist im Rahmen dieses Punkts vorgesehen):
+
+1. **Vor jedem Update**: Backup ziehen, unabhängig vom nächtlichen Cron-Lauf aus
+   Abschnitt 7 - `./scripts/backup_db.sh` im Repo-Root ausführen und den Erfolg
+   (neue Datei unter `backups/`) prüfen, bevor der Code aktualisiert wird.
+2. **Update durchführen**: `git pull` + `docker compose up -d --build` (Alembic migriert
+   die DB dabei automatisch, wie bei den anderen Umgebungen auch).
+3. **Nach dem Update verifizieren** (analog zur Test-Verifikation in Abschnitt 2, mit
+   einem Wegwerf-Testaccount, danach wieder löschen):
+   - https://hocx.tweber.ch/login erreichbar, Branding lädt korrekt
+   - Login funktioniert, mindestens eine Tabellen-Seite lädt Daten
+   - `docker compose logs backend --tail=50` zeigt keine Fehler, insbesondere keine
+     Alembic-Fehler beim Start
+4. **Bei Problemen**: Rollback wie in Abschnitt 4 beschrieben, mit dem in Schritt 1
+   frisch gezogenen Backup statt eines älteren Cron-Backups.

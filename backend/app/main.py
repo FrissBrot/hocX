@@ -17,6 +17,7 @@ from app.models import ElementType, PlatformAdmin, Role, Tenant
 from app.services import domain_health_check_service, traefik_config_service
 from app.services.submission_service import SubmissionService
 from app.services.document_template_service import DocumentTemplateService
+from app.services.export_service import ExportService
 from app.services.file_service import FileService
 from app.services.isolated_parse import warm_up_pool as warm_up_word_import_parse_pool
 
@@ -183,6 +184,26 @@ async def word_import_rescan_loop() -> None:
         await asyncio.sleep(interval_seconds)
 
 
+async def export_cleanup_loop() -> None:
+    """Periodic retention sweep for old generated export files under EXPORT_ROOT/generated
+    (see export_service.py's cleanup_old_generated_exports). Unlike the rescan loops above
+    this isn't a stuck/pending-state repair, just age-based deletion - every export run
+    writes a brand-new uuid-suffixed file and never reuses an old one, so without this the
+    directory grows unbounded on repeated re-exports. Same every-worker-but-advisory-locked
+    pattern as the loops above."""
+    interval_seconds = settings.export_cleanup_interval_minutes * 60
+    export_service = ExportService()
+    while True:
+        with SessionLocal() as db:
+            acquired = db.execute(text("SELECT pg_try_advisory_lock(202600007)")).scalar()
+            if acquired:
+                try:
+                    export_service.cleanup_old_generated_exports()
+                finally:
+                    db.execute(text("SELECT pg_advisory_unlock(202600007)"))
+        await asyncio.sleep(interval_seconds)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     FileService().ensure_storage()
@@ -194,10 +215,12 @@ async def lifespan(_: FastAPI):
     health_check_task = asyncio.create_task(domain_health_check_loop())
     rescan_task = asyncio.create_task(abgabebox_rescan_loop())
     word_import_rescan_task = asyncio.create_task(word_import_rescan_loop())
+    export_cleanup_task = asyncio.create_task(export_cleanup_loop())
     yield
     health_check_task.cancel()
     rescan_task.cancel()
     word_import_rescan_task.cancel()
+    export_cleanup_task.cancel()
     await close_redis_pool()
 
 

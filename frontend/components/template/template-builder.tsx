@@ -451,9 +451,9 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
       setTemplates((current) => [created, ...current]);
       setForm(initialTemplateCreate);
       setShowCreateForm(false);
-      showToast(`Created template #${created.id}`, "success");
+      showToast(`Vorlage #${created.id} erstellt`, "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Template creation failed", "error");
+      showToast(error instanceof Error ? error.message : "Vorlage konnte nicht erstellt werden", "error");
     }
   }
 
@@ -467,9 +467,9 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
     try {
       await browserApiFetch(`/api/templates/${templateId}`, { method: "DELETE" });
       setTemplates((current) => current.filter((template) => template.id !== templateId));
-      showToast(`Deleted template #${templateId}`, "success");
+      showToast(`Vorlage #${templateId} gelöscht`, "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Template deletion failed", "error");
+      showToast(error instanceof Error ? error.message : "Vorlage konnte nicht gelöscht werden", "error");
     }
   }
 
@@ -1233,10 +1233,10 @@ export function TemplateEditor({
         })
       });
       setTemplate(updated);
-      showToast("Template saved", "success");
+      showToast("Vorlage gespeichert", "success");
       router.refresh();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Template save failed", "error");
+      showToast(error instanceof Error ? error.message : "Vorlage konnte nicht gespeichert werden", "error");
     }
   }
 
@@ -1251,13 +1251,13 @@ export function TemplateEditor({
           })),
         }),
       });
-      showToast("Participant assignments saved", "success");
+      showToast("Teilnehmerzuordnungen gespeichert", "success");
       router.refresh();
       if (closeAfter) {
         setShowParticipantModal(false);
       }
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Participant assignments could not be saved", "error");
+      showToast(error instanceof Error ? error.message : "Teilnehmerzuordnungen konnten nicht gespeichert werden", "error");
     }
   }
 
@@ -1281,7 +1281,7 @@ export function TemplateEditor({
       showToast(`${createdItems.length} Element${createdItems.length === 1 ? "" : "e"} hinzugefuegt`, "success");
       router.refresh();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Template element creation failed", "error");
+      showToast(error instanceof Error ? error.message : "Element konnte nicht hinzugefügt werden", "error");
     }
   }
 
@@ -1511,10 +1511,10 @@ export function TemplateEditor({
     try {
       await browserApiFetch(`/api/template-elements/${templateElementId}`, { method: "DELETE" });
       setElements((current) => current.filter((item) => item.id !== templateElementId));
-      showToast("Element removed from template", "success");
+      showToast("Element aus Vorlage entfernt", "success");
       router.refresh();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Template element deletion failed", "error");
+      showToast(error instanceof Error ? error.message : "Element konnte nicht entfernt werden", "error");
     }
   }
 
@@ -1615,7 +1615,7 @@ export function TemplateEditor({
             <span className="field-help">Wird beim PDF-Export verwendet. Kann in den Einstellungen → Dokumentlayouts konfiguriert werden.</span>
           </label>
           <div className="table-toolbar-actions">
-            <button type="submit" className="button-inline">Save template</button>
+            <button type="submit" className="button-inline">Vorlage speichern</button>
           </div>
         </form>
       </Modal>
@@ -1712,14 +1712,14 @@ export function TemplateEditor({
       <article className="card">
         <DataToolbar
           title="Elemente"
-          description="Templates only collect finished elements. Wiederholungen und Filter werden direkt in den Blöcken des Elements gepflegt."
+          description="Vorlagen sammeln nur fertige Elemente. Wiederholungen und Filter werden direkt in den Blöcken des Elements gepflegt."
           actions={
             <div className="table-toolbar-actions">
               <button type="button" className="button-ghost button-inline" onClick={() => setShowAutoAssignModal(true)}>
                 Verantwortliche-Zuordnung
               </button>
               <button type="button" className="button-inline" onClick={() => setShowCreateItem((current) => !current)}>
-                {showCreateItem ? "Close create form" : "Add element"}
+                {showCreateItem ? "Formular schliessen" : "Element hinzufügen"}
               </button>
             </div>
           }
@@ -1800,7 +1800,7 @@ export function TemplateEditor({
         <Modal
           open={showCreateItem}
           onClose={() => setShowCreateItem(false)}
-          title="Add element to template"
+          title="Element zum Template hinzufügen"
           description="Waehle ein oder mehrere fertige Elemente aus und fuege sie gesammelt zum Template hinzu."
         >
           <form className="grid" onSubmit={addElementToTemplate}>

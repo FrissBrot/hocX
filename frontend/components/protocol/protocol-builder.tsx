@@ -134,7 +134,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
 
       const full = await browserApiFetch<ProtocolSummary>(`/api/protocols/${created.id}`);
       setProtocols((current) => [full, ...current]);
-      showToast(`Created protocol #${created.id}`, "success");
+      showToast(`Protokoll #${created.id} erstellt`, "success");
       setForm((current) => ({
         ...current,
         protocol_number: "",
@@ -143,7 +143,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
       setShowCreateForm(false);
       router.push(`/protocols/${created.id}`);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Protocol creation failed", "error");
+      showToast(error instanceof Error ? error.message : "Protokoll konnte nicht erstellt werden", "error");
     }
   }
 
@@ -157,10 +157,10 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
     try {
       await browserApiFetch<{ message: string }>(`/api/protocols/${protocolId}`, { method: "DELETE" });
       setProtocols((current) => current.filter((protocol) => protocol.id !== protocolId));
-      showToast(`Deleted protocol #${protocolId}`, "success");
+      showToast(`Protokoll #${protocolId} gelöscht`, "success");
       router.refresh();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Protocol deletion failed", "error");
+      showToast(error instanceof Error ? error.message : "Protokoll konnte nicht gelöscht werden", "error");
     }
   }
 
@@ -436,15 +436,15 @@ export function ProtocolOverview({ protocol }: ProtocolOverviewProps) {
         <span className="pill">{protocol.protocol_number}</span>
         <Badge variant={protocolStatusVariant(protocol.status)}>Status: {protocolStatusLabel(protocol.status)}</Badge>
         <span className="pill">Template zugewiesen</span>
-        <span className="pill">Layout from template snapshot</span>
+        <span className="pill">Layout aus Vorlagen-Snapshot</span>
       </div>
 
       <article className="card">
-        <div className="eyebrow">Overview</div>
-        <h3>{protocol.title ?? "Untitled protocol"}</h3>
-        <p className="muted">Protocol date: {formatDate(protocol.protocol_date) || "unknown"}</p>
-        <p className="muted">Template version snapshot: {protocol.template_version ?? "unknown"}</p>
-        <p className="muted">Created at: {formatDateTime(protocol.created_at) || "unknown"}</p>
+        <div className="eyebrow">Übersicht</div>
+        <h3>{protocol.title ?? "Unbenanntes Protokoll"}</h3>
+        <p className="muted">Protokolldatum: {formatDate(protocol.protocol_date) || "unbekannt"}</p>
+        <p className="muted">Vorlagenversion-Snapshot: {protocol.template_version ?? "unbekannt"}</p>
+        <p className="muted">Erstellt am: {formatDateTime(protocol.created_at) || "unbekannt"}</p>
       </article>
     </div>
   );

@@ -12,7 +12,9 @@ independent of production data and fast (plain pdflatex, no xelatex needed).
 from __future__ import annotations
 
 import asyncio
+import os
 import tempfile
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from app.core.config import settings
@@ -169,3 +171,54 @@ def test_export_pdf_raises_when_document_template_snapshot_missing(db):
     service = ExportService()
     with pytest.raises(ValueError, match="Document template snapshot path not found"):
         asyncio.run(service.export_pdf(db, protocol.id))
+
+
+# --- M17: EXPORT_ROOT/generated needs a retention sweep (no cleanup job previously) ---------
+
+
+def test_m17_cleanup_old_generated_exports_deletes_only_files_past_retention(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "export_root", str(tmp_path))
+    generated_dir = tmp_path / "generated"
+    generated_dir.mkdir()
+
+    old_file = generated_dir / "old-export.pdf"
+    old_file.write_bytes(b"%PDF-old")
+    recent_file = generated_dir / "recent-export.pdf"
+    recent_file.write_bytes(b"%PDF-recent")
+
+    old_timestamp = (datetime.now() - timedelta(days=31)).timestamp()
+    os.utime(old_file, (old_timestamp, old_timestamp))
+
+    service = ExportService()
+    result = service.cleanup_old_generated_exports()
+
+    assert result == {"deleted": 1}
+    assert not old_file.exists()
+    assert recent_file.exists()
+
+
+def test_m17_cleanup_old_generated_exports_respects_custom_retention(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "export_root", str(tmp_path))
+    generated_dir = tmp_path / "generated"
+    generated_dir.mkdir()
+
+    file_path = generated_dir / "export.pdf"
+    file_path.write_bytes(b"%PDF")
+    ten_days_ago = (datetime.now() - timedelta(days=10)).timestamp()
+    os.utime(file_path, (ten_days_ago, ten_days_ago))
+
+    service = ExportService()
+
+    assert service.cleanup_old_generated_exports(retention_days=30) == {"deleted": 0}
+    assert file_path.exists()
+
+    assert service.cleanup_old_generated_exports(retention_days=5) == {"deleted": 1}
+    assert not file_path.exists()
+
+
+def test_m17_cleanup_old_generated_exports_missing_dir_is_a_noop(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "export_root", str(tmp_path / "does-not-exist"))
+
+    service = ExportService()
+
+    assert service.cleanup_old_generated_exports() == {"deleted": 0}

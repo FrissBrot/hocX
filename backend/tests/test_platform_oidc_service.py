@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 from fastapi import HTTPException
 
+from app.core.secret_crypto import decrypt_secret
 from app.schemas.oidc import PlatformOidcConfigWrite
 from app.services.platform_oidc_service import (
     PlatformOidcService,
@@ -123,7 +124,9 @@ def test_upsert_config_keeps_existing_secret_when_not_provided(db):
         PlatformOidcConfigWrite(enabled=True, issuer_url="https://idp.example.com", client_id="a", client_secret=""),
     )
     row = service._get_row(db)
-    assert row.client_secret == "orig-secret"
+    # client_secret is encrypted at rest (audit finding M3) - the stored column is ciphertext,
+    # so compare the decrypted value rather than the raw row field.
+    assert decrypt_secret(row.client_secret) == "orig-secret"
 
 
 # --- build_authorize_url --------------------------------------------------------------------

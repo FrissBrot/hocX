@@ -1669,9 +1669,9 @@ export function ProtocolEditor({
           ) : (
             <div className="editor-panel-empty">
               <div>
-                <div className="eyebrow">No point selected</div>
-                <h3>Choose a point from the navigator</h3>
-                <p>Each point groups all blocks from one element, so text, todos and images stay together.</p>
+                <div className="eyebrow">Kein Punkt ausgewählt</div>
+                <h3>Wähle einen Punkt aus dem Navigator</h3>
+                <p>Jeder Punkt gruppiert alle Blöcke eines Elements, sodass Text, Todos und Bilder zusammenbleiben.</p>
               </div>
             </div>
           )}
