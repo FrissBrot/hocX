@@ -8,6 +8,7 @@ import { AssigneeOption, TodoAssigneeMenu } from "@/components/todos/todo-assign
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { formatDate } from "@/lib/utils/format";
+import { EVENT_SYNC_FIELD_LABELS } from "@/lib/constants/event-sync-fields";
 import {
   analyzeWordImport,
   commitWordImport,
@@ -123,6 +124,20 @@ function CheckIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="15" height="15">
       <path d="M3 8.5 6.2 11.5 13 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function LinkIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="16" height="16">
+      <path
+        d="M6.8 9.2 9.2 6.8M6.3 4.6l.9-.9a2.4 2.4 0 0 1 3.4 3.4l-.9.9M9.7 11.4l-.9.9a2.4 2.4 0 0 1-3.4-3.4l.9-.9"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -3011,45 +3026,68 @@ export function WordImportWizard({
                                   />
                                 </label>
                               )}
-                              {text.syncFieldStatus === "conflict" && (
-                                <div className="word-import-alert word-import-alert-block">
-                                  <WarningIcon />
+                              {text.syncTargetField && (
+                                <div
+                                  className={
+                                    text.syncFieldStatus === "conflict"
+                                      ? "word-import-alert word-import-alert-block"
+                                      : "word-import-alert word-import-alert-block word-import-alert-neutral"
+                                  }
+                                >
+                                  {text.syncFieldStatus === "conflict" ? <WarningIcon /> : <LinkIcon />}
                                   <div className="grid" style={{ gap: "10px" }}>
-                                    <span>
-                                      Das Feld &quot;{text.syncTargetField}&quot; des verknüpften Termins enthält bereits einen abweichenden Wert. Welcher Wert soll übernommen werden?
-                                    </span>
-                                    <div className="word-import-diff-options">
-                                      <label className="field-radio-option">
-                                        <input
-                                          type="radio"
-                                          checked={text.syncFieldSource === "doc"}
-                                          onChange={() =>
-                                            setTexts((current) =>
-                                              current.map((row, rowIndex) => (rowIndex === index ? { ...row, syncFieldSource: "doc" } : row))
-                                            )
-                                          }
-                                        />
+                                    {text.syncFieldStatus === "conflict" ? (
+                                      <>
                                         <span>
-                                          <span className="field-radio-option-label">Aus Dokument</span>
-                                          <strong>{text.content}</strong>
+                                          Das Feld &quot;{EVENT_SYNC_FIELD_LABELS[text.syncTargetField] ?? text.syncTargetField}&quot; des
+                                          verknüpften Termins enthält bereits einen abweichenden Wert. Welcher Wert soll übernommen werden?
                                         </span>
-                                      </label>
-                                      <label className="field-radio-option">
-                                        <input
-                                          type="radio"
-                                          checked={text.syncFieldSource === "existing"}
-                                          onChange={() =>
-                                            setTexts((current) =>
-                                              current.map((row, rowIndex) => (rowIndex === index ? { ...row, syncFieldSource: "existing" } : row))
-                                            )
-                                          }
-                                        />
-                                        <span>
-                                          <span className="field-radio-option-label">Bestehend</span>
-                                          <strong>{text.syncFieldExistingValue}</strong>
-                                        </span>
-                                      </label>
-                                    </div>
+                                        <div className="word-import-diff-options">
+                                          <label className="field-radio-option">
+                                            <input
+                                              type="radio"
+                                              checked={text.syncFieldSource === "doc"}
+                                              onChange={() =>
+                                                setTexts((current) =>
+                                                  current.map((row, rowIndex) => (rowIndex === index ? { ...row, syncFieldSource: "doc" } : row))
+                                                )
+                                              }
+                                            />
+                                            <span>
+                                              <span className="field-radio-option-label">Aus Dokument</span>
+                                              <strong>{text.content}</strong>
+                                            </span>
+                                          </label>
+                                          <label className="field-radio-option">
+                                            <input
+                                              type="radio"
+                                              checked={text.syncFieldSource === "existing"}
+                                              onChange={() =>
+                                                setTexts((current) =>
+                                                  current.map((row, rowIndex) =>
+                                                    rowIndex === index ? { ...row, syncFieldSource: "existing" } : row
+                                                  )
+                                                )
+                                              }
+                                            />
+                                            <span>
+                                              <span className="field-radio-option-label">Bestehend</span>
+                                              <strong>{text.syncFieldExistingValue}</strong>
+                                            </span>
+                                          </label>
+                                        </div>
+                                      </>
+                                    ) : text.syncFieldStatus === "match" ? (
+                                      <span>
+                                        Dieser Text wird außerdem in das Feld &quot;{EVENT_SYNC_FIELD_LABELS[text.syncTargetField] ?? text.syncTargetField}
+                                        &quot; des verknüpften Termins geschrieben – der dortige Wert stimmt bereits damit überein.
+                                      </span>
+                                    ) : (
+                                      <span>
+                                        Dieser Text wird außerdem in das Feld &quot;{EVENT_SYNC_FIELD_LABELS[text.syncTargetField] ?? text.syncTargetField}
+                                        &quot; des verknüpften Termins übernommen (dort aktuell leer).
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
                               )}

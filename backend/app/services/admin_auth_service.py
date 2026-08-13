@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from fastapi import HTTPException, Response, status
 from sqlalchemy.orm import Session
 
@@ -19,8 +21,18 @@ class AdminAuthService:
         issue_admin_session_cookie(response, admin.id)
         return self.session(CurrentAdmin(admin_id=admin.id, email=admin.email, display_name=admin.display_name))
 
-    def logout(self, response: Response) -> dict[str, str]:
+    def logout(self, db: Session, response: Response, admin: CurrentAdmin | None) -> dict[str, str]:
         response.delete_cookie(settings.admin_session_cookie, path="/")
+        if admin is not None:
+            # Admin session tokens are stateless (HMAC-signed, 12h TTL) - clearing the cookie
+            # alone doesn't invalidate a copy of the token that leaked elsewhere. Bumping
+            # session_revoke_at invalidates every outstanding token for this admin in one shot,
+            # matching the pattern used for customer logout and admin deactivation.
+            db_admin = db.get(PlatformAdmin, admin.admin_id)
+            if db_admin is not None:
+                db_admin.session_revoke_at = datetime.now(UTC)
+                db.add(db_admin)
+                db.commit()
         return {"message": "Logged out"}
 
     def session(self, admin: CurrentAdmin | None) -> AdminSessionRead:

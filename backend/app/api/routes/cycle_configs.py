@@ -133,6 +133,7 @@ def list_cycles(
 
     today = date.today()
     current_cycle_year = get_cycle_year(today, cfg.reset_month, cfg.reset_day)
+    cycle_years.add(current_cycle_year)
     cycle_years.add(current_cycle_year + 1)
 
     return sorted(

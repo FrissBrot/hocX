@@ -1,25 +1,30 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 import { AdminTenantSettingsModal } from "@/components/admin/admin-tenant-settings-modal";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
+import { Pagination } from "@/components/ui/pagination";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
-import { AdminTenantSummary } from "@/types/api";
+import { AdminTenantPage, AdminTenantSummary } from "@/types/api";
 
 type Props = {
-  initialTenants: AdminTenantSummary[];
+  initialPage: AdminTenantPage;
 };
 
-export function AdminTenantManagement({ initialTenants }: Props) {
+const PAGE_SIZE = 50;
+
+export function AdminTenantManagement({ initialPage }: Props) {
   const showToast = useToast();
   const confirm = useConfirm();
-  const [tenants, setTenants] = useState(initialTenants);
+  const [page, setPage] = useState(initialPage);
+  const [offset, setOffset] = useState(0);
+  const tenants = page.items;
   const [modalOpen, setModalOpen] = useState(false);
   const [name, setName] = useState("");
   const [search, setSearch] = useState("");
@@ -37,19 +42,37 @@ export function AdminTenantManagement({ initialTenants }: Props) {
   const [importName, setImportName] = useState("");
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importBusy, setImportBusy] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const visibleTenants = tenants.filter((tenant) =>
     !search.trim() || tenant.name.toLowerCase().includes(search.trim().toLowerCase())
   );
 
+  async function fetchPage(nextOffset: number) {
+    setLoading(true);
+    try {
+      const result = await browserApiFetch<AdminTenantPage>(`/api/admin/tenants?limit=${PAGE_SIZE}&offset=${nextOffset}`);
+      setPage(result);
+    } catch {
+      // keep showing the previous page rather than blanking the table on a transient error
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void fetchPage(offset);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offset]);
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     try {
-      const created = await browserApiFetch<AdminTenantSummary>("/api/admin/tenants", {
+      await browserApiFetch<AdminTenantSummary>("/api/admin/tenants", {
         method: "POST",
         body: JSON.stringify({ name }),
       });
-      setTenants((current) => [...current, created].sort((a, b) => a.name.localeCompare(b.name)));
+      await fetchPage(offset);
       setModalOpen(false);
       setName("");
       showToast("Mandant erstellt", "success");
@@ -64,7 +87,10 @@ export function AdminTenantManagement({ initialTenants }: Props) {
   }
 
   function handleTenantSaved(updated: AdminTenantSummary) {
-    setTenants((current) => current.map((tenant) => (tenant.id === updated.id ? updated : tenant)));
+    setPage((current) => ({
+      ...current,
+      items: current.items.map((tenant) => (tenant.id === updated.id ? updated : tenant)),
+    }));
     setSettingsTenant(updated);
   }
 
@@ -80,11 +106,11 @@ export function AdminTenantManagement({ initialTenants }: Props) {
     if (!cloneTenant) return;
     setCloneBusy(true);
     try {
-      const cloned = await browserApiFetch<AdminTenantSummary>(`/api/admin/tenants/${cloneTenant.id}/clone`, {
+      await browserApiFetch<AdminTenantSummary>(`/api/admin/tenants/${cloneTenant.id}/clone`, {
         method: "POST",
         body: JSON.stringify({ new_name: cloneName, mode: cloneMode }),
       });
-      setTenants((current) => [...current, cloned].sort((a, b) => a.name.localeCompare(b.name)));
+      await fetchPage(offset);
       setCloneModalOpen(false);
       showToast("Mandant geklont", "success");
     } catch (error) {
@@ -121,7 +147,13 @@ export function AdminTenantManagement({ initialTenants }: Props) {
     if (!confirmed) return;
     try {
       await browserApiFetch(`/api/admin/tenants/${tenant.id}`, { method: "DELETE" });
-      setTenants((current) => current.filter((t) => t.id !== tenant.id));
+      // Deleting the last item on a page would strand the view past the new end - fall
+      // back a page first if that's about to happen (changing offset re-triggers the load).
+      if (tenants.length === 1 && offset > 0) {
+        setOffset(offset - PAGE_SIZE);
+      } else {
+        await fetchPage(offset);
+      }
       showToast("Mandant gelöscht", "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Mandant konnte nicht gelöscht werden", "error");
@@ -146,7 +178,7 @@ export function AdminTenantManagement({ initialTenants }: Props) {
         "/api/admin/tenants/import",
         { method: "POST", body: formData }
       );
-      setTenants((current) => [...current, result.tenant].sort((a, b) => a.name.localeCompare(b.name)));
+      await fetchPage(offset);
       setImportModalOpen(false);
       if (result.warnings.length > 0) {
         showToast(`Mandant importiert mit ${result.warnings.length} Hinweis(en) - siehe Konsole`, "success");
@@ -185,7 +217,10 @@ export function AdminTenantManagement({ initialTenants }: Props) {
         </label>
       </article>
 
-      <DataTable columns={["Bild", "Mandant", "Teilnehmer", "Benutzer", "Erstellt am", "Aktionen"]} emptyMessage="Keine Mandanten gefunden.">
+      <DataTable
+        columns={["Bild", "Mandant", "Teilnehmer", "Benutzer", "Erstellt am", "Aktionen"]}
+        emptyMessage={loading ? "Wird geladen…" : "Keine Mandanten gefunden."}
+      >
         {visibleTenants.map((tenant) => (
           <tr key={tenant.id} className="table-row-clickable" onClick={() => openSettings(tenant)}>
             <td>
@@ -218,6 +253,8 @@ export function AdminTenantManagement({ initialTenants }: Props) {
           </tr>
         ))}
       </DataTable>
+
+      <Pagination offset={offset} limit={PAGE_SIZE} total={page.total} onOffsetChange={setOffset} />
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Neuer Mandant" description="Legt einen neuen Mandanten mit Standard-Dokumentvorlage an.">
         <form className="grid" onSubmit={submit}>

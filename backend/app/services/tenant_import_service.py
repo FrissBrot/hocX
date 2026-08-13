@@ -81,6 +81,15 @@ from app.services.tenant_transfer_common import (
 
 SUPPORTED_FORMAT_VERSION = 1
 
+# Zip-bomb guard, same idea as file_service.py's MAX_ZIP_ENTRIES/MAX_ZIP_TOTAL_BYTES for the
+# word-import ZIP upload, just scaled up: a full-tenant export can legitimately contain many
+# more files (every stored_file/protocol_image/abgabebox upload the tenant has) and be much
+# larger than a single word-import ZIP, but it still needs a hard ceiling so a corrupted or
+# malicious archive can't exhaust disk via extractall() (M19, 2026-08-12 audit - _safe_extract
+# previously only guarded against zip-slip path traversal, not entry count/decompressed size).
+MAX_IMPORT_ZIP_ENTRIES = 20_000
+MAX_IMPORT_ZIP_TOTAL_BYTES = 2 * 1024 * 1024 * 1024  # 2 GB combined uncompressed size
+
 
 class TenantImportService:
     def __init__(self) -> None:
@@ -715,7 +724,22 @@ class TenantImportService:
 
 def _safe_extract(zf: zipfile.ZipFile, dest_dir: Path) -> None:
     dest_resolved = dest_dir.resolve()
-    for member in zf.infolist():
+    infolist = zf.infolist()
+
+    # Zip-bomb guard (M19): check declared entry count/uncompressed size - same as
+    # file_service.py's extract_word_import_files_from_zip - before ever calling extractall,
+    # which would otherwise happily write an unbounded amount of data to disk.
+    if len(infolist) > MAX_IMPORT_ZIP_ENTRIES:
+        raise ValueError(
+            f"Import-Archiv enthält zu viele Dateien (> {MAX_IMPORT_ZIP_ENTRIES}) - Import abgebrochen."
+        )
+    total_uncompressed = sum(member.file_size for member in infolist)
+    if total_uncompressed > MAX_IMPORT_ZIP_TOTAL_BYTES:
+        raise ValueError(
+            f"Import-Archiv ist entpackt zu gross (> {MAX_IMPORT_ZIP_TOTAL_BYTES // (1024 * 1024)} MB) - Import abgebrochen."
+        )
+
+    for member in infolist:
         target = (dest_dir / member.filename).resolve()
         if target != dest_resolved and not str(target).startswith(str(dest_resolved) + os.sep):
             raise ValueError(f"Unsicherer Pfad im Import-Archiv: {member.filename}")

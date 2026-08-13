@@ -2043,11 +2043,14 @@ class ProtocolService:
                 .where(ProtocolTodo.protocol_element_block_id == session_block.id)
             ) or 0
         ) * 10
+        open_status_id = db.scalar(select(TodoStatus.id).where(TodoStatus.code == "open"))
+        if not open_status_id:
+            raise ValueError("Required todo status not found")
         todo = ProtocolTodo(
             protocol_element_block_id=session_block.id,
             sort_index=sort_index,
             task=task,
-            todo_status_id=1,
+            todo_status_id=open_status_id,
             tags=[tag_lower],
             created_by=created_by,
         )

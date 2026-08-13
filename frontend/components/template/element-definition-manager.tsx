@@ -14,6 +14,7 @@ import { useTagConfig } from "@/lib/hooks/use-tag-config";
 import { browserApiFetch } from "@/lib/api/client";
 import { formatDateRange } from "@/lib/utils/format";
 import { ELEMENT_TYPE_OPTIONS } from "@/lib/constants/element-types";
+import { EVENT_SYNC_FIELDS, TODO_SYNC_FIELDS } from "@/lib/constants/event-sync-fields";
 import { ElementDefinition, ElementDefinitionBlock, EventSummary, ParticipantSummary, StructuredListDefinition, StructuredListEntry } from "@/types/api";
 
 type ElementDefinitionManagerProps = {
@@ -128,20 +129,6 @@ const ALL_EVENT_FIELDS = [
   { field: "spezial_text1", defaultLabel: "Spezial Text 1", type: "text" },
   { field: "spezial_text2", defaultLabel: "Spezial Text 2", type: "text" },
   { field: "spezial_text3", defaultLabel: "Spezial Text 3", type: "text" },
-] as const;
-
-const EVENT_SYNC_FIELDS = [
-  { value: "description", label: "Beschreibung" },
-  { value: "location", label: "Standort" },
-  { value: "spezial_text1", label: "Spezial Text 1" },
-  { value: "spezial_text2", label: "Spezial Text 2" },
-  { value: "spezial_text3", label: "Spezial Text 3" },
-] as const;
-
-const TODO_SYNC_FIELDS = [
-  { value: "task", label: "Aufgabentext" },
-  { value: "reference_link", label: "Referenz-Link" },
-  { value: "due_marker", label: "Fälligkeits-Marker" },
 ] as const;
 
 type EventFieldConfig = { field: string; label: string; enabled: boolean };

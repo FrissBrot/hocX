@@ -1,25 +1,22 @@
-from collections import defaultdict
-from datetime import date
-
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import or_, select, text
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.core.cycle_utils import format_cycle_name
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, require_reader
-from app.services.chart_service import GROUPS_LIST_NAME
-from app.models.entities import (
-    AttendanceFine,
-    CycleConfig,
-    ElementType,
-    Participant,
-    Protocol,
-    ProtocolElement,
-    ProtocolElementBlock,
-    ProtocolTodo,
-    TodoStatus,
+from app.models.entities import CycleConfig, Participant, Protocol
+from app.services.statistics_common import (
+    aggregate_attendance,
+    aggregate_todo_counts,
+    fetch_attendance_blocks,
+    fetch_finance_by_account_month,
+    fetch_fines_by_participant,
+    fetch_fines_by_type,
+    fetch_group_session_rows,
+    fetch_group_tagged_cycles,
+    fetch_todo_rows,
 )
 
 router = APIRouter()
@@ -135,22 +132,7 @@ def get_statistics_overview(
             select(CycleConfig).where(CycleConfig.tenant_id == tenant_id)
         ).all()
     }
-    event_cycles_rows = db.execute(
-        text("""
-            SELECT DISTINCT ec.cycle_config_id, ec.cycle_year
-            FROM event_cycle ec
-            JOIN event e ON e.id = ec.event_id
-            WHERE e.tenant_id = :tenant_id
-              AND e.tag IN (
-                  SELECT le.column_one_value_json->>'text_value'
-                  FROM list_definition ld
-                  JOIN list_entry le ON le.list_definition_id = ld.id
-                  WHERE ld.tenant_id = :tenant_id AND ld.name = :groups_list_name
-              )
-            ORDER BY ec.cycle_config_id, ec.cycle_year
-        """),
-        {"tenant_id": tenant_id, "groups_list_name": GROUPS_LIST_NAME},
-    ).all()
+    event_cycles_rows = fetch_group_tagged_cycles(db, tenant_id)
     cycles: list[CycleInfo] = []
     seen_cycles: set[tuple[int, int]] = set()
     for ec in event_cycles_rows:
@@ -167,31 +149,7 @@ def get_statistics_overview(
                 ))
 
     # ── Groups stats (groups identified by event.tag matching Gruppen list) ──
-    group_rows = db.execute(
-        text("""
-            SELECT
-                e.tag AS group_name,
-                ec.cycle_config_id,
-                ec.cycle_year,
-                COUNT(DISTINCT e.id) AS session_count,
-                COUNT(DISTINCT e.id) FILTER (WHERE e.participant_count > 0) AS session_count_with_participants,
-                COALESCE(AVG(e.participant_count) FILTER (WHERE e.participant_count > 0), 0) AS avg_participants
-            FROM event e
-            LEFT JOIN event_cycle ec ON ec.event_id = e.id
-            WHERE e.tenant_id = :tenant_id
-              AND e.tag IS NOT NULL
-              AND e.tag IN (
-                  SELECT le.column_one_value_json->>'text_value'
-                  FROM list_definition ld
-                  JOIN list_entry le ON le.list_definition_id = ld.id
-                  WHERE ld.tenant_id = :tenant_id
-                    AND ld.name = :groups_list_name
-              )
-            GROUP BY e.tag, ec.cycle_config_id, ec.cycle_year
-            ORDER BY e.tag, ec.cycle_year
-        """),
-        {"tenant_id": tenant_id, "groups_list_name": GROUPS_LIST_NAME},
-    ).all()
+    group_rows = fetch_group_session_rows(db, tenant_id)
 
     groups_stats = [
         GroupStat(
@@ -207,70 +165,20 @@ def get_statistics_overview(
     ]
 
     # ── Attendance ───────────────────────────────────────────────────────────
-    attendance_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "attendance"))
-
-    attendance_blocks: list[tuple[date, dict]] = []
-    if attendance_type_id:
-        rows = db.execute(
-            select(Protocol.protocol_date, ProtocolElementBlock.configuration_snapshot_json)
-            .join(ProtocolElement, ProtocolElement.protocol_id == Protocol.id)
-            .join(ProtocolElementBlock, ProtocolElementBlock.protocol_element_id == ProtocolElement.id)
-            .where(
-                Protocol.tenant_id == tenant_id,
-                # "vorbereitet" protocols haven't happened yet - attendance is still being
-                # tracked/editable and only becomes final at the vorbereitet -> durchgeführt
-                # transition (see list_snapshot_service.clear_tracked_changes_for_protocol),
-                # so it must not feed the statistics. Matches chart_service.py's filter.
-                Protocol.status.in_(["durchgeführt", "abgeschlossen"]),
-                ProtocolElementBlock.element_type_id == attendance_type_id,
-            )
-            .order_by(Protocol.protocol_date)
-        ).all()
-        attendance_blocks = [(r.protocol_date, r.configuration_snapshot_json) for r in rows]
-
-    # Per-participant aggregation
-    participant_stats: dict[str, dict[str, int]] = defaultdict(lambda: {"present": 0, "late": 0, "absent": 0, "excused": 0})
-    # Per-month aggregation
-    monthly_att: dict[str, dict[str, int]] = defaultdict(lambda: {"present": 0, "late": 0, "absent": 0, "excused": 0, "total": 0})
-
-    for proto_date, config in attendance_blocks:
-        entries = config.get("attendance_entries", []) if config else []
-        month_key = proto_date.strftime("%Y-%m") if proto_date else None
-        for entry in entries:
-            name = entry.get("participant_name") or "Unbekannt"
-            status = entry.get("status") or "absent"
-            # Four-value status, matching export_service's counting: "late" is its own
-            # bucket, not lumped into "absent" (a late arrival is not the same as a no-show).
-            if status == "present":
-                participant_stats[name]["present"] += 1
-            elif status == "late":
-                participant_stats[name]["late"] += 1
-            elif status == "excused":
-                participant_stats[name]["excused"] += 1
-            else:
-                participant_stats[name]["absent"] += 1
-            if month_key:
-                monthly_att[month_key]["total"] += 1
-                if status == "present":
-                    monthly_att[month_key]["present"] += 1
-                elif status == "late":
-                    monthly_att[month_key]["late"] += 1
-                elif status == "excused":
-                    monthly_att[month_key]["excused"] += 1
-                else:
-                    monthly_att[month_key]["absent"] += 1
+    attendance_blocks = fetch_attendance_blocks(db, tenant_id)
+    monthly_att, per_participant_att = aggregate_attendance(attendance_blocks)
 
     attendance_by_participant = sorted(
         [
             AttendanceStat(
-                name=name,
-                present=s["present"],
-                late=s["late"],
-                absent=s["absent"],
-                excused=s["excused"],
-                total=s["present"] + s["late"] + s["absent"] + s["excused"],
+                name=p.name,
+                present=p.counts.present,
+                late=p.counts.late,
+                absent=p.counts.absent,
+                excused=p.counts.excused,
+                total=p.counts.total,
             )
-            for name, s in participant_stats.items()
+            for p in per_participant_att
         ],
         key=lambda x: x.name,
     )
@@ -278,81 +186,42 @@ def get_statistics_overview(
     attendance_over_time = [
         AttendanceMonth(
             month=m,
-            present=v["present"],
-            late=v["late"],
-            absent=v["absent"],
-            excused=v["excused"],
-            total=v["total"],
+            present=c.present,
+            late=c.late,
+            absent=c.absent,
+            excused=c.excused,
+            total=c.total,
         )
-        for m, v in sorted(monthly_att.items())
+        for m, c in sorted(monthly_att.items())
     ]
 
     # ── Todos ────────────────────────────────────────────────────────────────
-    todos = db.execute(
-        select(TodoStatus.code, ProtocolTodo.completed_at)
-        # LEFT JOINs - protocol_element_block_id is nullable (standalone todos and
-        # submission-assignment/Abgabebox-generated todos have no block), and an INNER JOIN
-        # here silently dropped both kinds from the statistics/PDF chart entirely. Those
-        # todos carry their own ProtocolTodo.tenant_id instead, checked in the WHERE below.
-        .outerjoin(ProtocolElementBlock, ProtocolElementBlock.id == ProtocolTodo.protocol_element_block_id)
-        .outerjoin(ProtocolElement, ProtocolElement.id == ProtocolElementBlock.protocol_element_id)
-        .outerjoin(Protocol, Protocol.id == ProtocolElement.protocol_id)
-        .join(TodoStatus, TodoStatus.id == ProtocolTodo.todo_status_id)
-        .where(or_(Protocol.tenant_id == tenant_id, ProtocolTodo.tenant_id == tenant_id))
-    ).all()
-
-    todo_open = sum(1 for t in todos if t.code not in ("done", "cancelled") and not t.completed_at)
-    todo_done = sum(1 for t in todos if t.code in ("done", "cancelled") or t.completed_at)
+    todos = fetch_todo_rows(db, tenant_id)
+    todo_open, todo_done = aggregate_todo_counts(todos)
     todos_summary = TodoSummary(open=todo_open, done=todo_done, total=len(todos))
 
     # ── Fines ────────────────────────────────────────────────────────────────
-    fines = db.execute(
-        select(
-            AttendanceFine.participant_name_snapshot,
-            AttendanceFine.fine_type,
-            AttendanceFine.amount,
-            AttendanceFine.status,
-        )
-        .join(Protocol, Protocol.id == AttendanceFine.protocol_id)
-        .where(Protocol.tenant_id == tenant_id)
-    ).all()
-
-    per_participant: dict[str, dict[str, float | int]] = defaultdict(lambda: {"count": 0, "amount": 0.0})
-    per_type: dict[str, dict[str, float | int]] = defaultdict(lambda: {"count": 0, "amount": 0.0})
-    for fine in fines:
-        per_participant[fine.participant_name_snapshot]["count"] = int(per_participant[fine.participant_name_snapshot]["count"]) + 1
-        per_participant[fine.participant_name_snapshot]["amount"] = float(per_participant[fine.participant_name_snapshot]["amount"]) + float(fine.amount)
-        per_type[fine.fine_type]["count"] = int(per_type[fine.fine_type]["count"]) + 1
-        per_type[fine.fine_type]["amount"] = float(per_type[fine.fine_type]["amount"]) + float(fine.amount)
-
     fine_type_labels = {"absent": "Unentschuldigt", "late": "Verspätet"}
     fines_by_participant = sorted(
-        [FineByStat(name=n, count=int(v["count"]), amount=float(v["amount"])) for n, v in per_participant.items()],
+        [
+            FineByStat(name=r.name, count=int(r.count), amount=float(r.amount or 0))
+            for r in fetch_fines_by_participant(db, tenant_id)
+        ],
         key=lambda x: x.count,
         reverse=True,
     )
     fines_by_type = [
-        FineTypeStat(fine_type=t, label=fine_type_labels.get(t, t), count=int(v["count"]), amount=float(v["amount"]))
-        for t, v in per_type.items()
+        FineTypeStat(
+            fine_type=r.fine_type,
+            label=fine_type_labels.get(r.fine_type, r.fine_type),
+            count=int(r.count),
+            amount=float(r.amount or 0),
+        )
+        for r in fetch_fines_by_type(db, tenant_id)
     ]
 
     # ── Finance by month ─────────────────────────────────────────────────────
-    finance_rows = db.execute(
-        text("""
-            SELECT
-                ft.account_id,
-                fa.name AS account_name,
-                to_char(ft.transaction_date, 'YYYY-MM') AS month,
-                SUM(CASE WHEN ft.amount > 0 THEN ft.amount ELSE 0 END) AS income,
-                SUM(CASE WHEN ft.amount < 0 THEN ABS(ft.amount) ELSE 0 END) AS expenses
-            FROM finance_transaction ft
-            JOIN finance_account fa ON fa.id = ft.account_id
-            WHERE fa.tenant_id = :tenant_id
-            GROUP BY ft.account_id, fa.name, month
-            ORDER BY month
-        """),
-        {"tenant_id": tenant_id},
-    ).all()
+    finance_rows = fetch_finance_by_account_month(db, tenant_id)
 
     finance_by_month = [
         FinanceMonthStat(

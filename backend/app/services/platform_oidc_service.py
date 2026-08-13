@@ -13,6 +13,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.secret_crypto import decrypt_secret, encrypt_secret
 from app.models import PlatformAdmin, PlatformOidcConfig
 from app.schemas.oidc import PlatformOidcConfigPublic, PlatformOidcConfigRead, PlatformOidcConfigWrite
 
@@ -117,7 +118,9 @@ class PlatformOidcService:
         cfg.client_id = payload.client_id
         cfg.scopes = payload.scopes
         if payload.client_secret:
-            cfg.client_secret = payload.client_secret
+            # Encrypted at rest (audit finding M3) - decrypted again only where it's actually
+            # used, in the token-exchange request below.
+            cfg.client_secret = encrypt_secret(payload.client_secret)
         db.commit()
         db.refresh(cfg)
         return self.get_config(db)
@@ -174,7 +177,7 @@ class PlatformOidcService:
         token_endpoint = discovery["token_endpoint"]
         callback_uri = redirect_base.rstrip("/") + "/api/admin/auth/oidc/callback"
 
-        credentials = base64.b64encode(f"{cfg.client_id}:{cfg.client_secret}".encode()).decode()
+        credentials = base64.b64encode(f"{cfg.client_id}:{decrypt_secret(cfg.client_secret)}".encode()).decode()
         token_data = urllib.parse.urlencode({
             "grant_type": "authorization_code",
             "code": code,

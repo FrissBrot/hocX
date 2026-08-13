@@ -126,6 +126,55 @@ def test_escape_latex_escapes_all_special_characters():
     assert r"\textbackslash{}" in escaped
 
 
+# --- M9: partial-commit risk (DB row committed before filesystem I/O) --------------------
+
+
+def test_create_document_template_rolls_back_row_on_filesystem_error(db, monkeypatch):
+    """DocumentTemplateRepository.create() commits the DB row immediately, before
+    _materialize_template()'s mkdir/copy2/write_text calls run. If those raise OSError (full
+    disk, permission issue), the freshly-created row must not survive as an orphan with a
+    broken filesystem_path - it should be deleted again."""
+    from sqlalchemy import select
+
+    from app.models import DocumentTemplate
+
+    tenant = make_tenant(db, "OSError Create Verein")
+    service = DocumentTemplateService()
+
+    def _boom(self, db, template):
+        raise OSError("no space left on device")
+
+    monkeypatch.setattr(DocumentTemplateService, "_materialize_template", _boom)
+
+    with pytest.raises(OSError):
+        service.create_document_template(db, DocumentTemplateCreate(name="Kaputt beim Schreiben"), tenant_id=tenant.id)
+
+    rows = db.scalars(select(DocumentTemplate).where(DocumentTemplate.tenant_id == tenant.id)).all()
+    assert rows == []
+
+
+def test_update_document_template_filesystem_error_keeps_existing_row(db, monkeypatch):
+    """Unlike create, update_document_template's row already existed with a valid
+    filesystem_path before the call - an OSError during rematerialization must not delete it,
+    only fail loudly."""
+    from app.models import DocumentTemplate
+
+    tenant = make_tenant(db, "OSError Update Verein")
+    service = DocumentTemplateService()
+    created = service.create_document_template(db, DocumentTemplateCreate(name="Original"), tenant_id=tenant.id)
+
+    def _boom(self, db, template):
+        raise OSError("no space left on device")
+
+    monkeypatch.setattr(DocumentTemplateService, "_materialize_template", _boom)
+
+    with pytest.raises(OSError):
+        service.update_document_template(db, created.id, DocumentTemplateUpdate(name="Neuer Name"))
+
+    still_there = db.get(DocumentTemplate, created.id)
+    assert still_there is not None
+
+
 def test_update_document_template_partial_payload_rematerializes(db):
     tenant = make_tenant(db, "Update Verein")
     service = DocumentTemplateService()

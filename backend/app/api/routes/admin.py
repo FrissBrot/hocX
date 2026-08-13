@@ -13,12 +13,15 @@ from app.core.admin_security import CurrentAdmin, get_current_admin
 from app.core.config import settings
 from app.core.db import get_db
 from app.schemas.admin import (
+    AdminDomainPage,
     AdminDomainRead,
     AdminTenantCreate,
+    AdminTenantPage,
     AdminTenantRead,
     AdminTenantUserGrant,
     AdminTenantUserRead,
     AdminUserMergeRequest,
+    AdminUserPage,
     PlatformAdminCreate,
     PlatformAdminRead,
     PlatformAdminUpdate,
@@ -56,14 +59,22 @@ import_service = TenantImportService()
 audit = AuditService()
 
 
-@router.get("/tenants", response_model=list[AdminTenantRead])
-def list_tenants(db: Session = Depends(get_db)):
-    return tenant_service.list_tenants(db)
+@router.get("/tenants", response_model=AdminTenantPage)
+def list_tenants(
+    limit: int | None = Query(None, gt=0, le=500),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+):
+    return tenant_service.list_tenants(db, limit=limit, offset=offset)
 
 
-@router.get("/domains", response_model=list[AdminDomainRead])
-def list_domains(db: Session = Depends(get_db)):
-    return domain_service.list_domains(db)
+@router.get("/domains", response_model=AdminDomainPage)
+def list_domains(
+    limit: int | None = Query(None, gt=0, le=500),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+):
+    return domain_service.list_domains(db, limit=limit, offset=offset)
 
 
 @router.delete("/domains/{domain_id}", status_code=204)
@@ -320,9 +331,13 @@ def tenant_profile_image(tenant_id: int, db: Session = Depends(get_db)):
     return FileResponse(file_path)
 
 
-@router.get("/users", response_model=list[UserRead])
-def list_users(db: Session = Depends(get_db)):
-    return user_service.list_users(db)
+@router.get("/users", response_model=AdminUserPage)
+def list_users(
+    limit: int | None = Query(None, gt=0, le=500),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+):
+    return user_service.list_users(db, limit=limit, offset=offset)
 
 
 @router.post("/users", response_model=UserRead, status_code=201)

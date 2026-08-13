@@ -37,6 +37,8 @@ def create_document_template(
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Document template could not be created") from exc
+    except OSError as exc:
+        raise HTTPException(status_code=400, detail="Document template files could not be written") from exc
 
 
 @router.patch("/document-templates/{document_template_id}", response_model=DocumentTemplateRead)
@@ -55,6 +57,8 @@ def patch_document_template(
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Document template could not be updated") from exc
+    except OSError as exc:
+        raise HTTPException(status_code=400, detail="Document template files could not be written") from exc
     if updated is None:
         raise HTTPException(status_code=404, detail="Document template not found")
     return updated

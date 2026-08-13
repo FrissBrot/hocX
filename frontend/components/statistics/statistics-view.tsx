@@ -376,6 +376,14 @@ export function StatisticsView({ data }: Props) {
   const groupsFiltered = useMemo(() => {
     const stats = data.groups_stats;
     if (selectedCycle === "all") {
+      // Weighted "Ø Teilnehmer" merge across cycles - this is a THIRD, hand-duplicated copy
+      // of the same logic that already lives twice in the backend (now de-duplicated into
+      // aggregate_group_rows in backend/app/services/statistics_common.py, used by both
+      // app/api/routes/statistics.py and app/services/chart_service.py). It can't be
+      // eliminated here without an API change (the /statistics/overview endpoint returns
+      // raw per-cycle rows, not a pre-merged view) - see that function's docstring.
+      // KEEP IN SYNC BY HAND: if the merge rule (weight by session_count_with_participants)
+      // changes there, change it here too (2026-08-13 audit, M11).
       const merged: Record<string, { session_count: number; session_count_with_participants: number; weighted_participants: number; sessions_with_p: number }> = {};
       for (const g of stats) {
         if (!merged[g.group_name]) merged[g.group_name] = { session_count: 0, session_count_with_participants: 0, weighted_participants: 0, sessions_with_p: 0 };

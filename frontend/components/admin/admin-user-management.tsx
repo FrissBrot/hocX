@@ -1,16 +1,17 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { ROLE_OPTIONS } from "@/components/admin/admin-tenant-settings-modal";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
+import { Pagination } from "@/components/ui/pagination";
 import { SearchInput } from "@/components/ui/search-input";
 import { Tabs } from "@/components/ui/tabs";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
-import { AdminTenantSummary, UserSummary } from "@/types/api";
+import { AdminTenantSummary, AdminUserPage, UserSummary } from "@/types/api";
 import {
   addOrUpsertMembership,
   buildTenantNameMap,
@@ -21,14 +22,26 @@ import {
 } from "@/components/users/user-form-shared";
 
 type Props = {
-  initialUsers: UserSummary[];
+  initialPage: AdminUserPage;
   allTenants: AdminTenantSummary[];
 };
 
-export function AdminUserManagement({ initialUsers, allTenants }: Props) {
+const PAGE_SIZE = 50;
+
+function isEligible(user: UserSummary) {
+  // Nur Benutzer mit freigeschaltetem Login und echter (nicht automatisch generierter
+  // Teilnehmer-Platzhalter-) E-Mail sind hier relevant - Schattenaccounts ohne Login
+  // sind nur internes Implementierungsdetail der Teilnehmerverwaltung.
+  return user.login_enabled && !user.email.endsWith("@participants.hocx.local");
+}
+
+export function AdminUserManagement({ initialPage, allTenants }: Props) {
   const showToast = useToast();
   const confirm = useConfirm();
-  const [users, setUsers] = useState(initialUsers);
+  const [page, setPage] = useState(initialPage);
+  const [offset, setOffset] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const users = page.items;
   const [search, setSearch] = useState("");
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [userForm, setUserForm] = useState<UserFormState>(() => emptyUserForm(allTenants));
@@ -36,16 +49,13 @@ export function AdminUserManagement({ initialUsers, allTenants }: Props) {
   const [mergeModalOpen, setMergeModalOpen] = useState(false);
   const [mergeSourceUserId, setMergeSourceUserId] = useState<number | null>(null);
   const [mergeTargetUserId, setMergeTargetUserId] = useState("");
+  // The merge target can be any eligible user tenant-wide, not just one on the currently
+  // displayed page, so it's loaded separately (unpaginated) when the merge modal opens.
+  const [mergeCandidates, setMergeCandidates] = useState<UserSummary[]>([]);
 
   const tenantNameById = useMemo(() => buildTenantNameMap(allTenants), [allTenants]);
 
-  // Nur Benutzer mit freigeschaltetem Login und echter (nicht automatisch generierter
-  // Teilnehmer-Platzhalter-) E-Mail sind hier relevant - Schattenaccounts ohne Login
-  // sind nur internes Implementierungsdetail der Teilnehmerverwaltung.
-  const eligibleUsers = useMemo(
-    () => users.filter((user) => user.login_enabled && !user.email.endsWith("@participants.hocx.local")),
-    [users]
-  );
+  const eligibleUsers = useMemo(() => users.filter(isEligible), [users]);
 
   const visibleUsers = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -56,6 +66,23 @@ export function AdminUserManagement({ initialUsers, allTenants }: Props) {
       return haystack.includes(query);
     });
   }, [eligibleUsers, search]);
+
+  async function fetchPage(nextOffset: number) {
+    setLoading(true);
+    try {
+      const result = await browserApiFetch<AdminUserPage>(`/api/admin/users?limit=${PAGE_SIZE}&offset=${nextOffset}`);
+      setPage(result);
+    } catch {
+      // keep showing the previous page rather than blanking the table on a transient error
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void fetchPage(offset);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offset]);
 
   function openNewUser() {
     setUserForm(emptyUserForm(allTenants));
@@ -128,7 +155,7 @@ export function AdminUserManagement({ initialUsers, allTenants }: Props) {
             body: JSON.stringify(payload)
           });
 
-      setUsers((current) => (userForm.id ? current.map((user) => (user.id === saved.id ? saved : user)) : [saved, ...current]));
+      await fetchPage(offset);
       setUserModalOpen(false);
       showToast(userForm.id ? "Benutzer gespeichert" : "Benutzer erstellt", "success");
     } catch (error) {
@@ -138,11 +165,20 @@ export function AdminUserManagement({ initialUsers, allTenants }: Props) {
     }
   }
 
-  function openMerge(user: UserSummary) {
+  async function openMerge(user: UserSummary) {
     setMergeSourceUserId(user.id);
-    const fallbackTarget = eligibleUsers.find((candidate) => candidate.id !== user.id);
-    setMergeTargetUserId(fallbackTarget ? String(fallbackTarget.id) : "");
+    setMergeCandidates([]);
+    setMergeTargetUserId("");
     setMergeModalOpen(true);
+    try {
+      const result = await browserApiFetch<AdminUserPage>("/api/admin/users");
+      const eligible = result.items.filter(isEligible);
+      setMergeCandidates(eligible);
+      const fallbackTarget = eligible.find((candidate) => candidate.id !== user.id);
+      setMergeTargetUserId(fallbackTarget ? String(fallbackTarget.id) : "");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Benutzerliste konnte nicht geladen werden", "error");
+    }
   }
 
   async function mergeUsers() {
@@ -154,16 +190,14 @@ export function AdminUserManagement({ initialUsers, allTenants }: Props) {
     });
     if (!ok) return;
     try {
-      const merged = await browserApiFetch<UserSummary>("/api/admin/users/merge", {
+      await browserApiFetch<UserSummary>("/api/admin/users/merge", {
         method: "POST",
         body: JSON.stringify({
           source_user_id: mergeSourceUserId,
           target_user_id: Number(mergeTargetUserId),
         }),
       });
-      setUsers((current) =>
-        current.filter((user) => user.id !== mergeSourceUserId).map((user) => (user.id === merged.id ? merged : user))
-      );
+      await fetchPage(offset);
       setMergeModalOpen(false);
       showToast("Benutzer zusammengeführt", "success");
     } catch (error) {
@@ -190,7 +224,10 @@ export function AdminUserManagement({ initialUsers, allTenants }: Props) {
         </label>
       </article>
 
-      <DataTable columns={["Anzeigename", "E-Mail", "Mandantenrollen", "Login", "Aktionen"]} emptyMessage="Keine Benutzer gefunden.">
+      <DataTable
+        columns={["Anzeigename", "E-Mail", "Mandantenrollen", "Login", "Aktionen"]}
+        emptyMessage={loading ? "Wird geladen…" : "Keine Benutzer gefunden."}
+      >
         {visibleUsers.map((user) => (
           <tr key={user.id} className="table-row-clickable" onClick={() => openEditUser(user)}>
             <td>
@@ -225,6 +262,8 @@ export function AdminUserManagement({ initialUsers, allTenants }: Props) {
           </tr>
         ))}
       </DataTable>
+
+      <Pagination offset={offset} limit={PAGE_SIZE} total={page.total} onOffsetChange={setOffset} />
 
       <Modal
         open={userModalOpen}
@@ -396,7 +435,7 @@ export function AdminUserManagement({ initialUsers, allTenants }: Props) {
           <label className="field-stack">
             <span className="field-label">Zielbenutzer</span>
             <select value={mergeTargetUserId} onChange={(event) => setMergeTargetUserId(event.target.value)}>
-              {eligibleUsers
+              {mergeCandidates
                 .filter((user) => user.id !== mergeSourceUserId)
                 .map((user) => (
                   <option key={user.id} value={user.id}>

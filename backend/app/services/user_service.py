@@ -59,6 +59,16 @@ class UserService:
             if membership.role_code == "admin" and membership.is_active
         }
 
+    def _scope_memberships(self, user: UserRead, visible_tenant_ids: set[int]) -> UserRead:
+        """Restricts a UserRead's tenant memberships to the tenants the viewing actor is
+        themselves admin of. Without this, a tenant admin who is merely allowed to *manage*
+        a shared user (because that user also has a membership in the admin's own tenant)
+        would otherwise see that user's role in every other tenant they belong to, including
+        tenants the admin has no authority over."""
+        return user.model_copy(update={
+            "memberships": [m for m in user.memberships if m.tenant_id in visible_tenant_ids]
+        })
+
     def _read_model(self, db: Session, user: AppUser) -> UserRead:
         external_identity = user.external_identity_json or {}
         return UserRead(
@@ -142,7 +152,12 @@ class UserService:
             for m in self.repository.list_memberships(db, tenant_id=actor.current_tenant_id)
             if m.is_active
         }
-        return [user for user in self.list_all_users(db) if user.id in allowed_ids]
+        admin_tenant_ids = self._admin_tenant_ids_for_actor(actor)
+        return [
+            self._scope_memberships(user, admin_tenant_ids)
+            for user in self.list_all_users(db)
+            if user.id in allowed_ids
+        ]
 
     def get_user(self, db: Session, user_id: int, actor: CurrentUser):
         require_admin(actor)
@@ -156,7 +171,7 @@ class UserService:
         }
         if user_id not in tenant_user_ids:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not manageable in current tenant")
-        return self._read_model(db, user)
+        return self._scope_memberships(self._read_model(db, user), self._admin_tenant_ids_for_actor(actor))
 
     def admin_get_user(self, db: Session, user_id: int) -> UserRead | None:
         """Unscoped single-user lookup for the platform-admin panel."""

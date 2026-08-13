@@ -108,3 +108,51 @@ durchläuft beim nächsten Start die komplette Alembic-Historie von Anfang an.
 7. Bootstrap-Admin-Login mit `INITIAL_ADMIN_EMAIL`/`INITIAL_ADMIN_PASSWORD` aus `.env`
    prüfen, danach im Admin-Panel weitere Admins anlegen und das Bootstrap-Passwort
    ändern.
+
+## 7. Backup- und Cleanup-Cronjobs
+
+Zwei eigenständige Skripte in `scripts/`, gedacht für periodische Ausführung per Cron
+(zusätzlich zum automatischen Pre-Deploy-Backup, das `deploy.sh` bei jedem Update ohnehin
+macht). Beide sind idempotent, loggen mit Zeitstempel nach stdout/stderr und brechen bei
+Fehlern mit Exit-Code ≠ 0 ab (wichtig für Cron-Fehlerbenachrichtigung/Monitoring).
+
+### `scripts/backup_db.sh`
+
+- **Zweck**: nächtlicher Postgres-Dump, unabhängig vom Deploy-Zyklus. Nutzt denselben
+  `pg_dump`-Mechanismus wie der Pre-Deploy-Backup in `deploy.sh` (`docker compose exec db
+  pg_dump ... | gzip`) - ein Cron-Backup lässt sich also genauso zurückspielen wie ein
+  Pre-Deploy-Backup (siehe Abschnitt 4, Rollback).
+- **Braucht**: keine Argumente, läuft immer gegen den Checkout, in dem es liegt (`.env`
+  im Repo-Root muss `POSTGRES_USER`/`POSTGRES_DB` enthalten; der `db`-Container muss
+  laufen, sonst bricht das Skript kontrolliert ab).
+- **Env-Var**: `RETENTION_DAYS` (Default 14) - Dumps, die älter sind, werden nach jedem
+  Lauf automatisch gelöscht.
+- **Schreibt nach**: `backups/<timestamp>-cron.sql.gz` (derselbe Ordner wie die
+  Pre-Deploy-Backups, gut unterscheidbar am `-cron`-Suffix).
+- **Empfohlener Cron-Zeitplan**: täglich 03:15 Uhr, mit Logdatei im selben `backups/`-Ordner:
+  ```
+  15 3 * * * /docker/hocX/scripts/backup_db.sh >> /docker/hocX/backups/backup_db.log 2>&1
+  ```
+- **Manuell testen**: `./scripts/backup_db.sh` direkt im Repo-Root ausführen und danach
+  `ls -lh backups/` prüfen.
+
+### `scripts/cleanup_storage.sh`
+
+- **Zweck**: räumt ausschließlich `storage/exports/` (generierte PDF/LaTeX-Exportdateien)
+  nach Alter auf. Bewusst **nicht** angefasst werden `storage/tenant_imports`,
+  `storage/tenant_clones` und `storage/abgabebox-uploads` - das sind laut Code- und
+  Live-DB-Prüfung permanente Speicherorte für echte Mandantendaten, keine Temp-Dateien
+  (Details dazu direkt im Skript-Kommentar).
+- **Braucht**: keine Pflicht-Argumente. Optionales `--dry-run` zeigt nur an, was gelöscht
+  würde, ohne etwas zu löschen.
+- **Env-Var**: `RETENTION_DAYS` (Default 30).
+- **Schreibt/löscht**: Dateien älter als `RETENTION_DAYS` Tage unter `storage/exports/`
+  (außer `.gitkeep`) sowie danach leer gewordene Unterverzeichnisse; Ausgabe geht nach
+  stdout/stderr (kein eigenes Logfile im Skript, daher beim Cron-Eintrag umleiten).
+- **Empfohlener Cron-Zeitplan**: täglich 03:45 Uhr, also nach `backup_db.sh`, damit ein
+  Backup immer vor einer Cleanup-Runde derselben Nacht liegt:
+  ```
+  45 3 * * * /docker/hocX/scripts/cleanup_storage.sh >> /docker/hocX/backups/cleanup_storage.log 2>&1
+  ```
+- **Manuell testen**: erst `./scripts/cleanup_storage.sh --dry-run` (zeigt betroffene
+  Dateien, löscht nichts), danach bei Bedarf ohne Flag für den echten Lauf.

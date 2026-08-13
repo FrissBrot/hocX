@@ -1,7 +1,17 @@
 from __future__ import annotations
 
 import re
-from datetime import date
+from datetime import date, timedelta
+
+
+def _reset_boundary(year: int, reset_month: int, reset_day: int) -> date:
+    try:
+        return date(year, reset_month, reset_day)
+    except ValueError:
+        # Invalid day for month (e.g. Feb 31) – clamp to last valid day
+        import calendar
+        last_day = calendar.monthrange(year, reset_month)[1]
+        return date(year, reset_month, min(reset_day, last_day))
 
 
 def get_cycle_year(d: date, reset_month: int, reset_day: int) -> int:
@@ -11,16 +21,19 @@ def get_cycle_year(d: date, reset_month: int, reset_day: int) -> int:
     reset date of the following year.  Example: reset_month=7, reset_day=31
     means the cycle runs 01 Aug – 31 Jul.  A date of 2025-08-01 returns 2025;
     a date of 2025-07-31 returns 2024.
-    """
-    try:
-        boundary = date(d.year, reset_month, reset_day)
-    except ValueError:
-        # Invalid day for month (e.g. Feb 31) – clamp to last valid day
-        import calendar
-        last_day = calendar.monthrange(d.year, reset_month)[1]
-        boundary = date(d.year, reset_month, min(reset_day, last_day))
 
-    return d.year if d > boundary else d.year - 1
+    This mirrors ProtocolService._cycle_bounds() exactly (start = day after
+    the previous/current reset boundary) so both code paths agree on the
+    cycle year for the same date, including the reset_month=12/reset_day=31
+    default where the reset boundary falls on the last day of the year.
+    """
+    boundary_this_year = _reset_boundary(d.year, reset_month, reset_day)
+    if d <= boundary_this_year:
+        boundary_prev_year = _reset_boundary(d.year - 1, reset_month, reset_day)
+        cycle_start = boundary_prev_year + timedelta(days=1)
+    else:
+        cycle_start = boundary_this_year + timedelta(days=1)
+    return cycle_start.year
 
 
 def format_cycle_name(pattern: str | None, cycle_year: int) -> str:

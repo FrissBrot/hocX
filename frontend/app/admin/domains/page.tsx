@@ -2,16 +2,16 @@ import { AdminDomainOverview } from "@/components/admin/admin-domain-overview";
 import { AdminShell } from "@/components/ui/admin-shell";
 import { requireAdminSession } from "@/lib/api/admin-server";
 import { backendFetchWithSession } from "@/lib/api/server";
-import { AdminDomainSummary } from "@/types/api";
+import { AdminDomainPage } from "@/types/api";
 
 export default async function AdminDomainsPage() {
   const session = await requireAdminSession();
-  const domains = await backendFetchWithSession<AdminDomainSummary[]>("/api/admin/domains");
+  const page = await backendFetchWithSession<AdminDomainPage>("/api/admin/domains?limit=50&offset=0");
 
   return (
     <AdminShell session={session}>
       <section className="panel">
-        <AdminDomainOverview initialDomains={domains ?? []} />
+        <AdminDomainOverview initialPage={page ?? { items: [], total: 0 }} />
       </section>
     </AdminShell>
   );

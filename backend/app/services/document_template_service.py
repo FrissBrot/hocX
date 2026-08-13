@@ -70,6 +70,22 @@ class DocumentTemplateService:
         template = self.repository.get(db, document_template_id)
         return DocumentTemplateRead.model_validate(template) if template else None
 
+    def _materialize_and_persist_path(self, db: Session, template: DocumentTemplate, *, is_new: bool) -> DocumentTemplate:
+        """Runs filesystem materialization (mkdir/copy2/write_text) and persists the resulting
+        filesystem_path. DocumentTemplateRepository.create()/update() already commit the row
+        before this runs, so there is no DB transaction left to roll back if materialization
+        fails with an OSError (full disk, permission issue). For a row that was just created in
+        this same call (is_new=True) that would otherwise leave a permanent orphan with a broken
+        (empty) filesystem_path, so it is deleted again instead. A pre-existing row (is_new=False)
+        just keeps whatever filesystem_path it had before - still valid, merely stale."""
+        try:
+            path = self._materialize_template(db, template)
+        except OSError:
+            if is_new:
+                self.repository.delete(db, template)
+            raise
+        return self.repository.update(db, template, {"filesystem_path": path})
+
     def create_document_template(self, db: Session, payload: DocumentTemplateCreate, *, tenant_id: int) -> DocumentTemplateRead:
         code = payload.code or self._generate_template_code(db, tenant_id=tenant_id, name=payload.name)
         entity = DocumentTemplate(
@@ -84,8 +100,7 @@ class DocumentTemplateService:
             configuration_json=payload.configuration_json,
         )
         created = self.repository.create(db, entity)
-        path = self._materialize_template(db, created)
-        updated = self.repository.update(db, created, {"filesystem_path": path})
+        updated = self._materialize_and_persist_path(db, created, is_new=True)
         if updated.is_default:
             self._unset_other_defaults(db, updated.id, updated.tenant_id)
             updated = self.repository.get(db, updated.id)
@@ -95,9 +110,7 @@ class DocumentTemplateService:
         existing = self.repository.list(db, tenant_id)
         for template in existing:
             if template.is_default and template.is_active:
-                path = self._materialize_template(db, template)
-                refreshed = self.repository.update(db, template, {"filesystem_path": path})
-                return refreshed
+                return self._materialize_and_persist_path(db, template, is_new=False)
         for template in existing:
             if template.code == "default_protocol":
                 values = {
@@ -108,8 +121,7 @@ class DocumentTemplateService:
                     "configuration_json": self._default_template_configuration(tenant_name),
                 }
                 updated = self.repository.update(db, template, values)
-                path = self._materialize_template(db, updated)
-                return self.repository.update(db, updated, {"filesystem_path": path})
+                return self._materialize_and_persist_path(db, updated, is_new=False)
 
         entity = DocumentTemplate(
             tenant_id=tenant_id,
@@ -123,8 +135,7 @@ class DocumentTemplateService:
             configuration_json=self._default_template_configuration(tenant_name),
         )
         created = self.repository.create(db, entity)
-        path = self._materialize_template(db, created)
-        return self.repository.update(db, created, {"filesystem_path": path})
+        return self._materialize_and_persist_path(db, created, is_new=True)
 
     def update_document_template(self, db: Session, document_template_id: int, payload: DocumentTemplateUpdate) -> DocumentTemplateRead | None:
         entity = self.repository.get(db, document_template_id)
@@ -135,8 +146,7 @@ class DocumentTemplateService:
             updated = self.repository.update(db, entity, values)
         else:
             updated = entity
-        path = self._materialize_template(db, updated)
-        updated = self.repository.update(db, updated, {"filesystem_path": path})
+        updated = self._materialize_and_persist_path(db, updated, is_new=False)
         if updated.is_default:
             self._unset_other_defaults(db, updated.id, updated.tenant_id)
             updated = self.repository.get(db, updated.id)

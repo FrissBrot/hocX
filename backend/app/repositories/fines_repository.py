@@ -12,6 +12,11 @@ from app.schemas.fines import AttendanceFineCreate, AttendanceFineListItem, Atte
 ClosedProtocol = aliased(Protocol)
 
 
+class DuplicateFineError(Exception):
+    """Raised by create_fine when an identical fine (same protocol, participant, fine_type)
+    already exists - see find_existing_fine below."""
+
+
 class FinesRepository:
     def __init__(self, protocol_repository: ProtocolRepository | None = None) -> None:
         self.protocol_repository = protocol_repository or ProtocolRepository()
@@ -98,18 +103,37 @@ class FinesRepository:
     def get_fine(self, db: Session, fine_id: int) -> AttendanceFine | None:
         return db.get(AttendanceFine, fine_id)
 
-    def find_existing_fine(self, db: Session, protocol_id: int, participant_id: int | None, fine_type: str) -> AttendanceFine | None:
+    def find_existing_fine(
+        self,
+        db: Session,
+        protocol_id: int,
+        participant_id: int | None,
+        fine_type: str,
+        participant_name_snapshot: str | None = None,
+    ) -> AttendanceFine | None:
         q = select(AttendanceFine).where(
             AttendanceFine.protocol_id == protocol_id,
             AttendanceFine.fine_type == fine_type,
         )
         if participant_id is not None:
             q = q.where(AttendanceFine.participant_id == participant_id)
+        else:
+            # No linked participant (free-text entry, or the original participant was later
+            # deleted - participant_id is ON DELETE SET NULL, see AttendanceFine model). Scope
+            # by name snapshot instead of leaving this unfiltered, otherwise it would flag any
+            # other person's same-type fine in this protocol as a "duplicate" of this one.
+            q = q.where(
+                AttendanceFine.participant_id.is_(None),
+                AttendanceFine.participant_name_snapshot == participant_name_snapshot,
+            )
         return db.scalar(q)
 
     def create_fine(self, db: Session, payload: AttendanceFineCreate, tenant_id: int) -> AttendanceFineRead | None:
         """Returns None if protocol/account/participant don't all belong to tenant_id - the
-        caller (route) turns that into a 404, matching the other tenant-scoped mutations here."""
+        caller (route) turns that into a 404, matching the other tenant-scoped mutations here.
+        Raises DuplicateFineError if an identical fine (same protocol/participant/fine_type)
+        already exists (M18, 2026-08-12 audit: find_existing_fine used to be dead code, so a
+        user could create the same Busse for the same participant/protocol any number of times)."""
         protocol = db.get(Protocol, payload.protocol_id)
         if protocol is None or protocol.tenant_id != tenant_id:
             return None
@@ -120,6 +144,16 @@ class FinesRepository:
             participant = db.get(Participant, payload.participant_id)
             if participant is None or participant.tenant_id != tenant_id:
                 return None
+        if self.find_existing_fine(
+            db,
+            payload.protocol_id,
+            payload.participant_id,
+            payload.fine_type,
+            participant_name_snapshot=payload.participant_name_snapshot,
+        ) is not None:
+            raise DuplicateFineError(
+                f"Fuer {payload.participant_name_snapshot} existiert in diesem Protokoll bereits eine Busse vom Typ '{payload.fine_type}'"
+            )
         fine = AttendanceFine(
             protocol_id=payload.protocol_id,
             participant_id=payload.participant_id,

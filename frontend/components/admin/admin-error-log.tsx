@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
+import { Pagination } from "@/components/ui/pagination";
 import { browserApiFetch } from "@/lib/api/client";
 import { AdminTenantSummary, SystemErrorLogEntry, SystemErrorLogFilterOptions, SystemErrorLogPage } from "@/types/api";
 
@@ -63,9 +64,6 @@ export function AdminErrorLog({ initialPage, initialFilterOptions, tenants }: Pr
     };
   }
 
-  const from = page.total === 0 ? 0 : offset + 1;
-  const to = Math.min(offset + PAGE_SIZE, page.total);
-
   return (
     <div className="grid">
       <DataToolbar
@@ -120,21 +118,7 @@ export function AdminErrorLog({ initialPage, initialFilterOptions, tenants }: Pr
         ))}
       </DataTable>
 
-      {page.total > 0 && (
-        <div className="table-actions" style={{ justifyContent: "space-between" }}>
-          <span className="muted">
-            {from}–{to} von {page.total}
-          </span>
-          <div className="table-actions-start">
-            <button type="button" className="button-inline button-ghost" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>
-              Zurück
-            </button>
-            <button type="button" className="button-inline button-ghost" disabled={to >= page.total} onClick={() => setOffset(offset + PAGE_SIZE)}>
-              Weiter
-            </button>
-          </div>
-        </div>
-      )}
+      <Pagination offset={offset} limit={PAGE_SIZE} total={page.total} onOffsetChange={setOffset} />
     </div>
   );
 }

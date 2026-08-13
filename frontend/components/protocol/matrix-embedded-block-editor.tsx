@@ -331,14 +331,20 @@ export function MatrixEmbeddedBlockEditor({
                 <button
                   type="button"
                   className="button-inline button-danger todo-delete"
-                  onClick={() =>
+                  onClick={async () => {
+                    const ok = await confirm({
+                      message: `Todo "${String(item.task ?? "").trim() || "Unbenannt"}" löschen?`,
+                      tone: "danger",
+                      confirmLabel: "Löschen",
+                    });
+                    if (!ok) return;
                     updateEmbeddedConfig((current) => ({
                       ...current,
                       todo_items: todoItems.filter((_, entryIndex) => entryIndex !== index),
-                    }), true)
-                  }
+                    }), true);
+                  }}
                 >
-                  Delete
+                  Löschen
                 </button>
               </article>
             );
@@ -606,14 +612,20 @@ export function MatrixEmbeddedBlockEditor({
               <button
                 type="button"
                 className="button-inline button-danger todo-delete"
-                onClick={() =>
+                onClick={async () => {
+                  const ok = await confirm({
+                    message: `Zeile "${String(row.label ?? "").trim() || "Unbenannt"}" löschen?`,
+                    tone: "danger",
+                    confirmLabel: "Löschen",
+                  });
+                  if (!ok) return;
                   updateEmbeddedConfig((current) => ({
                     ...current,
                     rows: rows.filter((_, entryIndex) => entryIndex !== index),
-                  }), true)
-                }
+                  }), true);
+                }}
               >
-                Delete
+                Löschen
               </button>
             </div>
           ))}
@@ -1076,14 +1088,20 @@ export function MatrixEmbeddedBlockEditor({
               <button
                 type="button"
                 className="button-inline button-danger todo-delete"
-                onClick={() =>
+                onClick={async () => {
+                  const ok = await confirm({
+                    message: `Bulletpoint "${String(item ?? "").trim() || "Unbenannt"}" löschen?`,
+                    tone: "danger",
+                    confirmLabel: "Löschen",
+                  });
+                  if (!ok) return;
                   updateEmbeddedConfig((current) => ({
                     ...current,
                     bullet_items: bulletItems.filter((_, entryIndex) => entryIndex !== index),
-                  }), true)
-                }
+                  }), true);
+                }}
               >
-                Delete
+                Löschen
               </button>
             </article>
           ))}

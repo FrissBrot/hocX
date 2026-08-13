@@ -199,6 +199,8 @@ def patch_template_element(
     _ensure_template_element_in_tenant(db, user, template_element_id)
     try:
         template_element = template_element_service.update_template_element(db, template_element_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Template element could not be updated") from exc

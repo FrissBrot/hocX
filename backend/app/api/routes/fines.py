@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, require_finance_access, require_reader
-from app.repositories.fines_repository import FinesRepository
+from app.repositories.fines_repository import DuplicateFineError, FinesRepository
 from app.schemas.fines import (
     AttendanceFineCreate,
     AttendanceFineListItem,
@@ -68,6 +68,9 @@ def create_fine(
     require_finance_access(user)
     try:
         result = repo.create_fine(db, payload, user.current_tenant_id)
+    except DuplicateFineError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Fine could not be created") from exc
