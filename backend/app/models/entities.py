@@ -129,6 +129,9 @@ class PlatformAdmin(Base, TimestampMixin, UpdatedAtMixin):
     session_revoke_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     oidc_subject: Mapped[str | None] = mapped_column(Text)
     oidc_issuer: Mapped[str | None] = mapped_column(Text)
+    # 'owner' = full read/write access, 'support' = read-only across the whole admin panel
+    # (no create/update/delete on tenants, users, admins, domains, OIDC config, ...).
+    role: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'owner'"))
 
 
 class UserRole(Base):

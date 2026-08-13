@@ -22,22 +22,38 @@ export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props)
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
+  const [role, setRole] = useState<"owner" | "support">("owner");
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     try {
       const created = await browserApiFetch<PlatformAdminSummary>("/api/admin/admins", {
         method: "POST",
-        body: JSON.stringify({ email, display_name: displayName, password }),
+        body: JSON.stringify({ email, display_name: displayName, password, role }),
       });
       setAdmins((current) => [...current, created].sort((a, b) => a.email.localeCompare(b.email)));
       setModalOpen(false);
       setEmail("");
       setDisplayName("");
       setPassword("");
+      setRole("owner");
       showToast("Admin-Account erstellt", "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Admin-Account konnte nicht erstellt werden", "error");
+    }
+  }
+
+  async function toggleRole(admin: PlatformAdminSummary) {
+    const nextRole = admin.role === "owner" ? "support" : "owner";
+    try {
+      const updated = await browserApiFetch<PlatformAdminSummary>(`/api/admin/admins/${admin.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ role: nextRole }),
+      });
+      setAdmins((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      showToast("Admin-Account aktualisiert", "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Admin-Account konnte nicht aktualisiert werden", "error");
     }
   }
 
@@ -74,7 +90,7 @@ export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props)
         }
       />
 
-      <DataTable columns={["Name", "E-Mail", "Status", "Aktionen"]} emptyMessage="Keine Admin-Accounts gefunden.">
+      <DataTable columns={["Name", "E-Mail", "Rolle", "Status", "Aktionen"]} emptyMessage="Keine Admin-Accounts gefunden.">
         {admins.map((admin) => (
           <tr key={admin.id}>
             <td>
@@ -82,9 +98,13 @@ export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props)
               {admin.id === currentAdminId ? <div className="muted">Du</div> : null}
             </td>
             <td>{admin.email}</td>
+            <td>{admin.role === "owner" ? "Vollzugriff" : "Nur Lesezugriff"}</td>
             <td>{admin.is_active ? "Aktiv" : "Deaktiviert"}</td>
             <td>
               <div className="table-actions table-actions-start">
+                <button type="button" className="button-inline" onClick={() => void toggleRole(admin)}>
+                  {admin.role === "owner" ? "Auf Nur-Lesezugriff setzen" : "Auf Vollzugriff setzen"}
+                </button>
                 <button
                   type="button"
                   className={`button-inline${admin.is_active ? " button-danger" : ""}`}
@@ -112,6 +132,13 @@ export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props)
           <label className="field-stack">
             <span className="field-label">Passwort</span>
             <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={8} />
+          </label>
+          <label className="field-stack">
+            <span className="field-label">Rolle</span>
+            <select value={role} onChange={(event) => setRole(event.target.value as "owner" | "support")}>
+              <option value="owner">Vollzugriff</option>
+              <option value="support">Nur Lesezugriff</option>
+            </select>
           </label>
           <div className="table-actions table-actions-start">
             <button type="submit" className="button-inline">

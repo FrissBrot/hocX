@@ -147,6 +147,15 @@ class ProtocolTodoRepository:
     def get(self, db: Session, todo_id: int) -> ProtocolTodo | None:
         return db.get(ProtocolTodo, todo_id)
 
+    def get_row(self, db: Session, todo_id: int):
+        """Same joined shape as the list_* queries (status code, participant name, resolved
+        due date/label, ...) but for exactly one todo - used to build a TodoListItem response
+        right after create/update without re-listing (and potentially paginating past) the
+        whole tenant."""
+        query, *_ = self._base_todo_query()
+        query = query.where(ProtocolTodo.id == todo_id)
+        return db.execute(query).first()
+
     def next_sort_index(self, db: Session, protocol_element_block_id: int | None) -> int:
         if protocol_element_block_id is None:
             current = db.scalar(

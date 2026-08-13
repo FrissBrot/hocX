@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -363,7 +363,7 @@ def save_element_position(
         .values(user_id=user.user_id, protocol_id=protocol_id, last_element_id=payload.element_id)
         .on_conflict_do_update(
             index_elements=["user_id", "protocol_id"],
-            set_={"last_element_id": payload.element_id, "updated_at": __import__("sqlalchemy").func.now()},
+            set_={"last_element_id": payload.element_id, "updated_at": func.now()},
         )
     )
     db.execute(stmt)

@@ -85,7 +85,6 @@ class CycleInfo(BaseModel):
 
 class GroupStat(BaseModel):
     group_name: str
-    group_id: int
     cycle_config_id: int | None
     cycle_year: int | None
     session_count: int
@@ -153,7 +152,6 @@ def get_statistics_overview(
 
     groups_stats = [
         GroupStat(
-            group_id=0,
             group_name=r.group_name,
             cycle_config_id=r.cycle_config_id,
             cycle_year=r.cycle_year,

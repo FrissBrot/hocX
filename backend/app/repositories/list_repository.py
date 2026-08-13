@@ -95,11 +95,16 @@ class ListRepository:
         return entry
 
     def update_entry(self, db: Session, entry: ListEntry, values: dict) -> ListEntry:
+        # Only bump content_version if something actually changed - an update with identical
+        # values (e.g. a no-op re-save) used to bump it unconditionally, creating unnecessary
+        # stale-snapshot markers and WS notifications for blocks that link this list.
+        changed = any(getattr(entry, key) != value for key, value in values.items())
         for key, value in values.items():
             setattr(entry, key, value)
         db.add(entry)
         db.flush()
-        self._bump_content_version(db, entry.list_definition_id)
+        if changed:
+            self._bump_content_version(db, entry.list_definition_id)
         db.commit()
         db.refresh(entry)
         return entry

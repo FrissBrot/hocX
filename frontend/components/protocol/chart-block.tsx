@@ -23,7 +23,11 @@ export function bumpStatsCharts() {
 // in-flight request/interval instead of each running its own.
 let _statsCache: StatisticsOverview | null = null;
 let _statsCacheVersion = -1;
-let _statsInFlight: { version: number; promise: Promise<StatisticsOverview | null> } | null = null;
+// True once a refresh attempt has failed and fallen back to _statsCache - so the chart can
+// still render (better than blanking out on a transient error), but the user is told the
+// numbers on screen may no longer be current instead of that being silent.
+let _statsCacheStale = false;
+let _statsInFlight: { version: number; promise: Promise<{ data: StatisticsOverview | null; stale: boolean }> } | null = null;
 let _statsPollInterval: ReturnType<typeof setInterval> | null = null;
 let _statsPollRefCount = 0;
 
@@ -42,16 +46,20 @@ function releaseStatsPolling() {
   }
 }
 
-function fetchStatsOverview(version: number): Promise<StatisticsOverview | null> {
-  if (_statsCacheVersion === version) return Promise.resolve(_statsCache);
+function fetchStatsOverview(version: number): Promise<{ data: StatisticsOverview | null; stale: boolean }> {
+  if (_statsCacheVersion === version) return Promise.resolve({ data: _statsCache, stale: _statsCacheStale });
   if (_statsInFlight?.version === version) return _statsInFlight.promise;
   const promise = browserApiFetch<StatisticsOverview>(`/api/statistics/overview?_t=${version}`)
     .then((d) => {
       _statsCache = d ?? null;
       _statsCacheVersion = version;
-      return _statsCache;
+      _statsCacheStale = false;
+      return { data: _statsCache, stale: false };
     })
-    .catch(() => _statsCache)
+    .catch(() => {
+      _statsCacheStale = _statsCache !== null;
+      return { data: _statsCache, stale: _statsCacheStale };
+    })
     .finally(() => {
       if (_statsInFlight?.version === version) _statsInFlight = null;
     });
@@ -97,6 +105,7 @@ type Props = {
 
 export function ChartBlock({ blockId, config, editable, onSave }: Props) {
   const [data, setData] = useState<StatisticsOverview | null>(_statsCacheVersion >= 0 ? _statsCache : null);
+  const [stale, setStale] = useState(_statsCacheStale);
   const [loading, setLoading] = useState(_statsCacheVersion < 0);
   const [tick, setTick] = useState(() => _statsVersion);
   const chartType = config.chart_type ?? "";
@@ -115,9 +124,10 @@ export function ChartBlock({ blockId, config, editable, onSave }: Props) {
   useEffect(() => {
     let cancelled = false;
     if (_statsCacheVersion !== tick) setLoading(true);
-    fetchStatsOverview(tick).then((d) => {
+    fetchStatsOverview(tick).then(({ data: d, stale: s }) => {
       if (cancelled) return;
       setData(d);
+      setStale(s);
       setLoading(false);
     });
     return () => {
@@ -166,6 +176,11 @@ export function ChartBlock({ blockId, config, editable, onSave }: Props) {
       )}
       {!editable && !chartType && (
         <p className="muted">Kein Diagramm ausgewählt.</p>
+      )}
+      {stale && (
+        <p className="muted" style={{ fontSize: 12 }}>
+          ⚠ Aktualisierung fehlgeschlagen – zeige zwischengespeicherte Daten.
+        </p>
       )}
       {chartType && <ChartPreview chartType={chartType} cycleKey={cycleKey} data={data} />}
     </div>

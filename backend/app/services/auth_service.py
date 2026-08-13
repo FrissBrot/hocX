@@ -6,6 +6,7 @@ from fastapi import HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.rate_limit import check_account_lockout, record_failed_attempt
 from app.core.security import CurrentUser, build_current_user, issue_session_cookie, verify_password
 from app.models import AppUser
 from app.schemas.user import LoginRequest, SessionRead, SessionUserRead, TenantMembershipRead, TenantRead
@@ -15,11 +16,20 @@ from app.services.tenant_service import build_tenant_profile_image_url
 
 _audit = AuditService()
 
+# Account-scoped lockout, independent of source IP - complements Traefik's per-IP rate limit
+# (10/min), which a distributed or shared-IP bruteforce attempt can bypass entirely.
+_ACCOUNT_LOGIN_ATTEMPT_LIMIT = 20
+_ACCOUNT_LOGIN_WINDOW_SECONDS = 15 * 60
+
 
 class AuthService:
     def login(self, db: Session, response: Response, payload: LoginRequest, request_host: str | None = None) -> SessionRead:
+        lockout_key = f"login-account:{payload.email.strip().lower()}"
+        check_account_lockout(lockout_key, limit=_ACCOUNT_LOGIN_ATTEMPT_LIMIT)
+
         user = db.query(AppUser).filter(AppUser.email == payload.email).one_or_none()
         if user is None or not user.is_active or not verify_password(payload.password, user.password_hash):
+            record_failed_attempt(lockout_key, period_seconds=_ACCOUNT_LOGIN_WINDOW_SECONDS)
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
         if (user.external_identity_json or {}).get("login_enabled") is False:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Login is disabled for this account")

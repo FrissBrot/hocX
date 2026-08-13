@@ -8,6 +8,7 @@ responsible_label_service.py.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Any
 
 from sqlalchemy import select
@@ -16,17 +17,51 @@ from sqlalchemy.orm import Session
 from app.models import ListDefinition, ListEntry, ProtocolElement, ProtocolElementBlock
 
 
-def compute_whole_list_snapshot(db: Session, list_definition_id: int) -> dict[str, Any] | None:
+@dataclass
+class ListSnapshotCache:
+    """Per-call memoization for compute_whole_list_snapshot/compute_row_list_snapshot, so a
+    refresh-all pass over many blocks that reference the same underlying list (a common case -
+    e.g. a shared "Verantwortliche" list linked from several blocks) issues each list's
+    definition/entries query at most once instead of once per block. Purely an optimization -
+    behavior is identical to passing no cache at all, just with fewer round-trips."""
+
+    definitions: dict[int, ListDefinition | None] = field(default_factory=dict)
+    entries: dict[int, list[ListEntry]] = field(default_factory=dict)
+
+    def get_definition(self, db: Session, list_definition_id: int) -> ListDefinition | None:
+        if list_definition_id not in self.definitions:
+            self.definitions[list_definition_id] = db.get(ListDefinition, list_definition_id)
+        return self.definitions[list_definition_id]
+
+    def get_entries(self, db: Session, list_definition_id: int) -> list[ListEntry]:
+        if list_definition_id not in self.entries:
+            self.entries[list_definition_id] = list(
+                db.scalars(
+                    select(ListEntry)
+                    .where(ListEntry.list_definition_id == list_definition_id)
+                    .order_by(ListEntry.sort_index.asc(), ListEntry.id.asc())
+                )
+            )
+        return self.entries[list_definition_id]
+
+
+def compute_whole_list_snapshot(
+    db: Session, list_definition_id: int, *, cache: ListSnapshotCache | None = None
+) -> dict[str, Any] | None:
     """Full frozen view of a list for the "Gekoppelte Liste" whole-list mode, or None if
     the list itself was deleted."""
-    definition = db.get(ListDefinition, list_definition_id)
+    definition = cache.get_definition(db, list_definition_id) if cache else db.get(ListDefinition, list_definition_id)
     if definition is None:
         return None
-    entries = list(
-        db.scalars(
-            select(ListEntry)
-            .where(ListEntry.list_definition_id == list_definition_id)
-            .order_by(ListEntry.sort_index.asc(), ListEntry.id.asc())
+    entries = (
+        cache.get_entries(db, list_definition_id)
+        if cache
+        else list(
+            db.scalars(
+                select(ListEntry)
+                .where(ListEntry.list_definition_id == list_definition_id)
+                .order_by(ListEntry.sort_index.asc(), ListEntry.id.asc())
+            )
         )
     )
     return {
@@ -48,16 +83,21 @@ def compute_whole_list_snapshot(db: Session, list_definition_id: int) -> dict[st
     }
 
 
-def compute_row_list_snapshot(db: Session, list_definition_id: int, list_entry_id: int) -> dict[str, Any]:
+def compute_row_list_snapshot(
+    db: Session, list_definition_id: int, list_entry_id: int, *, cache: ListSnapshotCache | None = None
+) -> dict[str, Any]:
     """Frozen view of one list entry for a "Zeile aus Liste" row. Stores both raw column
     values (not just the row's own fixed/variable split) so which column is "fixed" can
     still change without needing to recompute. entry_exists=False means the entry (or the
     whole list) was deleted since the last sync - callers show the existing "Verknuepfter
     Listeneintrag wurde geloescht" message in that case."""
-    definition = db.get(ListDefinition, list_definition_id)
+    definition = cache.get_definition(db, list_definition_id) if cache else db.get(ListDefinition, list_definition_id)
     if definition is None:
         return {"synced_version": 0, "entry_exists": False}
-    entry = db.get(ListEntry, list_entry_id)
+    if cache and list_definition_id in cache.entries:
+        entry = next((e for e in cache.entries[list_definition_id] if e.id == list_entry_id), None)
+    else:
+        entry = db.get(ListEntry, list_entry_id)
     base = {
         "synced_version": definition.content_version,
         "column_one_title": definition.column_one_title,
@@ -249,6 +289,7 @@ def refresh_block_list_snapshot(
     keep_undo: bool,
     track_changes_active: bool = False,
     commit: bool = True,
+    cache: ListSnapshotCache | None = None,
 ) -> ProtocolElementBlock:
     """Recomputes list_snapshot (whole-list) and/or every row's list_snapshot (row-link)
     from current live data and writes it back onto the block. When track_changes_active,
@@ -261,7 +302,7 @@ def refresh_block_list_snapshot(
 
     linked_list_id = config.get("linked_list_id")
     if linked_list_id:
-        new_snapshot = compute_whole_list_snapshot(db, int(linked_list_id))
+        new_snapshot = compute_whole_list_snapshot(db, int(linked_list_id), cache=cache)
         if new_snapshot is not None:
             old_list_snapshot = config.get("list_snapshot")
             new_snapshot["entries"] = _merge_tracked_list_entries(
@@ -290,7 +331,7 @@ def refresh_block_list_snapshot(
                 continue
             row = dict(row)
             new_snapshot = compute_row_list_snapshot(
-                db, int(row["linked_list_id"]), int(row.get("linked_list_entry_id") or 0)
+                db, int(row["linked_list_id"]), int(row.get("linked_list_entry_id") or 0), cache=cache
             )
             new_snapshot = _merge_tracked_row_snapshot(
                 new_snapshot, row.get("list_snapshot"), track_changes_active=track_changes_active
@@ -477,8 +518,9 @@ def freeze_list_snapshots_for_protocol(db: Session, protocol_id: int, *, commit:
     resolve every list-linked block one last time and drop any leftover undo point, since
     abgeschlossen protocols are permanently read-only and never show the refresh/undo UI
     again."""
+    cache = ListSnapshotCache()
     for block in list_linked_blocks_for_protocol(db, protocol_id):
-        refresh_block_list_snapshot(db, block, keep_undo=False, commit=commit)
+        refresh_block_list_snapshot(db, block, keep_undo=False, commit=commit, cache=cache)
         config = dict(block.configuration_snapshot_json or {})
         changed = False
         list_snapshot = config.get("list_snapshot")

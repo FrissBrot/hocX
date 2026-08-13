@@ -56,6 +56,7 @@ class PlatformAdminService:
             display_name=payload.display_name,
             password_hash=hash_password(payload.password),
             is_active=payload.is_active,
+            role=payload.role,
         )
         db.add(admin)
         db.commit()
@@ -72,6 +73,12 @@ class PlatformAdminService:
             remaining_active = db.query(PlatformAdmin).filter(PlatformAdmin.id != admin_id, PlatformAdmin.is_active.is_(True)).count()
             if remaining_active == 0:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="At least one active admin account is required")
+        if payload.role == "support":
+            remaining_owners = db.query(PlatformAdmin).filter(
+                PlatformAdmin.id != admin_id, PlatformAdmin.role == "owner", PlatformAdmin.is_active.is_(True)
+            ).count()
+            if remaining_owners == 0:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="At least one active owner admin account is required")
         if payload.display_name is not None:
             admin.display_name = payload.display_name
         if payload.password:
@@ -83,6 +90,8 @@ class PlatformAdminService:
             admin.session_revoke_at = datetime.now(UTC)
         if payload.is_active is not None:
             admin.is_active = payload.is_active
+        if payload.role is not None:
+            admin.role = payload.role
         db.add(admin)
         db.commit()
         db.refresh(admin)

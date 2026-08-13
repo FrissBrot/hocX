@@ -3,8 +3,8 @@ shares, by design, with abgabebox-backend/app/storage.py::move_from_quarantine (
 C-Niedrig-3: the two services intentionally duplicate this logic instead of sharing a package, to
 keep the public-facing Abgabebox process's dependency surface isolated from the main backend - but
 that means nothing catches the two copies drifting apart. This test pins backend's copy against the
-shared fixture in tests/fixtures/quarantine_path_parity.json; abgabebox-backend has no pytest harness
-yet, so its copy still has to be checked by hand against the same fixture until one exists."""
+shared fixture in tests/fixtures/quarantine_path_parity.json; abgabebox-backend's copy is pinned
+against the same fixture in abgabebox-backend/tests/test_storage_quarantine_parity.py."""
 from __future__ import annotations
 
 import json

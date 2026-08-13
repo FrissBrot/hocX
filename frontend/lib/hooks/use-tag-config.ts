@@ -57,11 +57,18 @@ export function useTagConfig() {
       if (oldCfg) next[nt] = oldCfg;
       return next;
     });
-    await browserApiFetch("/api/tag-config", {
-      method: "PATCH",
-      body: JSON.stringify({ [nt]: configRef.current[oldTag] ?? {}, [oldTag]: {} }),
-    }).catch(() => {});
-  }, []);
+    try {
+      await browserApiFetch("/api/tag-config", {
+        method: "PATCH",
+        body: JSON.stringify({ [nt]: configRef.current[oldTag] ?? {}, [oldTag]: {} }),
+      });
+    } catch {
+      // The rename itself already succeeded (above) - only the color carry-over failed, so
+      // this must not throw and undo it. Still tell the user, otherwise the tag silently
+      // loses its color with no indication anything went wrong.
+      showToast("Tag umbenannt, Farbe konnte aber nicht übertragen werden", "error");
+    }
+  }, [showToast]);
 
   return { tagConfig, updateTagColor, renameTag };
 }

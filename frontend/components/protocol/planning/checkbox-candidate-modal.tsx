@@ -125,6 +125,7 @@ export function CheckboxCandidateModal({
                           type="button"
                           className="button-ghost button-icon candidate-card-edit"
                           title="Termin bearbeiten"
+                          aria-label="Termin bearbeiten"
                           onClick={(e) => {
                             e.stopPropagation();
                             setEditingItem(item);

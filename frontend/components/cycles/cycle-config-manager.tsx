@@ -351,6 +351,7 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
                     <button
                       className="button-ghost button-icon button-icon-danger"
                       title="Löschen"
+                      aria-label="Löschen"
                       onClick={() => void handleDelete(cfg.id)}
                     >
                       <svg

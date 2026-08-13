@@ -35,8 +35,7 @@ def create_standalone_todo(
     except (SQLAlchemyError, ValueError) as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Todo could not be created") from exc
-    rows = service.repository.list_for_tenant(db, user.current_tenant_id)
-    row = next((r for r in rows if r.ProtocolTodo.id == todo.id), None)
+    row = service.repository.get_row(db, todo.id)
     if row is None:
         raise HTTPException(status_code=500, detail="Created todo not found")
     return service._row_to_list_item(row)

@@ -215,6 +215,7 @@ export type PlatformAdminSummary = {
   email: string;
   display_name: string;
   is_active: boolean;
+  role: "owner" | "support";
   created_at: string;
   updated_at: string;
 };
@@ -678,5 +679,5 @@ export type StatisticsOverview = {
   participants_active: number;
   protocols_total: number;
   cycles: { cycle_config_id: number; cycle_config_name: string; cycle_year: number; label: string }[];
-  groups_stats: { group_id: number; group_name: string; cycle_config_id: number | null; cycle_year: number | null; session_count: number; session_count_with_participants: number; avg_participants: number }[];
+  groups_stats: { group_name: string; cycle_config_id: number | null; cycle_year: number | null; session_count: number; session_count_with_participants: number; avg_participants: number }[];
 };

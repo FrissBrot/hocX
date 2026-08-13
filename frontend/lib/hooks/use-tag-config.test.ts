@@ -86,6 +86,23 @@ describe("useTagConfig.renameTag", () => {
     expect(result.current.tagConfig).toEqual({ urgent: { color: "#ff0000" } });
   });
 
+  it("shows an error toast when the rename succeeds but the color carry-over PATCH fails (regression: silently swallowed error)", async () => {
+    const { result } = renderHook(() => useTagConfig());
+    await waitFor(() => expect(result.current.tagConfig).toEqual({ urgent: { color: "#ff0000" } }));
+
+    browserApiFetchMock.mockReset();
+    browserApiFetchMock.mockResolvedValueOnce(undefined); // POST /api/events/rename-tag succeeds
+    browserApiFetchMock.mockRejectedValueOnce(new Error("Speichern fehlgeschlagen")); // PATCH /api/tag-config fails
+
+    await act(async () => {
+      await result.current.renameTag("urgent", "dringend");
+    });
+
+    // The rename itself must not be undone just because the secondary color carry-over failed.
+    expect(result.current.tagConfig).toEqual({ dringend: { color: "#ff0000" } });
+    expect(showToastMock).toHaveBeenCalledWith("Tag umbenannt, Farbe konnte aber nicht übertragen werden", "error");
+  });
+
   it("trims whitespace around the new tag name before renaming", async () => {
     const { result } = renderHook(() => useTagConfig());
     await waitFor(() => expect(result.current.tagConfig).toEqual({ urgent: { color: "#ff0000" } }));

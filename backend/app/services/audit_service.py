@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -36,7 +38,7 @@ class AuditService:
                 "action": action,
                 "entity_type": entity_type,
                 "entity_id": entity_id,
-                "details_json": __import__("json").dumps(details or {}),
+                "details_json": json.dumps(details or {}),
             },
         )
         db.commit()
