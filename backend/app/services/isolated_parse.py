@@ -34,6 +34,16 @@ def _worker_loop(task_queue: "mp.Queue", result_queue: "mp.Queue") -> None:
         import resource
 
         resource.setrlimit(resource.RLIMIT_AS, (PARSE_MEMORY_LIMIT_BYTES, PARSE_MEMORY_LIMIT_BYTES))
+    # word_import_service pulls in scipy (via optimal_assignment.py's linear_sum_assignment)
+    # for the small attendance-matching matrices it solves - single-threaded BLAS is plenty
+    # for that size of problem, but left at its default, OpenBLAS sizes its thread pool off
+    # the host's CPU count, not this process's RLIMIT_AS cap above. On a many-core host that
+    # thread pool alone can exceed the 512MB cap before any document parsing even starts,
+    # surfacing as an opaque PARSE_TIMEOUT_SECONDS timeout instead of a clear OOM.
+    import os
+
+    os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
     from app.services.word_import_service import parse_document
 
     while True:

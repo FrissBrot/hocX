@@ -1969,6 +1969,29 @@ Status: {protocol_status}
         )
         return self.repository.create_stored_file(db, stored_file)
 
+    def cleanup_old_generated_exports(self, *, retention_days: int | None = None) -> dict:
+        """Periodic sweep (see main.py's export_cleanup_loop) for old files under
+        EXPORT_ROOT/generated. Every export run writes into a brand-new uuid-suffixed file
+        (see _store_generated_file above, never overwrites/reuses an old one), so without a
+        retention sweep the directory grows unbounded on repeated re-exports - unlike the
+        ClamAV rescan loops nearby this isn't a stuck/pending-state repair, just age-based
+        deletion. Only removes the file on disk; the StoredFile row is left in place, same
+        convention as scripts/cleanup_storage.sh's cron sweep of this same directory - the
+        download route already returns a clean 404 if the file is gone, so an old export
+        link failing is expected, not an error to guard against.
+        """
+        retention = retention_days if retention_days is not None else settings.export_retention_days
+        target_dir = Path(settings.export_root) / "generated"
+        if not target_dir.is_dir():
+            return {"deleted": 0}
+        cutoff = datetime.now().timestamp() - retention * 86400
+        deleted = 0
+        for file_path in target_dir.iterdir():
+            if file_path.is_file() and file_path.stat().st_mtime < cutoff:
+                file_path.unlink()
+                deleted += 1
+        return {"deleted": deleted}
+
     def _escape_latex(self, value: str) -> str:
         # Single-pass per-character replacement to avoid double-escaping
         # (sequential str.replace would re-escape the {} in \textbackslash{})

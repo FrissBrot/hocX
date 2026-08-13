@@ -228,7 +228,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
       setForm(emptyForm);
       setAssignedTemplateIds([]);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Participant could not be saved", "error");
+      showToast(error instanceof Error ? error.message : "Teilnehmer konnte nicht gespeichert werden", "error");
     }
   }
 
@@ -243,9 +243,9 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
       await browserApiFetch(`/api/participants/${participantId}`, { method: "DELETE" });
       setParticipants((current) => current.filter((participant) => participant.id !== participantId));
       setSelectedParticipantIds((current) => current.filter((id) => id !== participantId));
-      showToast(`Deleted participant #${participantId}`, "success");
+      showToast(`Teilnehmer #${participantId} gelöscht`, "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Participant could not be deleted", "error");
+      showToast(error instanceof Error ? error.message : "Teilnehmer konnte nicht gelöscht werden", "error");
     }
   }
 
@@ -266,9 +266,9 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
       });
       setParticipants((current) => current.filter((participant) => !selectedParticipantIds.includes(participant.id)));
       setSelectedParticipantIds([]);
-      showToast("Participants deleted", "success");
+      showToast("Teilnehmer gelöscht", "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Participants could not be deleted", "error");
+      showToast(error instanceof Error ? error.message : "Teilnehmer konnten nicht gelöscht werden", "error");
     }
   }
 
@@ -295,7 +295,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
       setCsvPreview(null);
       setImportResult(result);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "CSV import failed", "error");
+      showToast(error instanceof Error ? error.message : "CSV-Import fehlgeschlagen", "error");
       setCsvPreview(null);
     } finally {
       setImporting(false);
@@ -311,7 +311,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
         </div>
         <div className="table-toolbar-actions">
           <label className="button-inline button-ghost participant-import-button">
-            CSV import
+            CSV-Import
             <input type="file" accept=".csv,text/csv" onChange={(e) => void handleCsvFileSelected(e)} hidden />
           </label>
           <button
@@ -320,7 +320,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
             onClick={() => void bulkDeleteParticipants()}
             disabled={selectedParticipantIds.length === 0}
           >
-            Bulk delete
+            Auswahl löschen
           </button>
           <button type="button" className="button-inline" onClick={openCreate}>
             Neuer Teilnehmer
@@ -556,7 +556,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
           </div>
           <div className="table-toolbar-actions">
             <button type="submit" className="button-inline">
-              {selectedParticipant ? "Save participant" : "Create participant"}
+              {selectedParticipant ? "Teilnehmer speichern" : "Teilnehmer erstellen"}
             </button>
           </div>
         </form>

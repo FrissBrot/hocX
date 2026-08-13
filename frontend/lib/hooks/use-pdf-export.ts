@@ -34,10 +34,10 @@ export function usePdfExport() {
           onMessageClick: () => window.open(pdfUrl, "_blank", "noopener,noreferrer"),
         });
       } else {
-        showToast(`PDF ready for ${protocolNumber}`, "success");
+        showToast(`PDF für ${protocolNumber} bereit`, "success");
       }
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "PDF export failed", "error");
+      showToast(error instanceof Error ? error.message : "PDF-Export fehlgeschlagen", "error");
     } finally {
       setBusyByProtocol((current) => ({ ...current, [protocolId]: false }));
     }
