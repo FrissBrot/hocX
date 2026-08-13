@@ -327,6 +327,18 @@ async def upload(
             scan_status=overall_scan,
         )
     except Exception as exc:
+        # M16: files were already moved out of quarantine (Step 4) before this insert, and
+        # regular storage - unlike quarantine/ - has no age-based cleanup loop at all (see
+        # cleanup_stale_quarantine_files's docstring in storage.py), so a failed insert here
+        # would otherwise leave them on disk forever with no DB row and no reaper to catch
+        # them. Delete them back out rather than reordering Step 4/5 (which would need the
+        # DB row to exist before the file is confirmed moved, trading one orphan class for
+        # another - a DB row pointing at a file that never made it out of quarantine).
+        for f in saved_files:
+            try:
+                (Path(settings.storage_root) / f["storage_path"]).unlink(missing_ok=True)
+            except Exception:
+                pass
         _log("upload_error", f"Datenbankfehler: {exc}")
         raise
 
