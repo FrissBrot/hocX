@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.schemas.admin import PlatformAdminCreate, PlatformAdminRead, PlatformAdminUpdate
+from app.schemas.admin import AdminUserPage, PlatformAdminCreate, PlatformAdminRead, PlatformAdminUpdate
 from app.schemas.user import UserCreate, UserRead, UserUpdate
 from app.services.user_service import UserService
 from app.core.security import hash_password
@@ -18,8 +18,14 @@ class AdminUserService:
     def __init__(self, user_service: UserService | None = None) -> None:
         self.user_service = user_service or UserService()
 
-    def list_users(self, db: Session) -> list[UserRead]:
-        return self.user_service.list_all_users(db)
+    def list_users(self, db: Session, *, limit: int | None = None, offset: int = 0) -> AdminUserPage:
+        # list_all_users() already batch-loads everything in 3 queries total (see its
+        # docstring) - offset/limit are applied in Python rather than pushed into that
+        # query so the existing N+1-avoidance logic doesn't need to change.
+        all_users = self.user_service.list_all_users(db)
+        total = len(all_users)
+        items = all_users[offset : offset + limit] if limit is not None else all_users[offset:]
+        return AdminUserPage(items=items, total=total)
 
     def get_user(self, db: Session, user_id: int) -> UserRead | None:
         return self.user_service.admin_get_user(db, user_id)

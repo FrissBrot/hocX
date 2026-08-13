@@ -2,6 +2,7 @@ from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import ElementType, Event, Participant, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolTodo, Template, TemplateParticipant, TodoStatus
+from app.repositories.participant_repository import participant_eligible_on
 
 
 class ProtocolTodoRepository:
@@ -158,13 +159,21 @@ class ProtocolTodoRepository:
         return 0 if current is None else int(current) + 1
 
     def participant_allowed_for_block(self, db: Session, protocol_element_block_id: int, participant_id: int) -> bool:
+        """A participant may be assigned a todo only if they are a template member AND were
+        an active member (joined_at/left_at) on the owning protocol's date - otherwise a
+        long-departed participant could still be assigned, since template membership alone
+        never expires. Standalone todos (protocol_element_block_id is None) are checked by
+        the caller before this is ever reached, so Protocol.protocol_date is always resolvable
+        here via the block's protocol."""
         statement = (
             select(func.count(TemplateParticipant.participant_id))
             .join(Protocol, Protocol.template_id == TemplateParticipant.template_id)
             .join(ProtocolElement, ProtocolElement.protocol_id == Protocol.id)
             .join(ProtocolElementBlock, ProtocolElementBlock.protocol_element_id == ProtocolElement.id)
+            .join(Participant, Participant.id == TemplateParticipant.participant_id)
             .where(ProtocolElementBlock.id == protocol_element_block_id)
             .where(TemplateParticipant.participant_id == participant_id)
+            .where(participant_eligible_on(Protocol.protocol_date))
         )
         return bool(db.scalar(statement))
 

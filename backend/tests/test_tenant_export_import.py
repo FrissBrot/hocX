@@ -192,6 +192,45 @@ def test_import_rejects_zip_without_manifest(db, tmp_path):
         TenantImportService().import_zip(db, bad_zip, "Should Not Exist")
 
 
+def test_import_rejects_zip_with_too_many_entries(db, tmp_path):
+    """Zip-bomb guard (M19, 2026-08-12 audit): an archive with an excessive entry count must
+    be rejected before extractall() ever runs, mirroring file_service.py's MAX_ZIP_ENTRIES
+    guard for the word-import ZIP upload."""
+    from app.services.tenant_import_service import MAX_IMPORT_ZIP_ENTRIES
+
+    bomb_zip = tmp_path / "entry-bomb.zip"
+    with zipfile.ZipFile(bomb_zip, "w") as zf:
+        manifest = {"format_version": 1, "scope": "structure", "tables": {"tenant": {"id": 1, "name": "x"}}}
+        zf.writestr("manifest.json", json.dumps(manifest))
+        for i in range(MAX_IMPORT_ZIP_ENTRIES + 1):
+            zf.writestr(f"junk/{i}.txt", "x")
+
+    with pytest.raises(ValueError, match="zu viele Dateien"):
+        TenantImportService().import_zip(db, bomb_zip, "Should Not Exist")
+
+
+def test_import_rejects_zip_with_excessive_uncompressed_size(db, tmp_path):
+    """Zip-bomb guard (M19): a small archive that declares a huge uncompressed size (highly
+    compressible payload, the classic zip-bomb shape) must be rejected before extractall()
+    based on the declared size in the zip's central directory - it should never actually have
+    to inflate gigabytes of data to detect this."""
+    from app.services.tenant_import_service import MAX_IMPORT_ZIP_TOTAL_BYTES
+
+    bomb_zip = tmp_path / "size-bomb.zip"
+    with zipfile.ZipFile(bomb_zip, "w") as zf:
+        manifest = {"format_version": 1, "scope": "structure", "tables": {"tenant": {"id": 1, "name": "x"}}}
+        zf.writestr("manifest.json", json.dumps(manifest))
+        oversized_info = zipfile.ZipInfo("huge.bin")
+        zf.writestr(oversized_info, "x")
+        # Forge the declared (central-directory) uncompressed size after writing the real
+        # (tiny) entry - exactly what a hand-crafted zip bomb does: a small compressed
+        # payload that claims to inflate to something enormous.
+        zf.NameToInfo["huge.bin"].file_size = MAX_IMPORT_ZIP_TOTAL_BYTES + 1
+
+    with pytest.raises(ValueError, match="entpackt zu gross"):
+        TenantImportService().import_zip(db, bomb_zip, "Should Not Exist")
+
+
 def test_import_rejects_zip_slip_path(db, tmp_path):
     """A malicious/corrupted archive whose member path escapes the extraction directory
     must be rejected outright rather than being extracted onto the filesystem."""

@@ -202,6 +202,44 @@ def test_get_user_forbidden_when_target_user_not_in_actors_tenant(db):
     assert exc_info.value.status_code == 403
 
 
+def test_get_user_hides_memberships_in_tenants_actor_does_not_administer(db):
+    """A shared user who is a member of both the actor's tenant and an unrelated tenant is
+    manageable (the actor sees basic info), but the actor must not learn what role that user
+    holds in the other tenant - only tenants the *actor themselves* administers are visible."""
+    tenant_a = make_tenant(db, "Tenant A")
+    tenant_b = make_tenant(db, "Tenant B")
+    actor_user = make_app_user(db, email="actor2@example.com")
+    make_user_tenant_role(db, actor_user.id, tenant_a.id, role_code="admin")
+    shared_user = make_app_user(db, email="shared-user@example.com")
+    make_user_tenant_role(db, shared_user.id, tenant_a.id, role_code="reader")
+    make_user_tenant_role(db, shared_user.id, tenant_b.id, role_code="admin")
+
+    actor = _admin_actor(tenant_a.id, user_id=actor_user.id)
+    service = UserService()
+
+    result = service.get_user(db, shared_user.id, actor)
+    visible_tenant_ids = {m.tenant_id for m in result.memberships}
+    assert visible_tenant_ids == {tenant_a.id}
+
+
+def test_list_users_hides_memberships_in_tenants_actor_does_not_administer(db):
+    tenant_a = make_tenant(db, "Tenant A List")
+    tenant_b = make_tenant(db, "Tenant B List")
+    actor_user = make_app_user(db, email="actor3@example.com")
+    make_user_tenant_role(db, actor_user.id, tenant_a.id, role_code="admin")
+    shared_user = make_app_user(db, email="shared-user-2@example.com")
+    make_user_tenant_role(db, shared_user.id, tenant_a.id, role_code="reader")
+    make_user_tenant_role(db, shared_user.id, tenant_b.id, role_code="admin")
+
+    actor = _admin_actor(tenant_a.id, user_id=actor_user.id)
+    service = UserService()
+
+    results = service.list_users(db, actor)
+    listed = next(u for u in results if u.id == shared_user.id)
+    visible_tenant_ids = {m.tenant_id for m in listed.memberships}
+    assert visible_tenant_ids == {tenant_a.id}
+
+
 def test_delete_user_cannot_delete_own_account(db):
     tenant = make_tenant(db, "Self Delete Tenant")
     admin_user = make_app_user(db, email="self-delete@example.com")

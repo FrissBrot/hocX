@@ -273,3 +273,36 @@ def test_admin_login_fails_with_wrong_password(db):
     with pytest.raises(HTTPException) as exc_info:
         service.login(db, Response(), AdminLoginRequest(email="ops2@example.com", password="wrong"))
     assert exc_info.value.status_code == 401
+
+
+def test_admin_logout_revokes_existing_session_tokens(db):
+    import json
+
+    from app.core.admin_security import CurrentAdmin, _sign_payload, get_optional_current_admin
+    from app.models.entities import PlatformAdmin
+
+    admin = PlatformAdmin(
+        email="ops3@example.com",
+        password_hash=hash_password("admin-password"),
+        display_name="Ops",
+    )
+    db.add(admin)
+    db.flush()
+
+    # Forge a token with an iat a few seconds in the past (rather than using
+    # create_admin_session_token, which stamps "now") so it can't land in the same
+    # truncated-to-the-second bucket as the session_revoke_at logout() is about to set -
+    # get_optional_current_admin's revocation check compares int() timestamps, so a same-second
+    # iat/revoke_at pair would flakily look "not yet revoked" regardless of the fix.
+    past_iat = int((datetime.now(UTC) - timedelta(seconds=30)).timestamp())
+    payload = json.dumps({"admin_id": admin.id, "iat": past_iat, "exp": past_iat + 3600}, separators=(",", ":")).encode()
+    token = _sign_payload(payload)
+    assert get_optional_current_admin(request=None, db=db, session_cookie=token) is not None
+
+    # A token minted before logout must stop working afterwards - logout must not just
+    # clear the cookie, it must bump session_revoke_at like customer logout / deactivation do.
+    service = AdminAuthService()
+    service.logout(db, Response(), CurrentAdmin(admin_id=admin.id, email=admin.email, display_name=admin.display_name))
+
+    assert admin.session_revoke_at is not None
+    assert get_optional_current_admin(request=None, db=db, session_cookie=token) is None

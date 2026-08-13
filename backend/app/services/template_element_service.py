@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from app.models import ElementDefinition, Template, TemplateElement
+from app.models import ElementDefinition, ListDefinition, Template, TemplateElement
 from app.repositories.template_element_repository import TemplateElementRepository
 from app.schemas.template import TemplateElementBehaviorUpdate, TemplateElementCreate, TemplateElementRead, TemplateElementUpdate
 from app.services.block_behavior import BEHAVIOR_FIELDS, resolve_block_behavior, resolve_element_wide_behavior
@@ -56,6 +56,33 @@ class TemplateElementService:
         row = self.repository.get_with_definition(db, template_element_id)
         return self._read_model(row) if row else None
 
+    def _referenced_list_definition_ids(self, config: dict | None) -> set[int]:
+        """Collects both whole-list `linked_list_id` and any row-link `rows[].linked_list_id`
+        values out of a block/element configuration_json. Mirrors the extraction logic in
+        list_snapshot_service.referenced_list_definition_ids - keep both in sync if the
+        list-linkage JSON shape ever changes."""
+        config = config or {}
+        ids: set[int] = set()
+        top_level = config.get("linked_list_id")
+        if top_level:
+            ids.add(int(top_level))
+        rows = config.get("rows")
+        if isinstance(rows, list):
+            for row in rows:
+                if isinstance(row, dict) and row.get("linked_list_id"):
+                    ids.add(int(row["linked_list_id"]))
+        return ids
+
+    def _validate_linked_lists(self, db: Session, config: dict | None, *, tenant_id: int) -> None:
+        """Any linked_list_id referenced from a TemplateElement's configuration_json must
+        point at a ListDefinition that actually exists and belongs to the same tenant as the
+        template - otherwise a foreign or stale id gets stored silently and only surfaces
+        much later as a crash when a protocol snapshot tries to resolve it."""
+        for list_id in self._referenced_list_definition_ids(config):
+            list_definition = db.get(ListDefinition, list_id)
+            if list_definition is None or list_definition.tenant_id != tenant_id:
+                raise ValueError(f"Linked list {list_id} not found")
+
     def create_template_element(self, db: Session, template_id: int, payload: TemplateElementCreate):
         existing_rows = self.repository.list_for_template(db, template_id)
         existing_sort_indexes = [template_element.sort_index for template_element, _definition in existing_rows]
@@ -73,6 +100,7 @@ class TemplateElementService:
         # for "wrong tenant" vs "doesn't exist".
         if template is None or definition.tenant_id != template.tenant_id:
             raise ValueError("Element definition not found")
+        self._validate_linked_lists(db, payload.configuration_json, tenant_id=template.tenant_id)
         entity = TemplateElement(
             template_id=template_id,
             element_definition_id=payload.element_definition_id,
@@ -94,6 +122,9 @@ class TemplateElementService:
         values = payload.model_dump(exclude_unset=True)
         if not values:
             return self.get_template_element(db, template_element_id)
+        if "configuration_json" in values:
+            template = db.get(Template, entity.template_id)
+            self._validate_linked_lists(db, values["configuration_json"], tenant_id=template.tenant_id if template else None)
         updated = self.repository.update(db, entity, values)
         return self.get_template_element(db, updated.id)
 

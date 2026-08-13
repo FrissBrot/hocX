@@ -2,6 +2,10 @@ services:
   traefik:
     image: traefik:v3.1
     restart: unless-stopped
+    # M28 (Mittel, Audit 2026-08-12): Ceiling gegen einen durchgehenden Container, der den
+    # ganzen (knappen) Host mitreisst - keine Zielwerte fuer Normalbetrieb, nur eine Obergrenze.
+    mem_limit: 128m
+    cpus: 0.5
     logging:
       driver: json-file
       options:
@@ -29,6 +33,8 @@ services:
   db:
     image: postgres:16
     restart: unless-stopped
+    mem_limit: 768m
+    cpus: 1.0
     logging:
       driver: json-file
       options:
@@ -55,6 +61,8 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    mem_limit: 128m
+    cpus: 0.5
     logging:
       driver: json-file
       options:
@@ -70,6 +78,8 @@ services:
     build:
       context: ./backend
     restart: unless-stopped
+    mem_limit: 768m
+    cpus: 1.5
     logging:
       driver: json-file
       options:
@@ -176,6 +186,8 @@ services:
       context: ./frontend
       target: deps
     restart: unless-stopped
+    mem_limit: 512m
+    cpus: 1.0
     logging:
       driver: json-file
       options:
@@ -217,6 +229,8 @@ services:
       context: ./frontend
       target: deps
     restart: unless-stopped
+    mem_limit: 256m
+    cpus: 0.5
     logging:
       driver: json-file
       options:
@@ -256,6 +270,8 @@ services:
     build:
       context: ./abgabebox-backend
     restart: unless-stopped
+    mem_limit: 384m
+    cpus: 1.0
     logging:
       driver: json-file
       options:
@@ -335,6 +351,10 @@ services:
   clamav:
     image: clamav/clamav:latest
     restart: unless-stopped
+    # Grosszuegiger als die anderen Services - die Signaturdatenbank allein braucht schon
+    # mehrere hundert MB im Speicher, ein zu enges Limit fuehrt zu Crash-Loops statt Schutz.
+    mem_limit: 1536m
+    cpus: 1.0
     logging:
       driver: json-file
       options:
@@ -354,6 +374,8 @@ services:
       context: ./abgabebox-frontend
       target: deps
     restart: unless-stopped
+    mem_limit: 384m
+    cpus: 0.5
     logging:
       driver: json-file
       options:
@@ -399,6 +421,8 @@ services:
     build:
       context: ./docs-site
     restart: unless-stopped
+    mem_limit: 128m
+    cpus: 0.25
     logging:
       driver: json-file
       options:

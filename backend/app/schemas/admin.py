@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.user import UserRead
+
 
 class AdminLoginRequest(BaseModel):
     email: str
@@ -63,6 +65,11 @@ class AdminTenantRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class AdminTenantPage(BaseModel):
+    items: list[AdminTenantRead]
+    total: int
+
+
 class AdminDomainRead(BaseModel):
     id: int
     tenant_id: int
@@ -76,6 +83,16 @@ class AdminDomainRead(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class AdminDomainPage(BaseModel):
+    items: list[AdminDomainRead]
+    total: int
+
+
+class AdminUserPage(BaseModel):
+    items: list[UserRead]
+    total: int
 
 
 class AdminUserMergeRequest(BaseModel):

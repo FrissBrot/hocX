@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.models import Tenant, TenantDomain
-from app.schemas.admin import AdminDomainRead
+from app.schemas.admin import AdminDomainPage, AdminDomainRead
 
 
 class AdminDomainService:
@@ -23,14 +23,18 @@ class AdminDomainService:
         db.commit()
         return domain
 
-    def list_domains(self, db: Session) -> list[AdminDomainRead]:
-        rows = (
+    def list_domains(self, db: Session, *, limit: int | None = None, offset: int = 0) -> AdminDomainPage:
+        query = (
             db.query(TenantDomain, Tenant)
             .join(Tenant, TenantDomain.tenant_id == Tenant.id)
             .order_by(Tenant.name.asc(), TenantDomain.purpose.asc())
-            .all()
         )
-        return [
+        total = query.count()
+        query = query.offset(offset)
+        if limit is not None:
+            query = query.limit(limit)
+        rows = query.all()
+        items = [
             AdminDomainRead(
                 id=domain.id,
                 tenant_id=tenant.id,
@@ -45,3 +49,4 @@ class AdminDomainService:
             )
             for domain, tenant in rows
         ]
+        return AdminDomainPage(items=items, total=total)

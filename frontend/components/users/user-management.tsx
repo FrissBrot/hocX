@@ -2,6 +2,7 @@
 
 import { FormEvent, useMemo, useState } from "react";
 
+import { ROLE_OPTIONS } from "@/components/admin/admin-tenant-settings-modal";
 import { DataTable } from "@/components/ui/data-table";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
@@ -370,10 +371,11 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
               <label className="field-stack">
                 <span className="field-label">Rolle</span>
                 <select value={userForm.pickerRoleCode} onChange={(event) => setUserForm((current) => ({ ...current, pickerRoleCode: event.target.value }))}>
-                  <option value="reader">Reader</option>
-                  <option value="kassier">Kassier</option>
-                  <option value="writer">Writer</option>
-                  <option value="admin">Admin</option>
+                  {ROLE_OPTIONS.map((r) => (
+                    <option key={r.code} value={r.code}>
+                      {r.label}
+                    </option>
+                  ))}
                 </select>
               </label>
               <div className="role-picker-action">

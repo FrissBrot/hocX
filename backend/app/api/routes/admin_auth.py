@@ -21,8 +21,12 @@ def login(payload: AdminLoginRequest, response: Response, db: Session = Depends(
 
 
 @router.post("/logout", response_model=dict[str, str])
-def logout(response: Response):
-    return service.logout(response)
+def logout(
+    response: Response,
+    db: Session = Depends(get_db),
+    admin: CurrentAdmin | None = Depends(get_optional_current_admin),
+):
+    return service.logout(db, response, admin)
 
 
 @router.get("/session", response_model=AdminSessionRead)

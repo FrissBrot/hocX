@@ -9671,6 +9671,15 @@ input[type="radio"] {
   font-weight: 400;
 }
 
+/* Neutral variant of .word-import-alert(-block) - same chrome, but info tone instead of
+   warning, for hints that just inform (e.g. "this text also fills a Termin field") rather
+   than flag something the reviewer must resolve. */
+.word-import-alert-neutral {
+  background: var(--info-bg);
+  color: var(--info-fg);
+  border-color: color-mix(in srgb, var(--info-fg) 30%, transparent 70%);
+}
+
 .word-import-alert-block > div {
   flex: 1;
   min-width: 0;

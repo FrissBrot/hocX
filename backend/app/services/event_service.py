@@ -7,7 +7,7 @@ from io import StringIO
 from sqlalchemy.orm import Session
 
 from app.core.cycle_utils import format_cycle_name
-from app.models import Event, Protocol
+from app.models import Event, Participant, Protocol
 from app.models.entities import CycleConfig, EventCycle
 from app.repositories.event_repository import EventRepository
 from app.schemas.event import CycleAssignment, EventCreate, EventUpdate
@@ -59,10 +59,47 @@ class EventService:
     def get_event(self, db: Session, event_id: int) -> Event | None:
         return self.repository.get(db, event_id)
 
+    # The six role slots on an Event that reference Participant rows. Kept as a single list
+    # so create/update validation can't silently miss a slot if a new one is ever added.
+    _PARTICIPANT_ID_FIELDS = (
+        "organizer_ids",
+        "leadership_ids",
+        "participant_ids",
+        "spezial1_ids",
+        "spezial2_ids",
+        "spezial3_ids",
+    )
+
+    def _validate_participant_ids(self, db: Session, *, tenant_id: int, id_lists: dict[str, list[int] | None]) -> None:
+        """Every id referenced by organizer_ids/leadership_ids/participant_ids/spezial1-3_ids
+        must exist and belong to the same tenant as the event - otherwise an event could
+        reference a deleted or cross-tenant participant (e.g. via a raw API call), which
+        would then surface that foreign participant's name/data through the event."""
+        requested_ids: set[int] = set()
+        for ids in id_lists.values():
+            if ids:
+                requested_ids.update(ids)
+        if not requested_ids:
+            return
+        owned_ids = {
+            row[0]
+            for row in db.query(Participant.id)
+            .filter(Participant.id.in_(requested_ids), Participant.tenant_id == tenant_id)
+            .all()
+        }
+        foreign_ids = requested_ids - owned_ids
+        if foreign_ids:
+            raise ValueError(f"Unknown participant id(s): {sorted(foreign_ids)}")
+
     def create_event(self, db: Session, payload: EventCreate, *, tenant_id: int) -> Event:
         category_id = self.repository.category_id_by_code(db, "other")
         if category_id is None:
             raise ValueError("Default event category missing")
+        self._validate_participant_ids(
+            db,
+            tenant_id=tenant_id,
+            id_lists={field: getattr(payload, field) for field in self._PARTICIPANT_ID_FIELDS},
+        )
         event = self._build_event_entity(
             tenant_id=tenant_id,
             category_id=category_id,
@@ -109,6 +146,11 @@ class EventService:
             raise ValueError("Event end date must be on or after the start date")
         if "participant_count" in values and values["participant_count"] is not None:
             values["participant_count"] = max(0, int(values["participant_count"]))
+        self._validate_participant_ids(
+            db,
+            tenant_id=event.tenant_id,
+            id_lists={field: values[field] for field in self._PARTICIPANT_ID_FIELDS if field in values},
+        )
         try:
             if values:
                 event = self.repository.update(db, event, values, commit=False)

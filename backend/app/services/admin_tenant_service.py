@@ -13,7 +13,7 @@ from app.models import (
     UserTenantRole,
     WordImportDocument,
 )
-from app.schemas.admin import AdminTenantCreate, AdminTenantRead
+from app.schemas.admin import AdminTenantCreate, AdminTenantPage, AdminTenantRead
 from app.schemas.user import TenantUpdate
 from app.services.document_template_service import DocumentTemplateService
 from app.services.tenant_service import apply_tenant_profile_image
@@ -54,9 +54,14 @@ class AdminTenantService:
             created_at=tenant.created_at,
         )
 
-    def list_tenants(self, db: Session) -> list[AdminTenantRead]:
-        tenants = db.query(Tenant).order_by(Tenant.name.asc()).all()
-        return [self._read_model(db, tenant) for tenant in tenants]
+    def list_tenants(self, db: Session, *, limit: int | None = None, offset: int = 0) -> AdminTenantPage:
+        query = db.query(Tenant).order_by(Tenant.name.asc())
+        total = query.count()
+        query = query.offset(offset)
+        if limit is not None:
+            query = query.limit(limit)
+        tenants = query.all()
+        return AdminTenantPage(items=[self._read_model(db, tenant) for tenant in tenants], total=total)
 
     def get_tenant(self, db: Session, tenant_id: int) -> AdminTenantRead | None:
         tenant = db.get(Tenant, tenant_id)

@@ -2,16 +2,16 @@ import { AdminTenantManagement } from "@/components/admin/admin-tenant-managemen
 import { AdminShell } from "@/components/ui/admin-shell";
 import { requireAdminSession } from "@/lib/api/admin-server";
 import { backendFetchWithSession } from "@/lib/api/server";
-import { AdminTenantSummary } from "@/types/api";
+import { AdminTenantPage } from "@/types/api";
 
 export default async function AdminTenantsPage() {
   const session = await requireAdminSession();
-  const tenants = await backendFetchWithSession<AdminTenantSummary[]>("/api/admin/tenants");
+  const page = await backendFetchWithSession<AdminTenantPage>("/api/admin/tenants?limit=50&offset=0");
 
   return (
     <AdminShell session={session}>
       <section className="panel">
-        <AdminTenantManagement initialTenants={tenants ?? []} />
+        <AdminTenantManagement initialPage={page ?? { items: [], total: 0 }} />
       </section>
     </AdminShell>
   );

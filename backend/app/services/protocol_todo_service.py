@@ -1,8 +1,16 @@
+from datetime import datetime, timezone
+
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import ProtocolTodo
+from app.models import ProtocolTodo, TodoStatus
 from app.repositories.protocol_todo_repository import ProtocolTodoRepository
 from app.schemas.protocol import ProtocolTodoCreate, ProtocolTodoRead, ProtocolTodoUpdate, TodoListItem
+
+# Status codes that count as "closed"/completed for completed_at purposes - mirrors the
+# closed_status_ids grouping used elsewhere (e.g. ProtocolService._open_todos_for_template_block)
+# and the "done" bucket the statistics/chart services derive from completed_at.
+_COMPLETED_STATUS_CODES = ("done", "cancelled")
 
 
 class ProtocolTodoService:
@@ -147,6 +155,18 @@ class ProtocolTodoService:
         due_event_id = values.get("due_event_id")
         if due_event_id is not None and not self.repository.event_allowed_for_block(db, todo.protocol_element_block_id, due_event_id):
             raise ValueError("Due event is not available for this tenant")
+        # completed_at is server-authoritative and derived solely from the status
+        # transition: a client-supplied value is always ignored/overridden here so
+        # statistics/charts (which key off completed_at) can't drift from the actual
+        # todo_status_id - e.g. reopening a "done" todo without the client explicitly
+        # clearing completed_at must not leave it counted as done.
+        if "todo_status_id" in values:
+            new_status_code = db.scalar(select(TodoStatus.code).where(TodoStatus.id == values["todo_status_id"]))
+            if new_status_code is None:
+                raise ValueError("Unknown todo status")
+            values["completed_at"] = datetime.now(timezone.utc) if new_status_code in _COMPLETED_STATUS_CODES else None
+        else:
+            values.pop("completed_at", None)
         if not values:
             return todo
         # Only task/tags count as "content" for marking purposes (assignee/due-date/status

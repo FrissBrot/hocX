@@ -18,6 +18,7 @@ class ElementDefinitionService:
             1: 2,  # text -> paragraph
             2: 3,  # todo -> todo_list
             3: 4,  # image -> image
+            4: 6,  # display -> plain_text (ProtocolDisplaySnapshot.compiled_text is plain rendered text, same as static_text)
             5: 6,  # static_text -> plain_text
             6: 5,  # form -> key_value
             7: 5,  # event_list -> key_value

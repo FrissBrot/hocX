@@ -7,7 +7,7 @@ import { Tabs } from "@/components/ui/tabs";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
-import { AdminTenantSummary, AdminTenantUser, UserSummary } from "@/types/api";
+import { AdminTenantSummary, AdminTenantUser, AdminUserPage, UserSummary } from "@/types/api";
 
 type Props = {
   open: boolean;
@@ -56,7 +56,10 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     });
 
     void loadTenantUsers(tenant.id);
-    browserApiFetch<UserSummary[]>("/api/admin/users").then(setAllUsers).catch(() => setAllUsers([]));
+    // No limit param -> full (unpaginated) list, needed here for the "add user" picker.
+    browserApiFetch<AdminUserPage>("/api/admin/users")
+      .then((result) => setAllUsers(result.items))
+      .catch(() => setAllUsers([]));
   }, [open, tenant]);
 
   async function loadTenantUsers(tenantId: number) {

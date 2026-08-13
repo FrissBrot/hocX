@@ -157,6 +157,11 @@ export type AdminTenantSummary = {
   created_at: string;
 };
 
+export type AdminTenantPage = {
+  items: AdminTenantSummary[];
+  total: number;
+};
+
 export type AdminDomainSummary = {
   id: number;
   tenant_id: number;
@@ -168,6 +173,16 @@ export type AdminDomainSummary = {
   last_checked_at: string | null;
   verified_at: string | null;
   created_at: string;
+};
+
+export type AdminDomainPage = {
+  items: AdminDomainSummary[];
+  total: number;
+};
+
+export type AdminUserPage = {
+  items: UserSummary[];
+  total: number;
 };
 
 export type SystemErrorLogEntry = {

@@ -1,18 +1,19 @@
 import { AdminShell } from "@/components/ui/admin-shell";
 import { requireAdminSession } from "@/lib/api/admin-server";
 import { backendFetchWithSession } from "@/lib/api/server";
-import { AdminTenantSummary, UserSummary } from "@/types/api";
+import { AdminTenantPage, AdminUserPage } from "@/types/api";
 
 export default async function AdminDashboardPage() {
   const session = await requireAdminSession();
+  // No limit param -> full (unpaginated) lists, needed here to compute accurate totals.
   const [tenants, users] = await Promise.all([
-    backendFetchWithSession<AdminTenantSummary[]>("/api/admin/tenants"),
-    backendFetchWithSession<UserSummary[]>("/api/admin/users"),
+    backendFetchWithSession<AdminTenantPage>("/api/admin/tenants"),
+    backendFetchWithSession<AdminUserPage>("/api/admin/users"),
   ]);
 
-  const tenantCount = tenants?.length ?? 0;
-  const userCount = users?.length ?? 0;
-  const activeLoginCount = (users ?? []).filter((user) => user.login_enabled).length;
+  const tenantCount = tenants?.total ?? 0;
+  const userCount = users?.total ?? 0;
+  const activeLoginCount = (users?.items ?? []).filter((user) => user.login_enabled).length;
 
   return (
     <AdminShell session={session}>

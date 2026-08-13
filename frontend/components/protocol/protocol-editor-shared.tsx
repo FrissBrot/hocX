@@ -1,50 +1,18 @@
 "use client";
 
-import { Dispatch, Fragment, ReactNode, SetStateAction, useMemo, useRef, useState } from "react";
+import { ReactNode, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
-import { useToast } from "@/contexts/toast-context";
 
-import { SessionPanel, SessionPanelHandle } from "@/components/protocol/session-panel";
-import { TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
-import { StructuredListTable } from "@/components/lists/structured-list-table";
 import { TrackedChangeHideButton } from "@/components/ui/tracked-change-hide-button";
-import { DataToolbar } from "@/components/ui/data-table";
-import { DateInput } from "@/components/ui/date-input";
-import { RichTextEditor } from "@/components/ui/rich-text-editor";
-import { Modal } from "@/components/ui/modal";
-import { StructuredListEditModal } from "@/components/protocol/planning/structured-list-edit-modal";
-import { EventOverviewModal } from "@/components/protocol/planning/event-overview-modal";
-import { CheckboxCandidateModal, CandidateItem } from "@/components/protocol/planning/checkbox-candidate-modal";
-import { EventDetailForm } from "@/components/protocol/planning/event-detail-form";
-import { PlanningIconTrigger } from "@/components/protocol/planning/planning-icon-trigger";
 import { usePopoverPosition, usePopoverDismiss } from "@/components/ui/popover";
-import { fetchCycleEvents } from "@/lib/api/cycle-events";
-import { TagInput } from "@/components/ui/tag-input";
-import { ChartBlock, bumpStatsCharts } from "@/components/protocol/chart-block";
-import { CollaborationPresenceBar, LockBadge } from "@/components/protocol/collaboration-presence";
-import { useProtocolCollaboration } from "@/lib/hooks/use-protocol-collaboration";
-import { useTagConfig, TagConfig } from "@/lib/hooks/use-tag-config";
-import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
-import { formatDate, formatDateRange, formatDateTime } from "@/lib/utils/format";
+import { formatDate } from "@/lib/utils/format";
 import { getCycleYear } from "@/lib/utils/cycle";
 import {
-  AttendanceFine,
-  AttendanceFineListItem,
-  DocumentTemplate,
   EventSummary,
-  FinanceAccount,
-  FinanceTransaction,
   ParticipantSummary,
   ProtocolElement,
-  ProtocolImage,
   ProtocolSummary,
   ProtocolTodo,
-  SaveState,
-  StructuredListDefinition,
-  StructuredListEntry,
-  TemplateSummary,
-  TodoListItem,
 } from "@/types/api";
 export const TODO_STATUS = {
   open: 1,

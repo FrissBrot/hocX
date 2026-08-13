@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import io
 import textwrap
-from collections import defaultdict
 from typing import Any
 
 import matplotlib
@@ -11,28 +10,24 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib import rcParams
-from sqlalchemy import or_, text, select
 from sqlalchemy.orm import Session
 
-from app.models.entities import (
-    ElementType,
-    Protocol,
-    ProtocolElement,
-    ProtocolElementBlock,
-    AttendanceFine,
-    FinanceTransaction,
-    FinanceAccount,
-    ProtocolTodo,
-    TodoStatus,
+from app.services.statistics_common import (
+    GROUPS_LIST_NAME,
+    aggregate_attendance,
+    aggregate_group_rows,
+    aggregate_todo_counts,
+    fetch_attendance_blocks,
+    fetch_finance_by_month,
+    fetch_fines_by_participant,
+    fetch_fines_by_type,
+    fetch_group_session_rows,
+    fetch_todo_rows,
 )
 
-# Name of the list_definition that holds the tenant's group tags (event.tag values that
-# count as "groups" for stats/charts). Duplicated as a literal in three subqueries
-# (here and twice in app/api/routes/statistics.py) before this constant was introduced -
-# import GROUPS_LIST_NAME from here rather than re-hardcoding the string, so the three
-# copies can't drift apart again. Does NOT fix the underlying fragility of matching by
-# a user-renameable list name - that's a separate, larger concern.
-GROUPS_LIST_NAME = "Gruppen"
+# GROUPS_LIST_NAME now lives in statistics_common.py (imported above) - that's the single
+# shared source for both this module and app/api/routes/statistics.py (2026-08-13 audit,
+# M10/M11). Kept importable from here too since chart_service historically was the source.
 
 # ── Print-tuned defaults ──────────────────────────────────────────────────────
 
@@ -142,63 +137,32 @@ def _fmt_month(m: str) -> str:
 
 
 # ── Data fetchers ─────────────────────────────────────────────────────────────
-
-def _get_attendance_type_id(db: Session) -> int | None:
-    row = db.execute(select(ElementType.id).where(ElementType.code == "attendance")).first()
-    return row[0] if row else None
-
+#
+# All the actual DB reads/aggregation live in app/services/statistics_common.py, shared
+# with app/api/routes/statistics.py's /statistics/overview endpoint - these functions just
+# adapt the shared shapes to what the matplotlib renderers below expect (dicts instead of
+# dataclasses/Rows, sorted+truncated to the top N for the chart). See statistics_common's
+# module docstring (2026-08-12/13 audit, M4/M10/M11/M12).
 
 def _fetch_attendance_data(db: Session, tenant_id: int) -> tuple[list[dict], list[dict]]:
-    attendance_type_id = _get_attendance_type_id(db)
-    if not attendance_type_id:
-        return [], []
+    blocks = fetch_attendance_blocks(db, tenant_id)
+    monthly, per_participant = aggregate_attendance(blocks)
 
-    rows = db.execute(
-        select(Protocol.protocol_date, ProtocolElementBlock.configuration_snapshot_json)
-        .join(ProtocolElement, ProtocolElement.protocol_id == Protocol.id)
-        .join(ProtocolElementBlock, ProtocolElementBlock.protocol_element_id == ProtocolElement.id)
-        .where(
-            Protocol.tenant_id == tenant_id,
-            Protocol.status.in_(["durchgeführt", "abgeschlossen"]),
-            ProtocolElementBlock.element_type_id == attendance_type_id,
-        )
-        .order_by(Protocol.protocol_date)
-    ).all()
-
-    participant_stats: dict[str, dict[str, int]] = defaultdict(lambda: {"present": 0, "late": 0, "absent": 0, "excused": 0})
-    monthly_att: dict[str, dict[str, int]] = defaultdict(lambda: {"present": 0, "late": 0, "absent": 0, "excused": 0})
-
-    for proto_date, config in rows:
-        entries = (config or {}).get("attendance_entries", [])
-        month_key = proto_date.strftime("%Y-%m") if proto_date else None
-        for entry in entries:
-            name = entry.get("participant_name") or "Unbekannt"
-            status = entry.get("status") or "absent"
-            # Four-value status, matching export_service's counting: "late" is its own
-            # bucket, not lumped into "absent" (a late arrival is not the same as a no-show).
-            if status == "present":
-                participant_stats[name]["present"] += 1
-            elif status == "late":
-                participant_stats[name]["late"] += 1
-            elif status == "excused":
-                participant_stats[name]["excused"] += 1
-            else:
-                participant_stats[name]["absent"] += 1
-            if month_key:
-                if status == "present":
-                    monthly_att[month_key]["present"] += 1
-                elif status == "late":
-                    monthly_att[month_key]["late"] += 1
-                elif status == "excused":
-                    monthly_att[month_key]["excused"] += 1
-                else:
-                    monthly_att[month_key]["absent"] += 1
-
-    by_time = [{"month": m, **v} for m, v in sorted(monthly_att.items())]
+    by_time = [
+        {"month": m, "present": c.present, "late": c.late, "absent": c.absent, "excused": c.excused}
+        for m, c in sorted(monthly.items())
+    ]
     by_participant = sorted(
         [
-            {"name": n, **v, "total": v["present"] + v["late"] + v["absent"] + v["excused"]}
-            for n, v in participant_stats.items()
+            {
+                "name": p.name,
+                "present": p.counts.present,
+                "late": p.counts.late,
+                "absent": p.counts.absent,
+                "excused": p.counts.excused,
+                "total": p.counts.total,
+            }
+            for p in per_participant
         ],
         key=lambda x: x["total"],
         reverse=True,
@@ -207,105 +171,33 @@ def _fetch_attendance_data(db: Session, tenant_id: int) -> tuple[list[dict], lis
 
 
 def _fetch_finance_data(db: Session, tenant_id: int) -> list[dict]:
-    rows = db.execute(
-        text("""
-            SELECT to_char(ft.transaction_date,'YYYY-MM') AS month,
-                   SUM(CASE WHEN ft.amount > 0 THEN ft.amount ELSE 0 END) AS income,
-                   SUM(CASE WHEN ft.amount < 0 THEN ABS(ft.amount) ELSE 0 END) AS expenses
-            FROM finance_transaction ft
-            JOIN finance_account fa ON fa.id = ft.account_id
-            WHERE fa.tenant_id = :tid
-            GROUP BY month ORDER BY month
-        """),
-        {"tid": tenant_id},
-    ).all()
+    rows = fetch_finance_by_month(db, tenant_id)
     return [{"month": r.month, "income": float(r.income or 0), "expenses": float(r.expenses or 0)} for r in rows]
 
 
 def _fetch_fines_data(db: Session, tenant_id: int) -> tuple[list[dict], list[dict]]:
-    fines = db.execute(
-        select(AttendanceFine.participant_name_snapshot, AttendanceFine.fine_type, AttendanceFine.amount)
-        .join(Protocol, Protocol.id == AttendanceFine.protocol_id)
-        .where(Protocol.tenant_id == tenant_id)
-    ).all()
-
-    per_participant: dict[str, float] = defaultdict(float)
-    per_type: dict[str, int] = defaultdict(int)
-    for f in fines:
-        per_participant[f.participant_name_snapshot] += float(f.amount)
-        per_type[f.fine_type] += 1
+    participant_rows = fetch_fines_by_participant(db, tenant_id)
+    type_rows = fetch_fines_by_type(db, tenant_id)
 
     by_participant = sorted(
-        [{"name": n, "amount": v} for n, v in per_participant.items()],
+        [{"name": r.name, "amount": float(r.amount or 0)} for r in participant_rows],
         key=lambda x: x["amount"],
         reverse=True,
     )[:10]
     fine_labels = {"absent": "Unentschuldigt", "late": "Verspätet"}
-    by_type = [{"label": fine_labels.get(t, t), "count": c} for t, c in per_type.items()]
+    by_type = [{"label": fine_labels.get(r.fine_type, r.fine_type), "count": r.count} for r in type_rows]
     return by_participant, by_type
 
 
 def _fetch_todo_data(db: Session, tenant_id: int) -> dict:
-    todos = db.execute(
-        select(TodoStatus.code, ProtocolTodo.completed_at)
-        # LEFT JOINs - see statistics.py's identical fix: protocol_element_block_id is
-        # nullable (standalone/Abgabebox-generated todos), an INNER JOIN here dropped them
-        # from the chart entirely. Those carry their own ProtocolTodo.tenant_id instead.
-        .outerjoin(ProtocolElementBlock, ProtocolElementBlock.id == ProtocolTodo.protocol_element_block_id)
-        .outerjoin(ProtocolElement, ProtocolElement.id == ProtocolElementBlock.protocol_element_id)
-        .outerjoin(Protocol, Protocol.id == ProtocolElement.protocol_id)
-        .join(TodoStatus, TodoStatus.id == ProtocolTodo.todo_status_id)
-        .where(or_(Protocol.tenant_id == tenant_id, ProtocolTodo.tenant_id == tenant_id))
-    ).all()
-    done = sum(1 for t in todos if t.code in ("done", "cancelled") or t.completed_at)
-    open_ = len(todos) - done
+    rows = fetch_todo_rows(db, tenant_id)
+    open_, done = aggregate_todo_counts(rows)
     return {"done": done, "open": open_}
 
 
 def _fetch_groups_data(db: Session, tenant_id: int, cycle_key: str | None = None) -> list[dict]:
-    rows = db.execute(
-        text("""
-            SELECT e.tag AS group_name,
-                   ec.cycle_config_id, ec.cycle_year,
-                   COUNT(DISTINCT e.id) AS session_count,
-                   COUNT(DISTINCT e.id) FILTER (WHERE e.participant_count > 0) AS session_count_with_participants,
-                   COALESCE(AVG(e.participant_count) FILTER (WHERE e.participant_count > 0), 0) AS avg_participants
-            FROM event e
-            LEFT JOIN event_cycle ec ON ec.event_id = e.id
-            WHERE e.tenant_id = :tid AND e.tag IS NOT NULL
-              AND e.tag IN (
-                  SELECT le.column_one_value_json->>'text_value'
-                  FROM list_definition ld
-                  JOIN list_entry le ON le.list_definition_id = ld.id
-                  WHERE ld.tenant_id = :tid AND ld.name = :groups_list_name
-              )
-            GROUP BY e.tag, ec.cycle_config_id, ec.cycle_year
-        """),
-        {"tid": tenant_id, "groups_list_name": GROUPS_LIST_NAME},
-    ).all()
-
-    if cycle_key and cycle_key != "all":
-        try:
-            config_id, year = cycle_key.split(":")
-            rows = [r for r in rows if str(r.cycle_config_id) == config_id and str(r.cycle_year) == year]
-        except ValueError:
-            pass
-
-    merged: dict[str, dict] = {}
-    for r in rows:
-        n = r.group_name
-        if n not in merged:
-            merged[n] = {"name": n, "sessions": 0, "sessions_with_p": 0, "weighted": 0.0}
-        merged[n]["sessions"] += int(r.session_count)
-        merged[n]["sessions_with_p"] += int(r.session_count_with_participants)
-        s = int(r.session_count_with_participants)
-        merged[n]["weighted"] += float(r.avg_participants) * s
-
-    result = []
-    for v in merged.values():
-        v["avg"] = round(v["weighted"] / v["sessions_with_p"], 1) if v["sessions_with_p"] > 0 else 0.0
-        result.append(v)
-    return sorted(result, key=lambda x: x["sessions"], reverse=True)
+    rows = fetch_group_session_rows(db, tenant_id)
+    return aggregate_group_rows(rows, cycle_key)
 
 
 # ── Chart renderers ───────────────────────────────────────────────────────────

@@ -42,6 +42,25 @@ _EXTENSION_MIME_MAP = {
     "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 }
 _OLE_SIGNATURE = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"  # legacy .doc/.xls/.ppt (Compound File Binary)
+# M20 (2026-08-12 audit): .doc/.xls/.ppt all share this one generic OLE/CFB container signature,
+# so a file that is actually a .doc but declared as .xls (or any other combination of the three)
+# currently passes this check - only the container format is verified, not which Office app
+# produced it. A real sub-type check exists in principle: an OLE/CFB root directory entry carries
+# a CLSID (GUID) that differs between Word/Excel/PowerPoint documents, and it's reachable by
+# parsing a handful of fields out of the fixed 512-byte header (sector size, first directory
+# sector) plus the root entry's fixed-offset CLSID field in that sector - no new dependency
+# needed. Deliberately NOT implemented here: doing it correctly requires exact CLSID constants
+# and exact byte offsets, and this sandbox has no real .doc/.xls/.ppt sample files (no LibreOffice
+# or similar available to generate any) to verify a hand-rolled parser against. A wrong constant
+# or off-by-one in the header math would either (a) silently never reject anything - an audit
+# finding that looks fixed but isn't - or (b) reject genuine .doc/.xls/.ppt uploads from real
+# users, which is worse than today's behavior. The actual security impact of accepting the wrong
+# legacy Office sub-type is also limited: unlike the forged-Content-Type issue this file already
+# guards against above, all three still end up served as an OLE/CFB blob with a server-controlled
+# mime_type from _EXTENSION_MIME_MAP, not e.g. inline-rendered HTML - so this is a data-integrity
+# gap (wrong file type accepted), not a code-execution/XSS one. If this is revisited: verify any
+# CLSID constants against real sample files first, or take a dependency on a maintained parser
+# (e.g. olefile) instead of a hand-rolled one - either beats guessing.
 _ZIP_SIGNATURE = b"PK\x03\x04"  # modern .docx/.xlsx/.pptx (all just zip containers)
 
 
