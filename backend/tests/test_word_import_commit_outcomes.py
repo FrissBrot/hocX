@@ -10,7 +10,7 @@ from sqlalchemy import select
 from app.models import WordImportProfile, WordImportSuggestionOutcome
 from app.schemas.word_import import WordImportAttendanceCommit, WordImportCommit, WordImportEventCommit
 from app.services.word_import_quality_service import WordImportQualityService
-from app.services.word_import_service import WordImportService
+from app.services.word_import_service import WordImportService, _normalize
 from tests.factories import make_event, make_template, make_tenant
 from tests.test_word_import_e2e import _build_template
 from tests.word_import_fixtures import default_spec, render_docx
@@ -226,6 +226,72 @@ def test_event_conflict_resolution_is_remembered_and_reused_across_different_dat
     assert second_row.raw_date == date(2027, 10, 25)
     assert second_row.remembered_title_source == "doc"
     assert second_row.remembered_date_source == "existing"
+
+
+def test_new_event_link_resolution_is_remembered_and_reused_when_no_date_is_ever_found(db):
+    """Timo's second real screenshot: a Termine row like "Scharanlässe Leiteranlässe
+    Sonstiges" that never carries a date in the document at all. _score_event_candidate
+    caps a dateless row's score at 0.2 * title_score against every existing Event (see
+    its own docstring), which can never clear event_change_threshold - so such a row
+    starts, and (without this memory) stays, "new" every single import no matter how
+    well its title actually matches, forcing the reviewer to redo the identical manual
+    "link to this Event" pick from the "Neu anlegen" dropdown forever."""
+    tenant = make_tenant(db)
+    template = _template_with_protocol_number(db, tenant)
+    target_event = make_event(db, tenant.id, title="Scharanlässe Leiteranlässe Sonstiges", event_date=date(2025, 6, 1))
+    service = WordImportService()
+
+    spec = default_spec(protocol_date=date(2026, 10, 18))
+    spec.events.rows = [*spec.events.rows, ["", "Scharanlässe Leiteranlässe Sonstiges"]]
+    raw_bytes = render_docx(spec)
+
+    first_analysis = service.analyze(
+        db, tenant_id=tenant.id, template_id=template.id, protocol_date_hint=None, raw_bytes=raw_bytes,
+    )
+    row = next(m for m in first_analysis.event_mappings if m.raw_title == "Scharanlässe Leiteranlässe Sonstiges")
+    assert row.status == "new"
+    assert row.raw_date is None
+    assert row.matched_event_id is None
+
+    # Reviewer manually links this dateless row to the real existing Event via the
+    # "Neu anlegen" dropdown instead of leaving it to create a brand-new Termin.
+    service.commit(
+        db, tenant_id=tenant.id, user_id=1,
+        payload=WordImportCommit(
+            template_id=template.id,
+            protocol_date=date(2026, 10, 18),
+            events=[
+                WordImportEventCommit(
+                    approved=True,
+                    linked_event_id=target_event.id,
+                    final_title=target_event.title,
+                    final_date=target_event.event_date,
+                    raw_title=row.raw_title,
+                    raw_date=row.raw_date,
+                    originally_suggested_event_id=row.matched_event_id,
+                    originally_suggested_score=None,
+                )
+            ],
+        ),
+    )
+
+    profile = db.execute(
+        select(WordImportProfile).where(WordImportProfile.tenant_id == tenant.id, WordImportProfile.template_id == template.id)
+    ).scalar_one()
+    assert profile.mapping_config_json["new_event_link_resolutions"][_normalize(row.raw_title)] == {
+        "linked_event_id": target_event.id
+    }
+
+    # A LATER import mentioning the same still-dateless title must promote straight to
+    # "changed" (pre-linked to the remembered Event, existing-wins default, reachable in
+    # candidates) instead of asking the reviewer to redo the identical manual pick again.
+    second_analysis = service.analyze(
+        db, tenant_id=tenant.id, template_id=template.id, protocol_date_hint=None, raw_bytes=raw_bytes,
+    )
+    second_row = next(m for m in second_analysis.event_mappings if m.raw_title == "Scharanlässe Leiteranlässe Sonstiges")
+    assert second_row.status == "changed"
+    assert second_row.matched_event_id == target_event.id
+    assert any(candidate.event_id == target_event.id for candidate in second_row.candidates)
 
 
 def test_no_link_attendance_name_is_remembered_and_reused(db):

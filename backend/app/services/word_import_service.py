@@ -119,6 +119,26 @@ _BARE_FIRST_NAME_MATCH_SCORE = 0.85
 # higher than that - but the first name is still only nickname-inferred, not literally
 # spelled the same, so it must stay short of 1.0 too (same false-certainty concern).
 _NICKNAME_SURNAME_MATCH_SCORE = 0.925
+# Ceiling for _name_score's "the two first names are NOT the same (or a known
+# nickname of each other)" branch. That branch's raw full-string/first-token
+# SequenceMatcher score is otherwise unbounded and can be inflated past
+# _BARE_FIRST_NAME_MATCH_SCORE by evidence that has nothing to do with the two
+# people actually being the same person: an unrelated but identical/near-identical
+# SURNAME (real bug: "Dominik Rohrer" vs. "Armin Rohrer" scored 0.77 off shared
+# "Rohrer" alone, with no independent check that "Dominik" and "Armin" are even
+# remotely the same first name), or a merely visually-similar but genuinely
+# different bare first name (real bug: bare "Timo" scored 0.857 against "Tim
+# Grisiger" - "Timo" vs. "Tim"'s SequenceMatcher ratio - which beat the capped 0.85
+# an exact "Timo" participant scores in the very same candidate pool, so the wrong
+# candidate won the Hungarian assignment by a hair). Since the first names are
+# established to be different, not a spelling/nickname variant of one, this must
+# stay below every fixed match-acceptance threshold in this module (all >= 0.5) so
+# such a pair can still surface as a low-confidence, manually-reviewed suggestion
+# (kept >= _NAME_CANDIDATE_MIN_SCORE) without ever being auto-picked, and - just as
+# important - without ever outscoring a genuinely matching candidate (even a
+# same-name namesake capped at _BARE_FIRST_NAME_MATCH_SCORE) elsewhere in the same
+# candidate pool.
+_UNRELATED_FIRST_NAME_SCORE_CAP = 0.45
 # Deliberately much stricter than the other thresholds above - a fuzzy signature match
 # redirects an ENTIRE table's rows to a learned role/target, a much larger blast radius
 # than a single name/event mismatch, so this only tolerates a near-identical header
@@ -990,6 +1010,36 @@ def _event_conflict_key(event_id: int, raw_title: str) -> str:
     return f"{event_id}|{_normalize(raw_title)}"
 
 
+def _dedupe_event_mappings(event_mappings: list[WordImportEventMapping]) -> list[WordImportEventMapping]:
+    """The same event can legitimately be extracted twice - e.g. a duplicate row in
+    the document's own "Termine" table, or (less commonly) the same date showing up
+    in two Matrix cells of the same column - which would otherwise show the identical
+    "Titel (Datum)" entry twice in the Termine review and let the user accidentally
+    create two duplicate Events for the same occasion. Keeps only one occurrence per
+    (title, date, matrix column) triple - but real bug: two identical duplicate rows
+    also tie exactly on their event-matching score, so the earlier
+    _event_row_score/solve_optimal_assignment pass (which does NOT know about this
+    later dedup step) can just as easily hand the real DB event match to the row that
+    gets discarded here as to the one that survives - confirmed live: an actual
+    "Maria Empfängnis" duplicate row pair had the Hungarian assignment award their
+    shared DB event to the SECOND occurrence, which a naive keep-the-first dedup then
+    silently dropped, leaving the surviving first occurrence shown to the user as an
+    unmatched "new" event even though a perfect match existed. Prefers whichever
+    occurrence actually carries a resolved match, keeping the first occurrence's
+    position/identity otherwise."""
+    seen_event_keys: dict[tuple[str, date | None, str | None, str | None], WordImportEventMapping] = {}
+    event_key_order: list[tuple[str, date | None, str | None, str | None]] = []
+    for mapping in event_mappings:
+        key = (_normalize(mapping.raw_title), mapping.raw_date, mapping.matrix_key, mapping.column_key)
+        existing = seen_event_keys.get(key)
+        if existing is None:
+            seen_event_keys[key] = mapping
+            event_key_order.append(key)
+        elif existing.matched_event_id is None and mapping.matched_event_id is not None:
+            seen_event_keys[key] = mapping
+    return [seen_event_keys[key] for key in event_key_order]
+
+
 def _text_match_reason(raw_text: str, candidate_label: str, score: float) -> str:
     """Generic reason string for candidates scored by plain _similarity (list entries,
     matrix columns, attendance names) - shared instead of duplicated per call site."""
@@ -1027,6 +1077,32 @@ def _canonical_first_token(token: str) -> str:
     return _NICKNAME_TO_CANONICAL.get(folded, folded)
 
 
+def _umlaut_digraph_fold(token: str) -> str:
+    """Collapses the ASCII "ue"/"oe"/"ae" digraph convention (typed when umlauts
+    aren't available on a keyboard/layout, e.g. "Juergen" for "Jürgen") down to the
+    same single vowel _fold_umlauts already collapses the literal umlaut character
+    to. Deliberately NOT folded into _canonical_first_token's own return value (used
+    elsewhere as a _NICKNAME_TO_CANONICAL lookup key) - a blanket digraph collapse
+    there risks corrupting an unrelated name that merely happens to contain "ue"/
+    "oe"/"ae" as ordinary letters (e.g. "Manuela"). Only used as the narrow fallback
+    equality check in _same_first_name below."""
+    return re.sub(r"ue|oe|ae", lambda m: m.group(0)[0], token)
+
+
+def _same_first_name(raw_first_token: str, display_first_token: str) -> bool:
+    """Real bug: a document typed without German diacritics spells "Jürgen" as
+    "Juergen" - _fold_umlauts already folds ü -> u, but the raw ASCII "ue" digraph
+    was never touched, so _canonical_first_token disagreed ("juergen" != "jurgen")
+    and this exact-spelling variant of the SAME name wrongly hit the "different
+    first name" branch in _name_score, hard-capping a genuine match at
+    _UNRELATED_FIRST_NAME_SCORE_CAP instead of scoring it as the clean match it is."""
+    canonical_raw = _canonical_first_token(raw_first_token)
+    canonical_display = _canonical_first_token(display_first_token)
+    if canonical_raw == canonical_display:
+        return True
+    return _umlaut_digraph_fold(canonical_raw) == _umlaut_digraph_fold(canonical_display)
+
+
 def _name_score(raw_name: str, display_name: str) -> float:
     # A raw name in a list/matrix cell is often just a first name (e.g. an informal
     # "Beisitzer: Nevio, Lino, Gian" column), while display_name is the full "Vorname
@@ -1041,8 +1117,11 @@ def _name_score(raw_name: str, display_name: str) -> float:
 
     raw_parts = raw_name.split(None, 1)
     raw_first_token = raw_parts[0] if raw_parts else raw_name
-    if _canonical_first_token(raw_first_token) != _canonical_first_token(first_token):
-        return max(full_score, first_token_score)
+    if not _same_first_name(raw_first_token, first_token):
+        # See _UNRELATED_FIRST_NAME_SCORE_CAP - the two first names are established
+        # to be different people's names here, so this pair must never be allowed to
+        # look as confident as (or more confident than) an actual same-name match.
+        return min(max(full_score, first_token_score), _UNRELATED_FIRST_NAME_SCORE_CAP)
     display_parts = display_name.split(None, 1)
     if len(raw_parts) <= 1 or len(display_parts) <= 1:
         # EITHER side being a bare (possibly nicknamed) first name means there's no
@@ -1093,6 +1172,22 @@ def _name_score(raw_name: str, display_name: str) -> float:
     return result
 
 
+def _participant_name_score(raw_name: str, participant: Participant) -> float:
+    """_name_score against the participant's configured display_name, maxed with a
+    second comparison against their actual first_name + last_name. display_name can
+    be an arbitrary nickname override chosen for the tenant's own display purposes
+    (e.g. "Nik" for a participant really named "Dominik Rohrer") with no spelling
+    relation to the person's real name - without this second comparison, a document
+    mention of that real name would never match this participant at all (scores ~0
+    against "Nik") and could instead drift onto a completely different, unrelated
+    same-surname participant that merely clears _UNRELATED_FIRST_NAME_SCORE_CAP's
+    ceiling by accident."""
+    score = _name_score(raw_name, participant.display_name)
+    if participant.first_name and participant.last_name:
+        score = max(score, _name_score(raw_name, f"{participant.first_name} {participant.last_name}"))
+    return score
+
+
 def _match_names(
     raw_text: str,
     participants: list[Participant],
@@ -1127,7 +1222,7 @@ def _match_names(
     def _score(index: int, participant: Participant) -> float:
         name = names[index]
         rejected_ids = set((rejected_by_name.get(f"name:{_normalize(name)}") or {}).get("rejected") or [])
-        score = _name_score(name, participant.display_name)
+        score = _participant_name_score(name, participant)
         if participant.id in rejected_ids:
             score -= _REJECTED_CANDIDATE_PENALTY
         return score
@@ -1699,6 +1794,7 @@ class WordImportService:
                 },
                 "rejected_candidates": profile_config.get("rejected_candidates", {}),
                 "event_conflict_resolutions": profile_config.get("event_conflict_resolutions", {}),
+                "new_event_link_resolutions": profile_config.get("new_event_link_resolutions", {}),
                 "no_link_names": profile_config.get("no_link_names", []),
             }
         heading_to_target = profile_config.get("heading_to_target", {})
@@ -1717,6 +1813,17 @@ class WordImportService:
         # import - even when only the raw date differs each time (e.g. a yearly-
         # recurring Termin whose document mention always names a different/stale date).
         event_conflict_resolutions = profile_config.get("event_conflict_resolutions", {})
+        # See WordImportService.commit's new_event_link_updates - {normalized raw_title:
+        # {"linked_event_id": id}}, keyed on raw text alone (there is no matched Event yet
+        # to key against, unlike event_conflict_resolutions above). A Termine row whose raw
+        # title never scores high enough for the live matcher to find ANY existing Event
+        # (status stays "new" every single import - e.g. a recurring category label like
+        # "Scharanlässe Leiteranlässe Sonstiges" that carries no date and only a loose title
+        # match) would otherwise force the reviewer to redo the exact same manual "link to
+        # this Event" pick forever. Consulted below to promote such a row to "changed"
+        # (same downstream handling - including missingDate / doc-vs-existing source - as a
+        # row the live matcher found on its own) instead of "new".
+        new_event_link_resolutions = profile_config.get("new_event_link_resolutions", {})
         # See WordImportService.commit's no_link_name_updates - normalized raw names
         # (e.g. a table's own "Total" footer row) the reviewer already explicitly
         # resolved as "Keinen verknüpfen" (not a real participant) before, so the same
@@ -1937,6 +2044,7 @@ class WordImportService:
                 element_targets[template_element.id] = targets_for_element
 
         all_events = list(db.execute(select(Event).where(Event.tenant_id == tenant_id)).scalars())
+        all_events_by_id = {event.id: event for event in all_events}
         # Event-repeat blocks (e.g. "Rückblick", "Scharanlässe") must be linked to a real
         # Termin from the same Zyklus-Periode as the protocol being imported (the template's
         # configured CycleConfig, cycle year computed from protocol_date) - not just any
@@ -2167,7 +2275,7 @@ class WordImportService:
         # row stranded on "Keinen verknüpfen" even though a perfect match existed.
         def _attendance_score(row_index: int, participant: Participant) -> float:
             raw_name = raw_attendance_rows[row_index][0]
-            score = _name_score(raw_name, participant.display_name)
+            score = _participant_name_score(raw_name, participant)
             if participant.id in _rejected_ids_for(f"name:{_normalize(raw_name)}"):
                 score -= _REJECTED_CANDIDATE_PENALTY
             return score
@@ -2280,6 +2388,22 @@ class WordImportService:
                     )
                     for score, event in scored_events[:_CANDIDATE_LIMIT]
                 ]
+                # A remembered new_event_link_resolutions target (see its declaration
+                # above) may score too low on THIS row's title/date to make the cut above
+                # (that's exactly why the row never auto-matches live) - guarantee it's
+                # still offered as a candidate (and, below, actually pre-selected) instead
+                # of only being reachable by scrolling a dropdown that never contains it.
+                remembered_event_id = (new_event_link_resolutions.get(_normalize(title)) or {}).get("linked_event_id")
+                remembered_event = all_events_by_id.get(remembered_event_id) if remembered_event_id is not None else None
+                if remembered_event is not None and not any(c.event_id == remembered_event.id for c in candidates):
+                    candidates = [
+                        WordImportEventCandidate(
+                            event_id=remembered_event.id, title=remembered_event.title, event_date=remembered_event.event_date,
+                            score=round(_score_event_candidate(title, raw_date, remembered_event), 3),
+                            reason="Aus früherem Import gemerkt",
+                        ),
+                        *candidates[: _CANDIDATE_LIMIT - 1],
+                    ]
                 extracted_event_rows.append((title, raw_date, candidates))
 
         def _event_row_score(row_index: int, event: Event) -> float:
@@ -2308,6 +2432,21 @@ class WordImportService:
                 status = "changed"
             else:
                 status = "new"
+            if status == "new":
+                # See new_event_link_resolutions' declaration above - the live scorer
+                # found nothing for this row (same as every previous import of this same
+                # raw text), but the reviewer already told an earlier import which Event
+                # this text means. Treat it exactly like a live "changed" match (existing-
+                # wins default, doc-vs-existing choice still editable, no forced re-pick)
+                # instead of asking the same question a third/fourth/... time. Deliberately
+                # "changed" rather than "matched": the title/date practically never equal
+                # the linked Event's own (that mismatch is WHY the live scorer missed it),
+                # so the reviewer's title/date-source choice must stay visible/editable.
+                remembered_event_id = (new_event_link_resolutions.get(_normalize(title)) or {}).get("linked_event_id")
+                remembered_event = all_events_by_id.get(remembered_event_id) if remembered_event_id is not None else None
+                if remembered_event is not None:
+                    best_event = remembered_event
+                    status = "changed"
             remembered_resolution = (
                 event_conflict_resolutions.get(_event_conflict_key(best_event.id, title))
                 if status == "changed" and best_event is not None
@@ -2554,12 +2693,13 @@ class WordImportService:
                         unresolved_col_indices.append(col_idx)
 
                 def _participant_column_score(col_idx: int, participant: Participant) -> float:
-                    # _name_score, not _similarity - a document column header naming a
-                    # participant is exactly the same "raw name vs. full display_name"
-                    # shape _match_names/_name_score already handle (bare first names,
+                    # _participant_name_score, not _similarity - a document column
+                    # header naming a participant is exactly the same "raw name vs.
+                    # full display_name (or real first/last name)" shape
+                    # _match_names/_name_score already handle (bare first names,
                     # nicknames), unlike plain character-based _similarity used here
                     # before.
-                    return _name_score(doc_column_labels[col_idx], participant.display_name)
+                    return _participant_name_score(doc_column_labels[col_idx], participant)
 
                 remaining_participants = [p for p in participants if p.id not in claimed_participant_ids]
                 auto_picked_participant_by_col = {
@@ -2572,7 +2712,7 @@ class WordImportService:
                 for col_idx in unresolved_col_indices:
                     label = doc_column_labels[col_idx]
                     scored = sorted(
-                        ((_name_score(label, p.display_name), p) for p in participants),
+                        ((_participant_name_score(label, p), p) for p in participants),
                         key=lambda entry: entry[0],
                         reverse=True,
                     )[:_CANDIDATE_LIMIT]
@@ -2882,21 +3022,7 @@ class WordImportService:
             if matrix_has_unresolved_column:
                 warnings.append(f'Matrix "{matrix["title"]}": nicht alle Spalten konnten eindeutig zugeordnet werden – bitte prüfen.')
 
-        # The same event can legitimately be extracted twice - e.g. a duplicate row in
-        # the document's own "Termine" table, or (less commonly) the same date showing
-        # up in two Matrix cells of the same column - which would otherwise show the
-        # identical "Titel (Datum)" entry twice in the Termine review and let the user
-        # accidentally create two duplicate Events for the same occasion. Keep only the
-        # first occurrence per (title, date, matrix column) triple.
-        seen_event_keys: set[tuple[str, date | None, str | None, str | None]] = set()
-        deduped_event_mappings: list[WordImportEventMapping] = []
-        for mapping in event_mappings:
-            key = (_normalize(mapping.raw_title), mapping.raw_date, mapping.matrix_key, mapping.column_key)
-            if key in seen_event_keys:
-                continue
-            seen_event_keys.add(key)
-            deduped_event_mappings.append(mapping)
-        event_mappings = deduped_event_mappings
+        event_mappings = _dedupe_event_mappings(event_mappings)
 
         if protocol_date is None:
             warnings.append("Kein Datum im Dokument erkannt – bitte manuell angeben.")
@@ -3114,9 +3240,27 @@ class WordImportService:
             # WordImportProfile.mapping_config_json["event_conflict_resolutions"] below,
             # same append-only-per-key pattern as rejected_candidate_updates above.
             event_conflict_updates: dict[str, dict] = {}
+            # Additive memory of "this exact raw title never got a live match at all, and
+            # the reviewer manually linked it to this Event anyway" (see
+            # new_event_link_resolutions' declaration in analyze() above) - merged into
+            # WordImportProfile.mapping_config_json["new_event_link_resolutions"] below,
+            # same append-only-per-key pattern as event_conflict_updates. Keyed on raw
+            # title alone (there is no matched event to key against yet).
+            new_event_link_updates: dict[str, dict] = {}
             for event_commit in payload.events:
                 if not event_commit.approved:
                     continue
+                if event_commit.originally_suggested_event_id is None and event_commit.linked_event_id is not None:
+                    # analyze() found NO candidate at all for this row (live match nor an
+                    # already-remembered one - see originally_suggested_event_id's own
+                    # docstring), yet the reviewer picked a real existing Event from the
+                    # "Neu anlegen" dropdown instead of leaving it as a genuine new Termin.
+                    # Remember that pick so an identical future import (same raw text,
+                    # still no live match - e.g. a category label with no date at all)
+                    # promotes straight to "changed" instead of asking again.
+                    new_event_link_updates[_normalize(event_commit.raw_title)] = {
+                        "linked_event_id": event_commit.linked_event_id
+                    }
                 # Keyed on the DOCUMENT's raw title/date (not final_title/final_date, the
                 # reviewer's resolved choice) - analyze() looks this key up again next time
                 # using ITS OWN raw_date/title extracted straight from a future document
@@ -3592,7 +3736,7 @@ class WordImportService:
             }
             if (
                 heading_updates or table_role_updates or name_updates or rejected_candidate_updates
-                or event_conflict_updates or no_link_name_updates
+                or event_conflict_updates or new_event_link_updates or no_link_name_updates
             ):
                 profile = db.execute(
                     select(WordImportProfile).where(
@@ -3625,6 +3769,8 @@ class WordImportService:
                     rejected_map[key] = {"rejected": merged_rejected, "chosen": update["chosen"]}
                 event_conflict_map = dict(config.get("event_conflict_resolutions", {}))
                 event_conflict_map.update(event_conflict_updates)
+                new_event_link_map = dict(config.get("new_event_link_resolutions", {}))
+                new_event_link_map.update(new_event_link_updates)
                 # A name that now got a real positive link (name_map) can't stay remembered
                 # as "Keinen verknüpfen" too - drop it from the negative set so a reviewer
                 # changing their mind about a name isn't stuck with the old decision forever.
@@ -3636,6 +3782,7 @@ class WordImportService:
                     "participant_name_overrides": name_map,
                     "rejected_candidates": rejected_map,
                     "event_conflict_resolutions": event_conflict_map,
+                    "new_event_link_resolutions": new_event_link_map,
                     "no_link_names": sorted(no_link_set),
                 }
 
