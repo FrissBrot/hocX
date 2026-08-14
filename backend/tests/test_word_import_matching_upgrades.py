@@ -1,5 +1,8 @@
 """Pure unit tests (no DB) for the A.1/A.2/A.3 matching-quality upgrades to
 word_import_service.py's scoring helpers."""
+from datetime import date
+
+from app.schemas.word_import import WordImportEventMapping
 from app.services import word_import_service as svc
 
 
@@ -169,3 +172,116 @@ def test_name_score_is_symmetric_when_the_roster_side_has_no_surname():
     assert svc._name_score("Sepp Muster", "Sepp") >= svc._PARTICIPANT_MATCH_THRESHOLD
     # Both sides bare must still work exactly as before (unaffected by this fix).
     assert svc._name_score("Sepp", "Josef") == svc._BARE_FIRST_NAME_MATCH_SCORE
+
+
+def test_name_score_caps_a_different_first_name_below_every_match_threshold():
+    # Real bug (confirmed live, both from the same tenant's actual roster):
+    # 1. A bare "Timo" mention scored 0.857 against "Tim Grisiger" - "Timo" vs.
+    #    "Tim"'s plain SequenceMatcher ratio, uncapped - which beat the CAPPED 0.85 an
+    #    exact "Timo" participant scores in the very same candidate pool, so the
+    #    Hungarian assignment wrongly picked the unrelated "Tim Grisiger" column
+    #    header over the real "Timo" participant.
+    # 2. "Dominik Rohrer" scored 0.769 against a completely different person, "Armin
+    #    Rohrer", purely off the shared surname's raw character overlap - comfortably
+    #    clearing _PARTICIPANT_MATCH_THRESHOLD (0.6) with zero corroboration that the
+    #    first names have anything to do with each other.
+    # Both pairs' first names are neither identical nor known nicknames of each other
+    # - this must now stay below every fixed acceptance threshold in the module.
+    unrelated_bare = svc._name_score("Timo", "Tim Grisiger")
+    unrelated_surname_only = svc._name_score("Dominik Rohrer", "Armin Rohrer")
+    for score in (unrelated_bare, unrelated_surname_only):
+        assert score < svc._PARTICIPANT_MATCH_THRESHOLD
+        assert score < svc._MATRIX_ROW_MATCH_THRESHOLD
+        assert score < svc._MATRIX_COLUMN_MATCH_THRESHOLD
+        assert score < svc._LIST_NAME_MATCH_THRESHOLD
+        # Still surfaces as a low-confidence manual-pick candidate, just never auto-picked.
+        assert score >= svc._NAME_CANDIDATE_MIN_SCORE
+    # An exact/real match for the SAME raw name must still clearly outrank the
+    # unrelated one in the same candidate pool.
+    assert svc._name_score("Timo", "Timo") > unrelated_bare
+
+
+def test_name_score_treats_ascii_umlaut_digraph_spelling_as_the_same_first_name():
+    # Real regression this same threshold-capping change introduced: a document typed
+    # without German diacritics spells "Jürgen" as "Juergen" - _fold_umlauts already
+    # folds the literal ü -> u, but the raw ASCII "ue" digraph was never touched, so
+    # _canonical_first_token disagreed ("juergen" != "jurgen") and this exact-spelling
+    # variant of the SAME name wrongly fell into the "different first name" branch,
+    # hard-capping a genuine match at _UNRELATED_FIRST_NAME_SCORE_CAP.
+    score = svc._name_score("Juergen Muller", "Jürgen Müller")
+    assert score >= svc._PARTICIPANT_MATCH_THRESHOLD
+    # The two real bugs this module's cap was built for must stay fixed - the digraph
+    # fallback must not accidentally widen the gate back open for genuinely different
+    # first names.
+    assert svc._name_score("Timo", "Tim Grisiger") < svc._PARTICIPANT_MATCH_THRESHOLD
+    assert svc._name_score("Dominik Rohrer", "Armin Rohrer") < svc._PARTICIPANT_MATCH_THRESHOLD
+
+
+def test_participant_name_score_falls_back_to_real_first_and_last_name():
+    # Real bug: display_name can be an arbitrary nickname override chosen for the
+    # tenant's own display purposes (e.g. "Nik" for a participant actually named
+    # "Dominik Rohrer") with no spelling relation to the person's real name. Matching
+    # only against display_name meant a document mention of the real name could never
+    # resolve to this participant at all, and - since "Dominik Rohrer" also happens to
+    # share a surname with another real roster participant ("Armin Rohrer") - could
+    # silently drift onto that unrelated person instead.
+    class _P:
+        def __init__(self, first_name, last_name, display_name):
+            self.first_name = first_name
+            self.last_name = last_name
+            self.display_name = display_name
+
+    nik = _P("Dominik", "Rohrer", "Nik")
+    armin = _P("Armin", "Rohrer", "Armin Rohrer")
+    assert svc._participant_name_score("Dominik Rohrer", nik) == 1.0
+    assert svc._participant_name_score("Dominik Rohrer", armin) < svc._PARTICIPANT_MATCH_THRESHOLD
+    assert svc._participant_name_score("Dominik Rohrer", nik) > svc._participant_name_score("Dominik Rohrer", armin)
+
+
+def _event_mapping(row_index, raw_title, raw_date, matched_event_id=None, matrix_key=None, column_key=None):
+    return WordImportEventMapping(
+        row_index=row_index,
+        raw_title=raw_title,
+        raw_date=raw_date,
+        status="matched" if matched_event_id is not None else "new",
+        matched_event_id=matched_event_id,
+        matrix_key=matrix_key,
+        column_key=column_key,
+    )
+
+
+def test_dedupe_event_mappings_keeps_the_duplicate_that_actually_matched():
+    # Real bug (confirmed live): a document with a genuine duplicate "Termine" row
+    # (same title/date extracted twice) feeds BOTH occurrences into the same
+    # solve_optimal_assignment call as separate rows competing for the same single DB
+    # event - since they're identical, they tie exactly on score, and the Hungarian
+    # solver can award the match to EITHER one (observed: the second occurrence won).
+    # The old dedup pass blindly kept the chronologically-first occurrence regardless
+    # of which one actually carries the resolved match, silently discarding a real
+    # match along with the "duplicate" that happened to lose the tie.
+    first = _event_mapping(2, "Maria Empfängnis", date(2024, 12, 8), matched_event_id=None)
+    second = _event_mapping(4, "Maria Empfängnis", date(2024, 12, 8), matched_event_id=77)
+    deduped = svc._dedupe_event_mappings([first, second])
+    assert len(deduped) == 1
+    assert deduped[0].matched_event_id == 77
+    # The surviving entry is whichever occurrence actually carries the resolved
+    # match (here, the second one) - list position is still first-occurrence order,
+    # but its identity/row_index is the winning duplicate's, not the discarded one's.
+    assert deduped[0].row_index == 4
+
+    # If the FIRST occurrence already won the match, it must not be displaced by an
+    # unmatched later duplicate.
+    matched_first = _event_mapping(0, "Herbstferien", date(2025, 9, 27), matched_event_id=74)
+    unmatched_second = _event_mapping(1, "Herbstferien", date(2025, 9, 27), matched_event_id=None)
+    deduped_again = svc._dedupe_event_mappings([matched_first, unmatched_second])
+    assert len(deduped_again) == 1
+    assert deduped_again[0].matched_event_id == 74
+
+    # Distinct events (different title/date/matrix column) are never merged.
+    distinct = svc._dedupe_event_mappings(
+        [
+            _event_mapping(0, "Herbstferien", date(2025, 9, 27), matched_event_id=74),
+            _event_mapping(1, "Weihnachtsferien", date(2025, 12, 24), matched_event_id=78),
+        ]
+    )
+    assert len(distinct) == 2
