@@ -191,6 +191,15 @@ export function ProtocolEditor({
         const blockId = Number(field_key.slice("block-".length).split("-cell-")[0]);
         if (!Number.isFinite(blockId) || !patch || typeof patch !== "object") return;
         updateBlockInState(blockId, (block) => ({ ...block, ...(patch as Partial<typeof block>) }));
+        // textDrafts (what the <textarea> actually renders, see handleTextChange) is
+        // separate from the elements/blocks state updated above - without this, a text
+        // block another user just saved keeps showing this client's stale draft even
+        // after the field's readOnly lock releases, and the next local edit here would
+        // silently overwrite the other user's change on save (audit F1, 2026-08-16).
+        const incomingText = (patch as { text_content?: unknown }).text_content;
+        if (typeof incomingText === "string") {
+          setTextDrafts((current) => ({ ...current, [blockId]: incomingText }));
+        }
       }),
     [collab.onFieldUpdate]
   );

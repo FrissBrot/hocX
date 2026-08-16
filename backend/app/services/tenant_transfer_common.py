@@ -102,18 +102,37 @@ def coerce_value(column: Any, raw: Any) -> Any:
     return raw
 
 
+FORCED_SECURE_DEFAULTS: dict[str, Any] = {"scan_status": "pending"}
+"""Columns that must never be taken from an imported manifest, even though they're ordinary
+non-computed model columns build_row() would otherwise happily copy 1:1. StoredFile.scan_status
+in particular gates whether get_stored_file_content() (routes/files.py) will ever serve the
+file's bytes - a manifest shipping `"scan_status": "clean"` for a file that was never actually
+run past ClamAV would let an attacker's payload skip the scan workflow entirely and be served
+as trusted content (audit S4, 2026-08-16). Every imported StoredFile must start in the same
+"pending until scanned" state a fresh upload gets. Note StoredFile.scan_status even has a
+DB-level server_default of 'clean' (see models/entities.py) - simply omitting the column from
+`values` and letting the DB default kick in would NOT be safe, so the value is forced here
+explicitly. A call site can still legitimately set the real, freshly-computed scan result via
+`overrides` (see TenantImportService._import_stored_files, which actually re-scans the restored
+file bytes through ClamAV) - `overrides` is applied after this loop and wins."""
+
+
 def build_row(model: type, data: dict[str, Any], overrides: dict[str, Any] | None = None) -> Any:
     """Builds a new, unattached ORM instance from an exported row dict.
 
     `id` is always dropped (the DB assigns a fresh one); so is any DB-computed column (e.g.
     app_user.name is `GENERATED ALWAYS AS (display_name)` - Postgres rejects an explicit
     value for it). `created_at`/`updated_at` are kept as-is so imported historical data
-    keeps its real timestamps instead of getting "now".
+    keeps its real timestamps instead of getting "now". See FORCED_SECURE_DEFAULTS for the
+    (small) set of columns that are never trusted from the manifest regardless.
     """
     mapper = sa_inspect(model)
     values: dict[str, Any] = {}
     for column in mapper.columns:
         if column.key == "id" or column.computed is not None:
+            continue
+        if column.key in FORCED_SECURE_DEFAULTS:
+            values[column.key] = FORCED_SECURE_DEFAULTS[column.key]
             continue
         if column.key in data:
             values[column.key] = coerce_value(column, data[column.key])

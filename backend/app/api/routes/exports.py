@@ -59,6 +59,7 @@ def export_latex(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_admin(user)
+    access_service.ensure_can_read_protocol(db, user, protocol_id)
     try:
         result = service.export_latex(db, protocol_id)
     except ValueError as exc:

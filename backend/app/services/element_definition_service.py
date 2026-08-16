@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from app.models import ElementDefinition
+from app.models import ElementDefinition, ListDefinition
 from app.repositories.element_definition_repository import ElementDefinitionRepository
 from app.schemas.template import (
     ElementDefinitionCreate,
@@ -28,6 +28,38 @@ class ElementDefinitionService:
             11: 5,  # matrix -> key_value
         }
         return mapping.get(element_type_id, 2)
+
+    def _referenced_list_definition_ids(self, config: dict | None) -> set[int]:
+        """Collects both whole-list `linked_list_id` and any row-link `rows[].linked_list_id`
+        values out of a single block's configuration_json. Mirrors
+        TemplateElementService._referenced_list_definition_ids - keep both in sync if the
+        list-linkage JSON shape ever changes."""
+        config = config or {}
+        ids: set[int] = set()
+        top_level = config.get("linked_list_id")
+        if top_level:
+            ids.add(int(top_level))
+        rows = config.get("rows")
+        if isinstance(rows, list):
+            for row in rows:
+                if isinstance(row, dict) and row.get("linked_list_id"):
+                    ids.add(int(row["linked_list_id"]))
+        return ids
+
+    def _validate_linked_lists(self, db: Session, blocks: list[dict], *, tenant_id: int) -> None:
+        """Every linked_list_id referenced from any of this element definition's blocks must
+        point at a ListDefinition belonging to the same tenant - otherwise a matrix/list block
+        built from this element definition would spread a foreign tenant's list content
+        (column titles, row contents, potentially participant data) into every protocol that
+        uses it (audit D8, 2026-08-16). Mirrors TemplateElementService._validate_linked_lists,
+        which already closes the equivalent gap for template-element-level configuration."""
+        referenced_ids: set[int] = set()
+        for block in blocks:
+            referenced_ids |= self._referenced_list_definition_ids(block.get("configuration_json"))
+        for list_id in referenced_ids:
+            list_definition = db.get(ListDefinition, list_id)
+            if list_definition is None or list_definition.tenant_id != tenant_id:
+                raise ValueError(f"Linked list {list_id} not found")
 
     def _normalize_blocks(self, blocks: list[dict]) -> list[dict]:
         normalized: list[dict] = []
@@ -64,6 +96,8 @@ class ElementDefinitionService:
         return self._read_model(entity) if entity else None
 
     def create_element_definition(self, db: Session, payload: ElementDefinitionCreate, *, tenant_id: int):
+        normalized_blocks = self._normalize_blocks([block.model_dump() for block in payload.blocks])
+        self._validate_linked_lists(db, normalized_blocks, tenant_id=tenant_id)
         entity = ElementDefinition(
             tenant_id=tenant_id,
             element_type_id=1,
@@ -75,7 +109,7 @@ class ElementDefinitionService:
             allows_multiple_values=False,
             export_visible=True,
             latex_template=None,
-            configuration_json={"blocks": self._normalize_blocks([block.model_dump() for block in payload.blocks])},
+            configuration_json={"blocks": normalized_blocks},
             is_active=payload.is_active,
         )
         created = self.repository.create(db, entity)
@@ -88,7 +122,9 @@ class ElementDefinitionService:
 
         values = payload.model_dump(exclude_unset=True)
         if "blocks" in values:
-            values["configuration_json"] = {"blocks": self._normalize_blocks(values.pop("blocks"))}
+            normalized_blocks = self._normalize_blocks(values.pop("blocks"))
+            self._validate_linked_lists(db, normalized_blocks, tenant_id=entity.tenant_id)
+            values["configuration_json"] = {"blocks": normalized_blocks}
         if "title" in values:
             values["display_title"] = values["title"]
         if not values:

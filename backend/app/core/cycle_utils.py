@@ -4,11 +4,18 @@ import re
 from datetime import date, timedelta
 
 
-def _reset_boundary(year: int, reset_month: int, reset_day: int) -> date:
+def reset_boundary(year: int, reset_month: int, reset_day: int) -> date:
+    """Builds the (year, reset_month, reset_day) date, clamping the day down to the
+    last valid day of that month if it doesn't exist (e.g. Feb 30/31, Apr/Jun/Sep/Nov 31).
+    CycleConfig validates reset_month (1-12) and reset_day (1-31) independently, so a
+    combination like reset_month=2, reset_day=30 is schema-valid but not a real date -
+    without this clamp, date(year, reset_month, reset_day) raises ValueError and blocks
+    every protocol-numbering call for the whole template (audit D1, 2026-08-16). Shared by
+    get_cycle_year() below and ProtocolService._cycle_bounds(), which must agree on the
+    same boundary for a given date."""
     try:
         return date(year, reset_month, reset_day)
     except ValueError:
-        # Invalid day for month (e.g. Feb 31) – clamp to last valid day
         import calendar
         last_day = calendar.monthrange(year, reset_month)[1]
         return date(year, reset_month, min(reset_day, last_day))
@@ -27,9 +34,9 @@ def get_cycle_year(d: date, reset_month: int, reset_day: int) -> int:
     cycle year for the same date, including the reset_month=12/reset_day=31
     default where the reset boundary falls on the last day of the year.
     """
-    boundary_this_year = _reset_boundary(d.year, reset_month, reset_day)
+    boundary_this_year = reset_boundary(d.year, reset_month, reset_day)
     if d <= boundary_this_year:
-        boundary_prev_year = _reset_boundary(d.year - 1, reset_month, reset_day)
+        boundary_prev_year = reset_boundary(d.year - 1, reset_month, reset_day)
         cycle_start = boundary_prev_year + timedelta(days=1)
     else:
         cycle_start = boundary_this_year + timedelta(days=1)

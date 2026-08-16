@@ -1763,6 +1763,15 @@ class WordImportService:
         table_role_overrides: dict[int, dict] | None = None,
         in_memory_profile_hints: dict | None = None,
     ) -> WordImportAnalysis:
+        # Tenant-Check zuerst, bevor irgendeine nachgelagerte Abfrage (Matrizen,
+        # TemplateElements, Teilnehmer-Roster, ...) mit dieser template_id lostläuft - siehe
+        # WordImportQueueService.ingest(), das denselben Guard schon hat. Ohne das könnte ein
+        # Nutzer aus Tenant A eine fremde template_id aus Tenant B übergeben und Struktur-/
+        # Teilnehmerdaten dieses fremden Mandanten in der Analyse-Antwort zurückbekommen.
+        template = db.get(Template, template_id)
+        if template is None or template.tenant_id != tenant_id:
+            raise ValueError("Vorlage nicht gefunden")
+
         # Isoliert statt parse_document(raw_bytes) direkt - siehe isolated_parse.py: ein
         # pathologisches/bösartig komprimiertes Dokument wird nach Timeout hart
         # abgebrochen statt den aufrufenden Worker unbegrenzt zu blockieren.
@@ -2049,8 +2058,8 @@ class WordImportService:
         # Termin from the same Zyklus-Periode as the protocol being imported (the template's
         # configured CycleConfig, cycle year computed from protocol_date) - not just any
         # tenant event. Falls back to all tenant events if the template has no cycle
-        # configured or no protocol_date could be determined yet.
-        template = db.get(Template, template_id)
+        # configured or no protocol_date could be determined yet. `template` was already
+        # loaded (and tenant-checked) at the top of this method.
         cycle_cfg = db.get(CycleConfig, template.cycle_config_id) if template and template.cycle_config_id else None
         if cycle_cfg is not None and protocol_date is not None:
             target_cycle_year = get_cycle_year(protocol_date, cycle_cfg.reset_month, cycle_cfg.reset_day)
@@ -2201,6 +2210,7 @@ class WordImportService:
         # (SequenceMatcher scores full-name overlap, so a shared last name alone can clear
         # _PARTICIPANT_MATCH_THRESHOLD even with a completely different first name).
         roster_filters = [
+            Participant.tenant_id == tenant_id,
             TemplateParticipant.template_id == template_id,
             TemplateParticipant.exclude_from_attendance.is_(False),
         ]
@@ -3869,6 +3879,15 @@ class WordImportService:
             # roll back whatever is still pending and delete it so retrying the
             # same document doesn't pile up orphaned protocols.
             db.rollback()
-            protocol_service.delete_protocol(db, protocol_id)
+            # bypass_freeze_check=True: update_protocol(..., status="abgeschlossen") above
+            # already committed the freeze transition on its own (see
+            # _run_status_transition_hooks's internal db.commit()) before the list-snapshot/
+            # outcome-row steps further below ran - so a failure THERE leaves an already-
+            # persisted, "abgeschlossen" protocol behind. The ordinary delete_protocol() guard
+            # (get_protocol_or_404_not_frozen) would reject deleting an "abgeschlossen"
+            # protocol with a 409, masking the real error and leaving a permanently locked,
+            # broken protocol in the DB - bypassing that guard here (internal cleanup only,
+            # never reachable from a public route) lets this actually clean up instead.
+            protocol_service.delete_protocol(db, protocol_id, bypass_freeze_check=True)
             raise
         return WordImportCommitResult(id=protocol_id, warnings=commit_warnings)
