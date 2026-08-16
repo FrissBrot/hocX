@@ -78,11 +78,11 @@ def patch_participant(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
-    participant = participant_service.get_participant(db, participant_id)
+    participant = participant_service.get_participant(db, participant_id, tenant_id=user.current_tenant_id)
     if participant is None or participant.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Participant not found")
     try:
-        updated = participant_service.update_participant(db, participant_id, payload)
+        updated = participant_service.update_participant(db, participant_id, payload, tenant_id=user.current_tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
@@ -100,11 +100,11 @@ def delete_participant(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
-    participant = participant_service.get_participant(db, participant_id)
+    participant = participant_service.get_participant(db, participant_id, tenant_id=user.current_tenant_id)
     if participant is None or participant.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Participant not found")
     try:
-        deleted = participant_service.delete_participant(db, participant_id)
+        deleted = participant_service.delete_participant(db, participant_id, tenant_id=user.current_tenant_id)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Participant could not be deleted") from exc
@@ -199,11 +199,11 @@ def list_participant_templates(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_reader(user)
-    participant = participant_service.get_participant(db, participant_id)
+    participant = participant_service.get_participant(db, participant_id, tenant_id=user.current_tenant_id)
     if participant is None or participant.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Participant not found")
     templates = participant_service.list_templates_for_participant(db, participant_id)
-    if access_service._is_restricted_reader(db, user):
+    if access_service.is_restricted_reader(db, user):
         return [template for template in templates if access_service.can_read_template(db, user, template.id)]
     return templates
 
@@ -216,7 +216,7 @@ def replace_participant_templates(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
-    participant = participant_service.get_participant(db, participant_id)
+    participant = participant_service.get_participant(db, participant_id, tenant_id=user.current_tenant_id)
     if participant is None or participant.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Participant not found")
     tenant_template_ids = {

@@ -30,6 +30,11 @@ def upgrade():
 
 
 def downgrade():
+    # NOT FULLY REVERSIBLE (audit I7, 2026-08-16): this recreates the 'superadmin' role
+    # itself, but not the user_role rows upgrade() deleted - whoever was superadmin before
+    # this migration does not automatically become superadmin again after a downgrade. Was
+    # a deliberate simplification for the admin-panel split (platform_admin is the new
+    # source of truth going forward), just never called out as such here before.
     op.execute(
         "INSERT INTO role (code, description) VALUES ('superadmin', 'Global access across all tenants') "
         "ON CONFLICT (code) DO NOTHING"

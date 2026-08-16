@@ -22,6 +22,8 @@ jobs:
             context: ./abgabebox-backend
           - name: abgabebox-frontend
             context: ./abgabebox-frontend
+          - name: docs
+            context: ./docs-site
     steps:
       - name: Checkout
         uses: actions/checkout@v4

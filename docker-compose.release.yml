@@ -285,5 +285,34 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.priority=10"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.loadbalancer.server.port=3000"
 
+  # Audit I8, 2026-08-16: was missing here (present in docker-compose.yml/dev) - a real
+  # prod server set up per RUNBOOK.md section 6 (docker-compose.release.yml, no source
+  # checkout needed) would have had no docs page at all, with nothing noting that as
+  # intentional. Image is built by the same release workflow as the other services now
+  # (.github/workflows/release.yml).
+  docs:
+    image: ghcr.io/${GHCR_NAMESPACE}/hocx-docs:${HOCX_VERSION}
+    restart: unless-stopped
+    mem_limit: 128m
+    cpus: 0.25
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-docs.rule=Host(`${TRAEFIK_DOCS_DOMAIN}`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-docs.entrypoints=websecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-docs.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-docs.priority=10"
+      - "traefik.http.services.${ROUTER_PREFIX:-hocx}-docs.loadbalancer.server.port=80"
+
 volumes:
   postgres_data:

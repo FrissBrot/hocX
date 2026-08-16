@@ -4,6 +4,7 @@ import { ChangeEvent, DragEvent, FormEvent, useRef, useState } from "react";
 
 import { CaptchaWidget } from "@/components/captcha-widget";
 import { publicApiUrl } from "@/lib/api";
+import { validateUploadFiles } from "@/lib/validate-upload";
 
 type Props = {
   tenantSlug: string;
@@ -28,27 +29,10 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
   const accept = allowedFileTypes.length > 0 ? allowedFileTypes.map((t) => `.${t}`).join(",") : undefined;
   const typeLabel = allowedFileTypes.length > 0 ? allowedFileTypes.map((t) => t.toUpperCase()).join(", ") : "Alle Dateitypen";
 
-  function getExtension(filename: string): string {
-    const parts = filename.split(".");
-    return parts.length > 1 ? parts.pop()!.toLowerCase() : "";
-  }
-
   function validateAndSet(selected: File[]): boolean {
-    if (selected.length > maxFiles) {
-      setError(`Maximal ${maxFiles} Datei(en) erlaubt`);
-      return false;
-    }
-    if (allowedFileTypes.length > 0) {
-      const allowed = allowedFileTypes.map((t) => t.toLowerCase());
-      const wrongType = selected.find((f) => !allowed.includes(getExtension(f.name)));
-      if (wrongType) {
-        setError(`„${wrongType.name}" hat ein nicht erlaubtes Dateiformat (erlaubt: ${typeLabel})`);
-        return false;
-      }
-    }
-    const tooLarge = selected.find((f) => f.size > maxFileSizeMb * 1024 * 1024);
-    if (tooLarge) {
-      setError(`„${tooLarge.name}" ist zu gross (max. ${maxFileSizeMb} MB)`);
+    const result = validateUploadFiles(selected, { maxFiles, allowedFileTypes, maxFileSizeMb });
+    if (!result.ok) {
+      setError(result.error);
       return false;
     }
     setError(null);

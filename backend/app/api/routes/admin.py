@@ -227,6 +227,15 @@ def export_tenant(
     )
 
 
+
+# Generous (tenant exports can legitimately be large - full history, abgabebox files) but
+# finite, so a single request can't buffer an unbounded amount into memory before any check
+# runs (audit S13, 2026-08-16) - only "owner"-role admins can hit this route at all, so this
+# is a self-DoS guard rather than a real attacker-facing one. Matches the abgabebox public
+# upload ceiling.
+MAX_TENANT_IMPORT_UPLOAD_BYTES = 2000 * 1024 * 1024
+
+
 @router.post("/tenants/import", response_model=TenantImportResult, status_code=201)
 async def import_tenant(
     new_name: str = Form(...),
@@ -234,9 +243,14 @@ async def import_tenant(
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
+    if file.size is not None and file.size > MAX_TENANT_IMPORT_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail=f"Datei zu gross. Maximum {MAX_TENANT_IMPORT_UPLOAD_BYTES // 1024 // 1024} MB")
     with tempfile.NamedTemporaryFile(prefix="hocx-import-upload-", suffix=".zip", delete=False) as tmp:
         tmp_path = Path(tmp.name)
         content = await file.read()
+        if len(content) > MAX_TENANT_IMPORT_UPLOAD_BYTES:
+            os.unlink(tmp_path)
+            raise HTTPException(status_code=413, detail=f"Datei zu gross. Maximum {MAX_TENANT_IMPORT_UPLOAD_BYTES // 1024 // 1024} MB")
         tmp.write(content)
     try:
         new_tenant, warnings = import_service.import_zip(db, tmp_path, new_name)
