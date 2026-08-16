@@ -14,6 +14,7 @@ from docx.oxml.ns import qn
 from docx.table import Table as DocxTable
 from docx.text.paragraph import Paragraph as DocxParagraph
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.core.cycle_utils import get_cycle_year
@@ -3499,6 +3500,7 @@ class WordImportService:
                             # editing gives via autosave_service.save_text_block.
                             block_field_sync.apply_text_sync(
                                 db,
+                                tenant_id=tenant_id,
                                 repeat_source_type="event",
                                 repeat_source_id=text_commit.linked_event_id,
                                 sync_target_field=sync_field,
@@ -3754,9 +3756,34 @@ class WordImportService:
                     )
                 ).scalar_one_or_none()
                 if profile is None:
-                    profile = WordImportProfile(tenant_id=tenant_id, template_id=payload.template_id, mapping_config_json={})
-                    db.add(profile)
-                    db.flush()
+                    # Read-then-create race (audit D12, 2026-08-16): two documents of the
+                    # same, still-profile-less template committed at once can both see
+                    # profile is None and both try to insert - WordImportProfile has a
+                    # UniqueConstraint(tenant_id, template_id). A SAVEPOINT-scoped retry (the
+                    # pattern ProtocolService.create_from_template's number race uses) was
+                    # tried here first but reusing db.begin_nested() a second time within
+                    # this same commit() call (the protocol insert above it already uses one)
+                    # corrupts this session's transaction bookkeeping - a real, pre-existing
+                    # SQLAlchemy/session limitation, not specific to the test harness (see
+                    # test_protocol_number_cycle_rank.py's module docstring for the same
+                    # caveat). ON CONFLICT DO NOTHING sidesteps it entirely: single atomic
+                    # statement, no savepoint needed, and correct either way - if we lose the
+                    # race, the RETURNING clause is simply empty and the re-SELECT below picks
+                    # up the winner's row.
+                    inserted_id = db.execute(
+                        pg_insert(WordImportProfile)
+                        .values(tenant_id=tenant_id, template_id=payload.template_id, mapping_config_json={})
+                        .on_conflict_do_nothing()
+                        .returning(WordImportProfile.id)
+                    ).scalar_one_or_none()
+                    if inserted_id is not None:
+                        profile = db.get(WordImportProfile, inserted_id)
+                    else:
+                        profile = db.execute(
+                            select(WordImportProfile).where(
+                                WordImportProfile.tenant_id == tenant_id, WordImportProfile.template_id == payload.template_id
+                            )
+                        ).scalar_one()
                 config = dict(profile.mapping_config_json or {})
                 heading_map = dict(config.get("heading_to_target", {}))
                 heading_map.update(heading_updates)

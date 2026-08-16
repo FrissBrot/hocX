@@ -45,6 +45,18 @@ export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props)
 
   async function toggleRole(admin: PlatformAdminSummary) {
     const nextRole = admin.role === "owner" ? "support" : "owner";
+    // Downgrading the OWN account had neither a confirmation nor a self-protection guard
+    // (unlike the Deaktivieren button right next to it) - a misclick here instantly loses
+    // write access to this whole panel, recoverable only by asking another owner to
+    // restore it (audit A3, 2026-08-16).
+    if (admin.id === currentAdminId && nextRole === "support") {
+      const ok = await confirm({
+        message: "Deinen eigenen Account auf Nur-Lesezugriff setzen? Du verlierst damit sofort selbst den Schreibzugriff auf dieses Panel.",
+        tone: "danger",
+        confirmLabel: "Auf Nur-Lesezugriff setzen",
+      });
+      if (!ok) return;
+    }
     try {
       const updated = await browserApiFetch<PlatformAdminSummary>(`/api/admin/admins/${admin.id}`, {
         method: "PATCH",

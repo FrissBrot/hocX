@@ -210,7 +210,7 @@ export function SessionTodosSection({
                   className="button-inline button-danger todo-delete"
                   onClick={() => void onDelete(todo.protocol_element_block_id, todo.id)}
                 >
-                  Delete
+                  Löschen
                 </button>
               )}
             </article>

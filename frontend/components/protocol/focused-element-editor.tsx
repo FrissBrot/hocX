@@ -1553,7 +1553,7 @@ export function FocusedElementEditor({
                               className="button-inline button-danger todo-delete"
                               onClick={() => deleteTodo(block.id, todo.id)}
                             >
-                              Delete
+                              Löschen
                             </button>
                           )}
                         </article>
@@ -1637,7 +1637,7 @@ export function FocusedElementEditor({
                             void saveBlockConfiguration(block.id, { ...blockConfig, bullet_items: nextItems });
                           }}
                         >
-                          Delete
+                          Löschen
                         </button>
                       </article>
                     ))}
@@ -3238,7 +3238,7 @@ export function FocusedElementEditor({
                         <LightboxImage alt={image.title ?? image.original_name} src={`${browserApiBaseUrl}${image.content_url}`} />
                         <p className="muted">{image.original_name}</p>
                         <button type="button" onClick={() => deleteImage(block.id, image.id)}>
-                          Delete image
+                          Bild löschen
                         </button>
                       </div>
                     ))}

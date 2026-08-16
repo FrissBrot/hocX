@@ -15,6 +15,7 @@ class AutosaveService:
         protocol_element_block_id: int,
         content: str,
         *,
+        tenant_id: int,
         track_changes_active: bool = False,
         block_config: dict | None = None,
     ) -> dict[str, str | int | bool | None]:
@@ -40,6 +41,7 @@ class AutosaveService:
         if block_config:
             block_field_sync.apply_text_sync(
                 db,
+                tenant_id=tenant_id,
                 repeat_source_type=block_config.get("repeat_source_type"),
                 repeat_source_id=block_config.get("repeat_source_id"),
                 sync_target_field=block_config.get("sync_target_field"),

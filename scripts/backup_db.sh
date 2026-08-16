@@ -72,8 +72,12 @@ fi
 mv "$TMP_FILE" "$BACKUP_FILE"
 log "Backup abgeschlossen: $BACKUP_FILE ($(du -h "$BACKUP_FILE" | cut -f1))"
 
-log "Loesche Backups aelter als $RETENTION_DAYS Tage..."
-find "$BACKUP_DIR" -maxdepth 1 -type f -name "*.sql.gz" -mtime "+$RETENTION_DAYS" -print -delete
+log "Loesche eigene Cron-Backups aelter als $RETENTION_DAYS Tage..."
+# Nur "-cron.sql.gz" (audit I4, 2026-08-16): "*.sql.gz" traf zuvor auch deploy.sh's
+# Pre-Deploy-Backups ("-pre-<version>.sql.gz") und beliebige manuelle Sicherheits-Dumps im
+# selben Ordner - ein fuer einen spaeteren Rollback vorgesehenes Backup verschwand damit
+# automatisch nach RETENTION_DAYS, ohne dass das je jemand aktiv entschieden hatte.
+find "$BACKUP_DIR" -maxdepth 1 -type f -name "*-cron.sql.gz" -mtime "+$RETENTION_DAYS" -print -delete
 
 # Optional offsite copy (audit I5, 2026-08-16): backups/ lives on the same disk/host as
 # the live DB volume, so a disk/host failure loses both simultaneously - there was no

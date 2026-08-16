@@ -49,14 +49,13 @@ export function Modal({ open, title, description, children, onClose, size = "def
       <div className={`modal-shell modal-${size}`} onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-label={title}>
         <div className="modal-header">
           <div>
-            <div className="eyebrow">Editor</div>
             <h2>{title}</h2>
             {description ? <p className="muted">{description}</p> : null}
           </div>
           <div className="modal-header-actions">
             {headerActions}
             <button type="button" className="button-ghost modal-close" onClick={onClose}>
-              Close
+              Schliessen
             </button>
           </div>
         </div>

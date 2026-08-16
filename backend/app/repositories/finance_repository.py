@@ -179,6 +179,11 @@ class FinanceRepository:
             protocol = db.get(Protocol, payload.protocol_id)
             if protocol is None or protocol.tenant_id != tenant_id:
                 return None
+            # Freeze-Schutz (audit S8, 2026-08-16) - see FinesRepository.create_fine's
+            # identical check: finalized protocols are immutable snapshots elsewhere in this
+            # codebase, a new transaction retroactively linked to one would change that.
+            if protocol.status == "abgeschlossen":
+                return None
         tx = FinanceTransaction(
             account_id=account_id,
             amount=payload.amount,
@@ -195,6 +200,11 @@ class FinanceRepository:
         tx = self._get_transaction_scoped(db, tx_id, tenant_id)
         if tx is None:
             return None
+        # Freeze-Schutz (audit S8, 2026-08-16) - see create_transaction's identical check.
+        if tx.protocol_id is not None:
+            protocol = db.get(Protocol, tx.protocol_id)
+            if protocol is not None and protocol.status == "abgeschlossen":
+                return None
         if payload.amount is not None:
             tx.amount = payload.amount
         if payload.description is not None:
@@ -209,6 +219,11 @@ class FinanceRepository:
         tx = self._get_transaction_scoped(db, tx_id, tenant_id)
         if tx is None:
             return False
+        # Freeze-Schutz (audit S8, 2026-08-16) - see create_transaction's identical check.
+        if tx.protocol_id is not None:
+            protocol = db.get(Protocol, tx.protocol_id)
+            if protocol is not None and protocol.status == "abgeschlossen":
+                return False
         db.delete(tx)
         db.commit()
         return True

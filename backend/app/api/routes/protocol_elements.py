@@ -337,6 +337,7 @@ def put_protocol_text(
             db,
             protocol_element_block_id,
             payload.content,
+            tenant_id=protocol.tenant_id,
             track_changes_active=track_changes_active,
             block_config=block.configuration_snapshot_json,
         )
