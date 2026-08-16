@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0 --port 3000",
     "build": "next build",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "vitest run"
   },
   "dependencies": {
     "friendly-challenge": "^0.9.20",
@@ -17,7 +18,8 @@
     "@types/node": "22.14.1",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
-    "typescript": "5.8.2"
+    "typescript": "5.8.2",
+    "vitest": "^4.1.10"
   },
   "overrides": {
     "postcss": "8.5.23",

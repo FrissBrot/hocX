@@ -151,6 +151,26 @@ class WordImportQueueService:
                 detail = getattr(exc, "detail", None) or "Datei konnte nicht gelesen werden"
                 errors.append(f"{filename}: {detail}")
 
+        # Display-name second pass (audit D13, 2026-08-16): ingest() processes files
+        # sequentially, so a document ingested early in the batch only saw whichever
+        # siblings existed as committed rows *before it*, not ones that arrive later in the
+        # same batch - an unsorted upload (e.g. March before January) could show "1." on
+        # the March document until a sibling committed or it was manually reanalyzed.
+        # Purely cosmetic (the real commit-time numbering via _renumber_later_siblings was
+        # already correct) - recomputes display_name now that every document in this batch
+        # is a committed row and _compute_display_name can see all of them.
+        if len(documents) > 1:
+            for document in documents:
+                document.display_name = self._compute_display_name(
+                    db,
+                    tenant_id=tenant_id,
+                    template_id=template_id,
+                    protocol_date=document.protocol_date,
+                    fallback=document.original_filename,
+                    exclude_document_id=document.id,
+                )
+            db.commit()
+
         # Batch-consensus pass (see C.11 plan / _build_batch_consensus_hint) - a single,
         # fixed second pass over documents that failed to confidently resolve something
         # the rest of THIS batch agrees on, never fed back into itself for a third pass

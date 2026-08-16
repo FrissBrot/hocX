@@ -115,6 +115,13 @@ jobs:
         working-directory: ${{ matrix.app }}
         run: npm ci
 
+      - name: Test
+        # Audit A5, 2026-08-16: both apps have a `test` script (frontend already had one
+        # with 3 test files, abgabebox-frontend's is new) but neither was ever actually run
+        # in CI before this - tests only guard against regressions if something runs them.
+        working-directory: ${{ matrix.app }}
+        run: npm test
+
       - name: Build
         working-directory: ${{ matrix.app }}
         run: npm run build

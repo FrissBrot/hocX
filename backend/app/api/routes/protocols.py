@@ -346,6 +346,13 @@ def get_element_position(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_reader(user)
+    # Audit S11, 2026-08-16: only require_reader (any tenant) was checked before, no
+    # protocol-tenant scoping - the (user_id, protocol_id) key limits blast radius (can only
+    # ever affect this user's own remembered scroll position), but a fremde protocol_id
+    # should still 404 rather than silently succeed.
+    protocol = service.get_protocol(db, protocol_id)
+    if protocol is None or protocol.tenant_id != user.current_tenant_id:
+        raise HTTPException(status_code=404, detail="Protocol not found")
     row = db.get(UserProtocolScroll, (user.user_id, protocol_id))
     return {"element_id": row.last_element_id if row else None}
 
@@ -358,6 +365,10 @@ def save_element_position(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_reader(user)
+    # Audit S11, 2026-08-16 - see get_element_position's identical check above.
+    protocol = service.get_protocol(db, protocol_id)
+    if protocol is None or protocol.tenant_id != user.current_tenant_id:
+        raise HTTPException(status_code=404, detail="Protocol not found")
     stmt = (
         pg_insert(UserProtocolScroll)
         .values(user_id=user.user_id, protocol_id=protocol_id, last_element_id=payload.element_id)

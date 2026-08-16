@@ -16,6 +16,7 @@ from app.core.config import settings
 from app.models import AttendanceFine, DocumentTemplate, ElementType, Event, FinanceAccount, FinanceTransaction, ListDefinition, ListEntry, Participant, Protocol as ProtocolModel, ProtocolElement, ProtocolExportCache, StoredFile, Tenant
 from app.repositories.export_repository import ExportRepository
 from app.services.event_cycle_service import list_cycle_event_ids, resolve_protocol_cycle
+from app.services.file_service import _safe_storage_path
 from app.services.responsible_label_service import resolve_display_section_titles_batch
 from app.schemas.protocol import ProtocolExportRead
 
@@ -710,7 +711,7 @@ Status: {protocol_status}
                 return "No images uploaded."
             parts: list[str] = []
             for index, row in enumerate(image_rows, start=1):
-                source_path = Path(settings.storage_root) / row.StoredFile.storage_path
+                source_path = _safe_storage_path(settings.storage_root, row.StoredFile.storage_path)
                 if not source_path.exists():
                     parts.append(f"Missing image file: {self._escape_latex(row.StoredFile.original_name)}")
                     continue

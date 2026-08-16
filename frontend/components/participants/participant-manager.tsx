@@ -296,7 +296,9 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
       setImportResult(result);
     } catch (error) {
       showToast(error instanceof Error ? error.message : "CSV-Import fehlgeschlagen", "error");
-      setCsvPreview(null);
+      // Keeps the preview open on failure (audit F9, 2026-08-16) - a transient error
+      // (network blip, brief server hiccup) shouldn't force re-selecting the file just to
+      // retry the same import.
     } finally {
       setImporting(false);
     }

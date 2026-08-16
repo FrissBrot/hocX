@@ -35,11 +35,11 @@ def _abgabebox_base_url(db: Session, tenant_id: int) -> str:
 
 def _move_from_quarantine(quarantine_rel_path: str, storage_root: str) -> str:
     """Move a quarantined file to regular storage. Returns the new relative path."""
-    q_full = Path(storage_root) / quarantine_rel_path
+    q_full = _safe_storage_path(storage_root, quarantine_rel_path)
     # quarantine/tenant-1/assignment-2/abc.pdf -> tenant-1/assignment-2/abc.pdf
     parts = Path(quarantine_rel_path).parts
     new_rel = str(Path(*parts[1:]))
-    new_full = Path(storage_root) / new_rel
+    new_full = _safe_storage_path(storage_root, new_rel)
     new_full.parent.mkdir(parents=True, exist_ok=True)
     q_full.rename(new_full)
     return new_rel

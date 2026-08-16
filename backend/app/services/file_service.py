@@ -282,7 +282,7 @@ class FileService:
         pending = self.stored_file_repository.list_pending_word_import_files(db)
         results = {"scanned": len(pending), "clean": 0, "infected": 0, "still_pending": 0}
         for stored_file in pending:
-            file_path = Path(settings.storage_root) / stored_file.storage_path
+            file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
             result = scanner.scan_file(file_path, host=settings.clamav_host, port=settings.clamav_port)
             if result == "pending":
                 results["still_pending"] += 1
@@ -299,7 +299,7 @@ class FileService:
         return file_path.read_bytes()
 
     def delete_stored_file(self, db: Session, stored_file: StoredFile) -> None:
-        file_path = Path(settings.storage_root) / stored_file.storage_path
+        file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
         if file_path.exists():
             file_path.unlink()
         self.stored_file_repository.delete(db, stored_file)
@@ -315,7 +315,7 @@ class FileService:
         stored_file = self.stored_file_repository.get(db, protocol_image.stored_file_id)
         self.protocol_image_repository.delete(db, protocol_image)
         if stored_file is not None:
-            file_path = Path(settings.storage_root) / stored_file.storage_path
+            file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
             if file_path.exists():
                 file_path.unlink()
             self.stored_file_repository.delete(db, stored_file)

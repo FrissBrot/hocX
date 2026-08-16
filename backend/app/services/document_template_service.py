@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models import DocumentTemplate, DocumentTemplatePart, Protocol
+from app.services.file_service import _safe_storage_path
 from app.repositories.document_template_repository import (
     DocumentTemplatePartRepository,
     DocumentTemplateRepository,
@@ -261,7 +262,7 @@ class DocumentTemplateService:
         entity = self.part_repository.get(db, part_id)
         if entity is None:
             return False
-        path = Path(settings.storage_root) / entity.storage_path
+        path = _safe_storage_path(settings.storage_root, entity.storage_path)
         self.part_repository.delete(db, entity)
         if path.exists():
             path.unlink()
@@ -351,7 +352,7 @@ class DocumentTemplateService:
             part_id = int(part_id) if not isinstance(part_id, int) else part_id
             if part_id not in parts_by_id:
                 continue
-            part_file = Path(settings.storage_root) / parts_by_id[part_id].storage_path
+            part_file = _safe_storage_path(settings.storage_root, parts_by_id[part_id].storage_path)
             if not part_file.exists():
                 continue
             target = output_dir / f"{target_stem}{part_file.suffix}"
@@ -362,7 +363,7 @@ class DocumentTemplateService:
             content = ""
             part_id = slots.get(slot)
             if part_id and part_id in parts_by_id:
-                part_file = Path(settings.storage_root) / parts_by_id[part_id].storage_path
+                part_file = _safe_storage_path(settings.storage_root, parts_by_id[part_id].storage_path)
                 if part_file.exists():
                     content = part_file.read_text(encoding="utf-8")
             if not content:
@@ -378,7 +379,7 @@ class DocumentTemplateService:
             part_id = font_slots.get(slot)
             if not part_id or part_id not in parts_by_id:
                 continue
-            part_file = Path(settings.storage_root) / parts_by_id[part_id].storage_path
+            part_file = _safe_storage_path(settings.storage_root, parts_by_id[part_id].storage_path)
             if not part_file.exists():
                 continue
             suffix = part_file.suffix or ".ttf"

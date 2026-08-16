@@ -113,8 +113,15 @@ class ParticipantService:
     def list_participants(self, db: Session, *, tenant_id: int, active_only: bool = False, skip: int = 0, limit: int = 100) -> list[Participant]:
         return self.repository.list(db, tenant_id=tenant_id, active_only=active_only, skip=skip, limit=limit)
 
-    def get_participant(self, db: Session, participant_id: int) -> Participant | None:
-        return self.repository.get(db, participant_id)
+    def get_participant(self, db: Session, participant_id: int, *, tenant_id: int) -> Participant | None:
+        # Tenant-scoped directly here now (audit D7, 2026-08-16) - defense in depth. Every
+        # current caller already re-checks tenant_id on the result too, so this doesn't
+        # change any observable behavior, only closes the gap for a future caller that might
+        # skip that check.
+        participant = self.repository.get(db, participant_id)
+        if participant is None or participant.tenant_id != tenant_id:
+            return None
+        return participant
 
     def _ensure_app_user_belongs_to_tenant(self, db: Session, app_user_id: int, *, tenant_id: int) -> None:
         app_user = self.user_repository.get(db, app_user_id)
@@ -163,9 +170,10 @@ class ParticipantService:
         db.refresh(created)
         return created
 
-    def update_participant(self, db: Session, participant_id: int, payload: ParticipantUpdate) -> Participant | None:
+    def update_participant(self, db: Session, participant_id: int, payload: ParticipantUpdate, *, tenant_id: int) -> Participant | None:
+        # Audit D7, 2026-08-16 - see get_participant's identical note above.
         participant = self.repository.get(db, participant_id)
-        if participant is None:
+        if participant is None or participant.tenant_id != tenant_id:
             return None
         values = payload.model_dump(exclude_unset=True)
         if not values:
@@ -180,9 +188,10 @@ class ParticipantService:
         db.refresh(updated)
         return updated
 
-    def delete_participant(self, db: Session, participant_id: int) -> bool:
+    def delete_participant(self, db: Session, participant_id: int, *, tenant_id: int) -> bool:
+        # Audit D7, 2026-08-16 - see get_participant's identical note above.
         participant = self.repository.get(db, participant_id)
-        if participant is None:
+        if participant is None or participant.tenant_id != tenant_id:
             return False
         self.repository.delete(db, participant)
         db.commit()
