@@ -2,6 +2,11 @@ services:
   db:
     image: postgres:16
     restart: unless-stopped
+    # Audit I1, 2026-08-16: this file had NO resource limits at all, unlike
+    # docker-compose.yml (dev) after M28 - a runaway container here could take down the
+    # whole host with nothing to stop it. Values mirror docker-compose.yml's equivalents.
+    mem_limit: 768m
+    cpus: 1.0
     logging:
       driver: json-file
       options:
@@ -24,6 +29,8 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    mem_limit: 128m
+    cpus: 0.5
     logging:
       driver: json-file
       options:
@@ -38,6 +45,8 @@ services:
   backend:
     image: ghcr.io/${GHCR_NAMESPACE}/hocx-backend:${HOCX_VERSION}
     restart: unless-stopped
+    mem_limit: 768m
+    cpus: 1.5
     logging:
       driver: json-file
       options:
@@ -115,6 +124,11 @@ services:
   frontend:
     image: ghcr.io/${GHCR_NAMESPACE}/hocx-frontend:${HOCX_VERSION}
     restart: unless-stopped
+    # Runs a pre-built image's `next start` here (no runtime build, unlike the dev
+    # compose's frontend/website - see their mem_limit comments there), so this is lighter
+    # than the dev value, but still bounded per audit I1.
+    mem_limit: 512m
+    cpus: 1.0
     logging:
       driver: json-file
       options:
@@ -149,6 +163,8 @@ services:
   website:
     image: ghcr.io/${GHCR_NAMESPACE}/hocx-frontend:${HOCX_VERSION}
     restart: unless-stopped
+    mem_limit: 512m
+    cpus: 0.5
     logging:
       driver: json-file
       options:
@@ -178,6 +194,8 @@ services:
   abgabebox-backend:
     image: ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-backend:${HOCX_VERSION}
     restart: unless-stopped
+    mem_limit: 384m
+    cpus: 1.0
     logging:
       driver: json-file
       options:
@@ -220,14 +238,25 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-upload.tls.certresolver=letsencrypt"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-upload.priority=200"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-upload.service=${ROUTER_PREFIX:-hocx}-abgabebox-backend"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-upload.middlewares=${ROUTER_PREFIX:-hocx}-abgabebox-upload-ratelimit"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-upload.middlewares=${ROUTER_PREFIX:-hocx}-abgabebox-upload-ratelimit,${ROUTER_PREFIX:-hocx}-abgabebox-upload-body-limit"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-ratelimit.ratelimit.average=5"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-ratelimit.ratelimit.burst=3"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-ratelimit.ratelimit.period=1m"
+      # Audit A2, 2026-08-16: was missing here (present in docker-compose.yml, which is
+      # what the regression test in abgabebox-backend/tests/test_upload_size_limits.py
+      # actually checked, not this file - the file `deploy.sh` really uses). Without it,
+      # Starlette buffers the whole request body for this unauthenticated public POST
+      # endpoint before the app-level size check ever runs. 2000 MB = 20 files x 100 MB
+      # (max_files_per_element/max_file_size_mb ceilings, see
+      # backend/app/schemas/submission.py) - keep in sync with MAX_UPLOAD_REQUEST_BYTES in
+      # abgabebox-backend/app/routes/public.py if that changes.
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-body-limit.buffering.maxRequestBodyBytes=2097152000"
 
   abgabebox-frontend:
     image: ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-frontend:${HOCX_VERSION}
     restart: unless-stopped
+    mem_limit: 512m
+    cpus: 0.5
     logging:
       driver: json-file
       options:

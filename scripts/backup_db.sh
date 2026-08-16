@@ -75,4 +75,25 @@ log "Backup abgeschlossen: $BACKUP_FILE ($(du -h "$BACKUP_FILE" | cut -f1))"
 log "Loesche Backups aelter als $RETENTION_DAYS Tage..."
 find "$BACKUP_DIR" -maxdepth 1 -type f -name "*.sql.gz" -mtime "+$RETENTION_DAYS" -print -delete
 
+# Optional offsite copy (audit I5, 2026-08-16): backups/ lives on the same disk/host as
+# the live DB volume, so a disk/host failure loses both simultaneously - there was no
+# offsite copy of any kind before this. No-ops unless both OFFSITE_BACKUP_REMOTE is set
+# (an rclone remote name, e.g. "s3:my-bucket/hocx-backups" - see
+# https://rclone.org/docs/#configure for setting one up) and the `rclone` binary is
+# installed, so this is safe to leave disabled until someone actually configures a remote.
+if [ -n "${OFFSITE_BACKUP_REMOTE:-}" ]; then
+  if command -v rclone > /dev/null 2>&1; then
+    log "Kopiere Backup nach OFFSITE_BACKUP_REMOTE=$OFFSITE_BACKUP_REMOTE..."
+    if rclone copy "$BACKUP_FILE" "$OFFSITE_BACKUP_REMOTE" --quiet; then
+      log "Offsite-Kopie abgeschlossen."
+    else
+      log "WARNUNG: Offsite-Kopie fehlgeschlagen (lokales Backup ist trotzdem vorhanden)."
+    fi
+  else
+    log "WARNUNG: OFFSITE_BACKUP_REMOTE gesetzt, aber 'rclone' ist nicht installiert - offsite-Kopie uebersprungen."
+  fi
+else
+  log "Kein OFFSITE_BACKUP_REMOTE gesetzt - Backup bleibt lokal (siehe RUNBOOK.md Abschnitt 7)."
+fi
+
 log "Fertig."

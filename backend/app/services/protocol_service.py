@@ -349,6 +349,13 @@ class ProtocolService:
                 counts["n_cycle_all"] += 1
         return counts
 
+    def _pattern_uses_token(self, pattern: str | None, token: str) -> bool:
+        """True if `pattern` references `{token}` or the equivalent `[token]` bracket form
+        (both are accepted, see _format_pattern's square_bracket_tokens normalization)."""
+        if not pattern:
+            return False
+        return f"{{{token}}}" in pattern or f"[{token}]" in pattern
+
     def _renumber_later_siblings(
         self,
         db: Session,
@@ -361,34 +368,67 @@ class ProtocolService:
     ) -> None:
         """Makes room for a protocol about to be auto-numbered at protocol_date (called before
         that protocol is inserted) by shifting every later-dated, still-open ("geplant" etc.,
-        not abgeschlossen) sibling of the same template up by one rank, so numbers keep matching
-        chronological order (see _sequence_counts) however out-of-order protocols get imported.
-        abgeschlossen protocols are frozen and are deliberately left untouched even if that
-        leaves a gap or a collision with a still-open sibling's freshly computed number - a
-        manual edge case, not something to silently paper over by renumbering finalized ones."""
+        not abgeschlossen) sibling up by one rank, so numbers keep matching chronological order
+        (see _sequence_counts) however out-of-order protocols get imported. abgeschlossen
+        protocols are frozen and are deliberately left untouched even if that leaves a gap or a
+        collision with a still-open sibling's freshly computed number - a manual edge case, not
+        something to silently paper over by renumbering finalized ones.
+
+        Considers two groups of siblings:
+        - same-template siblings, whose n/n_year/n_month/n_cycle/n_cycle_all can all shift;
+        - cross-template siblings (audit D2, 2026-08-16): {n_cycle_all} is deliberately a
+          tenant-wide count (_sequence_counts's cycle_all query has no template_id filter), so
+          inserting an earlier-dated protocol into THIS template can also shift the n_cycle_all
+          rank of a later-dated, still-open protocol that belongs to a DIFFERENT template - but
+          only if that other template's own pattern actually uses {n_cycle_all} (its n/n_year/
+          n_month/n_cycle are per-template and can't be affected by an insert elsewhere). Cross-
+          template siblings are recomputed against `reset_month`/`reset_day` - i.e. the inserted
+          protocol's own cycle config - since {n_cycle_all} only makes sense as a single shared
+          counter when every template using it shares the same cycle boundary.
+        """
         if not template.protocol_number_pattern and not template.title_pattern:
+            return
+        same_template_siblings = list(
+            db.execute(
+                select(Protocol).where(
+                    Protocol.tenant_id == tenant_id,
+                    Protocol.template_id == template.id,
+                    Protocol.protocol_date > protocol_date,
+                    Protocol.status != "abgeschlossen",
+                )
+            ).scalars()
+        )
+        pairs: list[tuple[Protocol, Template]] = [(sibling, template) for sibling in same_template_siblings]
+
+        cross_template_rows = db.execute(
+            select(Protocol, Template)
+            .join(Template, Template.id == Protocol.template_id)
+            .where(
+                Protocol.tenant_id == tenant_id,
+                Protocol.template_id != template.id,
+                Protocol.protocol_date > protocol_date,
+                Protocol.status != "abgeschlossen",
+            )
+        ).all()
+        for sibling, sibling_template in cross_template_rows:
+            if self._pattern_uses_token(
+                sibling_template.protocol_number_pattern, "n_cycle_all"
+            ) or self._pattern_uses_token(sibling_template.title_pattern, "n_cycle_all"):
+                pairs.append((sibling, sibling_template))
+
+        if not pairs:
             return
         # Processed latest-first: the latest sibling's new slot never collides with anything
         # (nothing ranks after it), which frees the slot the next-latest sibling needs, and so
         # on down the chain - processing earliest-first would instead have each sibling try to
         # move into a slot its later neighbor is still occupying and get skipped as a "collision".
-        siblings = db.execute(
-            select(Protocol)
-            .where(
-                Protocol.tenant_id == tenant_id,
-                Protocol.template_id == template.id,
-                Protocol.protocol_date > protocol_date,
-                Protocol.status != "abgeschlossen",
-            )
-            .order_by(Protocol.protocol_date.desc(), Protocol.id.desc())
-        ).scalars().all()
-        if not siblings:
-            return
-        for sibling in siblings:
+        pairs.sort(key=lambda pair: (pair[0].protocol_date, pair[0].id), reverse=True)
+
+        for sibling, sibling_template in pairs:
             counts = self._sequence_counts(
                 db,
                 tenant_id=tenant_id,
-                template_id=template.id,
+                template_id=sibling.template_id,
                 protocol_date=sibling.protocol_date,
                 reset_month=reset_month,
                 reset_day=reset_day,
@@ -404,8 +444,10 @@ class ProtocolService:
                 reset_month=reset_month,
                 reset_day=reset_day,
             )
-            if template.protocol_number_pattern:
-                candidate = self._format_pattern(template.protocol_number_pattern, counts=counts, protocol_date=sibling.protocol_date)
+            if sibling_template.protocol_number_pattern:
+                candidate = self._format_pattern(
+                    sibling_template.protocol_number_pattern, counts=counts, protocol_date=sibling.protocol_date
+                )
                 if candidate and candidate != sibling.protocol_number:
                     collision = db.scalar(
                         select(Protocol.id).where(
@@ -414,8 +456,10 @@ class ProtocolService:
                     )
                     if not collision:
                         sibling.protocol_number = candidate
-            if template.title_pattern:
-                candidate_title = self._format_pattern(template.title_pattern, counts=counts, protocol_date=sibling.protocol_date)
+            if sibling_template.title_pattern:
+                candidate_title = self._format_pattern(
+                    sibling_template.title_pattern, counts=counts, protocol_date=sibling.protocol_date
+                )
                 if candidate_title:
                     sibling.title = candidate_title
             # Flushed per-sibling (not once after the loop) so each subsequent collision check

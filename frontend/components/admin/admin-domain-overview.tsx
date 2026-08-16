@@ -27,16 +27,17 @@ export function AdminDomainOverview({ initialPage }: Props) {
   const [loading, setLoading] = useState(false);
   const domains = page.items;
 
-  const visibleDomains = domains.filter((d) => {
-    const term = search.trim().toLowerCase();
-    if (!term) return true;
-    return d.domain.toLowerCase().includes(term) || d.tenant_name.toLowerCase().includes(term);
-  });
+  // Server now applies `search` before pagination (audit A1, 2026-08-16 - fetchPage below
+  // sends it as `q`), so page.items is already the matching set for the current page.
+  const visibleDomains = domains;
 
-  async function fetchPage(nextOffset: number) {
+  async function fetchPage(nextOffset: number, query: string) {
     setLoading(true);
     try {
-      const result = await browserApiFetch<AdminDomainPage>(`/api/admin/domains?limit=${PAGE_SIZE}&offset=${nextOffset}`);
+      const q = query.trim();
+      const result = await browserApiFetch<AdminDomainPage>(
+        `/api/admin/domains?limit=${PAGE_SIZE}&offset=${nextOffset}${q ? `&q=${encodeURIComponent(q)}` : ""}`
+      );
       setPage(result);
     } catch {
       // keep showing the previous page rather than blanking the table on a transient error
@@ -46,9 +47,23 @@ export function AdminDomainOverview({ initialPage }: Props) {
   }
 
   useEffect(() => {
-    void fetchPage(offset);
+    void fetchPage(offset, search);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offset]);
+
+  // Debounced re-fetch from offset 0 whenever the search text changes - see the identical
+  // pattern in admin-user-management.tsx.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (offset !== 0) {
+        setOffset(0);
+      } else {
+        void fetchPage(0, search);
+      }
+    }, 300);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   async function deleteDomain(domain: AdminDomainSummary) {
     const confirmed = await confirm({
@@ -65,7 +80,7 @@ export function AdminDomainOverview({ initialPage }: Props) {
       if (domains.length === 1 && offset > 0) {
         setOffset(offset - PAGE_SIZE);
       } else {
-        await fetchPage(offset);
+        await fetchPage(offset, search);
       }
       showToast("Domain entfernt", "success");
     } catch (error) {

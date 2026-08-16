@@ -54,8 +54,13 @@ class AdminTenantService:
             created_at=tenant.created_at,
         )
 
-    def list_tenants(self, db: Session, *, limit: int | None = None, offset: int = 0) -> AdminTenantPage:
+    def list_tenants(self, db: Session, *, limit: int | None = None, offset: int = 0, q: str | None = None) -> AdminTenantPage:
         query = db.query(Tenant).order_by(Tenant.name.asc())
+        # Applied before the offset/limit slice (audit A1, 2026-08-16) - the frontend used
+        # to filter only the already-fetched current page, so a match on a later page was
+        # invisible while browsing an earlier one.
+        if q and q.strip():
+            query = query.filter(Tenant.name.ilike(f"%{q.strip()}%"))
         total = query.count()
         query = query.offset(offset)
         if limit is not None:

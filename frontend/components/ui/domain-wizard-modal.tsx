@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { Modal } from "@/components/ui/modal";
 import { browserApiFetch } from "@/lib/api/client";
+import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { TenantDomain, TenantDomainPurpose } from "@/types/api";
 
@@ -67,6 +68,7 @@ function CopyField({ label, value }: { label: string; value: string }) {
 
 export function DomainWizardModal({ open, onClose, tenantId, domain, onChanged }: Props) {
   const showToast = useToast();
+  const confirm = useConfirm();
   const [step, setStep] = useState<Step>("purpose");
   const [purpose, setPurpose] = useState<TenantDomainPurpose>("app");
   const [domainInput, setDomainInput] = useState("");
@@ -128,6 +130,15 @@ export function DomainWizardModal({ open, onClose, tenantId, domain, onChanged }
 
   async function removeAndClose() {
     if (!activeDomain) return;
+    // Was the only delete flow in the app without a confirmation dialog (audit F4,
+    // 2026-08-16) - a misclick here during DNS setup instantly discarded the domain
+    // config (incl. its verification token) with no way back.
+    const ok = await confirm({
+      message: `Domain "${activeDomain.domain}" entfernen? Die DNS-Einrichtung muss danach neu gestartet werden.`,
+      tone: "danger",
+      confirmLabel: "Entfernen",
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       await browserApiFetch<{ message: string }>(`/api/tenants/${tenantId}/domains/${activeDomain.id}`, { method: "DELETE" });

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models import Tenant, TenantDomain
@@ -23,12 +24,17 @@ class AdminDomainService:
         db.commit()
         return domain
 
-    def list_domains(self, db: Session, *, limit: int | None = None, offset: int = 0) -> AdminDomainPage:
+    def list_domains(self, db: Session, *, limit: int | None = None, offset: int = 0, q: str | None = None) -> AdminDomainPage:
         query = (
             db.query(TenantDomain, Tenant)
             .join(Tenant, TenantDomain.tenant_id == Tenant.id)
             .order_by(Tenant.name.asc(), TenantDomain.purpose.asc())
         )
+        # Applied before the offset/limit slice (audit A1, 2026-08-16) - see the identical
+        # fix in AdminTenantService.list_tenants/AdminUserService.list_users.
+        if q and q.strip():
+            like = f"%{q.strip()}%"
+            query = query.filter(or_(TenantDomain.domain.ilike(like), Tenant.name.ilike(like)))
         total = query.count()
         query = query.offset(offset)
         if limit is not None:

@@ -18,11 +18,25 @@ class AdminUserService:
     def __init__(self, user_service: UserService | None = None) -> None:
         self.user_service = user_service or UserService()
 
-    def list_users(self, db: Session, *, limit: int | None = None, offset: int = 0) -> AdminUserPage:
+    def list_users(self, db: Session, *, limit: int | None = None, offset: int = 0, q: str | None = None) -> AdminUserPage:
         # list_all_users() already batch-loads everything in 3 queries total (see its
-        # docstring) - offset/limit are applied in Python rather than pushed into that
-        # query so the existing N+1-avoidance logic doesn't need to change.
+        # docstring) - offset/limit (and now q) are applied in Python rather than pushed
+        # into that query so the existing N+1-avoidance logic doesn't need to change.
+        #
+        # q is applied BEFORE the offset/limit slice (audit A1, 2026-08-16): the admin
+        # frontend's search box used to filter only the 50 already-fetched items of the
+        # current page, so a match on page 3 was invisible while browsing page 1 - mirrors
+        # the same name/email/membership substring match the frontend used to do locally.
         all_users = self.user_service.list_all_users(db)
+        if q:
+            query = q.strip().lower()
+            if query:
+                def _matches(user: UserRead) -> bool:
+                    membership_text = " ".join(f"{m.tenant_name} {m.role_code}" for m in user.memberships)
+                    haystack = f"{user.display_name} {user.first_name} {user.last_name} {user.email} {membership_text}".lower()
+                    return query in haystack
+
+                all_users = [user for user in all_users if _matches(user)]
         total = len(all_users)
         items = all_users[offset : offset + limit] if limit is not None else all_users[offset:]
         return AdminUserPage(items=items, total=total)

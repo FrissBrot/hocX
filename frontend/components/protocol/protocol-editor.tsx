@@ -187,6 +187,41 @@ export function ProtocolEditor({
           setTrackChangesEnabledState(!!(patch as { enabled?: boolean } | null)?.enabled);
           return;
         }
+        // Todos/images/events had no live sync at all before this (audit F2, 2026-08-16):
+        // another viewer only ever saw them after a manual reload. Broadcasts the full
+        // resulting array/object (small lists, simpler than create/update/delete diffing)
+        // right after the mutating client's own local state update - see
+        // addTodo/updateTodo/deleteTodo, uploadImage/deleteImage,
+        // createEventFromBlock/updateEventFromBlock/deleteEventFromBlock.
+        if (field_key.endsWith("-todos") && field_key.startsWith("block-")) {
+          const blockId = Number(field_key.slice("block-".length, -"-todos".length));
+          if (Number.isFinite(blockId) && Array.isArray(patch)) {
+            setTodosByBlock((current) => ({ ...current, [blockId]: patch as ProtocolTodo[] }));
+          }
+          return;
+        }
+        if (field_key.endsWith("-images") && field_key.startsWith("block-")) {
+          const blockId = Number(field_key.slice("block-".length, -"-images".length));
+          if (Number.isFinite(blockId) && Array.isArray(patch)) {
+            setImagesByBlock((current) => ({ ...current, [blockId]: patch as ProtocolImage[] }));
+          }
+          return;
+        }
+        if (field_key === "event-created" && patch && typeof patch === "object") {
+          const created = patch as EventSummary;
+          setEvents((current) => (current.some((event) => event.id === created.id) ? current : [...current, created]));
+          return;
+        }
+        if (field_key === "event-updated" && patch && typeof patch === "object") {
+          const updated = patch as EventSummary;
+          setEvents((current) => current.map((event) => (event.id === updated.id ? updated : event)));
+          return;
+        }
+        if (field_key === "event-deleted" && patch && typeof patch === "object") {
+          const { id } = patch as { id: number };
+          setEvents((current) => current.filter((event) => event.id !== id));
+          return;
+        }
         if (!field_key.startsWith("block-")) return;
         const blockId = Number(field_key.slice("block-".length).split("-cell-")[0]);
         if (!Number.isFinite(blockId) || !patch || typeof patch !== "object") return;
@@ -836,10 +871,9 @@ export function ProtocolEditor({
         method: "POST",
         body: JSON.stringify({ task, tags: parsedTags, todo_status_id: TODO_STATUS.open, created_by: null })
       });
-      setTodosByBlock((current) => ({
-        ...current,
-        [protocolElementBlockId]: [...(current[protocolElementBlockId] ?? []), created].sort((left, right) => left.sort_index - right.sort_index)
-      }));
+      const next = [...(todosByBlock[protocolElementBlockId] ?? []), created].sort((left, right) => left.sort_index - right.sort_index);
+      setTodosByBlock((current) => ({ ...current, [protocolElementBlockId]: next }));
+      collab.sendFieldUpdate(`block-${protocolElementBlockId}-todos`, next);
       setNewTodoTask((current) => ({ ...current, [protocolElementBlockId]: "" }));
       setNewTodoTags((current) => ({ ...current, [protocolElementBlockId]: "" }));
       setStatus(protocolElementBlockId, "saved");
@@ -856,10 +890,9 @@ export function ProtocolEditor({
         method: "PATCH",
         body: JSON.stringify(patch)
       });
-      setTodosByBlock((current) => ({
-        ...current,
-        [protocolElementBlockId]: (current[protocolElementBlockId] ?? []).map((todo) => (todo.id === todoId ? updated : todo))
-      }));
+      const next = (todosByBlock[protocolElementBlockId] ?? []).map((todo) => (todo.id === todoId ? updated : todo));
+      setTodosByBlock((current) => ({ ...current, [protocolElementBlockId]: next }));
+      collab.sendFieldUpdate(`block-${protocolElementBlockId}-todos`, next);
       setStatus(protocolElementBlockId, "saved");
     } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
@@ -877,10 +910,9 @@ export function ProtocolEditor({
     setStatus(protocolElementBlockId, "saving");
     try {
       await browserApiFetch(`/api/protocol-todos/${todoId}`, { method: "DELETE" });
-      setTodosByBlock((current) => ({
-        ...current,
-        [protocolElementBlockId]: (current[protocolElementBlockId] ?? []).filter((todo) => todo.id !== todoId)
-      }));
+      const next = (todosByBlock[protocolElementBlockId] ?? []).filter((todo) => todo.id !== todoId);
+      setTodosByBlock((current) => ({ ...current, [protocolElementBlockId]: next }));
+      collab.sendFieldUpdate(`block-${protocolElementBlockId}-todos`, next);
       setStatus(protocolElementBlockId, "saved");
     } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
@@ -919,10 +951,9 @@ export function ProtocolEditor({
         method: "POST",
         body
       });
-      setImagesByBlock((current) => ({
-        ...current,
-        [protocolElementBlockId]: [...(current[protocolElementBlockId] ?? []), created].sort((left, right) => left.sort_index - right.sort_index)
-      }));
+      const next = [...(imagesByBlock[protocolElementBlockId] ?? []), created].sort((left, right) => left.sort_index - right.sort_index);
+      setImagesByBlock((current) => ({ ...current, [protocolElementBlockId]: next }));
+      collab.sendFieldUpdate(`block-${protocolElementBlockId}-images`, next);
       setSelectedFiles((current) => ({ ...current, [protocolElementBlockId]: null }));
       setStatus(protocolElementBlockId, "saved");
     } catch (err: unknown) {
@@ -941,10 +972,9 @@ export function ProtocolEditor({
     setStatus(protocolElementBlockId, "saving");
     try {
       await browserApiFetch(`/api/protocol-images/${imageId}`, { method: "DELETE" });
-      setImagesByBlock((current) => ({
-        ...current,
-        [protocolElementBlockId]: (current[protocolElementBlockId] ?? []).filter((image) => image.id !== imageId)
-      }));
+      const next = (imagesByBlock[protocolElementBlockId] ?? []).filter((image) => image.id !== imageId);
+      setImagesByBlock((current) => ({ ...current, [protocolElementBlockId]: next }));
+      collab.sendFieldUpdate(`block-${protocolElementBlockId}-images`, next);
       setStatus(protocolElementBlockId, "saved");
     } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
@@ -985,6 +1015,7 @@ export function ProtocolEditor({
         }),
       });
       setEvents((current) => [...current, created]);
+      collab.sendFieldUpdate("event-created", created);
       if (!draftOverride) {
         setNewEventDrafts((current) => ({
           ...current,
@@ -1008,6 +1039,7 @@ export function ProtocolEditor({
         body: JSON.stringify(patch),
       });
       setEvents((current) => current.map((event) => (event.id === eventId ? updated : event)));
+      collab.sendFieldUpdate("event-updated", updated);
       setStatus(protocolElementBlockId, "saved");
       return true;
     } catch (err: unknown) {
@@ -1022,6 +1054,7 @@ export function ProtocolEditor({
     try {
       await browserApiFetch(`/api/events/${eventId}`, { method: "DELETE" });
       setEvents((current) => current.filter((event) => event.id !== eventId));
+      collab.sendFieldUpdate("event-deleted", { id: eventId });
       setStatus(protocolElementBlockId, "saved");
     } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");

@@ -55,22 +55,19 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
 
   const tenantNameById = useMemo(() => buildTenantNameMap(allTenants), [allTenants]);
 
-  const eligibleUsers = useMemo(() => users.filter(isEligible), [users]);
+  // eligibleUsers/visibleUsers: server now applies `search` before pagination (audit A1,
+  // 2026-08-16 - fetchPage below sends it as `q`), so `page.items` is already the matching
+  // set for the current page. Only the login_enabled/participant-placeholder filter stays
+  // client-side (unrelated to search, always applied on top).
+  const visibleUsers = useMemo(() => users.filter(isEligible), [users]);
 
-  const visibleUsers = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) return eligibleUsers;
-    return eligibleUsers.filter((user) => {
-      const membershipText = user.memberships.map((m) => `${m.tenant_name} ${m.role_code}`).join(" ");
-      const haystack = `${user.display_name} ${user.first_name} ${user.last_name} ${user.email} ${membershipText}`.toLowerCase();
-      return haystack.includes(query);
-    });
-  }, [eligibleUsers, search]);
-
-  async function fetchPage(nextOffset: number) {
+  async function fetchPage(nextOffset: number, query: string) {
     setLoading(true);
     try {
-      const result = await browserApiFetch<AdminUserPage>(`/api/admin/users?limit=${PAGE_SIZE}&offset=${nextOffset}`);
+      const q = query.trim();
+      const result = await browserApiFetch<AdminUserPage>(
+        `/api/admin/users?limit=${PAGE_SIZE}&offset=${nextOffset}${q ? `&q=${encodeURIComponent(q)}` : ""}`
+      );
       setPage(result);
     } catch {
       // keep showing the previous page rather than blanking the table on a transient error
@@ -80,9 +77,24 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
   }
 
   useEffect(() => {
-    void fetchPage(offset);
+    void fetchPage(offset, search);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offset]);
+
+  // Debounced re-fetch from offset 0 whenever the search text changes - a fresh search
+  // always restarts pagination, since "page 2 of the old query" is meaningless once the
+  // filter changes.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (offset !== 0) {
+        setOffset(0);
+      } else {
+        void fetchPage(0, search);
+      }
+    }, 300);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   function openNewUser() {
     setUserForm(emptyUserForm(allTenants));
@@ -155,7 +167,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
             body: JSON.stringify(payload)
           });
 
-      await fetchPage(offset);
+      await fetchPage(offset, search);
       setUserModalOpen(false);
       showToast(userForm.id ? "Benutzer gespeichert" : "Benutzer erstellt", "success");
     } catch (error) {
@@ -197,7 +209,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
           target_user_id: Number(mergeTargetUserId),
         }),
       });
-      await fetchPage(offset);
+      await fetchPage(offset, search);
       setMergeModalOpen(false);
       showToast("Benutzer zusammengeführt", "success");
     } catch (error) {

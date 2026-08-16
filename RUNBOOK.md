@@ -135,6 +135,16 @@ Fehlern mit Exit-Code ≠ 0 ab (wichtig für Cron-Fehlerbenachrichtigung/Monitor
   ```
 - **Manuell testen**: `./scripts/backup_db.sh` direkt im Repo-Root ausführen und danach
   `ls -lh backups/` prüfen.
+- **⚠️ Offenes Risiko: kein Offsite-Backup aktiv (Audit I5, 2026-08-16).** `backups/`
+  liegt auf derselben Partition wie das Docker-Volume der Live-DB (`postgres_data`) -
+  bei Festplatten- oder Hostausfall sind Live-Daten und alle lokalen Backups gleichzeitig
+  weg. Das Skript unterstützt seit diesem Fund einen optionalen rclone-Sync (siehe
+  Kommentar am Ende von `backup_db.sh`): `OFFSITE_BACKUP_REMOTE` in `.env` setzen (z.B.
+  `s3:mein-bucket/hocx-backups`) und `rclone` installieren + konfigurieren
+  (`rclone config`, siehe [rclone.org/docs](https://rclone.org/docs/#configure)) - ohne
+  das bleibt der Sync ein No-op und dieses Risiko besteht weiter. **Noch nicht
+  eingerichtet** - eine bewusste Entscheidung dazu (welcher Anbieter, wer die Kosten
+  trägt) steht noch aus.
 
 ### `scripts/cleanup_storage.sh`
 

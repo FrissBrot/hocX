@@ -63,18 +63,20 @@ audit = AuditService()
 def list_tenants(
     limit: int | None = Query(None, gt=0, le=500),
     offset: int = Query(0, ge=0),
+    q: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
-    return tenant_service.list_tenants(db, limit=limit, offset=offset)
+    return tenant_service.list_tenants(db, limit=limit, offset=offset, q=q)
 
 
 @router.get("/domains", response_model=AdminDomainPage)
 def list_domains(
     limit: int | None = Query(None, gt=0, le=500),
     offset: int = Query(0, ge=0),
+    q: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
-    return domain_service.list_domains(db, limit=limit, offset=offset)
+    return domain_service.list_domains(db, limit=limit, offset=offset, q=q)
 
 
 @router.delete("/domains/{domain_id}", status_code=204)
@@ -335,9 +337,10 @@ def tenant_profile_image(tenant_id: int, db: Session = Depends(get_db)):
 def list_users(
     limit: int | None = Query(None, gt=0, le=500),
     offset: int = Query(0, ge=0),
+    q: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
-    return user_service.list_users(db, limit=limit, offset=offset)
+    return user_service.list_users(db, limit=limit, offset=offset, q=q)
 
 
 @router.post("/users", response_model=UserRead, status_code=201)

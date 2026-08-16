@@ -92,6 +92,19 @@ class ProtocolTodoService:
         return values
 
     def create_standalone_todo(self, db: Session, tenant_id: int, payload: ProtocolTodoCreate) -> ProtocolTodo:
+        # Unlike create_todo() below, this had no validation at all before the fix (audit D6,
+        # 2026-08-16): an assigned_participant_id/due_event_id from a different tenant was
+        # stored unvalidated and then leaked back out via the todo list's outerjoin on
+        # Participant.display_name. Uses the tenant-scoped counterparts (no protocol/template
+        # context exists for a standalone todo) - see participant_allowed_for_tenant().
+        if payload.assigned_participant_id is not None and not self.repository.participant_allowed_for_tenant(
+            db, tenant_id, payload.assigned_participant_id
+        ):
+            raise ValueError("Assigned participant is not available for this tenant")
+        if payload.due_event_id is not None and not self.repository.event_allowed_for_tenant(
+            db, tenant_id, payload.due_event_id
+        ):
+            raise ValueError("Due event is not available for this tenant")
         values = self._normalize_due_fields(payload.model_dump())
         todo = ProtocolTodo(
             tenant_id=tenant_id,
@@ -149,12 +162,30 @@ class ProtocolTodoService:
             return None
         values = payload.model_dump(exclude_unset=True)
         values = self._normalize_due_fields(values)
+        # Standalone todos (protocol_element_block_id is None) must use the tenant-scoped
+        # checks, not the block-scoped ones - the block-scoped queries INNER JOIN through
+        # ProtocolElementBlock.id == protocol_element_block_id, which can never match NULL,
+        # so every assignment to a standalone todo failed unconditionally before this fix
+        # (audit D5, 2026-08-16).
+        is_standalone = todo.protocol_element_block_id is None
         participant_id = values.get("assigned_participant_id")
-        if participant_id is not None and not self.repository.participant_allowed_for_block(db, todo.protocol_element_block_id, participant_id):
-            raise ValueError("Assigned participant is not available for this template")
+        if participant_id is not None:
+            allowed = (
+                self.repository.participant_allowed_for_tenant(db, todo.tenant_id, participant_id)
+                if is_standalone
+                else self.repository.participant_allowed_for_block(db, todo.protocol_element_block_id, participant_id)
+            )
+            if not allowed:
+                raise ValueError("Assigned participant is not available for this template")
         due_event_id = values.get("due_event_id")
-        if due_event_id is not None and not self.repository.event_allowed_for_block(db, todo.protocol_element_block_id, due_event_id):
-            raise ValueError("Due event is not available for this tenant")
+        if due_event_id is not None:
+            allowed = (
+                self.repository.event_allowed_for_tenant(db, todo.tenant_id, due_event_id)
+                if is_standalone
+                else self.repository.event_allowed_for_block(db, todo.protocol_element_block_id, due_event_id)
+            )
+            if not allowed:
+                raise ValueError("Due event is not available for this tenant")
         # completed_at is server-authoritative and derived solely from the status
         # transition: a client-supplied value is always ignored/overridden here so
         # statistics/charts (which key off completed_at) can't drift from the actual
