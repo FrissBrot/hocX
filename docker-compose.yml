@@ -379,7 +379,13 @@ services:
       context: ./abgabebox-frontend
       target: deps
     restart: unless-stopped
-    mem_limit: 384m
+    # 384m had the exact same OOM-restart-loop risk as frontend/website before their fix
+    # (verified 2026-08-13 deploy) - this service builds Next.js at container startup too
+    # (target: deps, `npm run build` in command: below), so it hits the same TypeScript-
+    # check memory peak. Raised to the same 1536m ceiling (audit I2, 2026-08-16) - never
+    # actually verified against a real rebuild here yet, see the frontend/website comment's
+    # warning about that.
+    mem_limit: 1536m
     cpus: 0.5
     logging:
       driver: json-file

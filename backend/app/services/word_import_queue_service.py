@@ -282,6 +282,17 @@ class WordImportQueueService:
         user_id: int | None,
         payload: WordImportCommit,
     ) -> WordImportCommitResult:
+        # Row-locks the document for the rest of this transaction (audit D11, 2026-08-16):
+        # without this, two near-simultaneous commit requests for the same document (double-
+        # click, two tabs, a client retry after a slow response) can both read
+        # status == "eingelesen" before either has written "importiert", so both proceed and
+        # each creates its own Protocol - one gets referenced by this document, the other
+        # survives as an invisible orphaned duplicate. A concurrent SELECT ... FOR UPDATE on
+        # this row now blocks until the first commit's transaction ends, so the second
+        # request re-reads the now-"importiert" status and hits the check below instead.
+        db.execute(
+            select(WordImportDocument).where(WordImportDocument.id == document.id).with_for_update()
+        ).scalar_one()
         if document.status == "importiert":
             raise ValueError("Dokument wurde bereits importiert")
         if payload.template_id != document.template_id:

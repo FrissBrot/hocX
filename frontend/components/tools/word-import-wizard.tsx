@@ -110,9 +110,10 @@ function DocIcon() {
   );
 }
 
-function WarningIcon() {
+function WarningIcon({ title }: { title?: string } = {}) {
   return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="18" height="18">
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden={title ? undefined : true} role={title ? "img" : undefined} width="18" height="18">
+      {title && <title>{title}</title>}
       <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4" />
       <path d="M8 5v4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
       <circle cx="8" cy="11" r="0.75" fill="currentColor" />
@@ -1106,7 +1107,18 @@ export function WordImportWizard({
             {!isOpen &&
               (linked ? (
                 <span className="word-import-text-row-summary">
-                  <CheckIcon /> {linked.title} ({formatDate(linked.event_date)})
+                  {titleDiffers || dateDiffers ? (
+                    // Matched-but-differs rows deliberately don't force a confirmation click
+                    // (see eventStillOpen's docstring - the reviewer can still open and
+                    // repoint the row before committing) but were previously visually
+                    // indistinguishable from a clean match while collapsed, so a conflict
+                    // could go unnoticed in a long, mostly-skimmed list (audit E3/F3,
+                    // 2026-08-16). This icon is purely a "look inside" signal, not a block.
+                    <WarningIcon title="Titel/Datum weichen vom Dokument ab - Zeile öffnen zum Prüfen" />
+                  ) : (
+                    <CheckIcon />
+                  )}{" "}
+                  {linked.title} ({formatDate(linked.event_date)})
                 </span>
               ) : (
                 <span className="word-import-text-row-summary is-new">
@@ -1392,7 +1404,14 @@ export function WordImportWizard({
             {!isOpen &&
               (linked ? (
                 <span className="word-import-text-row-summary">
-                  <CheckIcon /> {linked.column_one_display} → {linked.column_two_display}
+                  {col2Differs ? (
+                    // See the matching comment on the event row's summary above (audit
+                    // E3/F3, 2026-08-16) - purely a "look inside" signal, not a block.
+                    <WarningIcon title="Wert weicht vom Dokument ab - Zeile öffnen zum Prüfen" />
+                  ) : (
+                    <CheckIcon />
+                  )}{" "}
+                  {linked.column_one_display} → {linked.column_two_display}
                 </span>
               ) : (
                 <span className="word-import-text-row-summary is-new">

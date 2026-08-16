@@ -173,7 +173,11 @@ class ExportService:
             raise ValueError("Protocol not found")
 
         template = db.get(DocumentTemplate, template_id)
-        if template is None:
+        # Tenant check (audit S5, 2026-08-16): without this, a client-supplied template_id
+        # from another tenant renders this export with that tenant's private LaTeX
+        # layout/branding - see the equivalent, already-correct check in
+        # document_template_service.snapshot_template_for_protocol.
+        if template is None or template.tenant_id != protocol.tenant_id:
             raise ValueError("Template not found")
 
         template_path = Path(template.filesystem_path or "")
@@ -292,7 +296,9 @@ class ExportService:
     ) -> ProtocolExportRead:
         from types import SimpleNamespace
         template = db.get(DocumentTemplate, template_id)
-        if template is None:
+        # Tenant check (audit S5, 2026-08-16): see export_standalone_pdf above - same
+        # missing check, same "foreign tenant's private LaTeX layout/branding" leak.
+        if template is None or template.tenant_id != tenant_id:
             raise ValueError("Template not found")
         template_path = Path(template.filesystem_path or "")
         if not template_path.exists():

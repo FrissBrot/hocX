@@ -197,6 +197,26 @@ class ProtocolTodoRepository:
         )
         return bool(db.scalar(statement))
 
+    def participant_allowed_for_tenant(self, db: Session, tenant_id: int, participant_id: int) -> bool:
+        """Standalone-todo counterpart to participant_allowed_for_block() (audit D5/D6,
+        2026-08-16): a standalone todo has no protocol_element_block_id, so there's no
+        template/protocol context to check membership against - just that the participant
+        belongs to the same tenant as the todo."""
+        return bool(
+            db.scalar(
+                select(func.count(Participant.id)).where(
+                    Participant.id == participant_id, Participant.tenant_id == tenant_id
+                )
+            )
+        )
+
+    def event_allowed_for_tenant(self, db: Session, tenant_id: int, event_id: int) -> bool:
+        """Standalone-todo counterpart to event_allowed_for_block() - see
+        participant_allowed_for_tenant() above."""
+        return bool(
+            db.scalar(select(func.count(Event.id)).where(Event.id == event_id, Event.tenant_id == tenant_id))
+        )
+
     def list_todo_blocks(self, db: Session, tenant_id: int):
         """Return all protocol-element blocks of type 'todo' for a tenant, ordered by protocol date desc."""
         return db.execute(

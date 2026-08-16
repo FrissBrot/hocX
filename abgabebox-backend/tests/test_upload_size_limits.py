@@ -24,7 +24,13 @@ from starlette.datastructures import UploadFile
 
 from app.routes.public import MAX_UPLOAD_REQUEST_BYTES, _read_upload_within_limit
 
-COMPOSE_PATH = Path(__file__).resolve().parents[2] / "docker-compose.yml"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+# Audit A2 (2026-08-16): this test used to check only docker-compose.yml (dev), which is
+# NOT what's actually deployed - scripts/deploy.sh and RUNBOOK.md both use
+# docker-compose.release.yml for that, and that file was missing the middleware entirely
+# (config drift the original H11 test was specifically meant to catch, but couldn't, because
+# it never looked at the file that matters in prod). Both are checked now.
+COMPOSE_PATHS = [REPO_ROOT / "docker-compose.yml", REPO_ROOT / "docker-compose.release.yml"]
 
 
 def _run(coro):
@@ -76,16 +82,20 @@ def test_read_upload_within_limit_accepts_file_exactly_at_limit():
 
 
 def test_max_upload_request_bytes_matches_traefik_body_limit_label():
-    """Config-drift guard: the Traefik maxRequestBodyBytes label in docker-compose.yml
-    (abgabebox-upload-body-limit) is meant to enforce the exact same ceiling as
-    MAX_UPLOAD_REQUEST_BYTES here, one layer earlier - if either number changes without the
-    other, the two defenses silently disagree about the real limit. Plain text search (not a
-    YAML parse) deliberately, so this test needs no extra dependency beyond what's already
-    installed."""
-    compose_text = COMPOSE_PATH.read_text()
-    match = re.search(
-        r"traefik\.http\.middlewares\.abgabebox-upload-body-limit\.buffering\.maxRequestBodyBytes=(\d+)",
-        compose_text,
+    """Config-drift guard: the Traefik maxRequestBodyBytes label (abgabebox-upload-body-limit,
+    optionally prefixed with ${ROUTER_PREFIX:-hocx}- in docker-compose.release.yml) is meant
+    to enforce the exact same ceiling as MAX_UPLOAD_REQUEST_BYTES here, one layer earlier - if
+    either number changes without the other, the two defenses silently disagree about the real
+    limit. Checked in EVERY compose file in COMPOSE_PATHS (see its comment) - a middleware
+    present in only one of them is exactly the config-drift class of bug this guards against.
+    Plain text search (not a YAML parse) deliberately, so this test needs no extra dependency
+    beyond what's already installed."""
+    pattern = re.compile(
+        r"traefik\.http\.middlewares\.(?:\$\{ROUTER_PREFIX:-hocx\}-)?abgabebox-upload-body-limit"
+        r"\.buffering\.maxRequestBodyBytes=(\d+)"
     )
-    assert match is not None, "abgabebox-upload-body-limit maxRequestBodyBytes label not found in docker-compose.yml"
-    assert int(match.group(1)) == MAX_UPLOAD_REQUEST_BYTES
+    for compose_path in COMPOSE_PATHS:
+        compose_text = compose_path.read_text()
+        match = pattern.search(compose_text)
+        assert match is not None, f"abgabebox-upload-body-limit maxRequestBodyBytes label not found in {compose_path.name}"
+        assert int(match.group(1)) == MAX_UPLOAD_REQUEST_BYTES, f"mismatch in {compose_path.name}"

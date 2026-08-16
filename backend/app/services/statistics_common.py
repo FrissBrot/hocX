@@ -162,17 +162,25 @@ def fetch_fines_by_participant(db: Session, tenant_id: int) -> list[Row]:
     """SUM() on the DB side over the Numeric(15,2) amount column, instead of repeated
     Python float additions of CHF amounts (audit finding M12) - same pattern already used
     by the finance-by-month report. Returns (name, count, amount) rows with amount as
-    Decimal."""
+    Decimal.
+
+    Grouped by participant_id where available (COALESCE'd into the group key as text) - NOT
+    by participant_name_snapshot alone (audit D9, 2026-08-16) - so two participants sharing
+    a name (e.g. parent/child) aren't merged into one row, and a renamed participant's fines
+    aren't split across two rows. Mirrors aggregate_attendance's `id:{pid}`/`name:{name}` key
+    convention above. Rows without a participant_id (participant deleted, FK SET NULL) fall
+    back to grouping by the frozen name snapshot, same as before this fix."""
     return db.execute(
         text("""
             SELECT
-                af.participant_name_snapshot AS name,
+                MAX(COALESCE(p2.display_name, af.participant_name_snapshot)) AS name,
                 COUNT(*) AS count,
                 SUM(af.amount) AS amount
             FROM attendance_fine af
             JOIN protocol p ON p.id = af.protocol_id
+            LEFT JOIN participant p2 ON p2.id = af.participant_id
             WHERE p.tenant_id = :tenant_id
-            GROUP BY af.participant_name_snapshot
+            GROUP BY COALESCE(af.participant_id::text, af.participant_name_snapshot)
         """),
         {"tenant_id": tenant_id},
     ).all()

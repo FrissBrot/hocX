@@ -44,14 +44,17 @@ export function AdminTenantManagement({ initialPage }: Props) {
   const [importBusy, setImportBusy] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const visibleTenants = tenants.filter((tenant) =>
-    !search.trim() || tenant.name.toLowerCase().includes(search.trim().toLowerCase())
-  );
+  // Server now applies `search` before pagination (audit A1, 2026-08-16 - fetchPage below
+  // sends it as `q`), so page.items is already the matching set for the current page.
+  const visibleTenants = tenants;
 
-  async function fetchPage(nextOffset: number) {
+  async function fetchPage(nextOffset: number, query: string) {
     setLoading(true);
     try {
-      const result = await browserApiFetch<AdminTenantPage>(`/api/admin/tenants?limit=${PAGE_SIZE}&offset=${nextOffset}`);
+      const q = query.trim();
+      const result = await browserApiFetch<AdminTenantPage>(
+        `/api/admin/tenants?limit=${PAGE_SIZE}&offset=${nextOffset}${q ? `&q=${encodeURIComponent(q)}` : ""}`
+      );
       setPage(result);
     } catch {
       // keep showing the previous page rather than blanking the table on a transient error
@@ -61,9 +64,23 @@ export function AdminTenantManagement({ initialPage }: Props) {
   }
 
   useEffect(() => {
-    void fetchPage(offset);
+    void fetchPage(offset, search);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offset]);
+
+  // Debounced re-fetch from offset 0 whenever the search text changes - see the identical
+  // pattern in admin-user-management.tsx.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (offset !== 0) {
+        setOffset(0);
+      } else {
+        void fetchPage(0, search);
+      }
+    }, 300);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -72,7 +89,7 @@ export function AdminTenantManagement({ initialPage }: Props) {
         method: "POST",
         body: JSON.stringify({ name }),
       });
-      await fetchPage(offset);
+      await fetchPage(offset, search);
       setModalOpen(false);
       setName("");
       showToast("Mandant erstellt", "success");
@@ -110,7 +127,7 @@ export function AdminTenantManagement({ initialPage }: Props) {
         method: "POST",
         body: JSON.stringify({ new_name: cloneName, mode: cloneMode }),
       });
-      await fetchPage(offset);
+      await fetchPage(offset, search);
       setCloneModalOpen(false);
       showToast("Mandant geklont", "success");
     } catch (error) {
@@ -152,7 +169,7 @@ export function AdminTenantManagement({ initialPage }: Props) {
       if (tenants.length === 1 && offset > 0) {
         setOffset(offset - PAGE_SIZE);
       } else {
-        await fetchPage(offset);
+        await fetchPage(offset, search);
       }
       showToast("Mandant gelöscht", "success");
     } catch (error) {
@@ -178,7 +195,7 @@ export function AdminTenantManagement({ initialPage }: Props) {
         "/api/admin/tenants/import",
         { method: "POST", body: formData }
       );
-      await fetchPage(offset);
+      await fetchPage(offset, search);
       setImportModalOpen(false);
       if (result.warnings.length > 0) {
         showToast(`Mandant importiert mit ${result.warnings.length} Hinweis(en) - siehe Konsole`, "success");
