@@ -14,7 +14,6 @@ export are recoverable situations, not reasons to fail the whole import.
 from __future__ import annotations
 
 import json
-import os
 import secrets
 import shutil
 import tempfile
@@ -25,6 +24,7 @@ from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
+from app import scanner
 from app.core.config import settings
 from app.core.security import hash_password
 from app.models import (
@@ -150,7 +150,14 @@ class TenantImportService:
     def _restore_file(self, member_path: str | None, *, root: str, new_tenant_id: int, subdir: str) -> str | None:
         if member_path is None:
             return None
-        source = self.extract_dir / member_path
+        # SECURITY (audit S4, 2026-08-16): member_path comes straight out of the attacker-
+        # controlled manifest.json inside the uploaded import zip - joining it onto
+        # extract_dir unchecked would let a manifest with e.g. "../../../etc/passwd" or an
+        # absolute path (Path(a) / "/etc/passwd" silently discards "a" entirely, per Python's
+        # Path semantics) read arbitrary files off the server's filesystem into the new
+        # tenant's storage. _safe_extract() already guards the zip's own entries the same way
+        # for the same reason - reuse that exact containment check here.
+        source = _resolve_within_extract_dir(self.extract_dir, member_path)
         if not source.exists():
             return None
         suffix = Path(member_path).suffix
@@ -540,7 +547,21 @@ class TenantImportService:
             if new_storage_path is None:
                 self.warnings.append(f"Datei '{row.get('original_name')}' fehlte im Export, übersprungen.")
                 continue
-            new_row = build_row(StoredFile, data, {"tenant_id": new_tenant_id, "storage_path": new_storage_path})
+            # SECURITY (audit S4, 2026-08-16): never trust data["scan_status"] from the
+            # manifest (build_row() forces it to "pending" regardless, see
+            # FORCED_SECURE_DEFAULTS) - actually run the restored bytes past ClamAV here,
+            # the same way a fresh upload does (file_service.py's save_word_import_document),
+            # so an imported file goes through the real scan workflow instead of either
+            # trusting an attacker-supplied verdict or sitting at "pending" forever with no
+            # sweep ever reaching it (the periodic rescan sweeps are scoped to their own
+            # storage-path prefixes, which tenant-import restores don't share).
+            absolute_path = Path(root).resolve() / new_storage_path
+            scan_status = scanner.scan_file(absolute_path, host=settings.clamav_host, port=settings.clamav_port)
+            if scan_status == "infected":
+                absolute_path.unlink(missing_ok=True)
+                self.warnings.append(f"Datei '{row.get('original_name')}' wurde von der Virenprüfung als infiziert erkannt und wurde nicht importiert.")
+                continue
+            new_row = build_row(StoredFile, data, {"tenant_id": new_tenant_id, "storage_path": new_storage_path, "scan_status": scan_status})
             self.db.add(new_row)
             self.db.flush()
             id_map[row["id"]] = new_row.id
@@ -722,8 +743,22 @@ class TenantImportService:
         self.db.commit()
 
 
+def _resolve_within_extract_dir(base_dir: Path, relative_name: str) -> Path:
+    """Resolves `relative_name` against `base_dir` and rejects any result that would land
+    outside of it - covers both `../../etc/passwd`-style traversal and absolute paths
+    (`Path(base) / "/etc/passwd"` silently discards `base` per Python's own Path semantics,
+    so an absolute member name would otherwise land wherever the attacker points it).
+    Shared by _safe_extract() (zip member names) and TenantImportService._restore_file()
+    (manifest.json's storage_path/profile_image_path fields) - both are attacker-controlled
+    strings from the same untrusted import zip (audit S4, 2026-08-16)."""
+    base_resolved = base_dir.resolve()
+    target = (base_dir / relative_name).resolve()
+    if not target.is_relative_to(base_resolved):
+        raise ValueError(f"Unsicherer Pfad im Import-Archiv: {relative_name}")
+    return target
+
+
 def _safe_extract(zf: zipfile.ZipFile, dest_dir: Path) -> None:
-    dest_resolved = dest_dir.resolve()
     infolist = zf.infolist()
 
     # Zip-bomb guard (M19): check declared entry count/uncompressed size - same as
@@ -740,7 +775,5 @@ def _safe_extract(zf: zipfile.ZipFile, dest_dir: Path) -> None:
         )
 
     for member in infolist:
-        target = (dest_dir / member.filename).resolve()
-        if target != dest_resolved and not str(target).startswith(str(dest_resolved) + os.sep):
-            raise ValueError(f"Unsicherer Pfad im Import-Archiv: {member.filename}")
+        _resolve_within_extract_dir(dest_dir, member.filename)
     zf.extractall(dest_dir)

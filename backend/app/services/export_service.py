@@ -335,7 +335,7 @@ class ExportService:
         elif export_type == "list":
             from app.models.entities import ListDefinition as _ListDefinition
             list_def = db.get(_ListDefinition, list_definition_id)
-            if list_def is None:
+            if list_def is None or list_def.tenant_id != tenant_id:
                 raise ValueError("List not found")
             body_content = self._render_global_list_body(
                 db, list_definition_id=list_definition_id,

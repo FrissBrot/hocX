@@ -5,6 +5,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.cycle_utils import reset_boundary
 from app.models import (
     AttendanceFine,
     DocumentTemplate,
@@ -250,14 +251,20 @@ class ProtocolService:
         return True
 
     def _cycle_bounds(self, protocol_date: date, *, reset_month: int, reset_day: int) -> tuple[date, date]:
-        cutoff_this_year = date(protocol_date.year, reset_month, reset_day)
+        # Uses reset_boundary() instead of a raw date(...) call so an invalid
+        # (reset_month, reset_day) combination (e.g. Feb 30, schema-valid since
+        # reset_month/reset_day are validated independently) gets clamped to the last
+        # valid day of that month instead of raising ValueError and blocking every
+        # protocol-numbering call for the whole template (audit D1, 2026-08-16). Mirrors
+        # cycle_utils.get_cycle_year(), which already had this clamp.
+        cutoff_this_year = reset_boundary(protocol_date.year, reset_month, reset_day)
         if protocol_date <= cutoff_this_year:
             cycle_end = cutoff_this_year
-            previous_cutoff = date(protocol_date.year - 1, reset_month, reset_day)
+            previous_cutoff = reset_boundary(protocol_date.year - 1, reset_month, reset_day)
             cycle_start = previous_cutoff + timedelta(days=1)
         else:
             cycle_start = cutoff_this_year + timedelta(days=1)
-            cycle_end = date(protocol_date.year + 1, reset_month, reset_day)
+            cycle_end = reset_boundary(protocol_date.year + 1, reset_month, reset_day)
         return cycle_start, cycle_end
 
     def _sequence_counts(
@@ -1896,11 +1903,21 @@ class ProtocolService:
             return self.document_template_service.snapshot_template_for_protocol(db, updated, document_template_id)
         return updated
 
-    def delete_protocol(self, db: Session, protocol_id: int) -> bool:
+    def delete_protocol(self, db: Session, protocol_id: int, *, bypass_freeze_check: bool = False) -> bool:
+        """bypass_freeze_check is for internal cleanup only (see
+        WordImportService.commit's except-block) - it must never be reachable from a public
+        API route. word_import_service.commit() freezes the protocol (status="abgeschlossen",
+        committed immediately by _run_status_transition_hooks) before its own later write
+        steps (list snapshots, outcome rows) run; if one of those later steps then fails, the
+        already-committed, now-broken protocol needs to be deleted for cleanup even though
+        it's already frozen - the ordinary get_protocol_or_404_not_frozen guard below would
+        otherwise reject that delete with a 409, masking the original error and leaving a
+        permanently locked, broken protocol behind."""
         protocol = self.repository.get(db, protocol_id)
         if protocol is None:
             return False
-        self.get_protocol_or_404_not_frozen(db, protocol_id)
+        if not bypass_freeze_check:
+            self.get_protocol_or_404_not_frozen(db, protocol_id)
         self.repository.delete(db, protocol)
         return True
 
