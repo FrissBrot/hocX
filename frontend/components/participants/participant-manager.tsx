@@ -206,7 +206,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
         });
         participantId = updatedParticipant.id;
         setParticipants((current) => current.map((item) => (item.id === updatedParticipant.id ? updatedParticipant : item)));
-        successMessage = `Updated ${updatedParticipant.display_name}`;
+        successMessage = `${updatedParticipant.display_name} aktualisiert`;
       } else {
         updatedParticipant = await browserApiFetch<ParticipantSummary>("/api/participants", {
           method: "POST",
@@ -214,7 +214,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
         });
         participantId = updatedParticipant.id;
         setParticipants((current) => [updatedParticipant, ...current]);
-        successMessage = `Created ${updatedParticipant.display_name}`;
+        successMessage = `${updatedParticipant.display_name} erstellt`;
       }
 
       await browserApiFetch(`/api/participants/${participantId}/templates`, {
@@ -390,7 +390,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
                       void deleteParticipant(participant.id);
                     }}
                   >
-                    Delete
+                    Löschen
                   </button>
                 </div>
               </td>

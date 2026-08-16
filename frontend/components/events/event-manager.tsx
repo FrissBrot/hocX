@@ -764,7 +764,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                     void deleteEvent(item.id);
                   }}
                 >
-                  Delete
+                  Löschen
                 </button>
               </div>
             </td>

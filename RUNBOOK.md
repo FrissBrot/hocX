@@ -80,6 +80,13 @@ gunzip -c backups/<timestamp>-pre-vX.Y.Z.sql.gz | docker compose -p hocx exec -T
 befüllen in Release A, alte Spalte erst in Release B entfernen. Das hält jeden
 einzelnen Schritt rückwärtskompatibel und Rollback ohne Backup-Restore möglich.
 
+**Bekannte Ausnahme (Audit I6, 2026-08-16):** `backend/alembic/versions/0018_cycle_config.py`
+migriert Daten und entfernt die alten Spalten im selben Schritt (plus ein
+downgrade-unfähiges `DELETE` verwaister Zeilen) - verstößt gegen diese Regel, ist aber
+bereits produktiv angewendet und wird nicht nachträglich umgeschrieben. Nur als Beleg
+stehen gelassen, dass die Regel oben nicht rückwirkend gilt, aber für alle künftigen
+Migrationen bindend bleibt.
+
 ## 5. Testumgebung neu aufsetzen (falls die Test-DB mal komplett zurückgesetzt werden soll)
 
 ```bash
@@ -102,6 +109,12 @@ durchläuft beim nächsten Start die komplette Alembic-Historie von Anfang an.
    `change-me`-Werte durch echte, zufällige Werte ersetzen (`openssl rand -hex 32` für
    Secrets).
 5. `mkdir -p storage/abgabebox-uploads infra/traefik/letsencrypt infra/traefik/dynamic`
+   und `chown root:5001 storage/abgabebox-uploads && chmod 775 storage/abgabebox-uploads`
+   - `abgabebox-backend` läuft im Container als nicht-root User `abgabebox` (uid/gid 5001,
+   siehe `abgabebox-backend/Dockerfile`), `backend` schreibt als root in denselben
+   Host-Ordner (unterschiedliche Mountpunkte, siehe `docker-compose.yml`). Ohne die
+   Gruppen-Freigabe bräuchte es sonst 777 (Audit I3, 2026-08-16 - genau das lag hier vorher
+   unbemerkt vor).
 6. `./scripts/deploy.sh prod` - zieht die in `.env` gepinnte Version, startet den
    kompletten Stack inkl. eigenem Traefik (Let's-Encrypt-Zertifikate werden beim ersten
    Start automatisch bezogen, dauert ein paar Minuten).

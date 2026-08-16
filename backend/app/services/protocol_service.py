@@ -444,6 +444,13 @@ class ProtocolService:
                 reset_month=reset_month,
                 reset_day=reset_day,
             )
+            # number_blocked tracks whether the number's own collision check (below) refused
+            # to apply the new rank - if so, the title must NOT be re-rendered with that same
+            # (unapplied) rank either, or protocol_number and title would show two different
+            # countings for the same protocol (audit D3, 2026-08-16). Only ever set when a
+            # collision was actually found; a template with no protocol_number_pattern at all
+            # never blocks its title.
+            number_blocked = False
             if sibling_template.protocol_number_pattern:
                 candidate = self._format_pattern(
                     sibling_template.protocol_number_pattern, counts=counts, protocol_date=sibling.protocol_date
@@ -454,9 +461,11 @@ class ProtocolService:
                             Protocol.tenant_id == tenant_id, Protocol.protocol_number == candidate, Protocol.id != sibling.id
                         )
                     )
-                    if not collision:
+                    if collision:
+                        number_blocked = True
+                    else:
                         sibling.protocol_number = candidate
-            if sibling_template.title_pattern:
+            if sibling_template.title_pattern and not number_blocked:
                 candidate_title = self._format_pattern(
                     sibling_template.title_pattern, counts=counts, protocol_date=sibling.protocol_date
                 )
@@ -1924,6 +1933,7 @@ class ProtocolService:
         if protocol is None:
             return None
         previous_status = protocol.status
+        previous_protocol_date = protocol.protocol_date
         values = payload.model_dump(exclude_unset=True)
         document_template_id = values.pop("document_template_id", None) if "document_template_id" in values else None
         if values.get("event_id") is not None:
@@ -1943,9 +1953,65 @@ class ProtocolService:
         updated = self.repository.update(db, protocol, values, commit=not has_status_transition)
         if has_status_transition:
             updated = self._run_status_transition_hooks(db, protocol_id, previous_status, updated)
+        # D4, 2026-08-16: protocol_date is freely editable via PATCH, but until this fix
+        # nothing re-derived protocol_number/title or cascaded to siblings for the new date -
+        # the "number follows date rank" invariant b432393 established for imports broke
+        # again the moment someone manually moved a protocol's date. "protocol_number" in
+        # values is an explicit manual override in the SAME request (mirrors
+        # create_from_template's payload.protocol_number convention) and skips this, same as
+        # an already-frozen protocol (never renumbered, see _renumber_later_siblings).
+        new_date = values.get("protocol_date")
+        if (
+            new_date is not None
+            and new_date != previous_protocol_date
+            and updated.status != "abgeschlossen"
+            and "protocol_number" not in values
+        ):
+            self._renumber_for_date_change(db, updated)
         if "document_template_id" in payload.model_fields_set:
             return self.document_template_service.snapshot_template_for_protocol(db, updated, document_template_id)
         return updated
+
+    def _renumber_for_date_change(self, db: Session, protocol: Protocol) -> None:
+        """Re-derives protocol.protocol_number/title for their new protocol_date and cascades
+        the shift to later, still-open siblings, mirroring create_from_template's
+        auto-numbering (see update_protocol's call site for why/when this runs)."""
+        from app.models import CycleConfig
+
+        template = db.get(Template, protocol.template_id)
+        if template is None or (not template.protocol_number_pattern and not template.title_pattern):
+            return
+        cycle_cfg = db.get(CycleConfig, template.cycle_config_id) if template.cycle_config_id else None
+        reset_month = cycle_cfg.reset_month if cycle_cfg else 12
+        reset_day = cycle_cfg.reset_day if cycle_cfg else 31
+
+        self._renumber_later_siblings(
+            db, tenant_id=protocol.tenant_id, template=template, protocol_date=protocol.protocol_date,
+            reset_month=reset_month, reset_day=reset_day,
+        )
+        counts = self._sequence_counts(
+            db, tenant_id=protocol.tenant_id, template_id=template.id, protocol_date=protocol.protocol_date,
+            reset_month=reset_month, reset_day=reset_day, exclude_protocol_id=protocol.id,
+        )
+        if template.protocol_number_pattern:
+            candidate = self._format_pattern(template.protocol_number_pattern, counts=counts, protocol_date=protocol.protocol_date)
+            if candidate and candidate != protocol.protocol_number:
+                collision = db.scalar(
+                    select(Protocol.id).where(
+                        Protocol.tenant_id == protocol.tenant_id, Protocol.protocol_number == candidate, Protocol.id != protocol.id
+                    )
+                )
+                # Unlike create_from_template's auto-pick, a real collision here just leaves
+                # the number as-is rather than retrying with a bumped count - this is a rare
+                # edge case (two protocols landing on the same rank after a manual date edit)
+                # and the protocol already has a valid, if now slightly out-of-rank, number.
+                if not collision:
+                    protocol.protocol_number = candidate
+        if template.title_pattern:
+            candidate_title = self._format_pattern(template.title_pattern, counts=counts, protocol_date=protocol.protocol_date)
+            if candidate_title:
+                protocol.title = candidate_title
+        db.add(protocol)
 
     def delete_protocol(self, db: Session, protocol_id: int, *, bypass_freeze_check: bool = False) -> bool:
         """bypass_freeze_check is for internal cleanup only (see

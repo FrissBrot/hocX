@@ -9,6 +9,7 @@ importieren.
 | Scope | Enthält |
 |---|---|
 | `structure` | Zyklen, Formularfelder/Templates, Dokumentvorlagen, Listen, Konten, Benutzerrollen |
+| `structure_lists` | zusätzlich die Listeneinträge selbst (Zeileninhalte der unter `structure` bereits enthaltenen Listen) - Bezüge einzelner Einträge zu Teilnehmern/Terminen der Quellinstanz werden beim Import nicht übernommen, da Teilnehmer/Termine in diesem Scope nicht mitexportiert werden |
 | `full` | zusätzlich Teilnehmer, Termine, Protokolle, Bussen, Todos (ohne Abgabebox) |
 | `full_abgabebox` | zusätzlich Abgabebox-Konfiguration und hochgeladene Dateien |
 

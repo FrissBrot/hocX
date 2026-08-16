@@ -20,6 +20,7 @@ from app.schemas.participant import (
 )
 from app.services.participant_service import ParticipantService
 from app.services.access_service import AccessService
+from app.services.audit_service import AuditService
 from app.services.template_service import TemplateService
 from app.schemas.template import TemplateRead
 
@@ -27,6 +28,7 @@ router = APIRouter()
 participant_service = ParticipantService()
 template_service = TemplateService()
 access_service = AccessService()
+audit = AuditService()
 
 
 def _normalized_template_participant_assignments(payload: TemplateParticipantAssignmentUpdate) -> list[tuple[int, bool]]:
@@ -108,6 +110,9 @@ def delete_participant(
         raise HTTPException(status_code=400, detail="Participant could not be deleted") from exc
     if not deleted:
         raise HTTPException(status_code=404, detail="Participant not found")
+    # Audit S10, 2026-08-16: this route had no audit trail at all, unlike finance.py/
+    # fines.py/users.py/protocols.py/todos.py.
+    audit.log(db, action="participant.deleted", actor=user, entity_type="participant", entity_id=participant_id)
     return {"message": "Participant deleted"}
 
 
@@ -138,6 +143,10 @@ def bulk_delete_participants(
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Participants could not be deleted") from exc
+    audit.log(
+        db, action="participant.bulk_deleted", actor=user, entity_type="participant",
+        details={"participant_ids": payload.participant_ids, "deleted_count": deleted_count},
+    )
     return {"deleted_count": deleted_count}
 
 

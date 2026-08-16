@@ -12,11 +12,13 @@ from app.core.security import CurrentUser, get_current_user, require_reader, req
 from app.schemas.event import EventCreate, EventImportPreview, EventRead, EventUpdate
 from app.services.event_service import EventService
 from app.services.submission_service import SubmissionService
+from app.services.audit_service import AuditService
 from app.models.entities import Event
 
 router = APIRouter()
 service = EventService()
 submission_service = SubmissionService()
+audit = AuditService()
 
 
 @router.get("/events", response_model=list[EventRead])
@@ -128,6 +130,8 @@ def delete_event(
         raise HTTPException(status_code=400, detail="Event could not be deleted") from exc
     if not deleted:
         raise HTTPException(status_code=404, detail="Event not found")
+    # Audit S10, 2026-08-16 - see the identical fix in participants.py.
+    audit.log(db, action="event.deleted", actor=user, entity_type="event", entity_id=event_id)
     return {"message": "Event deleted"}
 
 

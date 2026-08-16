@@ -76,7 +76,7 @@ def test_apply_text_sync_writes_configured_event_field(db):
     event = make_event(db, tenant.id, title="Herbsthock", event_date=date(2026, 10, 18))
 
     block_field_sync.apply_text_sync(
-        db, repeat_source_type="event", repeat_source_id=event.id, sync_target_field="location", content="Vereinshaus"
+        db, tenant_id=tenant.id, repeat_source_type="event", repeat_source_id=event.id, sync_target_field="location", content="Vereinshaus"
     )
 
     db.flush()
@@ -92,7 +92,7 @@ def test_apply_text_sync_writes_configured_todo_field(db):
     todo = make_protocol_todo(db, protocol_element_block_id=None, task="Alter Text", tenant_id=tenant.id)
 
     block_field_sync.apply_text_sync(
-        db, repeat_source_type="todo", repeat_source_id=todo.id, sync_target_field="reference_link", content="https://example.org"
+        db, tenant_id=tenant.id, repeat_source_type="todo", repeat_source_id=todo.id, sync_target_field="reference_link", content="https://example.org"
     )
 
     db.flush()
@@ -106,7 +106,7 @@ def test_apply_text_sync_ignores_field_outside_allowlist(db):
     event = make_event(db, tenant.id, title="Herbsthock", event_date=date(2026, 10, 18))
 
     block_field_sync.apply_text_sync(
-        db, repeat_source_type="event", repeat_source_id=event.id, sync_target_field="tenant_id", content="not-a-real-write"
+        db, tenant_id=tenant.id, repeat_source_type="event", repeat_source_id=event.id, sync_target_field="tenant_id", content="not-a-real-write"
     )
 
     db.flush()
@@ -118,7 +118,7 @@ def test_apply_text_sync_noop_without_sync_target_field(db):
     event = make_event(db, tenant.id, title="Herbsthock", event_date=date(2026, 10, 18))
 
     block_field_sync.apply_text_sync(
-        db, repeat_source_type="event", repeat_source_id=event.id, sync_target_field=None, content="Should not land anywhere"
+        db, tenant_id=tenant.id, repeat_source_type="event", repeat_source_id=event.id, sync_target_field=None, content="Should not land anywhere"
     )
 
     db.flush()
@@ -149,7 +149,8 @@ def test_save_text_block_syncs_to_linked_event_field(db):
 
     autosave_service = AutosaveService()
     autosave_service.save_text_block(
-        db, block.id, "Neuer Standort laut Protokoll", block_config=block.configuration_snapshot_json
+        db, block.id, "Neuer Standort laut Protokoll",
+        tenant_id=ctx["tenant"].id, block_config=block.configuration_snapshot_json
     )
 
     db.flush()

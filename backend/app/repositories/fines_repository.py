@@ -137,6 +137,11 @@ class FinesRepository:
         protocol = db.get(Protocol, payload.protocol_id)
         if protocol is None or protocol.tenant_id != tenant_id:
             return None
+        # Freeze-Schutz (audit S6, 2026-08-16): finalized protocols are immutable snapshots
+        # everywhere else in this codebase (see reopen_fine's identical check below) - a new
+        # Busse retroactively added to one would silently change that historical record.
+        if protocol.status == "abgeschlossen":
+            return None
         account = db.get(FinanceAccount, payload.account_id)
         if account is None or account.tenant_id != tenant_id:
             return None
@@ -169,11 +174,22 @@ class FinesRepository:
 
     def delete_fine(self, db: Session, fine_id: int, tenant_id: int) -> bool:
         """Hard-delete the fine."""
-        fine = db.get(AttendanceFine, fine_id)
+        # Row-locked, same as collect_fine (audit E4, 2026-08-16): a plain db.get() here let
+        # a near-simultaneous collect_fine slip a FinanceTransaction in between this read and
+        # the DELETE below, leaving that transaction behind with no matching AttendanceFine
+        # row to explain who/what/when it was for. The lock makes this request wait for
+        # collect_fine's transaction to finish (or vice versa), so the re-read of `status`
+        # right after always reflects the real outcome.
+        fine = db.execute(
+            select(AttendanceFine).where(AttendanceFine.id == fine_id).with_for_update()
+        ).scalar_one_or_none()
         if fine is None or fine.status == "collected":
             return False
         protocol = db.get(Protocol, fine.protocol_id)
         if protocol is None or protocol.tenant_id != tenant_id:
+            return False
+        # Freeze-Schutz (audit S7, 2026-08-16) - see create_fine's identical check above.
+        if protocol.status == "abgeschlossen":
             return False
         db.delete(fine)
         db.commit()
@@ -207,6 +223,9 @@ class FinesRepository:
             return None
         protocol = db.get(Protocol, fine.protocol_id)
         if protocol is None or protocol.tenant_id != tenant_id:
+            return None
+        # Freeze-Schutz (audit S7, 2026-08-16) - see create_fine's identical check above.
+        if protocol.status == "abgeschlossen":
             return None
 
         # No explicit protocol context given (standalone Bussen tab, not the protocol editor) -

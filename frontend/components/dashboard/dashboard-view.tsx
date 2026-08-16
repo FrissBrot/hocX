@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { browserApiFetch } from "@/lib/api/client";
+import { useToast } from "@/contexts/toast-context";
 import { FINE_TYPE_LABEL } from "@/lib/constants/fine-types";
 import { formatDate } from "@/lib/utils/format";
 import { AttendanceFineListItem, NextSessionAttendanceEntry, NextSessionInfo, TodoListItem } from "@/types/api";
@@ -36,6 +37,7 @@ function sessionCountdownLabel(dateStr: string): string {
 
 export function DashboardView({ todos, fines, nextSession, canExcuse }: Props) {
   const router = useRouter();
+  const showToast = useToast();
   const [entries, setEntries] = useState<NextSessionAttendanceEntry[]>(nextSession.entries);
   const [busy, setBusy] = useState<Record<number, boolean>>({});
 
@@ -73,10 +75,14 @@ export function DashboardView({ todos, fines, nextSession, canExcuse }: Props) {
         method: "POST",
         body: JSON.stringify({ excused: nextExcused }),
       });
-    } catch {
+    } catch (err: unknown) {
       setEntries((current) =>
         current.map((e) => (e.participant_id === entry.participant_id ? { ...e, status: previousStatus } : e))
       );
+      // The optimistic status flip was already reverted above - without this, that revert
+      // was the only visible feedback, so a real failure just looked like the click didn't
+      // register (audit F8, 2026-08-16).
+      showToast(err instanceof Error ? err.message : "Status konnte nicht geändert werden", "error");
     } finally {
       setBusy((b) => ({ ...b, [entry.participant_id]: false }));
     }
