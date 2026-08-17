@@ -4,7 +4,7 @@ Adds a nullable preference on app_user that records which MFA method type should
 default during login. Existing users are backfilled to preserve the prior behavior: prefer a
 passkey when one exists, otherwise fall back to TOTP.
 
-Revision ID: 0055_app_user_preferred_mfa_factor_type
+Revision ID: 0055_pref_mfa_method
 Revises: 0054_user_mfa_factor
 Create Date: 2026-08-17
 """
@@ -12,7 +12,7 @@ Create Date: 2026-08-17
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0055_app_user_preferred_mfa_factor_type"
+revision = "0055_pref_mfa_method"
 down_revision = "0054_user_mfa_factor"
 branch_labels = None
 depends_on = None
