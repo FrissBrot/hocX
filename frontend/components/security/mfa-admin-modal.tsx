@@ -82,6 +82,9 @@ export function MfaAdminModal({ open, onClose, title, loadPath, deletePathBase }
             <div className="muted">
               {loading ? "Lädt…" : overview?.has_factors ? `${overview.factors.length} Faktor(en) hinterlegt` : "Noch keine Faktoren eingerichtet"}
             </div>
+            {overview?.preferred_factor_type ? (
+              <div className="muted">Standardmethode: {factorTypeLabel(overview.preferred_factor_type)}</div>
+            ) : null}
           </div>
         </div>
 

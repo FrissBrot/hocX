@@ -5940,6 +5940,72 @@ input[type="radio"] {
   gap: 16px;
 }
 
+.login-verify-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.login-inline-note {
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel-solid) 92%, transparent 8%);
+  box-shadow: var(--shadow-soft);
+}
+
+.login-inline-note strong {
+  font-size: 1rem;
+}
+
+.login-mfa-switcher {
+  display: grid;
+  gap: 10px;
+}
+
+.login-mfa-choice-list {
+  display: grid;
+  gap: 10px;
+}
+
+.login-mfa-choice-button {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--panel-solid);
+  color: var(--text);
+  text-align: left;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.login-mfa-choice-button strong {
+  font-size: 0.96rem;
+}
+
+.login-mfa-choice-button span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.login-mfa-choice-button:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent-soft) 48%, var(--panel-solid) 52%);
+  transform: translateY(-1px);
+}
+
+.login-mfa-choice-button.is-selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent-soft) 68%, var(--panel-solid) 32%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent 65%);
+}
+
 .login-mfa-methods {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

@@ -25,6 +25,8 @@ class UserMfaRead(BaseModel):
     required: bool
     has_factors: bool
     can_add_passkey_here: bool
+    preferred_factor_type: MfaFactorType | None = None
+    preferred_factor_label: str | None = None
     factors: list[MfaFactorRead] = Field(default_factory=list)
 
 
@@ -63,6 +65,10 @@ class MfaTicketRequest(BaseModel):
     ticket: str
 
 
+class PreferredMfaMethodUpdate(BaseModel):
+    factor_type: MfaFactorType
+
+
 class PasskeyAssertionStartRequest(BaseModel):
     ticket: str
 
@@ -90,6 +96,8 @@ class MfaPendingLoginRead(BaseModel):
     user_email: str
     tenant_name: str | None = None
     available_methods: list[MfaPendingLoginMethodRead] = Field(default_factory=list)
+    default_factor_type: MfaFactorType | None = None
+    default_factor_label: str | None = None
     can_add_totp: bool = True
     can_add_passkey: bool = True
 

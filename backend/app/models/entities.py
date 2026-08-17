@@ -94,6 +94,10 @@ class AppUser(Base, TimestampMixin, UpdatedAtMixin):
     __tablename__ = "app_user"
     __table_args__ = (
         UniqueConstraint("email", name="uq_app_user_email"),
+        CheckConstraint(
+            "preferred_mfa_factor_type IN ('totp', 'webauthn')",
+            name="ck_app_user_preferred_mfa_factor_type",
+        ),
         Index("idx_app_user_default_tenant", "default_tenant_id"),
         Index("idx_app_user_email", "email"),
     )
@@ -109,6 +113,7 @@ class AppUser(Base, TimestampMixin, UpdatedAtMixin):
     preferred_language: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'de'"))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
     session_revoke_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    preferred_mfa_factor_type: Mapped[str | None] = mapped_column(Text)
     external_identity_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
 
 
