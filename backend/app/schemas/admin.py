@@ -152,3 +152,23 @@ class SystemErrorLogPage(BaseModel):
 class SystemErrorLogFilterOptions(BaseModel):
     error_types: list[str]
     sources: list[str]
+
+
+TenantCleanupCategory = Literal[
+    "protocols", "list_entries", "lists_full", "events", "todos", "participants", "documents"
+]
+
+
+class TenantCleanupCounts(BaseModel):
+    protocols: int = 0
+    list_entries: int = 0
+    lists_full: int = 0
+    events: int = 0
+    todos: int = 0
+    participants: int = 0
+    documents: int = 0
+
+
+class TenantCleanupRequest(BaseModel):
+    categories: list[TenantCleanupCategory]
+    confirm_name: str

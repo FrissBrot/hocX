@@ -162,6 +162,18 @@ export type AdminTenantPage = {
   total: number;
 };
 
+export type TenantCleanupCategory = "protocols" | "list_entries" | "lists_full" | "events" | "todos" | "participants" | "documents";
+
+export type TenantCleanupCounts = {
+  protocols: number;
+  list_entries: number;
+  lists_full: number;
+  events: number;
+  todos: number;
+  participants: number;
+  documents: number;
+};
+
 export type AdminDomainSummary = {
   id: number;
   tenant_id: number;

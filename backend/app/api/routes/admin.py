@@ -27,6 +27,8 @@ from app.schemas.admin import (
     PlatformAdminUpdate,
     SystemErrorLogFilterOptions,
     SystemErrorLogPage,
+    TenantCleanupCounts,
+    TenantCleanupRequest,
     TenantCloneRequest,
     TenantImportResult,
 )
@@ -41,6 +43,7 @@ from app.services.file_service import _safe_storage_path
 from app.services.audit_service import AuditService
 from app.services.platform_oidc_service import PlatformOidcService
 from app.services.tenant_clone_service import TenantCloneService
+from app.services.tenant_cleanup_service import TenantCleanupService
 from app.services.tenant_export_service import TenantExportService
 from app.services.tenant_import_service import TenantImportService
 
@@ -52,6 +55,7 @@ user_service = AdminUserService()
 admin_account_service = PlatformAdminService()
 oidc_service = PlatformOidcService()
 clone_service = TenantCloneService()
+cleanup_service = TenantCleanupService()
 domain_service = AdminDomainService()
 error_log_service = AdminErrorLogService()
 export_service = TenantExportService()
@@ -173,6 +177,43 @@ def delete_tenant(tenant_id: int, db: Session = Depends(get_db), current_admin: 
     if not deleted:
         raise HTTPException(status_code=404, detail="Tenant not found")
     audit.log(db, action="admin.tenant_deleted", actor_email=current_admin.email, tenant_id=tenant_id, entity_type="tenant", entity_id=tenant_id)
+
+
+@router.get("/tenants/{tenant_id}/cleanup/preview", response_model=TenantCleanupCounts)
+def preview_tenant_cleanup(tenant_id: int, db: Session = Depends(get_db)):
+    tenant = tenant_service.get_tenant(db, tenant_id)
+    if tenant is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    return cleanup_service.preview(db, tenant_id)
+
+
+@router.post("/tenants/{tenant_id}/cleanup", response_model=TenantCleanupCounts)
+def cleanup_tenant(
+    tenant_id: int,
+    payload: TenantCleanupRequest,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
+    tenant = tenant_service.get_tenant(db, tenant_id)
+    if tenant is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    if payload.confirm_name.strip() != tenant.name:
+        raise HTTPException(status_code=400, detail="Mandantenname stimmt nicht überein")
+    if not payload.categories:
+        raise HTTPException(status_code=400, detail="Keine Kategorien ausgewählt")
+    try:
+        counts = cleanup_service.cleanup(db, tenant_id, payload.categories)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Aufräumen fehlgeschlagen") from exc
+    if counts is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    audit.log(
+        db, action="admin.tenant_cleanup", actor_email=current_admin.email, tenant_id=tenant_id,
+        entity_type="tenant", entity_id=tenant_id,
+        details={"categories": payload.categories, "counts": counts.model_dump()},
+    )
+    return counts
 
 
 @router.post("/tenants/{tenant_id}/clone", response_model=AdminTenantRead, status_code=201)
