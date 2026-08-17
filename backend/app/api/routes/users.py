@@ -8,6 +8,7 @@ from app.core.security import CurrentUser, get_current_user, issue_session_cooki
 from app.schemas.mfa import (
     PasskeyRegistrationComplete,
     PasskeyRegistrationStartRead,
+    PreferredMfaMethodUpdate,
     TotpEnrollmentComplete,
     TotpEnrollmentStartRead,
     UserMfaRead,
@@ -82,6 +83,21 @@ def get_my_mfa(
     user: CurrentUser = Depends(get_current_user),
 ):
     return mfa_service.get_self_overview(db, user, request.url.hostname)
+
+
+@router.patch("/me/mfa/preferred-method", response_model=UserMfaRead)
+def patch_my_preferred_mfa_method(
+    payload: PreferredMfaMethodUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    return mfa_service.set_self_preferred_method(
+        db,
+        user,
+        factor_type=payload.factor_type,
+        request_host=request.url.hostname,
+    )
 
 
 @router.post("/me/mfa/totp/start", response_model=TotpEnrollmentStartRead)

@@ -114,6 +114,39 @@ class MfaService:
             return settings.traefik_domain
         return request_host
 
+    def _method_labels_by_type(self, factors: list[UserMfaFactor]) -> dict[str, str]:
+        labels: dict[str, str] = {}
+        totp_count = sum(1 for factor in factors if factor.factor_type == "totp")
+        passkey_count = sum(1 for factor in factors if factor.factor_type == "webauthn")
+        if totp_count:
+            labels["totp"] = "Authenticator-App" if totp_count == 1 else f"{totp_count} Authenticator-Apps"
+        if passkey_count:
+            labels["webauthn"] = "Passkey" if passkey_count == 1 else f"{passkey_count} Passkeys"
+        return labels
+
+    def _resolve_preferred_factor_type(self, user: AppUser, factors: list[UserMfaFactor]) -> str | None:
+        if not factors:
+            return None
+        available_types: list[str] = []
+        for factor in factors:
+            if factor.factor_type not in available_types:
+                available_types.append(factor.factor_type)
+        if user.preferred_mfa_factor_type in available_types:
+            return user.preferred_mfa_factor_type
+        if "webauthn" in available_types:
+            return "webauthn"
+        return available_types[0]
+
+    def _sync_preferred_factor_type(self, db: Session, user: AppUser, factors: list[UserMfaFactor]) -> str | None:
+        effective_type = self._resolve_preferred_factor_type(user, factors)
+        if user.preferred_mfa_factor_type == effective_type:
+            return effective_type
+        user.preferred_mfa_factor_type = effective_type
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return effective_type
+
     def _factor_read(self, factor: UserMfaFactor) -> MfaFactorRead:
         return MfaFactorRead(
             id=factor.id,
@@ -123,13 +156,35 @@ class MfaService:
             last_used_at=factor.last_used_at,
         )
 
-    def get_self_overview(self, db: Session, actor: CurrentUser, request_host: str | None) -> UserMfaRead:
-        factors = self._list_factors(db, actor.user_id)
+    def _overview_read(
+        self,
+        *,
+        user: AppUser,
+        factors: list[UserMfaFactor],
+        required: bool,
+        can_add_passkey_here: bool,
+    ) -> UserMfaRead:
+        preferred_factor_type = self._resolve_preferred_factor_type(user, factors)
+        method_labels = self._method_labels_by_type(factors)
         return UserMfaRead(
-            required=self.user_requires_mfa(db, actor.user_id),
+            required=required,
             has_factors=bool(factors),
-            can_add_passkey_here=self.can_add_passkey_here(request_host),
+            can_add_passkey_here=can_add_passkey_here,
+            preferred_factor_type=preferred_factor_type,  # type: ignore[arg-type]
+            preferred_factor_label=method_labels.get(preferred_factor_type) if preferred_factor_type else None,
             factors=[self._factor_read(factor) for factor in factors],
+        )
+
+    def get_self_overview(self, db: Session, actor: CurrentUser, request_host: str | None) -> UserMfaRead:
+        user = db.get(AppUser, actor.user_id)
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        factors = self._list_factors(db, actor.user_id)
+        return self._overview_read(
+            user=user,
+            factors=factors,
+            required=self.user_requires_mfa(db, actor.user_id),
+            can_add_passkey_here=self.can_add_passkey_here(request_host),
         )
 
     def _managed_user(self, db: Session, actor: CurrentUser, user_id: int) -> AppUser:
@@ -153,11 +208,11 @@ class MfaService:
     def get_managed_user_overview(self, db: Session, actor: CurrentUser, user_id: int) -> UserMfaRead:
         user = self._managed_user(db, actor, user_id)
         factors = self._list_factors(db, user.id)
-        return UserMfaRead(
+        return self._overview_read(
+            user=user,
+            factors=factors,
             required=self.user_requires_mfa(db, user.id),
-            has_factors=bool(factors),
             can_add_passkey_here=False,
-            factors=[self._factor_read(factor) for factor in factors],
         )
 
     def get_platform_admin_user_overview(self, db: Session, user_id: int) -> UserMfaRead:
@@ -165,17 +220,20 @@ class MfaService:
         if user is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         factors = self._list_factors(db, user.id)
-        return UserMfaRead(
+        return self._overview_read(
+            user=user,
+            factors=factors,
             required=self.user_requires_mfa(db, user.id),
-            has_factors=bool(factors),
             can_add_passkey_here=False,
-            factors=[self._factor_read(factor) for factor in factors],
         )
 
     def delete_self_factor(self, db: Session, actor: CurrentUser, factor_id: int) -> UserMfaRead:
         factor = self._get_factor(db, factor_id=factor_id, user_id=actor.user_id)
         if factor is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="MFA-Faktor nicht gefunden")
+        user = db.get(AppUser, actor.user_id)
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         remaining = db.scalar(
             select(func.count())
             .select_from(UserMfaFactor)
@@ -188,6 +246,7 @@ class MfaService:
             )
         db.delete(factor)
         db.commit()
+        self._sync_preferred_factor_type(db, user, self._list_factors(db, actor.user_id))
         return self.get_self_overview(db, actor, request_host=None)
 
     def delete_managed_user_factor(self, db: Session, actor: CurrentUser, user_id: int, factor_id: int) -> UserMfaRead:
@@ -197,6 +256,7 @@ class MfaService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="MFA-Faktor nicht gefunden")
         db.delete(factor)
         db.commit()
+        self._sync_preferred_factor_type(db, user, self._list_factors(db, user.id))
         return self.get_managed_user_overview(db, actor, user.id)
 
     def delete_platform_admin_user_factor(self, db: Session, user_id: int, factor_id: int) -> UserMfaRead:
@@ -208,7 +268,23 @@ class MfaService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="MFA-Faktor nicht gefunden")
         db.delete(factor)
         db.commit()
+        self._sync_preferred_factor_type(db, user, self._list_factors(db, user.id))
         return self.get_platform_admin_user_overview(db, user.id)
+
+    def set_self_preferred_method(self, db: Session, actor: CurrentUser, *, factor_type: str, request_host: str | None) -> UserMfaRead:
+        user = db.get(AppUser, actor.user_id)
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        factors = self._list_factors(db, actor.user_id)
+        if factor_type not in {factor.factor_type for factor in factors}:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Diese MFA-Methode ist für dieses Konto noch nicht eingerichtet",
+            )
+        user.preferred_mfa_factor_type = factor_type
+        db.add(user)
+        db.commit()
+        return self.get_self_overview(db, actor, request_host)
 
     def _default_totp_label(self, user: AppUser) -> str:
         return f"Authenticator App für {user.email}"
@@ -304,6 +380,7 @@ class MfaService:
         db.add(factor)
         db.commit()
         db.refresh(factor)
+        self._sync_preferred_factor_type(db, user, self._list_factors(db, user.id))
         self._delete_flow(flow_token)
         return factor
 
@@ -489,6 +566,7 @@ class MfaService:
         db.add(factor)
         db.commit()
         db.refresh(factor)
+        self._sync_preferred_factor_type(db, user, self._list_factors(db, user.id))
         return factor
 
     def prepare_login(
@@ -513,6 +591,7 @@ class MfaService:
             },
         )
         if factors:
+            default_factor_type = self._resolve_preferred_factor_type(user, factors)
             return self._build_pending_login(
                 ticket=ticket,
                 user=user,
@@ -520,6 +599,7 @@ class MfaService:
                 status_value="verification_required",
                 required=required,
                 factors=factors,
+                default_factor_type=default_factor_type,
                 can_add_passkey=self.can_add_passkey_here(request_host),
             )
         return self._build_pending_login(
@@ -529,6 +609,7 @@ class MfaService:
             status_value="setup_required",
             required=True,
             factors=[],
+            default_factor_type=None,
             can_add_passkey=self.can_add_passkey_here(request_host),
         )
 
@@ -541,25 +622,14 @@ class MfaService:
         status_value: str,
         required: bool,
         factors: list[UserMfaFactor],
+        default_factor_type: str | None,
         can_add_passkey: bool,
     ) -> MfaPendingLoginRead:
-        methods: list[MfaPendingLoginMethodRead] = []
-        totp_count = sum(1 for factor in factors if factor.factor_type == "totp")
-        passkey_count = sum(1 for factor in factors if factor.factor_type == "webauthn")
-        if totp_count:
-            methods.append(
-                MfaPendingLoginMethodRead(
-                    factor_type="totp",
-                    label="Authenticator-App" if totp_count == 1 else f"{totp_count} Authenticator-Apps",
-                )
-            )
-        if passkey_count:
-            methods.append(
-                MfaPendingLoginMethodRead(
-                    factor_type="webauthn",
-                    label="Passkey" if passkey_count == 1 else f"{passkey_count} Passkeys",
-                )
-            )
+        method_labels = self._method_labels_by_type(factors)
+        methods = [
+            MfaPendingLoginMethodRead(factor_type=factor_type, label=label)  # type: ignore[arg-type]
+            for factor_type, label in method_labels.items()
+        ]
         return MfaPendingLoginRead(
             status=status_value,  # type: ignore[arg-type]
             ticket=ticket,
@@ -568,6 +638,8 @@ class MfaService:
             user_email=user.email,
             tenant_name=current_user.current_tenant_name,
             available_methods=methods,
+            default_factor_type=default_factor_type,  # type: ignore[arg-type]
+            default_factor_label=method_labels.get(default_factor_type) if default_factor_type else None,
             can_add_totp=True,
             can_add_passkey=can_add_passkey,
         )

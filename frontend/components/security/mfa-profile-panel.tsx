@@ -16,6 +16,10 @@ function formatDate(value: string | null) {
   }).format(new Date(value));
 }
 
+function factorTypeLabel(type: "totp" | "webauthn") {
+  return type === "totp" ? "TOTP" : "Passkey";
+}
+
 type Props = {
   open: boolean;
 };
@@ -44,10 +48,20 @@ export function MfaProfilePanel({ open }: Props) {
       .finally(() => setLoading(false));
   }, [open, showToast]);
 
-  async function refreshOverview() {
-    const next = await browserApiFetch<UserMfaOverview>("/api/users/me/mfa");
-    setOverview(next);
-    return next;
+  async function setPreferredMethod(factorType: "totp" | "webauthn") {
+    setBusy(true);
+    try {
+      const next = await browserApiFetch<UserMfaOverview>("/api/users/me/mfa/preferred-method", {
+        method: "PATCH",
+        body: JSON.stringify({ factor_type: factorType }),
+      });
+      setOverview(next);
+      showToast(`${factorTypeLabel(factorType)} ist jetzt die Standardmethode fürs Login`, "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Standardmethode konnte nicht gespeichert werden", "error");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function startTotp() {
@@ -134,6 +148,9 @@ export function MfaProfilePanel({ open }: Props) {
     }
   }
 
+  const hasTotpFactor = overview?.factors.some((factor) => factor.factor_type === "totp") ?? false;
+  const hasPasskeyFactor = overview?.factors.some((factor) => factor.factor_type === "webauthn") ?? false;
+
   return (
     <div className="grid">
       <div className="security-summary-card">
@@ -153,9 +170,13 @@ export function MfaProfilePanel({ open }: Props) {
               ? "Tenant-Admins müssen mindestens einen zweiten Faktor hinterlegen."
               : "Du kannst TOTP oder einen Passkey hinterlegen. Danach wird MFA bei jedem Login abgefragt."}
           </div>
+          {overview?.preferred_factor_label ? (
+            <div className="muted">Standard beim Login: {overview.preferred_factor_label}</div>
+          ) : null}
         </div>
         <div className="status-row">
           <span className="pill">{overview?.factors.length ?? 0} Faktor(en)</span>
+          {overview?.preferred_factor_type ? <span className="pill">Standard: {factorTypeLabel(overview.preferred_factor_type)}</span> : null}
           <span className="pill">{browserSupportsPasskeys() ? "Passkeys verfügbar" : "Kein Passkey-Support im Browser"}</span>
         </div>
       </div>
@@ -184,11 +205,20 @@ export function MfaProfilePanel({ open }: Props) {
               <div className="eyebrow">Option A</div>
               <h3>Authenticator-App mit TOTP</h3>
             </div>
-            <span className="pill">Universell</span>
+            {overview?.preferred_factor_type === "totp" ? (
+              <span className="pill">Login-Standard</span>
+            ) : (
+              <span className="pill">Universell</span>
+            )}
           </div>
           <p className="muted">
             Ideal, wenn du einen zuverlässigen zweiten Faktor auf mehreren Geräten nutzen willst.
           </p>
+          {hasTotpFactor && overview?.preferred_factor_type !== "totp" ? (
+            <button type="button" className="button-inline button-ghost" disabled={busy} onClick={() => void setPreferredMethod("totp")}>
+              Als Standard fürs Login setzen
+            </button>
+          ) : null}
           {!totpSetup ? (
             <button type="button" className="button-inline" onClick={() => void startTotp()}>
               TOTP einrichten
@@ -237,11 +267,25 @@ export function MfaProfilePanel({ open }: Props) {
               <div className="eyebrow">Option B</div>
               <h3>Passkey / WebAuthn</h3>
             </div>
-            <span className="pill">Komfortabel</span>
+            {overview?.preferred_factor_type === "webauthn" ? (
+              <span className="pill">Login-Standard</span>
+            ) : (
+              <span className="pill">Komfortabel</span>
+            )}
           </div>
           <p className="muted">
             Nutzt die sichere Entsperrung deines Geräts. Perfekt für schnelle Logins mit Face ID, Touch ID oder Windows Hello.
           </p>
+          {hasPasskeyFactor && overview?.preferred_factor_type !== "webauthn" ? (
+            <button
+              type="button"
+              className="button-inline button-ghost"
+              disabled={busy}
+              onClick={() => void setPreferredMethod("webauthn")}
+            >
+              Als Standard fürs Login setzen
+            </button>
+          ) : null}
           {overview?.can_add_passkey_here ? (
             <div className="grid">
               <label className="field-stack">

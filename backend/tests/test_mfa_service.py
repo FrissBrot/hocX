@@ -76,6 +76,73 @@ def test_verify_login_totp_completes_pending_ticket(db):
     assert context.current_user.current_tenant_id == tenant.id
 
 
+def test_prepare_login_uses_saved_default_method(db):
+    tenant = make_tenant(db)
+    user = make_app_user(db, email="preferred-method@example.com")
+    user.preferred_mfa_factor_type = "totp"
+    make_user_tenant_role(db, user.id, tenant.id, role_code="writer")
+    db.add(
+        UserMfaFactor(
+            user_id=user.id,
+            factor_type="totp",
+            label="Auth App",
+            secret_encrypted=encrypt_secret(generate_totp_secret()),
+        )
+    )
+    db.add(
+        UserMfaFactor(
+            user_id=user.id,
+            factor_type="webauthn",
+            label="Laptop Passkey",
+            webauthn_credential_id="credential-preferred-method",
+        )
+    )
+    db.flush()
+
+    service = MfaService()
+    current_user = build_current_user(db, user, tenant.id)
+    pending = service.prepare_login(db, user=user, current_user=current_user, request_host="app.example.com")
+
+    assert pending is not None
+    assert pending.default_factor_type == "totp"
+    assert pending.default_factor_label == "Authenticator-App"
+
+
+def test_set_self_preferred_method_updates_overview(db):
+    tenant = make_tenant(db)
+    user = make_app_user(db, email="switch-preferred@example.com")
+    make_user_tenant_role(db, user.id, tenant.id, role_code="writer")
+    db.add(
+        UserMfaFactor(
+            user_id=user.id,
+            factor_type="totp",
+            label="Auth App",
+            secret_encrypted=encrypt_secret(generate_totp_secret()),
+        )
+    )
+    db.add(
+        UserMfaFactor(
+            user_id=user.id,
+            factor_type="webauthn",
+            label="Phone Passkey",
+            webauthn_credential_id="credential-switch-preferred",
+        )
+    )
+    db.flush()
+
+    service = MfaService()
+    actor = build_current_user(db, user, tenant.id, mfa_verified=True)
+    overview = service.set_self_preferred_method(
+        db,
+        actor,
+        factor_type="webauthn",
+        request_host="app.example.com",
+    )
+
+    assert overview.preferred_factor_type == "webauthn"
+    assert overview.preferred_factor_label == "Passkey"
+
+
 def test_delete_self_factor_blocks_last_factor_for_required_user(db):
     tenant = make_tenant(db)
     user = make_app_user(db, email="required-reset@example.com")

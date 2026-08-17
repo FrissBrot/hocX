@@ -32,6 +32,8 @@ export type PendingMfaLogin = {
   user_email: string;
   tenant_name: string | null;
   available_methods: PendingMfaMethod[];
+  default_factor_type: MfaFactorType | null;
+  default_factor_label: string | null;
   can_add_totp: boolean;
   can_add_passkey: boolean;
 };
@@ -52,6 +54,8 @@ export type UserMfaOverview = {
   required: boolean;
   has_factors: boolean;
   can_add_passkey_here: boolean;
+  preferred_factor_type: MfaFactorType | null;
+  preferred_factor_label: string | null;
   factors: MfaFactor[];
 };
 

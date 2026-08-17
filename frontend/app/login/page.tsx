@@ -25,7 +25,10 @@ export default function LoginPage() {
   const [totpSetup, setTotpSetup] = useState<TotpEnrollmentStart | null>(null);
   const [passkeyLabel, setPasskeyLabel] = useState("");
   const [appVersion, setAppVersion] = useState("");
+  const [showMethodChooser, setShowMethodChooser] = useState(false);
   const resolvedTenantPromise = useRef<Promise<ResolvedTenant | null>>(Promise.resolve(null));
+  const autoStartedPasskeyTicketRef = useRef<string | null>(null);
+  const totpInputRef = useRef<HTMLInputElement | null>(null);
 
   const canUsePasskeys = browserSupportsPasskeys();
   const hasTotp = useMemo(
@@ -74,18 +77,58 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!pendingMfa) {
+      setShowMethodChooser(false);
+      autoStartedPasskeyTicketRef.current = null;
       return;
     }
     if (pendingMfa.status === "setup_required") {
       setActiveMethod(canUsePasskeys && pendingMfa.can_add_passkey ? "webauthn" : "totp");
       return;
     }
+    setShowMethodChooser(false);
+    if (pendingMfa.default_factor_type === "webauthn" && hasPasskey && (canUsePasskeys || !hasTotp)) {
+      setActiveMethod("webauthn");
+      return;
+    }
+    if (pendingMfa.default_factor_type === "totp" && hasTotp) {
+      setActiveMethod("totp");
+      return;
+    }
     if (canUsePasskeys && hasPasskey) {
       setActiveMethod("webauthn");
       return;
     }
+    if (hasTotp) {
+      setActiveMethod("totp");
+      return;
+    }
+    if (hasPasskey) {
+      setActiveMethod("webauthn");
+      return;
+    }
     setActiveMethod("totp");
-  }, [canUsePasskeys, hasPasskey, pendingMfa]);
+  }, [canUsePasskeys, hasPasskey, hasTotp, pendingMfa]);
+
+  useEffect(() => {
+    if (pendingMfa?.status !== "verification_required" || activeMethod !== "totp") {
+      return;
+    }
+    totpInputRef.current?.focus();
+  }, [activeMethod, pendingMfa]);
+
+  useEffect(() => {
+    if (!pendingMfa || pendingMfa.status !== "verification_required") {
+      return;
+    }
+    if (activeMethod !== "webauthn" || showMethodChooser || !hasPasskey || !canUsePasskeys || loading) {
+      return;
+    }
+    if (autoStartedPasskeyTicketRef.current === pendingMfa.ticket) {
+      return;
+    }
+    autoStartedPasskeyTicketRef.current = pendingMfa.ticket;
+    void runPasskeyFlow("auto");
+  }, [activeMethod, canUsePasskeys, hasPasskey, loading, pendingMfa, showMethodChooser]);
 
   function resetMfaFlow() {
     setPendingMfa(null);
@@ -93,6 +136,8 @@ export default function LoginPage() {
     setTotpCode("");
     setTotpLabel("");
     setPasskeyLabel("");
+    setShowMethodChooser(false);
+    autoStartedPasskeyTicketRef.current = null;
     setStatusMsg("");
   }
 
@@ -119,6 +164,9 @@ export default function LoginPage() {
       }
       if (session.mfa) {
         setPendingMfa(session.mfa);
+        setTotpCode("");
+        setShowMethodChooser(false);
+        autoStartedPasskeyTicketRef.current = null;
         setStatusMsg("");
         return;
       }
@@ -188,10 +236,16 @@ export default function LoginPage() {
     }
   }
 
-  async function runPasskeyFlow() {
+  async function runPasskeyFlow(mode: "auto" | "manual" = "manual") {
     if (!pendingMfa) return;
     setLoading(true);
-    setStatusMsg(pendingMfa.status === "setup_required" ? "Passkey wird eingerichtet…" : "Passkey wird geprüft…");
+    setStatusMsg(
+      pendingMfa.status === "setup_required"
+        ? "Passkey wird eingerichtet…"
+        : mode === "auto"
+          ? "Passkey-Dialog wird geöffnet…"
+          : "Passkey wird geprüft…"
+    );
     try {
       if (pendingMfa.status === "setup_required") {
         const start = await browserApiFetch<PasskeyRegistrationStart>("/api/auth/mfa/passkeys/setup/start", {
@@ -225,6 +279,9 @@ export default function LoginPage() {
       });
       finishLogin(session);
     } catch (error) {
+      if (mode === "auto" && pendingMfa.status === "verification_required" && pendingMfa.available_methods.length > 1) {
+        setShowMethodChooser(true);
+      }
       setStatusMsg(error instanceof Error ? error.message : "Passkey-Vorgang fehlgeschlagen");
     } finally {
       setLoading(false);
@@ -367,90 +424,115 @@ export default function LoginPage() {
 
   function renderVerifyStep() {
     if (!pendingMfa) return null;
+    const currentMethodLabel = activeMethod === "webauthn" ? "Passkey" : "TOTP";
+    const defaultMethodLabel = pendingMfa.default_factor_label ?? currentMethodLabel;
+    const canSwitchMethods = pendingMfa.available_methods.length > 1;
     return (
-      <div className="grid">
-        <div className="security-summary-card">
-          <div>
-            <div className="eyebrow">Zweiter Faktor</div>
-            <strong>Bitte bestätige deine Anmeldung</strong>
-            <div className="muted">
-              {pendingMfa.user_display_name} hat bereits MFA aktiviert. Wähle jetzt eine der verfügbaren Methoden.
-            </div>
+      <div className="login-verify-stack">
+        <div className="login-inline-note">
+          <div className="eyebrow">Zweiter Faktor</div>
+          <strong>Bitte bestätige deine Anmeldung</strong>
+          <div className="muted">
+            {pendingMfa.user_display_name} meldet sich mit {defaultMethodLabel} an.
           </div>
           <div className="status-row">
-            {pendingMfa.available_methods.map((method) => (
-              <span key={method.factor_type} className="pill">
-                {method.label}
-              </span>
-            ))}
+            <span className="pill">Aktuell: {currentMethodLabel}</span>
+            {pendingMfa.default_factor_type ? <span className="pill">Standard: {defaultMethodLabel}</span> : null}
           </div>
-        </div>
-
-        <div className="login-mfa-methods">
-          {hasTotp ? (
-            <button
-              type="button"
-              className={activeMethod === "totp" ? "wizard-purpose-card is-selected" : "wizard-purpose-card"}
-              onClick={() => setActiveMethod("totp")}
-            >
-              <div className="wizard-purpose-title">TOTP</div>
-              <div className="wizard-purpose-desc">Code aus deiner Authenticator-App</div>
-            </button>
-          ) : null}
-          {hasPasskey ? (
-            <button
-              type="button"
-              className={activeMethod === "webauthn" ? "wizard-purpose-card is-selected" : "wizard-purpose-card"}
-              onClick={() => setActiveMethod("webauthn")}
-              disabled={!canUsePasskeys}
-            >
-              <div className="wizard-purpose-title">Passkey</div>
-              <div className="wizard-purpose-desc">
-                {canUsePasskeys ? "Mit Gerätebiometrie bestätigen" : "Dieser Browser unterstützt keine Passkeys"}
-              </div>
-            </button>
-          ) : null}
         </div>
 
         {activeMethod === "totp" ? (
-          <article className="security-method-card">
-            <div className="security-method-header">
-              <div>
-                <div className="eyebrow">Anmeldung</div>
-                <h3>TOTP-Code eingeben</h3>
-              </div>
-            </div>
+          <form
+            className="login-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void verifyTotp();
+            }}
+          >
             <label className="field-stack">
               <span className="field-label">6-stelliger Code</span>
-              <input value={totpCode} onChange={(event) => setTotpCode(event.target.value)} inputMode="numeric" placeholder="123456" />
+              <input
+                ref={totpInputRef}
+                className="input"
+                value={totpCode}
+                onChange={(event) => setTotpCode(event.target.value)}
+                inputMode="numeric"
+                placeholder="123456"
+              />
             </label>
-            <button type="button" className="button-inline" disabled={!totpCode || loading} onClick={() => void verifyTotp()}>
+            <button type="submit" className="button-inline login-submit" disabled={!totpCode || loading}>
               {loading ? "Wird geprüft…" : "Mit TOTP anmelden"}
             </button>
-          </article>
+          </form>
         ) : (
-          <article className="security-method-card">
-            <div className="security-method-header">
-              <div>
-                <div className="eyebrow">Anmeldung</div>
-                <h3>Mit Passkey fortfahren</h3>
+          <div className="login-form">
+            <div className="login-inline-note">
+              <strong>Mit Passkey fortfahren</strong>
+              <div className="muted">
+                {canUsePasskeys
+                  ? "Der Passkey-Dialog öffnet sich automatisch. Falls nötig, kannst du ihn hier erneut starten."
+                  : "Dieser Browser unterstützt keine Passkeys. Nutze unten eine andere MFA-Methode."}
               </div>
             </div>
-            <p className="muted">
-              Nach dem Klick öffnet dein Gerät den Passkey-Dialog. Bestätige dort die Anmeldung.
-            </p>
-            <button type="button" className="button-inline" disabled={loading || !canUsePasskeys} onClick={() => void runPasskeyFlow()}>
-              {loading ? "Passkey wird geprüft…" : "Mit Passkey anmelden"}
+            <button
+              type="button"
+              className="button-inline login-submit"
+              disabled={loading || !canUsePasskeys}
+              onClick={() => void runPasskeyFlow("manual")}
+            >
+              {loading ? "Passkey wird geprüft…" : "Passkey erneut starten"}
             </button>
-          </article>
+          </div>
         )}
+
+        {canSwitchMethods ? (
+          <div className="login-mfa-switcher">
+            <button
+              type="button"
+              className="button-inline button-ghost"
+              onClick={() => setShowMethodChooser((current) => !current)}
+            >
+              {showMethodChooser ? "Methodenauswahl ausblenden" : "Andere Methode verwenden"}
+            </button>
+            {showMethodChooser ? (
+              <div className="login-mfa-choice-list">
+                {hasTotp ? (
+                  <button
+                    type="button"
+                    className={activeMethod === "totp" ? "login-mfa-choice-button is-selected" : "login-mfa-choice-button"}
+                    onClick={() => {
+                      setActiveMethod("totp");
+                      setStatusMsg("");
+                    }}
+                  >
+                    <strong>TOTP</strong>
+                    <span>Code aus deiner Authenticator-App eingeben</span>
+                  </button>
+                ) : null}
+                {hasPasskey ? (
+                  <button
+                    type="button"
+                    className={activeMethod === "webauthn" ? "login-mfa-choice-button is-selected" : "login-mfa-choice-button"}
+                    onClick={() => {
+                      setActiveMethod("webauthn");
+                      setStatusMsg("");
+                    }}
+                  >
+                    <strong>Passkey</strong>
+                    <span>{canUsePasskeys ? "Mit Face ID, Touch ID oder Windows Hello" : "Auf diesem Browser nicht verfügbar"}</span>
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     );
   }
 
   return (
     <main className="login-frame">
-      <section className={pendingMfa ? "login-panel login-panel-wide" : "login-panel"}>
+      <section className={pendingMfa?.status === "setup_required" ? "login-panel login-panel-wide" : "login-panel"}>
         <div className="login-brand">
           <div className={`login-avatar${resolvedTenant?.profile_image_url ? "" : " login-avatar-fallback"}`}>
             {resolvedTenant?.profile_image_url ? (
