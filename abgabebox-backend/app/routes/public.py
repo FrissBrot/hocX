@@ -177,6 +177,7 @@ def list_elements(tenant_slug: str, assignment_slug: str, db: Session = Depends(
             label=element["label"],
             window_start=element["window_start"],
             window_end=element["window_end"],
+            uploaded_count=element["uploaded_count"],
         )
         for element in elements
     ]
@@ -222,9 +223,22 @@ async def upload(
     if not files:
         _log("validation_failed", "Keine Datei ausgewählt")
         raise HTTPException(status_code=400, detail="Keine Datei ausgewaehlt")
-    if len(files) > assignment["max_files_per_element"]:
-        _log("validation_failed", f"Zu viele Dateien (max. {assignment['max_files_per_element']})")
-        raise HTTPException(status_code=400, detail=f"Maximal {assignment['max_files_per_element']} Dateien erlaubt")
+
+    # Kumulatives Modell (seit 2026-08-17): max_files_per_element gilt fuer die Gesamtzahl ueber
+    # alle bisherigen Upload-Vorgaenge dieses Elements hinweg, nicht nur fuer diese eine Anfrage.
+    # None = unbegrenzt viele Dateien.
+    max_files = assignment["max_files_per_element"]
+    if max_files is not None:
+        already_uploaded = repository.count_files_by_element(db, assignment_id=assignment["id"]).get(
+            (element["event_id"], element["list_entry_id"]), 0
+        )
+        remaining = max(0, max_files - already_uploaded)
+        if len(files) > remaining:
+            _log("validation_failed", f"Zu viele Dateien (max. {max_files} insgesamt, {remaining} noch moeglich)")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Maximal {max_files} Dateien insgesamt erlaubt ({remaining} noch möglich)",
+            )
 
     allowed_types = {str(t).lower().lstrip(".") for t in (assignment["allowed_file_types"] or [])}
     max_bytes = assignment["max_file_size_mb"] * 1024 * 1024

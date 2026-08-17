@@ -126,6 +126,25 @@ def reopen_element(
         raise HTTPException(status_code=400, detail=detail) from exc
 
 
+@router.post("/submission-assignments/{assignment_id}/elements/{element_ref}/close", response_model=SubmissionElementRead)
+def close_element(
+    assignment_id: int,
+    element_ref: str,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_writer(user)
+    assignment = service.get_assignment(db, assignment_id)
+    if assignment is None or assignment.tenant_id != user.current_tenant_id:
+        raise HTTPException(status_code=404, detail="Abgabe nicht gefunden")
+    try:
+        return service.close_element(db, assignment, element_ref)
+    except (SQLAlchemyError, ValueError) as exc:
+        db.rollback()
+        detail = str(exc) if isinstance(exc, ValueError) else "Element konnte nicht geschlossen werden"
+        raise HTTPException(status_code=400, detail=detail) from exc
+
+
 @router.get("/submission-uploads/{upload_id}/files/{file_id}/content")
 def get_submission_file_content(
     upload_id: int,

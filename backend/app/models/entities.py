@@ -874,16 +874,20 @@ class SubmissionAssignment(Base, TimestampMixin, UpdatedAtMixin):
         UniqueConstraint("tenant_id", "public_slug", name="uq_submission_assignment_tenant_slug"),
         CheckConstraint("source_type IN ('events', 'list')", name="ck_submission_assignment_source_type"),
         CheckConstraint(
-            "(source_type = 'events' AND tag_filter IS NOT NULL AND offset_days_before IS NOT NULL "
-            "AND offset_days_after IS NOT NULL AND list_definition_id IS NULL AND deadline IS NULL) OR "
-            "(source_type = 'list' AND list_definition_id IS NOT NULL AND deadline IS NOT NULL "
+            # Tage vor/nach Termin bzw. Stichtag sind bewusst optional (siehe Migration
+            # 0056_submission_flexible_window): NULL = kein Zeitfenster, die Abgabe bleibt offen,
+            # bis sie manuell geschlossen wird (SubmissionUpload.status = 'closed').
+            "(source_type = 'events' AND tag_filter IS NOT NULL "
+            "AND list_definition_id IS NULL AND deadline IS NULL) OR "
+            "(source_type = 'list' AND list_definition_id IS NOT NULL "
             "AND tag_filter IS NULL AND offset_days_before IS NULL AND offset_days_after IS NULL)",
             name="ck_submission_assignment_source_fields",
         ),
         CheckConstraint("offset_days_before IS NULL OR offset_days_before >= 0", name="ck_submission_assignment_offset_before"),
         CheckConstraint("offset_days_after IS NULL OR offset_days_after >= 0", name="ck_submission_assignment_offset_after"),
-        CheckConstraint("max_files_per_element >= 1", name="ck_submission_assignment_max_files"),
+        CheckConstraint("max_files_per_element IS NULL OR max_files_per_element >= 1", name="ck_submission_assignment_max_files"),
         CheckConstraint("max_file_size_mb >= 1", name="ck_submission_assignment_max_size"),
+        CheckConstraint("sort_order IN ('alphabetical', 'date', 'proximity')", name="ck_submission_assignment_sort_order"),
         Index("idx_submission_assignment_tenant_active", "tenant_id", "is_active"),
     )
 
@@ -899,9 +903,10 @@ class SubmissionAssignment(Base, TimestampMixin, UpdatedAtMixin):
     list_definition_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("list_definition.id", ondelete="RESTRICT"))
     deadline: Mapped[date | None] = mapped_column(Date)
     allowed_file_types: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
-    max_files_per_element: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("5"))
+    max_files_per_element: Mapped[int | None] = mapped_column(Integer, server_default=text("5"))
     max_file_size_mb: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("20"))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
+    sort_order: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'date'"))
     responsible_participant_source: Mapped[str | None] = mapped_column(Text)
 
 
@@ -921,7 +926,10 @@ class SubmissionUpload(Base, TimestampMixin):
             "(event_id IS NOT NULL AND list_entry_id IS NULL) OR (event_id IS NULL AND list_entry_id IS NOT NULL)",
             name="ck_submission_upload_exactly_one_target",
         ),
-        CheckConstraint("status IN ('submitted', 'reopened')", name="ck_submission_upload_status"),
+        # 'reopened' bleibt in der CHECK-Liste fuer historische Zeilen aus vor der 2026-08-17
+        # Umstellung auf kumulative Uploads (siehe submission_service.py) - der Service erzeugt
+        # diesen Wert nicht mehr neu, behandelt ihn aber weiterhin gleichwertig zu 'submitted'.
+        CheckConstraint("status IN ('submitted', 'reopened', 'closed')", name="ck_submission_upload_status"),
         Index("idx_submission_upload_assignment_event", "assignment_id", "event_id"),
         Index("idx_submission_upload_assignment_list_entry", "assignment_id", "list_entry_id"),
     )

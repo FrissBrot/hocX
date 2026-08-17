@@ -174,11 +174,17 @@ class SubmissionRepository:
         two is set per row (ck_submission_upload_exactly_one_target), so COUNT(DISTINCT ...)
         over both columns correctly counts distinct elements without colliding across the two
         id spaces.
+
+        Must join through submission_upload_file so a manually closed element that never
+        received any file (see SubmissionService.close_element - closing works even before a
+        submission exists) doesn't inflate this count: a bare SubmissionUpload row alone no
+        longer implies a real submission happened, only that *some* status-changing event did.
         """
         element_key = (SubmissionUpload.event_id, SubmissionUpload.list_entry_id)
 
         submitted_stmt = (
             select(func.count(func.distinct(*element_key)))
+            .join(SubmissionUploadFile, SubmissionUploadFile.upload_id == SubmissionUpload.id)
             .where(SubmissionUpload.assignment_id == assignment_id)
         )
         submitted = db.scalar(submitted_stmt) or 0

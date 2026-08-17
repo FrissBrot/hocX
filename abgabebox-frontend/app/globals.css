@@ -212,6 +212,12 @@ input[type="file"] {
 }
 
 /* Upload form */
+.upload-already-count {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 0 0 10px;
+}
+
 .drop-zone {
   border: 2px dashed var(--border);
   border-radius: 14px;

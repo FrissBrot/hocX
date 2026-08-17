@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
@@ -156,14 +156,17 @@ class SubmissionService:
         self._validate_source_fields_dict(payload.model_dump())
 
     def _validate_source_fields_dict(self, values: dict) -> None:
+        # offset_days_before/after (Termine) und deadline (Liste) sind bewusst optional: eine
+        # Abgabe ohne diese Werte bleibt offen, bis sie manuell geschlossen wird (siehe
+        # close_element/reopen_element), statt an ein festes Zeitfenster gebunden zu sein.
         if values["source_type"] == "events":
-            if not values.get("tag_filter") or values.get("offset_days_before") is None or values.get("offset_days_after") is None:
-                raise ValueError("tag_filter, offset_days_before und offset_days_after sind fuer Termin-Abgaben erforderlich")
+            if not values.get("tag_filter"):
+                raise ValueError("tag_filter ist fuer Termin-Abgaben erforderlich")
             if values.get("list_definition_id") is not None or values.get("deadline") is not None:
                 raise ValueError("list_definition_id/deadline duerfen bei Termin-Abgaben nicht gesetzt sein")
         else:
-            if values.get("list_definition_id") is None or values.get("deadline") is None:
-                raise ValueError("list_definition_id und deadline sind fuer Listen-Abgaben erforderlich")
+            if values.get("list_definition_id") is None:
+                raise ValueError("list_definition_id ist fuer Listen-Abgaben erforderlich")
             if values.get("tag_filter") is not None or values.get("offset_days_before") is not None or values.get("offset_days_after") is not None:
                 raise ValueError("tag_filter/offset_days_* duerfen bei Listen-Abgaben nicht gesetzt sein")
 
@@ -171,17 +174,27 @@ class SubmissionService:
         source = assignment.responsible_participant_source
         if assignment.source_type == "events":
             events = self.repository.list_events_by_tag(db, tenant_id=assignment.tenant_id, tag=assignment.tag_filter or "")
-            return [
+            raw = [
                 {
                     "event_id": event.id,
                     "list_entry_id": None,
                     "label": event.title,
-                    "window_start": event.event_date - timedelta(days=assignment.offset_days_before or 0),
-                    "window_end": (event.event_end_date or event.event_date) + timedelta(days=assignment.offset_days_after or 0),
+                    "sort_date": event.event_date,
+                    # None (kein Offset gesetzt) = kein Zeitfenster auf dieser Seite - die
+                    # Abgabe bleibt offen, bis sie manuell geschlossen wird.
+                    "window_start": (
+                        event.event_date - timedelta(days=assignment.offset_days_before)
+                        if assignment.offset_days_before is not None else None
+                    ),
+                    "window_end": (
+                        (event.event_end_date or event.event_date) + timedelta(days=assignment.offset_days_after)
+                        if assignment.offset_days_after is not None else None
+                    ),
                     "responsible_participant_id": _resolve_event_responsible(event, source),
                 }
                 for event in events
             ]
+            return self._sort_raw_elements(raw, assignment.sort_order)
 
         definition = self.repository.get_list_definition(db, assignment.list_definition_id) if assignment.list_definition_id else None
         if definition is None:
@@ -194,7 +207,7 @@ class SubmissionService:
         participants_by_id = self.repository.get_participants(db, participant_ids=list(participant_ids))
         events_by_id = {eid: event for eid in event_ids if (event := self.repository.get_event(db, eid)) is not None}
 
-        return [
+        raw = [
             {
                 "event_id": None,
                 "list_entry_id": entry.id,
@@ -204,12 +217,38 @@ class SubmissionService:
                     participants_by_id=participants_by_id,
                     events_by_id=events_by_id,
                 ),
+                # Listen-Eintraege haben kein eigenes Datum - nur der (optionale) Stichtag der
+                # ganzen Abgabe existiert, gleich fuer alle Eintraege. "date"/"proximity"-Sortierung
+                # kann sie also nicht unterscheiden und faellt auf die urspruengliche Reihenfolge zurueck.
+                "sort_date": None,
                 "window_start": None,
                 "window_end": assignment.deadline,
                 "responsible_participant_id": _resolve_list_responsible(entry, source),
             }
             for entry in entries
         ]
+        return self._sort_raw_elements(raw, assignment.sort_order)
+
+    @staticmethod
+    def _sort_raw_elements(raw: list[dict], sort_order: str) -> list[dict]:
+        """Reihenfolge, in der Elemente sowohl im Admin-Bereich als auch (unveraendert
+        uebernommen) in der oeffentlichen Abgabebox erscheinen - siehe sort_order auf
+        SubmissionAssignment. Python's sort ist stabil, daher bleibt bei Gleichstand
+        (z.B. "proximity" bei gleichem Datum, oder "date"/"proximity" bei Listen-Eintraegen
+        ohne eigenes Datum) die urspruengliche Reihenfolge erhalten."""
+        if sort_order == "alphabetical":
+            return sorted(raw, key=lambda item: item["label"].lower())
+        if sort_order == "proximity":
+            today = date.today()
+            return sorted(
+                raw,
+                key=lambda item: abs((item["sort_date"] - today).days) if item["sort_date"] is not None else float("inf"),
+            )
+        # "date" (Default): chronologisch, Elemente ohne eigenes Datum (Listen-Eintraege) zuletzt.
+        return sorted(
+            raw,
+            key=lambda item: (item["sort_date"] is None, item["sort_date"] or date.min),
+        )
 
     @staticmethod
     def _collect_referenced_ids(value_type: str, value_json: dict, participant_ids: set[int], event_ids: set[int]) -> None:
@@ -221,36 +260,55 @@ class SubmissionService:
             event_ids.add(int(value_json["event_id"]))
 
     def get_assignment_elements(self, db: Session, assignment: SubmissionAssignment) -> list[SubmissionElementRead]:
+        """Abgaben sind kumulativ (siehe 2026-08-17 Umstellung): jede oeffentliche Einreichung
+        legt eine neue SubmissionUpload-Zeile mit ihren eigenen Dateien an, statt eine
+        vorherige zu ersetzen. Der sichtbare Zustand eines Elements ergibt sich daher aus ALLEN
+        Zeilen dieses Elements, nicht nur der letzten:
+        - status = 'closed', wenn die juengste Zeile status='closed' hat (explizit geschlossen,
+          siehe close_element) - unabhaengig davon, ob vorher schon Dateien eingegangen sind.
+        - sonst 'submitted', wenn irgendeine Zeile Dateien beigetragen hat (weiterhin offen fuer
+          weitere Uploads).
+        - sonst 'open' (noch nie etwas eingereicht).
+        Dateien = Vereinigung aller Zeilen, mit dem tatsaechlichen Owner-Upload pro Datei (fuer
+        content_url), nicht der Datei-Liste der juengsten Zeile allein.
+        """
         raw_elements = self._resolve_raw_elements(db, assignment)
         uploads = self.repository.list_uploads_for_assignment(db, assignment_id=assignment.id)
-        latest_by_key: dict[tuple[int | None, int | None], SubmissionUpload] = {}
+        uploads_by_key: dict[tuple[int | None, int | None], list[SubmissionUpload]] = {}
         for upload in uploads:
-            latest_by_key[(upload.event_id, upload.list_entry_id)] = upload
+            uploads_by_key.setdefault((upload.event_id, upload.list_entry_id), []).append(upload)
 
         results: list[SubmissionElementRead] = []
         for raw in raw_elements:
             key = (raw["event_id"], raw["list_entry_id"])
-            latest = latest_by_key.get(key)
+            element_uploads = uploads_by_key.get(key, [])
+
             files: list[SubmissionFileRead] = []
-            status: str = "open"
             submitted_at: datetime | None = None
-            upload_id: int | None = None
-            if latest is not None:
-                status = latest.status
-                submitted_at = latest.submitted_at
-                upload_id = latest.id
-                if latest.status == "submitted":
-                    files = [
+            for upload in element_uploads:
+                if upload.submitted_at is not None and (submitted_at is None or upload.submitted_at > submitted_at):
+                    submitted_at = upload.submitted_at
+                for _upload_file, stored_file in self.repository.list_upload_files(db, upload_id=upload.id):
+                    files.append(
                         SubmissionFileRead(
                             id=stored_file.id,
                             original_name=stored_file.original_name,
                             mime_type=stored_file.mime_type,
                             file_size_bytes=stored_file.file_size_bytes,
-                            content_url=f"/api/submission-uploads/{latest.id}/files/{stored_file.id}/content",
+                            content_url=f"/api/submission-uploads/{upload.id}/files/{stored_file.id}/content",
                             scan_status=stored_file.scan_status,
                         )
-                        for _upload_file, stored_file in self.repository.list_upload_files(db, upload_id=latest.id)
-                    ]
+                    )
+
+            if not element_uploads:
+                status = "open"
+            elif element_uploads[-1].status == "closed":
+                status = "closed"
+            elif files:
+                status = "submitted"
+            else:
+                status = "open"
+
             results.append(
                 SubmissionElementRead(
                     element_ref=_element_ref(event_id=raw["event_id"], list_entry_id=raw["list_entry_id"]),
@@ -259,27 +317,28 @@ class SubmissionService:
                     window_end=raw["window_end"],
                     status=status,
                     submitted_at=submitted_at,
-                    upload_id=upload_id,
+                    upload_id=element_uploads[-1].id if element_uploads else None,
                     files=files,
                     responsible_participant_id=raw.get("responsible_participant_id"),
                 )
             )
         return results
 
-    def reopen_element(self, db: Session, assignment: SubmissionAssignment, element_ref: str) -> SubmissionElementRead:
+    def _latest_upload_for_element(
+        self, db: Session, assignment: SubmissionAssignment, element_ref: str
+    ) -> tuple[int | None, int | None, SubmissionUpload | None]:
         event_id, list_entry_id = _parse_element_ref(element_ref)
         uploads = self.repository.list_uploads_for_assignment(db, assignment_id=assignment.id)
         matching = [u for u in uploads if u.event_id == event_id and u.list_entry_id == list_entry_id]
-        latest = matching[-1] if matching else None
-        if latest is None or latest.status != "submitted":
-            raise ValueError("Element wurde noch nicht abgegeben")
+        return event_id, list_entry_id, (matching[-1] if matching else None)
 
-        for upload_file, stored_file in self.repository.list_upload_files(db, upload_id=latest.id):
-            file_path = _safe_storage_path(settings.abgabebox_storage_root, stored_file.storage_path)
-            if file_path.exists():
-                file_path.unlink()
-            self.repository.delete_upload_file(db, upload_file)
-            self.repository.delete_stored_file(db, stored_file)
+    def close_element(self, db: Session, assignment: SubmissionAssignment, element_ref: str) -> SubmissionElementRead:
+        """Schliesst ein Element manuell (keine weiteren Uploads mehr moeglich), unabhaengig
+        davon, ob schon Dateien eingegangen sind - das Gegenstueck zu reopen_element, seit
+        Abgaben ohne Tage-Fenster sonst unbegrenzt offen blieben."""
+        event_id, list_entry_id, latest = self._latest_upload_for_element(db, assignment, element_ref)
+        if latest is not None and latest.status == "closed":
+            raise ValueError("Element ist bereits geschlossen")
 
         self.repository.create_upload(
             db,
@@ -287,7 +346,29 @@ class SubmissionService:
                 assignment_id=assignment.id,
                 event_id=event_id,
                 list_entry_id=list_entry_id,
-                status="reopened",
+                status="closed",
+                submitted_at=None,
+            ),
+        )
+        elements = self.get_assignment_elements(db, assignment)
+        target_ref = _element_ref(event_id=event_id, list_entry_id=list_entry_id)
+        return next(element for element in elements if element.element_ref == target_ref)
+
+    def reopen_element(self, db: Session, assignment: SubmissionAssignment, element_ref: str) -> SubmissionElementRead:
+        """Hebt eine manuelle Schliessung wieder auf. Bereits eingereichte Dateien bleiben
+        erhalten (kumulatives Modell) - anders als vor der 2026-08-17 Umstellung, als reopen
+        die bisherigen Dateien geloescht hat."""
+        event_id, list_entry_id, latest = self._latest_upload_for_element(db, assignment, element_ref)
+        if latest is None or latest.status != "closed":
+            raise ValueError("Element ist nicht geschlossen")
+
+        self.repository.create_upload(
+            db,
+            SubmissionUpload(
+                assignment_id=assignment.id,
+                event_id=event_id,
+                list_entry_id=list_entry_id,
+                status="submitted",
                 submitted_at=None,
             ),
         )

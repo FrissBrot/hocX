@@ -59,36 +59,72 @@ def _value_label(value_type: str, value_json: dict, *, participants_by_id: dict[
     return "—"
 
 
+def _sort_elements(elements: list[dict], sort_order: str, sort_dates: dict[str, date | None]) -> list[dict]:
+    """Reihenfolge der Elemente - wird 1:1 vom Admin-Bereich (SubmissionAssignment.sort_order,
+    dort konfiguriert) uebernommen, hier nicht mehr anpassbar. Bewusste Duplikation der
+    gleichnamigen Logik aus backend/app/services/submission_service.py::_sort_raw_elements -
+    siehe Modul-Docstring oben. sort() ist stabil, Gleichstand behaelt daher die urspruengliche
+    Reihenfolge (z.B. Listen-Eintraege ohne eigenes Datum bei "date"/"proximity")."""
+    if sort_order == "alphabetical":
+        return sorted(elements, key=lambda el: el["label"].lower())
+    if sort_order == "proximity":
+        today = date.today()
+        return sorted(
+            elements,
+            key=lambda el: abs((d - today).days) if (d := sort_dates.get(el["element_ref"])) is not None else float("inf"),
+        )
+    return sorted(
+        elements,
+        key=lambda el: (
+            (d := sort_dates.get(el["element_ref"])) is None,
+            d or date.min,
+        ),
+    )
+
+
 def resolve_open_elements(db: Session, assignment: dict) -> list[dict]:
-    """Liefert alle Elemente, deren Fenster/Frist aktuell laeuft UND die noch nicht
-    (als letzter Log-Status) 'submitted' sind."""
+    """Liefert alle Elemente, deren (optionales) Fenster/Frist aktuell laeuft UND die nicht
+    manuell geschlossen wurden. Kumulatives Modell (seit 2026-08-17): ein Element mit Status
+    'submitted' bleibt sichtbar/offen fuer weitere Uploads, nur 'closed' blendet es aus."""
     today = date.today()
     latest_status = repository.latest_status_by_element(db, assignment_id=assignment["id"])
+    file_counts = repository.count_files_by_element(db, assignment_id=assignment["id"])
 
     elements: list[dict] = []
+    sort_dates: dict[str, date | None] = {}
     if assignment["source_type"] == "events":
         events = repository.list_events_by_tag(db, tenant_id=assignment["tenant_id"], tag=assignment["tag_filter"])
         for event in events:
-            window_start = event["event_date"] - timedelta(days=assignment["offset_days_before"])
-            window_end = event["event_date"] + timedelta(days=assignment["offset_days_after"])
-            if not (window_start <= today <= window_end):
+            offset_before = assignment["offset_days_before"]
+            offset_after = assignment["offset_days_after"]
+            # None = kein Zeitfenster auf dieser Seite - die Abgabe bleibt offen, bis sie
+            # manuell geschlossen wird, statt an ein festes Datum gebunden zu sein.
+            window_start = event["event_date"] - timedelta(days=offset_before) if offset_before is not None else None
+            window_end = event["event_date"] + timedelta(days=offset_after) if offset_after is not None else None
+            if window_start is not None and today < window_start:
+                continue
+            if window_end is not None and today > window_end:
                 continue
             status = latest_status.get((event["id"], None))
-            if status == "submitted":
+            if status == "closed":
                 continue
+            element_ref = f"event-{event['id']}"
+            sort_dates[element_ref] = event["event_date"]
             elements.append(
                 {
-                    "element_ref": f"event-{event['id']}",
+                    "element_ref": element_ref,
                     "event_id": event["id"],
                     "list_entry_id": None,
                     "label": event["title"],
-                    "window_start": window_start.isoformat(),
-                    "window_end": window_end.isoformat(),
+                    "window_start": window_start.isoformat() if window_start else None,
+                    "window_end": window_end.isoformat() if window_end else None,
+                    "uploaded_count": file_counts.get((event["id"], None), 0),
                 }
             )
-        return elements
+        return _sort_elements(elements, assignment["sort_order"], sort_dates)
 
-    if today > assignment["deadline"]:
+    deadline = assignment["deadline"]
+    if deadline is not None and today > deadline:
         return []
     definition = repository.get_list_definition(db, list_definition_id=assignment["list_definition_id"])
     if definition is None:
@@ -106,21 +142,26 @@ def resolve_open_elements(db: Session, assignment: dict) -> list[dict]:
 
     for entry in entries:
         status = latest_status.get((None, entry["id"]))
-        if status == "submitted":
+        if status == "closed":
             continue
+        element_ref = f"entry-{entry['id']}"
+        # Listen-Eintraege haben kein eigenes Datum (nur der gemeinsame, optionale Stichtag) -
+        # "date"/"proximity"-Sortierung kann sie nicht unterscheiden, siehe _sort_elements.
+        sort_dates[element_ref] = None
         elements.append(
             {
-                "element_ref": f"entry-{entry['id']}",
+                "element_ref": element_ref,
                 "event_id": None,
                 "list_entry_id": entry["id"],
                 "label": _value_label(
                     definition["column_one_value_type"], entry["column_one_value_json"] or {}, participants_by_id=participants_by_id
                 ),
                 "window_start": None,
-                "window_end": assignment["deadline"].isoformat(),
+                "window_end": deadline.isoformat() if deadline else None,
+                "uploaded_count": file_counts.get((None, entry["id"]), 0),
             }
         )
-    return elements
+    return _sort_elements(elements, assignment["sort_order"], sort_dates)
 
 
 def resolve_single_element(db: Session, assignment: dict, element_ref: str) -> dict | None:

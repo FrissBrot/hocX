@@ -33,6 +33,7 @@ export default async function ElementUploadPage({
         allowedFileTypes={assignment.allowed_file_types}
         maxFiles={assignment.max_files_per_element}
         maxFileSizeMb={assignment.max_file_size_mb}
+        alreadyUploadedCount={element.uploaded_count}
         sitekey={sitekey}
       />
 

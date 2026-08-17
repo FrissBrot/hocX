@@ -12,7 +12,7 @@ class AssignmentDetailPublic(BaseModel):
     title: str
     description: str | None = None
     allowed_file_types: list[str]
-    max_files_per_element: int
+    max_files_per_element: int | None
     max_file_size_mb: int
 
 
@@ -21,6 +21,7 @@ class ElementPublic(BaseModel):
     label: str
     window_start: str | None = None
     window_end: str | None = None
+    uploaded_count: int = 0
 
 
 class UploadResult(BaseModel):
