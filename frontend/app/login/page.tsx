@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, ClipboardEvent, FormEvent, KeyboardEvent, SVGProps, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { attemptBridgeRedirect } from "@/lib/bridge-redirect";
@@ -10,6 +10,52 @@ import { browserSupportsPasskeys, createPasskeyCredential, getPasskeyAssertion }
 import { LoginResponse, PasskeyAssertionStart, PasskeyRegistrationStart, PendingMfaLogin, SessionInfo, TotpEnrollmentStart } from "@/types/api";
 
 type ResolvedTenant = { tenant_id: number; tenant_name: string; profile_image_url: string | null };
+const MFA_CODE_LENGTH = 6;
+
+type IconProps = Omit<SVGProps<SVGSVGElement>, "viewBox" | "fill">;
+
+function MfaPasskeyIcon(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <circle cx="11" cy="8" r="3.3" />
+      <path d="M5.2 18.4c0-3.2 2.6-5.8 5.8-5.8s5.8 2.6 5.8 5.8" />
+      <path d="M16.8 10.6l2.1 2.1" />
+      <path d="M18.9 12.7v2.3" />
+      <path d="M18.9 12.7h2.3" />
+    </svg>
+  );
+}
+
+function MfaCodeIcon(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <rect x="4.5" y="10" width="15" height="9.5" rx="2.2" />
+      <path d="M8 10V7.8A4 4 0 0112 4a4 4 0 014 3.8V10" />
+    </svg>
+  );
+}
+
+function sanitizeTotpCode(value: string) {
+  return value.replace(/\D/g, "").slice(0, MFA_CODE_LENGTH);
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -28,7 +74,7 @@ export default function LoginPage() {
   const [showMethodChooser, setShowMethodChooser] = useState(false);
   const resolvedTenantPromise = useRef<Promise<ResolvedTenant | null>>(Promise.resolve(null));
   const autoStartedPasskeyTicketRef = useRef<string | null>(null);
-  const totpInputRef = useRef<HTMLInputElement | null>(null);
+  const totpDigitRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   const canUsePasskeys = browserSupportsPasskeys();
   const hasTotp = useMemo(
@@ -38,6 +84,20 @@ export default function LoginPage() {
   const hasPasskey = useMemo(
     () => pendingMfa?.available_methods.some((method) => method.factor_type === "webauthn") ?? false,
     [pendingMfa]
+  );
+  const canDirectToTotp = hasTotp;
+  const canDirectToPasskey = hasPasskey && (canUsePasskeys || !hasTotp);
+  const hasDirectDefaultMethod =
+    pendingMfa?.default_factor_type === "totp"
+      ? canDirectToTotp
+      : pendingMfa?.default_factor_type === "webauthn"
+        ? canDirectToPasskey
+        : false;
+  const directMethodCount = Number(canDirectToTotp) + Number(canDirectToPasskey);
+  const shouldRequireMethodChoice = pendingMfa?.status === "verification_required" ? !hasDirectDefaultMethod && directMethodCount > 1 : false;
+  const totpDigits = useMemo(
+    () => Array.from({ length: MFA_CODE_LENGTH }, (_, index) => totpCode[index] ?? ""),
+    [totpCode]
   );
 
   useEffect(() => {
@@ -82,10 +142,11 @@ export default function LoginPage() {
       return;
     }
     if (pendingMfa.status === "setup_required") {
+      setShowMethodChooser(false);
       setActiveMethod(canUsePasskeys && pendingMfa.can_add_passkey ? "webauthn" : "totp");
       return;
     }
-    setShowMethodChooser(false);
+    setShowMethodChooser(shouldRequireMethodChoice);
     if (pendingMfa.default_factor_type === "webauthn" && hasPasskey && (canUsePasskeys || !hasTotp)) {
       setActiveMethod("webauthn");
       return;
@@ -107,14 +168,17 @@ export default function LoginPage() {
       return;
     }
     setActiveMethod("totp");
-  }, [canUsePasskeys, hasPasskey, hasTotp, pendingMfa]);
+  }, [canUsePasskeys, hasPasskey, hasTotp, pendingMfa, shouldRequireMethodChoice]);
 
   useEffect(() => {
-    if (pendingMfa?.status !== "verification_required" || activeMethod !== "totp") {
+    if (pendingMfa?.status !== "verification_required" || activeMethod !== "totp" || showMethodChooser) {
       return;
     }
-    totpInputRef.current?.focus();
-  }, [activeMethod, pendingMfa]);
+    const firstEmptyIndex = totpDigits.findIndex((digit) => !digit);
+    const focusIndex = firstEmptyIndex === -1 ? MFA_CODE_LENGTH - 1 : firstEmptyIndex;
+    totpDigitRefs.current[focusIndex]?.focus();
+    totpDigitRefs.current[focusIndex]?.select();
+  }, [activeMethod, pendingMfa, showMethodChooser, totpDigits]);
 
   useEffect(() => {
     if (!pendingMfa || pendingMfa.status !== "verification_required") {
@@ -181,7 +245,7 @@ export default function LoginPage() {
   async function verifyTotp() {
     if (!pendingMfa) return;
     setLoading(true);
-    setStatusMsg("TOTP wird geprüft…");
+    setStatusMsg("Code wird geprüft…");
     try {
       const session = await browserApiFetch<LoginResponse>("/api/auth/mfa/totp/verify", {
         method: "POST",
@@ -189,10 +253,111 @@ export default function LoginPage() {
       });
       finishLogin(session);
     } catch (error) {
-      setStatusMsg(error instanceof Error ? error.message : "TOTP-Prüfung fehlgeschlagen");
+      setStatusMsg(error instanceof Error ? error.message : "Code-Prüfung fehlgeschlagen");
     } finally {
       setLoading(false);
     }
+  }
+
+  function setTotpDigitValue(index: number, nextValue: string) {
+    const digits = sanitizeTotpCode(nextValue);
+    setTotpCode((current) => {
+      const nextDigits = Array.from({ length: MFA_CODE_LENGTH }, (_, currentIndex) => current[currentIndex] ?? "");
+      if (!digits) {
+        nextDigits[index] = "";
+        return nextDigits.join("");
+      }
+      digits.split("").forEach((digit, offset) => {
+        const targetIndex = index + offset;
+        if (targetIndex < MFA_CODE_LENGTH) {
+          nextDigits[targetIndex] = digit;
+        }
+      });
+      return nextDigits.join("");
+    });
+
+    if (!digits) {
+      return;
+    }
+
+    const focusIndex = Math.min(index + digits.length, MFA_CODE_LENGTH - 1);
+    requestAnimationFrame(() => {
+      totpDigitRefs.current[focusIndex]?.focus();
+      totpDigitRefs.current[focusIndex]?.select();
+    });
+  }
+
+  function handleTotpDigitChange(index: number, event: ChangeEvent<HTMLInputElement>) {
+    setTotpDigitValue(index, event.target.value);
+  }
+
+  function handleTotpDigitKeyDown(index: number, event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Backspace") {
+      event.preventDefault();
+      setTotpCode((current) => {
+        const nextDigits = Array.from({ length: MFA_CODE_LENGTH }, (_, currentIndex) => current[currentIndex] ?? "");
+        if (nextDigits[index]) {
+          nextDigits[index] = "";
+          return nextDigits.join("");
+        }
+        if (index > 0) {
+          nextDigits[index - 1] = "";
+          requestAnimationFrame(() => {
+            totpDigitRefs.current[index - 1]?.focus();
+            totpDigitRefs.current[index - 1]?.select();
+          });
+        }
+        return nextDigits.join("");
+      });
+      return;
+    }
+
+    if (event.key === "ArrowLeft" && index > 0) {
+      event.preventDefault();
+      totpDigitRefs.current[index - 1]?.focus();
+      totpDigitRefs.current[index - 1]?.select();
+      return;
+    }
+
+    if (event.key === "ArrowRight" && index < MFA_CODE_LENGTH - 1) {
+      event.preventDefault();
+      totpDigitRefs.current[index + 1]?.focus();
+      totpDigitRefs.current[index + 1]?.select();
+      return;
+    }
+
+    if (event.key === "Home") {
+      event.preventDefault();
+      totpDigitRefs.current[0]?.focus();
+      totpDigitRefs.current[0]?.select();
+      return;
+    }
+
+    if (event.key === "End") {
+      event.preventDefault();
+      totpDigitRefs.current[MFA_CODE_LENGTH - 1]?.focus();
+      totpDigitRefs.current[MFA_CODE_LENGTH - 1]?.select();
+    }
+  }
+
+  function handleTotpPaste(index: number, event: ClipboardEvent<HTMLInputElement>) {
+    const pastedDigits = sanitizeTotpCode(event.clipboardData.getData("text"));
+    if (!pastedDigits) {
+      return;
+    }
+    event.preventDefault();
+    setTotpDigitValue(index, pastedDigits);
+  }
+
+  function selectVerificationMethod(method: "totp" | "webauthn") {
+    setActiveMethod(method);
+    setShowMethodChooser(false);
+    setStatusMsg("");
+  }
+
+  function openMethodChooser() {
+    setShowMethodChooser(true);
+    setStatusMsg("");
   }
 
   async function startTotpSetup() {
@@ -279,9 +444,6 @@ export default function LoginPage() {
       });
       finishLogin(session);
     } catch (error) {
-      if (mode === "auto" && pendingMfa.status === "verification_required" && pendingMfa.available_methods.length > 1) {
-        setShowMethodChooser(true);
-      }
       setStatusMsg(error instanceof Error ? error.message : "Passkey-Vorgang fehlgeschlagen");
     } finally {
       setLoading(false);
@@ -389,7 +551,7 @@ export default function LoginPage() {
                 </label>
                 <label className="field-stack">
                   <span className="field-label">6-stelligen Code eingeben</span>
-                  <input value={totpCode} onChange={(event) => setTotpCode(event.target.value)} inputMode="numeric" placeholder="123456" />
+                  <input value={totpCode} onChange={(event) => setTotpCode(sanitizeTotpCode(event.target.value))} inputMode="numeric" placeholder="123456" />
                 </label>
                 <button type="button" className="button-inline" disabled={!totpCode || loading} onClick={() => void completeTotpSetup()}>
                   {loading ? "Wird aktiviert…" : "TOTP aktivieren und anmelden"}
@@ -424,146 +586,194 @@ export default function LoginPage() {
 
   function renderVerifyStep() {
     if (!pendingMfa) return null;
-    const currentMethodLabel = activeMethod === "webauthn" ? "Passkey" : "TOTP";
-    const defaultMethodLabel = pendingMfa.default_factor_label ?? currentMethodLabel;
     const canSwitchMethods = pendingMfa.available_methods.length > 1;
-    return (
-      <div className="login-verify-stack">
-        <div className="login-inline-note">
-          <div className="eyebrow">Zweiter Faktor</div>
-          <strong>Bitte bestätige deine Anmeldung</strong>
-          <div className="muted">
-            {pendingMfa.user_display_name} meldet sich mit {defaultMethodLabel} an.
+    if (showMethodChooser) {
+      return (
+        <div className="mfa-screen mfa-screen-choice">
+          <div className="mfa-screen-header mfa-screen-header-left">
+            <h1>Anmeldemethode wählen</h1>
+            <p>Wähle, wie du deine Identität bestätigen möchtest.</p>
           </div>
-          <div className="status-row">
-            <span className="pill">Aktuell: {currentMethodLabel}</span>
-            {pendingMfa.default_factor_type ? <span className="pill">Standard: {defaultMethodLabel}</span> : null}
+
+          <div className="mfa-choice-list">
+            {hasPasskey ? (
+              <button
+                type="button"
+                className="mfa-choice-card"
+                onClick={() => selectVerificationMethod("webauthn")}
+                disabled={!canUsePasskeys}
+              >
+                <span className="mfa-choice-icon mfa-choice-icon-passkey">
+                  <MfaPasskeyIcon width={28} height={28} />
+                </span>
+                <span className="mfa-choice-copy">
+                  <strong>Passkey</strong>
+                  <span>
+                    {canUsePasskeys
+                      ? "Mit Face ID, Fingerabdruck oder Gerätecode"
+                      : "In diesem Browser oder auf dieser Domain nicht verfügbar"}
+                  </span>
+                </span>
+              </button>
+            ) : null}
+            {hasTotp ? (
+              <button type="button" className="mfa-choice-card" onClick={() => selectVerificationMethod("totp")}>
+                <span className="mfa-choice-icon">
+                  <MfaCodeIcon width={28} height={28} />
+                </span>
+                <span className="mfa-choice-copy">
+                  <strong>Code</strong>
+                  <span>Aus deiner Authenticator-App eingeben</span>
+                </span>
+              </button>
+            ) : null}
+          </div>
+
+          <div className="mfa-footer-stack">
+            <button type="button" className="button-inline button-ghost login-secondary-button login-secondary-button-centered" onClick={resetMfaFlow}>
+              Zurück zur Anmeldung
+            </button>
           </div>
         </div>
+      );
+    }
 
-        {activeMethod === "totp" ? (
+    if (activeMethod === "totp") {
+      return (
+        <div className="mfa-screen mfa-screen-code">
+          <div className="mfa-icon-badge mfa-icon-badge-large mfa-icon-badge-left">
+            <MfaCodeIcon width={34} height={34} />
+          </div>
+
+          <div className="mfa-screen-header mfa-screen-header-left">
+            <h1>Bestätigungscode eingeben</h1>
+            <p>Gib den 6-stelligen Code aus deiner Authenticator-App ein.</p>
+          </div>
+
           <form
-            className="login-form"
+            className="mfa-code-form"
             onSubmit={(event) => {
               event.preventDefault();
               void verifyTotp();
             }}
           >
-            <label className="field-stack">
-              <span className="field-label">6-stelliger Code</span>
-              <input
-                ref={totpInputRef}
-                className="input"
-                value={totpCode}
-                onChange={(event) => setTotpCode(event.target.value)}
-                inputMode="numeric"
-                placeholder="123456"
-              />
-            </label>
-            <button type="submit" className="button-inline login-submit" disabled={!totpCode || loading}>
-              {loading ? "Wird geprüft…" : "Mit TOTP anmelden"}
+            <div className="mfa-code-inputs">
+              {totpDigits.map((digit, index) => (
+                <input
+                  key={index}
+                  ref={(node) => {
+                    totpDigitRefs.current[index] = node;
+                  }}
+                  className="mfa-code-input"
+                  value={digit}
+                  onChange={(event) => handleTotpDigitChange(index, event)}
+                  onKeyDown={(event) => handleTotpDigitKeyDown(index, event)}
+                  onPaste={(event) => handleTotpPaste(index, event)}
+                  onFocus={(event) => event.currentTarget.select()}
+                  inputMode="numeric"
+                  autoComplete={index === 0 ? "one-time-code" : "off"}
+                  aria-label={`Code-Ziffer ${index + 1}`}
+                  maxLength={1}
+                />
+              ))}
+            </div>
+
+            <button type="submit" className="button-inline login-submit mfa-primary-button" disabled={totpCode.length !== MFA_CODE_LENGTH || loading}>
+              {loading ? "Prüft…" : "Bestätigen"}
             </button>
           </form>
-        ) : (
-          <div className="login-form">
-            <div className="login-inline-note">
-              <strong>Mit Passkey fortfahren</strong>
-              <div className="muted">
-                {canUsePasskeys
-                  ? "Der Passkey-Dialog öffnet sich automatisch. Falls nötig, kannst du ihn hier erneut starten."
-                  : "Dieser Browser unterstützt keine Passkeys. Nutze unten eine andere MFA-Methode."}
-              </div>
-            </div>
-            <button
-              type="button"
-              className="button-inline login-submit"
-              disabled={loading || !canUsePasskeys}
-              onClick={() => void runPasskeyFlow("manual")}
-            >
-              {loading ? "Passkey wird geprüft…" : "Passkey erneut starten"}
-            </button>
-          </div>
-        )}
 
-        {canSwitchMethods ? (
-          <div className="login-mfa-switcher">
-            <button
-              type="button"
-              className="button-inline button-ghost"
-              onClick={() => setShowMethodChooser((current) => !current)}
-            >
-              {showMethodChooser ? "Methodenauswahl ausblenden" : "Andere Methode verwenden"}
+          <div className={`mfa-footer-links${canSwitchMethods ? " mfa-footer-links-split" : ""}`}>
+            <button type="button" className="button-inline button-ghost login-secondary-button" onClick={resetMfaFlow}>
+              Zurück zur Anmeldung
             </button>
-            {showMethodChooser ? (
-              <div className="login-mfa-choice-list">
-                {hasTotp ? (
-                  <button
-                    type="button"
-                    className={activeMethod === "totp" ? "login-mfa-choice-button is-selected" : "login-mfa-choice-button"}
-                    onClick={() => {
-                      setActiveMethod("totp");
-                      setStatusMsg("");
-                    }}
-                  >
-                    <strong>TOTP</strong>
-                    <span>Code aus deiner Authenticator-App eingeben</span>
-                  </button>
-                ) : null}
-                {hasPasskey ? (
-                  <button
-                    type="button"
-                    className={activeMethod === "webauthn" ? "login-mfa-choice-button is-selected" : "login-mfa-choice-button"}
-                    onClick={() => {
-                      setActiveMethod("webauthn");
-                      setStatusMsg("");
-                    }}
-                  >
-                    <strong>Passkey</strong>
-                    <span>{canUsePasskeys ? "Mit Face ID, Touch ID oder Windows Hello" : "Auf diesem Browser nicht verfügbar"}</span>
-                  </button>
-                ) : null}
-              </div>
+            {canSwitchMethods ? (
+              <button type="button" className="button-inline button-ghost login-secondary-button" onClick={openMethodChooser}>
+                Andere Option wählen
+              </button>
             ) : null}
           </div>
-        ) : null}
+        </div>
+      );
+    }
+
+    return (
+      <div className="mfa-screen mfa-screen-passkey">
+        <div className="mfa-icon-badge mfa-icon-badge-xl">
+          <MfaPasskeyIcon width={40} height={40} />
+        </div>
+
+        <div className="mfa-screen-header mfa-screen-header-center">
+          <h1>Passkey bestätigen</h1>
+          <p>Folge den Anweisungen deines Geräts, um dich mit Face ID, Fingerabdruck oder Gerätecode anzumelden.</p>
+        </div>
+
+        <button
+          type="button"
+          className="button-inline login-submit mfa-primary-button"
+          disabled={loading || !canUsePasskeys}
+          onClick={() => void runPasskeyFlow("manual")}
+        >
+          {loading ? "Öffnet…" : canUsePasskeys ? "Weiter" : "Passkey nicht verfügbar"}
+        </button>
+
+        <div className="mfa-footer-stack">
+          {canSwitchMethods ? (
+            <button type="button" className="button-inline button-ghost login-secondary-button login-secondary-button-centered" onClick={openMethodChooser}>
+              Andere Option wählen
+            </button>
+          ) : null}
+          <button type="button" className="button-inline button-ghost login-secondary-button login-secondary-button-centered" onClick={resetMfaFlow}>
+            Zurück zur Anmeldung
+          </button>
+        </div>
       </div>
     );
   }
 
+  const isVerifyScreen = pendingMfa?.status === "verification_required";
+  const loginPanelClassName = pendingMfa?.status === "setup_required" ? "login-panel login-panel-wide" : "login-panel";
+  const loginTitle = pendingMfa?.status === "setup_required" ? "Sicher anmelden" : "Anmelden bei hocX";
+
   return (
     <main className="login-frame">
-      <section className={pendingMfa?.status === "setup_required" ? "login-panel login-panel-wide" : "login-panel"}>
-        <div className="login-brand">
-          <div className={`login-avatar${resolvedTenant?.profile_image_url ? "" : " login-avatar-fallback"}`}>
-            {resolvedTenant?.profile_image_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={resolvedTenant.profile_image_url} alt={resolvedTenant.tenant_name} />
-            ) : (
-              <span>hX</span>
-            )}
-          </div>
-          <div className="eyebrow">hocX</div>
-        </div>
+      <section className={loginPanelClassName}>
+        {!isVerifyScreen ? (
+          <>
+            <div className="login-brand">
+              <div className={`login-avatar${resolvedTenant?.profile_image_url ? "" : " login-avatar-fallback"}`}>
+                {resolvedTenant?.profile_image_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={resolvedTenant.profile_image_url} alt={resolvedTenant.tenant_name} />
+                ) : (
+                  <span>hX</span>
+                )}
+              </div>
+              <div className="eyebrow">hocX</div>
+            </div>
 
-        <div className="login-heading">
-          <h1>{pendingMfa ? "Sicher anmelden" : "Anmelden bei hocX"}</h1>
-          {resolvedTenant && !pendingMfa ? <p className="login-subtitle">für {resolvedTenant.tenant_name}</p> : null}
-          {pendingMfa ? <p className="login-subtitle">{pendingMfa.user_email}</p> : null}
-        </div>
+            <div className="login-heading">
+              <h1>{loginTitle}</h1>
+              {resolvedTenant && !pendingMfa ? <p className="login-subtitle">für {resolvedTenant.tenant_name}</p> : null}
+              {pendingMfa ? <p className="login-subtitle">{pendingMfa.user_email}</p> : null}
+            </div>
+          </>
+        ) : null}
 
         {!pendingMfa ? renderPasswordStep() : pendingMfa.status === "setup_required" ? renderSetupStep() : renderVerifyStep()}
 
-        {pendingMfa ? (
+        {pendingMfa?.status === "setup_required" ? (
           <div className="table-actions table-actions-start">
-            <button type="button" className="button-inline button-ghost" onClick={resetMfaFlow}>
+            <button type="button" className="button-inline button-ghost login-secondary-button" onClick={resetMfaFlow}>
               Zurück zum Login
             </button>
           </div>
         ) : null}
 
-        {statusMsg && <p className="login-status">{statusMsg}</p>}
+        {statusMsg && <p className={isVerifyScreen ? "login-status login-status-mfa" : "login-status"}>{statusMsg}</p>}
+        {appVersion && isVerifyScreen ? <p className="login-version login-version-in-panel">hocX {appVersion}</p> : null}
       </section>
-      {appVersion && <p className="login-version">hocX {appVersion}</p>}
+      {appVersion && !isVerifyScreen ? <p className="login-version">hocX {appVersion}</p> : null}
     </main>
   );
 }
