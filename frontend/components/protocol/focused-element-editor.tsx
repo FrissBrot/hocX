@@ -1224,7 +1224,7 @@ export function FocusedElementEditor({
     <section
       id={`protocol-element-${element.id}`}
       ref={sectionRef}
-      className={`protocol-doc-section${isActive ? " protocol-doc-section-active" : " protocol-doc-section-blurred"}`}
+      className={`protocol-doc-section${isActive ? " protocol-doc-section-active" : " protocol-doc-section-inactive"}`}
       inert={!isActive}
     >
       <div className="editor-panel-header">

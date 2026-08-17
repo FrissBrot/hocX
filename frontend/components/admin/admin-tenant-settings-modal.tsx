@@ -7,7 +7,7 @@ import { Tabs } from "@/components/ui/tabs";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
-import { AdminTenantSummary, AdminTenantUser, AdminUserPage, UserSummary } from "@/types/api";
+import { AdminTenantSummary, AdminTenantUser, AdminUserPage, TenantCleanupCategory, TenantCleanupCounts, UserSummary } from "@/types/api";
 
 type Props = {
   open: boolean;
@@ -32,6 +32,44 @@ export const ROLE_OPTIONS: { code: string; label: string }[] = [
   { code: "admin", label: "Admin" }
 ];
 
+const CLEANUP_CATEGORIES: { key: TenantCleanupCategory; title: string; description: string }[] = [
+  {
+    key: "protocols",
+    title: "Protokolle",
+    description: "Alle Protokolle – manuell erstellte und importierte – inklusive der Word-Import-Warteschlange."
+  },
+  {
+    key: "list_entries",
+    title: "Daten aus Listen",
+    description: "Alle Einträge in allen Listen. Die Listen selbst (Name, Spalten) bleiben erhalten."
+  },
+  {
+    key: "lists_full",
+    title: "Listen komplett",
+    description: "Listen inklusive ihrer Einträge. Löscht auch Abgabebox-Konfigurationen, die an eine dieser Listen gekoppelt sind."
+  },
+  {
+    key: "events",
+    title: "Termine",
+    description: "Alle Termine/Anlässe."
+  },
+  {
+    key: "todos",
+    title: "Todos",
+    description: "Eigenständige Todos. Todos, die an ein Protokoll gebunden sind, verschwinden bereits mit „Protokolle“."
+  },
+  {
+    key: "participants",
+    title: "Teilnehmer/Personen",
+    description: "Alle angelegten Teilnehmer/Personen-Stammdaten."
+  },
+  {
+    key: "documents",
+    title: "Hochgeladene Dokumente",
+    description: "Word-/PDF-Importe und Abgabebox-Uploads, inklusive dadurch verwaister Dateien."
+  }
+];
+
 export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Props) {
   const showToast = useToast();
   const confirm = useConfirm();
@@ -43,6 +81,13 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
   const [addUserId, setAddUserId] = useState("");
   const [addUserRole, setAddUserRole] = useState("reader");
   const [addUserBusy, setAddUserBusy] = useState(false);
+
+  const [cleanupCounts, setCleanupCounts] = useState<TenantCleanupCounts | null>(null);
+  const [cleanupLoading, setCleanupLoading] = useState(false);
+  const [cleanupSelected, setCleanupSelected] = useState<Set<TenantCleanupCategory>>(new Set());
+  const [cleanupConfirmName, setCleanupConfirmName] = useState("");
+  const [cleanupBusy, setCleanupBusy] = useState(false);
+  const [cleanupLastResult, setCleanupLastResult] = useState<TenantCleanupCounts | null>(null);
 
   useEffect(() => {
     if (!open || !tenant) {
@@ -60,7 +105,73 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     browserApiFetch<AdminUserPage>("/api/admin/users")
       .then((result) => setAllUsers(result.items))
       .catch(() => setAllUsers([]));
+
+    setCleanupSelected(new Set());
+    setCleanupConfirmName("");
+    setCleanupLastResult(null);
+    void loadCleanupPreview(tenant.id);
   }, [open, tenant]);
+
+  async function loadCleanupPreview(tenantId: number) {
+    setCleanupLoading(true);
+    try {
+      const result = await browserApiFetch<TenantCleanupCounts>(`/api/admin/tenants/${tenantId}/cleanup/preview`);
+      setCleanupCounts(result);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Vorschau konnte nicht geladen werden", "error");
+    } finally {
+      setCleanupLoading(false);
+    }
+  }
+
+  function toggleCleanupCategory(key: TenantCleanupCategory) {
+    setCleanupSelected((current) => {
+      const next = new Set(current);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }
+
+  const allCleanupSelected = CLEANUP_CATEGORIES.every((category) => cleanupSelected.has(category.key));
+
+  function toggleAllCleanupCategories() {
+    setCleanupSelected(allCleanupSelected ? new Set() : new Set(CLEANUP_CATEGORIES.map((category) => category.key)));
+  }
+
+  const cleanupNameMatches = !!tenant && cleanupConfirmName.trim() === tenant.name;
+
+  async function submitCleanup(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!tenant || cleanupSelected.size === 0 || !cleanupNameMatches) return;
+    if (
+      !(await confirm({
+        message: `${cleanupSelected.size} Datenkategorie(n) von "${tenant.name}" werden unwiderruflich gelöscht. Fortfahren?`,
+        tone: "danger",
+        confirmLabel: "Endgültig löschen"
+      }))
+    )
+      return;
+    setCleanupBusy(true);
+    try {
+      const result = await browserApiFetch<TenantCleanupCounts>(`/api/admin/tenants/${tenant.id}/cleanup`, {
+        method: "POST",
+        body: JSON.stringify({ categories: Array.from(cleanupSelected), confirm_name: cleanupConfirmName.trim() })
+      });
+      setCleanupLastResult(result);
+      setCleanupSelected(new Set());
+      setCleanupConfirmName("");
+      showToast("Mandant aufgeräumt", "success");
+      void loadCleanupPreview(tenant.id);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Aufräumen fehlgeschlagen", "error");
+    } finally {
+      setCleanupBusy(false);
+    }
+  }
 
   async function loadTenantUsers(tenantId: number) {
     setUsersLoading(true);
@@ -284,6 +395,74 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                   </form>
                 </div>
               </div>
+            )
+          },
+          {
+            id: "aufraeumen",
+            label: "Aufräumen",
+            content: (
+              <form className="grid" onSubmit={submitCleanup}>
+                <div className="form-error-banner">
+                  Diese Aktion löscht Daten endgültig aus der Datenbank – es gibt kein Zurück. Der Mandant selbst, Vorlagen,
+                  Formularfelder und Benutzerzugriffe bleiben in jedem Fall erhalten.
+                </div>
+
+                <div className="field-stack">
+                  <span className="field-label">Was soll gelöscht werden?</span>
+                  <label className="field-radio-option">
+                    <input type="checkbox" checked={allCleanupSelected} onChange={toggleAllCleanupCategories} />
+                    <span>
+                      <strong>Alle Daten löschen</strong>
+                      <div className="muted">Wählt alle Kategorien unten auf einmal aus.</div>
+                    </span>
+                  </label>
+                  {CLEANUP_CATEGORIES.map((category) => (
+                    <label key={category.key} className="field-radio-option">
+                      <input
+                        type="checkbox"
+                        checked={cleanupSelected.has(category.key)}
+                        onChange={() => toggleCleanupCategory(category.key)}
+                      />
+                      <span>
+                        <strong>
+                          {category.title}
+                          {cleanupCounts ? <span className="muted"> – {cleanupCounts[category.key]} vorhanden</span> : null}
+                        </strong>
+                        <div className="muted">{category.description}</div>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+
+                {cleanupLastResult ? (
+                  <div className="muted">
+                    Zuletzt gelöscht: {Object.entries(cleanupLastResult)
+                      .filter(([, count]) => count > 0)
+                      .map(([key, count]) => `${CLEANUP_CATEGORIES.find((c) => c.key === key)?.title ?? key}: ${count}`)
+                      .join(", ") || "nichts (0 Treffer in den gewählten Kategorien)"}
+                  </div>
+                ) : null}
+
+                <label className="field-stack">
+                  <span className="field-label">Zur Bestätigung Mandantenname eintippen: „{tenant.name}“</span>
+                  <input
+                    value={cleanupConfirmName}
+                    onChange={(event) => setCleanupConfirmName(event.target.value)}
+                    placeholder={tenant.name}
+                    autoComplete="off"
+                  />
+                </label>
+
+                <div className="table-actions table-actions-start">
+                  <button
+                    type="submit"
+                    className="button-danger"
+                    disabled={cleanupSelected.size === 0 || !cleanupNameMatches || cleanupBusy || cleanupLoading}
+                  >
+                    {cleanupBusy ? "Wird gelöscht…" : "Ausgewählte Daten löschen"}
+                  </button>
+                </div>
+              </form>
             )
           }
         ]}

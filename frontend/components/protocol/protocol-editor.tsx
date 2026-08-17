@@ -483,11 +483,24 @@ export function ProtocolEditor({
       if (panel) {
         panel.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
       } else {
-        // Document layout: center the jump target to match the scroll-snap-align: center
-        // set on .protocol-doc-section, so an explicit jump lands exactly where free
-        // scrolling would settle too.
+        // Document layout: scroll only .protocol-document itself (never section.
+        // scrollIntoView() - that walks up and re-scrolls every clipping ancestor it
+        // passes on the way, including the outer .app-frame-writing shell that's
+        // deliberately pinned to the viewport via overflow:hidden - overflow:hidden
+        // still counts as a "scrolling box" for scrollIntoView purposes even though it
+        // never shows a scrollbar or responds to wheel input, so it silently absorbed
+        // part of the scroll too, leaving the pinned shell offset from the viewport
+        // with a matching dead strip of blank space at its bottom edge). The division
+        // below undoes .protocol-document-shell's zoom: 0.9, which scales visual
+        // pixels (getBoundingClientRect) relative to scrollTop's own unscaled space.
+        const container = documentRef.current;
         const section = document.getElementById(`protocol-element-${selectedElementId}`);
-        section?.scrollIntoView({ behavior: "smooth", block: "center" });
+        if (container && section) {
+          const zoomHost = container.closest<HTMLElement>(".protocol-document-shell");
+          const zoom = zoomHost ? parseFloat(getComputedStyle(zoomHost).zoom) || 1 : 1;
+          const delta = (section.getBoundingClientRect().top - container.getBoundingClientRect().top) / zoom;
+          container.scrollTo({ top: container.scrollTop + delta, behavior: "smooth" });
+        }
       }
 
       // Center active nav item
@@ -502,25 +515,41 @@ export function ProtocolEditor({
         }
       }
 
+      // Safety net: on the locked document-mode desktop layout the outer page must
+      // never itself scroll (see the cascading-scrollIntoView note above - focus() below
+      // has the same "scrolls every clipping ancestor" behavior unless told not to, and
+      // there may be other browser-driven scroll-restoration sources beyond these two).
+      // Confirmed live that leaving this unset does drift the pinned shell off the
+      // viewport top with blank space appearing at its bottom to match.
+      if (!panelRef.current && window.matchMedia("(min-width: 901px)").matches) {
+        window.scrollTo(0, 0);
+      }
+
       window.setTimeout(() => {
         const section = document.getElementById(`protocol-element-${selectedElementId}`);
         if (!section) return;
         const firstEditable = section.querySelector<HTMLElement>(
           '[data-form-input], textarea:not([readonly]), input:not([readonly]):not([type="file"])'
         );
-        firstEditable?.focus();
+        firstEditable?.focus({ preventScroll: true });
+        if (!panelRef.current && window.matchMedia("(min-width: 901px)").matches) {
+          window.scrollTo(0, 0);
+        }
       }, 120);
     });
   }, [selectedElementId]);
 
   const visibleElementIdsKey = visibleElements.map((element) => element.id).join(",");
 
-  // Scroll-spy for the continuous document layout: tracks whichever section currently sits at
-  // the vertical center of .protocol-document and makes it the active/unblurred one - matching
-  // scroll-snap-align: center below. Uses plain getBoundingClientRect() math (rAF-throttled on
-  // scroll/resize) rather than IntersectionObserver - that earlier approach combined a custom
-  // `root`, percentage rootMargin and the .protocol-document-shell `zoom` scale in a way that
-  // didn't reliably fire (nothing ever got marked active/blurred). getBoundingClientRect always
+  // Scroll-spy for the continuous document layout: tracks whichever section currently sits
+  // at the top of .protocol-document and makes it the active/highlighted one - matching
+  // scroll-snap-align: start below (a short section snapped to the top of a much taller
+  // pane would otherwise never contain the pane's vertical center, so center-based
+  // detection stopped matching scroll-snap-align: start once that was switched from
+  // "center"). Uses plain getBoundingClientRect() math (rAF-throttled on scroll/resize)
+  // rather than IntersectionObserver - that earlier approach combined a custom `root`,
+  // percentage rootMargin and the .protocol-document-shell `zoom` scale in a way that
+  // didn't reliably fire (nothing ever got marked active). getBoundingClientRect always
   // reports already-zoomed, viewport-relative coordinates, so it isn't affected by that.
   // Deliberately only calls setSelectedElementId directly (never focusElement/
   // shouldScrollToElementRef) so passive scrolling never triggers the jump-effect's own
@@ -535,7 +564,7 @@ export function ProtocolEditor({
     function computeActiveSection() {
       rafId = null;
       const containerRect = container!.getBoundingClientRect();
-      const centerY = containerRect.top + containerRect.height / 2;
+      const topY = containerRect.top + 32;
       const sections = visibleElementIdsKey
         .split(",")
         .filter(Boolean)
@@ -548,11 +577,11 @@ export function ProtocolEditor({
       for (const section of sections) {
         const rect = section.getBoundingClientRect();
         const id = Number(section.id.replace("protocol-element-", ""));
-        if (rect.top <= centerY && rect.bottom >= centerY) {
+        if (rect.top <= topY && rect.bottom >= topY) {
           bestId = id;
           break;
         }
-        const distance = Math.abs(rect.top + rect.height / 2 - centerY);
+        const distance = Math.abs(rect.top - topY);
         if (distance < bestDistance) {
           bestDistance = distance;
           bestId = id;
@@ -1371,33 +1400,29 @@ export function ProtocolEditor({
       {useDocumentLayout && (
         <div className="protocol-document-header">
           <a href="/protocols" className="button-inline protocol-document-back">← Zurück zu Protokollen</a>
-          <div className="page-header">
-            <div>
-              <Badge variant={protocolStatusVariant(protocolStatus)} className="protocol-document-badge">
-                {protocolStatusLabel(protocolStatus)}
-              </Badge>
-              <h1 className="page-title">{protocol.title || protocol.protocol_number}</h1>
-            </div>
-            <div className="protocol-document-actions">
+          <Badge variant={protocolStatusVariant(protocolStatus)} className="protocol-document-badge">
+            {protocolStatusLabel(protocolStatus)}
+          </Badge>
+          <h1 className="protocol-document-title">{protocol.title || protocol.protocol_number}</h1>
+          <div className="protocol-document-actions">
+            <button
+              type="button"
+              className="button-ghost"
+              disabled={pdfBusyByProtocol[protocol.id]}
+              onClick={() => openOrGeneratePdf(protocol)}
+            >
+              {pdfBusyByProtocol[protocol.id] ? "…" : "PDF exportieren"}
+            </button>
+            {!isReadOnly && workflowMeta[protocolStatus]?.ctaLabel && (
               <button
                 type="button"
-                className="button-ghost"
-                disabled={pdfBusyByProtocol[protocol.id]}
-                onClick={() => openOrGeneratePdf(protocol)}
+                className="button-primary"
+                disabled={transitioningStatus}
+                onClick={transitionStatus}
               >
-                {pdfBusyByProtocol[protocol.id] ? "…" : "PDF exportieren"}
+                {transitioningStatus ? "…" : workflowMeta[protocolStatus]?.ctaLabel}
               </button>
-              {!isReadOnly && workflowMeta[protocolStatus]?.ctaLabel && (
-                <button
-                  type="button"
-                  className="button-primary"
-                  disabled={transitioningStatus}
-                  onClick={transitionStatus}
-                >
-                  {transitioningStatus ? "…" : workflowMeta[protocolStatus]?.ctaLabel}
-                </button>
-              )}
-            </div>
+            )}
           </div>
         </div>
       )}

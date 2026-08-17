@@ -1176,7 +1176,8 @@ input[type="radio"] {
   cursor: pointer;
 }
 
-.field-radio-option input[type="radio"] {
+.field-radio-option input[type="radio"],
+.field-radio-option input[type="checkbox"] {
   margin-top: 3px;
   flex-shrink: 0;
 }
@@ -3080,9 +3081,14 @@ input[type="radio"] {
   overflow: visible;
 }
 
-/* ── Protocol "document mode": continuous scrollable document + Schnellzugriff sidebar ── */
+/* ── Protocol "document mode": continuous scrollable document + Schnellzugriff sidebar ──
+   Everything below (back-link, badge, title, action buttons) sits in a single wrapped
+   flex row instead of stacking, so the pinned header costs one line of height, not four -
+   the document itself is what should own the vertical space, not the chrome above it. */
 .protocol-document-header {
-  display: grid;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   /* Pinned page header: title + back-link must never scroll away, unlike the old
      hard-swap view where the whole page (incl. header) scrolled together. Sticky (not
@@ -3090,24 +3096,42 @@ input[type="radio"] {
      app chrome - same top offset as the other sticky panes below (.protocol-document,
      .protocol-quicknav) for a consistent pinned distance from the viewport top. */
   position: sticky;
-  top: 20px;
+  top: 12px;
   z-index: 5;
   background: var(--panel);
-  padding-bottom: 14px;
+  padding-bottom: 8px;
 }
 
 .protocol-document-back {
-  justify-self: start;
+  flex-shrink: 0;
+  font-size: 0.85rem;
 }
 
 .protocol-document-badge {
-  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.protocol-document-title {
+  margin: 0;
+  min-width: 0;
+  flex: 1 1 auto;
+  font-family: "Canela", "Iowan Old Style", "Palatino Linotype", serif;
+  font-size: clamp(1.15rem, 1.6vw, 1.4rem);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .protocol-document-actions {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .protocol-document-shell {
@@ -3131,8 +3155,8 @@ input[type="radio"] {
      sticky/max-height pattern below) - this is what lets scroll-snap center the active
      section within it regardless of how tall the page around it is. */
   position: sticky;
-  top: 20px;
-  max-height: calc(100dvh - 40px);
+  top: 12px;
+  max-height: calc(100dvh - 24px);
   overflow-y: auto;
   /* Setting overflow-y:auto alone makes browsers auto-compute overflow-x as auto too (CSS
      Overflow spec), which would open a second, sideways scrollbar for any section content
@@ -3143,6 +3167,13 @@ input[type="radio"] {
      A section taller than the viewport still scrolls normally inside itself - per spec, once
      a snap area is already as centered as it can get, the browser doesn't yank it away. */
   scroll-snap-type: y mandatory;
+  /* Without this, scrolling past this pane's own end chains the leftover wheel delta to
+     the next scrollable ancestor up the tree - which, despite the outer .app-frame-writing
+     shell being pinned via overflow:hidden for this exact layout, still receives it and
+     drifts the whole locked page upward, leaving blank space at the bottom to match.
+     Confirmed live: without `contain`, scrolling past the end here moved the outer page by
+     thousands of pixels. */
+  overscroll-behavior: contain;
 }
 
 .protocol-doc-section {
@@ -3154,47 +3185,51 @@ input[type="radio"] {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-soft);
   padding: 20px;
-  transition: filter 150ms ease, opacity 150ms ease;
-  scroll-snap-align: center;
+  transition: box-shadow 150ms ease, border-color 150ms ease;
+  /* start, not center: centering a short section (e.g. one with just 1-2 small blocks)
+     leaves tall, empty-looking gutters above AND below it, worse the taller .protocol-
+     document gets - reads as "the page scrolled into blank space". Snapping its top edge
+     to the pane's top instead means only ever the space after the very last section can
+     end up blank, same as any normal page falling short of the viewport. */
+  scroll-snap-align: start;
+  scroll-margin-top: 16px;
   scroll-snap-stop: always;
 }
 
-/* While the document is actively scrolling, apply the blur/opacity state change instantly
+/* While the document is actively scrolling, apply the active/inactive state change instantly
    instead of animating it - see the JS comment next to the scroll listener that toggles this
-   class. Animating filter at the same time as the native scroll-snap motion is what made the
-   whole thing feel janky. */
+   class. Animating the highlight at the same time as the native scroll-snap motion is what
+   made the whole thing feel janky. */
 .protocol-document.is-scrolling .protocol-doc-section {
   transition: none;
 }
 
+/* The active section is marked with an accent ring instead of blurring everything else -
+   inactive sections stay fully readable (no blur/opacity dip), which also keeps scanning
+   ahead/behind the active section cheap for the browser with ~15 sections mounted. */
 .protocol-doc-section-active {
-  filter: none;
-  opacity: 1;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent 65%), var(--shadow-soft);
 }
 
-/* Plain CSS filter, deliberately not backdrop-filter — see the removal note above about
-   Linux/Chromium compositing performance; this needs to stay cheap with up to ~15 sections
-   simultaneously mounted. */
-.protocol-doc-section-blurred {
-  filter: blur(6px);
-  opacity: 0.55;
-}
-
-/* The section itself is inert while blurred (see focused-element-editor.tsx), so clicks pass
-   through to this wrapper - that's what makes "click a blurred section to jump there" work. */
-.protocol-doc-section-wrap:has(.protocol-doc-section-blurred) {
+/* The section itself is inert while inactive (see focused-element-editor.tsx), so clicks pass
+   through to this wrapper - that's what makes "click a section to jump there" work. */
+.protocol-doc-section-wrap:has(.protocol-doc-section-inactive) {
   cursor: pointer;
 }
 
 .protocol-quicknav {
   position: sticky;
-  top: 20px;
+  top: 12px;
   align-self: start;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-height: calc(100dvh - 40px);
+  max-height: calc(100dvh - 24px);
   overflow-y: auto;
+  /* See .protocol-document's own overscroll-behavior comment - same scroll-chaining fix,
+     same pinned outer shell it would otherwise drift. */
+  overscroll-behavior: contain;
 }
 
 .protocol-quicknav-list {
@@ -6077,7 +6112,16 @@ input[type="radio"] {
     flex-direction: column;
   }
 
-  .app-frame-writing .element-block-stack {
+  /* Scoped to .editor-panel (only ever rendered in the old "abgeschlossen" hard-swap
+     single-block view, see the useDocumentLayout ? … : … branch in protocol-editor.tsx)
+     rather than just .app-frame-writing, which both views share. Unscoped, this whole
+     flex:1 stretch chain also matched the same class names reused for FocusedElementEditor
+     inside the new continuous-document mode's .protocol-doc-section cards - there,
+     .protocol-doc-section never provides the definite/viewport-bound height this chain is
+     designed to stretch into, so it left .event-table-wrap-scrollable computing a large,
+     mostly-blank height instead of respecting its own max-height: 320px (confirmed live: a
+     ~1160px tall block for what should render as a compact, internally-scrolling table). */
+  .app-frame-writing .editor-panel .element-block-stack {
     flex: 1;
     min-height: 0;
     display: flex;
@@ -6085,22 +6129,22 @@ input[type="radio"] {
   }
 
   /* event-list block card stretches to fill remaining panel height */
-  .app-frame-writing .editor-block-card-event-list {
+  .app-frame-writing .editor-panel .editor-block-card-event-list {
     flex: 1;
     min-height: 0;
     display: flex;
     flex-direction: column;
   }
 
-  .app-frame-writing .editor-block-card-event-list .event-list-grid {
+  .app-frame-writing .editor-panel .editor-block-card-event-list .event-list-grid {
     flex: 1;
     min-height: 0;
     display: flex;
     flex-direction: column;
   }
 
-  .app-frame-writing .editor-block-card-event-list .event-table-wrap,
-  .app-frame-writing .editor-block-card-event-list .event-table-wrap-scrollable {
+  .app-frame-writing .editor-panel .editor-block-card-event-list .event-table-wrap,
+  .app-frame-writing .editor-panel .editor-block-card-event-list .event-table-wrap-scrollable {
     flex: 1;
     min-height: 0;
     max-height: none;
@@ -6117,6 +6161,22 @@ input[type="radio"] {
    magic-number match rather than a hard constraint, so it's deliberately left untouched
    here to avoid clipping it if that number is ever slightly off). */
 @media (min-width: 901px) {
+  /* Belt-and-suspenders alongside .app-frame-writing's own overflow:hidden below: `body`
+     only sets overflow-x:hidden (see the base html/body rules near the top of this file),
+     never overflow-y - per the CSS Overflow spec, when one axis is non-visible the other's
+     computed value flips from 'visible' to 'auto' too, and a `body` with non-visible
+     overflow on either axis has its overflow propagated up to become the actual viewport/
+     root scrolling behavior (the standard HTML "body scroll propagates to the viewport"
+     rule). That propagation was still letting genuine scroll gestures (confirmed live -
+     real trackpad/mouse input, not reproducible via synthetic wheel events) reach
+     document.documentElement and drag the whole locked shell off-screen, even though
+     .app-frame-writing's own overflow:hidden looked like it should have been the final
+     word. Locking html/body directly here removes that path instead of relying on it. */
+  html:has(.protocol-panel-document),
+  body:has(.protocol-panel-document) {
+    overflow: hidden;
+  }
+
   .app-frame-writing:has(.protocol-panel-document) {
     height: 100vh;
     overflow: hidden;
@@ -6144,6 +6204,11 @@ input[type="radio"] {
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    /* Less top/bottom padding than a regular .panel - the document-mode header is now a
+       single compact row, so the panel shell shouldn't add its own large margin on top of
+       that; every pixel saved here goes straight to the scrollable document below. */
+    padding-top: 12px;
+    padding-bottom: 12px;
   }
 
   /* ProtocolEditor's own root element - turn it into the flex column that lays out
@@ -6156,12 +6221,17 @@ input[type="radio"] {
     min-height: 0;
     display: flex;
     flex-direction: column;
+    /* Tighter than the default 18px .grid gap - header/status-row/document-shell are chrome
+       stacked above the document, not content rows, so they don't need as much air between
+       them. */
+    gap: 10px;
     overflow: hidden;
   }
 
   .protocol-document-header {
     position: static;
     flex-shrink: 0;
+    padding-bottom: 0;
   }
 
   .protocol-panel-document .status-row {
