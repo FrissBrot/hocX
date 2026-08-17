@@ -3,6 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 
 import { ROLE_OPTIONS } from "@/components/admin/admin-tenant-settings-modal";
+import { MfaAdminModal } from "@/components/security/mfa-admin-modal";
 import { DataTable } from "@/components/ui/data-table";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
@@ -51,6 +52,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [mfaModalUser, setMfaModalUser] = useState<UserSummary | null>(null);
 
   const tenantNameById = useMemo(() => buildTenantNameMap(manageableTenants), [manageableTenants]);
   const activeUsers = useMemo(() => users.filter((user) => user.login_enabled), [users]);
@@ -101,6 +103,10 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
     setLoginPassword("");
     setLoginError(null);
     setLoginModalOpen(true);
+  }
+
+  function openMfa(user: UserSummary) {
+    setMfaModalUser(user);
   }
 
   async function submitEnableLogin(event: FormEvent<HTMLFormElement>) {
@@ -251,6 +257,16 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
                 <div className="table-actions table-actions-start">
                   <button
                     type="button"
+                    className="button-inline button-ghost"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openMfa(user);
+                    }}
+                  >
+                    MFA
+                  </button>
+                  <button
+                    type="button"
                     className="button-inline button-danger"
                     onClick={(event) => {
                       event.stopPropagation();
@@ -285,6 +301,9 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
               </td>
               <td>
                 <div className="table-actions table-actions-start">
+                  <button type="button" className="button-inline button-ghost" onClick={() => openMfa(user)}>
+                    MFA
+                  </button>
                   <button type="button" className="button-inline" onClick={() => openEnableLogin(user)}>
                     Login aktivieren
                   </button>
@@ -447,6 +466,14 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
           </div>
         </form>
       </Modal>
+
+      <MfaAdminModal
+        open={!!mfaModalUser}
+        onClose={() => setMfaModalUser(null)}
+        title={mfaModalUser ? `MFA von ${mfaModalUser.display_name}` : "MFA"}
+        loadPath={mfaModalUser ? `/api/users/${mfaModalUser.id}/mfa` : null}
+        deletePathBase={mfaModalUser ? `/api/users/${mfaModalUser.id}/mfa/factors` : null}
+      />
     </div>
   );
 }

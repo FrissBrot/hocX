@@ -2,6 +2,7 @@
 
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 
+import { MfaAdminModal } from "@/components/security/mfa-admin-modal";
 import { Modal } from "@/components/ui/modal";
 import { Tabs } from "@/components/ui/tabs";
 import { browserApiFetch } from "@/lib/api/client";
@@ -81,6 +82,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
   const [addUserId, setAddUserId] = useState("");
   const [addUserRole, setAddUserRole] = useState("reader");
   const [addUserBusy, setAddUserBusy] = useState(false);
+  const [mfaModalUser, setMfaModalUser] = useState<AdminTenantUser | null>(null);
 
   const [cleanupCounts, setCleanupCounts] = useState<TenantCleanupCounts | null>(null);
   const [cleanupLoading, setCleanupLoading] = useState(false);
@@ -329,6 +331,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                         <th>Name</th>
                         <th>E-Mail</th>
                         <th>Rolle</th>
+                        <th>MFA</th>
                         <th>Aktion</th>
                       </tr>
                     </thead>
@@ -348,6 +351,11 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                                 </option>
                               ))}
                             </select>
+                          </td>
+                          <td>
+                            <button type="button" className="button-inline button-ghost" onClick={() => setMfaModalUser(u)}>
+                              Anzeigen
+                            </button>
                           </td>
                           <td>
                             <button type="button" className="button-inline button-ghost" onClick={() => removeUser(u.user_id, u.display_name)}>
@@ -466,6 +474,14 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
             )
           }
         ]}
+      />
+
+      <MfaAdminModal
+        open={!!mfaModalUser}
+        onClose={() => setMfaModalUser(null)}
+        title={mfaModalUser ? `MFA von ${mfaModalUser.display_name}` : "MFA"}
+        loadPath={mfaModalUser ? `/api/admin/users/${mfaModalUser.user_id}/mfa` : null}
+        deletePathBase={mfaModalUser ? `/api/admin/users/${mfaModalUser.user_id}/mfa/factors` : null}
       />
     </Modal>
   );

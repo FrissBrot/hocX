@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { ROLE_OPTIONS } from "@/components/admin/admin-tenant-settings-modal";
+import { MfaAdminModal } from "@/components/security/mfa-admin-modal";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
@@ -49,6 +50,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
   const [mergeModalOpen, setMergeModalOpen] = useState(false);
   const [mergeSourceUserId, setMergeSourceUserId] = useState<number | null>(null);
   const [mergeTargetUserId, setMergeTargetUserId] = useState("");
+  const [mfaModalUser, setMfaModalUser] = useState<UserSummary | null>(null);
   // The merge target can be any eligible user tenant-wide, not just one on the currently
   // displayed page, so it's loaded separately (unpaginated) when the merge modal opens.
   const [mergeCandidates, setMergeCandidates] = useState<UserSummary[]>([]);
@@ -193,6 +195,10 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
     }
   }
 
+  function openMfa(user: UserSummary) {
+    setMfaModalUser(user);
+  }
+
   async function mergeUsers() {
     if (!mergeSourceUserId || !mergeTargetUserId) return;
     const ok = await confirm({
@@ -259,6 +265,16 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
             <td>{user.login_enabled ? "Aktiv" : "Deaktiviert"}</td>
             <td>
               <div className="table-actions table-actions-start">
+                <button
+                  type="button"
+                  className="button-inline"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openMfa(user);
+                  }}
+                >
+                  MFA
+                </button>
                 <button
                   type="button"
                   className="button-inline"
@@ -432,6 +448,14 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
           </div>
         </form>
       </Modal>
+
+      <MfaAdminModal
+        open={!!mfaModalUser}
+        onClose={() => setMfaModalUser(null)}
+        title={mfaModalUser ? `MFA von ${mfaModalUser.display_name}` : "MFA"}
+        loadPath={mfaModalUser ? `/api/admin/users/${mfaModalUser.id}/mfa` : null}
+        deletePathBase={mfaModalUser ? `/api/admin/users/${mfaModalUser.id}/mfa/factors` : null}
+      />
 
       <Modal
         open={mergeModalOpen}
