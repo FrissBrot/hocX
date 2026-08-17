@@ -5,6 +5,17 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, get_optional_current_user
+from app.schemas.mfa import (
+    LoginResponse,
+    MfaTicketRequest,
+    PasskeyAssertionStartRead,
+    PasskeyAssertionVerifyRequest,
+    PasskeyRegistrationComplete,
+    PasskeyRegistrationStartRead,
+    TotpEnrollmentComplete,
+    TotpEnrollmentStartRead,
+    TotpLoginVerifyRequest,
+)
 from app.schemas.user import LoginRequest, SessionRead, TenantByDomainRead
 from app.services import domain_bridge_service
 from app.services.auth_service import AuthService
@@ -14,9 +25,72 @@ router = APIRouter()
 service = AuthService()
 
 
-@router.post("/login", response_model=SessionRead)
+def _expected_origin(request: Request) -> str:
+    origin = request.headers.get("origin")
+    if origin:
+        return origin
+    host = request.headers.get("host") or request.url.netloc
+    if host.startswith("localhost") or host.startswith("127.0.0.1"):
+        return f"http://{host}"
+    return f"https://{host}"
+
+
+@router.post("/login", response_model=LoginResponse)
 def login(payload: LoginRequest, response: Response, request: Request, db: Session = Depends(get_db)):
     return service.login(db, response, payload, request_host=request.url.hostname)
+
+
+@router.post("/mfa/totp/verify", response_model=LoginResponse)
+def verify_login_totp(payload: TotpLoginVerifyRequest, response: Response, db: Session = Depends(get_db)):
+    return service.verify_login_totp(db, response, payload)
+
+
+@router.post("/mfa/totp/setup/start", response_model=TotpEnrollmentStartRead)
+def start_login_totp_setup(payload: MfaTicketRequest, db: Session = Depends(get_db)):
+    return service.start_login_totp_setup(db, payload)
+
+
+@router.post("/mfa/totp/setup/complete", response_model=LoginResponse)
+def complete_login_totp_setup(payload: TotpEnrollmentComplete, response: Response, db: Session = Depends(get_db)):
+    return service.complete_login_totp_setup(db, response, payload)
+
+
+@router.post("/mfa/passkeys/setup/start", response_model=PasskeyRegistrationStartRead)
+def start_login_passkey_setup(payload: MfaTicketRequest, request: Request, db: Session = Depends(get_db)):
+    return service.start_login_passkey_setup(
+        db,
+        payload,
+        request_host=request.url.hostname,
+        request_origin=_expected_origin(request),
+    )
+
+
+@router.post("/mfa/passkeys/setup/complete", response_model=LoginResponse)
+def complete_login_passkey_setup(
+    payload: PasskeyRegistrationComplete,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    return service.complete_login_passkey_setup(db, response, payload)
+
+
+@router.post("/mfa/passkeys/assertion/start", response_model=PasskeyAssertionStartRead)
+def start_login_passkey_assertion(payload: MfaTicketRequest, request: Request, db: Session = Depends(get_db)):
+    return service.start_login_passkey_assertion(
+        db,
+        payload,
+        request_host=request.url.hostname,
+        request_origin=_expected_origin(request),
+    )
+
+
+@router.post("/mfa/passkeys/assertion/verify", response_model=LoginResponse)
+def verify_login_passkey(
+    payload: PasskeyAssertionVerifyRequest,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    return service.verify_login_passkey(db, response, payload)
 
 
 @router.get("/tenant-by-domain", response_model=TenantByDomainRead)
@@ -53,7 +127,11 @@ def session(request: Request, db: Session = Depends(get_db), user: CurrentUser |
     bridge_redirect_url = None
     if user is not None:
         bridge_redirect_url = domain_bridge_service.resolve_bridge_redirect(
-            db, request.url.hostname, user.user_id, user.current_tenant_id
+            db,
+            request.url.hostname,
+            user.user_id,
+            user.current_tenant_id,
+            mfa_verified=user.mfa_verified,
         )
     return service.session(user, bridge_redirect_url)
 

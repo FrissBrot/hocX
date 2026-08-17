@@ -32,6 +32,7 @@ from app.schemas.admin import (
     TenantCloneRequest,
     TenantImportResult,
 )
+from app.schemas.mfa import UserMfaRead
 from app.schemas.oidc import PlatformOidcConfigRead, PlatformOidcConfigWrite
 from app.schemas.user import TenantUpdate, UserCreate, UserRead, UserUpdate
 from app.services.admin_domain_service import AdminDomainService
@@ -40,6 +41,7 @@ from app.services.admin_tenant_service import AdminTenantService
 from app.services.admin_tenant_user_service import AdminTenantUserService
 from app.services.admin_user_service import AdminUserService, PlatformAdminService
 from app.services.file_service import _safe_storage_path
+from app.services.mfa_service import MfaService
 from app.services.audit_service import AuditService
 from app.services.platform_oidc_service import PlatformOidcService
 from app.services.tenant_clone_service import TenantCloneService
@@ -60,6 +62,7 @@ domain_service = AdminDomainService()
 error_log_service = AdminErrorLogService()
 export_service = TenantExportService()
 import_service = TenantImportService()
+mfa_service = MfaService()
 audit = AuditService()
 
 
@@ -456,6 +459,30 @@ def merge_users(payload: AdminUserMergeRequest, db: Session = Depends(get_db), c
     audit.log(
         db, action="admin.users_merged", actor_email=current_admin.email, entity_type="user", entity_id=payload.target_user_id,
         details={"source_user_id": payload.source_user_id, "target_user_id": payload.target_user_id},
+    )
+    return result
+
+
+@router.get("/users/{user_id}/mfa", response_model=UserMfaRead)
+def get_user_mfa(user_id: int, db: Session = Depends(get_db)):
+    return mfa_service.get_platform_admin_user_overview(db, user_id)
+
+
+@router.delete("/users/{user_id}/mfa/factors/{factor_id}", response_model=UserMfaRead)
+def delete_user_mfa_factor(
+    user_id: int,
+    factor_id: int,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
+    result = mfa_service.delete_platform_admin_user_factor(db, user_id, factor_id)
+    audit.log(
+        db,
+        action="admin.user_mfa_factor_deleted",
+        actor_email=current_admin.email,
+        entity_type="user_mfa_factor",
+        entity_id=factor_id,
+        details={"target_user_id": user_id},
     )
     return result
 

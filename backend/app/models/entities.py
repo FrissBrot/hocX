@@ -112,6 +112,31 @@ class AppUser(Base, TimestampMixin, UpdatedAtMixin):
     external_identity_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
 
 
+class UserMfaFactor(Base, TimestampMixin, UpdatedAtMixin):
+    __tablename__ = "user_mfa_factor"
+    __table_args__ = (
+        Index("idx_user_mfa_factor_user", "user_id", "factor_type"),
+        UniqueConstraint("webauthn_credential_id", name="uq_user_mfa_factor_webauthn_credential_id"),
+        CheckConstraint("factor_type IN ('totp', 'webauthn')", name="ck_user_mfa_factor_type"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False)
+    factor_type: Mapped[str] = mapped_column(Text, nullable=False)
+    label: Mapped[str] = mapped_column(Text, nullable=False)
+    secret_encrypted: Mapped[str | None] = mapped_column(Text)
+    totp_last_counter: Mapped[int | None] = mapped_column(BigInteger)
+    webauthn_credential_id: Mapped[str | None] = mapped_column(Text)
+    webauthn_public_key_pem: Mapped[str | None] = mapped_column(Text)
+    webauthn_sign_count: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"))
+    webauthn_aaguid: Mapped[str | None] = mapped_column(Text)
+    webauthn_rp_id: Mapped[str | None] = mapped_column(Text)
+    webauthn_transports_json: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list
+    )
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class PlatformAdmin(Base, TimestampMixin, UpdatedAtMixin):
     """Betreiber-Account fürs zentrale Admin-Panel. Komplett getrennt vom Kunden-`AppUser`-System."""
 
@@ -956,4 +981,3 @@ class SystemErrorLog(Base):
     error_message: Mapped[str] = mapped_column(Text, nullable=False)
     traceback: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
-

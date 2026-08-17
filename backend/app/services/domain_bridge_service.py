@@ -12,29 +12,40 @@ _KEY_PREFIX = "domain_bridge:"
 _TTL_SECONDS = 60
 
 
-def create_bridge_token(user_id: int, tenant_id: int) -> str:
+def create_bridge_token(user_id: int, tenant_id: int, *, mfa_verified: bool = False) -> str:
     """Single-use, short-lived token used to hand a session off from the main domain to a
     tenant's custom domain (cookies aren't shared across unrelated domains)."""
     token = secrets.token_urlsafe(32)
     redis = get_redis_sync()
-    redis.set(f"{_KEY_PREFIX}{token}", f"{user_id}:{tenant_id}", nx=True, ex=_TTL_SECONDS)
+    redis.set(f"{_KEY_PREFIX}{token}", f"{user_id}:{tenant_id}:{int(bool(mfa_verified))}", nx=True, ex=_TTL_SECONDS)
     return token
 
 
-def consume_bridge_token(token: str) -> tuple[int, int] | None:
+def consume_bridge_token(token: str) -> tuple[int, int, bool] | None:
     """Atomically reads and deletes the token so it can never be replayed."""
     redis = get_redis_sync()
     value = redis.getdel(f"{_KEY_PREFIX}{token}")
     if value is None:
         return None
-    user_id_str, _, tenant_id_str = value.partition(":")
+    parts = value.split(":", 2)
     try:
-        return int(user_id_str), int(tenant_id_str)
-    except ValueError:
+        if len(parts) == 2:
+            user_id_str, tenant_id_str = parts
+            return int(user_id_str), int(tenant_id_str), False
+        user_id_str, tenant_id_str, mfa_str = parts
+        return int(user_id_str), int(tenant_id_str), mfa_str == "1"
+    except (TypeError, ValueError):
         return None
 
 
-def resolve_bridge_redirect(db: Session, request_host: str | None, user_id: int, tenant_id: int | None) -> str | None:
+def resolve_bridge_redirect(
+    db: Session,
+    request_host: str | None,
+    user_id: int,
+    tenant_id: int | None,
+    *,
+    mfa_verified: bool = False,
+) -> str | None:
     """Returns the URL to send the browser to so its session ends up on whichever domain this
     tenant belongs on: their own healthy custom domain if they have one, otherwise the shared
     main domain. Returns None if the browser is already on that exact host - this is what makes
@@ -64,7 +75,7 @@ def resolve_bridge_redirect(db: Session, request_host: str | None, user_id: int,
     if request_host == target_host:
         return None
 
-    token = create_bridge_token(user_id, tenant_id)
+    token = create_bridge_token(user_id, tenant_id, mfa_verified=mfa_verified)
     return f"https://{target_host}/api/auth/bridge?token={token}"
 
 

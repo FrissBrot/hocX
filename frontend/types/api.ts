@@ -1,5 +1,7 @@
 export type SaveState = "saving" | "saved" | "error";
 
+export type MfaFactorType = "totp" | "webauthn";
+
 export type SessionInfo = {
   authenticated: boolean;
   user: {
@@ -15,6 +17,61 @@ export type SessionInfo = {
   current_role: string | null;
   available_tenants: TenantMembership[];
   bridge_redirect_url: string | null;
+};
+
+export type PendingMfaMethod = {
+  factor_type: MfaFactorType;
+  label: string;
+};
+
+export type PendingMfaLogin = {
+  status: "setup_required" | "verification_required";
+  ticket: string;
+  required: boolean;
+  user_display_name: string;
+  user_email: string;
+  tenant_name: string | null;
+  available_methods: PendingMfaMethod[];
+  can_add_totp: boolean;
+  can_add_passkey: boolean;
+};
+
+export type LoginResponse = SessionInfo & {
+  mfa: PendingMfaLogin | null;
+};
+
+export type MfaFactor = {
+  id: number;
+  factor_type: MfaFactorType;
+  label: string;
+  created_at: string;
+  last_used_at: string | null;
+};
+
+export type UserMfaOverview = {
+  required: boolean;
+  has_factors: boolean;
+  can_add_passkey_here: boolean;
+  factors: MfaFactor[];
+};
+
+export type TotpEnrollmentStart = {
+  flow_token: string;
+  secret: string;
+  manual_entry_key: string;
+  provisioning_uri: string;
+  issuer: string;
+  account_name: string;
+};
+
+export type PasskeyRegistrationStart = {
+  flow_token: string;
+  public_key: Record<string, unknown>;
+};
+
+export type PasskeyAssertionStart = {
+  flow_token: string;
+  public_key: Record<string, unknown>;
 };
 
 export type TenantSummary = {

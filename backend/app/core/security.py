@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.db import get_db
-from app.models import AppUser, Role, Tenant, UserTenantRole
+from app.models import AppUser, Role, Tenant, UserMfaFactor, UserTenantRole
 
 
 PASSWORD_SCHEME = "pbkdf2_sha256"
@@ -45,6 +45,7 @@ class CurrentUser:
     current_tenant_profile_image_path: str | None
     current_role: str | None
     available_tenants: list[TenantMembership]
+    mfa_verified: bool = False
 
     def has_tenant_role(self, *allowed_roles: str) -> bool:
         return self.current_role in allowed_roles
@@ -76,12 +77,13 @@ def _sign_payload(payload: bytes) -> str:
     return base64.urlsafe_b64encode(payload).decode("utf-8") + "." + base64.urlsafe_b64encode(signature).decode("utf-8")
 
 
-def create_session_token(user_id: int, tenant_id: int | None) -> str:
+def create_session_token(user_id: int, tenant_id: int | None, *, mfa_verified: bool = False) -> str:
     now = datetime.now(UTC)
     payload = json.dumps(
         {
             "user_id": user_id,
             "tenant_id": tenant_id,
+            "mfa": bool(mfa_verified),
             "iat": int(now.timestamp()),
             "exp": int((now + timedelta(hours=settings.auth_session_ttl_hours)).timestamp()),
         },
@@ -90,11 +92,11 @@ def create_session_token(user_id: int, tenant_id: int | None) -> str:
     return _sign_payload(payload)
 
 
-def issue_session_cookie(response: Response, user_id: int, tenant_id: int | None) -> None:
+def issue_session_cookie(response: Response, user_id: int, tenant_id: int | None, *, mfa_verified: bool = False) -> None:
     """Mints a fresh session token and sets it as a host-only cookie on the response - shared by
     login, select-tenant and the cross-domain login bridge so all three stay consistent. (OIDC
     is admin-panel-only now - see platform_oidc_service.py / issue_admin_session_cookie.)"""
-    token = create_session_token(user_id, tenant_id)
+    token = create_session_token(user_id, tenant_id, mfa_verified=mfa_verified)
     response.set_cookie(
         key=settings.auth_session_cookie,
         value=token,
@@ -148,7 +150,7 @@ def _load_memberships(db: Session, user_id: int) -> list[TenantMembership]:
     ]
 
 
-def build_current_user(db: Session, user: AppUser, selected_tenant_id: int | None) -> CurrentUser:
+def build_current_user(db: Session, user: AppUser, selected_tenant_id: int | None, *, mfa_verified: bool = False) -> CurrentUser:
     memberships = _load_memberships(db, user.id)
 
     current_membership = None
@@ -173,7 +175,22 @@ def build_current_user(db: Session, user: AppUser, selected_tenant_id: int | Non
         current_tenant_profile_image_path=current_membership.tenant_profile_image_path if current_membership else None,
         current_role=current_membership.role_code if current_membership else None,
         available_tenants=memberships,
+        mfa_verified=mfa_verified,
     )
+
+
+def _has_active_mfa_factor(db: Session, user_id: int) -> bool:
+    return (
+        db.query(UserMfaFactor.id)
+        .filter(UserMfaFactor.user_id == user_id)
+        .limit(1)
+        .one_or_none()
+        is not None
+    )
+
+
+def _requires_mfa(user: CurrentUser) -> bool:
+    return any(membership.role_code == "admin" and membership.is_active for membership in user.available_tenants)
 
 
 def get_optional_current_user(
@@ -192,7 +209,13 @@ def get_optional_current_user(
         token_iat = int(session_data.get("iat", 0))
         if int(user.session_revoke_at.timestamp()) > token_iat:
             return None
-    return build_current_user(db, user, session_data.get("tenant_id"))
+    current_user = build_current_user(db, user, session_data.get("tenant_id"), mfa_verified=bool(session_data.get("mfa")))
+    has_mfa_factor = _has_active_mfa_factor(db, user.id)
+    if has_mfa_factor and not current_user.mfa_verified:
+        return None
+    if _requires_mfa(current_user) and (not has_mfa_factor or not current_user.mfa_verified):
+        return None
+    return current_user
 
 
 def get_current_user(user: CurrentUser | None = Depends(get_optional_current_user)) -> CurrentUser:
