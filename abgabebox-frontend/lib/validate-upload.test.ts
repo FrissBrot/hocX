@@ -61,4 +61,21 @@ describe("validateUploadFiles", () => {
     const result = validateUploadFiles([fakeFile("beleg.PDF", 100)], opts);
     expect(result).toEqual({ ok: true });
   });
+
+  it("accounts for files already uploaded in a previous session (cumulative limit)", () => {
+    const result = validateUploadFiles([fakeFile("a.pdf", 100), fakeFile("b.pdf", 100)], { ...opts, alreadyUploaded: 1 });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain("1 noch möglich");
+  });
+
+  it("accepts exactly the remaining capacity after previous uploads", () => {
+    const result = validateUploadFiles([fakeFile("a.pdf", 100)], { ...opts, alreadyUploaded: 1 });
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("allows any number of files when maxFiles is null (unlimited)", () => {
+    const files = Array.from({ length: 50 }, (_, i) => fakeFile(`f${i}.pdf`, 100));
+    const result = validateUploadFiles(files, { ...opts, maxFiles: null, alreadyUploaded: 1000 });
+    expect(result).toEqual({ ok: true });
+  });
 });

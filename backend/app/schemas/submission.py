@@ -6,7 +6,8 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 SubmissionSourceType = Literal["events", "list"]
-SubmissionElementStatus = Literal["open", "submitted", "reopened"]
+SubmissionElementStatus = Literal["open", "submitted", "closed"]
+SubmissionSortOrder = Literal["alphabetical", "date", "proximity"]
 
 SLUG_PATTERN = r"^[a-z0-9-]+$"
 
@@ -21,9 +22,9 @@ class SubmissionAssignmentBase(BaseModel):
     list_definition_id: int | None = None
     deadline: date | None = None
     allowed_file_types: list[str] = Field(default_factory=list)
-    max_files_per_element: int = Field(default=5, ge=1, le=20)
+    max_files_per_element: int | None = Field(default=5, ge=1)
     max_file_size_mb: int = Field(default=20, ge=1, le=100)
-    is_active: bool = True
+    sort_order: SubmissionSortOrder = "date"
     responsible_participant_source: str | None = None
 
 
@@ -42,9 +43,9 @@ class SubmissionAssignmentUpdate(BaseModel):
     list_definition_id: int | None = None
     deadline: date | None = None
     allowed_file_types: list[str] | None = None
-    max_files_per_element: int | None = Field(default=None, ge=1, le=20)
+    max_files_per_element: int | None = Field(default=None, ge=1)
     max_file_size_mb: int | None = Field(default=None, ge=1, le=100)
-    is_active: bool | None = None
+    sort_order: SubmissionSortOrder | None = None
     responsible_participant_source: str | None = None
 
 

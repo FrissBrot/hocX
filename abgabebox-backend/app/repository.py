@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import insert, select
+from sqlalchemy import func, insert, select
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -101,6 +101,31 @@ def latest_status_by_element(db: Session, *, assignment_id: int) -> dict[tuple[i
     for row in rows:
         latest[(row.event_id, row.list_entry_id)] = row.status
     return latest
+
+
+def count_files_by_element(db: Session, *, assignment_id: int) -> dict[tuple[int | None, int | None], int]:
+    """Anzahl bereits hochgeladener Dateien je (event_id, list_entry_id), ueber alle
+    kumulativen Upload-Vorgaenge eines Elements hinweg - fuer die "bereits hochgeladen"-Anzeige
+    in der Abgabebox. Zaehlt nur Zeilenanzahl (submission_upload_file), liest nie original_name/
+    storage_path aus stored_file - die restricted Rolle darf hier keine Dateinamen/-pfade
+    preisgeben (siehe Kommentar am submission_upload_table-Grant in Migration 0020_abgabebox).
+    """
+    rows = db.execute(
+        select(
+            submission_upload_table.c.event_id,
+            submission_upload_table.c.list_entry_id,
+            func.count(submission_upload_file_table.c.id).label("file_count"),
+        )
+        .select_from(
+            submission_upload_file_table.join(
+                submission_upload_table,
+                submission_upload_table.c.id == submission_upload_file_table.c.upload_id,
+            )
+        )
+        .where(submission_upload_table.c.assignment_id == assignment_id)
+        .group_by(submission_upload_table.c.event_id, submission_upload_table.c.list_entry_id)
+    )
+    return {(row.event_id, row.list_entry_id): row.file_count for row in rows}
 
 
 def insert_stored_file(

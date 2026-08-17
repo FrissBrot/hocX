@@ -9,7 +9,7 @@ export type AssignmentDetailPublic = {
   title: string;
   description: string | null;
   allowed_file_types: string[];
-  max_files_per_element: number;
+  max_files_per_element: number | null;
   max_file_size_mb: number;
 };
 
@@ -18,6 +18,7 @@ export type ElementPublic = {
   label: string;
   window_start: string | null;
   window_end: string | null;
+  uploaded_count: number;
 };
 
 // Deliberately not shared with frontend/lib/api/server.ts's backendFetch: this is a

@@ -9591,6 +9591,18 @@ input[type="radio"] {
   color: var(--warning);
 }
 
+.subm-close-button { --button-hover-bg: color-mix(in srgb, var(--danger) 12%, transparent 88%);
+  width: auto;
+  min-width: 0;
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent 60%);
+}
+
+.subm-close-button:hover {
+  background: color-mix(in srgb, var(--danger) 12%, transparent 88%);
+  color: var(--danger);
+}
+
 /* ── Loading skeleton ── */
 
 .subm-skeleton-box {

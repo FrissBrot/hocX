@@ -15,9 +15,16 @@ import {
   StructuredListDefinition,
   SubmissionAssignment,
   SubmissionElementStatusEntry,
+  SubmissionSortOrder,
   SubmissionSourceType,
   SubmissionUploadLogEntry,
 } from "@/types/api";
+
+const SORT_ORDER_LABEL: Record<SubmissionSortOrder, string> = {
+  alphabetical: "Alphabetisch",
+  date: "Nach Datum",
+  proximity: "Nähe zu heute",
+};
 
 const LOG_STATUS_LABEL: Record<string, string> = {
   upload_received: "Datei empfangen",
@@ -89,9 +96,9 @@ type FormState = {
   list_definition_id: number | "";
   deadline: string;
   allowed_file_types: string[];
-  max_files_per_element: number;
+  max_files_per_element: number | "";
   max_file_size_mb: number;
-  is_active: boolean;
+  sort_order: SubmissionSortOrder;
   responsible_participant_source: string;
 };
 
@@ -112,9 +119,9 @@ const initialForm: FormState = {
   list_definition_id: "",
   deadline: "",
   allowed_file_types: [],
-  max_files_per_element: 1,
+  max_files_per_element: 5,
   max_file_size_mb: 20,
-  is_active: true,
+  sort_order: "date",
   responsible_participant_source: "",
 };
 
@@ -138,14 +145,15 @@ function formFromAssignment(assignment: SubmissionAssignment): FormState {
     list_definition_id: assignment.list_definition_id ?? "",
     deadline: assignment.deadline ?? "",
     allowed_file_types: assignment.allowed_file_types,
-    max_files_per_element: assignment.max_files_per_element,
+    max_files_per_element: assignment.max_files_per_element ?? "",
     max_file_size_mb: assignment.max_file_size_mb,
-    is_active: assignment.is_active,
+    sort_order: assignment.sort_order,
     responsible_participant_source: assignment.responsible_participant_source ?? "",
   };
 }
 
 function statusLabel(element: SubmissionElementStatusEntry): string {
+  if (element.status === "closed") return "Geschlossen";
   if (element.status === "submitted") {
     if (element.files.some((f) => f.scan_status === "pending")) return "In Quarantäne";
     return "Abgegeben";
@@ -159,6 +167,7 @@ function statusLabel(element: SubmissionElementStatusEntry): string {
 }
 
 function statusVariant(element: SubmissionElementStatusEntry): BadgeVariant | null {
+  if (element.status === "closed") return "neutral";
   if (element.status === "submitted") {
     if (element.files.some((f) => f.scan_status === "pending")) return "warning";
     return "success";
@@ -472,14 +481,14 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
             public_slug: form.public_slug,
             source_type: "events" as const,
             tag_filter: form.tag_filter,
-            offset_days_before: form.offset_days_before === "" ? 0 : Number(form.offset_days_before),
-            offset_days_after: form.offset_days_after === "" ? 0 : Number(form.offset_days_after),
+            offset_days_before: form.offset_days_before === "" ? null : Number(form.offset_days_before),
+            offset_days_after: form.offset_days_after === "" ? null : Number(form.offset_days_after),
             list_definition_id: null,
             deadline: null,
             allowed_file_types: form.allowed_file_types,
-            max_files_per_element: Number(form.max_files_per_element),
+            max_files_per_element: form.max_files_per_element === "" ? null : Number(form.max_files_per_element),
             max_file_size_mb: Number(form.max_file_size_mb),
-            is_active: form.is_active,
+            sort_order: form.sort_order,
             responsible_participant_source: form.responsible_participant_source || null,
           }
         : {
@@ -491,11 +500,11 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
             offset_days_before: null,
             offset_days_after: null,
             list_definition_id: form.list_definition_id === "" ? null : Number(form.list_definition_id),
-            deadline: form.deadline,
+            deadline: form.deadline || null,
             allowed_file_types: form.allowed_file_types,
-            max_files_per_element: Number(form.max_files_per_element),
+            max_files_per_element: form.max_files_per_element === "" ? null : Number(form.max_files_per_element),
             max_file_size_mb: Number(form.max_file_size_mb),
-            is_active: form.is_active,
+            sort_order: form.sort_order,
             responsible_participant_source: form.responsible_participant_source || null,
           };
 
@@ -614,19 +623,38 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
     }
   }
 
+  async function closeElement(assignmentId: number, elementRef: string) {
+    try {
+      const updated = await browserApiFetch<SubmissionElementStatusEntry>(
+        `/api/submission-assignments/${assignmentId}/elements/${elementRef}/close`,
+        { method: "POST" }
+      );
+      setElements((current) => current.map((el) => (el.element_ref === elementRef ? updated : el)));
+      setElementModal((current) => (current?.element_ref === elementRef ? updated : current));
+      showToast("Element geschlossen", "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Element konnte nicht geschlossen werden", "error");
+    }
+  }
+
   const selectedAssignment = assignments.find((a) => a.id === selectedId);
   const hasPendingFiles = elements.some((el) => el.files.some((f) => f.scan_status === "pending"));
 
   function metaLine(assignment: SubmissionAssignment): string {
     if (assignment.source_type === "events") {
       const source = assignment.tag_filter ? `Termin „${assignment.tag_filter}“` : "Termine";
-      const before = assignment.offset_days_before ?? 0;
-      const after = assignment.offset_days_after ?? 0;
-      return `Quelle: ${source} · Fenster ${before}–${after} Tage`;
+      const before = assignment.offset_days_before;
+      const after = assignment.offset_days_after;
+      const windowParts = [
+        before !== null ? `ab ${before} Tage vorher` : null,
+        after !== null ? `bis ${after} Tage danach` : null,
+      ].filter((v): v is string => Boolean(v));
+      const window = windowParts.length > 0 ? windowParts.join(", ") : "kein Zeitfenster (offen bis manuell geschlossen)";
+      return `Quelle: ${source} · ${window}`;
     }
     const list = availableLists.find((l) => l.id === assignment.list_definition_id);
     const source = list ? `Liste „${list.name}“` : "Liste";
-    const deadline = assignment.deadline ? `Deadline ${formatDateShort(assignment.deadline)}` : "Keine Deadline";
+    const deadline = assignment.deadline ? `Deadline ${formatDateShort(assignment.deadline)}` : "Kein Stichtag (offen bis manuell geschlossen)";
     return `Quelle: ${source} · ${deadline}`;
   }
 
@@ -675,9 +703,6 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
               </span>
               <div className="record-list-row-trailing">
                 <SummaryBar summary={summaries[assignment.id]} />
-                <Badge variant={assignment.is_active ? "success" : "neutral"}>
-                  {assignment.is_active ? "Aktiv" : "Inaktiv"}
-                </Badge>
                 <div className="subm-row-actions">
                   <button
                     type="button"
@@ -737,10 +762,10 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
                     ? (availableParticipants.find((p) => p.id === element.responsible_participant_id)?.display_name ?? `#${element.responsible_participant_id}`)
                     : null;
                   const displayName = responsibleName ?? element.label;
-                  const isSubmitted = element.status === "submitted";
+                  const hasFiles = element.files.length > 0;
                   const variant = statusVariant(element);
                   const label = statusLabel(element);
-                  const meta = isSubmitted
+                  const meta = hasFiles
                     ? `${element.files.length} Datei${element.files.length === 1 ? "" : "en"}${element.submitted_at ? ` · ${relativeTime(element.submitted_at)}` : ""}`
                     : "Noch nicht eingereicht";
                   return (
@@ -757,7 +782,7 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
                       </div>
                       <div className="subm-participant-status">
                         <Badge variant={variant ?? "neutral"}>
-                          {isSubmitted ? <DownloadIcon /> : null} {label}
+                          {hasFiles ? <DownloadIcon /> : null} {label}
                         </Badge>
                       </div>
                     </div>
@@ -857,8 +882,8 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
               )}
             </div>
 
-            {elementModal.status === "submitted" ? (
-              <div className="table-toolbar-actions">
+            <div className="table-toolbar-actions">
+              {elementModal.status === "closed" ? (
                 <button
                   type="button"
                   className="button-ghost button-inline subm-reopen-button"
@@ -866,8 +891,16 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
                 >
                   Wieder aufschalten
                 </button>
-              </div>
-            ) : null}
+              ) : (
+                <button
+                  type="button"
+                  className="button-ghost button-inline subm-close-button"
+                  onClick={() => selectedId && void closeElement(selectedId, elementModal.element_ref)}
+                >
+                  Element schliessen
+                </button>
+              )}
+            </div>
 
             <div className="subm-modal-section">
               <div className="subm-modal-section-title">Log</div>
@@ -995,9 +1028,9 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
                   <input
                     type="number"
                     min={0}
+                    placeholder="unbegrenzt"
                     value={form.offset_days_before}
                     onChange={(e) => setForm((c) => ({ ...c, offset_days_before: e.target.value === "" ? "" : Number(e.target.value) }))}
-                    required
                   />
                 </label>
                 <label className="field-stack">
@@ -1005,12 +1038,15 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
                   <input
                     type="number"
                     min={0}
+                    placeholder="unbegrenzt"
                     value={form.offset_days_after}
                     onChange={(e) => setForm((c) => ({ ...c, offset_days_after: e.target.value === "" ? "" : Number(e.target.value) }))}
-                    required
                   />
                 </label>
               </div>
+              <span className="field-help">
+                Leer lassen = kein Zeitfenster auf dieser Seite. Ohne beide Werte bleibt die Abgabe offen, bis sie manuell geschlossen wird.
+              </span>
             </div>
           ) : (
             <div className="two-col">
@@ -1035,8 +1071,8 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
                   type="date"
                   value={form.deadline}
                   onChange={(e) => setForm((c) => ({ ...c, deadline: e.target.value }))}
-                  required
                 />
+                <span className="field-help">Leer lassen = kein Stichtag, Abgabe bleibt offen, bis sie manuell geschlossen wird.</span>
               </label>
             </div>
           )}
@@ -1130,9 +1166,11 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
               <input
                 type="number"
                 min={1}
+                placeholder="unbegrenzt"
                 value={form.max_files_per_element}
-                onChange={(e) => setForm((c) => ({ ...c, max_files_per_element: Number(e.target.value) }))}
+                onChange={(e) => setForm((c) => ({ ...c, max_files_per_element: e.target.value === "" ? "" : Number(e.target.value) }))}
               />
+              <span className="field-help">Leer lassen = unbegrenzt viele Dateien.</span>
             </label>
             <label className="field-stack">
               <span className="field-label">Max. Größe (MB)</span>
@@ -1145,9 +1183,19 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
             </label>
           </div>
 
-          <label className="checkbox-line">
-            <input type="checkbox" checked={form.is_active} onChange={(e) => setForm((c) => ({ ...c, is_active: e.target.checked }))} />
-            Aktiv (öffentlich sichtbar)
+          <label className="field-stack">
+            <span className="field-label">Sortierung der Elemente</span>
+            <select
+              value={form.sort_order}
+              onChange={(e) => setForm((c) => ({ ...c, sort_order: e.target.value as SubmissionSortOrder }))}
+            >
+              {(Object.keys(SORT_ORDER_LABEL) as SubmissionSortOrder[]).map((value) => (
+                <option key={value} value={value}>
+                  {SORT_ORDER_LABEL[value]}
+                </option>
+              ))}
+            </select>
+            <span className="field-help">Wird unverändert in der öffentlichen Abgabebox übernommen (dort nicht anpassbar).</span>
           </label>
 
           <div className="table-toolbar-actions">

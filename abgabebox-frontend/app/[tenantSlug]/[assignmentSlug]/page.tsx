@@ -41,8 +41,16 @@ export default async function AssignmentElementsPage({
               </div>
               {element.window_start || element.window_end ? (
                 <div className="window">
-                  {element.window_start ? `${formatDate(element.window_start)} – ` : ""}
-                  {formatDate(element.window_end)}
+                  {element.window_start && element.window_end
+                    ? `${formatDate(element.window_start)} – ${formatDate(element.window_end)}`
+                    : element.window_start
+                      ? `ab ${formatDate(element.window_start)}`
+                      : `bis ${formatDate(element.window_end)}`}
+                </div>
+              ) : null}
+              {element.uploaded_count > 0 ? (
+                <div className="window">
+                  {element.uploaded_count} Datei{element.uploaded_count === 1 ? "" : "en"} bereits hochgeladen
                 </div>
               ) : null}
             </Link>

@@ -104,7 +104,8 @@ export type TenantDomain = {
 };
 
 export type SubmissionSourceType = "events" | "list";
-export type SubmissionElementStatus = "open" | "submitted" | "reopened";
+export type SubmissionElementStatus = "open" | "submitted" | "closed";
+export type SubmissionSortOrder = "alphabetical" | "date" | "proximity";
 
 export type SubmissionAssignment = {
   id: number;
@@ -119,9 +120,9 @@ export type SubmissionAssignment = {
   list_definition_id: number | null;
   deadline: string | null;
   allowed_file_types: string[];
-  max_files_per_element: number;
+  max_files_per_element: number | null;
   max_file_size_mb: number;
-  is_active: boolean;
+  sort_order: SubmissionSortOrder;
   responsible_participant_source: string | null;
   created_at: string;
   updated_at: string;

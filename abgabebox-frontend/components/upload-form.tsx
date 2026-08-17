@@ -11,26 +11,29 @@ type Props = {
   assignmentSlug: string;
   elementRef: string;
   allowedFileTypes: string[];
-  maxFiles: number;
+  maxFiles: number | null;
   maxFileSizeMb: number;
+  alreadyUploadedCount: number;
   sitekey: string;
 };
 
-export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFileTypes, maxFiles, maxFileSizeMb, sitekey }: Props) {
+export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFileTypes, maxFiles, maxFileSizeMb, alreadyUploadedCount, sitekey }: Props) {
   const [files, setFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
   const [captchaSolution, setCaptchaSolution] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [uploadedSoFar, setUploadedSoFar] = useState(alreadyUploadedCount);
   const inputRef = useRef<HTMLInputElement>(null);
   const captchaWidgetRef = useRef<HTMLDivElement>(null);
 
   const accept = allowedFileTypes.length > 0 ? allowedFileTypes.map((t) => `.${t}`).join(",") : undefined;
   const typeLabel = allowedFileTypes.length > 0 ? allowedFileTypes.map((t) => t.toUpperCase()).join(", ") : "Alle Dateitypen";
+  const remaining = maxFiles === null ? null : Math.max(0, maxFiles - uploadedSoFar);
 
   function validateAndSet(selected: File[]): boolean {
-    const result = validateUploadFiles(selected, { maxFiles, allowedFileTypes, maxFileSizeMb });
+    const result = validateUploadFiles(selected, { maxFiles, allowedFileTypes, maxFileSizeMb, alreadyUploaded: uploadedSoFar });
     if (!result.ok) {
       setError(result.error);
       return false;
@@ -99,25 +102,41 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
         const body = await response.json().catch(() => null);
         throw new Error(body?.detail ?? "Upload fehlgeschlagen");
       }
+      setUploadedSoFar((prev) => prev + files.length);
+      setFiles([]);
       setDone(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload fehlgeschlagen");
-      // Der Captcha-Token wurde ggf. bereits verbraucht oder ist ungültig geworden -
-      // niemals denselben Token erneut senden. Widget zu einer frischen Challenge zwingen.
+    } finally {
+      // Der Captcha-Token wurde bereits verbraucht (Erfolg) oder ist ungueltig geworden
+      // (Fehler) - niemals denselben Token erneut senden. Widget in beiden Faellen zu einer
+      // frischen Challenge zwingen, damit ein weiterer Upload (siehe "Weitere Datei
+      // hochladen" auf dem Erfolgsbildschirm, oder ein erneuter Versuch nach einem Fehler)
+      // funktioniert - die Abgabe bleibt jetzt offen, statt die Seite nach einem Upload zu
+      // verlassen.
       setCaptchaSolution(null);
       const widget = captchaWidgetRef.current as (HTMLDivElement & { friendlyChallengeWidget?: { reset: () => void } }) | null;
       widget?.friendlyChallengeWidget?.reset();
-    } finally {
       setSubmitting(false);
     }
   }
+
+  const remainingAfterSuccess = maxFiles === null ? null : Math.max(0, maxFiles - uploadedSoFar);
+  const canUploadMore = remainingAfterSuccess === null || remainingAfterSuccess > 0;
 
   if (done) {
     return (
       <div className="upload-success">
         <div className="upload-success-icon">✓</div>
         <div className="upload-success-title">Abgabe erfolgreich</div>
-        <div className="upload-success-sub">Deine Datei wurde hochgeladen.</div>
+        <div className="upload-success-sub">
+          {uploadedSoFar} Datei{uploadedSoFar === 1 ? "" : "en"} für diese Abgabe hochgeladen.
+        </div>
+        {canUploadMore && (
+          <button type="button" className="button" style={{ marginTop: 16 }} onClick={() => setDone(false)}>
+            Weitere Datei hochladen
+          </button>
+        )}
       </div>
     );
   }
@@ -126,6 +145,12 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
 
   return (
     <form onSubmit={handleSubmit}>
+      {uploadedSoFar > 0 && (
+        <p className="upload-already-count">
+          Bereits {uploadedSoFar} Datei{uploadedSoFar === 1 ? "" : "en"} für diese Abgabe hochgeladen.
+        </p>
+      )}
+
       {/* Drop zone */}
       <div
         className={`drop-zone${dragging ? " drop-zone-active" : ""}${files.length > 0 ? " drop-zone-filled" : ""}`}
@@ -138,7 +163,7 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
           ref={inputRef}
           id="files"
           type="file"
-          multiple={maxFiles > 1}
+          multiple={remaining === null || remaining > 1}
           accept={accept}
           onChange={handleFileChange}
           style={{ display: "none" }}
@@ -150,7 +175,7 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
             : "Datei auswählen oder hierher ziehen"}
         </div>
         <div className="drop-zone-hint">
-          {typeLabel} · max. {maxFiles} {maxFiles === 1 ? "Datei" : "Dateien"} · je {maxFileSizeMb} MB
+          {typeLabel} · {remaining === null ? "beliebig viele Dateien" : `max. ${remaining} weitere ${remaining === 1 ? "Datei" : "Dateien"}`} · je {maxFileSizeMb} MB
         </div>
       </div>
 
