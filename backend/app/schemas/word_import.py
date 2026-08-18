@@ -52,6 +52,7 @@ class WordImportEventCandidate(BaseModel):
     event_id: int
     title: str
     event_date: date
+    event_end_date: date | None = None
     score: float = 0.0
     # Short human-readable justification (e.g. "Datum exakt, Titel 92% ähnlich") - see
     # word_import_service._event_match_reason. Empty string for candidates built before
@@ -198,10 +199,17 @@ class WordImportEventMapping(BaseModel):
     row_index: int
     raw_title: str
     raw_date: date | None = None
+    # Set when raw_date's cell named a "dd.mm.yyyy - dd.mm.yyyy"-style range (e.g. a
+    # holiday-plan or multi-day course entry) - the range's end date, so the row can be
+    # created/updated as a multi-day Event (Event.event_end_date) instead of silently
+    # collapsing to a single-day Termin on raw_date alone. None for an ordinary
+    # single-day row.
+    raw_end_date: date | None = None
     status: EventMatchStatus
     matched_event_id: int | None = None
     matched_event_title: str | None = None
     matched_event_date: date | None = None
+    matched_event_end_date: date | None = None
     # Ranked alternatives (best first, top match included) so the wizard can offer a
     # dropdown instead of only the single auto-picked candidate.
     candidates: list[WordImportEventCandidate] = Field(default_factory=list)
@@ -401,12 +409,16 @@ class WordImportEventCommit(BaseModel):
     linked_event_id: int | None = None
     final_title: str
     final_date: date
+    # Resolved the same way as final_date (doc-vs-existing), written to
+    # Event.event_end_date - None for an ordinary single-day Termin.
+    final_end_date: date | None = None
     # The document's own raw title/date, BEFORE the doc-vs-existing decision (see
     # final_title/final_date above) - not used to write the Event, only to key a
     # remembered resolution for this exact conflict (see WordImportService.commit /
     # _event_conflict_key) so an identical recurring conflict auto-resolves next time.
     raw_title: str
     raw_date: date | None = None
+    raw_end_date: date | None = None
     # Mirrors WordImportEventMapping.tag - when set (Matrix-sourced row), the created/
     # updated Event's tag is set to this value so it appears in the right Matrix column.
     # None for ordinary Termine-table rows, whose tag is left untouched.

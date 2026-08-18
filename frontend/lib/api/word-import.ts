@@ -126,6 +126,7 @@ export type WordImportEventCandidate = {
   event_id: number;
   title: string;
   event_date: string;
+  event_end_date: string | null;
   score: number;
   reason: string;
 };
@@ -134,10 +135,16 @@ export type WordImportEventMapping = {
   row_index: number;
   raw_title: string;
   raw_date: string | null;
+  // Set when the document cell named a "dd.mm.yyyy - dd.mm.yyyy"-style range (e.g. a
+  // holiday-plan or multi-day course entry) - the range's end date, so the row can be
+  // created/updated as a multi-day Termin instead of collapsing to a single day on
+  // raw_date alone. null for an ordinary single-day row.
+  raw_end_date: string | null;
   status: EventMatchStatus;
   matched_event_id: number | null;
   matched_event_title: string | null;
   matched_event_date: string | null;
+  matched_event_end_date: string | null;
   candidates: WordImportEventCandidate[];
   // Only set for rows extracted from a Matrix "events" row - the tag this Event needs
   // so it shows up in that Matrix column (see WordImportService.analyze). null for
@@ -287,8 +294,10 @@ export type WordImportCommitPayload = {
     linked_event_id: number | null;
     final_title: string;
     final_date: string;
+    final_end_date: string | null;
     raw_title: string;
     raw_date: string | null;
+    raw_end_date: string | null;
     tag: string | null;
     participant_count: number | null;
     originally_suggested_event_id: number | null;
