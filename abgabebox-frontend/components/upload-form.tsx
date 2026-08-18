@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, DragEvent, FormEvent, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, FormEvent, useCallback, useRef, useState } from "react";
 
 import { CaptchaWidget } from "@/components/captcha-widget";
 import { publicApiUrl } from "@/lib/api";
@@ -20,13 +20,18 @@ type Props = {
 export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFileTypes, maxFiles, maxFileSizeMb, alreadyUploadedCount, sitekey }: Props) {
   const [files, setFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
-  const [captchaSolution, setCaptchaSolution] = useState<string | null>(null);
+  const [captchaSessionToken, setCaptchaSessionToken] = useState<string | null>(null);
+  const [captchaVerifying, setCaptchaVerifying] = useState(false);
+  const [captchaKey, setCaptchaKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
   const [done, setDone] = useState(false);
   const [uploadedSoFar, setUploadedSoFar] = useState(alreadyUploadedCount);
   const inputRef = useRef<HTMLInputElement>(null);
-  const captchaWidgetRef = useRef<HTMLDivElement>(null);
+  // Welche rohe FriendlyCaptcha-Loesung bereits gegen ein Sitzungs-Token eingetauscht wurde -
+  // handleSolved kann mehrfach mit derselben Loesung feuern (Callback + DOM-Fallback im Widget).
+  const exchangedSolutionRef = useRef<string | null>(null);
 
   const accept = allowedFileTypes.length > 0 ? allowedFileTypes.map((t) => `.${t}`).join(",") : undefined;
   const typeLabel = allowedFileTypes.length > 0 ? allowedFileTypes.map((t) => t.toUpperCase()).join(", ") : "Alle Dateitypen";
@@ -64,32 +69,63 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
-  // Try to read the solution directly from the DOM as fallback when callback didn't fire
-  function getCaptchaSolution(): string | null {
-    if (captchaSolution) return captchaSolution;
-    const widget = captchaWidgetRef.current;
-    if (!widget) return null;
-    // FriendlyCaptcha stores solution in data-response attribute after solving
-    const response = widget.getAttribute("data-response");
-    if (response && response !== ".") return response;
-    return null;
+  // Laeuft einmal pro Seitenaufruf, sobald FriendlyCaptcha eine Loesung liefert - tauscht sie
+  // sofort gegen ein serverseitig signiertes Sitzungs-Token (siehe abgabebox-backend
+  // captcha-verify-Endpoint), das fuer alle weiteren Uploads auf dieser Seite gueltig bleibt.
+  // Eine einzelne FriendlyCaptcha-Loesung selbst laesst sich nur einmal gegen deren Siteverify
+  // pruefen, deshalb der Umweg ueber ein eigenes Token statt die Loesung direkt wiederzuverwenden.
+  const handleSolved = useCallback(async (solution: string) => {
+    if (exchangedSolutionRef.current === solution) return;
+    exchangedSolutionRef.current = solution;
+    setCaptchaVerifying(true);
+    try {
+      const formData = new FormData();
+      formData.append("captcha_solution", solution);
+      const response = await fetch(
+        publicApiUrl(`/api/public/${tenantSlug}/assignments/${assignmentSlug}/elements/${elementRef}/captcha-verify`),
+        { method: "POST", body: formData }
+      );
+      if (!response.ok) {
+        // Eintausch fehlgeschlagen (z.B. FriendlyCaptcha-Loesung inzwischen abgelaufen) - Widget
+        // neu montieren, statt in diesem bereits vom Widget als "geloest" markierten Zustand
+        // stehenzubleiben, in dem keine neue Loesung mehr von selbst nachkaeme.
+        setCaptchaVerifying(false);
+        requestFreshCaptcha();
+        return;
+      }
+      const result = await response.json();
+      setCaptchaSessionToken(result.session_token);
+      setCaptchaVerifying(false);
+    } catch {
+      setCaptchaVerifying(false);
+      requestFreshCaptcha();
+    }
+  }, [tenantSlug, assignmentSlug, elementRef]);
+
+  // Startet einen frischen Sicherheitscheck (z.B. nach abgelaufenem Sitzungs-Token) - der `key`-
+  // Wechsel zwingt React, das Widget komplett neu zu montieren, was dank data-start="auto" sofort
+  // eine neue Challenge loest, ohne dass ausgewaehlte Dateien verloren gehen.
+  function requestFreshCaptcha() {
+    setCaptchaSessionToken(null);
+    exchangedSolutionRef.current = null;
+    setCaptchaKey((k) => k + 1);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (files.length === 0) { setError("Bitte mindestens eine Datei auswählen"); return; }
 
-    const solution = getCaptchaSolution();
-    if (!solution) {
+    if (!captchaSessionToken) {
       setError("Sicherheitscheck läuft noch – bitte kurz warten und nochmals versuchen");
       return;
     }
 
     setSubmitting(true);
     setError(null);
+    setWarnings([]);
     try {
       const formData = new FormData();
-      formData.append("captcha_solution", solution);
+      formData.append("captcha_session_token", captchaSessionToken);
       files.forEach((file) => formData.append("files", file));
       const response = await fetch(
         publicApiUrl(`/api/public/${tenantSlug}/assignments/${assignmentSlug}/elements/${elementRef}/upload`),
@@ -99,24 +135,25 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
         if (response.status === 429) {
           throw new Error("Zu viele Versuche – bitte kurz warten und dann nochmals versuchen");
         }
+        if (response.status === 401) {
+          // Sitzungs-Token abgelaufen (siehe ABGABEBOX_CAPTCHA_SESSION_TTL_MINUTES) - Widget fuer
+          // eine frische Loesung neu starten, ausgewaehlte Dateien bleiben erhalten.
+          requestFreshCaptcha();
+          throw new Error("Sicherheitscheck ist abgelaufen – wird gerade erneuert, bitte kurz warten");
+        }
         const body = await response.json().catch(() => null);
         throw new Error(body?.detail ?? "Upload fehlgeschlagen");
       }
+      const result = await response.json().catch(() => null);
+      setWarnings(result?.image_duplicate_warnings ?? []);
       setUploadedSoFar((prev) => prev + files.length);
       setFiles([]);
       setDone(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload fehlgeschlagen");
     } finally {
-      // Der Captcha-Token wurde bereits verbraucht (Erfolg) oder ist ungueltig geworden
-      // (Fehler) - niemals denselben Token erneut senden. Widget in beiden Faellen zu einer
-      // frischen Challenge zwingen, damit ein weiterer Upload (siehe "Weitere Datei
-      // hochladen" auf dem Erfolgsbildschirm, oder ein erneuter Versuch nach einem Fehler)
-      // funktioniert - die Abgabe bleibt jetzt offen, statt die Seite nach einem Upload zu
-      // verlassen.
-      setCaptchaSolution(null);
-      const widget = captchaWidgetRef.current as (HTMLDivElement & { friendlyChallengeWidget?: { reset: () => void } }) | null;
-      widget?.friendlyChallengeWidget?.reset();
+      // Das Sitzungs-Token bleibt bewusst erhalten (ausser beim 401-Fall oben) - der
+      // Sicherheitscheck soll nur einmal pro Seitenaufruf laufen, nicht vor jedem Upload.
       setSubmitting(false);
     }
   }
@@ -132,6 +169,13 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
         <div className="upload-success-sub">
           {uploadedSoFar} Datei{uploadedSoFar === 1 ? "" : "en"} für diese Abgabe hochgeladen.
         </div>
+        {warnings.length > 0 && (
+          <div className="upload-warning-list">
+            {warnings.map((warning, i) => (
+              <p key={i}>{warning}</p>
+            ))}
+          </div>
+        )}
         {canUploadMore && (
           <button type="button" className="button" style={{ marginTop: 16 }} onClick={() => setDone(false)}>
             Weitere Datei hochladen
@@ -140,8 +184,6 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
       </div>
     );
   }
-
-  const captchaReady = !!getCaptchaSolution();
 
   return (
     <form onSubmit={handleSubmit}>
@@ -192,17 +234,20 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
         </ul>
       )}
 
-      {/* Captcha */}
+      {/* Captcha - laeuft einmal beim Laden der Seite, bleibt danach fuer alle weiteren Uploads
+          gueltig (siehe handleSolved oben) - das Widget selbst wird nach erfolgreichem Eintausch
+          ausgeblendet, nur der Status bleibt sichtbar. */}
       {sitekey && (
         <div style={{ margin: "20px 0 4px" }}>
-          <CaptchaWidget
-            sitekey={sitekey}
-            onSolved={(sol) => setCaptchaSolution(sol)}
-            onExpired={() => setCaptchaSolution(null)}
-            widgetRef={captchaWidgetRef}
-          />
-          <div className={`captcha-status${captchaReady ? " captcha-status-ok" : ""}`}>
-            {captchaReady ? "✓ Sicherheitscheck abgeschlossen" : "Sicherheitscheck läuft…"}
+          {!captchaSessionToken && (
+            <CaptchaWidget key={captchaKey} sitekey={sitekey} onSolved={handleSolved} onExpired={() => { exchangedSolutionRef.current = null; }} />
+          )}
+          <div className={`captcha-status${captchaSessionToken ? " captcha-status-ok" : ""}`}>
+            {captchaSessionToken
+              ? "✓ Sicherheitscheck abgeschlossen"
+              : captchaVerifying
+                ? "Sicherheitscheck wird geprüft…"
+                : "Sicherheitscheck läuft…"}
           </div>
         </div>
       )}

@@ -985,6 +985,7 @@ export function ProtocolEditor({
       collab.sendFieldUpdate(`block-${protocolElementBlockId}-images`, next);
       setSelectedFiles((current) => ({ ...current, [protocolElementBlockId]: null }));
       setStatus(protocolElementBlockId, "saved");
+      if (created.duplicate_warning) showToast(created.duplicate_warning, "info");
     } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
       showToast(err instanceof Error ? err.message : "Bild konnte nicht hochgeladen werden", "error");

@@ -693,7 +693,10 @@ Index("idx_protocol_element_block_render", ProtocolElementBlock.protocol_element
 
 class StoredFile(Base, TimestampMixin):
     __tablename__ = "stored_file"
-    __table_args__ = (Index("idx_stored_file_tenant", "tenant_id"),)
+    __table_args__ = (
+        Index("idx_stored_file_tenant", "tenant_id"),
+        Index("idx_stored_file_tags_gin", "tags", postgresql_using="gin"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
@@ -706,6 +709,11 @@ class StoredFile(Base, TimestampMixin):
     perceptual_hash: Mapped[str | None] = mapped_column(Text)
     thumbnail_path: Mapped[str | None] = mapped_column(Text)
     scan_status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'clean'"))
+    # User-assigned tags for the "Dateien" overview page's filter/editor - separate from the
+    # auto-derived "origin tag" (which protocol/word-import/submission this file came from,
+    # see StoredFileRepository.list_tenant_files), which is computed on read rather than
+    # stored here so it always reflects the current protocol number / assignment title.
+    tags: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
 
 

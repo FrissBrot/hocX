@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import io
 import zipfile
+from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -13,10 +14,17 @@ from sqlalchemy.orm import Session
 
 from app import scanner
 from app.core.config import settings
-from app.models import Protocol, ProtocolElement, ProtocolElementBlock, ProtocolImage, StoredFile
+from app.models import AppUser, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolImage, StoredFile
 from app.repositories.file_repository import ProtocolImageRepository, StoredFileRepository
-from app.schemas.files import FileOverviewItem
+from app.schemas.files import FileOverviewItem, StoredFileMetadata
 from app.schemas.protocol import ProtocolImageRead
+
+# Max number of tags a suggestion query returns to the frontend's autocomplete dropdown.
+MAX_TAG_SUGGESTIONS = 50
+# Hard cap on tags per file and on each tag's length - guards against a pathological client
+# sending an unbounded array/strings into a jsonb column with a GIN index.
+MAX_TAGS_PER_FILE = 30
+MAX_TAG_LENGTH = 60
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
 ALLOWED_IMAGE_MIME_TYPES = {
@@ -152,6 +160,48 @@ def _generate_thumbnail_bytes(content: bytes) -> bytes | None:
         return None
 
 
+def _extract_image_metadata(content: bytes) -> tuple[int | None, int | None, datetime | None, str | None]:
+    """(width, height, exif_taken_at, exif_camera) for the file-detail metadata panel.
+    Deliberately does not read/return GPS EXIF data (present on some phone photos) - that's
+    location data about where a user was, not something this feature needs to expose.
+    Returns all-None for non-images or content PIL can't decode."""
+    try:
+        with Image.open(io.BytesIO(content)) as image:
+            width, height = image.size
+            taken_at: datetime | None = None
+            camera: str | None = None
+            try:
+                exif = image.getexif()
+                make = exif.get(271)
+                model = exif.get(272)
+                camera_parts = [str(p).strip() for p in (make, model) if p and str(p).strip()]
+                camera = " ".join(camera_parts) or None
+                exif_ifd = exif.get_ifd(0x8769) if hasattr(exif, "get_ifd") else {}
+                raw_taken_at = exif_ifd.get(36867) or exif_ifd.get(36868) or exif.get(306)
+                if raw_taken_at:
+                    taken_at = datetime.strptime(str(raw_taken_at).strip(), "%Y:%m:%d %H:%M:%S")
+            except Exception:
+                pass
+            return width, height, taken_at, camera
+    except Exception:
+        return None, None, None, None
+
+
+def _normalize_tags(tags: list[str]) -> list[str]:
+    """Trims/dedupes/caps a user-submitted tag list before it hits the JSONB column - same
+    spirit as the trim-and-filter TagInput already does client-side, but enforced server-side
+    since this is a real API input, not just a UI convenience."""
+    seen: dict[str, None] = {}
+    for raw in tags:
+        tag = raw.strip()
+        if not tag or len(tag) > MAX_TAG_LENGTH:
+            continue
+        seen.setdefault(tag, None)
+        if len(seen) >= MAX_TAGS_PER_FILE:
+            break
+    return list(seen.keys())
+
+
 def _closest_perceptual_match(perceptual_hash: str | None, candidates: list[tuple[int, str]]) -> int | None:
     """Returns the stored_file_id of the closest candidate within PERCEPTUAL_DUPLICATE_THRESHOLD,
     or None if there's no hash to compare or nothing close enough."""
@@ -193,6 +243,12 @@ class FileService:
 
     def build_thumbnail_url(self, stored_file_id: int) -> str:
         return f"/api/stored-files/{stored_file_id}/thumbnail"
+
+    def build_tags_url(self, stored_file_id: int) -> str:
+        return f"/api/stored-files/{stored_file_id}/tags"
+
+    def build_metadata_url(self, stored_file_id: int) -> str:
+        return f"/api/stored-files/{stored_file_id}/metadata"
 
     def ensure_thumbnail(self, db: Session, stored_file: StoredFile, storage_root: str) -> Path | None:
         """Returns the path to a small JPEG preview of stored_file's content, generating and
@@ -249,6 +305,7 @@ class FileService:
         source: str | None = None,
         only_images: bool = False,
         search: str | None = None,
+        tags: list[str] | None = None,
         sort_by: str = "created_at",
         sort_dir: str = "desc",
     ) -> list[FileOverviewItem]:
@@ -260,6 +317,7 @@ class FileService:
             source=source,
             only_images=only_images,
             search=search,
+            tags=tags,
             sort_by=sort_by,
             sort_dir=sort_dir,
         )
@@ -269,14 +327,20 @@ class FileService:
             if row.source == "submission_upload":
                 content_url = f"/api/submission-uploads/{row.upload_id}/files/{row.id}/content"
                 thumbnail_url = f"/api/submission-uploads/{row.upload_id}/files/{row.id}/thumbnail" if is_image else None
+                tags_url = f"/api/submission-uploads/{row.upload_id}/files/{row.id}/tags"
+                metadata_url = f"/api/submission-uploads/{row.upload_id}/files/{row.id}/metadata"
                 ref_href = f"/submission-assignments/{row.ref_id}" if row.ref_id is not None else None
             elif row.source == "protocol_image":
                 content_url = self.build_content_url(row.id)
                 thumbnail_url = self.build_thumbnail_url(row.id) if is_image else None
+                tags_url = self.build_tags_url(row.id)
+                metadata_url = self.build_metadata_url(row.id)
                 ref_href = f"/protocols/{row.ref_id}" if row.ref_id is not None else None
             else:  # word_import - no dedicated per-document frontend route to link to
                 content_url = self.build_content_url(row.id)
                 thumbnail_url = self.build_thumbnail_url(row.id) if is_image else None
+                tags_url = self.build_tags_url(row.id)
+                metadata_url = self.build_metadata_url(row.id)
                 ref_href = None
             items.append(
                 FileOverviewItem(
@@ -289,12 +353,75 @@ class FileService:
                     is_image=is_image,
                     content_url=content_url,
                     thumbnail_url=thumbnail_url,
+                    tags_url=tags_url,
+                    metadata_url=metadata_url,
                     ref_label=row.ref_label,
                     ref_date=row.ref_date,
                     ref_href=ref_href,
+                    tags=list(row.tags or []),
+                    origin_tag=row.origin_tag,
                 )
             )
         return items
+
+    def list_distinct_tags(self, db: Session, tenant_id: int, *, query: str | None = None, limit: int = MAX_TAG_SUGGESTIONS) -> list[str]:
+        """Every tag currently in use by this tenant's files (custom + auto origin tags),
+        deduped and sorted, for the tag-filter/editor autocomplete."""
+        rows = self.stored_file_repository.list_tag_sources(db, tenant_id)
+        seen: set[str] = set()
+        needle = query.strip().lower() if query else None
+        for row in rows:
+            for tag in [*(row.tags or []), row.origin_tag]:
+                if not tag or tag in seen:
+                    continue
+                if needle and needle not in tag.lower():
+                    continue
+                seen.add(tag)
+        return sorted(seen, key=str.lower)[:limit]
+
+    def update_stored_file_tags(self, db: Session, stored_file: StoredFile, tags: list[str]) -> list[str]:
+        normalized = _normalize_tags(tags)
+        self.stored_file_repository.update_tags(db, stored_file, normalized)
+        return normalized
+
+    def get_stored_file_metadata(self, db: Session, stored_file: StoredFile, storage_root: str, tenant_id: int) -> StoredFileMetadata | None:
+        row = self.stored_file_repository.get_file_overview_row(db, tenant_id, stored_file.id)
+        if row is None:
+            return None
+        width = height = None
+        exif_taken_at = None
+        exif_camera = None
+        if stored_file.mime_type and stored_file.mime_type.startswith("image/"):
+            file_path = _safe_storage_path(storage_root, stored_file.storage_path)
+            if file_path.exists():
+                width, height, exif_taken_at, exif_camera = _extract_image_metadata(file_path.read_bytes())
+        # created_by is NULL for files this backend never attributed to a logged-in user -
+        # notably abgabebox submission uploads (written by an anonymous public submitter
+        # through a separate restricted DB role that never sets this column) and any file
+        # uploaded before its upload path started passing created_by through.
+        uploaded_by_name = None
+        if stored_file.created_by is not None:
+            uploader = db.get(AppUser, stored_file.created_by)
+            if uploader is not None:
+                uploaded_by_name = uploader.display_name
+        return StoredFileMetadata(
+            id=stored_file.id,
+            original_name=stored_file.original_name,
+            mime_type=stored_file.mime_type,
+            file_size_bytes=stored_file.file_size_bytes,
+            created_at=stored_file.created_at,
+            checksum_sha256=stored_file.checksum_sha256,
+            source=row.source,
+            ref_label=row.ref_label,
+            ref_date=row.ref_date,
+            tags=list(stored_file.tags or []),
+            origin_tag=row.origin_tag,
+            width=width,
+            height=height,
+            exif_taken_at=exif_taken_at,
+            exif_camera=exif_camera,
+            uploaded_by_name=uploaded_by_name,
+        )
 
     async def save_protocol_image(
         self,

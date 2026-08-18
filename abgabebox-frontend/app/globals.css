@@ -12,10 +12,10 @@
   --muted: #667085;
   --accent: #2f6df6;
   --danger: #dc2626;
-  --c0: #22c55e;
-  --c1: #a78bfa;
-  --c2: #2f6fed;
-  --c3: #f97316;
+  --c0: #86d9b0;
+  --c1: #b8a8f0;
+  --c2: #8fb8f5;
+  --c3: #f3b788;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -27,10 +27,10 @@
     --muted: #8b94a7;
     --accent: #5b8def;
     --danger: #f87171;
-    --c0: #22c55e;
-    --c1: #a78bfa;
-    --c2: #6d9bff;
-    --c3: #f97316;
+    --c0: #86d9b0;
+    --c1: #b8a8f0;
+    --c2: #8fb8f5;
+    --c3: #f3b788;
   }
 }
 
@@ -216,6 +216,25 @@ input[type="file"] {
   font-size: 0.85rem;
   color: var(--muted);
   margin: 0 0 10px;
+}
+
+.upload-warning-list {
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--c3);
+  background: color-mix(in srgb, var(--c3) 16%, var(--panel));
+  text-align: left;
+}
+
+.upload-warning-list p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.upload-warning-list p + p {
+  margin-top: 4px;
 }
 
 .drop-zone {

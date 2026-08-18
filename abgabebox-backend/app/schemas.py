@@ -27,3 +27,9 @@ class ElementPublic(BaseModel):
 class UploadResult(BaseModel):
     ok: bool
     files_received: int
+    image_duplicate_warnings: list[str] = []
+
+
+class CaptchaVerifyResult(BaseModel):
+    session_token: str
+    expires_in_seconds: int

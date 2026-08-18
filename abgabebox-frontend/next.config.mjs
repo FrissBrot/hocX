@@ -1,9 +1,15 @@
 // connect-src erlaubt zusaetzlich https://api.friendlycaptcha.com: components/captcha-widget.tsx
-// bindet das Friendly-Captcha-Skript zwar selbst gehostet ein (public/friendly-challenge.module.min.js,
-// data-worker-src ebenfalls self-hosted unter public/friendly-challenge.worker.min.js -> keine
-// Ausnahme in script-src/worker-src noetig), das Widget loest die Proof-of-Work-Challenge aber per
-// XHR/fetch gegen den data-puzzle-endpoint https://api.friendlycaptcha.com/api/v1/puzzle - ohne
-// diese Ausnahme wuerde jeder Upload-Versuch am blockierten Captcha scheitern.
+// bindet das Friendly-Captcha-Skript zwar selbst gehostet ein (public/friendly-challenge.module.min.js),
+// das Widget loest die Proof-of-Work-Challenge aber per XHR/fetch gegen den data-puzzle-endpoint
+// https://api.friendlycaptcha.com/api/v1/puzzle - ohne diese Ausnahme wuerde jeder Upload-Versuch
+// am blockierten Captcha scheitern.
+//
+// worker-src braucht zusaetzlich 'blob:': data-worker-src (public/friendly-challenge.worker.min.js)
+// wird vom Bundle nie gelesen - das Modul hat den Worker-Code inline als String eingebettet und
+// erzeugt den Worker immer per `new Worker(URL.createObjectURL(new Blob([...])))`, also aus einer
+// blob:-URL, unabhaengig vom eigenen Hosting. `worker-src 'self'` erlaubt laut CSP-Spec kein
+// automatisches Fallback auf blob: und blockiert die Worker-Erzeugung, was das Widget selbst als
+// "Background worker error undefined" anzeigt (Verifizierung fehlgeschlagen).
 //
 // script-src braucht 'unsafe-inline': per echtem Playwright-Browser-Test (nicht nur `npm run
 // build`) festgestellt, dass der App Router auf dynamischen Seiten (z.B. /[tenantSlug]) selbst
@@ -26,7 +32,7 @@ const securityHeaders = [
       "img-src 'self' data: blob:",
       "font-src 'self'",
       "connect-src 'self' https://api.friendlycaptcha.com",
-      "worker-src 'self'",
+      "worker-src 'self' blob:",
       "object-src 'none'",
       "frame-src 'none'",
       "frame-ancestors 'none'",

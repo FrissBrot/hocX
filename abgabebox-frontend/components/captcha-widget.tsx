@@ -38,11 +38,26 @@ export function CaptchaWidget({ sitekey, onSolved, onExpired, widgetRef }: Props
       document.body.appendChild(script);
     }
 
+    // Zweiter Signalweg neben data-callback: das Widget schreibt die geloeste Antwort immer in
+    // data-response, unabhaengig davon ob der Callback zuverlaessig feuert (z.B. wenn das Skript
+    // erst nach der Widget-Initialisierung nachlaedt) - onSolved dedupliziert mehrfache Aufrufe
+    // mit derselben Loesung selbst.
+    const node = ref.current;
+    let observer: MutationObserver | null = null;
+    if (node) {
+      observer = new MutationObserver(() => {
+        const response = node.getAttribute("data-response");
+        if (response && response !== ".") onSolved(response);
+      });
+      observer.observe(node, { attributes: true, attributeFilter: ["data-response"] });
+    }
+
     return () => {
       delete window[callbackName];
       delete window[expiredCallbackName];
+      observer?.disconnect();
     };
-  }, [callbackName, expiredCallbackName, onSolved, onExpired]);
+  }, [callbackName, expiredCallbackName, onSolved, onExpired, ref]);
 
   if (!sitekey) return null;
 
