@@ -284,3 +284,7 @@ class ProtocolExportRead(BaseModel):
     status: str
     version_major: int | None = None
     version_minor: int | None = None
+
+
+class MarkdownExportRead(BaseModel):
+    content: str

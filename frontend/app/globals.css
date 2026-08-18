@@ -5729,12 +5729,24 @@ input[type="radio"] {
   display: block;
   width: 100%;
   height: 160px;
-  object-fit: cover;
+  padding: 0;
+  border: none;
   cursor: zoom-in;
 }
 
 .files-grid-photos .file-card-preview {
   height: 210px;
+}
+
+.file-card-preview-button {
+  background: none;
+}
+
+.file-card-preview-button img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .file-card-preview-icon {
@@ -5743,7 +5755,6 @@ input[type="radio"] {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: 160px;
   color: var(--muted);
   background: var(--accent-soft);
   cursor: pointer;
@@ -5802,8 +5813,130 @@ input[type="radio"] {
   cursor: default;
 }
 
+.file-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.file-card-tags .tag-chip {
+  border: none;
+  cursor: pointer;
+  font: inherit;
+}
+
 .files-sort-select {
   min-width: 180px;
+}
+
+.files-tag-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.files-tag-filter-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* File-detail modal (components/files/files-view.tsx FileDetailModal) */
+.file-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 24px;
+}
+
+@media (max-width: 720px) {
+  .file-detail {
+    grid-template-columns: 1fr;
+  }
+}
+
+.file-detail-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  border-radius: var(--radius-lg);
+  background: var(--accent-soft);
+  overflow: hidden;
+}
+
+.file-detail-preview-img {
+  display: block;
+  width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+  cursor: zoom-in;
+}
+
+.file-detail-preview-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 48px;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.file-detail-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.file-detail-meta-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+}
+
+.file-detail-meta-list > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.file-detail-meta-list dt {
+  flex: 0 0 120px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.file-detail-meta-list dd {
+  margin: 0;
+  overflow: hidden;
+  font-size: 0.88rem;
+  text-overflow: ellipsis;
+}
+
+.file-detail-origin,
+.file-detail-tags {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.file-detail-origin-label,
+.file-detail-tags-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.tag-chip-origin {
+  align-self: flex-start;
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--text);
 }
 
 .segment-control {

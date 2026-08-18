@@ -17,8 +17,10 @@ import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from sqlalchemy import select
+
 from app.core.config import settings
-from app.models.entities import StoredFile
+from app.models.entities import StoredFile, TodoStatus
 from app.services.export_service import ExportService
 from tests.factories import (
     make_participant,
@@ -26,6 +28,7 @@ from tests.factories import (
     make_protocol_element,
     make_protocol_element_block,
     make_protocol_text,
+    make_protocol_todo,
     make_template,
     make_tenant,
 )
@@ -171,6 +174,73 @@ def test_export_pdf_raises_when_document_template_snapshot_missing(db):
     service = ExportService()
     with pytest.raises(ValueError, match="Document template snapshot path not found"):
         asyncio.run(service.export_pdf(db, protocol.id))
+
+
+def test_export_global_todo_markdown_formats_grouped_whatsapp_view(db):
+    tenant = make_tenant(db, "Markdown Export Verein")
+    template = make_template(db, tenant.id)
+    protocol = make_protocol(db, tenant.id, template.id, protocol_number="P-42")
+    protocol.title = "Lagerplanung"
+    db.add(protocol)
+
+    element = make_protocol_element(db, protocol.id, section_name="Todos")
+    todo_block = make_protocol_element_block(db, element.id, configuration_snapshot_json={}, element_type_code="todo")
+    anna = make_participant(db, tenant.id, display_name="Anna Muster")
+    make_participant(db, tenant.id, display_name="Bruno Beispiel")
+
+    todo_included = make_protocol_todo(db, todo_block.id, task="Material einkaufen")
+    todo_included.assigned_participant_id = anna.id
+    todo_included.due_date = datetime(2026, 1, 3).date()
+    todo_included.tags = ["Camp", "Kueche"]
+
+    todo_filtered_out = make_protocol_todo(db, todo_block.id, task="Bus anfragen", sort_index=1)
+    todo_filtered_out.assigned_participant_id = anna.id
+    todo_filtered_out.due_date = datetime(2026, 1, 10).date()
+    db.add_all([todo_included, todo_filtered_out])
+    db.flush()
+
+    service = ExportService()
+    markdown = service.export_global_todo_markdown(
+        db,
+        tenant.id,
+        "open",
+        group_by_person=True,
+        until_date="2026-01-05",
+        date_summary="Bis nächster Hock",
+    )
+
+    assert "*Offene Todos*" in markdown
+    assert "Ansicht: Nach Person gruppiert" in markdown
+    assert "Zeitraum: Bis nächster Hock (05.01.2026)" in markdown
+    assert "*Anna Muster (1)*" in markdown
+    assert "1. Material einkaufen" in markdown
+    assert "Fällig: 03.01.2026" in markdown
+    assert "Protokoll: P-42 · Lagerplanung" in markdown
+    assert "Tags: Camp, Kueche" in markdown
+    assert "Bus anfragen" not in markdown
+
+
+def test_export_global_todo_markdown_marks_completed_items_in_all_view(db):
+    tenant = make_tenant(db, "Markdown Status Verein")
+    template = make_template(db, tenant.id)
+    protocol = make_protocol(db, tenant.id, template.id, protocol_number="P-9")
+    element = make_protocol_element(db, protocol.id, section_name="Todos")
+    todo_block = make_protocol_element_block(db, element.id, configuration_snapshot_json={}, element_type_code="todo")
+
+    open_todo = make_protocol_todo(db, todo_block.id, task="Offene Aufgabe")
+    done_todo = make_protocol_todo(db, todo_block.id, task="Erledigte Aufgabe", sort_index=1)
+    done_status_id = db.scalar(select(TodoStatus.id).where(TodoStatus.code == "done"))
+    done_todo.todo_status_id = done_status_id
+    db.add_all([open_todo, done_todo])
+    db.flush()
+
+    service = ExportService()
+    markdown = service.export_global_todo_markdown(db, tenant.id, "all")
+
+    assert "*Todo-Übersicht*" in markdown
+    assert "Offen: 1 | Erledigt: 1 | Abgebrochen: 0" in markdown
+    assert "1. Offene Aufgabe [Offen]" in markdown
+    assert "2. ~Erledigte Aufgabe~ [Erledigt]" in markdown
 
 
 # --- M17: EXPORT_ROOT/generated needs a retention sweep (no cleanup job previously) ---------

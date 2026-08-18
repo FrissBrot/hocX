@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
+from app.schemas.files import StoredFileMetadata, StoredFileTagsUpdate
 from app.schemas.submission import (
     SubmissionAssignmentCreate,
     SubmissionAssignmentRead,
@@ -214,6 +215,48 @@ def get_submission_file_thumbnail(
         media_type="image/jpeg",
         headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=86400"},
     )
+
+
+@router.patch("/submission-uploads/{upload_id}/files/{file_id}/tags", response_model=list[str])
+def update_submission_file_tags(
+    upload_id: int,
+    file_id: int,
+    payload: StoredFileTagsUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Tags leben auf `stored_file`, das die Haupt-Backend-DB-Rolle voll beschreiben darf -
+    unabhaengig von abgabebox-backends eigener restricted Rolle, die diesen Endpoint nie
+    aufruft (Tags werden ausschliesslich von Mandanten-Writern auf der "Dateien"-Seite
+    gesetzt, nie beim Hochladen selbst)."""
+    require_writer(user)
+    upload, stored_file = service.get_stored_file_for_upload(db, upload_id=upload_id, stored_file_id=file_id)
+    if upload is None or stored_file is None:
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden")
+    assignment = service.get_assignment(db, upload.assignment_id)
+    if assignment is None or assignment.tenant_id != user.current_tenant_id:
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden")
+    return file_service.update_stored_file_tags(db, stored_file, payload.tags)
+
+
+@router.get("/submission-uploads/{upload_id}/files/{file_id}/metadata", response_model=StoredFileMetadata)
+def get_submission_file_metadata(
+    upload_id: int,
+    file_id: int,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_reader(user)
+    upload, stored_file = service.get_stored_file_for_upload(db, upload_id=upload_id, stored_file_id=file_id)
+    if upload is None or stored_file is None:
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden")
+    assignment = service.get_assignment(db, upload.assignment_id)
+    if assignment is None or assignment.tenant_id != user.current_tenant_id:
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden")
+    metadata = file_service.get_stored_file_metadata(db, stored_file, settings.abgabebox_storage_root, assignment.tenant_id)
+    if metadata is None:
+        raise HTTPException(status_code=404, detail="Keine Metadaten verfügbar")
+    return metadata
 
 
 @router.get("/clamav/status")

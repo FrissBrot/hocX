@@ -10,7 +10,7 @@ from app.core.db import get_db
 from app.core.config import settings
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
 from app.models import ProtocolElementBlock, ProtocolImage
-from app.schemas.files import FileOverviewItem, FileOverviewSource
+from app.schemas.files import FileOverviewItem, FileOverviewSource, StoredFileMetadata, StoredFileTagsUpdate
 from app.schemas.protocol import ProtocolImageRead
 from app.services.access_service import AccessService
 from app.services.file_service import FileService, _safe_storage_path
@@ -27,6 +27,7 @@ def list_files(
     source: FileOverviewSource | None = Query(default=None),
     only_images: bool = Query(default=False),
     search: str | None = Query(default=None),
+    tags: list[str] | None = Query(default=None),
     sort_by: Literal["created_at", "original_name", "file_size_bytes"] = Query(default="created_at"),
     sort_dir: Literal["asc", "desc"] = Query(default="desc"),
     db: Session = Depends(get_db),
@@ -48,9 +49,26 @@ def list_files(
         source=source,
         only_images=only_images,
         search=search,
+        tags=tags,
         sort_by=sort_by,
         sort_dir=sort_dir,
     )
+
+
+@router.get("/files/tags", response_model=list[str])
+def list_file_tags(
+    query: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Autocomplete-Quelle fuer den Tag-Filter/-Editor auf der "Dateien"-Seite - jeder Tag,
+    der aktuell auf irgendeiner Datei des Mandanten liegt, inklusive der automatischen
+    Herkunfts-Tags (siehe FileOverviewItem.origin_tag)."""
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    return service.list_distinct_tags(db, user.current_tenant_id, query=query, limit=limit)
 
 
 @router.get("/protocol-element-blocks/{protocol_element_block_id}/images", response_model=list[ProtocolImageRead])
@@ -85,7 +103,7 @@ async def upload_image(
             file=file,
             title=title,
             caption=caption,
-            created_by=None,
+            created_by=user.user_id,
         )
     except SQLAlchemyError as exc:
         db.rollback()
@@ -140,6 +158,38 @@ def get_stored_file_content(
         content_disposition_type="inline" if stored_file.mime_type == "application/pdf" else "attachment",
         headers={"X-Content-Type-Options": "nosniff"},
     )
+
+
+@router.patch("/stored-files/{stored_file_id}/tags", response_model=list[str])
+def update_stored_file_tags(
+    stored_file_id: int,
+    payload: StoredFileTagsUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_writer(user)
+    access_service.ensure_can_read_stored_file(db, user, stored_file_id)
+    stored_file = service.get_stored_file(db, stored_file_id)
+    if stored_file is None:
+        raise HTTPException(status_code=404, detail="Stored file not found")
+    return service.update_stored_file_tags(db, stored_file, payload.tags)
+
+
+@router.get("/stored-files/{stored_file_id}/metadata", response_model=StoredFileMetadata)
+def get_stored_file_metadata(
+    stored_file_id: int,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_reader(user)
+    access_service.ensure_can_read_stored_file(db, user, stored_file_id)
+    stored_file = service.get_stored_file(db, stored_file_id)
+    if stored_file is None or user.current_tenant_id is None:
+        raise HTTPException(status_code=404, detail="Stored file not found")
+    metadata = service.get_stored_file_metadata(db, stored_file, settings.storage_root, user.current_tenant_id)
+    if metadata is None:
+        raise HTTPException(status_code=404, detail="Keine Metadaten verfügbar")
+    return metadata
 
 
 @router.get("/stored-files/{stored_file_id}/thumbnail")

@@ -13,6 +13,7 @@ from app.api.routes import files as files_routes
 from app.models.entities import StoredFile, SubmissionAssignment, SubmissionUpload, SubmissionUploadFile, WordImportDocument
 from app.services.file_service import FileService
 from tests.factories import (
+    make_app_user,
     make_current_user,
     make_protocol,
     make_protocol_element,
@@ -24,14 +25,14 @@ from tests.factories import (
 service = FileService()
 
 
-def _make_protocol_image(db, tenant_id, *, mime_type="image/png", scan_status="clean"):
+def _make_protocol_image(db, tenant_id, *, mime_type="image/png", scan_status="clean", created_by=None):
     template = make_template(db, tenant_id)
     protocol = make_protocol(db, tenant_id, template.id, protocol_number="7/2026", protocol_date=date(2026, 3, 4))
     element = make_protocol_element(db, protocol.id)
     block = make_protocol_element_block(db, element.id, configuration_snapshot_json={})
     stored_file = StoredFile(
         tenant_id=tenant_id, original_name="lager-foto.png", mime_type=mime_type,
-        storage_path="uploads/tenant-x/block-x/lager-foto.png", scan_status=scan_status,
+        storage_path="uploads/tenant-x/block-x/lager-foto.png", scan_status=scan_status, created_by=created_by,
     )
     db.add(stored_file)
     db.flush()
@@ -225,7 +226,7 @@ def test_list_files_route_requires_writer_role(db):
 
     with pytest.raises(HTTPException) as exc_info:
         files_routes.list_files(
-            skip=0, limit=60, source=None, only_images=False, search=None,
+            skip=0, limit=60, source=None, only_images=False, search=None, tags=None,
             sort_by="created_at", sort_dir="desc", db=db, user=reader,
         )
     assert exc_info.value.status_code == 403
@@ -237,9 +238,131 @@ def test_list_files_route_returns_items_for_writer_role(db):
     writer = make_current_user(tenant.id, role="writer")
 
     result = files_routes.list_files(
-        skip=0, limit=60, source=None, only_images=False, search=None,
+        skip=0, limit=60, source=None, only_images=False, search=None, tags=None,
         sort_by="created_at", sort_dir="desc", db=db, user=writer,
     )
 
     assert len(result) == 1
     assert result[0].source == "protocol_image"
+
+
+def test_list_tenant_files_defaults_tags_to_empty_and_sets_origin_tag_per_source(db):
+    tenant = make_tenant(db)
+    _make_protocol_image(db, tenant.id)
+    _make_word_import_document(db, tenant.id)
+    _make_submission_upload_file(db, tenant.id)
+
+    items = {item.source: item for item in service.list_tenant_files(db, tenant.id)}
+
+    assert all(item.tags == [] for item in items.values())
+    assert items["protocol_image"].origin_tag == "Protokoll 7/2026 – Test Block"
+    assert items["word_import"].origin_tag == "Word-Import: 1. Hock vom 14.10.2026.docx"
+    assert items["submission_upload"].origin_tag == "Abgabe: Fotos Sommerlager"
+
+
+def test_update_stored_file_tags_normalizes_trims_dedupes_and_drops_blanks(db):
+    tenant = make_tenant(db)
+    _, stored_file = _make_protocol_image(db, tenant.id)
+
+    result = service.update_stored_file_tags(db, stored_file, ["  Lager  ", "Lager", "", "   ", "Foto"])
+
+    assert result == ["Lager", "Foto"]
+    items = service.list_tenant_files(db, tenant.id)
+    assert items[0].tags == ["Lager", "Foto"]
+
+
+def test_list_tenant_files_tags_filter_matches_custom_tag(db):
+    tenant = make_tenant(db)
+    _, stored_file_a = _make_protocol_image(db, tenant.id)
+    _make_word_import_document(db, tenant.id)
+    service.update_stored_file_tags(db, stored_file_a, ["Wichtig"])
+
+    items = service.list_tenant_files(db, tenant.id, tags=["Wichtig"])
+
+    assert len(items) == 1
+    assert items[0].id == stored_file_a.id
+
+
+def test_list_tenant_files_tags_filter_matches_origin_tag(db):
+    tenant = make_tenant(db)
+    _, stored_file_a = _make_protocol_image(db, tenant.id)
+    _make_word_import_document(db, tenant.id)
+
+    items = service.list_tenant_files(db, tenant.id, tags=["Protokoll 7/2026 – Test Block"])
+
+    assert len(items) == 1
+    assert items[0].id == stored_file_a.id
+
+
+def test_list_tenant_files_tags_filter_requires_all_selected_tags(db):
+    tenant = make_tenant(db)
+    _, stored_file_a = _make_protocol_image(db, tenant.id)
+    service.update_stored_file_tags(db, stored_file_a, ["Wichtig"])
+
+    matches_both = service.list_tenant_files(db, tenant.id, tags=["Wichtig", "Protokoll 7/2026 – Test Block"])
+    matches_missing = service.list_tenant_files(db, tenant.id, tags=["Wichtig", "Nicht vorhanden"])
+
+    assert len(matches_both) == 1
+    assert len(matches_missing) == 0
+
+
+def test_list_distinct_tags_includes_custom_and_origin_tags_and_supports_substring_query(db):
+    tenant = make_tenant(db)
+    _, stored_file = _make_protocol_image(db, tenant.id)
+    service.update_stored_file_tags(db, stored_file, ["Wichtig"])
+
+    all_tags = service.list_distinct_tags(db, tenant.id)
+    assert "Wichtig" in all_tags
+    assert "Protokoll 7/2026 – Test Block" in all_tags
+
+    filtered = service.list_distinct_tags(db, tenant.id, query="wich")
+    assert filtered == ["Wichtig"]
+
+
+def test_update_stored_file_tags_route_requires_writer_role(db):
+    tenant = make_tenant(db)
+    _, stored_file = _make_protocol_image(db, tenant.id)
+    reader = make_current_user(tenant.id, role="reader")
+
+    with pytest.raises(HTTPException) as exc_info:
+        files_routes.update_stored_file_tags(
+            stored_file.id, files_routes.StoredFileTagsUpdate(tags=["Wichtig"]), db=db, user=reader,
+        )
+    assert exc_info.value.status_code == 403
+
+
+def test_update_stored_file_tags_route_persists_for_writer_role(db):
+    tenant = make_tenant(db)
+    _, stored_file = _make_protocol_image(db, tenant.id)
+    writer = make_current_user(tenant.id, role="writer")
+
+    result = files_routes.update_stored_file_tags(
+        stored_file.id, files_routes.StoredFileTagsUpdate(tags=["Wichtig"]), db=db, user=writer,
+    )
+
+    assert result == ["Wichtig"]
+    db.refresh(stored_file)
+    assert stored_file.tags == ["Wichtig"]
+
+
+def test_get_stored_file_metadata_includes_uploader_display_name(db):
+    tenant = make_tenant(db)
+    uploader = make_app_user(db, email="leiter@example.com", first_name="Anna", last_name="Muster")
+    _, stored_file = _make_protocol_image(db, tenant.id, created_by=uploader.id)
+
+    metadata = service.get_stored_file_metadata(db, stored_file, "/app/storage", tenant.id)
+
+    assert metadata is not None
+    assert metadata.uploaded_by_name == "Anna Muster"
+
+
+def test_get_stored_file_metadata_uploaded_by_name_is_none_without_created_by(db):
+    """Covers abgabebox submission uploads in particular: written by an anonymous public
+    submitter through a restricted DB role that never sets created_by."""
+    tenant = make_tenant(db)
+    _, stored_file = _make_protocol_image(db, tenant.id, created_by=None)
+
+    metadata = service.get_stored_file_metadata(db, stored_file, "/app/storage", tenant.id)
+
+    assert metadata is not None
+    assert metadata.uploaded_by_name is None

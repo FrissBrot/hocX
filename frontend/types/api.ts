@@ -156,9 +156,32 @@ export type FileOverviewItem = {
   is_image: boolean;
   content_url: string;
   thumbnail_url: string | null;
+  tags_url: string;
+  metadata_url: string;
   ref_label: string;
   ref_date: string | null;
   ref_href: string | null;
+  tags: string[];
+  origin_tag: string;
+};
+
+export type StoredFileMetadata = {
+  id: number;
+  original_name: string;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  created_at: string;
+  checksum_sha256: string | null;
+  source: FileOverviewSource;
+  ref_label: string;
+  ref_date: string | null;
+  tags: string[];
+  origin_tag: string;
+  width: number | null;
+  height: number | null;
+  exif_taken_at: string | null;
+  exif_camera: string | null;
+  uploaded_by_name: string | null;
 };
 
 export type SubmissionUploadLogEntry = {
