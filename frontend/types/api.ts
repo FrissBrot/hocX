@@ -144,6 +144,23 @@ export type SubmissionFile = {
   scan_status: string;
 };
 
+export type FileOverviewSource = "protocol_image" | "word_import" | "submission_upload";
+
+export type FileOverviewItem = {
+  id: number;
+  original_name: string;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  created_at: string;
+  source: FileOverviewSource;
+  is_image: boolean;
+  content_url: string;
+  thumbnail_url: string | null;
+  ref_label: string;
+  ref_date: string | null;
+  ref_href: string | null;
+};
+
 export type SubmissionUploadLogEntry = {
   id: number;
   element_ref: string;
@@ -650,6 +667,7 @@ export type ProtocolImage = {
   mime_type: string | null;
   file_size_bytes: number | null;
   content_url: string;
+  duplicate_warning?: string | null;
 };
 
 export type ProtocolElementBlock = {

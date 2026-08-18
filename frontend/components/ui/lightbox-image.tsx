@@ -7,9 +7,13 @@ type LightboxImageProps = {
   src: string;
   alt: string;
   className?: string;
+  /** Smaller preview shown in the trigger thumbnail, e.g. a generated thumbnail - the
+   * lightbox popup always opens with the full-resolution `src`. Falls back to `src` when
+   * omitted. */
+  previewSrc?: string;
 };
 
-export function LightboxImage({ src, alt, className }: LightboxImageProps) {
+export function LightboxImage({ src, alt, className, previewSrc }: LightboxImageProps) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -29,7 +33,9 @@ export function LightboxImage({ src, alt, className }: LightboxImageProps) {
     <>
       <img
         alt={alt}
-        src={src}
+        src={previewSrc ?? src}
+        loading="lazy"
+        decoding="async"
         className={className ? `${className} image-lightbox-trigger` : "image-lightbox-trigger"}
         onClick={() => setOpen(true)}
         role="button"

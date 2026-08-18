@@ -703,6 +703,8 @@ class StoredFile(Base, TimestampMixin):
     latex_path: Mapped[str | None] = mapped_column(Text)
     file_size_bytes: Mapped[int | None] = mapped_column(BigInteger)
     checksum_sha256: Mapped[str | None] = mapped_column(Text)
+    perceptual_hash: Mapped[str | None] = mapped_column(Text)
+    thumbnail_path: Mapped[str | None] = mapped_column(Text)
     scan_status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'clean'"))
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
 

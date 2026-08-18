@@ -21,11 +21,12 @@ from app.schemas.submission import (
     SubmissionElementRead,
     SubmissionUploadLogEntry,
 )
-from app.services.file_service import _safe_storage_path
+from app.services.file_service import FileService, _safe_storage_path
 from app.services.submission_service import SubmissionService
 
 router = APIRouter()
 service = SubmissionService()
+file_service = FileService()
 
 
 @router.get("/submission-assignments", response_model=list[SubmissionAssignmentRead])
@@ -181,6 +182,37 @@ def get_submission_file_content(
             "Content-Disposition": f'{disposition}; filename="{stored_file.original_name}"',
             "X-Content-Type-Options": "nosniff",
         },
+    )
+
+
+@router.get("/submission-uploads/{upload_id}/files/{file_id}/thumbnail")
+def get_submission_file_thumbnail(
+    upload_id: int,
+    file_id: int,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Small JPEG preview for the "Dateien" grid - same access rules as
+    get_submission_file_content. Generated lazily on first request since abgabebox-backend's
+    restricted DB role never sets thumbnail_path itself (see FileService.ensure_thumbnail)."""
+    require_reader(user)
+    upload, stored_file = service.get_stored_file_for_upload(db, upload_id=upload_id, stored_file_id=file_id)
+    if upload is None or stored_file is None:
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden")
+    assignment = service.get_assignment(db, upload.assignment_id)
+    if assignment is None or assignment.tenant_id != user.current_tenant_id:
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden")
+    if stored_file.scan_status == "infected":
+        raise HTTPException(status_code=403, detail="Datei wurde als Schadware eingestuft und gesperrt")
+    if stored_file.scan_status == "pending":
+        raise HTTPException(status_code=423, detail="Datei wird noch auf Viren geprüft")
+    thumbnail_path = file_service.ensure_thumbnail(db, stored_file, settings.abgabebox_storage_root)
+    if thumbnail_path is None:
+        raise HTTPException(status_code=404, detail="Keine Vorschau verfügbar")
+    return FileResponse(
+        path=thumbnail_path,
+        media_type="image/jpeg",
+        headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=86400"},
     )
 
 
