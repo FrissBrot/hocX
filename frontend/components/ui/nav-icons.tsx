@@ -11,6 +11,7 @@ export type NavIconKey =
   | "participants"
   | "events"
   | "submissions"
+  | "files"
   | "templates"
   | "elements"
   | "cycles"
@@ -111,6 +112,13 @@ const ICONS: Record<NavIconKey, (props: IconProps) => React.ReactElement> = {
       <path d="M12 3.2v10.2" />
       <path d="M8.4 9.8L12 13.4l3.6-3.6" />
       <path d="M4 15.2v3a2 2 0 002 2h12a2 2 0 002-2v-3" />
+    </Icon>
+  ),
+  files: (props) => (
+    <Icon {...props}>
+      <rect x="4" y="4.5" width="16" height="15" rx="2" />
+      <circle cx="9" cy="9.5" r="1.6" fill="currentColor" stroke="none" />
+      <path d="M5.2 16.5l4.3-4.6a1.4 1.4 0 012.05-.03l2.15 2.28a1.4 1.4 0 002.03-.02l2.3-2.43" />
     </Icon>
   ),
   templates: (props) => (

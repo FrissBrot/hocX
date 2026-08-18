@@ -44,6 +44,7 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
         { href: "/participants", label: "Teilnehmer", icon: "participants" },
         { href: "/events", label: "Termine", icon: "events" },
         { href: "/submission-assignments", label: "Abgaben", icon: "submissions" },
+        { href: "/files", label: "Dateien", icon: "files" },
       ],
     });
   }

@@ -271,6 +271,7 @@ class ProtocolImageRead(BaseModel):
     mime_type: str | None = None
     file_size_bytes: int | None = None
     content_url: str
+    duplicate_warning: str | None = None
 
 
 class ProtocolExportRead(BaseModel):
