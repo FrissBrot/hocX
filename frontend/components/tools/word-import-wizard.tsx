@@ -7,7 +7,7 @@ import { ATTENDANCE_OPTIONS } from "@/components/protocol/protocol-editor-shared
 import { AssigneeOption, TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
-import { formatDate } from "@/lib/utils/format";
+import { formatDate, formatDateRange } from "@/lib/utils/format";
 import { EVENT_SYNC_FIELD_LABELS } from "@/lib/constants/event-sync-fields";
 import {
   analyzeWordImport,
@@ -392,6 +392,11 @@ type EventDraft = {
   row_index: number;
   raw_title: string;
   raw_date: string | null;
+  // See WordImportEventMapping.raw_end_date - set for a document row naming a
+  // "dd.mm.yyyy - dd.mm.yyyy" range, null for an ordinary single-day row. Resolved the
+  // same way as the date itself (see date_source/resolveEventFinal), never edited
+  // independently of it.
+  raw_end_date: string | null;
   status: EventMatchStatus;
   candidates: WordImportEventCandidate[];
   linked_event_id: number | null;
@@ -515,11 +520,12 @@ function parseReviewDraft(raw: WordImportReviewDraftJson | null | undefined): Wo
   };
 }
 
-function resolveEventFinal(entry: EventDraft): { title: string; date: string } {
+function resolveEventFinal(entry: EventDraft): { title: string; date: string; endDate: string | null } {
   const linked = entry.candidates.find((candidate) => candidate.event_id === entry.linked_event_id);
   return {
     title: entry.title_source === "existing" && linked ? linked.title : entry.raw_title,
     date: entry.date_source === "existing" && linked ? linked.event_date : entry.raw_date ?? linked?.event_date ?? "",
+    endDate: entry.date_source === "existing" && linked ? linked.event_end_date : entry.raw_end_date ?? linked?.event_end_date ?? null,
   };
 }
 
@@ -1083,7 +1089,10 @@ export function WordImportWizard({
     const flagged = eventNeedsReview(entry);
     const isOpen = flagged || expandedEvents.has(index);
     const titleDiffers = !!linked && linked.title !== entry.raw_title;
-    const dateDiffers = !!linked && linked.event_date !== (entry.raw_date ?? linked.event_date);
+    const dateDiffers =
+      !!linked &&
+      (linked.event_date !== (entry.raw_date ?? linked.event_date) ||
+        (linked.event_end_date ?? null) !== (entry.raw_end_date ?? linked.event_end_date ?? null));
     const missingDate = !linked && !entry.raw_date;
     const decision = decisionState(entry.approved, flagged);
     const isIgnored = decision === "ignore";
@@ -1100,7 +1109,7 @@ export function WordImportWizard({
           onKeyDown={rowHeadKeyDown(() => toggleEventExpanded(index))}
         >
           <span className="word-import-text-row-title">
-            {entry.raw_title} ({entry.raw_date ? formatDate(entry.raw_date) : "kein Datum"})
+            {entry.raw_title} ({entry.raw_date ? formatDateRange(entry.raw_date, entry.raw_end_date) : "kein Datum"})
             {entry.participant_count !== null && <span className="muted"> · {entry.participant_count} TN</span>}
           </span>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -1118,7 +1127,7 @@ export function WordImportWizard({
                   ) : (
                     <CheckIcon />
                   )}{" "}
-                  {linked.title} ({formatDate(linked.event_date)})
+                  {linked.title} ({formatDateRange(linked.event_date, linked.event_end_date)})
                 </span>
               ) : (
                 <span className="word-import-text-row-summary is-new">
@@ -1163,13 +1172,13 @@ export function WordImportWizard({
               </div>
             )}
             <TodoAssigneeMenu
-              label={linked ? `${linked.title} (${formatDate(linked.event_date)})` : "🆕 Neu anlegen"}
+              label={linked ? `${linked.title} (${formatDateRange(linked.event_date, linked.event_end_date)})` : "🆕 Neu anlegen"}
               nullLabel="🆕 Neu anlegen"
               activeId={entry.linked_event_id}
               participants={entry.candidates.map(
                 (candidate): AssigneeOption => ({
                   id: candidate.event_id,
-                  display_name: `${candidate.title} (${formatDate(candidate.event_date)})`,
+                  display_name: `${candidate.title} (${formatDateRange(candidate.event_date, candidate.event_end_date)})`,
                 })
               )}
               onChange={(option) =>
@@ -1217,7 +1226,7 @@ export function WordImportWizard({
                         />
                         <span>
                           <span className="field-radio-option-label">Aus Dokument</span>
-                          <strong>{formatDate(entry.raw_date) || "?"}</strong>
+                          <strong>{(entry.raw_date && formatDateRange(entry.raw_date, entry.raw_end_date)) || "?"}</strong>
                         </span>
                       </label>
                       <label className="field-radio-option">
@@ -1228,7 +1237,7 @@ export function WordImportWizard({
                         />
                         <span>
                           <span className="field-radio-option-label">Bestehend</span>
-                          <strong>{formatDate(linked.event_date)}</strong>
+                          <strong>{formatDateRange(linked.event_date, linked.event_end_date)}</strong>
                         </span>
                       </label>
                     </div>
@@ -1656,6 +1665,7 @@ export function WordImportWizard({
         row_index: mapping.row_index,
         raw_title: mapping.raw_title,
         raw_date: mapping.raw_date,
+        raw_end_date: mapping.raw_end_date,
         status: mapping.status,
         candidates: mapping.candidates,
         linked_event_id: mapping.status !== "new" ? mapping.matched_event_id : null,
@@ -2174,8 +2184,10 @@ export function WordImportWizard({
             linked_event_id: entry.linked_event_id,
             final_title: resolved.title,
             final_date: resolved.date,
+            final_end_date: resolved.endDate,
             raw_title: entry.raw_title,
             raw_date: entry.raw_date,
+            raw_end_date: entry.raw_end_date,
             tag: entry.tag,
             participant_count: entry.participant_count,
             originally_suggested_event_id: entry.originallySuggestedEventId,
