@@ -245,16 +245,20 @@ def _normalize(text: str) -> str:
     return re.sub(r"\s+", " ", _fold_umlauts(text.strip().lower()))
 
 
+def _date_from_numeric_match(match: re.Match[str]) -> date | None:
+    day, month, year = match.groups()
+    year_int = int(year) if len(year) == 4 else 2000 + int(year)
+    try:
+        return date(year_int, int(month), int(day))
+    except ValueError:
+        return None
+
+
 def _extract_date(text: str) -> date | None:
     candidate = _strip_leading_ordinal(text)
     match = _DATE_PATTERN.search(candidate)
     if match:
-        day, month, year = match.groups()
-        year_int = int(year) if len(year) == 4 else 2000 + int(year)
-        try:
-            return date(year_int, int(month), int(day))
-        except ValueError:
-            return None
+        return _date_from_numeric_match(match)
     match = _DATE_TEXT_PATTERN.search(candidate.lower())
     if match:
         day, month_name, year = match.groups()
@@ -268,41 +272,61 @@ def _extract_date(text: str) -> date | None:
 _PARTICIPANT_COUNT_PATTERN = re.compile(r"^\s*\((\d+)\)")
 
 
-def _extract_dates_with_counts(text: str) -> list[tuple[date, int | None]]:
+def _extract_dates_with_counts(text: str) -> list[tuple[date, date | None, int | None]]:
     """Finds every date mentioned anywhere in text, not just the first (unlike
     _extract_date) - used for a Matrix "events" cell, where multiple dates may be
     crammed onto one line/paragraph (e.g. Word soft line breaks, which python-docx
     does not reliably surface as "\\n" in Cell.text) instead of one date per line.
+    A "dd.mm.yyyy - dd.mm.yyyy" range (see _DATE_RANGE_PATTERN) yields a single entry
+    with both dates instead of two separate single-day entries - mirrors
+    _extract_event_row's own range handling for an ordinary "events"-role table.
     Also captures a trailing "(N)" right after a date (e.g. "18.10.2025 (7)") as that
     date's participant count - the exact format export_service._matrix_event_row_value
     itself writes when event_show_participant_count is on, so an old exported/re-
     imported protocol round-trips its attendance counts. Deduplicates by date (first
     occurrence wins) while preserving first-seen order."""
-    matches: list[tuple[int, int, date]] = []
-    for match in _DATE_PATTERN.finditer(text):
-        day, month, year = match.groups()
-        year_int = int(year) if len(year) == 4 else 2000 + int(year)
-        try:
-            matches.append((match.start(), match.end(), date(year_int, int(month), int(day))))
-        except ValueError:
+    range_spans: list[tuple[int, int, date, date]] = []
+    for match in _DATE_RANGE_PATTERN.finditer(text):
+        sub_matches = list(_DATE_PATTERN.finditer(match.group(0)))
+        if len(sub_matches) != 2:
             continue
+        range_start = _date_from_numeric_match(sub_matches[0])
+        range_end = _date_from_numeric_match(sub_matches[1])
+        if range_start is None or range_end is None or range_end < range_start:
+            continue
+        range_spans.append((match.start(), match.end(), range_start, range_end))
+
+    def _inside_a_range(position: int) -> bool:
+        return any(start <= position < end for start, end, _, _ in range_spans)
+
+    matches: list[tuple[int, int, date, date | None]] = [
+        (start, end, range_start, range_end) for start, end, range_start, range_end in range_spans
+    ]
+    for match in _DATE_PATTERN.finditer(text):
+        if _inside_a_range(match.start()):
+            continue
+        candidate = _date_from_numeric_match(match)
+        if candidate is not None:
+            matches.append((match.start(), match.end(), candidate, None))
     for match in _DATE_TEXT_PATTERN.finditer(text.lower()):
+        if _inside_a_range(match.start()):
+            continue
         day, month_name, year = match.groups()
         try:
-            matches.append((match.start(), match.end(), date(int(year), _GERMAN_MONTHS[month_name], int(day))))
+            matches.append((match.start(), match.end(), date(int(year), _GERMAN_MONTHS[month_name], int(day)), None))
         except ValueError:
             continue
     matches.sort(key=lambda entry: entry[0])
 
     seen: set[date] = set()
-    results: list[tuple[date, int | None]] = []
-    for start_index, end_index, candidate in matches:
+    results: list[tuple[date, date | None, int | None]] = []
+    for start_index, end_index, candidate, end_candidate in matches:
         if candidate in seen:
             continue
         seen.add(candidate)
         count_match = _PARTICIPANT_COUNT_PATTERN.match(text[end_index : end_index + 20])
         participant_count = int(count_match.group(1)) if count_match else None
-        results.append((candidate, participant_count))
+        results.append((candidate, end_candidate, participant_count))
     return results
 
 
@@ -850,7 +874,7 @@ _DATE_RANGE_PATTERN = re.compile(
 )
 
 
-def _extract_event_row(cells: list[str]) -> tuple[str, date | None]:
+def _extract_event_row(cells: list[str]) -> tuple[str, date | None, date | None]:
     for raw_cell in cells:
         # Strip a leading list ordinal ("14. ") first and consistently reuse that
         # stripped text for both date detection and remainder/title-building below -
@@ -861,27 +885,36 @@ def _extract_event_row(cells: list[str]) -> tuple[str, date | None]:
         if candidate_date is None:
             continue
         range_match = _DATE_RANGE_PATTERN.search(cell)
+        candidate_end_date: date | None = None
         if range_match:
             # "14.05.2026 – 17.05.2026 Auffahrt" - strip the whole range as one unit so
             # the end date doesn't linger in the title (a plain global sub would also
             # eat unrelated later dates in the same cell, which we don't want here).
             remainder = (cell[: range_match.start()] + cell[range_match.end() :]).strip(" -–:\t")
+            sub_matches = list(_DATE_PATTERN.finditer(range_match.group(0)))
+            if len(sub_matches) == 2:
+                parsed_end = _date_from_numeric_match(sub_matches[1])
+                # A malformed/reversed range (end before start) is kept as a plain
+                # single-day row on candidate_date rather than trusting a nonsensical
+                # end date - Event._build_event_entity would reject it outright anyway.
+                if parsed_end is not None and parsed_end >= candidate_date:
+                    candidate_end_date = parsed_end
         else:
             remainder = _DATE_PATTERN.sub("", cell, count=1)
             remainder = _DATE_TEXT_PATTERN.sub("", remainder, count=1)
             remainder = remainder.strip(" -–:\t")
         if remainder:
-            return remainder, candidate_date
+            return remainder, candidate_date, candidate_end_date
         for other in cells:
             if other is raw_cell or not other.strip():
                 continue
             if _extract_date(other) is None:
-                return other.strip(), candidate_date
-        return "", candidate_date
+                return other.strip(), candidate_date, candidate_end_date
+        return "", candidate_date, candidate_end_date
     for cell in cells:
         if cell.strip():
-            return cell.strip(), None
-    return "", None
+            return cell.strip(), None, None
+    return "", None, None
 
 
 def _split_two_columns(line: str) -> tuple[str, str] | None:
@@ -2121,7 +2154,8 @@ class WordImportService:
             )
             event_candidates = [
                 WordImportEventCandidate(
-                    event_id=event.id, title=event.title, event_date=event.event_date, score=round(score, 3),
+                    event_id=event.id, title=event.title, event_date=event.event_date,
+                    event_end_date=event.event_end_date, score=round(score, 3),
                     reason=_text_match_reason(search_text, event.title, score),
                 )
                 for score, event in scored_events
@@ -2369,12 +2403,12 @@ class WordImportService:
         # two different document rows could both auto-match the SAME existing Event
         # (verified: nothing previously stopped that), which is almost always wrong for
         # an events/Termine table, where each row names a distinct real occasion.
-        extracted_event_rows: list[tuple[str, date | None, list[WordImportEventCandidate]]] = []
+        extracted_event_rows: list[tuple[str, date | None, date | None, list[WordImportEventCandidate]]] = []
         for table in parsed.tables:
             if table_roles.get(table.index) != "events":
                 continue
             for cells in table.rows:
-                title, raw_date = _extract_event_row(cells)
+                title, raw_date, raw_end_date = _extract_event_row(cells)
                 if not title:
                     continue
                 event_rejected_ids = (
@@ -2394,7 +2428,8 @@ class WordImportService:
                 )
                 candidates = [
                     WordImportEventCandidate(
-                        event_id=event.id, title=event.title, event_date=event.event_date, score=round(score, 3),
+                        event_id=event.id, title=event.title, event_date=event.event_date,
+                        event_end_date=event.event_end_date, score=round(score, 3),
                         reason=_event_match_reason(title, raw_date, event),
                     )
                     for score, event in scored_events[:_CANDIDATE_LIMIT]
@@ -2410,15 +2445,16 @@ class WordImportService:
                     candidates = [
                         WordImportEventCandidate(
                             event_id=remembered_event.id, title=remembered_event.title, event_date=remembered_event.event_date,
+                            event_end_date=remembered_event.event_end_date,
                             score=round(_score_event_candidate(title, raw_date, remembered_event), 3),
                             reason="Aus früherem Import gemerkt",
                         ),
                         *candidates[: _CANDIDATE_LIMIT - 1],
                     ]
-                extracted_event_rows.append((title, raw_date, candidates))
+                extracted_event_rows.append((title, raw_date, raw_end_date, candidates))
 
         def _event_row_score(row_index: int, event: Event) -> float:
-            title, raw_date, _candidates = extracted_event_rows[row_index]
+            title, raw_date, _raw_end_date, _candidates = extracted_event_rows[row_index]
             rejected_ids = (
                 _rejected_ids_for(f"event:{raw_date.isoformat()}|{_normalize(title)}") if raw_date is not None else set()
             )
@@ -2435,9 +2471,14 @@ class WordImportService:
                 list(range(len(extracted_event_rows))), all_events, _event_row_score, min_score=event_change_threshold
             )
         }
-        for row_index, (title, raw_date, candidates) in enumerate(extracted_event_rows):
+        for row_index, (title, raw_date, raw_end_date, candidates) in enumerate(extracted_event_rows):
             best_event = auto_picked_event_by_row.get(row_index)
-            if best_event is not None and raw_date == best_event.event_date and _similarity(title, best_event.title) >= _EVENT_MATCH_THRESHOLD:
+            if (
+                best_event is not None
+                and raw_date == best_event.event_date
+                and raw_end_date == best_event.event_end_date
+                and _similarity(title, best_event.title) >= _EVENT_MATCH_THRESHOLD
+            ):
                 status: str = "matched"
             elif best_event is not None:
                 status = "changed"
@@ -2468,10 +2509,12 @@ class WordImportService:
                     row_index=row_index,
                     raw_title=title,
                     raw_date=raw_date,
+                    raw_end_date=raw_end_date,
                     status=status,
                     matched_event_id=best_event.id if best_event else None,
                     matched_event_title=best_event.title if best_event else None,
                     matched_event_date=best_event.event_date if best_event else None,
+                    matched_event_end_date=best_event.event_end_date if best_event else None,
                     candidates=candidates,
                     remembered_title_source=(remembered_resolution or {}).get("title_source"),
                     remembered_date_source=(remembered_resolution or {}).get("date_source"),
@@ -2938,7 +2981,7 @@ class WordImportService:
                         effective_tag = None
                         if use_column_tag and matched_column is not None:
                             effective_tag = str(matched_column.get("event_tag_filter") or matched_column.get("title") or "").strip() or None
-                        for extracted_date, extracted_participant_count in _extract_dates_with_counts(raw_cell_text):
+                        for extracted_date, extracted_end_date, extracted_participant_count in _extract_dates_with_counts(raw_cell_text):
                             matrix_event_rejected_ids = _rejected_ids_for(
                                 f"event:{extracted_date.isoformat()}|{_normalize(column_title)}"
                             )
@@ -2956,7 +2999,8 @@ class WordImportService:
                             )
                             candidates = [
                                 WordImportEventCandidate(
-                                    event_id=event.id, title=event.title, event_date=event.event_date, score=round(score, 3),
+                                    event_id=event.id, title=event.title, event_date=event.event_date,
+                                    event_end_date=event.event_end_date, score=round(score, 3),
                                     reason=_event_match_reason(column_title, extracted_date, event),
                                 )
                                 for score, event in scored_events[:_CANDIDATE_LIMIT]
@@ -2978,10 +3022,12 @@ class WordImportService:
                                     row_index=row_index,
                                     raw_title=column_title,
                                     raw_date=extracted_date,
+                                    raw_end_date=extracted_end_date,
                                     status=status,
                                     matched_event_id=matched_event.id if matched_event else None,
                                     matched_event_title=matched_event.title if matched_event else None,
                                     matched_event_date=matched_event.event_date if matched_event else None,
+                                    matched_event_end_date=matched_event.event_end_date if matched_event else None,
                                     candidates=candidates,
                                     tag=effective_tag,
                                     participant_count=extracted_participant_count,
@@ -3303,6 +3349,7 @@ class WordImportService:
                         EventCreate(
                             title=event_commit.final_title,
                             event_date=event_commit.final_date,
+                            event_end_date=event_commit.final_end_date,
                             cycle_assignments=cycle_assignments,
                             **extra_kwargs,
                         ),
@@ -3315,10 +3362,15 @@ class WordImportService:
                         # request could retitle/redate/re-cycle another tenant's Event.
                         raise ValueError("Verknüpfter Termin gehört nicht zu diesem Mandanten")
                     if (
-                        existing_event.title != event_commit.raw_title or existing_event.event_date != event_commit.raw_date
+                        existing_event.title != event_commit.raw_title
+                        or existing_event.event_date != event_commit.raw_date
+                        or existing_event.event_end_date != event_commit.raw_end_date
                     ):
                         event_conflict_updates[_event_conflict_key(event_commit.linked_event_id, event_commit.raw_title)] = {
                             "title_source": "doc" if event_commit.final_title == event_commit.raw_title else "existing",
+                            # Governs both event_date and event_end_date together - the
+                            # wizard offers a single "Aus Dokument"/"Bestehend" choice for
+                            # the whole "wann" pair, not two independent ones.
                             "date_source": "doc" if event_commit.final_date == event_commit.raw_date else "existing",
                         }
                     event_service.update_event(
@@ -3327,6 +3379,7 @@ class WordImportService:
                         EventUpdate(
                             title=event_commit.final_title,
                             event_date=event_commit.final_date,
+                            event_end_date=event_commit.final_end_date,
                             cycle_assignments=cycle_assignments,
                             **extra_kwargs,
                         ),
