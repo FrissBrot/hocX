@@ -1905,73 +1905,77 @@ export function WordImportWizard({
   // anlegen", any other id = link to that existing Participant.
   function updateFormFieldSingleName(textIndex: number, fieldIndex: number, optionId: number | null, rawName: string) {
     setTexts((current) =>
-      current.map((row, rowIndex) =>
-        rowIndex === textIndex
-          ? {
-              ...row,
-              formFields: row.formFields.map((field, i) =>
-                i === fieldIndex
-                  ? {
-                      ...field,
-                      names:
-                        optionId === null
-                          ? []
-                          : [
-                              {
-                                raw_name: rawName,
-                                participant_id: optionId === CREATE_NEW_PARTICIPANT_ID ? null : optionId,
-                                create_new: optionId === CREATE_NEW_PARTICIPANT_ID,
-                                // Only ever reached for optionId !== null - the null
-                                // ("Keinen verknüpfen") case takes the names: [] branch
-                                // above instead, so no_link is never true here.
-                                no_link: false,
-                                // A brand-new name entry typed by the reviewer here, not
-                                // something analyze() suggested - nothing to compare
-                                // against, so there's no original suggestion.
-                                originally_suggested_participant_id: null,
-                                originally_suggested_score: null,
-                                candidates: field.names[0]?.candidates ?? [],
-                              },
-                            ],
-                    }
-                  : field
-              ),
-            }
-          : row
-      )
+      current.map((row, rowIndex) => {
+        if (rowIndex !== textIndex) return row;
+        const updatedRow = {
+          ...row,
+          formFields: row.formFields.map((field, i) =>
+            i === fieldIndex
+              ? {
+                  ...field,
+                  names:
+                    optionId === null
+                      ? []
+                      : [
+                          {
+                            raw_name: rawName,
+                            participant_id: optionId === CREATE_NEW_PARTICIPANT_ID ? null : optionId,
+                            create_new: optionId === CREATE_NEW_PARTICIPANT_ID,
+                            // Only ever reached for optionId !== null - the null
+                            // ("Keinen verknüpfen") case takes the names: [] branch
+                            // above instead, so no_link is never true here.
+                            no_link: false,
+                            // A brand-new name entry typed by the reviewer here, not
+                            // something analyze() suggested - nothing to compare
+                            // against, so there's no original suggestion.
+                            originally_suggested_participant_id: null,
+                            originally_suggested_score: null,
+                            candidates: field.names[0]?.candidates ?? [],
+                          },
+                        ],
+                }
+              : field
+          ),
+        };
+        // Mirrors updateListName/updateMatrixName: resolving the last open name on this
+        // row must clear a stale "Ignorieren" from before the row was fully filled in,
+        // otherwise the row silently stays dismissed at commit despite looking resolved.
+        return { ...updatedRow, dismissed: formFieldsStillOpen(updatedRow) ? row.dismissed : false };
+      })
     );
   }
 
   function updateFormFieldNameAt(textIndex: number, fieldIndex: number, nameIndex: number, optionId: number | null) {
     setTexts((current) =>
-      current.map((row, rowIndex) =>
-        rowIndex === textIndex
-          ? {
-              ...row,
-              formFields: row.formFields.map((field, i) =>
-                i === fieldIndex
-                  ? {
-                      ...field,
-                      names: field.names.map((name, ni) =>
-                        ni === nameIndex
-                          ? {
-                              ...name,
-                              participant_id: optionId === CREATE_NEW_PARTICIPANT_ID ? null : optionId,
-                              create_new: optionId === CREATE_NEW_PARTICIPANT_ID,
-                              // See WordImportNameResolution.no_link - explicit "Keinen
-                              // verknüpfen" here must be distinguishable from never having
-                              // been reviewed, otherwise the recurring-name clarifier can
-                              // never count this name as resolved.
-                              no_link: optionId === null,
-                            }
-                          : name
-                      ),
-                    }
-                  : field
-              ),
-            }
-          : row
-      )
+      current.map((row, rowIndex) => {
+        if (rowIndex !== textIndex) return row;
+        const updatedRow = {
+          ...row,
+          formFields: row.formFields.map((field, i) =>
+            i === fieldIndex
+              ? {
+                  ...field,
+                  names: field.names.map((name, ni) =>
+                    ni === nameIndex
+                      ? {
+                          ...name,
+                          participant_id: optionId === CREATE_NEW_PARTICIPANT_ID ? null : optionId,
+                          create_new: optionId === CREATE_NEW_PARTICIPANT_ID,
+                          // See WordImportNameResolution.no_link - explicit "Keinen
+                          // verknüpfen" here must be distinguishable from never having
+                          // been reviewed, otherwise the recurring-name clarifier can
+                          // never count this name as resolved.
+                          no_link: optionId === null,
+                        }
+                      : name
+                  ),
+                }
+              : field
+          ),
+        };
+        // See updateFormFieldSingleName above - same reset, same reason.
+        return { ...updatedRow, dismissed: formFieldsStillOpen(updatedRow) ? row.dismissed : false };
+      })
     );
   }
 
@@ -2037,12 +2041,13 @@ export function WordImportWizard({
       return updated.filter((row) => !(row.raw_name === "" && row.participant_id === participantId));
     });
     setTexts((current) =>
-      current.map((text) => ({
-        ...text,
-        formFields: text.formFields.map((field) => {
+      current.map((text) => {
+        let touched = false;
+        const formFields = text.formFields.map((field) => {
           if (field.row_type === "participant") {
             const name = field.names[0];
             if (!name || name.participant_id !== null || name.create_new || normalizeRawName(name.raw_name) !== key) return field;
+            touched = true;
             return {
               ...field,
               names:
@@ -2065,18 +2070,25 @@ export function WordImportWizard({
             };
           }
           if (field.row_type === "participants") {
-            return {
-              ...field,
-              names: field.names.map((name) =>
-                name.participant_id === null && !name.create_new && normalizeRawName(name.raw_name) === key
-                  ? { ...name, participant_id: participantId, create_new: createNew, no_link: optionId === null }
-                  : name
-              ),
-            };
+            let fieldTouched = false;
+            const names = field.names.map((name) => {
+              if (name.participant_id !== null || name.create_new || normalizeRawName(name.raw_name) !== key) return name;
+              fieldTouched = true;
+              return { ...name, participant_id: participantId, create_new: createNew, no_link: optionId === null };
+            });
+            if (fieldTouched) touched = true;
+            return { ...field, names };
           }
           return field;
-        }),
-      }))
+        });
+        // Same guard as setLists/setMatrices below - only rows this bulk action actually
+        // touched may have their dismissed state recomputed, otherwise clarifying one
+        // recurring name would silently un-ignore unrelated rows a reviewer already
+        // dismissed on purpose.
+        if (!touched) return text;
+        const updatedText = { ...text, formFields };
+        return { ...updatedText, dismissed: formFieldsStillOpen(updatedText) ? text.dismissed : false };
+      })
     );
     setLists((current) =>
       current.map((row) => {
@@ -3140,23 +3152,27 @@ export function WordImportWizard({
                                           onChange={(event) => updateFormFieldValue(index, fieldIndex, event.target.value)}
                                         />
                                       ) : field.row_type === "participant" ? (
-                                        <TodoAssigneeMenu
-                                          label={
-                                            field.names[0]?.create_new
-                                              ? `🆕 Neuer Teilnehmer: "${field.names[0].raw_name}"`
-                                              : participants.find((participant) => participant.id === field.names[0]?.participant_id)?.display_name ??
-                                                field.raw_value ??
-                                                "Keinen verknüpfen"
-                                          }
-                                          nullLabel="Keinen verknüpfen"
-                                          activeId={field.names[0]?.create_new ? CREATE_NEW_PARTICIPANT_ID : field.names[0]?.participant_id ?? null}
-                                          participants={
-                                            field.raw_value
-                                              ? [{ id: CREATE_NEW_PARTICIPANT_ID, display_name: `🆕 Als neuen Teilnehmer anlegen: "${field.raw_value}"` }, ...participants]
-                                              : participants
-                                          }
-                                          onChange={(option) => updateFormFieldSingleName(index, fieldIndex, option.id, field.raw_value)}
-                                        />
+                                        <div className="field-stack" style={{ gap: "0.15rem" }}>
+                                          {field.raw_value && field.names[0]?.participant_id === null && !field.names[0]?.create_new && (
+                                            <span className="muted">{field.raw_value}</span>
+                                          )}
+                                          <TodoAssigneeMenu
+                                            label={
+                                              field.names[0]?.create_new
+                                                ? `🆕 Neuer Teilnehmer: "${field.names[0].raw_name}"`
+                                                : participants.find((participant) => participant.id === field.names[0]?.participant_id)?.display_name ??
+                                                  "Keinen verknüpfen"
+                                            }
+                                            nullLabel="Keinen verknüpfen"
+                                            activeId={field.names[0]?.create_new ? CREATE_NEW_PARTICIPANT_ID : field.names[0]?.participant_id ?? null}
+                                            participants={
+                                              field.raw_value
+                                                ? [{ id: CREATE_NEW_PARTICIPANT_ID, display_name: `🆕 Als neuen Teilnehmer anlegen: "${field.raw_value}"` }, ...participants]
+                                                : participants
+                                            }
+                                            onChange={(option) => updateFormFieldSingleName(index, fieldIndex, option.id, field.raw_value)}
+                                          />
+                                        </div>
                                       ) : field.row_type === "participants" ? (
                                         field.names.length > 0 ? (
                                           <div className="grid" style={{ gap: "0.35rem" }}>
