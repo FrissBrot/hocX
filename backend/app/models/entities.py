@@ -255,6 +255,7 @@ class Event(Base, TimestampMixin, UpdatedAtMixin):
     description: Mapped[str | None] = mapped_column(Text)
     participant_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     is_cancelled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    is_session_marker: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     group_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("group_entity.id", ondelete="SET NULL"))
     organizer_ids: Mapped[list[int] | None] = mapped_column(JSONB)
     leadership_ids: Mapped[list[int] | None] = mapped_column(JSONB)

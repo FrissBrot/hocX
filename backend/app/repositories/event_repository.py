@@ -1,14 +1,28 @@
 from __future__ import annotations
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import Session
 
-from app.models import Event, EventCategory
+from app.models import Event, EventCategory, Protocol
 
 
 class EventRepository:
     def list(self, db: Session, *, tenant_id: int, skip: int = 0, limit: int = 100) -> list[Event]:
-        statement = select(Event).where(Event.tenant_id == tenant_id).order_by(Event.event_date.desc(), Event.event_end_date.desc(), Event.id.desc()).offset(skip).limit(limit)
+        # is_session_marker events are auto-generated "next session" placeholders from a
+        # protocol's session-date block - they shouldn't clutter the Termine overview.
+        # Once a Protocol actually gets held against one (event_id points at it), it's a
+        # real session and belongs in the list like any other event.
+        has_protocol = exists().where(Protocol.event_id == Event.id)
+        statement = (
+            select(Event)
+            .where(
+                Event.tenant_id == tenant_id,
+                or_(Event.is_session_marker.is_(False), has_protocol),
+            )
+            .order_by(Event.event_date.desc(), Event.event_end_date.desc(), Event.id.desc())
+            .offset(skip)
+            .limit(limit)
+        )
         return list(db.scalars(statement))
 
     def list_filtered(

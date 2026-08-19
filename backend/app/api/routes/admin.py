@@ -179,7 +179,9 @@ def delete_tenant(tenant_id: int, db: Session = Depends(get_db), current_admin: 
         raise HTTPException(status_code=400, detail="Tenant could not be deleted") from exc
     if not deleted:
         raise HTTPException(status_code=404, detail="Tenant not found")
-    audit.log(db, action="admin.tenant_deleted", actor_email=current_admin.email, tenant_id=tenant_id, entity_type="tenant", entity_id=tenant_id)
+    # tenant_id darf hier NICHT gesetzt werden: der Tenant wurde oben bereits geloescht+committed,
+    # audit_log.tenant_id hat eine FK auf tenant(id) - welcher Tenant betroffen war steht in entity_id.
+    audit.log(db, action="admin.tenant_deleted", actor_email=current_admin.email, entity_type="tenant", entity_id=tenant_id)
 
 
 @router.get("/tenants/{tenant_id}/cleanup/preview", response_model=TenantCleanupCounts)
