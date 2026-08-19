@@ -30,8 +30,13 @@ from app.services.tenant_export_service import TenantExportService
 from app.services.tenant_import_service import TenantImportService
 from tests.factories import (
     make_app_user,
+    make_element_definition,
+    make_list_definition,
+    make_list_entry,
     make_participant,
     make_protocol,
+    make_protocol_element,
+    make_protocol_element_block,
     make_template,
     make_tenant,
     make_user_tenant_role,
@@ -265,3 +270,126 @@ def test_failed_import_does_not_leave_a_half_imported_tenant(db):
 
     tenants_after = set(db.scalars(select(Tenant.id)).all())
     assert tenants_after == tenants_before
+
+
+# --- table/matrix "linked list" survives export/import (previously reset to nothing) ----
+#
+# element_definition.configuration_json["blocks"][].configuration_json is where the block
+# designer UI actually writes a Matrix/Table block's list link - both the block-level
+# "Modus: Automatisch / Quelle: Liste" source (auto_source.list_id) and a per-row "Zeile aus
+# Liste" link (rows[].row_config.linked_list_id/linked_list_entry_id). Neither was remapped
+# from the source tenant's list_definition/list_entry ids to the freshly imported ones -
+# only the unrelated top-level linked_list_id (whole-list "Formular" blocks) was.
+
+
+def test_export_import_roundtrip_remaps_matrix_auto_source_list_link(db):
+    tenant_a = make_tenant(db, "Tenant A")
+    source_list = make_list_definition(db, tenant_a.id, name="Leitende")
+    definition = make_element_definition(
+        db, tenant_a.id, "Matrix",
+        blocks=[{
+            "id": 1,
+            "configuration_json": {
+                "mode": "auto",
+                "auto_source": {"type": "list", "list_id": source_list.id, "event_tag_filter": None},
+            },
+        }],
+    )
+
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
+    try:
+        new_tenant, _warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
+    finally:
+        zip_path.unlink(missing_ok=True)
+
+    from app.models.entities import ElementDefinition, ListDefinition
+
+    imported_list = db.scalar(select(ListDefinition).where(ListDefinition.tenant_id == new_tenant.id))
+    imported_definition = db.scalar(select(ElementDefinition).where(ElementDefinition.tenant_id == new_tenant.id))
+    assert imported_definition.id != definition.id
+    imported_list_id = imported_definition.configuration_json["blocks"][0]["configuration_json"]["auto_source"]["list_id"]
+    assert imported_list_id == imported_list.id
+    assert imported_list_id != source_list.id
+
+
+def test_export_import_roundtrip_remaps_matrix_row_list_entry_link(db):
+    tenant_a = make_tenant(db, "Tenant A")
+    source_list = make_list_definition(db, tenant_a.id, name="Leitende")
+    source_entry = make_list_entry(db, source_list.id, column_one_value={"text_value": "Anna"})
+    make_element_definition(
+        db, tenant_a.id, "Tabelle",
+        blocks=[{
+            "id": 1,
+            "configuration_json": {
+                "rows": [{
+                    "id": "1",
+                    "row_type": "list_entry",
+                    "row_config": {"linked_list_id": source_list.id, "linked_list_entry_id": source_entry.id},
+                }],
+            },
+        }],
+    )
+
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
+    try:
+        new_tenant, _warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
+    finally:
+        zip_path.unlink(missing_ok=True)
+
+    from app.models.entities import ElementDefinition, ListDefinition, ListEntry
+
+    imported_list = db.scalar(select(ListDefinition).where(ListDefinition.tenant_id == new_tenant.id))
+    imported_entry = db.scalar(select(ListEntry).where(ListEntry.list_definition_id == imported_list.id))
+    imported_definition = db.scalar(select(ElementDefinition).where(ElementDefinition.tenant_id == new_tenant.id))
+    row_config = imported_definition.configuration_json["blocks"][0]["configuration_json"]["rows"][0]["row_config"]
+    assert row_config["linked_list_id"] == imported_list.id
+    assert row_config["linked_list_entry_id"] == imported_entry.id
+    assert row_config["linked_list_id"] != source_list.id
+    assert row_config["linked_list_entry_id"] != source_entry.id
+
+
+def test_export_import_roundtrip_remaps_protocol_block_row_list_entry_link(db):
+    """protocol_element_block.configuration_snapshot_json uses a FLATTENED row shape
+    (linked_list_id directly on the row, not nested under row_config like the template
+    design-time shape) - materialized that way by protocol_service when a Matrix/Table
+    block is copied from its template onto a concrete protocol."""
+    tenant_a = make_tenant(db, "Tenant A")
+    source_list = make_list_definition(db, tenant_a.id, name="Leitende")
+    source_entry = make_list_entry(db, source_list.id, column_one_value={"text_value": "Anna"})
+    template = make_template(db, tenant_a.id)
+    protocol = make_protocol(db, tenant_a.id, template.id, protocol_number="P-1")
+    protocol_element = make_protocol_element(db, protocol.id)
+    make_protocol_element_block(
+        db, protocol_element.id,
+        configuration_snapshot_json={
+            "rows": [{
+                "id": "1",
+                "value_type": "list_entry",
+                "linked_list_id": source_list.id,
+                "linked_list_entry_id": source_entry.id,
+            }],
+        },
+    )
+
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
+    try:
+        new_tenant, _warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
+    finally:
+        zip_path.unlink(missing_ok=True)
+
+    from app.models.entities import ListDefinition, ListEntry, ProtocolElement, ProtocolElementBlock
+
+    imported_list = db.scalar(select(ListDefinition).where(ListDefinition.tenant_id == new_tenant.id))
+    imported_entry = db.scalar(select(ListEntry).where(ListEntry.list_definition_id == imported_list.id))
+    imported_protocol_id = db.scalar(select(Protocol.id).where(Protocol.tenant_id == new_tenant.id))
+    imported_protocol_element_id = db.scalar(
+        select(ProtocolElement.id).where(ProtocolElement.protocol_id == imported_protocol_id)
+    )
+    imported_block = db.scalar(
+        select(ProtocolElementBlock).where(ProtocolElementBlock.protocol_element_id == imported_protocol_element_id)
+    )
+    row = imported_block.configuration_snapshot_json["rows"][0]
+    assert row["linked_list_id"] == imported_list.id
+    assert row["linked_list_entry_id"] == imported_entry.id
+    assert row["linked_list_id"] != source_list.id
+    assert row["linked_list_entry_id"] != source_entry.id

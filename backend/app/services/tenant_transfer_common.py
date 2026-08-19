@@ -306,6 +306,7 @@ def remap_block_configuration(
     participant_map: dict[int, int],
     event_map: dict[int, int],
     list_definition_map: dict[int, int],
+    list_entry_map: dict[int, int],
     finance_account_map: dict[int, int],
 ) -> dict:
     """Remaps every participant/event/list/finance-account id embedded in a block's
@@ -326,12 +327,31 @@ def remap_block_configuration(
             value["event_id"] = event_map.get(value["event_id"])
         return value
 
+    def remap_list_link(container: dict) -> dict:
+        # Row-level "Zeile aus Liste"/"Spalte aus Liste" link, shared by the flattened
+        # protocol-snapshot row shape (linked_list_id directly on the row) and the nested
+        # template/element_definition row shape (linked_list_id under row.row_config).
+        if container.get("linked_list_id") is None:
+            return container
+        container = dict(container)
+        new_list_id = list_definition_map.get(container["linked_list_id"])
+        container["linked_list_id"] = new_list_id
+        entry_id = container.get("linked_list_entry_id")
+        container["linked_list_entry_id"] = (
+            list_entry_map.get(entry_id) if new_list_id is not None and entry_id is not None else None
+        )
+        return container
+
     if config.get("linked_list_id") is not None:
         config["linked_list_id"] = list_definition_map.get(config["linked_list_id"])
     if config.get("fine_account_id") is not None:
         config["fine_account_id"] = finance_account_map.get(config["fine_account_id"])
     if config.get("finance_account_id") is not None:
         config["finance_account_id"] = finance_account_map.get(config["finance_account_id"])
+
+    auto_source = config.get("auto_source")
+    if isinstance(auto_source, dict) and auto_source.get("list_id") is not None:
+        config["auto_source"] = {**auto_source, "list_id": list_definition_map.get(auto_source["list_id"])}
 
     entries = config.get("attendance_entries")
     if isinstance(entries, list):
@@ -347,7 +367,9 @@ def remap_block_configuration(
             if not isinstance(row, dict):
                 new_rows.append(row)
                 continue
-            new_row = remap_value(row)
+            new_row = remap_list_link(remap_value(row))
+            if isinstance(new_row.get("row_config"), dict):
+                new_row["row_config"] = remap_list_link(new_row["row_config"])
             if "template_participant_id" in new_row:
                 new_row["template_participant_id"] = participant_map.get(new_row["template_participant_id"])
             if isinstance(new_row.get("template_participant_ids"), list):
@@ -385,6 +407,7 @@ def remap_element_definition_config(
     participant_map: dict[int, int],
     event_map: dict[int, int],
     list_definition_map: dict[int, int],
+    list_entry_map: dict[int, int],
     finance_account_map: dict[int, int],
 ) -> dict:
     """element_definition.configuration_json is `{"blocks": [...]}`, where each block carries
@@ -407,7 +430,8 @@ def remap_element_definition_config(
         new_block["configuration_json"] = remap_block_configuration(
             block.get("configuration_json"),
             participant_map=participant_map, event_map=event_map,
-            list_definition_map=list_definition_map, finance_account_map=finance_account_map,
+            list_definition_map=list_definition_map, list_entry_map=list_entry_map,
+            finance_account_map=finance_account_map,
         )
         new_blocks.append(new_block)
     config["blocks"] = new_blocks

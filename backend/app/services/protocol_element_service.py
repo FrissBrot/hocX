@@ -166,6 +166,7 @@ class ProtocolElementService:
                 tag=tag,
                 title=title,
                 description="Generated from session date block",
+                is_session_marker=True,
             )
             db.add(next_event)
             db.flush()

@@ -348,6 +348,36 @@ def test_delete_tenant_returns_false_for_unknown_tenant(db):
     assert AdminTenantService().delete_tenant(db, 999_999_999) is False
 
 
+def test_delete_tenant_route_audits_without_fk_violation(db):
+    """Regression for the 2026-08-18 production 500: the route's audit.log call ran
+    *after* AdminTenantService.delete_tenant() already committed the tenant's deletion,
+    passing that now-nonexistent id as tenant_id - audit_log.tenant_id has a FK into
+    tenant.id, so the INSERT raised psycopg.errors.ForeignKeyViolation and the DELETE
+    request 500'd (the tenant was in fact already gone by then; only the audit write
+    failed). Fixed by not passing tenant_id at all for this event - which tenant was
+    deleted is already recorded via entity_type="tenant"/entity_id."""
+    tenant = make_tenant(db, "Route Delete Tenant")
+    admin = CurrentAdmin(admin_id=1, email="ops@example.com", display_name="Ops")
+
+    admin_routes.delete_tenant(tenant.id, db=db, current_admin=admin)
+
+    assert db.get(Tenant, tenant.id) is None
+    audit_rows = db.execute(
+        text("SELECT action, tenant_id, entity_type, entity_id FROM audit_log WHERE action = 'admin.tenant_deleted' AND entity_id = :id"),
+        {"id": tenant.id},
+    ).all()
+    assert len(audit_rows) == 1
+    assert audit_rows[0].tenant_id is None
+    assert audit_rows[0].entity_type == "tenant"
+
+
+def test_delete_tenant_route_404_for_unknown_tenant(db):
+    admin = CurrentAdmin(admin_id=1, email="ops@example.com", display_name="Ops")
+    with pytest.raises(HTTPException) as exc_info:
+        admin_routes.delete_tenant(999_999_999, db=db, current_admin=admin)
+    assert exc_info.value.status_code == 404
+
+
 # --- H19: domain deletion -------------------------------------------------------------
 
 
