@@ -2225,6 +2225,7 @@ export function WordImportWizard({
           column_key: entry.column_key as string,
           column_label:
             entry.column_candidates.find((candidate) => candidate.column_key === entry.column_key)?.label ?? entry.column_label_raw,
+          column_label_raw: entry.column_label_raw,
           raw_value: entry.raw_value,
           names: entry.names,
           approved: true,
@@ -2821,21 +2822,21 @@ export function WordImportWizard({
                                   <div className="matrix-card-row">
                                     <div className="matrix-card-row-label">Ziel-Spalte</div>
                                     <div className="matrix-card-row-cell">
-                                      <select
-                                        value=""
-                                        onChange={(event) => {
-                                          const value = event.target.value;
-                                          if (!value) return;
-                                          resolveMatrixColumn(group.matrixKey, column.columnLabelRaw, value);
+                                      <TodoAssigneeMenu<string>
+                                        label="– auswählen –"
+                                        nullLabel="– auswählen –"
+                                        activeId={null}
+                                        participants={column.candidates.map(
+                                          (candidate): AssigneeOption<string> => ({
+                                            id: candidate.column_key,
+                                            display_name: candidate.label,
+                                          })
+                                        )}
+                                        onChange={(option) => {
+                                          if (option.id === null) return;
+                                          resolveMatrixColumn(group.matrixKey, column.columnLabelRaw, option.id);
                                         }}
-                                      >
-                                        <option value="">– auswählen ({column.columnLabelRaw}) –</option>
-                                        {column.candidates.map((candidate) => (
-                                          <option key={candidate.column_key} value={candidate.column_key}>
-                                            {candidate.label}
-                                          </option>
-                                        ))}
-                                      </select>
+                                      />
                                     </div>
                                   </div>
                                 )}

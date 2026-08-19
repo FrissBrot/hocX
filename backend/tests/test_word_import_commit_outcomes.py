@@ -8,7 +8,12 @@ from datetime import date
 from sqlalchemy import select
 
 from app.models import WordImportProfile, WordImportSuggestionOutcome
-from app.schemas.word_import import WordImportAttendanceCommit, WordImportCommit, WordImportEventCommit
+from app.schemas.word_import import (
+    WordImportAttendanceCommit,
+    WordImportCommit,
+    WordImportEventCommit,
+    WordImportMatrixCellCommit,
+)
 from app.services.word_import_quality_service import WordImportQualityService
 from app.services.word_import_service import WordImportService, _normalize
 from tests.factories import make_event, make_template, make_tenant
@@ -345,6 +350,77 @@ def test_no_link_attendance_name_is_remembered_and_reused(db):
     assert second_row.suggested_participant_id is None
     assert second_row.remembered_no_link is True
     assert 'Kein passender Teilnehmer für "Total" gefunden.' not in second_analysis.warnings
+
+
+def test_matrix_column_resolution_is_remembered_and_reused_when_no_candidate_matches(db):
+    """Timo's screenshot: a Matrix's fixed "Ziel-Spalte" picker for a document column
+    header ("Mega Rammer & Bigfoots") that doesn't resemble any configured column title
+    well enough to auto-resolve. Unlike a corrected-but-still-suggested pick, analyze()
+    found NO candidate confident enough to suggest here at all, so there's nothing to
+    "reject" - without matrix_column_overrides the reviewer would have to make the exact
+    same manual pick again on every later import of the same recurring document."""
+    ctx = _build_template(db)
+    tenant, template = ctx["tenant"], ctx["template"]
+    service = WordImportService()
+    spec = default_spec(protocol_date=date(2026, 10, 18))
+    # "18.10.2026" (matching template column col1) is deliberately dropped from the
+    # header row so col1 has no other claimant - isolates the override behavior from
+    # the exclusivity solver fighting over col1 with a genuinely-matching document
+    # column (see the "else" branch of analyze()'s column_resolution).
+    spec.matrix.header_cells = ["", "Mega Rammer & Bigfoots", "25.10.2026"]
+    spec.matrix.rows = [["Küchendienst", "Sandro Keller", "Nevio Muster, Sandro Keller"]]
+    raw_bytes = render_docx(spec)
+
+    first_analysis = service.analyze(
+        db, tenant_id=tenant.id, template_id=template.id, protocol_date_hint=None, raw_bytes=raw_bytes,
+    )
+    unresolved_rows = [m for m in first_analysis.matrix_mappings if m.column_label_raw == "Mega Rammer & Bigfoots"]
+    assert unresolved_rows
+    row = unresolved_rows[0]
+    assert row.column_key is None
+
+    # Reviewer manually picks "col1" ("18.10.2026") from the Ziel-Spalte dropdown for
+    # this unmatched column - an arbitrary pick from the reviewer's own knowledge, not
+    # something the text similarity could have suggested.
+    service.commit(
+        db, tenant_id=tenant.id, user_id=1,
+        payload=WordImportCommit(
+            template_id=template.id,
+            protocol_date=date(2026, 10, 18),
+            matrices=[
+                WordImportMatrixCellCommit(
+                    matrix_key=row.matrix_key,
+                    row_id=row.row_id,
+                    row_type=row.row_type,
+                    column_key="col1",
+                    column_label="18.10.2026",
+                    column_label_raw=row.column_label_raw,
+                    raw_value=row.raw_value,
+                    names=row.names,
+                    approved=True,
+                    originally_suggested_column_key=row.column_key,
+                    originally_suggested_score=(row.column_candidates[0].score if row.column_candidates else None),
+                )
+            ],
+        ),
+    )
+
+    profile = db.execute(
+        select(WordImportProfile).where(WordImportProfile.tenant_id == tenant.id, WordImportProfile.template_id == template.id)
+    ).scalar_one()
+    assert profile.mapping_config_json["matrix_column_overrides"][f"{row.matrix_key}:{_normalize('Mega Rammer & Bigfoots')}"] == "col1"
+
+    # A LATER import of the same recurring layout must auto-resolve this column to the
+    # remembered target instead of asking the reviewer to redo the identical manual pick
+    # - and the genuinely-matching "25.10.2026" column must still resolve to col2 on its
+    # own, unaffected by col1 now being claimed by the remembered override.
+    second_analysis = service.analyze(
+        db, tenant_id=tenant.id, template_id=template.id, protocol_date_hint=None, raw_bytes=raw_bytes,
+    )
+    second_row = next(m for m in second_analysis.matrix_mappings if m.column_label_raw == "Mega Rammer & Bigfoots")
+    assert second_row.column_key == "col1"
+    other_row = next(m for m in second_analysis.matrix_mappings if m.column_label_raw == "25.10.2026")
+    assert other_row.column_key == "col2"
 
 
 def test_quality_service_aggregates_accept_rate_by_bucket(db):
