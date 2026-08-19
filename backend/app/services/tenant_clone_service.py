@@ -131,7 +131,8 @@ class TenantCloneService:
         finance_account_map = self._clone_finance_accounts(db, source.id, new_tenant.id)
         element_definition_map = self._clone_element_definitions(
             db, source.id, new_tenant.id,
-            participant_map={}, event_map={}, list_definition_map={}, finance_account_map=finance_account_map,
+            participant_map={}, event_map={}, list_definition_map={}, list_entry_map={},
+            finance_account_map=finance_account_map,
         )
         self._clone_templates(
             db, source.id, new_tenant.id,
@@ -170,7 +171,8 @@ class TenantCloneService:
         element_definition_map = self._clone_element_definitions(
             db, source.id, new_tenant.id,
             participant_map=participant_map, event_map=event_map,
-            list_definition_map=list_definition_map, finance_account_map=finance_account_map,
+            list_definition_map=list_definition_map, list_entry_map=list_entry_map,
+            finance_account_map=finance_account_map,
         )
         template_map, template_element_map, template_element_block_map = self._clone_templates(
             db, source.id, new_tenant.id,
@@ -205,6 +207,7 @@ class TenantCloneService:
             participant_map=participant_map,
             event_map=event_map,
             list_definition_map=list_definition_map,
+            list_entry_map=list_entry_map,
             finance_account_map=finance_account_map,
         )
         self._clone_protocol_texts(db, protocol_element_block_map=protocol_element_block_map)
@@ -303,7 +306,7 @@ class TenantCloneService:
     def _clone_element_definitions(
         self, db: Session, source_tenant_id: int, new_tenant_id: int,
         *, participant_map: dict[int, int], event_map: dict[int, int],
-        list_definition_map: dict[int, int], finance_account_map: dict[int, int],
+        list_definition_map: dict[int, int], list_entry_map: dict[int, int], finance_account_map: dict[int, int],
     ) -> dict[int, int]:
         rows = db.scalars(select(ElementDefinition).where(ElementDefinition.tenant_id == source_tenant_id)).all()
         id_map: dict[int, int] = {}
@@ -312,7 +315,8 @@ class TenantCloneService:
                 "tenant_id": new_tenant_id,
                 "configuration_json": remap_element_definition_config(
                     row.configuration_json, participant_map=participant_map, event_map=event_map,
-                    list_definition_map=list_definition_map, finance_account_map=finance_account_map,
+                    list_definition_map=list_definition_map, list_entry_map=list_entry_map,
+                    finance_account_map=finance_account_map,
                 ),
             })
             db.add(new_row)
@@ -443,6 +447,7 @@ class TenantCloneService:
                         participant_map=participant_map,
                         event_map=event_map,
                         list_definition_map=list_definition_map,
+                        list_entry_map=list_entry_map,
                         finance_account_map=finance_account_map,
                     ),
                 })
@@ -714,6 +719,7 @@ class TenantCloneService:
         participant_map: dict[int, int],
         event_map: dict[int, int],
         list_definition_map: dict[int, int],
+        list_entry_map: dict[int, int],
         finance_account_map: dict[int, int],
     ) -> dict[int, int]:
         if not protocol_element_map:
@@ -732,7 +738,8 @@ class TenantCloneService:
                 "element_definition_id": element_definition_map.get(row.element_definition_id) if row.element_definition_id else None,
                 "configuration_snapshot_json": remap_block_configuration(
                     row.configuration_snapshot_json, participant_map=participant_map,
-                    event_map=event_map, list_definition_map=list_definition_map, finance_account_map=finance_account_map,
+                    event_map=event_map, list_definition_map=list_definition_map, list_entry_map=list_entry_map,
+                    finance_account_map=finance_account_map,
                 ),
             })
             db.add(new_row)

@@ -12,9 +12,17 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from app.models.entities import Participant, Protocol, Template
+from app.models.entities import ElementDefinition, ListDefinition, ListEntry, Participant, Protocol, Template
 from app.services.tenant_clone_service import TenantCloneService
-from tests.factories import make_participant, make_protocol, make_template, make_tenant
+from tests.factories import (
+    make_element_definition,
+    make_list_definition,
+    make_list_entry,
+    make_participant,
+    make_protocol,
+    make_template,
+    make_tenant,
+)
 
 
 def test_clone_full_creates_new_tenant_with_fresh_ids_and_core_content(db):
@@ -98,3 +106,44 @@ def test_clone_full_of_tenant_with_no_data_still_succeeds(db):
     assert cloned.id != source.id
     assert db.scalar(select(Template).where(Template.tenant_id == cloned.id)) is None
     assert db.scalar(select(Participant).where(Participant.tenant_id == cloned.id)) is None
+
+
+def test_clone_full_remaps_matrix_block_list_links(db):
+    """A Matrix/Table block's list link lives in element_definition.configuration_json
+    ["blocks"][].configuration_json - both the block-level "Quelle: Liste" source
+    (auto_source.list_id) and a per-row "Zeile aus Liste" link
+    (rows[].row_config.linked_list_id/linked_list_entry_id). Must be re-pointed at the
+    cloned list/entry, not left pointing at the source tenant's ids."""
+    source = make_tenant(db, "Quelle")
+    source_list = make_list_definition(db, source.id, name="Leitende")
+    source_entry = make_list_entry(db, source_list.id, column_one_value={"text_value": "Anna"})
+    make_element_definition(
+        db, source.id, "Matrix",
+        blocks=[{
+            "id": 1,
+            "configuration_json": {
+                "mode": "auto",
+                "auto_source": {"type": "list", "list_id": source_list.id, "event_tag_filter": None},
+                "rows": [{
+                    "id": "1",
+                    "row_type": "list_entry",
+                    "row_config": {"linked_list_id": source_list.id, "linked_list_entry_id": source_entry.id},
+                }],
+            },
+        }],
+    )
+
+    cloned = TenantCloneService().clone_full(db, source.id, "Quelle (Kopie)")
+
+    cloned_list = db.scalar(select(ListDefinition).where(ListDefinition.tenant_id == cloned.id))
+    cloned_entry = db.scalar(select(ListEntry).where(ListEntry.list_definition_id == cloned_list.id))
+    cloned_definition = db.scalar(select(ElementDefinition).where(ElementDefinition.tenant_id == cloned.id))
+    block_config = cloned_definition.configuration_json["blocks"][0]["configuration_json"]
+
+    assert block_config["auto_source"]["list_id"] == cloned_list.id
+    assert block_config["auto_source"]["list_id"] != source_list.id
+    row_config = block_config["rows"][0]["row_config"]
+    assert row_config["linked_list_id"] == cloned_list.id
+    assert row_config["linked_list_entry_id"] == cloned_entry.id
+    assert row_config["linked_list_id"] != source_list.id
+    assert row_config["linked_list_entry_id"] != source_entry.id

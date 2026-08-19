@@ -190,7 +190,7 @@ class TenantImportService:
         finance_account_map = self._import_simple(FinanceAccount, self._t("finance_account"), "finance_account", {"tenant_id": new_tenant.id})
         element_definition_map = self._import_element_definitions(
             new_tenant.id, participant_map=participant_map, event_map=event_map,
-            list_definition_map=list_definition_map, finance_account_map=finance_account_map,
+            list_definition_map=list_definition_map, list_entry_map=list_entry_map, finance_account_map=finance_account_map,
         )
         template_map, template_element_map, template_element_block_map = self._import_templates(
             new_tenant.id,
@@ -213,7 +213,8 @@ class TenantImportService:
         protocol_element_map = self._import_protocol_elements(protocol_map, template_element_map)
         protocol_element_block_map = self._import_protocol_element_blocks(
             protocol_element_map, template_element_block_map, element_definition_map, participant_map,
-            event_map=event_map, list_definition_map=list_definition_map, finance_account_map=finance_account_map,
+            event_map=event_map, list_definition_map=list_definition_map, list_entry_map=list_entry_map,
+            finance_account_map=finance_account_map,
         )
         self._import_protocol_texts(protocol_element_block_map)
         self._import_protocol_display_snapshots(protocol_element_block_map)
@@ -309,7 +310,7 @@ class TenantImportService:
     # ── structure tables with extra remapping ────────────────────────────
 
     def _import_element_definitions(
-        self, new_tenant_id: int, *, participant_map, event_map, list_definition_map, finance_account_map,
+        self, new_tenant_id: int, *, participant_map, event_map, list_definition_map, list_entry_map, finance_account_map,
     ) -> dict[int, int]:
         id_map: dict[int, int] = {}
         for row in self._t("element_definition"):
@@ -318,7 +319,8 @@ class TenantImportService:
                 "tenant_id": new_tenant_id,
                 "configuration_json": remap_element_definition_config(
                     data.get("configuration_json"), participant_map=participant_map, event_map=event_map,
-                    list_definition_map=list_definition_map, finance_account_map=finance_account_map,
+                    list_definition_map=list_definition_map, list_entry_map=list_entry_map,
+                    finance_account_map=finance_account_map,
                 ),
             })
             self.db.add(new_row)
@@ -471,7 +473,8 @@ class TenantImportService:
                 "element_definition_id": element_definition_map.get(row["element_definition_id"], row["element_definition_id"]),
                 "configuration_override_json": remap_block_configuration(
                     row.get("configuration_override_json"), participant_map=participant_map,
-                    event_map=event_map, list_definition_map=list_definition_map, finance_account_map=finance_account_map,
+                    event_map=event_map, list_definition_map=list_definition_map, list_entry_map=list_entry_map,
+                    finance_account_map=finance_account_map,
                 ),
             })
             self.db.add(new_row)
@@ -614,7 +617,7 @@ class TenantImportService:
 
     def _import_protocol_element_blocks(
         self, protocol_element_map, template_element_block_map, element_definition_map, participant_map,
-        *, event_map, list_definition_map, finance_account_map,
+        *, event_map, list_definition_map, list_entry_map, finance_account_map,
     ) -> dict[int, int]:
         id_map: dict[int, int] = {}
         for row in self._t("protocol_element_block"):
@@ -628,7 +631,8 @@ class TenantImportService:
                 "element_definition_id": element_definition_map.get(data["element_definition_id"]) if data.get("element_definition_id") else None,
                 "configuration_snapshot_json": remap_block_configuration(
                     data.get("configuration_snapshot_json"), participant_map=participant_map,
-                    event_map=event_map, list_definition_map=list_definition_map, finance_account_map=finance_account_map,
+                    event_map=event_map, list_definition_map=list_definition_map, list_entry_map=list_entry_map,
+                    finance_account_map=finance_account_map,
                 ),
             })
             self.db.add(new_row)
