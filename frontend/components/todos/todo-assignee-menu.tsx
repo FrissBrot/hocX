@@ -5,20 +5,30 @@ import { KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from "rea
 import { Popover } from "@/components/ui/popover";
 import { SearchInput } from "@/components/ui/search-input";
 
-export type AssigneeOption = { id: number | null; display_name: string };
+// Id defaults to number (todo assignees, participant/event/list ids - all existing
+// callers) but is generic so a caller keyed by string (e.g. a Matrix column_key) can
+// instantiate TodoAssigneeMenu<string> instead of widening every other call site's
+// type to a union.
+export type AssigneeOption<Id extends string | number = number> = { id: Id | null; display_name: string };
 
-type Props = {
+type Props<Id extends string | number> = {
   label: string;
-  participants: AssigneeOption[];
-  activeId: number | null;
-  onChange: (option: AssigneeOption) => void;
+  participants: AssigneeOption<Id>[];
+  activeId: Id | null;
+  onChange: (option: AssigneeOption<Id>) => void;
   /** Text for the built-in "id: null" option - defaults to the todo-assignee wording
    * ("Niemand") but callers reusing this as a generic searchable dropdown (e.g. picking
    * an existing record vs. creating a new one) pass their own, e.g. "Neu anlegen". */
   nullLabel?: string;
 };
 
-export function TodoAssigneeMenu({ label, participants, activeId, onChange, nullLabel = "Niemand" }: Props) {
+export function TodoAssigneeMenu<Id extends string | number = number>({
+  label,
+  participants,
+  activeId,
+  onChange,
+  nullLabel = "Niemand",
+}: Props<Id>) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [highlighted, setHighlighted] = useState(0);
@@ -26,7 +36,7 @@ export function TodoAssigneeMenu({ label, participants, activeId, onChange, null
   const listRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
 
-  const options: AssigneeOption[] = [{ id: null, display_name: nullLabel }, ...participants];
+  const options: AssigneeOption<Id>[] = [{ id: null, display_name: nullLabel }, ...participants];
   const filtered = search.trim()
     ? options.filter((o) => o.display_name.toLowerCase().includes(search.trim().toLowerCase()))
     : options;

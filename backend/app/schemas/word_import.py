@@ -462,6 +462,13 @@ class WordImportMatrixCellCommit(BaseModel):
     row_type: str
     column_key: str
     column_label: str
+    # The raw document header text for this column (WordImportMatrixCellMapping.
+    # column_label_raw) - unlike column_label above (which prefers the resolved
+    # target column's own title once matched), this is stable across imports of the
+    # same recurring document layout, so it's the correct key for remembering a
+    # manual "Ziel-Spalte" pick (see WordImportService.commit's
+    # matrix_column_overrides_updates / analyze()'s matrix_column_overrides).
+    column_label_raw: str
     raw_value: str
     names: list[WordImportNameResolution] = Field(default_factory=list)
     approved: bool
