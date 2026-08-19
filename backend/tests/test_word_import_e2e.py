@@ -263,6 +263,7 @@ def _commit_payload_from_analysis(analysis, *, template_id) -> WordImportCommit:
             row_type=mapping.row_type,
             column_key=mapping.column_key,
             column_label=mapping.column_label_raw,
+            column_label_raw=mapping.column_label_raw,
             raw_value=mapping.raw_value,
             names=mapping.names,
             approved=mapping.column_key is not None,

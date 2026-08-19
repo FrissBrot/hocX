@@ -1835,6 +1835,9 @@ class WordImportService:
                 "participant_name_overrides": {
                     **profile_config.get("participant_name_overrides", {}), **in_memory_profile_hints.get("participant_name_overrides", {})
                 },
+                "matrix_column_overrides": {
+                    **profile_config.get("matrix_column_overrides", {}), **in_memory_profile_hints.get("matrix_column_overrides", {})
+                },
                 "rejected_candidates": profile_config.get("rejected_candidates", {}),
                 "event_conflict_resolutions": profile_config.get("event_conflict_resolutions", {}),
                 "new_event_link_resolutions": profile_config.get("new_event_link_resolutions", {}),
@@ -1843,6 +1846,14 @@ class WordImportService:
         heading_to_target = profile_config.get("heading_to_target", {})
         table_roles_by_signature = profile_config.get("table_roles_by_signature", {})
         participant_name_overrides = profile_config.get("participant_name_overrides", {})
+        # Same idea as participant_name_overrides above, but for a Matrix column that
+        # has no template-configured auto-source (the "fixed columns" branch below) -
+        # {"{matrix_key}:{normalized column_label_raw}": column_key}. Consulted there so
+        # a document column with NO confident text match at all (e.g. a group name that
+        # doesn't resemble any configured column title) doesn't force the reviewer to
+        # re-pick the same "Ziel-Spalte" by hand on every single import of the same
+        # recurring document layout.
+        matrix_column_overrides = profile_config.get("matrix_column_overrides", {})
         # See A.4 / WordImportService.commit's _log_outcome - {"{prefix}:{context}":
         # {"rejected": [ids], "chosen": id}}, consulted below (_rejected_ids_for) to
         # demote a candidate that was already wrong for this exact context once before,
@@ -1872,7 +1883,9 @@ class WordImportService:
         # resolved as "Keinen verknüpfen" (not a real participant) before, so the same
         # row appearing again in a later import doesn't need to be re-flagged.
         no_link_names = set(profile_config.get("no_link_names", []))
-        profile_applied = bool(heading_to_target or table_roles_by_signature or participant_name_overrides)
+        profile_applied = bool(
+            heading_to_target or table_roles_by_signature or participant_name_overrides or matrix_column_overrides
+        )
 
         def _rejected_ids_for(rejection_key: str) -> set:
             return set((rejected_candidates.get(rejection_key) or {}).get("rejected") or [])
@@ -2875,6 +2888,37 @@ class WordImportService:
                 # threads through.
                 labeled_col_indices = [col_idx for col_idx, label in enumerate(doc_column_labels) if label]
 
+                # A manually resolved "Ziel-Spalte" pick for this exact (matrix, document
+                # column label) is remembered in matrix_column_overrides (see its
+                # declaration above) and claimed immediately here - same "direct match
+                # claims first, solver only runs over what's left" shape as the
+                # "participants" auto branch above - so a column with NO scoring
+                # candidate confident enough to auto-resolve on its own (the whole reason
+                # a reviewer had to pick it by hand in the first place) doesn't need the
+                # exact same pick redone on every later import of the same recurring
+                # document layout.
+                unresolved_col_indices: list[int] = []
+                claimed_column_ids: set[str] = set()
+                for col_idx in labeled_col_indices:
+                    label = doc_column_labels[col_idx]
+                    overridden_id = matrix_column_overrides.get(f"{matrix_key}:{_normalize(label)}")
+                    overridden_column = (
+                        next((c for c in matrix_columns if str(c.get("id")) == overridden_id), None) if overridden_id else None
+                    )
+                    if overridden_column is not None:
+                        column_resolution[col_idx] = (
+                            overridden_id,
+                            [
+                                WordImportMatrixColumnCandidate(
+                                    column_key=overridden_id, label=str(overridden_column.get("title") or ""), score=1.0,
+                                    reason="Gemerkte Zuordnung",
+                                )
+                            ],
+                        )
+                        claimed_column_ids.add(overridden_id)
+                    else:
+                        unresolved_col_indices.append(col_idx)
+
                 def _fixed_column_score(col_idx: int, column: dict) -> float:
                     label = doc_column_labels[col_idx]
                     score = _similarity(label, str(column.get("title") or ""))
@@ -2883,13 +2927,14 @@ class WordImportService:
                         score -= _REJECTED_CANDIDATE_PENALTY
                     return score
 
+                remaining_columns = [column for column in matrix_columns if str(column.get("id")) not in claimed_column_ids]
                 auto_picked_column_by_col = {
                     assignment.row: assignment.col
                     for assignment in solve_optimal_assignment(
-                        labeled_col_indices, matrix_columns, _fixed_column_score, min_score=_MATRIX_COLUMN_MATCH_THRESHOLD
+                        unresolved_col_indices, remaining_columns, _fixed_column_score, min_score=_MATRIX_COLUMN_MATCH_THRESHOLD
                     )
                 }
-                for col_idx in labeled_col_indices:
+                for col_idx in unresolved_col_indices:
                     label = doc_column_labels[col_idx]
                     scored = sorted(
                         ((_similarity(label, str(column.get("title") or "")), column) for column in matrix_columns),
@@ -3679,14 +3724,30 @@ class WordImportService:
             # entity, and (see WordImportService plan) no freeze/refresh step touches matrix
             # blocks on the "abgeschlossen" transition below, so this can run immediately.
             matrix_name_updates: dict[str, int] = {}
+            # {"{matrix_key}:{normalized column_label_raw}": column_key} - see
+            # analyze()'s matrix_column_overrides declaration. Keyed on the raw document
+            # header text (stable across imports of the same recurring layout), not
+            # matrix_commit.column_label (which prefers the resolved target column's own
+            # title once matched) - that mismatch is also why the _log_outcome rejection
+            # key just below uses column_label_raw now, not column_label like before.
+            matrix_column_overrides_updates: dict[str, str] = {}
             for matrix_commit in payload.matrices:
                 if not matrix_commit.approved:
                     continue
                 _log_outcome(
                     "matrix_column_match", matrix_commit.originally_suggested_score,
                     matrix_commit.originally_suggested_column_key, matrix_commit.column_key,
-                    rejection_key=f"matrix_column:{matrix_commit.matrix_key}:{_normalize(matrix_commit.column_label)}",
+                    rejection_key=f"matrix_column:{matrix_commit.matrix_key}:{_normalize(matrix_commit.column_label_raw)}",
                 )
+                # Only the "fixed, template-configured columns" branch of analyze() ever
+                # consults matrix_column_overrides - a "gen-p-"/"gen-e-"/"gen-l-" key
+                # (participant/event/list auto-source columns) is resolved fresh from its
+                # own live roster/event/list every import instead, so remembering those
+                # here would just be dead data.
+                if not matrix_commit.column_key.startswith("gen-"):
+                    matrix_column_overrides_updates[f"{matrix_commit.matrix_key}:{_normalize(matrix_commit.column_label_raw)}"] = (
+                        matrix_commit.column_key
+                    )
                 try:
                     template_element_id_str, sort_index_str = matrix_commit.matrix_key.split(":", 1)
                     block_key = (int(template_element_id_str), int(sort_index_str))
@@ -3802,6 +3863,7 @@ class WordImportService:
             if (
                 heading_updates or table_role_updates or name_updates or rejected_candidate_updates
                 or event_conflict_updates or new_event_link_updates or no_link_name_updates
+                or matrix_column_overrides_updates
             ):
                 profile = db.execute(
                     select(WordImportProfile).where(
@@ -3844,6 +3906,8 @@ class WordImportService:
                 table_map.update(table_role_updates)
                 name_map = dict(config.get("participant_name_overrides", {}))
                 name_map.update(name_updates)
+                matrix_column_map = dict(config.get("matrix_column_overrides", {}))
+                matrix_column_map.update(matrix_column_overrides_updates)
                 # Additive negative-feedback store (see A.4 plan / _log_outcome above) - one
                 # entry per "{signal_prefix}:{normalized_context}" key, merging newly rejected
                 # candidate ids into any list already recorded for that same context rather
@@ -3870,6 +3934,7 @@ class WordImportService:
                     "heading_to_target": heading_map,
                     "table_roles_by_signature": table_map,
                     "participant_name_overrides": name_map,
+                    "matrix_column_overrides": matrix_column_map,
                     "rejected_candidates": rejected_map,
                     "event_conflict_resolutions": event_conflict_map,
                     "new_event_link_resolutions": new_event_link_map,
