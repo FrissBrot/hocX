@@ -7,6 +7,7 @@ import {
 } from "recharts";
 import { StatisticsOverview } from "@/types/api";
 import { browserApiFetch } from "@/lib/api/client";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 
 const STATS_BUMP_EVENT = "hocx:stats-refresh";
 let _statsVersion = 0;
@@ -143,6 +144,10 @@ export function ChartBlock({ blockId, config, editable, onSave }: Props) {
   if (!data) return <div className="muted" style={{ padding: "12px 0" }}>Statistikdaten nicht verfügbar.</div>;
 
   const hasCycles = data.cycles.length > 0;
+  const cycleOptions = [
+    { key: "all", label: "Alle Zyklen" },
+    ...data.cycles.map((c) => ({ key: `${c.cycle_config_id}:${c.cycle_year}`, label: c.label })),
+  ];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -160,17 +165,14 @@ export function ChartBlock({ blockId, config, editable, onSave }: Props) {
             ))}
           </select>
           {hasCycles && (chartType === "groups_sessions" || chartType === "groups_avg") && (
-            <select
+            <SearchableSelect
               className="stats-cycle-select"
+              options={cycleOptions}
+              getId={(o) => o.key}
+              getLabel={(o) => o.label}
               value={cycleKey}
-              onChange={(e) => save({ cycle_key: e.target.value })}
-            >
-              <option value="all">Alle Zyklen</option>
-              {data.cycles.map((c) => {
-                const k = `${c.cycle_config_id}:${c.cycle_year}`;
-                return <option key={k} value={k}>{c.label}</option>;
-              })}
-            </select>
+              onChange={(o) => save({ cycle_key: o ? o.key : "all" })}
+            />
           )}
         </div>
       )}

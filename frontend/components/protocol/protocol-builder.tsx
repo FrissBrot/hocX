@@ -9,6 +9,7 @@ import { FilterTabOption, FilterTabs } from "@/components/ui/filter-tabs";
 import { Menu, MenuItem, Popover } from "@/components/ui/popover";
 import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
@@ -235,16 +236,13 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
         <form className="grid" onSubmit={createProtocol}>
           <label className="field-stack">
             <span className="field-label">Template</span>
-            <select
-              value={form.template_id}
-              onChange={(event) => setForm((current) => ({ ...current, template_id: event.target.value }))}
-            >
-              {availableTemplates.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.name}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={availableTemplates}
+              getId={(template) => String(template.id)}
+              getLabel={(template) => template.name}
+              value={form.template_id || null}
+              onChange={(template) => setForm((current) => ({ ...current, template_id: template ? String(template.id) : "" }))}
+            />
           </label>
           {selectedTemplate?.protocol_number_pattern || selectedTemplate?.title_pattern ? (
             <div className="info-note">

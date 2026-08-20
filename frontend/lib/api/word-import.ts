@@ -168,6 +168,11 @@ export type WordImportEventMapping = {
   // reviewer to reconfirm an already-resolved recurring conflict every import.
   remembered_title_source: "doc" | "existing" | null;
   remembered_date_source: "doc" | "existing" | null;
+  // Set when status === "new" (no live-matched Termin at all) AND this exact raw title
+  // (+ Matrix context, if any) was already explicitly dismissed ("Ignorieren") in an
+  // earlier commit. The wizard pre-applies that same decision instead of asking the
+  // reviewer to re-dismiss the same recurring non-Termin text every import.
+  remembered_dismissed: boolean;
 };
 
 export type WordImportListDefinitionOption = {
@@ -302,6 +307,15 @@ export type WordImportCommitPayload = {
     participant_count: number | null;
     originally_suggested_event_id: number | null;
     originally_suggested_score: number | null;
+  }[];
+  // Not written anywhere (an ignored proposal creates/links nothing) - only feeds
+  // WordImportEventMapping.remembered_dismissed so the same recurring "not a real
+  // Termin" row defaults to "Ignorieren" again on the next import.
+  dismissed_events: {
+    raw_title: string;
+    matrix_key: string | null;
+    row_id: string | null;
+    column_key: string | null;
   }[];
   lists: {
     table_index: number;
@@ -448,4 +462,11 @@ export async function saveWordImportDocumentDraft(documentId: number, draft: Wor
 
 export async function deleteWordImportDocument(documentId: number): Promise<void> {
   await browserApiFetch(`/api/tools/word-import/documents/${documentId}`, { method: "DELETE" });
+}
+
+export async function setLastWordImportTemplate(templateId: number | null): Promise<void> {
+  await browserApiFetch("/api/tools/word-import/last-template", {
+    method: "PUT",
+    body: JSON.stringify({ template_id: templateId }),
+  });
 }

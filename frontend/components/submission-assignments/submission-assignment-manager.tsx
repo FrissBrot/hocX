@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 
 import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
@@ -1052,18 +1053,14 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
             <div className="two-col">
               <label className="field-stack">
                 <span className="field-label">Liste</span>
-                <select
-                  value={form.list_definition_id}
-                  onChange={(e) => setForm((c) => ({ ...c, list_definition_id: e.target.value ? Number(e.target.value) : "" }))}
-                  required
-                >
-                  <option value="">Liste wählen…</option>
-                  {availableLists.map((list) => (
-                    <option key={list.id} value={list.id}>
-                      {list.name}
-                    </option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  options={availableLists}
+                  getId={(list) => list.id}
+                  getLabel={(list) => list.name}
+                  value={form.list_definition_id || null}
+                  onChange={(list) => setForm((c) => ({ ...c, list_definition_id: list ? list.id : "" }))}
+                  nullLabel="Liste wählen…"
+                />
               </label>
               <label className="field-stack">
                 <span className="field-label">Stichtag</span>
@@ -1091,19 +1088,21 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
             const eventOptions = form.source_type === "events" ? SINGLE_PARTICIPANT_EVENT_FIELDS : [];
             const options = form.source_type === "events" ? eventOptions : listParticipantCols;
             if (options.length === 0) return null;
+            const normalizedOptions = options.map((opt) => ({
+              value: "field" in opt ? opt.field : opt.value,
+              label: opt.label,
+            }));
             return (
               <label className="field-stack">
                 <span className="field-label">Verantwortliche Person</span>
-                <select
-                  value={form.responsible_participant_source}
-                  onChange={(e) => setForm((c) => ({ ...c, responsible_participant_source: e.target.value }))}
-                >
-                  <option value="">Keine Zuweisung</option>
-                  {options.map((opt) => {
-                    const val = "field" in opt ? opt.field : opt.value;
-                    return <option key={val} value={val}>{opt.label}</option>;
-                  })}
-                </select>
+                <SearchableSelect
+                  options={normalizedOptions}
+                  getId={(opt) => opt.value}
+                  getLabel={(opt) => opt.label}
+                  value={form.responsible_participant_source || null}
+                  onChange={(opt) => setForm((c) => ({ ...c, responsible_participant_source: opt ? opt.value : "" }))}
+                  nullLabel="Keine Zuweisung"
+                />
                 <span className="field-help">Das Feld, das die verantwortliche Person für diese Abgabe enthält.</span>
               </label>
             );

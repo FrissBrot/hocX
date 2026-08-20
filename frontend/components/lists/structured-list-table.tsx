@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { Modal } from "@/components/ui/modal";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { TrackedChangeHideButton } from "@/components/ui/tracked-change-hide-button";
 import { formatDate, formatDateRange } from "@/lib/utils/format";
 import {
@@ -381,25 +382,22 @@ export function StructuredListTable({
   ) {
     if (valueType === "participant") {
       return (
-        <select
-          value={String(value.participant_id ?? "")}
+        <SearchableSelect
+          options={availableParticipants}
+          getId={(participant) => participant.id}
+          getLabel={(participant) => participant.display_name}
+          value={(value.participant_id as number | null | undefined) ?? null}
           disabled={options.disabled}
-          onChange={(event) => {
-            const nextValue = { participant_id: event.target.value ? Number(event.target.value) : null };
+          nullLabel="Teilnehmer"
+          onChange={(participant) => {
+            const nextValue = { participant_id: participant ? participant.id : null };
             if (options.isNewRow) {
               patchNewRow({ [columnKey]: nextValue });
             } else if (entryId) {
               queueRowSave(entryId, { [columnKey]: nextValue });
             }
           }}
-        >
-          <option value="">Teilnehmer</option>
-          {availableParticipants.map((participant) => (
-            <option key={`${definition.id}-${columnKey}-participant-${participant.id}`} value={participant.id}>
-              {participant.display_name}
-            </option>
-          ))}
-        </select>
+        />
       );
     }
 
@@ -418,25 +416,22 @@ export function StructuredListTable({
 
     if (valueType === "event") {
       return (
-        <select
-          value={String(value.event_id ?? "")}
+        <SearchableSelect
+          options={sortedEvents}
+          getId={(eventRow) => eventRow.id}
+          getLabel={(eventRow) => `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}`}
+          value={(value.event_id as number | null | undefined) ?? null}
           disabled={options.disabled}
-          onChange={(event) => {
-            const nextValue = { event_id: event.target.value ? Number(event.target.value) : null };
+          nullLabel="Termin"
+          onChange={(eventRow) => {
+            const nextValue = { event_id: eventRow ? eventRow.id : null };
             if (options.isNewRow) {
               patchNewRow({ [columnKey]: nextValue });
             } else if (entryId) {
               queueRowSave(entryId, { [columnKey]: nextValue });
             }
           }}
-        >
-          <option value="">Termin</option>
-          {sortedEvents.map((eventRow) => (
-            <option key={`${definition.id}-${columnKey}-event-${eventRow.id}`} value={eventRow.id}>
-              {formatDateRange(eventRow.event_date, eventRow.event_end_date)} · {eventRow.title}
-            </option>
-          ))}
-        </select>
+        />
       );
     }
 

@@ -22,8 +22,9 @@ from tests.factories import make_protocol, make_protocol_element, make_protocol_
 def _isolated_storage_root(monkeypatch, tmp_path):
     from app.core.config import settings
 
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
-    monkeypatch.setattr(settings, "upload_root", str(tmp_path / "uploads"))
+    monkeypatch.setattr(settings, "storage_root", str(tmp_path / "storage"))
+    monkeypatch.setattr(settings, "upload_root", str(tmp_path / "storage" / "uploads"))
+    monkeypatch.setattr(settings, "thumbnail_root", str(tmp_path / "storage-local" / "thumbnails"))
 
 
 def _png_bytes(color: tuple[int, int, int] = (10, 20, 30), size: tuple[int, int] = (800, 600)) -> bytes:
@@ -53,8 +54,8 @@ def test_save_protocol_image_eagerly_generates_a_thumbnail(db):
     result = asyncio.run(service.save_protocol_image(db, protocol_element_block=block, file=_upload_file(_png_bytes())))
 
     stored_file = db.get(StoredFile, result.stored_file_id)
-    assert stored_file.thumbnail_path is not None
-    thumb_path = _safe_storage_path(settings.storage_root, stored_file.thumbnail_path)
+    assert stored_file.thumbnail_path == f"{stored_file.id}.jpg"
+    thumb_path = _safe_storage_path(settings.thumbnail_root, stored_file.thumbnail_path)
     assert thumb_path.exists()
     with Image.open(thumb_path) as thumb:
         assert max(thumb.size) <= 480
@@ -84,11 +85,38 @@ def test_ensure_thumbnail_backfills_a_stored_file_created_without_one(db):
 
     assert thumb_path is not None
     assert thumb_path.exists()
-    assert stored_file.thumbnail_path is not None
+    assert thumb_path.parent == Path(settings.thumbnail_root).resolve()
+    assert stored_file.thumbnail_path == f"{stored_file.id}.jpg"
 
     # Second call must reuse the persisted thumbnail instead of regenerating it.
     thumb_path_again = service.ensure_thumbnail(db, stored_file, settings.storage_root)
     assert thumb_path_again == thumb_path
+
+
+def test_ensure_thumbnail_regenerates_when_thumbnail_root_no_longer_has_the_file(db):
+    """Deploying the thumbnail_root split moves the resolution root out from under any
+    thumbnail_path written under the old (colocated-with-original) scheme - those stale
+    paths silently miss on the new root and must self-heal via regeneration, not crash."""
+    from app.core.config import settings
+
+    tenant = make_tenant(db)
+    original_path = Path(settings.storage_root) / "original.png"
+    original_path.parent.mkdir(parents=True, exist_ok=True)
+    original_path.write_bytes(_png_bytes(color=(90, 80, 70)))
+
+    stored_file = StoredFile(
+        tenant_id=tenant.id, original_name="original.png", mime_type="image/png",
+        storage_path="original.png", thumbnail_path="stale/pre-migration-name.thumb.jpg",
+    )
+    db.add(stored_file)
+    db.flush()
+
+    service = FileService()
+    thumb_path = service.ensure_thumbnail(db, stored_file, settings.storage_root)
+
+    assert thumb_path is not None
+    assert thumb_path.exists()
+    assert stored_file.thumbnail_path == f"{stored_file.id}.jpg"
 
 
 def test_ensure_thumbnail_returns_none_for_non_image_mime(db):
@@ -105,6 +133,23 @@ def test_ensure_thumbnail_returns_none_for_non_image_mime(db):
     service = FileService()
     assert service.ensure_thumbnail(db, stored_file, settings.storage_root) is None
     assert stored_file.thumbnail_path is None
+
+
+def test_delete_stored_file_also_removes_its_thumbnail(db):
+    from app.core.config import settings
+
+    tenant = make_tenant(db)
+    block = _make_block(db, tenant.id)
+    service = FileService()
+
+    result = asyncio.run(service.save_protocol_image(db, protocol_element_block=block, file=_upload_file(_png_bytes())))
+    stored_file = db.get(StoredFile, result.stored_file_id)
+    thumb_path = _safe_storage_path(settings.thumbnail_root, stored_file.thumbnail_path)
+    assert thumb_path.exists()
+
+    service.delete_stored_file(db, stored_file)
+
+    assert not thumb_path.exists()
 
 
 def test_list_tenant_files_sets_thumbnail_url_only_for_images(db):

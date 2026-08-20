@@ -6,6 +6,7 @@ import { useConfirm } from "@/contexts/confirm-context";
 import { Badge } from "@/components/ui/badge";
 import { DateInput } from "@/components/ui/date-input";
 import { LightboxImage } from "@/components/ui/lightbox-image";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { EventOverviewModal } from "@/components/protocol/planning/event-overview-modal";
 import { PlanningIconTrigger } from "@/components/protocol/planning/planning-icon-trigger";
 import { TagConfig } from "@/lib/hooks/use-tag-config";
@@ -550,47 +551,41 @@ export function MatrixEmbeddedBlockEditor({
                   ))}
                 </select>
                 {String(row.value_type ?? "text") === "participant" ? (
-                  <select
-                    value={row.participant_id ?? ""}
-                    onChange={(event) =>
+                  <SearchableSelect
+                    options={availableParticipants}
+                    getId={(participant) => participant.id}
+                    getLabel={(participant) => participant.display_name}
+                    value={row.participant_id ?? null}
+                    onChange={(participant) =>
                       updateEmbeddedConfig((current) => ({
                         ...current,
                         rows: rows.map((entry, entryIndex) =>
-                          entryIndex === index ? { ...entry, participant_id: event.target.value ? Number(event.target.value) : null } : entry
+                          entryIndex === index ? { ...entry, participant_id: participant ? participant.id : null } : entry
                         ),
                       }), true)
                     }
-                  >
-                    <option value="">Teilnehmer waehlen</option>
-                    {availableParticipants.map((participant) => (
-                      <option key={participant.id} value={participant.id}>
-                        {participant.display_name}
-                      </option>
-                    ))}
-                  </select>
+                    nullLabel="Teilnehmer waehlen"
+                  />
                 ) : String(row.value_type ?? "text") === "participants" ? (
                   <button type="button" className="button-ghost form-participant-picker-button" onClick={() => openMultiParticipantPicker(row)}>
                     {embeddedParticipantSummary(row)}
                   </button>
                 ) : String(row.value_type ?? "text") === "event" ? (
-                  <select
-                    value={row.event_id ?? ""}
-                    onChange={(event) =>
+                  <SearchableSelect
+                    options={sortedEvents}
+                    getId={(eventRow) => eventRow.id}
+                    getLabel={(eventRow) => `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}`}
+                    value={row.event_id ?? null}
+                    onChange={(eventRow) =>
                       updateEmbeddedConfig((current) => ({
                         ...current,
                         rows: rows.map((entry, entryIndex) =>
-                          entryIndex === index ? { ...entry, event_id: event.target.value ? Number(event.target.value) : null } : entry
+                          entryIndex === index ? { ...entry, event_id: eventRow ? eventRow.id : null } : entry
                         ),
                       }), true)
                     }
-                  >
-                    <option value="">Termin waehlen</option>
-                    {sortedEvents.map((eventRow) => (
-                      <option key={eventRow.id} value={eventRow.id}>
-                        {formatDateRange(eventRow.event_date, eventRow.event_end_date)} · {eventRow.title}
-                      </option>
-                    ))}
-                  </select>
+                    nullLabel="Termin waehlen"
+                  />
                 ) : (
                   <textarea
                     rows={1}

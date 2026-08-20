@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Popover } from "@/components/ui/popover";
+import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { formatDate, formatDateRange } from "@/lib/utils/format";
@@ -37,6 +38,7 @@ export function TodoDueMenu({ todoId, label, onApply }: Props) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<DueEventsResponse | null>(null);
+  const [search, setSearch] = useState("");
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
@@ -51,6 +53,18 @@ export function TodoDueMenu({ todoId, label, onApply }: Props) {
       })
       .finally(() => setLoading(false));
   }, [open, todoId, data, showToast]);
+
+  useEffect(() => {
+    if (!open) {
+      setSearch("");
+    }
+  }, [open]);
+
+  const filteredEvents = data
+    ? search.trim()
+      ? data.events.filter((event) => event.title.toLowerCase().includes(search.trim().toLowerCase()))
+      : data.events
+    : [];
 
   function pick(patch: DuePatch) {
     onApply(patch);
@@ -85,17 +99,22 @@ export function TodoDueMenu({ todoId, label, onApply }: Props) {
             {data && data.events.length > 0 && (
               <>
                 <div className="due-menu-divider" />
-                {data.events.map((event) => (
-                  <button
-                    key={event.id}
-                    type="button"
-                    className="due-menu-option"
-                    onClick={() => pick({ due_date: null, due_event_id: event.id, due_marker: null })}
-                  >
-                    {event.title}
-                    <span className="due-menu-option-sub">{formatDateRange(event.event_date, event.event_end_date)}</span>
-                  </button>
-                ))}
+                <SearchInput value={search} onChange={setSearch} placeholder="Suchen…" />
+                {filteredEvents.length === 0 ? (
+                  <span className="assignee-empty">Keine Ergebnisse</span>
+                ) : (
+                  filteredEvents.map((event) => (
+                    <button
+                      key={event.id}
+                      type="button"
+                      className="due-menu-option"
+                      onClick={() => pick({ due_date: null, due_event_id: event.id, due_marker: null })}
+                    >
+                      {event.title}
+                      <span className="due-menu-option-sub">{formatDateRange(event.event_date, event.event_end_date)}</span>
+                    </button>
+                  ))
+                )}
               </>
             )}
           </>

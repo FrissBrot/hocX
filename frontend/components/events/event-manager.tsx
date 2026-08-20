@@ -10,6 +10,7 @@ import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
 import { computePopoverPosition, Popover, usePopoverDismiss } from "@/components/ui/popover";
 import { SearchInput } from "@/components/ui/search-input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { EventDetailForm } from "@/components/protocol/planning/event-detail-form";
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -838,18 +839,15 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                       {target.label}
                       {target.required && <span className="csv-import-required">*</span>}
                     </span>
-                    <select
+                    <SearchableSelect
                       className={!importColumnMap[target.field] ? "mapping-unmapped" : undefined}
-                      value={importColumnMap[target.field] ?? ""}
-                      onChange={(event) => updateColumnMapping(target.field, event.target.value)}
-                    >
-                      <option value="">– nicht zuordnen –</option>
-                      {importPreview.detected_columns.map((column) => (
-                        <option key={column} value={column}>
-                          {column}
-                        </option>
-                      ))}
-                    </select>
+                      options={importPreview.detected_columns}
+                      getId={(column) => column}
+                      getLabel={(column) => column}
+                      value={importColumnMap[target.field] ?? null}
+                      onChange={(column) => updateColumnMapping(target.field, column ?? "")}
+                      nullLabel="– nicht zuordnen –"
+                    />
                   </label>
                 ))}
               </div>
@@ -1193,18 +1191,14 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
               </span>
             )}
             {exportDateMode === "until-event" && (
-              <select
-                value={exportUntilEventId}
-                onChange={(e) => { setExportUntilEventId(Number(e.target.value)); setExportUrl(null); }}
-                style={{ width: "100%", minHeight: 0, padding: "7px 36px 7px 12px", borderRadius: "10px", fontSize: "0.875rem", border: "1px solid var(--border)", backgroundColor: "var(--panel-solid)", color: "var(--text)", appearance: "none", WebkitAppearance: "none", backgroundImage: "linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%)", backgroundPosition: "calc(100% - 18px) calc(50% - 2px), calc(100% - 12px) calc(50% - 2px)", backgroundSize: "6px 6px, 6px 6px", backgroundRepeat: "no-repeat" }}
-              >
-                <option value="">— Termin wählen —</option>
-                {sortedEvents.map((ev) => (
-                  <option key={ev.id} value={ev.id}>
-                    {formatDate(ev.event_date)}{ev.tag ? ` · ${ev.tag}` : ""} — {ev.title}
-                  </option>
-                ))}
-              </select>
+              <SearchableSelect
+                options={sortedEvents}
+                getId={(ev) => ev.id}
+                getLabel={(ev) => `${formatDate(ev.event_date)}${ev.tag ? ` · ${ev.tag}` : ""} — ${ev.title}`}
+                value={exportUntilEventId === "" ? null : exportUntilEventId}
+                onChange={(ev) => { setExportUntilEventId(ev ? ev.id : ""); setExportUrl(null); }}
+                nullLabel="— Termin wählen —"
+              />
             )}
           </div>
 

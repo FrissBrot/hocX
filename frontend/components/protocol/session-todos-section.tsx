@@ -6,7 +6,7 @@ import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { formatDate, formatDateRange } from "@/lib/utils/format";
 import { EventSummary, ParticipantSummary, ProtocolSummary, ProtocolTodo, TodoListItem } from "@/types/api";
-import { TODO_STATUS, TodoMenuOption, TodoMiniMenu, TrackedTaskText, formatShortDate } from "@/components/protocol/protocol-editor-shared";
+import { TODO_STATUS, TodoMenuOption, TodoMenuSearchList, TodoMiniMenu, TrackedTaskText, formatShortDate } from "@/components/protocol/protocol-editor-shared";
 
 type DueDraft =
   | { type: "none" }
@@ -179,11 +179,14 @@ export function SessionTodosSection({
                           {dueEvents.length > 0 && (
                             <div className="mini-menu-section">
                               <div className="mini-menu-section-title">Termine</div>
-                              {dueEvents.map((event) => (
-                                <TodoMenuOption key={event.id} label={event.title} subtle={formatDateRange(event.event_date, event.event_end_date ?? null)}
-                                  active={todo.due_event_id === event.id}
-                                  onClick={() => { void onUpdate(todo.protocol_element_block_id, todo.id, { due_date: null, due_event_id: event.id, due_marker: null }); closeMenu(); }} />
-                              ))}
+                              <TodoMenuSearchList
+                                items={dueEvents}
+                                getKey={(event) => event.id}
+                                getLabel={(event) => event.title}
+                                getSubtle={(event) => formatDateRange(event.event_date, event.event_end_date ?? null)}
+                                isActive={(event) => todo.due_event_id === event.id}
+                                onPick={(event) => { void onUpdate(todo.protocol_element_block_id, todo.id, { due_date: null, due_event_id: event.id, due_marker: null }); closeMenu(); }}
+                              />
                             </div>
                           )}
                         </>

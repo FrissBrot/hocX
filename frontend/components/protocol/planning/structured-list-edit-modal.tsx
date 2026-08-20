@@ -1,6 +1,7 @@
 "use client";
 
 import { Modal } from "@/components/ui/modal";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { StructuredListTable } from "@/components/lists/structured-list-table";
 import {
   EventSummary,
@@ -68,28 +69,25 @@ export function StructuredListEditModal({
       <div className="list-block-config-bar">
         <label className="list-block-config-item">
           <span className="list-block-config-label">Gruppieren</span>
-          <select value={groupByColumn} onChange={(e) => onChangeGroupBy((e.target.value || "") as SortColumn)}>
-            <option value="">Keine Gruppierung</option>
-            {listColOptions.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            options={listColOptions}
+            getId={(o) => o.value}
+            getLabel={(o) => o.label}
+            value={groupByColumn || null}
+            nullLabel="Keine Gruppierung"
+            onChange={(o) => onChangeGroupBy(o ? o.value : "")}
+          />
         </label>
         <label className="list-block-config-item">
           <span className="list-block-config-label">Sortieren</span>
-          <select
-            value={sortByColumn}
-            onChange={(e) => onChangeSortBy((e.target.value || "") as SortColumn)}
-          >
-            <option value="">Manuell</option>
-            {listColOptions.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            options={listColOptions}
+            getId={(o) => o.value}
+            getLabel={(o) => o.label}
+            value={sortByColumn || null}
+            nullLabel="Manuell"
+            onChange={(o) => onChangeSortBy(o ? o.value : "")}
+          />
         </label>
         <label className="list-block-config-item">
           <select
