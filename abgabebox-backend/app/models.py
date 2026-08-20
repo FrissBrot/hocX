@@ -4,8 +4,13 @@ Bewusst NICHT als ORM-Klassen (kein Base/Mapped) und NICHT per Reflection gelade
 sondern als schlanke sa.Table()-Objekte mit genau den Spalten, die die restricted
 Postgres-Rolle 'hocx_abgabebox' lesen/schreiben darf (siehe
 backend/alembic/versions/0020_abgabebox.py fuer die GRANT-Statements). Kein ORM-Mapping,
-weil db.refresh()/db.get() intern SELECT braucht, das diese Rolle auf einigen Tabellen
-(stored_file, submission_upload_file) nicht hat - siehe app/repository.py.
+weil db.refresh()/db.get() intern ein SELECT auf die volle Zeile braucht, das ueber die
+gezielten Spalten-Grants dieser Rolle hinausgehen wuerde - siehe app/repository.py.
+
+Hinweis stored_file/submission_upload_file: urspruenglich (Migration 0020) nur mit
+INSERT-Grant gedacht, seit Migration 0023_abgabebox_select_grants aber tabellenweit
+per SELECT lesbar - die Spaltenlisten hier bilden also nicht mehr die tatsaechlichen
+DB-Grants ab, sondern nur die Spalten, die dieser Service kennt/braucht.
 """
 
 from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, Integer, MetaData, Table, Text
@@ -120,7 +125,8 @@ submission_upload_log_table = Table(
     Column("created_at", DateTime(timezone=True)),
 )
 
-# stored_file: nur INSERT-Grant, absichtlich KEIN SELECT - siehe Migration 0020.
+# stored_file: INSERT tabellenweit (Migration 0020), SELECT tabellenweit seit Migration
+# 0023_abgabebox_select_grants - siehe Hinweis im Modul-Docstring oben.
 stored_file_table = Table(
     "stored_file",
     metadata,
@@ -131,6 +137,7 @@ stored_file_table = Table(
     Column("storage_path", Text),
     Column("file_size_bytes", BigInteger),
     Column("checksum_sha256", Text),
+    Column("perceptual_hash", Text),
     Column("scan_status", Text),
 )
 

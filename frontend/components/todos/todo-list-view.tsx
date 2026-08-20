@@ -61,8 +61,9 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
   // Export modal state
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportTemplateId, setExportTemplateId] = useState<number | "">(landscapeTemplates[0]?.id ?? "");
-  const [exportBusy, setExportBusy] = useState(false);
-  const [exportUrl, setExportUrl] = useState<string | null>(null);
+  const [exportBusyKind, setExportBusyKind] = useState<"pdf" | "md" | null>(null);
+  const [exportPdfUrl, setExportPdfUrl] = useState<string | null>(null);
+  const [exportMarkdownCopied, setExportMarkdownCopied] = useState(false);
   const [exportFilter, setExportFilter] = useState<"all" | "open">("open");
   const [exportPersonMode, setExportPersonMode] = useState<"all" | "filter" | "group">("all");
   const [exportParticipantId, setExportParticipantId] = useState<number | "">("");
@@ -122,29 +123,96 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
     document.body.removeChild(a);
   }
 
+  function clearExportState() {
+    setExportPdfUrl(null);
+    setExportMarkdownCopied(false);
+  }
+
+  function buildTodoExportPayload() {
+    return {
+      filter: exportFilter,
+      participant_id: exportPersonMode === "filter" && exportParticipantId ? exportParticipantId : null,
+      group_by_person: exportPersonMode === "group",
+      until_date: getUntilDate(),
+    };
+  }
+
+  function getDateSummary(): string | null {
+    if (exportDateMode === "all") return null;
+    if (exportDateMode === "next-hock") {
+      return nextHockEvent ? "Bis nächster Hock" : null;
+    }
+    if (exportDateMode === "until-event" && exportUntilEventId) {
+      const selectedEvent = events.find((event) => event.id === exportUntilEventId);
+      if (!selectedEvent) return null;
+      return selectedEvent.title ? `Bis Termin: ${selectedEvent.title}` : "Bis Termin";
+    }
+    if (exportDateMode === "custom-date" && exportCustomDate) {
+      return "Bis Datum";
+    }
+    return null;
+  }
+
+  async function copyToClipboard(text: string) {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "true");
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    textarea.style.pointerEvents = "none";
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    const copied = document.execCommand("copy");
+    document.body.removeChild(textarea);
+    if (!copied) {
+      throw new Error("Zwischenablage nicht verfuegbar");
+    }
+  }
+
   async function handlePdfClick() {
-    if (exportBusy) return;
-    if (exportUrl) { triggerDownload(exportUrl); return; }
+    if (exportBusyKind) return;
+    if (exportPdfUrl) { triggerDownload(exportPdfUrl); return; }
     if (!exportTemplateId) return;
-    setExportBusy(true);
+    setExportBusyKind("pdf");
     try {
       const result = await browserApiFetch<{ content_url?: string | null }>("/api/exports/todos", {
         method: "POST",
-        body: JSON.stringify({
-          template_id: exportTemplateId,
-          filter: exportFilter,
-          participant_id: exportPersonMode === "filter" && exportParticipantId ? exportParticipantId : null,
-          group_by_person: exportPersonMode === "group",
-          until_date: getUntilDate(),
-        }),
+        body: JSON.stringify({ template_id: exportTemplateId, ...buildTodoExportPayload() }),
       });
       const url = result.content_url ?? null;
-      setExportUrl(url);
+      setExportPdfUrl(url);
       if (url) triggerDownload(url);
     } catch (error) {
       showToast(error instanceof Error ? error.message : "PDF-Export fehlgeschlagen", "error");
     } finally {
-      setExportBusy(false);
+      setExportBusyKind(null);
+    }
+  }
+
+  async function handleMarkdownClick() {
+    if (exportBusyKind) return;
+    setExportBusyKind("md");
+    try {
+      const result = await browserApiFetch<{ content: string }>("/api/exports/todos/markdown", {
+        method: "POST",
+        body: JSON.stringify({
+          ...buildTodoExportPayload(),
+          date_summary: getDateSummary(),
+        }),
+      });
+      await copyToClipboard(result.content);
+      setExportMarkdownCopied(true);
+      showToast("Markdown in die Zwischenablage kopiert", "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Markdown konnte nicht kopiert werden", "error");
+    } finally {
+      setExportBusyKind(null);
     }
   }
 
@@ -406,11 +474,9 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
           <p className="muted">Alle offenen und erledigten Todos dieses Mandanten.</p>
         </div>
         <div className="table-toolbar-actions">
-          {landscapeTemplates.length > 0 && (
-            <button type="button" className="button-inline button-ghost" onClick={() => setExportModalOpen(true)}>
-              Export
-            </button>
-          )}
+          <button type="button" className="button-inline button-ghost" onClick={() => setExportModalOpen(true)}>
+            Export
+          </button>
           {canEdit && (
             <button type="button" className="button-inline" onClick={() => setShowCreate((v) => !v)}>
               {showCreate ? "Abbrechen" : "+ Todo"}
@@ -694,7 +760,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
       <Modal
         open={exportModalOpen}
         title="Todos exportieren"
-        onClose={() => { setExportModalOpen(false); setExportUrl(null); }}
+        onClose={() => { setExportModalOpen(false); clearExportState(); }}
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 20, minWidth: 360, maxWidth: 480 }}>
 
@@ -708,7 +774,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
                   type="button"
                   className={exportFilter === f ? "tag-filter-chip tag-filter-chip-active" : "tag-filter-chip"}
                   style={{ width: "auto", minHeight: 0 }}
-                  onClick={() => { setExportFilter(f); setExportUrl(null); }}
+                  onClick={() => { setExportFilter(f); clearExportState(); }}
                 >
                   {f === "open" ? "Offene Todos" : "Alle Todos"}
                 </button>
@@ -726,7 +792,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
                   type="button"
                   className={exportPersonMode === mode ? "tag-filter-chip tag-filter-chip-active" : "tag-filter-chip"}
                   style={{ width: "auto", minHeight: 0 }}
-                  onClick={() => { setExportPersonMode(mode); setExportUrl(null); if (mode !== "filter") { setExportParticipantId(""); setParticipantSearch(""); } }}
+                  onClick={() => { setExportPersonMode(mode); clearExportState(); if (mode !== "filter") { setExportParticipantId(""); setParticipantSearch(""); } }}
                 >
                   {mode === "all" ? "Alle" : mode === "filter" ? "Person filtern" : "Nach Person gruppieren"}
                 </button>
@@ -739,7 +805,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
                   type="text"
                   placeholder="Person suchen…"
                   value={participantSearch}
-                  onChange={(e) => { setParticipantSearch(e.target.value); if (!e.target.value) setExportParticipantId(""); }}
+                  onChange={(e) => { setParticipantSearch(e.target.value); if (!e.target.value) setExportParticipantId(""); clearExportState(); }}
                 />
                 {participantSuggestions.length > 0 && (
                   <div style={{
@@ -765,7 +831,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
                           setExportParticipantId(p.id);
                           setParticipantSearch(p.display_name);
                           setParticipantSuggestions([]);
-                          setExportUrl(null);
+                          clearExportState();
                         }}
                       >
                         {p.display_name}
@@ -787,7 +853,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
                   type="button"
                   className={exportDateMode === mode ? "tag-filter-chip tag-filter-chip-active" : "tag-filter-chip"}
                   style={{ width: "auto", minHeight: 0 }}
-                  onClick={() => { setExportDateMode(mode); setExportUrl(null); }}
+                  onClick={() => { setExportDateMode(mode); clearExportState(); }}
                 >
                   {mode === "all" ? "Alle" : mode === "next-hock" ? "Nächster Hock" : mode === "until-event" ? "Bis Termin" : "Eigenes Datum"}
                 </button>
@@ -805,7 +871,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
                 <select
                   className="input"
                   value={exportUntilEventId}
-                  onChange={(e) => { setExportUntilEventId(Number(e.target.value)); setExportUrl(null); }}
+                  onChange={(e) => { setExportUntilEventId(Number(e.target.value)); clearExportState(); }}
                 >
                   <option value="">Termin wählen…</option>
                   {sortedEvents.map((e) => (
@@ -822,7 +888,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
                   className="input"
                   type="date"
                   value={exportCustomDate}
-                  onChange={(e) => { setExportCustomDate(e.target.value); setExportUrl(null); }}
+                  onChange={(e) => { setExportCustomDate(e.target.value); clearExportState(); }}
                 />
               </div>
             )}
@@ -837,15 +903,15 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
               onClick={() => void handlePdfClick()}
               disabled={!exportTemplateId}
             >
-              {exportBusy ? "…" : exportUrl ? "PDF ↓" : "PDF"}
+              {exportBusyKind === "pdf" ? "…" : exportPdfUrl ? "PDF ↓" : "PDF"}
             </button>
             <button
               type="button"
               className="pdf-icon-link"
-              style={{ minWidth: 56, textAlign: "center", backgroundColor: "#a78bfa", color: "#fff", opacity: 0.5, cursor: "not-allowed" }}
-              disabled
+              style={{ minWidth: 56, textAlign: "center" }}
+              onClick={() => void handleMarkdownClick()}
             >
-              MD
+              {exportBusyKind === "md" ? "…" : exportMarkdownCopied ? "MD OK" : "MD"}
             </button>
 
             <div style={{ flex: 1 }} />
@@ -887,7 +953,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
                       <button
                         key={t.id}
                         type="button"
-                        onClick={() => { setExportTemplateId(t.id); setTemplateDropdownOpen(false); setExportUrl(null); }}
+                        onClick={() => { setExportTemplateId(t.id); setTemplateDropdownOpen(false); clearExportState(); }}
                         style={{
                           display: "block", width: "100%", textAlign: "left",
                           padding: "6px 12px", background: "none", border: "none",

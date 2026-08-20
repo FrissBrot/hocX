@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from app.core.db import get_db
 from app.core.error_log import record_system_error
 from app.core.security import CurrentUser, get_current_user, require_admin, require_reader
-from app.schemas.protocol import ProtocolExportRead
+from app.schemas.protocol import MarkdownExportRead, ProtocolExportRead
 from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
 from app.services.export_service import ExportService
@@ -37,6 +37,14 @@ class GlobalTodoExportRequest(BaseModel):
     participant_id: int | None = None
     group_by_person: bool = False
     until_date: str | None = None
+
+
+class GlobalTodoMarkdownExportRequest(BaseModel):
+    filter: str = "all"
+    participant_id: int | None = None
+    group_by_person: bool = False
+    until_date: str | None = None
+    date_summary: str | None = None
 
 
 class GlobalListExportRequest(BaseModel):
@@ -170,6 +178,45 @@ async def export_global_todos(
         raise HTTPException(status_code=400, detail=_EXPORT_FAILED_MESSAGE) from exc
     audit.log(db, action="export.global_todos", actor=user, details={"template_id": body.template_id})
     return result
+
+
+@router.post("/exports/todos/markdown", response_model=MarkdownExportRead)
+async def export_global_todos_markdown(
+    body: GlobalTodoMarkdownExportRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_reader(user)
+    try:
+        content = service.export_global_todo_markdown(
+            db,
+            user.current_tenant_id,
+            body.filter,
+            participant_id=body.participant_id,
+            group_by_person=body.group_by_person,
+            until_date=body.until_date,
+            date_summary=body.date_summary,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (SQLAlchemyError, RuntimeError) as exc:
+        db.rollback()
+        record_system_error(db, exc=exc, request=request, tenant_id=user.current_tenant_id, actor_email=user.email, status_code=400)
+        raise HTTPException(status_code=400, detail=_EXPORT_FAILED_MESSAGE) from exc
+    audit.log(
+        db,
+        action="export.global_todos_markdown",
+        actor=user,
+        details={
+            "filter": body.filter,
+            "participant_id": body.participant_id,
+            "group_by_person": body.group_by_person,
+            "until_date": body.until_date,
+            "date_summary": body.date_summary,
+        },
+    )
+    return MarkdownExportRead(content=content)
 
 
 @router.post("/exports/lists", response_model=ProtocolExportRead)

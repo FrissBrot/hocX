@@ -5,7 +5,7 @@ import re
 import shutil
 import subprocess
 import unicodedata
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -387,24 +387,50 @@ class ExportService:
             status="generated",
         )
 
+    def export_global_todo_markdown(
+        self,
+        db: Session,
+        tenant_id: int,
+        todo_filter: str = "all",
+        *,
+        participant_id: int | None = None,
+        group_by_person: bool = False,
+        until_date: str | None = None,
+        date_summary: str | None = None,
+    ) -> str:
+        rows = self._list_global_todo_rows(
+            db,
+            tenant_id,
+            todo_filter,
+            participant_id=participant_id,
+            until_date=until_date,
+        )
+        participant_name = None
+        if participant_id is not None:
+            participant = db.get(Participant, participant_id)
+            if participant is not None and participant.tenant_id == tenant_id:
+                participant_name = participant.display_name
+
+        return self._render_global_todo_markdown(
+            rows,
+            todo_filter=todo_filter,
+            participant_name=participant_name,
+            group_by_person=group_by_person,
+            until_date=until_date,
+            date_summary=date_summary,
+        )
+
     def _render_global_todo_body(
         self, db: Session, tenant_id: int, todo_filter: str = "all",
         participant_id: int | None = None, group_by_person: bool = False, until_date: str | None = None,
     ) -> str:
-        from datetime import date
-        from app.repositories.protocol_todo_repository import ProtocolTodoRepository
-        repo = ProtocolTodoRepository()
-        rows = repo.list_for_tenant(db, tenant_id, skip=0, limit=10000)
-        if todo_filter == "open":
-            rows = [r for r in rows if (getattr(r, "todo_status_code", None) or "open") not in ("done", "cancelled")]
-        if participant_id is not None:
-            rows = [r for r in rows if getattr(r.ProtocolTodo, "assigned_participant_id", None) == participant_id]
-        if until_date:
-            cutoff = date.fromisoformat(until_date)
-            rows = [
-                r for r in rows
-                if getattr(r, "resolved_due_date", None) is None or r.resolved_due_date <= cutoff
-            ]
+        rows = self._list_global_todo_rows(
+            db,
+            tenant_id,
+            todo_filter,
+            participant_id=participant_id,
+            until_date=until_date,
+        )
         if not rows:
             return "Keine Todos vorhanden."
         if group_by_person:
@@ -421,6 +447,175 @@ class ExportService:
             parts.append(f"\\subsection*{{{self._escape_latex(person)}}}")
             parts.append(self._render_todo_rows_latex(group_rows))
         return "\n".join(parts)
+
+    def _list_global_todo_rows(
+        self,
+        db: Session,
+        tenant_id: int,
+        todo_filter: str = "all",
+        *,
+        participant_id: int | None = None,
+        until_date: str | None = None,
+    ):
+        from app.repositories.protocol_todo_repository import ProtocolTodoRepository
+
+        repo = ProtocolTodoRepository()
+        rows = repo.list_for_tenant(db, tenant_id, skip=0, limit=10000)
+        if todo_filter == "open":
+            rows = [r for r in rows if (getattr(r, "todo_status_code", None) or "open") not in ("done", "cancelled")]
+        if participant_id is not None:
+            rows = [r for r in rows if getattr(r.ProtocolTodo, "assigned_participant_id", None) == participant_id]
+        if until_date:
+            cutoff = date.fromisoformat(until_date)
+            rows = [
+                r for r in rows
+                if getattr(r, "resolved_due_date", None) is None or r.resolved_due_date <= cutoff
+            ]
+        return rows
+
+    def _render_global_todo_markdown(
+        self,
+        rows,
+        *,
+        todo_filter: str,
+        participant_name: str | None,
+        group_by_person: bool,
+        until_date: str | None,
+        date_summary: str | None,
+    ) -> str:
+        now = datetime.utcnow()
+        title = "Offene Todos" if todo_filter == "open" else "Todo-Übersicht"
+        open_count = sum(1 for row in rows if (getattr(row, "todo_status_code", None) or "open") in ("open", "in_progress"))
+        done_count = sum(1 for row in rows if getattr(row, "todo_status_code", None) == "done")
+        cancelled_count = sum(1 for row in rows if getattr(row, "todo_status_code", None) == "cancelled")
+
+        lines = [
+            f"*{title}*",
+            f"Stand: {now.strftime('%d.%m.%Y')}",
+            f"Anzahl: {len(rows)}",
+        ]
+        if todo_filter != "open":
+            lines.append(f"Offen: {open_count} | Erledigt: {done_count} | Abgebrochen: {cancelled_count}")
+        if participant_name:
+            lines.append(f"Person: {self._whatsapp_text(participant_name)}")
+        if group_by_person:
+            lines.append("Ansicht: Nach Person gruppiert")
+        if until_date:
+            formatted_until_date = date.fromisoformat(until_date).strftime("%d.%m.%Y")
+            if date_summary:
+                lines.append(f"Zeitraum: {self._whatsapp_text(date_summary)} ({formatted_until_date})")
+            else:
+                lines.append(f"Zeitraum: Bis {formatted_until_date}")
+        elif date_summary:
+            lines.append(f"Zeitraum: {self._whatsapp_text(date_summary)}")
+        lines.append("")
+
+        if not rows:
+            lines.append("Keine Todos vorhanden.")
+            return "\n".join(lines)
+
+        sorted_rows = self._sort_markdown_todo_rows(rows)
+        if group_by_person:
+            groups: dict[str, list] = {}
+            for row in sorted_rows:
+                assignee = getattr(row, "assigned_participant_name", None) or "Ohne Zuweisung"
+                groups.setdefault(assignee, []).append(row)
+            group_names = sorted(groups, key=lambda name: (name == "Ohne Zuweisung", name.casefold()))
+            for group_name in group_names:
+                lines.append(f"*{self._whatsapp_text(group_name)} ({len(groups[group_name])})*")
+                for index, row in enumerate(groups[group_name], start=1):
+                    lines.extend(self._markdown_todo_entry_lines(row, index=index, include_assignee=False, show_status=todo_filter != "open"))
+                lines.append("")
+        else:
+            for index, row in enumerate(sorted_rows, start=1):
+                include_assignee = participant_name is None
+                lines.extend(self._markdown_todo_entry_lines(row, index=index, include_assignee=include_assignee, show_status=todo_filter != "open"))
+
+        while lines and lines[-1] == "":
+            lines.pop()
+        return "\n".join(lines)
+
+    def _sort_markdown_todo_rows(self, rows):
+        def status_rank(row) -> int:
+            code = getattr(row, "todo_status_code", None) or "open"
+            if code in ("open", "in_progress"):
+                return 0
+            if code == "done":
+                return 1
+            return 2
+
+        return sorted(
+            rows,
+            key=lambda row: (
+                status_rank(row),
+                1 if getattr(row, "resolved_due_date", None) is None else 0,
+                getattr(row, "resolved_due_date", None) or date.max,
+                (getattr(row, "assigned_participant_name", None) or "Ohne Zuweisung").casefold(),
+                (getattr(row, "protocol_number", None) or "").casefold(),
+                self._whatsapp_text(getattr(row.ProtocolTodo, "task", "")),
+            ),
+        )
+
+    def _markdown_todo_entry_lines(self, row, *, index: int, include_assignee: bool, show_status: bool) -> list[str]:
+        code = getattr(row, "todo_status_code", None) or "open"
+        task = self._whatsapp_text(getattr(row.ProtocolTodo, "task", "") or "Ohne Titel")
+        if code in ("done", "cancelled"):
+            task = f"~{task}~"
+        title_line = f"{index}. {task}"
+        if show_status:
+            title_line = f"{title_line} [{self._todo_status_label(code)}]"
+
+        lines = [title_line]
+        if include_assignee and getattr(row, "assigned_participant_name", None):
+            lines.append(f"   Zuständig: {self._whatsapp_text(row.assigned_participant_name)}")
+
+        due = self._todo_due_text(row)
+        if due:
+            lines.append(f"   Fällig: {due}")
+
+        protocol_parts = []
+        if getattr(row, "protocol_number", None):
+            protocol_parts.append(self._whatsapp_text(row.protocol_number))
+        if getattr(row, "protocol_title", None):
+            protocol_parts.append(self._whatsapp_text(row.protocol_title))
+        if protocol_parts:
+            lines.append(f"   Protokoll: {' · '.join(protocol_parts)}")
+
+        tags = [self._whatsapp_text(tag) for tag in (getattr(row.ProtocolTodo, "tags", None) or []) if str(tag).strip()]
+        if tags:
+            lines.append(f"   Tags: {', '.join(tags)}")
+
+        lines.append("")
+        return lines
+
+    def _todo_due_text(self, row) -> str:
+        due_parts: list[str] = []
+        if getattr(row, "resolved_due_label", None):
+            due_parts.append(self._whatsapp_text(row.resolved_due_label))
+        if getattr(row, "resolved_due_date", None):
+            due_parts.append(row.resolved_due_date.strftime("%d.%m.%Y"))
+        if not due_parts:
+            return ""
+        if len(due_parts) == 2:
+            return f"{due_parts[0]} ({due_parts[1]})"
+        return due_parts[0]
+
+    def _todo_status_label(self, code: str) -> str:
+        return {
+            "open": "Offen",
+            "in_progress": "Offen",
+            "done": "Erledigt",
+            "cancelled": "Abgebrochen",
+        }.get(code, "Offen")
+
+    def _whatsapp_text(self, value: object) -> str:
+        text = re.sub(r"\s+", " ", str(value or "")).strip()
+        return (
+            text.replace("*", "∗")
+            .replace("_", "‗")
+            .replace("~", "∼")
+            .replace("`", "´")
+        )
 
     def _render_global_event_body(
         self, db: Session, fake_protocol, tag_filters: list[str] | None = None, until_date: str | None = None

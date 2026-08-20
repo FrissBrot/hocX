@@ -1,17 +1,21 @@
 from __future__ import annotations
 
+import hashlib
+import io
 import re
 from datetime import UTC, datetime
 from pathlib import Path
 
+import imagehash
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from PIL import Image
 from sqlalchemy.orm import Session
 
 from app import element_resolver, repository, scanner
-from app.captcha import verify_captcha
+from app.captcha import mint_captcha_session_token, verify_captcha, verify_captcha_session_token
 from app.config import settings
 from app.db import get_db, tenant_upload_lock
-from app.schemas import AssignmentDetailPublic, AssignmentPublic, ElementPublic, UploadResult
+from app.schemas import AssignmentDetailPublic, AssignmentPublic, CaptchaVerifyResult, ElementPublic, UploadResult
 from app.storage import move_from_quarantine, save_to_quarantine, tenant_storage_bytes
 
 router = APIRouter()
@@ -92,6 +96,29 @@ def _content_matches_extension(content: bytes, extension: str) -> bool:
 # (docker-compose.yml) enforces the same number one layer earlier, before this application code -
 # or even Starlette's multipart parser - ever runs; keep both numbers in sync.
 MAX_UPLOAD_REQUEST_BYTES = 20 * 100 * 1024 * 1024  # 2000 MB
+
+_IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+# Hamming-Distanz (von 64 Bit) zweier pHashes, ab der zwei Bilder als "wahrscheinlich
+# dasselbe Motiv" gelten - gleicher Richtwert wie backend/app/services/file_service.py
+# (bewusst dupliziert statt geteilt, siehe _read_upload_within_limit-Docstring oben).
+PERCEPTUAL_DUPLICATE_THRESHOLD = 5
+
+
+def _compute_perceptual_hash(content: bytes, mime_type: str) -> str | None:
+    """DCT-based perceptual hash (pHash) for the tenant-wide image-similarity warning.
+    Returns None for non-image mime types or content PIL can't decode."""
+    if mime_type not in _IMAGE_MIME_TYPES:
+        return None
+    try:
+        with Image.open(io.BytesIO(content)) as image:
+            return str(imagehash.phash(image))
+    except Exception:
+        return None
+
+
+def _has_close_perceptual_match(perceptual_hash: str, candidates: list[str]) -> bool:
+    this_hash = imagehash.hex_to_hash(perceptual_hash)
+    return any(this_hash - imagehash.hex_to_hash(candidate) <= PERCEPTUAL_DUPLICATE_THRESHOLD for candidate in candidates)
 
 
 async def _read_upload_within_limit(file: UploadFile, max_bytes: int) -> bytes | None:
@@ -184,6 +211,31 @@ def list_elements(tenant_slug: str, assignment_slug: str, db: Session = Depends(
 
 
 @router.post(
+    "/public/{tenant_slug}/assignments/{assignment_slug}/elements/{element_ref}/captcha-verify",
+    response_model=CaptchaVerifyResult,
+)
+async def verify_captcha_for_element(
+    tenant_slug: str,
+    assignment_slug: str,
+    element_ref: str,
+    captcha_solution: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Called once when the upload page loads (widget solves automatically), not per upload -
+    see upload() below, which accepts the resulting session token instead of a raw
+    captcha_solution so a visitor doesn't have to pass the bot-check again for every file."""
+    tenant = _get_tenant_or_404(db, tenant_slug)
+    assignment = _get_assignment_or_404(db, tenant, assignment_slug)
+    element = element_resolver.resolve_single_element(db, assignment, element_ref)
+    if element is None:
+        raise HTTPException(status_code=400, detail="Element ist nicht (mehr) offen")
+    if not await verify_captcha(captcha_solution):
+        raise HTTPException(status_code=400, detail="Captcha ungueltig")
+    token = mint_captcha_session_token(tenant_slug, assignment_slug, element_ref)
+    return CaptchaVerifyResult(session_token=token, expires_in_seconds=settings.captcha_session_ttl_minutes * 60)
+
+
+@router.post(
     "/public/{tenant_slug}/assignments/{assignment_slug}/elements/{element_ref}/upload",
     response_model=UploadResult,
 )
@@ -191,7 +243,7 @@ async def upload(
     tenant_slug: str,
     assignment_slug: str,
     element_ref: str,
-    captcha_solution: str = Form(...),
+    captcha_session_token: str = Form(...),
     files: list[UploadFile] = File(default_factory=list),
     db: Session = Depends(get_db),
 ):
@@ -216,9 +268,11 @@ async def upload(
         _log("element_closed", "Element ist nicht (mehr) offen")
         raise HTTPException(status_code=400, detail="Element ist nicht (mehr) offen")
 
-    if not await verify_captcha(captcha_solution):
-        _log("captcha_failed", "Bot-Verifikation fehlgeschlagen")
-        raise HTTPException(status_code=400, detail="Captcha ungueltig")
+    # 401 statt 400: das Frontend unterscheidet daran "Sicherheitscheck abgelaufen, bitte neu
+    # verifizieren" (Widget erneut ausloesen) von den echten Validierungsfehlern unten (400).
+    if not verify_captcha_session_token(captcha_session_token, tenant_slug, assignment_slug, element_ref):
+        _log("captcha_failed", "Bot-Verifikation fehlgeschlagen oder Sicherheitscheck abgelaufen")
+        raise HTTPException(status_code=401, detail="Sicherheitscheck abgelaufen - bitte kurz warten")
 
     if not files:
         _log("validation_failed", "Keine Datei ausgewählt")
@@ -268,6 +322,34 @@ async def upload(
 
     _log("upload_received", f"{len(contents)} Datei(en) empfangen")
 
+    # Exakt-Duplikat-Pruefung (SHA-256): dieselbe Datei darf nicht zweimal fuer dasselbe
+    # Element landen - weder zweimal in diesem Request noch erneut in einem spaeteren.
+    # Laeuft bewusst vor jeglichem Quarantaene-Schreiben (siehe Schritt 1 unten), damit ein
+    # Duplikat abgelehnt wird, ohne dass ueberhaupt etwas auf Platte geschrieben wurde.
+    checksums = [hashlib.sha256(content).hexdigest() for content, _, _ in contents]
+    existing_checksums = repository.list_checksums_for_element(
+        db, assignment_id=assignment["id"], event_id=element["event_id"], list_entry_id=element["list_entry_id"]
+    )
+    seen_in_request: set[str] = set()
+    for (_content, original_name, _mime), checksum in zip(contents, checksums):
+        if checksum in seen_in_request or checksum in existing_checksums:
+            _log("validation_failed", f"Datei bereits hochgeladen: {original_name}")
+            raise HTTPException(status_code=400, detail=f"Datei '{original_name}' wurde bereits hochgeladen")
+        seen_in_request.add(checksum)
+
+    # Bild-Aehnlichkeitspruefung (Perceptual Hash): nur Warnung, blockiert nicht - siehe
+    # _compute_perceptual_hash. Mandantenweit statt element-scoped, und erfasst dank der
+    # gemeinsamen stored_file-Tabelle automatisch auch Protokoll-Bilder aus dem Haupt-Backend.
+    perceptual_hashes = [_compute_perceptual_hash(content, mime) for content, _, mime in contents]
+    tenant_image_hashes = [phash for _id, phash in repository.list_tenant_image_hashes(db, tenant_id=tenant["id"])]
+    image_duplicate_warnings: list[str] = []
+    for i, ((_content, original_name, _mime), phash) in enumerate(zip(contents, perceptual_hashes)):
+        if phash is None:
+            continue
+        other_hashes_in_request = [h for j, h in enumerate(perceptual_hashes) if h is not None and j != i]
+        if _has_close_perceptual_match(phash, tenant_image_hashes + other_hashes_in_request):
+            image_duplicate_warnings.append(f"{original_name} ähnelt einem bereits im Mandanten hochgeladenen Bild.")
+
     incoming_bytes = sum(len(content) for content, _, _ in contents)
     quota_bytes = settings.tenant_storage_quota_mb * 1024 * 1024
 
@@ -311,6 +393,7 @@ async def upload(
                 "storage_path": q_path,
                 "file_size_bytes": len(content),
                 "checksum_sha256": checksum,
+                "perceptual_hash": perceptual_hashes[i],
                 "_content": content,
             })
 
@@ -380,4 +463,4 @@ async def upload(
     else:
         _log("scan_clean")
     _log("submitted", "Freigegeben")
-    return UploadResult(ok=True, files_received=len(contents))
+    return UploadResult(ok=True, files_received=len(contents), image_duplicate_warnings=image_duplicate_warnings)

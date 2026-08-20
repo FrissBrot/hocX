@@ -7,3 +7,6 @@ pydantic-settings==2.8.1
 python-multipart==0.0.32
 httpx==0.28.1
 pyclamd==0.4.0
+scipy==1.18.0
+Pillow==12.3.0
+ImageHash==4.3.2
