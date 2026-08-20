@@ -16,6 +16,7 @@ from app.models import (
 from app.schemas.admin import AdminTenantCreate, AdminTenantPage, AdminTenantRead
 from app.schemas.user import TenantUpdate
 from app.services.document_template_service import DocumentTemplateService
+from app.services.storage_service import StorageService
 from app.services.tenant_service import apply_tenant_profile_image
 
 
@@ -30,8 +31,9 @@ class AdminTenantService:
 
     def __init__(self) -> None:
         self.document_template_service = DocumentTemplateService()
+        self.storage_service = StorageService()
 
-    def _read_model(self, db: Session, tenant: Tenant) -> AdminTenantRead:
+    def _read_model(self, db: Session, tenant: Tenant, *, storage_used_bytes: int | None = None) -> AdminTenantRead:
         participant_count = int(
             db.scalar(select(func.count(Participant.id)).where(Participant.tenant_id == tenant.id)) or 0
         )
@@ -43,6 +45,10 @@ class AdminTenantService:
             )
             or 0
         )
+        # Single-tenant callers (get_tenant, create/update/clone/import) don't have a
+        # prefetched totals dict - fall back to one query for just this tenant.
+        if storage_used_bytes is None:
+            storage_used_bytes = self.storage_service.total_bytes_by_tenant(db).get(tenant.id, 0)
         return AdminTenantRead(
             id=tenant.id,
             name=tenant.name,
@@ -52,6 +58,8 @@ class AdminTenantService:
             participant_count=participant_count,
             user_count=user_count,
             created_at=tenant.created_at,
+            storage_used_bytes=storage_used_bytes,
+            storage_quota_bytes=tenant.storage_quota_bytes,
         )
 
     def list_tenants(self, db: Session, *, limit: int | None = None, offset: int = 0, q: str | None = None) -> AdminTenantPage:
@@ -66,7 +74,13 @@ class AdminTenantService:
         if limit is not None:
             query = query.limit(limit)
         tenants = query.all()
-        return AdminTenantPage(items=[self._read_model(db, tenant) for tenant in tenants], total=total)
+        # One query for every tenant's storage total instead of N+1 - list_tenants can return
+        # up to 500 rows (see the route's `le=500` cap).
+        storage_totals = self.storage_service.total_bytes_by_tenant(db)
+        return AdminTenantPage(
+            items=[self._read_model(db, tenant, storage_used_bytes=storage_totals.get(tenant.id, 0)) for tenant in tenants],
+            total=total,
+        )
 
     def get_tenant(self, db: Session, tenant_id: int) -> AdminTenantRead | None:
         tenant = db.get(Tenant, tenant_id)

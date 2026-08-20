@@ -19,7 +19,8 @@ export type NavIconKey =
   | "documents"
   | "tenant"
   | "activity"
-  | "tools";
+  | "tools"
+  | "storage";
 
 type IconProps = Omit<SVGProps<SVGSVGElement>, "viewBox" | "fill">;
 
@@ -169,6 +170,13 @@ const ICONS: Record<NavIconKey, (props: IconProps) => React.ReactElement> = {
       <rect x="3.5" y="9.5" width="17" height="10" rx="2" />
       <path d="M8 9.5V7a2 2 0 012-2h4a2 2 0 012 2v2.5" />
       <path d="M3.5 14h17" />
+    </Icon>
+  ),
+  storage: (props) => (
+    <Icon {...props}>
+      <path d="M4 6.2c0-1.5 3.6-2.7 8-2.7s8 1.2 8 2.7-3.6 2.7-8 2.7-8-1.2-8-2.7z" />
+      <path d="M4 6.2v5.8c0 1.5 3.6 2.7 8 2.7s8-1.2 8-2.7V6.2" />
+      <path d="M4 12v5.8c0 1.5 3.6 2.7 8 2.7s8-1.2 8-2.7V12" />
     </Icon>
   ),
 };

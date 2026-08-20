@@ -18,6 +18,7 @@ from app.schemas.admin import (
     AdminTenantCreate,
     AdminTenantPage,
     AdminTenantRead,
+    AdminTenantStorageQuotaUpdate,
     AdminTenantUserGrant,
     AdminTenantUserRead,
     AdminUserMergeRequest,
@@ -34,6 +35,7 @@ from app.schemas.admin import (
 )
 from app.schemas.mfa import UserMfaRead
 from app.schemas.oidc import PlatformOidcConfigRead, PlatformOidcConfigWrite
+from app.schemas.storage import StorageUsageRead
 from app.schemas.user import TenantUpdate, UserCreate, UserRead, UserUpdate
 from app.services.admin_domain_service import AdminDomainService
 from app.services.admin_error_log_service import AdminErrorLogService
@@ -44,6 +46,7 @@ from app.services.file_service import _safe_storage_path
 from app.services.mfa_service import MfaService
 from app.services.audit_service import AuditService
 from app.services.platform_oidc_service import PlatformOidcService
+from app.services.storage_service import StorageService
 from app.services.tenant_clone_service import TenantCloneService
 from app.services.tenant_cleanup_service import TenantCleanupService
 from app.services.tenant_export_service import TenantExportService
@@ -62,6 +65,7 @@ domain_service = AdminDomainService()
 error_log_service = AdminErrorLogService()
 export_service = TenantExportService()
 import_service = TenantImportService()
+storage_service = StorageService()
 mfa_service = MfaService()
 audit = AuditService()
 
@@ -219,6 +223,35 @@ def cleanup_tenant(
         details={"categories": payload.categories, "counts": counts.model_dump()},
     )
     return counts
+
+
+@router.get("/tenants/{tenant_id}/storage", response_model=StorageUsageRead)
+def get_tenant_storage(tenant_id: int, db: Session = Depends(get_db)):
+    tenant = tenant_service.get_tenant(db, tenant_id)
+    if tenant is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    return storage_service.breakdown_for_tenant(db, tenant_id)
+
+
+@router.patch("/tenants/{tenant_id}/storage-quota", response_model=AdminTenantRead)
+def update_tenant_storage_quota(
+    tenant_id: int,
+    payload: AdminTenantStorageQuotaUpdate,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
+    quota_bytes = payload.quota_mb * 1024 * 1024 if payload.quota_mb is not None else None
+    tenant = storage_service.set_quota(db, tenant_id, quota_bytes)
+    if tenant is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    audit.log(
+        db, action="admin.tenant_storage_quota_updated", actor_email=current_admin.email, tenant_id=tenant_id,
+        entity_type="tenant", entity_id=tenant_id, details={"quota_mb": payload.quota_mb},
+    )
+    result = tenant_service.get_tenant(db, tenant_id)
+    if result is None:
+        raise HTTPException(status_code=500, detail="Tenant could not be reloaded")
+    return result
 
 
 @router.post("/tenants/{tenant_id}/clone", response_model=AdminTenantRead, status_code=201)

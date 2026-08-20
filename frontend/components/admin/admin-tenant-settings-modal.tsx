@@ -9,7 +9,9 @@ import { Tabs } from "@/components/ui/tabs";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
-import { AdminTenantSummary, AdminTenantUser, AdminUserPage, TenantCleanupCategory, TenantCleanupCounts, UserSummary } from "@/types/api";
+import { formatFileSize } from "@/lib/utils/format";
+import { CATEGORY_COLORS, formatPercent } from "@/components/storage/storage-usage-view";
+import { AdminTenantSummary, AdminTenantUser, AdminUserPage, StorageUsageRead, TenantCleanupCategory, TenantCleanupCounts, UserSummary } from "@/types/api";
 
 type Props = {
   open: boolean;
@@ -92,6 +94,11 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
   const [cleanupBusy, setCleanupBusy] = useState(false);
   const [cleanupLastResult, setCleanupLastResult] = useState<TenantCleanupCounts | null>(null);
 
+  const [storageUsage, setStorageUsage] = useState<StorageUsageRead | null>(null);
+  const [storageLoading, setStorageLoading] = useState(false);
+  const [quotaMbInput, setQuotaMbInput] = useState("");
+  const [quotaBusy, setQuotaBusy] = useState(false);
+
   useEffect(() => {
     if (!open || !tenant) {
       return;
@@ -113,7 +120,47 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     setCleanupConfirmName("");
     setCleanupLastResult(null);
     void loadCleanupPreview(tenant.id);
+
+    setQuotaMbInput(tenant.storage_quota_bytes !== null ? String(Math.round(tenant.storage_quota_bytes / (1024 * 1024))) : "");
+    void loadStorageUsage(tenant.id);
   }, [open, tenant]);
+
+  async function loadStorageUsage(tenantId: number) {
+    setStorageLoading(true);
+    try {
+      const result = await browserApiFetch<StorageUsageRead>(`/api/admin/tenants/${tenantId}/storage`);
+      setStorageUsage(result);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Speicherverbrauch konnte nicht geladen werden", "error");
+    } finally {
+      setStorageLoading(false);
+    }
+  }
+
+  async function submitQuota(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!tenant) return;
+    const trimmed = quotaMbInput.trim();
+    const quotaMb = trimmed === "" ? null : Number(trimmed);
+    if (quotaMb !== null && (!Number.isFinite(quotaMb) || quotaMb < 1)) {
+      showToast("Kontingent muss eine Zahl grösser 0 sein", "error");
+      return;
+    }
+    setQuotaBusy(true);
+    try {
+      const updated = await browserApiFetch<AdminTenantSummary>(`/api/admin/tenants/${tenant.id}/storage-quota`, {
+        method: "PATCH",
+        body: JSON.stringify({ quota_mb: quotaMb }),
+      });
+      onSaved(updated);
+      setStorageUsage((current) => (current ? { ...current, quota_bytes: updated.storage_quota_bytes } : current));
+      showToast("Speicherkontingent gespeichert", "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Speicherkontingent konnte nicht gespeichert werden", "error");
+    } finally {
+      setQuotaBusy(false);
+    }
+  }
 
   async function loadCleanupPreview(tenantId: number) {
     setCleanupLoading(true);
@@ -470,6 +517,86 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                   </button>
                 </div>
               </form>
+            )
+          },
+          {
+            id: "speicher",
+            label: "Speicher",
+            content: (
+              <div className="grid">
+                {storageUsage ? (
+                  <>
+                    <div className="storage-usage-bar">
+                      {storageUsage.categories
+                        .filter((c) => c.bytes > 0)
+                        .map((category) => (
+                          <div
+                            key={category.key}
+                            className="storage-usage-segment"
+                            style={{
+                              width: `${(category.bytes / Math.max(storageUsage.total_bytes, storageUsage.quota_bytes ?? 0, 1)) * 100}%`,
+                              background: CATEGORY_COLORS[category.key]
+                            }}
+                            title={`${category.label}: ${formatFileSize(category.bytes)}`}
+                          />
+                        ))}
+                    </div>
+                    <div className="table-shell">
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>Kategorie</th>
+                            <th>Grösse</th>
+                            <th>Anteil</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {storageUsage.categories
+                            .filter((c) => c.bytes > 0)
+                            .map((category) => (
+                              <tr key={category.key}>
+                                <td>
+                                  <span className="storage-legend-dot" style={{ background: CATEGORY_COLORS[category.key] }} />
+                                  {category.label}
+                                </td>
+                                <td>{formatFileSize(category.bytes)}</td>
+                                <td className="muted">{formatPercent(category.bytes, storageUsage.total_bytes)}</td>
+                              </tr>
+                            ))}
+                          {storageUsage.categories.every((c) => c.bytes === 0) && (
+                            <tr>
+                              <td colSpan={3} className="muted">
+                                Noch keine Dateien vorhanden.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="muted">Gesamt belegt: {formatFileSize(storageUsage.total_bytes)}</div>
+                  </>
+                ) : (
+                  <div className="muted">{storageLoading ? "Wird geladen…" : "Keine Daten verfügbar."}</div>
+                )}
+
+                <form className="grid" onSubmit={submitQuota}>
+                  <label className="field-stack">
+                    <span className="field-label">Speicherkontingent (MB, leer = kein Limit)</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={quotaMbInput}
+                      onChange={(event) => setQuotaMbInput(event.target.value)}
+                      placeholder="z.B. 5120"
+                    />
+                  </label>
+                  <div className="table-actions table-actions-start">
+                    <button type="submit" className="button-inline" disabled={quotaBusy}>
+                      {quotaBusy ? "Wird gespeichert…" : "Kontingent speichern"}
+                    </button>
+                  </div>
+                </form>
+              </div>
             )
           }
         ]}

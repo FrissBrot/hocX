@@ -65,8 +65,17 @@ class AdminTenantRead(BaseModel):
     participant_count: int = 0
     user_count: int = 0
     created_at: datetime
+    storage_used_bytes: int = 0
+    storage_quota_bytes: int | None = None
 
     model_config = {"from_attributes": True}
+
+
+class AdminTenantStorageQuotaUpdate(BaseModel):
+    # None = Limit entfernen (Feld ist bewusst ohne Default, damit ein Client es nicht aus
+    # Versehen weglassen kann - anders als bei PATCH /tenants/{id} ist das hier der gesamte
+    # Payload, nicht ein optionales Teilfeld eines groesseren Formulars).
+    quota_mb: int | None = Field(ge=1)
 
 
 class AdminTenantPage(BaseModel):

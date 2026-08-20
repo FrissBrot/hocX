@@ -257,11 +257,27 @@ export type AdminTenantSummary = {
   participant_count: number;
   user_count: number;
   created_at: string;
+  storage_used_bytes: number;
+  storage_quota_bytes: number | null;
 };
 
 export type AdminTenantPage = {
   items: AdminTenantSummary[];
   total: number;
+};
+
+export type StorageCategoryKey = "protocol_image" | "word_import" | "submission_upload" | "export" | "other";
+
+export type StorageCategoryUsage = {
+  key: StorageCategoryKey;
+  label: string;
+  bytes: number;
+};
+
+export type StorageUsageRead = {
+  total_bytes: number;
+  quota_bytes: number | null;
+  categories: StorageCategoryUsage[];
 };
 
 export type TenantCleanupCategory = "protocols" | "list_entries" | "lists_full" | "events" | "todos" | "participants" | "documents";

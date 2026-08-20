@@ -11,6 +11,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
+import { formatFileSize } from "@/lib/utils/format";
 import { AdminTenantPage, AdminTenantSummary } from "@/types/api";
 
 type Props = {
@@ -235,7 +236,7 @@ export function AdminTenantManagement({ initialPage }: Props) {
       </article>
 
       <DataTable
-        columns={["Bild", "Mandant", "Teilnehmer", "Benutzer", "Erstellt am", "Aktionen"]}
+        columns={["Bild", "Mandant", "Teilnehmer", "Benutzer", "Speicher", "Erstellt am", "Aktionen"]}
         emptyMessage={loading ? "Wird geladen…" : "Keine Mandanten gefunden."}
       >
         {visibleTenants.map((tenant) => (
@@ -256,6 +257,25 @@ export function AdminTenantManagement({ initialPage }: Props) {
             </td>
             <td>{tenant.participant_count}</td>
             <td>{tenant.user_count}</td>
+            <td>
+              {tenant.storage_quota_bytes ? (
+                <>
+                  <div
+                    className={`storage-usage-bar-mini${tenant.storage_used_bytes > tenant.storage_quota_bytes ? " storage-usage-bar-mini-over" : ""}`}
+                  >
+                    <div
+                      className="storage-usage-segment-fill"
+                      style={{ width: `${Math.min((tenant.storage_used_bytes / tenant.storage_quota_bytes) * 100, 100)}%` }}
+                    />
+                  </div>
+                  <div className="muted">
+                    {formatFileSize(tenant.storage_used_bytes)} / {formatFileSize(tenant.storage_quota_bytes)}
+                  </div>
+                </>
+              ) : (
+                <span className="muted">{formatFileSize(tenant.storage_used_bytes)} (kein Limit)</span>
+              )}
+            </td>
             <td>{new Date(tenant.created_at).toLocaleDateString("de-CH")}</td>
             <td>
               <ActionMenu
