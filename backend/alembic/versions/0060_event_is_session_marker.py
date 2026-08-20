@@ -1,7 +1,7 @@
 """add is_session_marker to event so auto-generated next-session markers are hidden from the Termine overview list"""
 
 revision = "0060_event_is_session_marker"
-down_revision = "0059_stored_file_tags"
+down_revision = "0056_submission_flexible_window"
 
 import sqlalchemy as sa
 from alembic import op

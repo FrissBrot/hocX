@@ -61,7 +61,6 @@ services:
       LATEX_TEMPLATE_ROOT: /app/storage/latex_templates
       EXPORT_ROOT: /app/storage/exports
       UPLOAD_ROOT: /app/storage/uploads
-      THUMBNAIL_ROOT: /app/storage-local/thumbnails
       ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
       ABGABEBOX_DB_PASSWORD: ${ABGABEBOX_DB_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
@@ -77,10 +76,6 @@ services:
       # HOCX_STORAGE_PATH (.env) zeigt lokal auf ./storage; sobald ein Cloud Volume gemountet
       # ist, dort umbiegen - kein Compose-/Code-Aendern noetig.
       - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
-      # Bewusst NICHT ueber HOCX_STORAGE_PATH gesteuert - dieser Ordner bleibt IMMER lokal,
-      # auch wenn /app/storage spaeter auf ein Netzwerk-/Cloud-Volume umgehaengt wird
-      # (siehe FileService.ensure_thumbnail).
-      - ./storage-local/thumbnails:/app/storage-local/thumbnails
       - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
       - ./infra/traefik/dynamic:/app/traefik_dynamic
     healthcheck:
