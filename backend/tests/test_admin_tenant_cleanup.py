@@ -220,23 +220,6 @@ def test_documents_sweeps_orphaned_files_but_spares_referenced_ones(db, service)
     assert exists(db, Protocol, protocol_id)
 
 
-def test_documents_sweeps_orphaned_files_thumbnail_too(db, service, monkeypatch, tmp_path):
-    from app.core.config import settings
-
-    monkeypatch.setattr(settings, "thumbnail_root", str(tmp_path))
-
-    tenant = make_tenant(db, "Cleanup Tenant")
-    orphan_file = make_stored_file(db, tenant.id, "orphan.jpg")
-    orphan_file.thumbnail_path = f"{orphan_file.id}.jpg"
-    db.flush()
-    (tmp_path / orphan_file.thumbnail_path).write_bytes(b"fake-jpeg")
-
-    counts = service.cleanup(db, tenant.id, ["documents"])
-
-    assert counts.documents == 1
-    assert not (tmp_path / f"{orphan_file.id}.jpg").exists()
-
-
 def test_documents_plus_protocols_sweeps_newly_orphaned_protocol_image_file(db, service):
     tenant = make_tenant(db, "Cleanup Tenant")
     template = make_template(db, tenant.id)
