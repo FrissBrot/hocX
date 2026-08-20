@@ -12,6 +12,7 @@ from app.schemas.word_import import (
     WordImportAttendanceCommit,
     WordImportCommit,
     WordImportEventCommit,
+    WordImportEventIgnore,
     WordImportMatrixCellCommit,
 )
 from app.services.word_import_quality_service import WordImportQualityService
@@ -297,6 +298,108 @@ def test_new_event_link_resolution_is_remembered_and_reused_when_no_date_is_ever
     assert second_row.status == "changed"
     assert second_row.matched_event_id == target_event.id
     assert any(candidate.event_id == target_event.id for candidate in second_row.candidates)
+
+
+def test_event_ignore_is_remembered_and_reused_when_status_stays_new(db):
+    """Timo's third real screenshot: the same kind of dateless, no-live-match Termine
+    row as test_new_event_link_resolution_is_remembered_and_reused_when_no_date_is_ever_
+    found above ("Scharanlässe Leiteranlässe Sonstiges (kein Datum)"), but here there is
+    no real existing Event to link it to either - the reviewer's only real option is
+    "Ignorieren". Without event_ignored_keys the reviewer would have to click
+    "Ignorieren" on the same recurring non-Termin text on every single import."""
+    ctx = _build_template(db)
+    tenant, template = ctx["tenant"], ctx["template"]
+    service = WordImportService()
+    spec = default_spec(protocol_date=date(2026, 10, 18))
+    spec.events.rows = [*spec.events.rows, ["", "Scharanlässe Leiteranlässe Sonstiges"]]
+    raw_bytes = render_docx(spec)
+
+    first_analysis = service.analyze(
+        db, tenant_id=tenant.id, template_id=template.id, protocol_date_hint=None, raw_bytes=raw_bytes,
+    )
+    row = next(m for m in first_analysis.event_mappings if m.raw_title == "Scharanlässe Leiteranlässe Sonstiges")
+    assert row.status == "new"
+    assert row.remembered_dismissed is False
+
+    # Reviewer clicks "Ignorieren" - no entry in `events` at all, only in
+    # `dismissed_events` (mirrors the wizard: an ignored row is never sent as approved).
+    service.commit(
+        db, tenant_id=tenant.id, user_id=1,
+        payload=WordImportCommit(
+            template_id=template.id,
+            protocol_date=date(2026, 10, 18),
+            dismissed_events=[WordImportEventIgnore(raw_title=row.raw_title)],
+        ),
+    )
+
+    profile = db.execute(
+        select(WordImportProfile).where(WordImportProfile.tenant_id == tenant.id, WordImportProfile.template_id == template.id)
+    ).scalar_one()
+    assert profile.mapping_config_json["event_ignored_keys"] == [_normalize(row.raw_title)]
+
+    # A LATER import mentioning the same still-dateless title must default straight to
+    # "Ignorieren" again instead of asking the reviewer to redismiss it every time.
+    second_analysis = service.analyze(
+        db, tenant_id=tenant.id, template_id=template.id, protocol_date_hint=None, raw_bytes=raw_bytes,
+    )
+    second_row = next(m for m in second_analysis.event_mappings if m.raw_title == "Scharanlässe Leiteranlässe Sonstiges")
+    assert second_row.status == "new"
+    assert second_row.remembered_dismissed is True
+
+
+def test_event_ignore_is_cleared_when_reviewer_later_approves_the_same_title(db):
+    """Companion to test_event_ignore_is_remembered_and_reused_when_status_stays_new
+    above: a title previously remembered as "Ignorieren" must not keep fighting a later,
+    explicit decision to actually create that Termin - same rationale as no_link_set
+    being dropped from name_map's keys in commit() below. Seeds event_ignored_keys
+    directly (rather than via a real dismiss commit first) since
+    test_protocol_number_cycle_rank.py's module docstring documents that calling
+    create_from_template - and so WordImportService.commit() - twice against the same
+    `db` fixture session trips an unrelated, pre-existing SQLAlchemy limitation."""
+    ctx = _build_template(db)
+    tenant, template = ctx["tenant"], ctx["template"]
+    service = WordImportService()
+    spec = default_spec(protocol_date=date(2026, 10, 18))
+    spec.events.rows = [*spec.events.rows, ["", "Scharanlässe Leiteranlässe Sonstiges"]]
+    raw_bytes = render_docx(spec)
+
+    profile = WordImportProfile(
+        tenant_id=tenant.id, template_id=template.id,
+        mapping_config_json={"event_ignored_keys": [_normalize("Scharanlässe Leiteranlässe Sonstiges")]},
+    )
+    db.add(profile)
+    db.flush()
+
+    first_analysis = service.analyze(
+        db, tenant_id=tenant.id, template_id=template.id, protocol_date_hint=None, raw_bytes=raw_bytes,
+    )
+    row = next(m for m in first_analysis.event_mappings if m.raw_title == "Scharanlässe Leiteranlässe Sonstiges")
+    assert row.remembered_dismissed is True
+
+    # Reviewer changes their mind on THIS import and actually creates the Termin - the
+    # stale "Ignorieren" memory must not keep fighting that explicit decision forever.
+    service.commit(
+        db, tenant_id=tenant.id, user_id=1,
+        payload=WordImportCommit(
+            template_id=template.id,
+            protocol_date=date(2026, 10, 18),
+            events=[
+                WordImportEventCommit(
+                    approved=True,
+                    linked_event_id=None,
+                    final_title=row.raw_title,
+                    final_date=date(2026, 10, 18),
+                    raw_title=row.raw_title,
+                    raw_date=row.raw_date,
+                    originally_suggested_event_id=None,
+                    originally_suggested_score=None,
+                )
+            ],
+        ),
+    )
+    db.flush()
+    db.expire(profile)
+    assert profile.mapping_config_json["event_ignored_keys"] == []
 
 
 def test_no_link_attendance_name_is_remembered_and_reused(db):

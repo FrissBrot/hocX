@@ -242,6 +242,13 @@ class WordImportEventMapping(BaseModel):
     # reviewer to reconfirm an already-resolved recurring conflict.
     remembered_title_source: Literal["doc", "existing"] | None = None
     remembered_date_source: Literal["doc", "existing"] | None = None
+    # Set when status == "new" (no live-matched Event at all) AND this exact raw title
+    # (+ Matrix context, if any) was already explicitly dismissed ("Ignorieren") in an
+    # earlier commit - see WordImportService._event_ignore_key / commit's
+    # event_ignore_updates. Lets the wizard pre-apply that same "not a real Termin"
+    # decision instead of asking the reviewer to re-dismiss the same recurring
+    # boilerplate row (e.g. a dateless category label) on every import.
+    remembered_dismissed: bool = False
 
 
 class WordImportListDefinitionOption(BaseModel):
@@ -495,12 +502,28 @@ class WordImportTableRoleCommit(BaseModel):
     originally_suggested_score: float | None = None
 
 
+class WordImportEventIgnore(BaseModel):
+    """One event proposal the reviewer explicitly clicked "Ignorieren" on (status
+    "new", no live Event match) - see WordImportEventMapping.remembered_dismissed /
+    WordImportService._event_ignore_key. Carries only the identifying raw text (+
+    Matrix context, if any), never anything that would create/link a real Event."""
+
+    raw_title: str
+    matrix_key: str | None = None
+    row_id: str | None = None
+    column_key: str | None = None
+
+
 class WordImportCommit(BaseModel):
     template_id: int
     protocol_date: date
     texts: list[WordImportTextCommit] = Field(default_factory=list)
     attendance: list[WordImportAttendanceCommit] = Field(default_factory=list)
     events: list[WordImportEventCommit] = Field(default_factory=list)
+    # Not written anywhere (an ignored proposal creates/links nothing) - only feeds
+    # WordImportService.commit's event_ignore_updates so the same recurring "not a
+    # real Termin" row defaults to "Ignorieren" again on the next import.
+    dismissed_events: list[WordImportEventIgnore] = Field(default_factory=list)
     lists: list[WordImportListRowCommit] = Field(default_factory=list)
     matrices: list[WordImportMatrixCellCommit] = Field(default_factory=list)
     tables: list[WordImportTableRoleCommit] = Field(default_factory=list)
@@ -573,6 +596,10 @@ class WordImportDocumentUploadResult(BaseModel):
 class WordImportDocumentReanalyzeRequest(BaseModel):
     protocol_date: date | None = None
     table_roles: dict[int, dict] = Field(default_factory=dict)
+
+
+class WordImportLastTemplate(BaseModel):
+    template_id: int | None = None
 
 
 class WordImportQualityBucket(BaseModel):

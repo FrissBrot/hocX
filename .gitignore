@@ -47,3 +47,10 @@ infra/traefik/dynamic/tenant-domains.yml
 # DB backups and abgabebox uploads — real user data, never committed
 backups/
 storage/abgabebox-uploads/*
+
+# Generated thumbnails (FileService.ensure_thumbnail) — real tenant images, never committed.
+# Root-level is the dedicated bind mount target; backend/ is where they land if the backend
+# container is still running without that mount (e.g. before a `docker compose up -d` picks
+# up the compose change that added it).
+/storage-local/
+backend/storage-local/

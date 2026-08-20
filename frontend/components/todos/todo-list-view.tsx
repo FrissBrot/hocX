@@ -9,6 +9,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { TagInput } from "@/components/ui/tag-input";
 import { TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
 import { TodoDueMenu, DuePatch } from "@/components/todos/todo-due-menu";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
@@ -452,16 +453,15 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
     <div className="table-th-filter">
       <span className="table-th-label">Tags</span>
       {allTags.length > 0 && (
-        <select
+        <SearchableSelect
           className="table-th-tag-select"
-          value={tagFilter ?? ""}
-          onChange={(e) => setTagFilter(e.target.value || null)}
-        >
-          <option value="">Alle</option>
-          {allTags.map((tag) => (
-            <option key={tag} value={tag}>{tag}</option>
-          ))}
-        </select>
+          options={allTags}
+          getId={(tag) => tag}
+          getLabel={(tag) => tag}
+          value={tagFilter}
+          onChange={(tag) => setTagFilter(tag)}
+          nullLabel="Alle"
+        />
       )}
     </div>
   );
@@ -515,14 +515,15 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
               autoFocus
             />
             <TagInput value={createTags} onChange={setCreateTags} suggestions={allTagSuggestions} placeholder="Tags…" />
-            <select value={createBlockId} onChange={(e) => setCreateBlockId(e.target.value)} className="todo-create-block-select">
-              <option value="">Kein Protokoll</option>
-              {todoBlocks.map((b) => (
-                <option key={b.block_id} value={b.block_id}>
-                  {b.protocol_number}{b.protocol_title ? ` · ${b.protocol_title}` : ""}{b.block_title ? ` — ${b.block_title}` : ""}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              className="todo-create-block-select"
+              options={todoBlocks}
+              getId={(b) => b.block_id}
+              getLabel={(b) => `${b.protocol_number}${b.protocol_title ? ` · ${b.protocol_title}` : ""}${b.block_title ? ` — ${b.block_title}` : ""}`}
+              value={createBlockId ? Number(createBlockId) : null}
+              onChange={(b) => setCreateBlockId(b ? String(b.block_id) : "")}
+              nullLabel="Kein Protokoll"
+            />
             <button type="button" className="button-inline" onClick={() => void createTodo()} disabled={creating || !createTask.trim()}>
               {creating ? "…" : "Erstellen"}
             </button>
@@ -868,18 +869,14 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
             )}
             {exportDateMode === "until-event" && (
               <div style={{ marginTop: 8 }}>
-                <select
-                  className="input"
-                  value={exportUntilEventId}
-                  onChange={(e) => { setExportUntilEventId(Number(e.target.value)); clearExportState(); }}
-                >
-                  <option value="">Termin wählen…</option>
-                  {sortedEvents.map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {formatDate(e.event_date)}{e.title ? ` — ${e.title}` : ""}
-                    </option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  options={sortedEvents}
+                  getId={(e) => e.id}
+                  getLabel={(e) => `${formatDate(e.event_date)}${e.title ? ` — ${e.title}` : ""}`}
+                  value={exportUntilEventId || null}
+                  onChange={(e) => { setExportUntilEventId(e ? e.id : ""); clearExportState(); }}
+                  nullLabel="Termin wählen…"
+                />
               </div>
             )}
             {exportDateMode === "custom-date" && (

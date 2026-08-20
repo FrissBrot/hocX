@@ -7,6 +7,7 @@ import { MfaAdminModal } from "@/components/security/mfa-admin-modal";
 import { DataTable } from "@/components/ui/data-table";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
@@ -379,13 +380,13 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
             <div className="role-picker">
               <label className="field-stack">
                 <span className="field-label">Mandant</span>
-                <select value={userForm.pickerTenantId} onChange={(event) => setUserForm((current) => ({ ...current, pickerTenantId: event.target.value }))}>
-                  {manageableTenants.map((tenant) => (
-                    <option key={tenant.id} value={tenant.id}>
-                      {tenant.name}
-                    </option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  options={manageableTenants}
+                  getId={(tenant) => String(tenant.id)}
+                  getLabel={(tenant) => tenant.name}
+                  value={userForm.pickerTenantId || null}
+                  onChange={(tenant) => setUserForm((current) => ({ ...current, pickerTenantId: tenant ? String(tenant.id) : "" }))}
+                />
               </label>
               <label className="field-stack">
                 <span className="field-label">Rolle</span>

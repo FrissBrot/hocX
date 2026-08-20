@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -552,12 +553,14 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
           </div>
           <label className="field-stack">
             <span className="field-label">Zyklus</span>
-            <select value={form.cycle_config_id} onChange={(event) => setForm((current) => ({ ...current, cycle_config_id: event.target.value }))}>
-              <option value="">Kein Zyklus</option>
-              {availableCycleConfigs.map((cc) => (
-                <option key={cc.id} value={cc.id}>{cc.name}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={availableCycleConfigs}
+              getId={(cc) => cc.id}
+              getLabel={(cc) => cc.name}
+              value={form.cycle_config_id ? Number(form.cycle_config_id) : null}
+              onChange={(cc) => setForm((current) => ({ ...current, cycle_config_id: cc ? String(cc.id) : "" }))}
+              nullLabel="Kein Zyklus"
+            />
             <span className="field-help">Zyklen können unter Struktur → Zyklen verwaltet werden.</span>
           </label>
           <label className="checkbox-row">
@@ -1565,25 +1568,26 @@ export function TemplateEditor({
           </div>
           <label className="field-stack">
             <span className="field-label">Zyklus</span>
-            <select value={templateMeta.cycle_config_id} onChange={(event) => setTemplateMeta((current) => ({ ...current, cycle_config_id: event.target.value }))}>
-              <option value="">Kein Zyklus</option>
-              {availableCycleConfigs.map((cc) => (
-                <option key={cc.id} value={cc.id}>{cc.name}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={availableCycleConfigs}
+              getId={(cc) => cc.id}
+              getLabel={(cc) => cc.name}
+              value={templateMeta.cycle_config_id ? Number(templateMeta.cycle_config_id) : null}
+              onChange={(cc) => setTemplateMeta((current) => ({ ...current, cycle_config_id: cc ? String(cc.id) : "" }))}
+              nullLabel="Kein Zyklus"
+            />
             <span className="field-help">Zyklen können unter Struktur → Zyklen verwaltet werden.</span>
           </label>
           <label className="field-stack">
             <span className="field-label">Todo-Termin-Tag</span>
-            <select
-              value={templateMeta.todo_due_event_tag}
-              onChange={(event) => setTemplateMeta((current) => ({ ...current, todo_due_event_tag: event.target.value }))}
-            >
-              <option value="">Alle Termine</option>
-              {Array.from(new Set(availableEvents.map((e) => e.tag).filter(Boolean))).sort().map((tag) => (
-                <option key={tag} value={tag!}>{tag}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={Array.from(new Set(availableEvents.map((e) => e.tag).filter((tag): tag is string => Boolean(tag)))).sort()}
+              getId={(tag) => tag}
+              getLabel={(tag) => tag}
+              value={templateMeta.todo_due_event_tag || null}
+              onChange={(tag) => setTemplateMeta((current) => ({ ...current, todo_due_event_tag: tag ?? "" }))}
+              nullLabel="Alle Termine"
+            />
             <span className="field-help">Nur Termine mit diesem Tag werden in der Todo-Fällig-Auswahl angezeigt. Leer = alle Termine.</span>
           </label>
           <label className="checkbox-row">
@@ -1601,17 +1605,14 @@ export function TemplateEditor({
           </div>
           <label className="field-stack">
             <span className="field-label">PDF-Layout</span>
-            <select
-              value={templateMeta.document_template_id}
-              onChange={(event) => setTemplateMeta((current) => ({ ...current, document_template_id: event.target.value }))}
-            >
-              <option value="">Kein Layout zugewiesen</option>
-              {availableDocumentTemplates.filter((dt) => dt.is_active).map((dt) => (
-                <option key={dt.id} value={dt.id}>
-                  {dt.name}{dt.is_default ? " (Standard)" : ""}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={availableDocumentTemplates.filter((dt) => dt.is_active)}
+              getId={(dt) => dt.id}
+              getLabel={(dt) => `${dt.name}${dt.is_default ? " (Standard)" : ""}`}
+              value={templateMeta.document_template_id ? Number(templateMeta.document_template_id) : null}
+              onChange={(dt) => setTemplateMeta((current) => ({ ...current, document_template_id: dt ? String(dt.id) : "" }))}
+              nullLabel="Kein Layout zugewiesen"
+            />
             <span className="field-help">Wird beim PDF-Export verwendet. Kann in den Einstellungen → Dokumentlayouts konfiguriert werden.</span>
           </label>
           <div className="table-toolbar-actions">
@@ -1749,24 +1750,21 @@ export function TemplateEditor({
               </label>
               <label className="field-stack">
                 <span className="field-label">Initiale Zuordnung aus Liste</span>
-                <select
-                  value={responsibilityAutoListId}
+                <SearchableSelect
+                  options={eligibleResponsibleLists}
+                  getId={(item) => item.definition.id}
+                  getLabel={(item) => item.definition.name}
+                  value={responsibilityAutoListId ? Number(responsibilityAutoListId) : null}
                   disabled={bulkAssignBusy}
-                  onChange={(event) => {
-                    const nextValue = event.target.value;
+                  onChange={(item) => {
+                    const nextValue = item ? String(item.definition.id) : "";
                     setResponsibilityAutoListId(nextValue);
                     if (nextValue) {
                       void autoAssignResponsiblesFromList(Number(nextValue));
                     }
                   }}
-                >
-                  <option value="">Keine Liste ausgewählt</option>
-                  {eligibleResponsibleLists.map((item) => (
-                    <option key={item.definition.id} value={item.definition.id}>
-                      {item.definition.name}
-                    </option>
-                  ))}
-                </select>
+                  nullLabel="Keine Liste ausgewählt"
+                />
                 <span className="field-help">Es werden nur Listen mit genau einer Textspalte und einer Teilnehmer-Spalte angeboten.</span>
               </label>
               <div className="table-toolbar-actions align-end">
@@ -1923,37 +1921,32 @@ export function TemplateEditor({
                   <div className="two-col">
                     <label className="field-stack">
                       <span className="field-label">Liste</span>
-                      <select value={manualLinkListId} onChange={(event) => setManualLinkListId(event.target.value)}>
-                        <option value="">Liste wählen</option>
-                        {eligibleResponsibleLists.map((item) => (
-                          <option key={`responsibility-list-${item.definition.id}`} value={item.definition.id}>
-                            {item.definition.name}
-                          </option>
-                        ))}
-                      </select>
+                      <SearchableSelect
+                        options={eligibleResponsibleLists}
+                        getId={(item) => item.definition.id}
+                        getLabel={(item) => item.definition.name}
+                        value={manualLinkListId ? Number(manualLinkListId) : null}
+                        onChange={(item) => setManualLinkListId(item ? String(item.definition.id) : "")}
+                        placeholder="Liste wählen"
+                      />
                     </label>
                     <label className="field-stack">
                       <span className="field-label">Zeile</span>
-                      <select
-                        value={manualLinkEntryId}
-                        onChange={(event) => setManualLinkEntryId(event.target.value)}
+                      <SearchableSelect
+                        options={manualLinkListMeta ? availableManualEntries : []}
+                        getId={(entry) => entry.id}
+                        getLabel={(entry) => rowOptionLabel(entry, manualLinkListMeta!, participantsById, responsibilityNameMode)}
+                        value={manualLinkEntryId ? Number(manualLinkEntryId) : null}
+                        onChange={(entry) => setManualLinkEntryId(entry ? String(entry.id) : "")}
                         disabled={!manualLinkListMeta || loadingResponsibleListId === manualLinkListMeta.definition.id}
-                      >
-                        <option value="">
-                          {!manualLinkListMeta
+                        placeholder={
+                          !manualLinkListMeta
                             ? "Zuerst Liste wählen"
                             : loadingResponsibleListId === manualLinkListMeta.definition.id
                             ? "Zeilen werden geladen..."
-                            : "Zeile wählen"}
-                        </option>
-                        {manualLinkListMeta
-                          ? availableManualEntries.map((entry) => (
-                              <option key={`responsibility-entry-${entry.id}`} value={entry.id}>
-                                {rowOptionLabel(entry, manualLinkListMeta, participantsById, responsibilityNameMode)}
-                              </option>
-                            ))
-                          : null}
-                      </select>
+                            : "Zeile wählen"
+                        }
+                      />
                     </label>
                   </div>
                   <div className="table-toolbar-actions">

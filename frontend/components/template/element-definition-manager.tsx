@@ -6,6 +6,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { SearchableMultiSelect, SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
 import { TagInput } from "@/components/ui/tag-input";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -1082,17 +1083,14 @@ export function ElementDefinitionManager({
       return (
         <label className="field-stack">
           <span className="field-label">Initialer Teilnehmer</span>
-          <select
-            value={field.template_participant_id ?? ""}
-            onChange={(event) => applyPatch({ template_participant_id: event.target.value })}
-          >
-            <option value="">Kein Standardwert</option>
-            {participantOptions.map((participant) => (
-              <option key={`initial-participant-${participant.id}`} value={participant.id}>
-                {participant.display_name}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            options={participantOptions}
+            getId={(participant) => participant.id}
+            getLabel={(participant) => participant.display_name}
+            value={field.template_participant_id ? Number(field.template_participant_id) : null}
+            onChange={(participant) => applyPatch({ template_participant_id: participant ? String(participant.id) : "" })}
+            nullLabel="Kein Standardwert"
+          />
         </label>
       );
     }
@@ -1101,22 +1099,14 @@ export function ElementDefinitionManager({
       return (
         <label className="field-stack">
           <span className="field-label">Initiale Teilnehmer</span>
-          <select
-            multiple
-            size={Math.min(6, Math.max(3, participantOptions.length || 3))}
-            value={field.template_participant_ids ?? []}
-            onChange={(event) =>
-              applyPatch({
-                template_participant_ids: Array.from(event.target.selectedOptions).map((option) => option.value),
-              })
-            }
-          >
-            {participantOptions.map((participant) => (
-              <option key={`initial-participants-${participant.id}`} value={participant.id}>
-                {participant.display_name}
-              </option>
-            ))}
-          </select>
+          <SearchableMultiSelect
+            options={participantOptions}
+            getId={(participant) => participant.id}
+            getLabel={(participant) => participant.display_name}
+            values={(field.template_participant_ids ?? []).map(Number)}
+            onChange={(ids) => applyPatch({ template_participant_ids: ids.map((id) => String(id)) })}
+            emptySelectionLabel="Kein Standardwert"
+          />
         </label>
       );
     }
@@ -1125,17 +1115,14 @@ export function ElementDefinitionManager({
       return (
         <label className="field-stack">
           <span className="field-label">Initialer Termin</span>
-          <select
-            value={field.template_event_id ?? ""}
-            onChange={(event) => applyPatch({ template_event_id: event.target.value })}
-          >
-            <option value="">Kein Standardwert</option>
-            {sortedAvailableEvents.map((eventRow) => (
-              <option key={`initial-event-${eventRow.id}`} value={eventRow.id}>
-                {formatDateRange(eventRow.event_date, eventRow.event_end_date)} · {eventRow.title}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            options={sortedAvailableEvents}
+            getId={(eventRow) => eventRow.id}
+            getLabel={(eventRow) => `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}`}
+            value={field.template_event_id ? Number(field.template_event_id) : null}
+            onChange={(eventRow) => applyPatch({ template_event_id: eventRow ? String(eventRow.id) : "" })}
+            nullLabel="Kein Standardwert"
+          />
         </label>
       );
     }
@@ -1154,43 +1141,37 @@ export function ElementDefinitionManager({
         <div className="field-stack">
           <label className="field-stack">
             <span className="field-label">Verknuepfte Liste</span>
-            <select
-              value={selectedListId || ""}
-              onChange={(event) => {
-                const nextListId = event.target.value ? Number(event.target.value) : 0;
+            <SearchableSelect
+              options={listOptions}
+              getId={(listDefinition) => listDefinition.id}
+              getLabel={(listDefinition) => listDefinition.name}
+              value={selectedListId || null}
+              onChange={(listDefinition) => {
+                const nextListId = listDefinition ? listDefinition.id : 0;
                 if (nextListId) {
                   void ensureListEntriesLoaded(nextListId);
                 }
                 applyPatch({ row_config: { ...rowConfig, linked_list_id: nextListId || null, linked_list_entry_id: null } });
               }}
-            >
-              <option value="">Liste wählen</option>
-              {listOptions.map((listDefinition) => (
-                <option key={`list-entry-list-${listDefinition.id}`} value={listDefinition.id}>
-                  {listDefinition.name}
-                </option>
-              ))}
-            </select>
+              nullLabel="Liste wählen"
+            />
           </label>
           {selectedListId ? (
             <>
               <label className="field-stack">
                 <span className="field-label">Listeneintrag</span>
-                <select
-                  value={Number(rowConfig.linked_list_entry_id ?? 0) || ""}
-                  onChange={(event) =>
+                <SearchableSelect
+                  options={entryOptions}
+                  getId={(entry) => entry.id}
+                  getLabel={(entry) => (selectedListDefinition ? describeListEntry(entry, selectedListDefinition) : `Eintrag ${entry.id}`)}
+                  value={Number(rowConfig.linked_list_entry_id ?? 0) || null}
+                  onChange={(entry) =>
                     applyPatch({
-                      row_config: { ...rowConfig, linked_list_entry_id: event.target.value ? Number(event.target.value) : null },
+                      row_config: { ...rowConfig, linked_list_entry_id: entry ? entry.id : null },
                     })
                   }
-                >
-                  <option value="">Eintrag wählen</option>
-                  {entryOptions.map((entry) => (
-                    <option key={`list-entry-entry-${entry.id}`} value={entry.id}>
-                      {selectedListDefinition ? describeListEntry(entry, selectedListDefinition) : `Eintrag ${entry.id}`}
-                    </option>
-                  ))}
-                </select>
+                  nullLabel="Eintrag wählen"
+                />
               </label>
               <label className="field-stack">
                 <span className="field-label">Fixe Spalte</span>
@@ -2143,15 +2124,14 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
               <div className="three-col">
                 <label className="field-stack">
                   <span className="field-label">Bussen-Konto (optional)</span>
-                  <select
-                    value={createBlockForm.fine_account_id}
-                    onChange={(e) => setCreateBlockForm((c) => ({ ...c, fine_account_id: e.target.value }))}
-                  >
-                    <option value="">— Kein Bussen-Konto —</option>
-                    {availableAccounts.map((a) => (
-                      <option key={a.id} value={a.id}>{a.name} ({a.currency_label})</option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    options={availableAccounts}
+                    getId={(a) => a.id}
+                    getLabel={(a) => `${a.name} (${a.currency_label})`}
+                    value={createBlockForm.fine_account_id ? Number(createBlockForm.fine_account_id) : null}
+                    onChange={(a) => setCreateBlockForm((c) => ({ ...c, fine_account_id: a ? String(a.id) : "" }))}
+                    nullLabel="— Kein Bussen-Konto —"
+                  />
                 </label>
                 {createBlockForm.fine_account_id ? (
                   <>
@@ -2176,15 +2156,14 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
               <div className="three-col">
                 <label className="field-stack">
                   <span className="field-label">Konto</span>
-                  <select
-                    value={createBlockForm.finance_account_id}
-                    onChange={(e) => setCreateBlockForm((c) => ({ ...c, finance_account_id: e.target.value }))}
-                  >
-                    <option value="">— Konto wählen —</option>
-                    {availableAccounts.map((a) => (
-                      <option key={a.id} value={a.id}>{a.name} ({a.currency_label})</option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    options={availableAccounts}
+                    getId={(a) => a.id}
+                    getLabel={(a) => `${a.name} (${a.currency_label})`}
+                    value={createBlockForm.finance_account_id ? Number(createBlockForm.finance_account_id) : null}
+                    onChange={(a) => setCreateBlockForm((c) => ({ ...c, finance_account_id: a ? String(a.id) : "" }))}
+                    nullLabel="— Konto wählen —"
+                  />
                 </label>
                 {createBlockForm.element_type_id === "13" ? (
                   <>
@@ -2270,25 +2249,22 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
             >
               <label className="field-stack">
                 <span className="field-label">Gekoppelte Liste</span>
-                <select
-                  value={createBlockForm.linked_list_id}
-                  onChange={(event) =>
+                <SearchableSelect
+                  options={listOptions}
+                  getId={(listDefinition) => listDefinition.id}
+                  getLabel={(listDefinition) => listDefinition.name}
+                  value={createBlockForm.linked_list_id ? Number(createBlockForm.linked_list_id) : null}
+                  onChange={(listDefinition) =>
                     setCreateBlockForm((current) => ({
                       ...current,
-                      linked_list_id: event.target.value,
-                      linked_list_group_by: event.target.value ? current.linked_list_group_by : "",
-                      linked_list_sort_by: event.target.value ? current.linked_list_sort_by : "",
-                      linked_list_sort_direction: event.target.value ? current.linked_list_sort_direction : "asc",
+                      linked_list_id: listDefinition ? String(listDefinition.id) : "",
+                      linked_list_group_by: listDefinition ? current.linked_list_group_by : "",
+                      linked_list_sort_by: listDefinition ? current.linked_list_sort_by : "",
+                      linked_list_sort_direction: listDefinition ? current.linked_list_sort_direction : "asc",
                     }))
                   }
-                >
-                  <option value="">Keine globale Liste</option>
-                  {listOptions.map((listDefinition) => (
-                    <option key={`create-linked-list-${listDefinition.id}`} value={listDefinition.id}>
-                      {listDefinition.name}
-                    </option>
-                  ))}
-                </select>
+                  nullLabel="Keine globale Liste"
+                />
                 <span className="field-help">
                   Wenn eine Liste gewaehlt ist, zeigt der Tabellenblock spaeter genau diese globale Liste im Protokoll an.
                 </span>
@@ -2311,42 +2287,36 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                   <div className="three-col">
                     <label className="field-stack">
                       <span className="field-label">Gruppieren nach</span>
-                      <select
-                        value={createBlockForm.linked_list_group_by}
-                        onChange={(event) =>
+                      <SearchableSelect
+                        options={linkedListColumnOptions(createLinkedList)}
+                        getId={(option) => option.value}
+                        getLabel={(option) => option.label}
+                        value={createBlockForm.linked_list_group_by || null}
+                        onChange={(option) =>
                           setCreateBlockForm((current) => ({
                             ...current,
-                            linked_list_group_by: event.target.value as BlockFormState["linked_list_group_by"],
+                            linked_list_group_by: (option?.value ?? "") as BlockFormState["linked_list_group_by"],
                           }))
                         }
-                      >
-                        <option value="">Keine Gruppierung</option>
-                        {linkedListColumnOptions(createLinkedList).map((option) => (
-                          <option key={`create-linked-group-${option.value}`} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                        nullLabel="Keine Gruppierung"
+                      />
                     </label>
                     <label className="field-stack">
                       <span className="field-label">Alphabetisch sortieren nach</span>
-                      <select
-                        value={createBlockForm.linked_list_sort_by}
-                        onChange={(event) =>
+                      <SearchableSelect
+                        options={linkedListColumnOptions(createLinkedList)}
+                        getId={(option) => option.value}
+                        getLabel={(option) => option.label}
+                        value={createBlockForm.linked_list_sort_by || null}
+                        onChange={(option) =>
                           setCreateBlockForm((current) => ({
                             ...current,
-                            linked_list_sort_by: event.target.value as BlockFormState["linked_list_sort_by"],
-                            linked_list_sort_direction: event.target.value ? current.linked_list_sort_direction : "asc",
+                            linked_list_sort_by: (option?.value ?? "") as BlockFormState["linked_list_sort_by"],
+                            linked_list_sort_direction: option ? current.linked_list_sort_direction : "asc",
                           }))
                         }
-                      >
-                        <option value="">Manuelle Listenreihenfolge</option>
-                        {linkedListColumnOptions(createLinkedList).map((option) => (
-                          <option key={`create-linked-sort-${option.value}`} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                        nullLabel="Manuelle Listenreihenfolge"
+                      />
                     </label>
                     <label className="field-stack">
                       <span className="field-label">Sortierung</span>
@@ -2715,15 +2685,14 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 <div className="three-col">
                   <label className="field-stack">
                     <span className="field-label">Bussen-Konto (optional)</span>
-                    <select
-                      value={blockForm.fine_account_id}
-                      onChange={(e) => setBlockForm((c) => ({ ...c, fine_account_id: e.target.value }))}
-                    >
-                      <option value="">— Kein Bussen-Konto —</option>
-                      {availableAccounts.map((a) => (
-                        <option key={a.id} value={a.id}>{a.name} ({a.currency_label})</option>
-                      ))}
-                    </select>
+                    <SearchableSelect
+                      options={availableAccounts}
+                      getId={(a) => a.id}
+                      getLabel={(a) => `${a.name} (${a.currency_label})`}
+                      value={blockForm.fine_account_id ? Number(blockForm.fine_account_id) : null}
+                      onChange={(a) => setBlockForm((c) => ({ ...c, fine_account_id: a ? String(a.id) : "" }))}
+                      nullLabel="— Kein Bussen-Konto —"
+                    />
                   </label>
                   {blockForm.fine_account_id ? (
                     <>
@@ -2748,15 +2717,14 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 <div className="three-col">
                   <label className="field-stack">
                     <span className="field-label">Konto</span>
-                    <select
-                      value={blockForm.finance_account_id}
-                      onChange={(e) => setBlockForm((c) => ({ ...c, finance_account_id: e.target.value }))}
-                    >
-                      <option value="">— Konto wählen —</option>
-                      {availableAccounts.map((a) => (
-                        <option key={a.id} value={a.id}>{a.name} ({a.currency_label})</option>
-                      ))}
-                    </select>
+                    <SearchableSelect
+                      options={availableAccounts}
+                      getId={(a) => a.id}
+                      getLabel={(a) => `${a.name} (${a.currency_label})`}
+                      value={blockForm.finance_account_id ? Number(blockForm.finance_account_id) : null}
+                      onChange={(a) => setBlockForm((c) => ({ ...c, finance_account_id: a ? String(a.id) : "" }))}
+                      nullLabel="— Konto wählen —"
+                    />
                   </label>
                   {blockForm.element_type_id === "13" ? (
                     <>
@@ -2842,25 +2810,22 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
               >
                 <label className="field-stack">
                   <span className="field-label">Gekoppelte Liste</span>
-                <select
-                  value={blockForm.linked_list_id}
-                  onChange={(event) =>
+                <SearchableSelect
+                  options={listOptions}
+                  getId={(listDefinition) => listDefinition.id}
+                  getLabel={(listDefinition) => listDefinition.name}
+                  value={blockForm.linked_list_id ? Number(blockForm.linked_list_id) : null}
+                  onChange={(listDefinition) =>
                     setBlockForm((current) => ({
                       ...current,
-                      linked_list_id: event.target.value,
-                      linked_list_group_by: event.target.value ? current.linked_list_group_by : "",
-                      linked_list_sort_by: event.target.value ? current.linked_list_sort_by : "",
-                      linked_list_sort_direction: event.target.value ? current.linked_list_sort_direction : "asc",
+                      linked_list_id: listDefinition ? String(listDefinition.id) : "",
+                      linked_list_group_by: listDefinition ? current.linked_list_group_by : "",
+                      linked_list_sort_by: listDefinition ? current.linked_list_sort_by : "",
+                      linked_list_sort_direction: listDefinition ? current.linked_list_sort_direction : "asc",
                     }))
                   }
-                >
-                    <option value="">Keine globale Liste</option>
-                    {listOptions.map((listDefinition) => (
-                      <option key={`edit-linked-list-${listDefinition.id}`} value={listDefinition.id}>
-                        {listDefinition.name}
-                      </option>
-                    ))}
-                  </select>
+                  nullLabel="Keine globale Liste"
+                />
                   <span className="field-help">
                     Wenn eine Liste gewaehlt ist, zeigt der Tabellenblock spaeter genau diese globale Liste im Protokoll an.
                   </span>
@@ -2883,42 +2848,36 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                     <div className="three-col">
                       <label className="field-stack">
                         <span className="field-label">Gruppieren nach</span>
-                        <select
-                          value={blockForm.linked_list_group_by}
-                          onChange={(event) =>
+                        <SearchableSelect
+                          options={linkedListColumnOptions(editLinkedList)}
+                          getId={(option) => option.value}
+                          getLabel={(option) => option.label}
+                          value={blockForm.linked_list_group_by || null}
+                          onChange={(option) =>
                             setBlockForm((current) => ({
                               ...current,
-                              linked_list_group_by: event.target.value as BlockFormState["linked_list_group_by"],
+                              linked_list_group_by: (option?.value ?? "") as BlockFormState["linked_list_group_by"],
                             }))
                           }
-                        >
-                          <option value="">Keine Gruppierung</option>
-                          {linkedListColumnOptions(editLinkedList).map((option) => (
-                            <option key={`edit-linked-group-${option.value}`} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
+                          nullLabel="Keine Gruppierung"
+                        />
                       </label>
                       <label className="field-stack">
                         <span className="field-label">Alphabetisch sortieren nach</span>
-                        <select
-                          value={blockForm.linked_list_sort_by}
-                          onChange={(event) =>
+                        <SearchableSelect
+                          options={linkedListColumnOptions(editLinkedList)}
+                          getId={(option) => option.value}
+                          getLabel={(option) => option.label}
+                          value={blockForm.linked_list_sort_by || null}
+                          onChange={(option) =>
                             setBlockForm((current) => ({
                               ...current,
-                              linked_list_sort_by: event.target.value as BlockFormState["linked_list_sort_by"],
-                              linked_list_sort_direction: event.target.value ? current.linked_list_sort_direction : "asc",
+                              linked_list_sort_by: (option?.value ?? "") as BlockFormState["linked_list_sort_by"],
+                              linked_list_sort_direction: option ? current.linked_list_sort_direction : "asc",
                             }))
                           }
-                        >
-                          <option value="">Manuelle Listenreihenfolge</option>
-                          {linkedListColumnOptions(editLinkedList).map((option) => (
-                            <option key={`edit-linked-sort-${option.value}`} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
+                          nullLabel="Manuelle Listenreihenfolge"
+                        />
                       </label>
                       <label className="field-stack">
                         <span className="field-label">Sortierung</span>
@@ -3202,16 +3161,16 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                         />
                       ) : null}
                       {matrixDesignerForm.auto_source_type === "list" ? (
-                        <select
-                          value={matrixDesignerForm.auto_source_list_id}
-                          onChange={(e) => updateMatrixDesignerForm((c) => ({ ...c, auto_source_list_id: e.target.value }))}
-                          style={{ minWidth: 160 }}
-                        >
-                          <option value="">Liste wählen...</option>
-                          {listOptions.map((list) => (
-                            <option key={`col-src-list-${list.id}`} value={list.id}>{list.name}</option>
-                          ))}
-                        </select>
+                        <span style={{ minWidth: 160, display: "inline-block" }}>
+                          <SearchableSelect
+                            options={listOptions}
+                            getId={(list) => list.id}
+                            getLabel={(list) => list.name}
+                            value={matrixDesignerForm.auto_source_list_id ? Number(matrixDesignerForm.auto_source_list_id) : null}
+                            onChange={(list) => updateMatrixDesignerForm((c) => ({ ...c, auto_source_list_id: list ? String(list.id) : "" }))}
+                            nullLabel="Liste wählen..."
+                          />
+                        </span>
                       ) : null}
                     </>
                   ) : null}

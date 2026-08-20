@@ -4,6 +4,7 @@ import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 
 import { MfaAdminModal } from "@/components/security/mfa-admin-modal";
 import { Modal } from "@/components/ui/modal";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Tabs } from "@/components/ui/tabs";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
@@ -374,16 +375,14 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                   <form className="role-picker" onSubmit={addUser}>
                     <label className="field-stack">
                       <span className="field-label">Bestehender Benutzer</span>
-                      <select value={addUserId} onChange={(event) => setAddUserId(event.target.value)} required>
-                        <option value="" disabled>
-                          Auswählen…
-                        </option>
-                        {availableToAdd.map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.display_name} ({u.email})
-                          </option>
-                        ))}
-                      </select>
+                      <SearchableSelect
+                        options={availableToAdd}
+                        getId={(u) => String(u.id)}
+                        getLabel={(u) => `${u.display_name} (${u.email})`}
+                        value={addUserId || null}
+                        onChange={(u) => setAddUserId(u ? String(u.id) : "")}
+                        placeholder="Auswählen…"
+                      />
                     </label>
                     <label className="field-stack">
                       <span className="field-label">Rolle</span>

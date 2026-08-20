@@ -235,7 +235,13 @@ class FileService:
         self.protocol_image_repository = protocol_image_repository or ProtocolImageRepository()
 
     def ensure_storage(self) -> None:
-        for path in [settings.storage_root, settings.export_root, settings.upload_root, settings.latex_template_root]:
+        for path in [
+            settings.storage_root,
+            settings.export_root,
+            settings.upload_root,
+            settings.latex_template_root,
+            settings.thumbnail_root,
+        ]:
             Path(path).mkdir(parents=True, exist_ok=True)
 
     def build_content_url(self, stored_file_id: int) -> str:
@@ -250,16 +256,25 @@ class FileService:
     def build_metadata_url(self, stored_file_id: int) -> str:
         return f"/api/stored-files/{stored_file_id}/metadata"
 
-    def ensure_thumbnail(self, db: Session, stored_file: StoredFile, storage_root: str) -> Path | None:
+    def ensure_thumbnail(
+        self, db: Session, stored_file: StoredFile, storage_root: str, thumbnail_root: str | None = None
+    ) -> Path | None:
         """Returns the path to a small JPEG preview of stored_file's content, generating and
         persisting it on first request if none exists yet (covers files uploaded before this
         feature existed, and submission uploads written by abgabebox-backend's restricted DB
         role, which never sets thumbnail_path itself). None for non-images or files whose
-        content PIL can't decode - callers fall back to the original in that case."""
+        content PIL can't decode - callers fall back to the original in that case.
+
+        Thumbnails live under thumbnail_root (a local-only directory, separate from
+        storage_root) so that storage_root can be moved to network-attached storage without
+        dragging previews along - see hocx storage-offload plan. Named by stored_file.id
+        rather than mirroring the original's path, since storage_root differs between callers
+        (tenant files vs. abgabebox submissions) but thumbnail_root is shared."""
+        thumbnail_root = thumbnail_root or settings.thumbnail_root
         if not stored_file.mime_type or not stored_file.mime_type.startswith("image/"):
             return None
         if stored_file.thumbnail_path:
-            existing = _safe_storage_path(storage_root, stored_file.thumbnail_path)
+            existing = _safe_storage_path(thumbnail_root, stored_file.thumbnail_path)
             if existing.exists():
                 return existing
 
@@ -270,9 +285,10 @@ class FileService:
         if thumbnail_bytes is None:
             return None
 
-        thumbnail_path = original_path.with_name(original_path.stem + ".thumb.jpg")
+        Path(thumbnail_root).mkdir(parents=True, exist_ok=True)
+        thumbnail_path = Path(thumbnail_root).resolve() / f"{stored_file.id}.jpg"
         thumbnail_path.write_bytes(thumbnail_bytes)
-        stored_file.thumbnail_path = str(thumbnail_path.relative_to(Path(storage_root).resolve()))
+        stored_file.thumbnail_path = thumbnail_path.name
         db.add(stored_file)
         db.commit()
         return thumbnail_path
@@ -466,13 +482,6 @@ class FileService:
 
         target_path.write_bytes(content)
 
-        thumbnail_bytes = _generate_thumbnail_bytes(content)
-        thumbnail_relative_path: str | None = None
-        if thumbnail_bytes is not None:
-            thumbnail_target_path = target_path.with_name(target_path.stem + ".thumb.jpg")
-            thumbnail_target_path.write_bytes(thumbnail_bytes)
-            thumbnail_relative_path = str(thumbnail_target_path.relative_to(settings.storage_root))
-
         relative_path = target_path.relative_to(settings.storage_root)
         stored_file = StoredFile(
             tenant_id=tenant_id,
@@ -483,10 +492,20 @@ class FileService:
             file_size_bytes=len(content),
             checksum_sha256=checksum,
             perceptual_hash=perceptual_hash,
-            thumbnail_path=thumbnail_relative_path,
+            thumbnail_path=None,
             created_by=created_by,
         )
         stored_file = self.stored_file_repository.create(db, stored_file)
+
+        # Thumbnail is keyed by stored_file.id (see ensure_thumbnail), so it's generated after
+        # the insert/flush above instead of before it.
+        thumbnail_bytes = _generate_thumbnail_bytes(content)
+        if thumbnail_bytes is not None:
+            thumbnail_root = Path(settings.thumbnail_root)
+            thumbnail_root.mkdir(parents=True, exist_ok=True)
+            thumbnail_target_path = thumbnail_root.resolve() / f"{stored_file.id}.jpg"
+            thumbnail_target_path.write_bytes(thumbnail_bytes)
+            stored_file.thumbnail_path = thumbnail_target_path.name
 
         protocol_image = ProtocolImage(
             protocol_element_block_id=protocol_element_block.id,
@@ -595,6 +614,10 @@ class FileService:
         file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
         if file_path.exists():
             file_path.unlink()
+        if stored_file.thumbnail_path:
+            thumbnail_path = _safe_storage_path(settings.thumbnail_root, stored_file.thumbnail_path)
+            if thumbnail_path.exists():
+                thumbnail_path.unlink()
         self.stored_file_repository.delete(db, stored_file)
 
     def get_stored_file(self, db: Session, stored_file_id: int) -> StoredFile | None:

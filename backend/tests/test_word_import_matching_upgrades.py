@@ -238,6 +238,64 @@ def test_participant_name_score_falls_back_to_real_first_and_last_name():
     assert svc._participant_name_score("Dominik Rohrer", nik) > svc._participant_name_score("Dominik Rohrer", armin)
 
 
+class _P:
+    def __init__(self, id, first_name, last_name, display_name):
+        self.id = id
+        self.first_name = first_name
+        self.last_name = last_name
+        self.display_name = display_name
+
+
+def test_unique_bare_name_match_resolves_first_or_last_name_when_only_one_candidate():
+    # Timo's real screenshot: "Remo" scores only _BARE_FIRST_NAME_MATCH_SCORE (0.85)
+    # against "Remo Omlin" via plain _name_score, since a bare first name COULD in
+    # principle be a namesake among several participants - but this roster only has
+    # one Remo, so the dedicated uniqueness check must resolve it directly instead of
+    # leaving it stuck in "Namen klären" every import.
+    remo = _P(1, "Remo", "Omlin", "Remo Omlin")
+    timo = _P(2, "Timo", "Weber", "Timo Weber")
+    nevio = _P(3, "Nevio", "Kim Nguyen", "Nevio Kim Nguyen")
+    roster = [remo, timo, nevio]
+
+    assert svc._name_score("Remo", remo.display_name) == svc._BARE_FIRST_NAME_MATCH_SCORE
+    assert svc._unique_bare_name_match("Remo", roster) is remo
+
+    # Timo's follow-up: "auch nachnamen prüfen, da vornamen auch nachnamen sein
+    # können" - a bare raw word matching exactly one participant's LAST name (not
+    # just first name) must resolve just as unambiguously.
+    assert svc._unique_bare_name_match("Omlin", roster) is remo
+
+    # Genuinely ambiguous (two participants share the same first name) must NOT
+    # auto-resolve - the whole point of _BARE_FIRST_NAME_MATCH_SCORE's caution still
+    # applies when the roster itself doesn't rule out a namesake.
+    lisa1 = _P(4, "Lisa", "Muster", "Lisa Muster")
+    lisa2 = _P(5, "Lisa", "Meier", "Lisa Meier")
+    assert svc._unique_bare_name_match("Lisa", [lisa1, lisa2]) is None
+
+    # Multi-word raw names are out of scope for this helper - already-adequate full-
+    # name scoring handles those.
+    assert svc._unique_bare_name_match("Remo Omlin", roster) is None
+
+
+def test_match_names_auto_resolves_a_unique_bare_name_end_to_end():
+    remo = _P(1, "Remo", "Omlin", "Remo Omlin")
+    timo = _P(2, "Timo", "Weber", "Timo Weber")
+    roster = [remo, timo]
+    resolutions = svc._match_names("Remo", roster, {}, {}, svc._PARTICIPANT_MATCH_THRESHOLD)
+    assert len(resolutions) == 1
+    assert resolutions[0].participant_id == remo.id
+
+    # A previous rejection of this exact (unique) candidate for this exact raw text
+    # must skip the roster-uniqueness bypass and fall back to ordinary penalized
+    # scoring - demonstrated here against a stricter-than-default threshold (as an
+    # adaptively-learned one could be) that the penalized score (0.85 - 0.15 = 0.70)
+    # no longer clears, unlike the un-rejected bypass above which ignores the
+    # threshold entirely.
+    rejected = {"name:remo": {"rejected": [remo.id], "chosen": None}}
+    resolutions = svc._match_names("Remo", roster, {}, rejected, match_threshold=0.75)
+    assert resolutions[0].participant_id is None
+
+
 def _event_mapping(row_index, raw_title, raw_date, matched_event_id=None, matrix_key=None, column_key=None):
     return WordImportEventMapping(
         row_index=row_index,

@@ -6,10 +6,11 @@ import { ParticipantSummary, TemplateSummary } from "@/types/api";
 
 export default async function WordImportQueuePage() {
   const session = await requireSession();
-  const [templates, participants, documents] = await Promise.all([
+  const [templates, participants, documents, lastTemplate] = await Promise.all([
     backendFetchWithSession<TemplateSummary[]>("/api/templates"),
     backendFetchWithSession<ParticipantSummary[]>("/api/participants"),
     backendFetchWithSession<WordImportDocumentSummary[]>("/api/tools/word-import/documents"),
+    backendFetchWithSession<{ template_id: number | null }>("/api/tools/word-import/last-template"),
   ]);
   const activeTemplates = (templates ?? []).filter((template) => template.status === "active");
   const activeParticipants = (participants ?? []).filter((participant) => participant.is_active);
@@ -27,7 +28,12 @@ export default async function WordImportQueuePage() {
             </p>
           </div>
         </div>
-        <WordImportQueueView templates={activeTemplates} participants={activeParticipants} initialDocuments={documents ?? []} />
+        <WordImportQueueView
+          templates={activeTemplates}
+          participants={activeParticipants}
+          initialDocuments={documents ?? []}
+          initialTemplateId={lastTemplate?.template_id ?? null}
+        />
       </div>
     </AppShell>
   );
