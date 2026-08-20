@@ -6,11 +6,13 @@ import { useConfirm } from "@/contexts/confirm-context";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { FilterTabs } from "@/components/ui/filter-tabs";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { WordImportWizard } from "@/components/tools/word-import-wizard";
 import {
   deleteWordImportDocument,
   ingestWordImportDocuments,
   listWordImportDocuments,
+  setLastWordImportTemplate,
   WordImportDocumentSummary,
 } from "@/lib/api/word-import";
 import { formatDateTime } from "@/lib/utils/format";
@@ -22,6 +24,7 @@ type Props = {
   templates: TemplateSummary[];
   participants: ParticipantSummary[];
   initialDocuments: WordImportDocumentSummary[];
+  initialTemplateId: number | null;
 };
 
 function UploadIcon() {
@@ -48,12 +51,18 @@ type PendingUpload = {
   name: string;
 };
 
-export function WordImportQueueView({ templates, participants, initialDocuments }: Props) {
+export function WordImportQueueView({ templates, participants, initialDocuments, initialTemplateId }: Props) {
   const confirm = useConfirm();
   const [documents, setDocuments] = useState<WordImportDocumentSummary[]>(initialDocuments);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("eingelesen");
   const [openDocumentId, setOpenDocumentId] = useState<number | null>(null);
-  const [uploadTemplateId, setUploadTemplateId] = useState<number | null>(templates[0]?.id ?? null);
+  // Zuletzt gewählte Vorlage (tenant.last_word_import_template_id) wird vorausgewählt,
+  // solange sie noch existiert/aktiv ist - sonst Fallback auf die erste verfügbare.
+  const [uploadTemplateId, setUploadTemplateId] = useState<number | null>(
+    (initialTemplateId && templates.some((template) => template.id === initialTemplateId) ? initialTemplateId : null) ??
+      templates[0]?.id ??
+      null
+  );
   const [uploading, setUploading] = useState(false);
   const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
@@ -184,13 +193,17 @@ export function WordImportQueueView({ templates, participants, initialDocuments 
         <div className="word-import-narrow" style={{ display: "flex", gap: "0.75rem", alignItems: "flex-end", flexWrap: "wrap" }}>
           <label className="field-stack" style={{ flex: "0 0 auto", minWidth: "220px" }}>
             <span className="field-label">Vorlage</span>
-            <select value={uploadTemplateId ?? ""} onChange={(event) => setUploadTemplateId(Number(event.target.value))}>
-              {templates.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.name}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={templates}
+              getId={(template) => template.id}
+              getLabel={(template) => template.name}
+              value={uploadTemplateId}
+              onChange={(template) => {
+                const templateId = template ? template.id : null;
+                setUploadTemplateId(templateId);
+                void setLastWordImportTemplate(templateId);
+              }}
+            />
           </label>
           <label className="field-stack" style={{ flex: "1 1 auto" }}>
             <span className="field-label">Word-, PDF- oder ZIP-Dateien (.docx, .pdf, .zip)</span>

@@ -44,6 +44,13 @@ class Tenant(Base, TimestampMixin):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
     tag_config_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
     public_slug: Mapped[str | None] = mapped_column(Text, unique=True)
+    # Vorlage, die im Import-Assistenten zuletzt ausgewählt wurde - wird beim nächsten
+    # Öffnen der Seite wieder vorausgewählt. SET NULL statt CASCADE, damit das Löschen
+    # einer Vorlage nicht versehentlich den Tenant mitreisst; die UI fällt dann einfach
+    # auf die erste aktive Vorlage zurück.
+    last_word_import_template_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("template.id", ondelete="SET NULL")
+    )
 
 
 class PlatformOidcConfig(Base, TimestampMixin, UpdatedAtMixin):

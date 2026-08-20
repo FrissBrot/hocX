@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -845,12 +846,14 @@ function TemplateForm({
                   {fontSlotDefinitions.map(({ key, label, help }) => (
                     <label className="field-stack" key={key}>
                       <span className="field-label">{label}</span>
-                      <select value={form[key as keyof TemplateFormState] as string} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}>
-                        <option value="">Keine</option>
-                        {(partsByType[key] ?? []).map((part) => (
-                          <option key={part.id} value={part.id}>{part.name}</option>
-                        ))}
-                      </select>
+                      <SearchableSelect
+                        options={partsByType[key] ?? []}
+                        getId={(part) => String(part.id)}
+                        getLabel={(part) => part.name}
+                        value={(form[key as keyof TemplateFormState] as string) || null}
+                        onChange={(part) => setForm((f) => ({ ...f, [key]: part ? String(part.id) : "" }))}
+                        nullLabel="Keine"
+                      />
                       <span className="field-help">{help}</span>
                     </label>
                   ))}
@@ -894,12 +897,14 @@ function TemplateForm({
               <div style={{ marginTop: "14px" }}>
                 <label className="field-stack">
                   <span className="field-label">Logo / Bild für Header</span>
-                  <select value={form.title_header_image} onChange={(e) => setForm((f) => ({ ...f, title_header_image: e.target.value }))}>
-                    <option value="">Kein Bild</option>
-                    {imageParts.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    options={imageParts}
+                    getId={(p) => String(p.id)}
+                    getLabel={(p) => p.name}
+                    value={form.title_header_image || null}
+                    onChange={(p) => setForm((f) => ({ ...f, title_header_image: p ? String(p.id) : "" }))}
+                    nullLabel="Kein Bild"
+                  />
                   <span className="field-help">PNG oder JPG — aus der Parts-Bibliothek wählen. Höhe im Header: ca. 0.8 cm.</span>
                 </label>
               </div>
@@ -937,22 +942,26 @@ function TemplateForm({
               <div style={{ display: "flex", gap: "16px", marginTop: "16px", flexWrap: "wrap" }}>
                 <label className="field-stack" style={{ flex: 1, minWidth: "200px" }}>
                   <span className="field-label">Logo / Bild oben links</span>
-                  <select value={form.title_header_image} onChange={(e) => setForm((f) => ({ ...f, title_header_image: e.target.value }))}>
-                    <option value="">Kein Bild</option>
-                    {imageParts.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    options={imageParts}
+                    getId={(p) => String(p.id)}
+                    getLabel={(p) => p.name}
+                    value={form.title_header_image || null}
+                    onChange={(p) => setForm((f) => ({ ...f, title_header_image: p ? String(p.id) : "" }))}
+                    nullLabel="Kein Bild"
+                  />
                   <span className="field-help">PNG oder JPG — aus der Parts-Bibliothek wählen.</span>
                 </label>
                 <label className="field-stack" style={{ flex: 1, minWidth: "200px" }}>
                   <span className="field-label">Footer-Bild unten links</span>
-                  <select value={form.title_footer_image} onChange={(e) => setForm((f) => ({ ...f, title_footer_image: e.target.value }))}>
-                    <option value="">Kein Bild</option>
-                    {imageParts.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    options={imageParts}
+                    getId={(p) => String(p.id)}
+                    getLabel={(p) => p.name}
+                    value={form.title_footer_image || null}
+                    onChange={(p) => setForm((f) => ({ ...f, title_footer_image: p ? String(p.id) : "" }))}
+                    nullLabel="Kein Bild"
+                  />
                   <span className="field-help">Silhouette o.ä. — aus der Parts-Bibliothek wählen.</span>
                 </label>
                 <label className="field-stack" style={{ minWidth: "160px" }}>
@@ -1043,12 +1052,14 @@ function TemplateForm({
             {latexSlotDefinitions.map(({ key, label, help }) => (
               <label className="field-stack" key={key}>
                 <span className="field-label">{label}</span>
-                <select value={form[key as keyof TemplateFormState] as string} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}>
-                  <option value="">— Preset verwenden —</option>
-                  {(partsByType[key] ?? []).map((part) => (
-                    <option key={part.id} value={part.id}>{part.name}</option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  options={partsByType[key] ?? []}
+                  getId={(part) => String(part.id)}
+                  getLabel={(part) => part.name}
+                  value={(form[key as keyof TemplateFormState] as string) || null}
+                  onChange={(part) => setForm((f) => ({ ...f, [key]: part ? String(part.id) : "" }))}
+                  nullLabel="— Preset verwenden —"
+                />
                 <span className="field-help">{help}</span>
               </label>
             ))}

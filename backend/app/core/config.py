@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     latex_template_root: str = "/app/storage/latex_templates"
     export_root: str = "/app/storage/exports"
     upload_root: str = "/app/storage/uploads"
+    thumbnail_root: str = "/app/storage-local/thumbnails"
     abgabebox_storage_root: str = "/app/abgabebox-storage"
     abgabebox_base_url: str = "https://upload.tweber.ch"
     traefik_domain: str | None = None

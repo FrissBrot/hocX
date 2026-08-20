@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 
 import { TrackedChangeHideButton } from "@/components/ui/tracked-change-hide-button";
 import { usePopoverPosition, usePopoverDismiss } from "@/components/ui/popover";
+import { SearchInput } from "@/components/ui/search-input";
 import { formatDate } from "@/lib/utils/format";
 import { getCycleYear } from "@/lib/utils/cycle";
 import {
@@ -542,5 +543,52 @@ export function TodoMenuOption({
       <span>{label}</span>
       {subtle ? <span className="mini-menu-option-subtle">{subtle}</span> : null}
     </button>
+  );
+}
+
+// Search-filtered list of TodoMenuOptions for the dynamically-loaded (DB-backed) part
+// of a TodoMiniMenu - e.g. the "Termine"/template section below a few fixed static
+// options - so those menus get the app's standard search-to-filter pattern once the
+// list is long enough to need it.
+export function TodoMenuSearchList<T>({
+  items,
+  getKey,
+  getLabel,
+  getSubtle,
+  isActive,
+  onPick,
+  emptyLabel = "Keine Ergebnisse",
+  searchPlaceholder = "Suchen…",
+}: {
+  items: T[];
+  getKey: (item: T) => string | number;
+  getLabel: (item: T) => string;
+  getSubtle?: (item: T) => string | undefined;
+  isActive?: (item: T) => boolean;
+  onPick: (item: T) => void;
+  emptyLabel?: string;
+  searchPlaceholder?: string;
+}) {
+  const [search, setSearch] = useState("");
+  const filtered = search.trim()
+    ? items.filter((item) => getLabel(item).toLowerCase().includes(search.trim().toLowerCase()))
+    : items;
+  return (
+    <>
+      <SearchInput value={search} onChange={setSearch} placeholder={searchPlaceholder} />
+      {filtered.length === 0 ? (
+        <span className="assignee-empty">{emptyLabel}</span>
+      ) : (
+        filtered.map((item) => (
+          <TodoMenuOption
+            key={getKey(item)}
+            label={getLabel(item)}
+            subtle={getSubtle?.(item)}
+            active={isActive?.(item) ?? false}
+            onClick={() => onPick(item)}
+          />
+        ))
+      )}
+    </>
   );
 }
