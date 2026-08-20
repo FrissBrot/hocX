@@ -7,6 +7,7 @@ import { MfaAdminModal } from "@/components/security/mfa-admin-modal";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
 import { Tabs } from "@/components/ui/tabs";
 import { browserApiFetch } from "@/lib/api/client";
@@ -407,13 +408,13 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
                         <div className="role-picker">
                           <label className="field-stack">
                             <span className="field-label">Mandant</span>
-                            <select value={userForm.pickerTenantId} onChange={(event) => setUserForm((current) => ({ ...current, pickerTenantId: event.target.value }))}>
-                              {remainingTenantsToAdd.map((tenant) => (
-                                <option key={tenant.id} value={tenant.id}>
-                                  {tenant.name}
-                                </option>
-                              ))}
-                            </select>
+                            <SearchableSelect
+                              options={remainingTenantsToAdd}
+                              getId={(tenant) => String(tenant.id)}
+                              getLabel={(tenant) => tenant.name}
+                              value={userForm.pickerTenantId || null}
+                              onChange={(tenant) => setUserForm((current) => ({ ...current, pickerTenantId: tenant ? String(tenant.id) : "" }))}
+                            />
                           </label>
                           <label className="field-stack">
                             <span className="field-label">Rolle</span>
@@ -470,15 +471,13 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
           </label>
           <label className="field-stack">
             <span className="field-label">Zielbenutzer</span>
-            <select value={mergeTargetUserId} onChange={(event) => setMergeTargetUserId(event.target.value)}>
-              {mergeCandidates
-                .filter((user) => user.id !== mergeSourceUserId)
-                .map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.display_name} ({user.email})
-                  </option>
-                ))}
-            </select>
+            <SearchableSelect
+              options={mergeCandidates.filter((user) => user.id !== mergeSourceUserId)}
+              getId={(user) => String(user.id)}
+              getLabel={(user) => `${user.display_name} (${user.email})`}
+              value={mergeTargetUserId || null}
+              onChange={(user) => setMergeTargetUserId(user ? String(user.id) : "")}
+            />
           </label>
           <div className="modal-actions">
             <button type="button" className="button-inline" onClick={() => void mergeUsers()} disabled={!mergeTargetUserId}>

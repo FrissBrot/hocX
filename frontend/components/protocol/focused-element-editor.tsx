@@ -20,6 +20,7 @@ import { PlanningIconTrigger } from "@/components/protocol/planning/planning-ico
 import { TrackedWordDiff } from "@/components/protocol/tracked-word-diff";
 import { fetchCycleEvents } from "@/lib/api/cycle-events";
 import { TagInput } from "@/components/ui/tag-input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { bumpStatsCharts } from "@/components/protocol/chart-block";
 import { LockBadge } from "@/components/protocol/collaboration-presence";
 import { useProtocolCollaboration } from "@/lib/hooks/use-protocol-collaboration";
@@ -52,6 +53,7 @@ import {
   ProtocolEventDraft,
   TODO_STATUS,
   TodoMenuOption,
+  TodoMenuSearchList,
   TodoMiniMenu,
   asObject,
   attendanceParticipants,
@@ -1494,22 +1496,21 @@ export function FocusedElementEditor({
                               {todoDueEvents.length ? (
                                 <div className="mini-menu-section">
                                   <div className="mini-menu-section-title">Termine</div>
-                                  {todoDueEvents.map((event) => (
-                                    <TodoMenuOption
-                                      key={event.id}
-                                      label={event.title}
-                                      subtle={formatDateRange(event.event_date, event.event_end_date)}
-                                      active={todo.due_event_id === event.id}
-                                      onClick={() => {
-                                        void updateTodo(block.id, todo.id, {
-                                          due_date: null,
-                                          due_event_id: event.id,
-                                          due_marker: null,
-                                        });
-                                        closeMenu();
-                                      }}
-                                    />
-                                  ))}
+                                  <TodoMenuSearchList
+                                    items={todoDueEvents}
+                                    getKey={(event) => event.id}
+                                    getLabel={(event) => event.title}
+                                    getSubtle={(event) => formatDateRange(event.event_date, event.event_end_date)}
+                                    isActive={(event) => todo.due_event_id === event.id}
+                                    onPick={(event) => {
+                                      void updateTodo(block.id, todo.id, {
+                                        due_date: null,
+                                        due_event_id: event.id,
+                                        due_marker: null,
+                                      });
+                                      closeMenu();
+                                    }}
+                                  />
                                 </div>
                               ) : null}
                               </>
@@ -1784,25 +1785,27 @@ export function FocusedElementEditor({
                         <div className="list-block-config-bar">
                           <label className="list-block-config-item">
                             <span className="list-block-config-label">Gruppieren</span>
-                            <select
-                              value={linkedListGroupBy}
+                            <SearchableSelect
+                              options={listColOptions}
+                              getId={(o) => o.value}
+                              getLabel={(o) => o.label}
+                              value={linkedListGroupBy || null}
                               disabled={!blockEditable}
-                              onChange={(e) => void saveBlockConfiguration(block.id, { ...blockConfig, linked_list_group_by: e.target.value || null })}
-                            >
-                              <option value="">Keine Gruppierung</option>
-                              {listColOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                            </select>
+                              onChange={(o) => void saveBlockConfiguration(block.id, { ...blockConfig, linked_list_group_by: o?.value || null })}
+                              nullLabel="Keine Gruppierung"
+                            />
                           </label>
                           <label className="list-block-config-item">
                             <span className="list-block-config-label">Sortieren</span>
-                            <select
-                              value={linkedListSortBy}
+                            <SearchableSelect
+                              options={listColOptions}
+                              getId={(o) => o.value}
+                              getLabel={(o) => o.label}
+                              value={linkedListSortBy || null}
                               disabled={!blockEditable}
-                              onChange={(e) => void saveBlockConfiguration(block.id, { ...blockConfig, linked_list_sort_by: e.target.value || null, linked_list_sort_direction: e.target.value ? linkedListSortDirection : "asc" })}
-                            >
-                              <option value="">Manuell</option>
-                              {listColOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                            </select>
+                              onChange={(o) => void saveBlockConfiguration(block.id, { ...blockConfig, linked_list_sort_by: o?.value || null, linked_list_sort_direction: o?.value ? linkedListSortDirection : "asc" })}
+                              nullLabel="Manuell"
+                            />
                           </label>
                           <label className="list-block-config-item">
                             <select
@@ -2092,24 +2095,20 @@ export function FocusedElementEditor({
                                     {formatListEntryColumnValue(variableRawValue, "participants") || "Teilnehmer wählen"}
                                   </button>
                                 ) : variableValueType === "event" ? (
-                                  <select
-                                    data-form-input
-                                    value={variableRawValue?.event_id ?? ""}
+                                  <SearchableSelect
+                                    options={[...availableEvents].sort((left, right) => compareIsoDate(left.event_date, right.event_date))}
+                                    getId={(eventRow) => eventRow.id}
+                                    getLabel={(eventRow) => `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}`}
+                                    value={variableRawValue?.event_id ?? null}
                                     disabled={!blockEditable}
-                                    onKeyDown={handleFormInputKeyDown}
-                                    onChange={(event) => {
+                                    onChange={(eventRow) => {
                                       void updateListEntryFromBlock(block.id, linkedListId, linkedListEntryId, {
-                                        [variableColumnKey]: { event_id: event.target.value ? Number(event.target.value) : null },
+                                        [variableColumnKey]: { event_id: eventRow ? eventRow.id : null },
                                       });
                                     }}
-                                  >
-                                    <option value="">Termin wählen</option>
-                                    {[...availableEvents].sort((left, right) => compareIsoDate(left.event_date, right.event_date)).map((eventRow) => (
-                                      <option key={eventRow.id} value={eventRow.id}>
-                                        {formatDateRange(eventRow.event_date, eventRow.event_end_date)} · {eventRow.title}
-                                      </option>
-                                    ))}
-                                  </select>
+                                    nullLabel="Termin wählen"
+                                    triggerProps={{ "data-form-input": true, onKeyDown: handleFormInputKeyDown }}
+                                  />
                                 ) : (
                                   <textarea
                                     rows={1}
@@ -2171,23 +2170,19 @@ export function FocusedElementEditor({
                                 {multiParticipantSummary(row)}
                               </button>
                             ) : rowType === "event" ? (
-                              <select
-                                data-form-input
-                                value={row.event_id ?? ""}
-                                onKeyDown={handleFormInputKeyDown}
-                                onChange={(event) => {
+                              <SearchableSelect
+                                options={[...availableEvents].sort((left, right) => compareIsoDate(left.event_date, right.event_date))}
+                                getId={(eventRow) => eventRow.id}
+                                getLabel={(eventRow) => `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}`}
+                                value={row.event_id ?? null}
+                                onChange={(eventRow) => {
                                   const nextRows = [...((Array.isArray(blockConfig.rows) ? blockConfig.rows : []) as Array<Record<string, any>>)];
-                                  nextRows[index] = { ...nextRows[index], event_id: event.target.value ? Number(event.target.value) : null };
+                                  nextRows[index] = { ...nextRows[index], event_id: eventRow ? eventRow.id : null };
                                   void saveBlockConfiguration(block.id, { ...blockConfig, rows: nextRows });
                                 }}
-                              >
-                                <option value="">Termin wählen</option>
-                                {[...availableEvents].sort((left, right) => compareIsoDate(left.event_date, right.event_date)).map((eventRow) => (
-                                  <option key={eventRow.id} value={eventRow.id}>
-                                    {formatDateRange(eventRow.event_date, eventRow.event_end_date)} · {eventRow.title}
-                                  </option>
-                                ))}
-                              </select>
+                                nullLabel="Termin wählen"
+                                triggerProps={{ "data-form-input": true, onKeyDown: handleFormInputKeyDown }}
+                              />
                             ) : (
                               <textarea
                                 rows={1}
@@ -2429,16 +2424,15 @@ export function FocusedElementEditor({
                                               {multiParticipantSummary(value)}
                                             </button>
                                           ) : matrixRowType(row) === "event" ? (
-                                            <select value={value.event_id ?? ""}
-                                              onChange={(e) => updateMatrixCell(block.id, blockConfig, columnId!, rowId,
-                                                { event_id: e.target.value ? Number(e.target.value) : null }, true)}>
-                                              <option value="">Termin waehlen</option>
-                                              {sortedAvailableEvents.map((ev) => (
-                                                <option key={ev.id} value={ev.id}>
-                                                  {formatDateRange(ev.event_date, ev.event_end_date)} · {ev.title}
-                                                </option>
-                                              ))}
-                                            </select>
+                                            <SearchableSelect
+                                              options={sortedAvailableEvents}
+                                              getId={(ev) => ev.id}
+                                              getLabel={(ev) => `${formatDateRange(ev.event_date, ev.event_end_date)} · ${ev.title}`}
+                                              value={value.event_id ?? null}
+                                              onChange={(ev) => updateMatrixCell(block.id, blockConfig, columnId!, rowId,
+                                                { event_id: ev ? ev.id : null }, true)}
+                                              nullLabel="Termin waehlen"
+                                            />
                                           ) : (
                                             <textarea rows={1} className="todo-input"
                                               value={String(value.text_value ?? row.template_value ?? "")}
@@ -2963,17 +2957,16 @@ export function FocusedElementEditor({
                                   close();
                                 }}
                               />
-                              {otherTemplates.map((template) => (
-                                <TodoMenuOption
-                                  key={template.id}
-                                  label={template.name}
-                                  active={activeFollowupId === template.id}
-                                  onClick={() => {
-                                    patchBlockConfigValue(block.id, "followup_template_id", template.id, blockConfig);
-                                    close();
-                                  }}
-                                />
-                              ))}
+                              <TodoMenuSearchList
+                                items={otherTemplates}
+                                getKey={(template) => template.id}
+                                getLabel={(template) => template.name}
+                                isActive={(template) => activeFollowupId === template.id}
+                                onPick={(template) => {
+                                  patchBlockConfigValue(block.id, "followup_template_id", template.id, blockConfig);
+                                  close();
+                                }}
+                              />
                             </div>
                           )}
                         </TodoMiniMenu>

@@ -5,6 +5,7 @@ import { FormEvent, useMemo, useRef, useState } from "react";
 import { StructuredListTable } from "@/components/lists/structured-list-table";
 import { Modal } from "@/components/ui/modal";
 import { usePopoverDismiss } from "@/components/ui/popover";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -542,28 +543,30 @@ export function ListManager({
                   const vtype = exportFilterColumn === "column_one" ? exportListDef.column_one_value_type : exportListDef.column_two_value_type;
                   if (vtype === "participant" || vtype === "participants") {
                     return (
-                      <select
-                        className="input"
-                        value={exportFilterParticipantId}
-                        onChange={(e) => { setExportFilterParticipantId(e.target.value ? Number(e.target.value) : ""); clearExportUrl(); }}
-                        style={{ marginTop: 8 }}
-                      >
-                        <option value="">Alle</option>
-                        {availableParticipants.map((p) => <option key={p.id} value={p.id}>{p.display_name}</option>)}
-                      </select>
+                      <div style={{ marginTop: 8 }}>
+                        <SearchableSelect
+                          options={availableParticipants}
+                          getId={(p) => p.id}
+                          getLabel={(p) => p.display_name}
+                          value={exportFilterParticipantId || null}
+                          nullLabel="Alle"
+                          onChange={(p) => { setExportFilterParticipantId(p ? p.id : ""); clearExportUrl(); }}
+                        />
+                      </div>
                     );
                   }
                   if (vtype === "event") {
                     return (
-                      <select
-                        className="input"
-                        value={exportFilterEventId}
-                        onChange={(e) => { setExportFilterEventId(e.target.value ? Number(e.target.value) : ""); clearExportUrl(); }}
-                        style={{ marginTop: 8 }}
-                      >
-                        <option value="">Alle</option>
-                        {[...availableEvents].sort((a, b) => a.event_date.localeCompare(b.event_date)).map((e) => <option key={e.id} value={e.id}>{e.event_date} — {e.title}</option>)}
-                      </select>
+                      <div style={{ marginTop: 8 }}>
+                        <SearchableSelect
+                          options={[...availableEvents].sort((a, b) => a.event_date.localeCompare(b.event_date))}
+                          getId={(e) => e.id}
+                          getLabel={(e) => `${e.event_date} — ${e.title}`}
+                          value={exportFilterEventId || null}
+                          nullLabel="Alle"
+                          onChange={(e) => { setExportFilterEventId(e ? e.id : ""); clearExportUrl(); }}
+                        />
+                      </div>
                     );
                   }
                   return (

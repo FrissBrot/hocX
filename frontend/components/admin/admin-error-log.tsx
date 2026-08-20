@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Pagination } from "@/components/ui/pagination";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { browserApiFetch } from "@/lib/api/client";
 import { AdminTenantSummary, SystemErrorLogEntry, SystemErrorLogFilterOptions, SystemErrorLogPage } from "@/types/api";
 
@@ -75,36 +76,36 @@ export function AdminErrorLog({ initialPage, initialFilterOptions, tenants }: Pr
         <div className="filter-row" style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
           <label className="field-stack">
             <span className="field-label">Mandant</span>
-            <select value={tenantId} onChange={(e) => resetAndSet(setTenantId)(e.target.value)}>
-              <option value="">Alle</option>
-              {tenants.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={tenants}
+              getId={(t) => String(t.id)}
+              getLabel={(t) => t.name}
+              value={tenantId || null}
+              onChange={(t) => resetAndSet(setTenantId)(t ? String(t.id) : "")}
+              nullLabel="Alle"
+            />
           </label>
           <label className="field-stack">
             <span className="field-label">Fehlertyp</span>
-            <select value={errorType} onChange={(e) => resetAndSet(setErrorType)(e.target.value)}>
-              <option value="">Alle</option>
-              {filterOptions.error_types.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={filterOptions.error_types}
+              getId={(t) => t}
+              getLabel={(t) => t}
+              value={errorType || null}
+              onChange={(t) => resetAndSet(setErrorType)(t ?? "")}
+              nullLabel="Alle"
+            />
           </label>
           <label className="field-stack">
             <span className="field-label">Quelle</span>
-            <select value={source} onChange={(e) => resetAndSet(setSource)(e.target.value)}>
-              <option value="">Alle</option>
-              {filterOptions.sources.map((s) => (
-                <option key={s} value={s}>
-                  {SOURCE_LABELS[s] ?? s}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={filterOptions.sources}
+              getId={(s) => s}
+              getLabel={(s) => SOURCE_LABELS[s] ?? s}
+              value={source || null}
+              onChange={(s) => resetAndSet(setSource)(s ?? "")}
+              nullLabel="Alle"
+            />
           </label>
         </div>
       </article>

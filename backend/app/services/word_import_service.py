@@ -1044,6 +1044,19 @@ def _event_conflict_key(event_id: int, raw_title: str) -> str:
     return f"{event_id}|{_normalize(raw_title)}"
 
 
+# Identifies one recurring "status new" event proposal the reviewer explicitly
+# dismissed ("Ignorieren") - see WordImportEventMapping.remembered_dismissed /
+# WordImportService.commit's event_ignore_updates. Includes the Matrix context (when
+# present) since the same title text can legitimately appear in several different
+# Matrix columns/rows with independent ignore decisions - unlike _event_conflict_key,
+# there is no matched Event id to key against here (status "new" means none was found).
+def _event_ignore_key(raw_title: str, matrix_key: str | None, row_id: str | None, column_key: str | None) -> str:
+    base = _normalize(raw_title)
+    if matrix_key:
+        return f"{matrix_key}:{row_id}:{column_key}:{base}"
+    return base
+
+
 def _dedupe_event_mappings(event_mappings: list[WordImportEventMapping]) -> list[WordImportEventMapping]:
     """The same event can legitimately be extracted twice - e.g. a duplicate row in
     the document's own "Termine" table, or (less commonly) the same date showing up
@@ -1222,6 +1235,37 @@ def _participant_name_score(raw_name: str, participant: Participant) -> float:
     return score
 
 
+def _unique_bare_name_match(raw_name: str, participants: list[Participant]) -> Participant | None:
+    """A bare single-word raw name (e.g. "Remo") that exactly identifies exactly ONE
+    participant - by first name (nickname-aware, e.g. "Sepp" for "Josef") OR by last
+    name (Timo: "vornamen können auch nachnamen sein" - a document sometimes refers to
+    someone by surname alone) - is unambiguous by construction: there is no second,
+    differently-spelled candidate that could have silently outscored it. _name_score's
+    _BARE_FIRST_NAME_MATCH_SCORE cap exists specifically because a bare first name
+    COULD be a namesake among several participants; when the roster itself proves
+    there's only one, that caution no longer applies and _match_names below claims
+    this participant directly, bypassing the cap (and the adaptive match_threshold
+    entirely) the same way an explicit name_overrides entry already does. Returns
+    None for a multi-word raw name, or when zero or more than one participant matches
+    (still genuinely ambiguous, or no exact hit - falls back to ordinary fuzzy/capped
+    scoring either way)."""
+    parts = raw_name.split(None, 1)
+    if len(parts) != 1 or not parts[0].strip():
+        return None
+    canonical_raw = _canonical_first_token(parts[0])
+    folded_raw = _fold_umlauts(parts[0].strip().lower())
+    matches: list[Participant] = []
+    for participant in participants:
+        first_name = participant.first_name or (participant.display_name or "").split(None, 1)[0]
+        if first_name and canonical_raw == _canonical_first_token(first_name):
+            matches.append(participant)
+            continue
+        last_name = participant.last_name or ""
+        if last_name and folded_raw == _fold_umlauts(last_name.strip().lower()):
+            matches.append(participant)
+    return matches[0] if len(matches) == 1 else None
+
+
 def _match_names(
     raw_text: str,
     participants: list[Participant],
@@ -1253,9 +1297,28 @@ def _match_names(
             resolutions[index] = override_id
             used_participant_ids.add(override_id)
 
+    def _rejected_ids_for_name(name: str) -> set:
+        return set((rejected_by_name.get(f"name:{_normalize(name)}") or {}).get("rejected") or [])
+
+    # See _unique_bare_name_match's docstring - a bare name unambiguously identifying
+    # exactly one still-unclaimed participant is claimed directly here, same as an
+    # explicit override above, BEFORE the capped/thresholded scoring below ever runs.
+    # Skips a participant already rejected for this exact raw name (A.4 negative
+    # feedback) - uniqueness in the roster doesn't override a reviewer's own earlier
+    # "no, not that one" for this same text.
+    for index, name in enumerate(names):
+        if index in resolutions:
+            continue
+        unique_match = _unique_bare_name_match(
+            name, [participant for participant in participants if participant.id not in used_participant_ids]
+        )
+        if unique_match is not None and unique_match.id not in _rejected_ids_for_name(name):
+            resolutions[index] = unique_match.id
+            used_participant_ids.add(unique_match.id)
+
     def _score(index: int, participant: Participant) -> float:
         name = names[index]
-        rejected_ids = set((rejected_by_name.get(f"name:{_normalize(name)}") or {}).get("rejected") or [])
+        rejected_ids = _rejected_ids_for_name(name)
         score = _participant_name_score(name, participant)
         if participant.id in rejected_ids:
             score -= _REJECTED_CANDIDATE_PENALTY
@@ -1842,6 +1905,7 @@ class WordImportService:
                 "event_conflict_resolutions": profile_config.get("event_conflict_resolutions", {}),
                 "new_event_link_resolutions": profile_config.get("new_event_link_resolutions", {}),
                 "no_link_names": profile_config.get("no_link_names", []),
+                "event_ignored_keys": profile_config.get("event_ignored_keys", []),
             }
         heading_to_target = profile_config.get("heading_to_target", {})
         table_roles_by_signature = profile_config.get("table_roles_by_signature", {})
@@ -1883,6 +1947,11 @@ class WordImportService:
         # resolved as "Keinen verknüpfen" (not a real participant) before, so the same
         # row appearing again in a later import doesn't need to be re-flagged.
         no_link_names = set(profile_config.get("no_link_names", []))
+        # See _event_ignore_key / WordImportService.commit's event_ignore_updates - raw
+        # keys for "status new" event proposals the reviewer already explicitly
+        # dismissed before, so the same recurring non-Termin text (e.g. a dateless
+        # category label) defaults to "Ignorieren" again instead of asking every import.
+        event_ignored_keys = set(profile_config.get("event_ignored_keys", []))
         profile_applied = bool(
             heading_to_target or table_roles_by_signature or participant_name_overrides or matrix_column_overrides
         )
@@ -2523,6 +2592,9 @@ class WordImportService:
                     raw_title=title,
                     raw_date=raw_date,
                     raw_end_date=raw_end_date,
+                    remembered_dismissed=(
+                        status == "new" and _event_ignore_key(title, None, None, None) in event_ignored_keys
+                    ),
                     status=status,
                     matched_event_id=best_event.id if best_event else None,
                     matched_event_title=best_event.title if best_event else None,
@@ -3069,6 +3141,11 @@ class WordImportService:
                                     raw_date=extracted_date,
                                     raw_end_date=extracted_end_date,
                                     status=status,
+                                    remembered_dismissed=(
+                                        status == "new"
+                                        and _event_ignore_key(column_title, matrix_key, str(best_row.get("id")), column_key)
+                                        in event_ignored_keys
+                                    ),
                                     matched_event_id=matched_event.id if matched_event else None,
                                     matched_event_title=matched_event.title if matched_event else None,
                                     matched_event_date=matched_event.event_date if matched_event else None,
@@ -3349,6 +3426,28 @@ class WordImportService:
             # same append-only-per-key pattern as event_conflict_updates. Keyed on raw
             # title alone (there is no matched event to key against yet).
             new_event_link_updates: dict[str, dict] = {}
+            # Additive memory of "this exact status-new event proposal was explicitly
+            # dismissed" (see _event_ignore_key / WordImportEventMapping.
+            # remembered_dismissed) - merged into
+            # WordImportProfile.mapping_config_json["event_ignored_keys"] below. Built
+            # up front from the whole dismissed_events list rather than inside the
+            # payload.events loop below, since a dismissed proposal is never part of
+            # payload.events (it creates/links nothing).
+            event_ignore_additions = {
+                _event_ignore_key(item.raw_title, item.matrix_key, item.row_id, item.column_key)
+                for item in payload.dismissed_events
+            }
+            # A title that now got a real positive decision (approved, creating/linking
+            # an actual Event) can't stay remembered as "Ignorieren" too - same
+            # rationale as no_link_set below for participant names. Matched on the
+            # normalized title alone (not full Matrix-scoped key) since
+            # WordImportEventCommit doesn't carry matrix/row/column context - slightly
+            # broader than strictly necessary (clears every ignored key sharing this
+            # title, even in an unrelated Matrix column) but never leaves a stale
+            # "still ignored" entry directly contradicting an explicit approval.
+            event_ignore_removed_titles = {
+                _normalize(event_commit.raw_title) for event_commit in payload.events if event_commit.approved
+            }
             for event_commit in payload.events:
                 if not event_commit.approved:
                     continue
@@ -3863,7 +3962,7 @@ class WordImportService:
             if (
                 heading_updates or table_role_updates or name_updates or rejected_candidate_updates
                 or event_conflict_updates or new_event_link_updates or no_link_name_updates
-                or matrix_column_overrides_updates
+                or matrix_column_overrides_updates or event_ignore_additions or event_ignore_removed_titles
             ):
                 profile = db.execute(
                     select(WordImportProfile).where(
@@ -3930,6 +4029,12 @@ class WordImportService:
                 # changing their mind about a name isn't stuck with the old decision forever.
                 no_link_set = set(config.get("no_link_names", [])) | no_link_name_updates
                 no_link_set -= set(name_map.keys())
+                event_ignore_set = set(config.get("event_ignored_keys", [])) | event_ignore_additions
+                event_ignore_set = {
+                    key
+                    for key in event_ignore_set
+                    if key.rsplit(":", 1)[-1] not in event_ignore_removed_titles
+                }
                 profile.mapping_config_json = {
                     "heading_to_target": heading_map,
                     "table_roles_by_signature": table_map,
@@ -3939,6 +4044,7 @@ class WordImportService:
                     "event_conflict_resolutions": event_conflict_map,
                     "new_event_link_resolutions": new_event_link_map,
                     "no_link_names": sorted(no_link_set),
+                    "event_ignored_keys": sorted(event_ignore_set),
                 }
 
             protocol_service.update_protocol(db, protocol_id, ProtocolUpdate(status="abgeschlossen"))

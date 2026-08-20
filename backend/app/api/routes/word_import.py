@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, require_writer
-from app.models import Template, WordImportDocument
+from app.models import Template, Tenant, WordImportDocument
 from app.schemas.word_import import (
     WordImportAnalysis,
     WordImportCommit,
@@ -19,6 +19,7 @@ from app.schemas.word_import import (
     WordImportDocumentUploadResult,
     WordImportDraftSave,
     WordImportDuplicateCandidate,
+    WordImportLastTemplate,
     WordImportQualityBucket,
     WordImportQualityStats,
 )
@@ -203,6 +204,35 @@ async def ingest_word_import_documents(
         ],
         errors=errors + ingest_errors,
     )
+
+
+@router.get("/tools/word-import/last-template", response_model=WordImportLastTemplate)
+def get_last_word_import_template(
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_writer(user)
+    tenant = db.get(Tenant, user.current_tenant_id)
+    return WordImportLastTemplate(template_id=tenant.last_word_import_template_id if tenant else None)
+
+
+@router.put("/tools/word-import/last-template", response_model=WordImportLastTemplate)
+def set_last_word_import_template(
+    payload: WordImportLastTemplate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_writer(user)
+    tenant = db.get(Tenant, user.current_tenant_id)
+    if tenant is None:
+        raise HTTPException(status_code=404, detail="Mandant nicht gefunden")
+    if payload.template_id is not None:
+        template = db.get(Template, payload.template_id)
+        if template is None or template.tenant_id != user.current_tenant_id:
+            raise HTTPException(status_code=400, detail="Vorlage nicht gefunden")
+    tenant.last_word_import_template_id = payload.template_id
+    db.commit()
+    return WordImportLastTemplate(template_id=tenant.last_word_import_template_id)
 
 
 @router.get("/tools/word-import/documents", response_model=list[WordImportDocumentSummary])

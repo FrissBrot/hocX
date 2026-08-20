@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { PillMenu } from "@/components/ui/pill-menu";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { ATTENDANCE_OPTIONS } from "@/components/protocol/protocol-editor-shared";
 import { AssigneeOption, TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
 import { browserApiFetch } from "@/lib/api/client";
@@ -1675,7 +1676,10 @@ export function WordImportWizard({
         title_source: mapping.remembered_title_source ?? "existing",
         date_source: mapping.remembered_date_source ?? "existing",
         approved: false,
-        dismissed: false,
+        // See WordImportEventMapping.remembered_dismissed - this exact status-"new"
+        // proposal (no live Termin match) was already explicitly dismissed in an
+        // earlier import, so it defaults to "Ignorieren" again instead of asking.
+        dismissed: mapping.remembered_dismissed,
         tag: mapping.tag,
         participant_count: mapping.participant_count,
         matrix_key: mapping.matrix_key,
@@ -1692,9 +1696,12 @@ export function WordImportWizard({
       // reviewer must explicitly confirm creating it - unless this exact resolution
       // was already made identically in an earlier import (see WordImportEventMapping.
       // remembered_title_source/remembered_date_source above), in which case it's
-      // pre-applied instead of asking again.
+      // pre-applied instead of asking again. A remembered dismissal (draft.dismissed
+      // above) takes precedence over all of that - never auto-approve a proposal the
+      // reviewer already told a previous import isn't a real Termin.
       draft.approved =
-        !eventStillOpen(draft) || mapping.remembered_title_source !== null || mapping.remembered_date_source !== null;
+        !draft.dismissed &&
+        (!eventStillOpen(draft) || mapping.remembered_title_source !== null || mapping.remembered_date_source !== null);
       return draft;
     });
     const freshLists: ListDraft[] = result.list_mappings.map((mapping) => {
@@ -2206,6 +2213,18 @@ export function WordImportWizard({
             originally_suggested_score: entry.originallySuggestedScore,
           };
         }),
+        // Explicitly dismissed ("Ignorieren") status-"new" proposals - sent separately
+        // from `events` (which only ever carries approved rows) so the backend can
+        // remember this exact "not a real Termin" decision, see
+        // WordImportEventMapping.remembered_dismissed.
+        dismissed_events: events
+          .filter((entry) => entry.dismissed)
+          .map((entry) => ({
+            raw_title: entry.raw_title,
+            matrix_key: entry.matrix_key,
+            row_id: entry.row_id,
+            column_key: entry.column_key,
+          })),
         lists: approvedLists.map((entry) => ({
           table_index: entry.table_index,
           list_definition_id: tableRoles[entry.table_index]?.list_definition_id ?? 0,
@@ -2362,13 +2381,13 @@ export function WordImportWizard({
         <div className="grid word-import-narrow">
           <label className="field-stack">
             <span className="field-label">Vorlage</span>
-            <select value={templateId ?? ""} onChange={(event) => setTemplateId(Number(event.target.value))}>
-              {templates.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.name}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={templates}
+              getId={(template) => template.id}
+              getLabel={(template) => template.name}
+              value={templateId}
+              onChange={(template) => setTemplateId(template ? template.id : null)}
+            />
           </label>
           <label className="field-stack">
             <span className="field-label">Word- oder PDF-Datei (.docx, .pdf)</span>
@@ -2633,17 +2652,14 @@ export function WordImportWizard({
                                       onChange={(option) => updateTableRole(table.index, { list_definition_id: option.id })}
                                     />
                                   ) : current.role === "matrix" ? (
-                                    <select
-                                      value={current.matrix_key ?? ""}
-                                      onChange={(event) => updateTableRole(table.index, { matrix_key: event.target.value || null })}
-                                    >
-                                      <option value="">– auswählen –</option>
-                                      {analysis.matrix_options.map((option) => (
-                                        <option key={option.matrix_key} value={option.matrix_key}>
-                                          {option.title}
-                                        </option>
-                                      ))}
-                                    </select>
+                                    <SearchableSelect
+                                      options={analysis.matrix_options}
+                                      getId={(option) => option.matrix_key}
+                                      getLabel={(option) => option.title}
+                                      value={current.matrix_key ?? null}
+                                      onChange={(option) => updateTableRole(table.index, { matrix_key: option ? option.matrix_key : null })}
+                                      nullLabel="– auswählen –"
+                                    />
                                   ) : (
                                     <span className="muted">—</span>
                                   )}
@@ -2653,22 +2669,19 @@ export function WordImportWizard({
                               <td>
                                 {current.role === "list" ? (
                                   <div className="grid" style={{ gap: "4px" }}>
-                                    <select
+                                    <SearchableSelect
                                       className={table.needs_manual_grouping ? "word-import-select-warning" : undefined}
-                                      value={current.list_grouping_strategy ?? ""}
-                                      onChange={(event) =>
+                                      options={table.available_grouping_strategies}
+                                      getId={(strategy) => strategy}
+                                      getLabel={(strategy) => listGroupingStrategyLabel(strategy)}
+                                      value={current.list_grouping_strategy ?? null}
+                                      onChange={(strategy) =>
                                         updateTableRole(table.index, {
-                                          list_grouping_strategy: (event.target.value || null) as ListGroupingStrategy | null,
+                                          list_grouping_strategy: (strategy ?? null) as ListGroupingStrategy | null,
                                         })
                                       }
-                                    >
-                                      <option value="">Automatisch</option>
-                                      {table.available_grouping_strategies.map((strategy) => (
-                                        <option key={strategy} value={strategy}>
-                                          {listGroupingStrategyLabel(strategy)}
-                                        </option>
-                                      ))}
-                                    </select>
+                                      nullLabel="Automatisch"
+                                    />
                                     {table.needs_manual_grouping && !current.list_grouping_strategy && (
                                       <span className="muted" style={{ fontSize: "0.8em" }}>
                                         Liste ist noch leer – bitte Gruppierung prüfen und ggf. anpassen.

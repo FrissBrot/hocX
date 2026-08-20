@@ -1483,7 +1483,8 @@ input[type="radio"] {
   gap: 12px;
 }
 
-.csv-import-mapping-field select.mapping-unmapped {
+.csv-import-mapping-field select.mapping-unmapped,
+.csv-import-mapping-field .mapping-unmapped .mini-menu-trigger-label {
   color: var(--muted);
 }
 
