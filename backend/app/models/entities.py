@@ -51,6 +51,10 @@ class Tenant(Base, TimestampMixin):
     last_word_import_template_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("template.id", ondelete="SET NULL")
     )
+    # NULL = kein Limit gesetzt (Standard fuer alle bestehenden Mandanten). Vom Adminportal aus
+    # gesetzt (siehe AdminTenantStorageQuotaUpdate), gegen StorageService.breakdown_for_tenant
+    # geprueft.
+    storage_quota_bytes: Mapped[int | None] = mapped_column(BigInteger)
 
 
 class PlatformOidcConfig(Base, TimestampMixin, UpdatedAtMixin):
