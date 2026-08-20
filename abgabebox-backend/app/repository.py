@@ -103,6 +103,49 @@ def latest_status_by_element(db: Session, *, assignment_id: int) -> dict[tuple[i
     return latest
 
 
+def list_checksums_for_element(
+    db: Session, *, assignment_id: int, event_id: int | None, list_entry_id: int | None
+) -> set[str]:
+    """SHA-256-Checksums aller bereits fuer dieses Abgabe-Element hochgeladenen Dateien -
+    fuer die Exakt-Duplikat-Pruefung in routes/public.py (verhindert, dass dieselbe Datei
+    zweimal fuers gleiche Element eingereicht wird). Element-Scope statt mandantenweit,
+    damit ein zufaelliger Hash-Treffer zwischen zwei verschiedenen Personen keine legitime
+    Abgabe blockiert."""
+    rows = db.execute(
+        select(stored_file_table.c.checksum_sha256)
+        .select_from(
+            submission_upload_file_table.join(
+                submission_upload_table,
+                submission_upload_table.c.id == submission_upload_file_table.c.upload_id,
+            ).join(
+                stored_file_table,
+                stored_file_table.c.id == submission_upload_file_table.c.stored_file_id,
+            )
+        )
+        .where(
+            submission_upload_table.c.assignment_id == assignment_id,
+            submission_upload_table.c.event_id == event_id,
+            submission_upload_table.c.list_entry_id == list_entry_id,
+            stored_file_table.c.checksum_sha256.is_not(None),
+        )
+    )
+    return {row[0] for row in rows}
+
+
+def list_tenant_image_hashes(db: Session, *, tenant_id: int) -> list[tuple[int, str]]:
+    """(id, perceptual_hash) aller bereits gehashten Bilder eines Mandanten - fuer die
+    mandantenweite Bild-Aehnlichkeitswarnung. Erfasst automatisch Bilder aus beiden
+    Upload-Wegen (Protokoll-Bilder im Haupt-Backend UND Abgabebox-Einreichungen), da beide
+    Services in dieselbe stored_file-Tabelle schreiben."""
+    rows = db.execute(
+        select(stored_file_table.c.id, stored_file_table.c.perceptual_hash).where(
+            stored_file_table.c.tenant_id == tenant_id,
+            stored_file_table.c.perceptual_hash.is_not(None),
+        )
+    )
+    return [(row[0], row[1]) for row in rows]
+
+
 def count_files_by_element(db: Session, *, assignment_id: int) -> dict[tuple[int | None, int | None], int]:
     """Anzahl bereits hochgeladener Dateien je (event_id, list_entry_id), ueber alle
     kumulativen Upload-Vorgaenge eines Elements hinweg - fuer die "bereits hochgeladen"-Anzeige
@@ -239,6 +282,7 @@ def insert_full_upload(
                 storage_path=f["storage_path"],
                 file_size_bytes=f["file_size_bytes"],
                 checksum_sha256=f["checksum_sha256"],
+                perceptual_hash=f.get("perceptual_hash"),
                 scan_status=scan_status,
             )
             .returning(stored_file_table.c.id)

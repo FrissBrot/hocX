@@ -22,6 +22,14 @@ class Settings(BaseSettings):
         default="https://api.friendlycaptcha.com/api/v2/captcha/siteverify",
         validation_alias="FRIENDLY_CAPTCHA_VERIFY_URL",
     )
+    # Signs the short-lived session token issued after a successful FriendlyCaptcha solve (see
+    # captcha.py's mint_captcha_session_token) so a visitor only has to pass the actual bot-check
+    # once per page visit instead of once per upload - a FriendlyCaptcha solution is single-use
+    # against their siteverify endpoint (a second verify of the same solution fails), so this
+    # token is what actually stays valid for repeat uploads, not the raw solution itself. Empty
+    # default fails closed, same as friendly_captcha_api_key/sitekey above.
+    captcha_session_secret: str = Field(default="", validation_alias="ABGABEBOX_CAPTCHA_SESSION_SECRET")
+    captcha_session_ttl_minutes: int = Field(default=120, validation_alias="ABGABEBOX_CAPTCHA_SESSION_TTL_MINUTES")
     cors_allow_origin: str = Field(default="https://abgabe.tweber.ch", validation_alias="ABGABEBOX_CORS_ORIGIN")
     clamav_host: str = Field(default="clamav", validation_alias="CLAMAV_HOST")
     clamav_port: int = Field(default=3310, validation_alias="CLAMAV_PORT")
