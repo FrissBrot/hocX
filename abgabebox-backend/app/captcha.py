@@ -13,6 +13,14 @@ def _session_scope(tenant_slug: str, assignment_slug: str, element_ref: str) -> 
     return f"{tenant_slug}:{assignment_slug}:{element_ref}"
 
 
+def captcha_enabled() -> bool:
+    """FriendlyCaptcha ist nur aktiv, wenn Sitekey UND API-Key konfiguriert sind. Ohne beide gilt
+    kein Captcha als noetig (typischerweise lokale Entwicklung oder Test-Stacks ohne eigene
+    FriendlyCaptcha-Keys) - Frontend zeigt dann einen Platzhalter statt des echten Widgets, und
+    verify_captcha/verify_captcha_session_token unten lassen entsprechend alles durch."""
+    return bool(settings.friendly_captcha_api_key and settings.friendly_captcha_sitekey)
+
+
 def mint_captcha_session_token(tenant_slug: str, assignment_slug: str, element_ref: str) -> str:
     """Issued once after a real FriendlyCaptcha solve passes verify_captcha() below - lets the
     frontend prove "a human already passed the bot-check on this page" for subsequent uploads
@@ -34,8 +42,13 @@ def mint_captcha_session_token(tenant_slug: str, assignment_slug: str, element_r
 
 
 def verify_captcha_session_token(token: str, tenant_slug: str, assignment_slug: str, element_ref: str) -> bool:
+    if not captcha_enabled():
+        # Kein FriendlyCaptcha konfiguriert -> Sitzungs-Check entfaellt komplett, siehe
+        # captcha_enabled() oben.
+        return True
     if not settings.captcha_session_secret:
-        # Nicht konfiguriert - fail closed, analog zu verify_captcha unten.
+        # Captcha-Keys gesetzt, Sitzungs-Secret aber nicht - fail closed, das ist ein echter
+        # Konfigurationsfehler und keine bewusste "kein Captcha noetig"-Situation.
         return False
     if not token or "." not in token:
         return False
@@ -58,9 +71,10 @@ def verify_captcha_session_token(token: str, tenant_slug: str, assignment_slug: 
 
 
 async def verify_captcha(solution: str) -> bool:
-    if not settings.friendly_captcha_api_key or not settings.friendly_captcha_sitekey:
-        # Nicht konfiguriert (z.B. lokale Entwicklung) - fail closed, kein Upload ohne Captcha.
-        return False
+    if not captcha_enabled():
+        # Nicht konfiguriert (z.B. lokale Entwicklung/Test-Stack) - kein Captcha noetig, siehe
+        # captcha_enabled() oben.
+        return True
     if not solution:
         return False
     try:

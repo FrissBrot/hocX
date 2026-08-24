@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, DragEvent, FormEvent, useCallback, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { CaptchaWidget } from "@/components/captcha-widget";
 import { publicApiUrl } from "@/lib/api";
@@ -101,6 +101,17 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
       requestFreshCaptcha();
     }
   }, [tenantSlug, assignmentSlug, elementRef]);
+
+  // Kein Sitekey konfiguriert (lokale Entwicklung/Test-Stack ohne eigene FriendlyCaptcha-Keys) -
+  // das Widget kann gar nicht laden, also direkt den Backend-Austausch anstossen; captcha.py
+  // laesst den Platzhalter-Wert durch, solange dort ebenfalls keine Keys gesetzt sind (siehe
+  // captcha_enabled() im Backend). Ist doch ein Sitekey gesetzt, greift stattdessen der echte
+  // Widget-Callback oben.
+  useEffect(() => {
+    if (!sitekey) {
+      handleSolved("no-friendly-captcha-configured");
+    }
+  }, [sitekey, handleSolved]);
 
   // Startet einen frischen Sicherheitscheck (z.B. nach abgelaufenem Sitzungs-Token) - der `key`-
   // Wechsel zwingt React, das Widget komplett neu zu montieren, was dank data-start="auto" sofort
@@ -236,8 +247,11 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
 
       {/* Captcha - laeuft einmal beim Laden der Seite, bleibt danach fuer alle weiteren Uploads
           gueltig (siehe handleSolved oben) - das Widget selbst wird nach erfolgreichem Eintausch
-          ausgeblendet, nur der Status bleibt sichtbar. */}
-      {sitekey && (
+          ausgeblendet, nur der Status bleibt sichtbar. Ohne Sitekey (kein FriendlyCaptcha
+          konfiguriert) zeigen wir statt des Widgets nur einen Platzhalter - der Eintausch laeuft
+          im Hintergrund trotzdem (siehe useEffect oben), damit der Rest des Formulars unveraendert
+          bleibt. */}
+      {sitekey ? (
         <div style={{ margin: "20px 0 4px" }}>
           {!captchaSessionToken && (
             <CaptchaWidget key={captchaKey} sitekey={sitekey} onSolved={handleSolved} onExpired={() => { exchangedSolutionRef.current = null; }} />
@@ -249,6 +263,10 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
                 ? "Sicherheitscheck wird geprüft…"
                 : "Sicherheitscheck läuft…"}
           </div>
+        </div>
+      ) : (
+        <div style={{ margin: "20px 0 4px" }}>
+          <div className="captcha-placeholder">Sicherheitscheck (kein FriendlyCaptcha konfiguriert – Test-/Dev-Betrieb)</div>
         </div>
       )}
 

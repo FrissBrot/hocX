@@ -339,6 +339,14 @@ input[type="file"] {
   color: var(--c0);
 }
 
+.captcha-placeholder {
+  font-size: 0.8rem;
+  color: var(--muted);
+  padding: 10px 12px;
+  border: 1.5px dashed color-mix(in srgb, var(--muted) 40%, transparent);
+  border-radius: 8px;
+}
+
 .upload-success {
   text-align: center;
   padding: 40px 20px;
