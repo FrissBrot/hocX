@@ -10083,43 +10083,23 @@ input[type="radio"] {
   white-space: nowrap;
 }
 
-/* Wrapper for InlineDateField - a formatted dd.mm.yyyy label with a fully
-   transparent native <input type="date"> stacked on top so clicks/focus still
-   hit the real input (and its calendar picker), but the browser never gets to
-   render its own locale-formatted text (e.g. "10/14/2025" on en-US Chrome). */
-.word-import-inline-date {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  vertical-align: baseline;
-}
-
-.word-import-inline-date input[type="date"] {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  width: 100%;
-  min-height: 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-}
-
+/* DateFieldButton - opens the styled DateEditorModal popup, formatted dd.mm.yyyy. */
 .word-import-filebar-date {
   display: inline-block;
   border: 1px solid transparent;
   padding: 1px 4px;
   margin: -1px -4px;
   border-radius: 6px;
+  background: none;
   color: var(--muted);
   font: inherit;
   font-size: 0.92rem;
   white-space: nowrap;
+  cursor: pointer;
 }
 
-.word-import-inline-date:hover .word-import-filebar-date,
-.word-import-inline-date:focus-within .word-import-filebar-date {
+.word-import-filebar-date:hover,
+.word-import-filebar-date:focus-visible {
   border-color: var(--border-strong);
   background: var(--panel);
   color: var(--text);
@@ -10170,6 +10150,14 @@ input[type="radio"] {
   background: var(--panel-solid);
   border-color: color-mix(in srgb, var(--warning) 40%, transparent 60%);
   cursor: pointer;
+}
+
+/* Wraps a DateInput (text entry + native-picker button) inline inside a
+   .word-import-alert-block row - fixed width so it doesn't stretch full-width
+   like DateInput normally does in a form field. */
+.word-import-alert-date-picker {
+  width: 176px;
+  min-width: 176px;
 }
 
 /* Inline conflict-resolution box (event date/title, list column-two) inside a

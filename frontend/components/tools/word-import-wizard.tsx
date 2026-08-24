@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Badge, BadgeVariant } from "@/components/ui/badge";
+import { DateInput } from "@/components/ui/date-input";
+import { Modal } from "@/components/ui/modal";
 import { PillMenu } from "@/components/ui/pill-menu";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { ATTENDANCE_OPTIONS } from "@/components/protocol/protocol-editor-shared";
@@ -168,31 +170,73 @@ function SpinnerIcon({ size = 14 }: { size?: number }) {
   );
 }
 
-// Native <input type="date"> always renders its OWN text in the browser/OS locale
-// (e.g. "10/14/2025" on an en-US Chrome) - CSS can't override that. To always show
-// dd.mm.yyyy we overlay a formatted label on top of a fully transparent native input;
-// the input still handles the click and the calendar picker, it's just invisible.
-function InlineDateField({
+// Opens the styled DateEditorModal instead of relying on a native <input type="date">
+// directly in the page flow - clicking anywhere in the browser/OS chrome around a bare
+// native date input is unreliable (some browsers only open the picker when the tiny
+// calendar-icon affordance itself is hit), which is exactly why editing the date used
+// to silently do nothing for some users.
+function DateFieldButton({
   value,
-  onChange,
+  onClick,
   className,
   placeholder = "– Datum wählen –",
 }: {
   value: string;
-  onChange: (value: string) => void;
+  onClick: () => void;
   className?: string;
   placeholder?: string;
 }) {
   return (
-    <span className="word-import-inline-date">
-      <span className={className}>{value ? formatDate(value) : placeholder}</span>
-      <input
-        type="date"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        aria-label="Datum"
-      />
-    </span>
+    <button type="button" className={className} onClick={onClick}>
+      {value ? formatDate(value) : placeholder}
+    </button>
+  );
+}
+
+// Styled popup for correcting the auto-detected protocol date by hand - either by typing
+// dd.mm.yyyy directly or via the native calendar picker (opened through DateInput's own
+// button, which uses showPicker() rather than depending on a raw click hitting an
+// invisible input). Confirming re-runs the analysis with the new date as an override hint,
+// which is also what recomputes the document's display name server-side.
+function DateEditorModal({
+  open,
+  initialValue,
+  onCancel,
+  onConfirm,
+  busy,
+}: {
+  open: boolean;
+  initialValue: string;
+  onCancel: () => void;
+  onConfirm: (value: string) => void;
+  busy: boolean;
+}) {
+  const [draft, setDraft] = useState(initialValue);
+
+  useEffect(() => {
+    if (open) {
+      setDraft(initialValue);
+    }
+  }, [open, initialValue]);
+
+  return (
+    <Modal open={open} title="Protokolldatum anpassen" onClose={onCancel}>
+      <div className="grid" style={{ gap: "0.75rem" }}>
+        <p className="muted" style={{ margin: 0 }}>
+          Das im Dokument erkannte Datum kann falsch sein - hier von Hand korrigieren. Das Dokument wird danach mit dem neuen
+          Datum neu gescannt, der Name aktualisiert sich entsprechend.
+        </p>
+        <DateInput value={draft} onChange={setDraft} autoFocus />
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+          <button type="button" className="button-ghost" onClick={onCancel} disabled={busy}>
+            Abbrechen
+          </button>
+          <button type="button" className="button-primary" onClick={() => onConfirm(draft)} disabled={!draft || busy}>
+            {busy ? "Wird neu gescannt…" : "Übernehmen & neu scannen"}
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -865,6 +909,7 @@ export function WordImportWizard({
 
   const [analysis, setAnalysis] = useState<WordImportAnalysis | null>(null);
   const [protocolDate, setProtocolDate] = useState("");
+  const [dateEditorOpen, setDateEditorOpen] = useState(false);
   const [tableRoles, setTableRoles] = useState<Record<number, TableRoleOverride>>({});
   const [texts, setTexts] = useState<TextDraft[]>([]);
   const [attendance, setAttendance] = useState<AttendanceDraft[]>([]);
@@ -1164,8 +1209,8 @@ export function WordImportWizard({
                 <WarningIcon />
                 <span className="word-import-alert-date">
                   Kein Datum im Dokument erkannt - ohne Datum kann kein neuer Termin angelegt werden.
-                  <InlineDateField
-                    className="input word-import-alert-date-input"
+                  <DateInput
+                    className="word-import-alert-date-picker"
                     value={entry.raw_date ?? ""}
                     onChange={(value) => updateEventField(index, { raw_date: value || null })}
                   />
@@ -1799,7 +1844,7 @@ export function WordImportWizard({
     }
   }
 
-  async function reanalyzeWithRoles(nextTableRoles: Record<number, TableRoleOverride>) {
+  async function reanalyzeWithRoles(nextTableRoles: Record<number, TableRoleOverride>, dateOverride?: string) {
     // Real bug fixed here: reanalyzeBusyRef is set to true by the caller (updateTableRole/
     // reanalyze) BEFORE calling this - either early return below used to leave it stuck at
     // true forever (both callers guard on it and bail out immediately), permanently
@@ -1836,12 +1881,16 @@ export function WordImportWizard({
       }
     }
     setTableRoles(nextTableRoles);
+    const effectiveDate = dateOverride ?? protocolDate;
+    if (dateOverride !== undefined) {
+      setProtocolDate(dateOverride);
+    }
     setBusy(true);
     setError(null);
     try {
       const result = documentId
-        ? await reanalyzeWordImportDocument(documentId, protocolDate || null, nextTableRoles)
-        : await analyzeWordImport(file!, templateId, protocolDate || null, nextTableRoles);
+        ? await reanalyzeWordImportDocument(documentId, effectiveDate || null, nextTableRoles)
+        : await analyzeWordImport(file!, templateId, effectiveDate || null, nextTableRoles);
       applyAnalysis(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Datei konnte nicht erneut analysiert werden");
@@ -1874,6 +1923,13 @@ export function WordImportWizard({
     if (reanalyzeBusyRef.current) return;
     reanalyzeBusyRef.current = true;
     await reanalyzeWithRoles(tableRoles);
+  }
+
+  async function confirmDateEdit(newDate: string) {
+    if (reanalyzeBusyRef.current) return;
+    reanalyzeBusyRef.current = true;
+    await reanalyzeWithRoles(tableRoles, newDate);
+    setDateEditorOpen(false);
   }
 
   function resetWizard() {
@@ -2444,10 +2500,10 @@ export function WordImportWizard({
               <strong>{fileName ?? file?.name ?? "Dokument"}</strong>
               <span className="muted"> · {templateName}</span>
               <span className="muted"> · </span>
-              <InlineDateField
+              <DateFieldButton
                 className="word-import-filebar-date"
                 value={protocolDate}
-                onChange={setProtocolDate}
+                onClick={() => setDateEditorOpen(true)}
               />
             </span>
             <button type="button" className="button-ghost" disabled={busy} onClick={() => void reanalyze()}>
@@ -2466,14 +2522,23 @@ export function WordImportWizard({
               <WarningIcon />
               <span className="word-import-alert-date">
                 Protokolldatum konnte nicht automatisch erkannt werden.
-                <InlineDateField
+                <DateFieldButton
                   className="input word-import-alert-date-input"
                   value={protocolDate}
-                  onChange={setProtocolDate}
+                  onClick={() => setDateEditorOpen(true)}
+                  placeholder="Datum festlegen"
                 />
               </span>
             </div>
           )}
+
+          <DateEditorModal
+            open={dateEditorOpen}
+            initialValue={protocolDate}
+            onCancel={() => setDateEditorOpen(false)}
+            onConfirm={(value) => void confirmDateEdit(value)}
+            busy={busy}
+          />
 
           {analysis.warnings.length > 0 && (
             // Real bug fixed here: analyze() has always produced these (e.g. a Matrix-
