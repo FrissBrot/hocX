@@ -6,6 +6,7 @@ from sqlalchemy.engine import Row
 from sqlalchemy.orm import Session
 
 from app.models import (
+    GalleryImage,
     Protocol,
     ProtocolElement,
     ProtocolElementBlock,
@@ -46,6 +47,19 @@ class StoredFileRepository:
                 select(StoredFile).where(
                     StoredFile.scan_status == "pending",
                     StoredFile.storage_path.like("uploads/word-imports/%"),
+                )
+            ).scalars()
+        )
+
+    def list_pending_gallery_upload_files(self, db: Session) -> list[StoredFile]:
+        """Same idea as list_pending_word_import_files above, for gallery uploads (see
+        FileService.save_gallery_uploads) - matched by their fixed storage path prefix
+        rather than a join to gallery_image, so a row still mid-insert is picked up too."""
+        return list(
+            db.execute(
+                select(StoredFile).where(
+                    StoredFile.scan_status == "pending",
+                    StoredFile.storage_path.like("uploads/tenant-%/gallery/%"),
                 )
             ).scalars()
         )
@@ -151,10 +165,32 @@ class StoredFileRepository:
             .where(StoredFile.tenant_id == tenant_id, SubmissionUploadFile.delete_comment.is_(None))
         )
 
+        gallery_branch = (
+            select(
+                StoredFile.id.label("id"),
+                StoredFile.original_name.label("original_name"),
+                StoredFile.mime_type.label("mime_type"),
+                StoredFile.file_size_bytes.label("file_size_bytes"),
+                StoredFile.created_at.label("created_at"),
+                StoredFile.scan_status.label("scan_status"),
+                StoredFile.tags.label("tags"),
+                literal("gallery_upload").label("source"),
+                GalleryImage.id.label("ref_id"),
+                literal("").label("ref_label"),
+                cast(null(), Date).label("ref_date"),
+                cast(null(), BigInteger).label("upload_id"),
+                literal("Direkt hochgeladen").label("origin_tag"),
+            )
+            .select_from(StoredFile)
+            .join(GalleryImage, GalleryImage.stored_file_id == StoredFile.id)
+            .where(StoredFile.tenant_id == tenant_id)
+        )
+
         return {
             "protocol_image": protocol_branch,
             "word_import": word_import_branch,
             "submission_upload": submission_branch,
+            "gallery_upload": gallery_branch,
         }
 
     def list_tenant_files(

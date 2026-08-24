@@ -4,6 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import (
+    GalleryImage,
     ProtocolExportCache,
     ProtocolImage,
     StoredFile,
@@ -17,12 +18,13 @@ CATEGORY_LABELS: dict[str, str] = {
     "protocol_image": "Protokoll-Bilder",
     "word_import": "Word-Import-Dateien",
     "submission_upload": "Abgabebox-Uploads",
+    "gallery_upload": "Galerie-Uploads",
     "export": "PDF-/LaTeX-Exporte",
     "other": "Sonstiges",
 }
 
 # Order mirrors the join branches below, "other" always last.
-_KNOWN_CATEGORY_KEYS = ("protocol_image", "word_import", "submission_upload", "export")
+_KNOWN_CATEGORY_KEYS = ("protocol_image", "word_import", "submission_upload", "gallery_upload", "export")
 
 
 class StorageService:
@@ -51,6 +53,7 @@ class StorageService:
         joins: dict[str, type] = {
             "protocol_image": ProtocolImage,
             "word_import": WordImportDocument,
+            "gallery_upload": GalleryImage,
         }
         for key, model in joins.items():
             query = scoped(

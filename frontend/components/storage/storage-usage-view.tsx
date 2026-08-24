@@ -11,6 +11,7 @@ export const CATEGORY_COLORS: Record<StorageCategoryKey, string> = {
   protocol_image: "#6366f1",
   word_import: "#06b6d4",
   submission_upload: "#b45309",
+  gallery_upload: "#db2777",
   export: "#a855f7",
   other: "#9ca3af",
 };

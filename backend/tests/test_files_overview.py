@@ -89,6 +89,39 @@ def _make_submission_upload_file(db, tenant_id, *, filename="beleg.pdf", delete_
     return assignment, upload, stored_file
 
 
+def _make_gallery_image(db, tenant_id, *, mime_type="image/png", scan_status="clean", created_by=None, tags=None):
+    from app.models.entities import GalleryImage
+
+    stored_file = StoredFile(
+        tenant_id=tenant_id, original_name="strand.png", mime_type=mime_type,
+        storage_path="uploads/tenant-x/gallery/strand.png", scan_status=scan_status, created_by=created_by,
+        tags=tags or [],
+    )
+    db.add(stored_file)
+    db.flush()
+    db.add(GalleryImage(tenant_id=tenant_id, stored_file_id=stored_file.id, created_by=created_by))
+    db.flush()
+    return stored_file
+
+
+def test_list_tenant_files_includes_gallery_upload_with_expected_shape(db):
+    tenant = make_tenant(db)
+    stored_file = _make_gallery_image(db, tenant.id, tags=["Sommerlager"])
+
+    items = service.list_tenant_files(db, tenant.id)
+
+    assert len(items) == 1
+    item = items[0]
+    assert item.source == "gallery_upload"
+    assert item.is_image is True
+    assert item.ref_label == ""
+    assert item.ref_href is None
+    assert item.origin_tag == "Direkt hochgeladen"
+    assert item.tags == ["Sommerlager"]
+    assert item.content_url == f"/api/stored-files/{stored_file.id}/content"
+    assert item.thumbnail_url == f"/api/stored-files/{stored_file.id}/thumbnail"
+
+
 def test_list_tenant_files_includes_protocol_image_with_context(db):
     tenant = make_tenant(db)
     protocol, stored_file = _make_protocol_image(db, tenant.id)

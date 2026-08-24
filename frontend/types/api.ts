@@ -144,7 +144,7 @@ export type SubmissionFile = {
   scan_status: string;
 };
 
-export type FileOverviewSource = "protocol_image" | "word_import" | "submission_upload";
+export type FileOverviewSource = "protocol_image" | "word_import" | "submission_upload" | "gallery_upload";
 
 export type FileOverviewItem = {
   id: number;
@@ -266,7 +266,7 @@ export type AdminTenantPage = {
   total: number;
 };
 
-export type StorageCategoryKey = "protocol_image" | "word_import" | "submission_upload" | "export" | "other";
+export type StorageCategoryKey = "protocol_image" | "word_import" | "submission_upload" | "gallery_upload" | "export" | "other";
 
 export type StorageCategoryUsage = {
   key: StorageCategoryKey;

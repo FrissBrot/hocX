@@ -10,10 +10,13 @@ import { LightboxImage } from "@/components/ui/lightbox-image";
 import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
 import { TagInput } from "@/components/ui/tag-input";
+import { useToast } from "@/contexts/toast-context";
 import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { formatDate, formatDateTime, formatFileSize } from "@/lib/utils/format";
 import { FileOverviewItem, FileOverviewSource, StoredFileMetadata } from "@/types/api";
+
+const GALLERY_UPLOAD_ACCEPT = "image/jpeg,image/png,image/gif,image/webp,image/bmp,image/tiff,.zip";
 
 const PAGE_SIZE = 60;
 
@@ -25,12 +28,14 @@ const SOURCE_LABEL: Record<FileOverviewSource, string> = {
   protocol_image: "Protokoll",
   word_import: "Word-Import",
   submission_upload: "Abgabe",
+  gallery_upload: "Galerie",
 };
 
 const SOURCE_BADGE_VARIANT: Record<FileOverviewSource, BadgeVariant> = {
   protocol_image: "info",
   word_import: "neutral",
   submission_upload: "success",
+  gallery_upload: "warning",
 };
 
 type Props = {
@@ -39,6 +44,8 @@ type Props = {
 
 export function FilesView({ initialItems }: Props) {
   const router = useRouter();
+  const showToast = useToast();
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [view, setView] = useState<ViewMode>("all");
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const [search, setSearch] = useState("");
@@ -120,12 +127,30 @@ export function FilesView({ initialItems }: Props) {
     setTagSuggestions((current) => Array.from(new Set([...current, ...tags])).sort((a, b) => a.localeCompare(b)));
   }
 
+  function handleUploaded(uploaded: FileOverviewItem[], errors: string[]) {
+    if (uploaded.length > 0) {
+      setItems((current) => [...uploaded, ...current]);
+      setTagSuggestions((current) =>
+        Array.from(new Set([...current, ...uploaded.flatMap((item) => item.tags)])).sort((a, b) => a.localeCompare(b))
+      );
+      showToast(uploaded.length === 1 ? "1 Bild hochgeladen." : `${uploaded.length} Bilder hochgeladen.`, "success");
+    }
+    if (errors.length > 0) {
+      showToast(errors.join(" · "), uploaded.length > 0 ? "info" : "error");
+    }
+  }
+
   return (
     <div className="grid">
       <div className="page-header">
         <div>
           <h1 className="page-title">Dateien</h1>
           <p className="muted">Alle hochgeladenen Dateien dieses Mandanten - aus Protokollen, Word-Importen und Abgaben.</p>
+        </div>
+        <div className="table-toolbar-actions">
+          <button type="button" className="button-inline" onClick={() => setUploadModalOpen(true)}>
+            + Bilder hochladen
+          </button>
         </div>
       </div>
 
@@ -145,6 +170,7 @@ export function FilesView({ initialItems }: Props) {
             { value: "protocol_image", label: "Protokolle" },
             { value: "word_import", label: "Word-Import" },
             { value: "submission_upload", label: "Abgaben" },
+            { value: "gallery_upload", label: "Galerie" },
           ]}
           value={sourceFilter}
           onChange={(value) => setSourceFilter(value as SourceFilter)}
@@ -217,7 +243,144 @@ export function FilesView({ initialItems }: Props) {
           onTagsSaved={(tags) => handleTagsSaved(detailItem.id, tags)}
         />
       )}
+
+      {uploadModalOpen && (
+        <GalleryUploadModal
+          tagSuggestions={tagSuggestions}
+          onClose={() => setUploadModalOpen(false)}
+          onUploaded={handleUploaded}
+        />
+      )}
     </div>
+  );
+}
+
+function GalleryUploadModal({
+  tagSuggestions,
+  onClose,
+  onUploaded,
+}: {
+  tagSuggestions: string[];
+  onClose: () => void;
+  onUploaded: (items: FileOverviewItem[], errors: string[]) => void;
+}) {
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [tagsValue, setTagsValue] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function addFiles(fileList: FileList | File[]) {
+    setSelectedFiles((current) => [...current, ...Array.from(fileList)]);
+    setError(null);
+  }
+
+  function removeFile(index: number) {
+    setSelectedFiles((current) => current.filter((_, i) => i !== index));
+  }
+
+  async function handleUpload() {
+    if (selectedFiles.length === 0 || uploading) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const body = new FormData();
+      selectedFiles.forEach((file) => body.append("files", file));
+      body.append("tags", tagsValue);
+      const result = await browserApiFetch<{ items: FileOverviewItem[]; errors: string[] }>("/api/files/gallery-uploads", {
+        method: "POST",
+        body,
+      });
+      onUploaded(result?.items ?? [], result?.errors ?? []);
+      onClose();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Upload fehlgeschlagen");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <Modal
+      open
+      title="Bilder hochladen"
+      description="Direkt in die Galerie hochladen - auch als ZIP-Archiv, dabei werden nur enthaltene Bilddateien übernommen. Jede Datei durchläuft die Virenprüfung."
+      onClose={onClose}
+      size="wide"
+    >
+      <div className="gallery-upload">
+        <div
+          className={`gallery-upload-dropzone${isDragging ? " gallery-upload-dropzone-active" : ""}`}
+          onDragOver={(event) => {
+            event.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={(event) => {
+            event.preventDefault();
+            setIsDragging(false);
+            if (event.dataTransfer.files.length > 0) addFiles(event.dataTransfer.files);
+          }}
+          onClick={() => inputRef.current?.click()}
+          role="button"
+          tabIndex={0}
+        >
+          <input
+            ref={inputRef}
+            type="file"
+            multiple
+            accept={GALLERY_UPLOAD_ACCEPT}
+            hidden
+            onChange={(event) => {
+              if (event.target.files) addFiles(event.target.files);
+              event.target.value = "";
+            }}
+          />
+          <p>Bilder oder ZIP-Dateien hierher ziehen oder klicken zum Auswählen</p>
+          <p className="muted">JPEG, PNG, GIF, WebP, BMP, TIFF - oder ein ZIP-Archiv mit Bildern darin</p>
+        </div>
+
+        {selectedFiles.length > 0 && (
+          <ul className="gallery-upload-file-list">
+            {selectedFiles.map((file, index) => (
+              <li key={`${file.name}-${index}`}>
+                <span className="gallery-upload-file-name" title={file.name}>{file.name}</span>
+                <span className="muted">{formatFileSize(file.size)}</span>
+                <button type="button" className="button-ghost button-inline" onClick={() => removeFile(index)}>
+                  Entfernen
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="gallery-upload-tags">
+          <span className="file-detail-tags-label">Tags für diesen Upload</span>
+          <TagInput value={tagsValue} onChange={setTagsValue} suggestions={tagSuggestions} placeholder="Tag hinzufügen…" />
+        </div>
+
+        {error && <p className="form-error-banner">{error}</p>}
+
+        <div className="gallery-upload-actions">
+          <button type="button" className="button-ghost" onClick={onClose} disabled={uploading}>
+            Abbrechen
+          </button>
+          <button
+            type="button"
+            className="button-inline"
+            onClick={() => void handleUpload()}
+            disabled={uploading || selectedFiles.length === 0}
+          >
+            {uploading
+              ? "Lädt hoch…"
+              : selectedFiles.length > 0
+                ? `${selectedFiles.length} ${selectedFiles.length === 1 ? "Bild" : "Bilder"} hochladen`
+                : "Hochladen"}
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

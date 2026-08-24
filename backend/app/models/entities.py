@@ -811,6 +811,21 @@ class ProtocolImage(Base, TimestampMixin):
     caption: Mapped[str | None] = mapped_column(Text)
 
 
+class GalleryImage(Base, TimestampMixin):
+    """Marks a StoredFile as having been uploaded directly through the "Dateien"/"Fotos"
+    gallery upload window - not tied to a protocol block, word-import document, or
+    submission upload, the three other origins in StoredFileRepository._files_overview_branches.
+    Exists as its own join table (rather than a boolean/enum column on StoredFile) purely to
+    follow that same "one join table per origin" convention the other three branches use."""
+    __tablename__ = "gallery_image"
+    __table_args__ = (Index("idx_gallery_image_tenant", "tenant_id"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    stored_file_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("stored_file.id", ondelete="RESTRICT"), nullable=False)
+    created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+
+
 class ProtocolExportCache(Base, TimestampMixin):
     __tablename__ = "protocol_export_cache"
     __table_args__ = (

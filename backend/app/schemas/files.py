@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-FileOverviewSource = Literal["protocol_image", "word_import", "submission_upload"]
+FileOverviewSource = Literal["protocol_image", "word_import", "submission_upload", "gallery_upload"]
 
 
 class FileOverviewItem(BaseModel):
@@ -33,6 +33,14 @@ class FileOverviewItem(BaseModel):
 
 class StoredFileTagsUpdate(BaseModel):
     tags: list[str]
+
+
+class GalleryUploadResult(BaseModel):
+    items: list[FileOverviewItem]
+    # Per-file problems (too large, no supported image format, infected, ZIP entries that
+    # weren't images, ...) - the batch still succeeds for every other file, so this is
+    # reported alongside `items` rather than raising.
+    errors: list[str]
 
 
 class StoredFileMetadata(BaseModel):

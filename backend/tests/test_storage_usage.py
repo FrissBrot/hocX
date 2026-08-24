@@ -15,6 +15,7 @@ from app.api.routes import admin as admin_routes
 from app.api.routes import storage as storage_routes
 from app.core.admin_security import CurrentAdmin
 from app.models.entities import (
+    GalleryImage,
     ProtocolExportCache,
     ProtocolImage,
     StoredFile,
@@ -107,6 +108,18 @@ def _make_export(db, tenant_id, protocol, *, size=4000):
     return stored_file
 
 
+def _make_gallery_image(db, tenant_id, *, size=6000):
+    stored_file = StoredFile(
+        tenant_id=tenant_id, original_name="strand.png", mime_type="image/png",
+        storage_path="uploads/tenant-x/gallery/strand.png", file_size_bytes=size,
+    )
+    db.add(stored_file)
+    db.flush()
+    db.add(GalleryImage(tenant_id=tenant_id, stored_file_id=stored_file.id))
+    db.flush()
+    return stored_file
+
+
 def _make_orphan(db, tenant_id, *, size=5000):
     """A stored_file with no association at all - e.g. a tenant-import/-clone artifact or an
     orphaned row (see project memory: orphaned word-import stored_file rows found on tenant 3).
@@ -125,6 +138,7 @@ def test_breakdown_categorizes_each_source_correctly(db):
     protocol, _ = _make_protocol_image(db, tenant.id, size=0, protocol_number="8/2026")
     _make_export(db, tenant.id, protocol, size=4000)
     _make_orphan(db, tenant.id, size=5000)
+    _make_gallery_image(db, tenant.id, size=6000)
 
     result = service.breakdown_for_tenant(db, tenant.id)
     by_key = {c.key: c.bytes for c in result.categories}
@@ -134,7 +148,8 @@ def test_breakdown_categorizes_each_source_correctly(db):
     assert by_key["submission_upload"] == 3000
     assert by_key["export"] == 4000
     assert by_key["other"] == 5000
-    assert result.total_bytes == 1000 + 2000 + 3000 + 4000 + 5000
+    assert by_key["gallery_upload"] == 6000
+    assert result.total_bytes == 1000 + 2000 + 3000 + 4000 + 5000 + 6000
     assert result.quota_bytes is None
 
 

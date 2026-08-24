@@ -5843,6 +5843,73 @@ input[type="radio"] {
   color: var(--muted);
 }
 
+/* Gallery upload modal (components/files/files-view.tsx GalleryUploadModal) */
+.gallery-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.gallery-upload-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  text-align: center;
+  padding: 36px 20px;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--accent-soft);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.gallery-upload-dropzone:hover,
+.gallery-upload-dropzone-active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--accent-soft) 90%);
+}
+
+.gallery-upload-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.gallery-upload-file-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--panel-solid) 88%, transparent 12%);
+}
+
+.gallery-upload-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gallery-upload-tags {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gallery-upload-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 /* File-detail modal (components/files/files-view.tsx FileDetailModal) */
 .file-detail {
   display: grid;

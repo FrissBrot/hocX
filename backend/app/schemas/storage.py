@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-StorageCategoryKey = Literal["protocol_image", "word_import", "submission_upload", "export", "other"]
+StorageCategoryKey = Literal["protocol_image", "word_import", "submission_upload", "gallery_upload", "export", "other"]
 
 
 class StorageCategoryUsage(BaseModel):

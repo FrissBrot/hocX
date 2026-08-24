@@ -3,21 +3,41 @@ from typing import Literal
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
 
 from app.core.db import get_db
 from app.core.config import settings
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
 from app.models import ProtocolElementBlock, ProtocolImage
-from app.schemas.files import FileOverviewItem, FileOverviewSource, StoredFileMetadata, StoredFileTagsUpdate
+from app.schemas.files import FileOverviewItem, FileOverviewSource, GalleryUploadResult, StoredFileMetadata, StoredFileTagsUpdate
 from app.schemas.protocol import ProtocolImageRead
 from app.services.access_service import AccessService
-from app.services.file_service import FileService, _safe_storage_path
+from app.services.file_service import MAX_UPLOAD_BYTES, MAX_ZIP_TOTAL_BYTES, FileService, _safe_storage_path, extract_image_files_from_zip
 
 router = APIRouter()
 service = FileService()
 access_service = AccessService()
+
+# Ganzer Batch (Summe aller akzeptierten Dateien eines Upload-Requests, ausserhalb von
+# ZIPs - deren eigener Grenzwert ist MAX_ZIP_TOTAL_BYTES): grösszügiger als eine einzelne
+# Datei, aber trotzdem endlich - selbes Limit-Muster wie beim Word-Import-Batch-Upload.
+MAX_GALLERY_UPLOAD_BATCH_FILES = 50
+MAX_GALLERY_UPLOAD_BATCH_BYTES = 150 * 1024 * 1024
+
+
+async def _read_upload_within_limit(file: UploadFile, max_bytes: int) -> bytes | None:
+    """Rejects an oversized upload using Starlette's already-known `.size` (populated by
+    the multipart parser before the route runs) instead of buffering the whole thing into a
+    `bytes` object first just to measure it. Returns None if too large. Mirrors
+    word_import.py's helper of the same name - kept local rather than shared since routes
+    don't otherwise import each other's private helpers in this codebase."""
+    if file.size is not None and file.size > max_bytes:
+        return None
+    content = await file.read()
+    if len(content) > max_bytes:
+        return None
+    return content
 
 
 @router.get("/files", response_model=list[FileOverviewItem])
@@ -69,6 +89,64 @@ def list_file_tags(
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     return service.list_distinct_tags(db, user.current_tenant_id, query=query, limit=limit)
+
+
+@router.post("/files/gallery-uploads", response_model=GalleryUploadResult, status_code=status.HTTP_201_CREATED)
+async def upload_gallery_images(
+    files: list[UploadFile] = File(...),
+    tags: str | None = Form(default=None),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Direkter Bild-Upload fuer die "Fotos"-Galerie (nicht an ein Protokoll/Word-Import/
+    Abgabe gebunden) - unterstuetzt einzelne Bilddateien und .zip-Archive, aus denen nur
+    Bilddateien uebernommen werden (siehe extract_image_files_from_zip), jeweils durch
+    dieselbe Pipeline wie jeder andere Upload in dieser App: Magic-Byte-Pruefung,
+    Grössenlimit, Virenscan (siehe FileService.save_gallery_uploads)."""
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    if len(files) > MAX_GALLERY_UPLOAD_BATCH_FILES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Zu viele Dateien in einem Batch (maximal {MAX_GALLERY_UPLOAD_BATCH_FILES})",
+        )
+
+    tag_list = [tag.strip() for tag in (tags or "").split(",") if tag.strip()]
+
+    file_payloads: list[tuple[str, bytes]] = []
+    errors: list[str] = []
+    batch_bytes = 0
+    for file in files:
+        name = file.filename or ""
+        if batch_bytes > MAX_GALLERY_UPLOAD_BATCH_BYTES:
+            errors.append(f"{name or 'Datei'}: übersprungen - Gesamtgrösse des Batches überschritten")
+            continue
+        if name.lower().endswith(".zip"):
+            zip_bytes = await _read_upload_within_limit(file, MAX_ZIP_TOTAL_BYTES)
+            if zip_bytes is None:
+                errors.append(f"{name}: ZIP-Datei zu gross (maximal {MAX_ZIP_TOTAL_BYTES // 1024 // 1024} MB)")
+                continue
+            matched, notes = extract_image_files_from_zip(zip_bytes)
+            file_payloads.extend(matched)
+            batch_bytes += sum(len(content) for _, content in matched)
+            errors.extend(f"{name}: {note}" for note in notes)
+            continue
+        content = await _read_upload_within_limit(file, MAX_UPLOAD_BYTES)
+        if content is None:
+            errors.append(f"{name or 'Datei'}: zu gross (maximal {MAX_UPLOAD_BYTES // 1024 // 1024} MB)")
+            continue
+        file_payloads.append((name, content))
+        batch_bytes += len(content)
+
+    items, save_errors = service.save_gallery_uploads(
+        db,
+        tenant_id=user.current_tenant_id,
+        files=file_payloads,
+        tags=tag_list,
+        created_by=user.user_id,
+    )
+    return GalleryUploadResult(items=items, errors=errors + save_errors)
 
 
 @router.get("/protocol-element-blocks/{protocol_element_block_id}/images", response_model=list[ProtocolImageRead])
