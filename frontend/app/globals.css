@@ -908,7 +908,10 @@ button:disabled {
   color: var(--muted);
 }
 
-.button-danger { --button-hover-bg: var(--danger);
+.button-danger {
+  width: auto;
+  min-width: 0;
+  --button-hover-bg: var(--danger);
   background: var(--danger);
 }
 
