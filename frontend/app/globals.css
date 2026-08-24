@@ -815,17 +815,19 @@ input[type="number"] {
 
 button {
   border: 1px solid transparent;
-  background: var(--primary);
+  --button-bg: var(--primary);
+  background: var(--button-bg);
   color: var(--primary-contrast);
   font-weight: 600;
   letter-spacing: -0.01em;
 }
 
-/* Buttons that opt out of the default solid background (ghost/icon/text-link
-   buttons) should also set --button-hover-bg on their own base rule, otherwise
-   they inherit this dark solid hover regardless of their own resting style. */
+/* Hover falls back to the button's own resting background (--button-bg) rather
+   than a hardcoded color, so a variant that forgets to set --button-hover-bg
+   simply shows no hover change instead of flashing dark/black. Variants that
+   want a distinct hover color still set --button-hover-bg explicitly. */
 button:hover:not(:disabled) {
-  background: var(--button-hover-bg, var(--primary-strong));
+  background: var(--button-hover-bg, var(--button-bg));
 }
 
 button:disabled {
