@@ -732,6 +732,80 @@ class ProtocolService:
             .limit(1)
         )
 
+    def _entry_exit_entries(
+        self,
+        db: Session,
+        *,
+        tenant_id: int,
+        template_id: int,
+        protocol_date: date,
+        current_protocol_id: int,
+        block_config: dict,
+    ) -> list[dict[str, object]]:
+        """Participant joins/leaves (joined_at/left_at) since this block's prior use in an
+        earlier protocol of the same template, up to and including this protocol's date - so
+        consecutive protocols each report a disjoint date window and never repeat an entry.
+
+        On the block's very first use (no earlier protocol of this template carried it), the
+        lower bound is either open (report all history) or a configured cutoff date, per
+        `entry_exit_first_use_mode`/`entry_exit_first_use_date` set on the template block.
+        """
+        latest_protocol_id = self._latest_previous_protocol_id(
+            db,
+            tenant_id=tenant_id,
+            template_id=template_id,
+            protocol_date=protocol_date,
+            current_protocol_id=current_protocol_id,
+        )
+        since_date: date | None = None
+        if latest_protocol_id is not None:
+            since_date = db.scalar(select(Protocol.protocol_date).where(Protocol.id == latest_protocol_id))
+        elif str(block_config.get("entry_exit_first_use_mode") or "all") == "since_date":
+            raw_since_date = block_config.get("entry_exit_first_use_date")
+            if raw_since_date:
+                since_date = date.fromisoformat(str(raw_since_date))
+
+        participants = list(
+            db.execute(
+                select(Participant)
+                .join(TemplateParticipant, TemplateParticipant.participant_id == Participant.id)
+                .where(
+                    TemplateParticipant.template_id == template_id,
+                    TemplateParticipant.exclude_from_attendance.is_(False),
+                )
+            ).scalars()
+        )
+
+        def in_window(change_date: date | None) -> bool:
+            if change_date is None or change_date > protocol_date:
+                return False
+            return since_date is None or change_date > since_date
+
+        entries: list[dict[str, object]] = []
+        for participant in participants:
+            if in_window(participant.joined_at):
+                entries.append(
+                    {
+                        "participant_id": participant.id,
+                        "participant_name": participant.display_name,
+                        "type": "join",
+                        "date": participant.joined_at.isoformat(),
+                        "hidden": False,
+                    }
+                )
+            if in_window(participant.left_at):
+                entries.append(
+                    {
+                        "participant_id": participant.id,
+                        "participant_name": participant.display_name,
+                        "type": "leave",
+                        "date": participant.left_at.isoformat(),
+                        "hidden": False,
+                    }
+                )
+        entries.sort(key=lambda entry: (str(entry["date"]), str(entry["type"]), str(entry["participant_name"])))
+        return entries
+
     def _manually_hidden_event_ids(
         self,
         db: Session,
@@ -1303,6 +1377,7 @@ class ProtocolService:
         session_date_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "session_date"))
         matrix_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "matrix"))
         image_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "image"))
+        entry_exit_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "entry_exit"))
 
         template_rows = db.execute(
             select(TemplateElement, ElementDefinition)
@@ -1670,6 +1745,19 @@ class ProtocolService:
                             }
                             for participant in participants
                         ],
+                    }
+                    db.add(protocol_block)
+                elif block["element_type_id"] == entry_exit_type_id:
+                    protocol_block.configuration_snapshot_json = {
+                        **(protocol_block.configuration_snapshot_json or {}),
+                        "entries": self._entry_exit_entries(
+                            db,
+                            tenant_id=tenant_id,
+                            template_id=template.id,
+                            protocol_date=payload.protocol_date,
+                            current_protocol_id=protocol.id,
+                            block_config=block_config,
+                        ),
                     }
                     db.add(protocol_block)
                 elif block["element_type_id"] == session_date_type_id:

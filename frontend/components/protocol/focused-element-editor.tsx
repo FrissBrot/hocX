@@ -2922,6 +2922,55 @@ export function FocusedElementEditor({
                 );
               })()}
 
+              {elementType === "entry_exit" && (() => {
+                const entries = Array.isArray(blockConfig.entries) ? (blockConfig.entries as Array<Record<string, any>>) : [];
+                const joins = entries.filter((entry) => entry.type === "join");
+                const leaves = entries.filter((entry) => entry.type === "leave");
+
+                function toggleHidden(entry: Record<string, any>) {
+                  if (!blockEditable) return;
+                  const nextEntries = entries.map((candidate) => (candidate === entry ? { ...candidate, hidden: !candidate.hidden } : candidate));
+                  void saveBlockConfiguration(block.id, { ...blockConfig, entries: nextEntries });
+                }
+
+                function renderGroup(label: string, group: Array<Record<string, any>>) {
+                  if (group.length === 0) return null;
+                  return (
+                    <div className="entry-exit-group">
+                      <div className="entry-exit-group-title">{label}</div>
+                      <div className="attendance-list">
+                        {group.map((entry, index) => (
+                          <div
+                            className={`attendance-row entry-exit-row${entry.hidden ? " entry-exit-row-hidden" : ""}`}
+                            key={`${block.id}-${entry.participant_id}-${entry.type}-${index}`}
+                          >
+                            <span className="attendance-name">
+                              {entry.participant_name}
+                              <span className="entry-exit-date"> · {formatDate(entry.date)}</span>
+                            </span>
+                            {blockEditable && (
+                              <button type="button" className="entry-exit-toggle" onClick={() => toggleHidden(entry)}>
+                                {entry.hidden ? "Einblenden" : "Ausblenden"}
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="entry-exit-block">
+                    {renderGroup("Eintritte", joins)}
+                    {renderGroup("Austritte", leaves)}
+                    {joins.length === 0 && leaves.length === 0 && (
+                      <p className="muted">Keine Ein- oder Austritte seit der letzten Verwendung dieses Blocks.</p>
+                    )}
+                  </div>
+                );
+              })()}
+
               {elementType === "session_date" && (
                 <div className="session-date-block">
                   <div className="session-date-main">

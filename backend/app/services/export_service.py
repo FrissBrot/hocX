@@ -1031,7 +1031,32 @@ Status: {protocol_status}
         chart_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "chart"))
         if chart_type_id and block.element_type_id == chart_type_id:
             return self._chart_block_content(db, block, image_export_dir)
+        # Entry/exit block (element_type code="entry_exit", id determined at runtime)
+        entry_exit_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "entry_exit"))
+        if entry_exit_type_id and block.element_type_id == entry_exit_type_id:
+            return self._entry_exit_block_content(block.configuration_snapshot_json or {})
         return self._escape_latex(block.description_snapshot or "")
+
+    def _entry_exit_block_content(self, config: dict) -> str:
+        entries = config.get("entries", []) if config else []
+        joins = [e for e in entries if e.get("type") == "join" and not e.get("hidden")]
+        leaves = [e for e in entries if e.get("type") == "leave" and not e.get("hidden")]
+
+        def _format_group(heading: str, group: list) -> list[str]:
+            if not group:
+                return []
+            lines = [f"\\textbf{{{self._escape_latex(heading)}}}", "\\begin{itemize}"]
+            for entry in group:
+                name = self._escape_latex(str(entry.get("participant_name") or "Unbekannt"))
+                entry_date = self._format_date_value(entry.get("date"))
+                lines.append(f"\\item {name} ({entry_date})")
+            lines.append("\\end{itemize}")
+            return lines
+
+        lines = _format_group("Eintritte", joins) + _format_group("Austritte", leaves)
+        if not lines:
+            return "Keine Ein- oder Austritte."
+        return "\n".join(lines)
 
     def _chart_block_content(self, db: Session, block, image_export_dir: Path) -> str:
         from app.services.chart_service import generate_chart_png

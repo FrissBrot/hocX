@@ -82,6 +82,8 @@ type BlockFormState = {
   fine_amount_absent: string;
   chart_type: string;
   chart_cycle_key: string;
+  entry_exit_first_use_mode: "all" | "since_date";
+  entry_exit_first_use_date: string;
   left_column_heading: string;
   value_column_heading: string;
   linked_list_id: string;
@@ -199,6 +201,8 @@ const initialBlockForm: BlockFormState = {
   fine_amount_absent: "",
   chart_type: "",
   chart_cycle_key: "all",
+  entry_exit_first_use_mode: "all" as "all" | "since_date",
+  entry_exit_first_use_date: "",
   left_column_heading: "",
   value_column_heading: "",
   linked_list_id: "",
@@ -253,7 +257,7 @@ const elementTypeCategories: Array<{ title: string; description: string; types: 
   {
     title: "Organisation",
     description: "Automatisch befüllte Inhalte rund um Termine und Anwesenheit.",
-    types: ["9", "10", "7", "15"],
+    types: ["9", "10", "7", "15", "16"],
   },
 ];
 
@@ -297,6 +301,7 @@ function renderTypeForElementType(elementTypeId: string | number) {
     "9": "5",
     "10": "6",
     "11": "5",
+    "16": "5",
   };
   return mapping[String(elementTypeId)] ?? "2";
 }
@@ -316,6 +321,7 @@ function blockKindForElementType(elementTypeId: string | number) {
     "12": "finance_balance",
     "13": "finance_transactions",
     "15": "chart",
+    "16": "entry_exit",
   };
   return mapping[String(elementTypeId)] ?? "text";
 }
@@ -486,6 +492,8 @@ function blockFormFromBlock(block: ElementDefinitionBlock): BlockFormState {
     fine_amount_absent: block.configuration_json?.fine_amount_absent != null ? String(block.configuration_json.fine_amount_absent) : "",
     chart_type: String(block.configuration_json?.chart_type ?? ""),
     chart_cycle_key: String(block.configuration_json?.cycle_key ?? "all"),
+    entry_exit_first_use_mode: (String(block.configuration_json?.entry_exit_first_use_mode ?? "all") as "all" | "since_date"),
+    entry_exit_first_use_date: String(block.configuration_json?.entry_exit_first_use_date ?? ""),
     left_column_heading: String(block.configuration_json?.left_column_heading ?? ""),
     value_column_heading: String(block.configuration_json?.value_column_heading ?? ""),
     linked_list_id: block.configuration_json?.linked_list_id != null ? String(block.configuration_json?.linked_list_id) : "",
@@ -629,6 +637,8 @@ function blockPayload(form: BlockFormState): ElementDefinitionBlock {
       fine_amount_absent: form.fine_amount_absent ? parseFloat(form.fine_amount_absent) : null,
       chart_type: form.chart_type || null,
       cycle_key: form.chart_cycle_key || "all",
+      entry_exit_first_use_mode: form.entry_exit_first_use_mode,
+      entry_exit_first_use_date: form.entry_exit_first_use_mode === "since_date" ? (form.entry_exit_first_use_date || null) : null,
       left_column_heading: form.left_column_heading || null,
       value_column_heading: form.value_column_heading || null,
       linked_list_id:
@@ -1500,7 +1510,7 @@ export function ElementDefinitionManager({
   }
 
 function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
-  const nextEditable = !["5", "7", "9"].includes(elementTypeId);
+  const nextEditable = !["5", "7", "9", "16"].includes(elementTypeId);
   if (mode === "create") {
     setCreateBlockForm((current) => ({
       ...current,
@@ -1614,6 +1624,21 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
           </div>
           <div className="block-type-preview-row">
             <div className="block-type-preview-dot" />
+            <div className="block-type-preview-line" />
+          </div>
+        </div>
+      );
+    }
+    // Ein-/Austritte: Namenszeilen mit Pfeil-Icon (rein/raus)
+    if (elementTypeId === "16") {
+      return (
+        <div className="block-type-preview">
+          <div className="block-type-preview-row">
+            <div className="block-type-preview-dot" />
+            <div className="block-type-preview-line block-type-preview-line-short" />
+          </div>
+          <div className="block-type-preview-row">
+            <div className="block-type-preview-dot block-type-preview-dot-muted" />
             <div className="block-type-preview-line" />
           </div>
         </div>
@@ -2481,6 +2506,31 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
               </div>
             </SettingsSection>
           ) : null}
+          {createBlockForm.element_type_id === "16" ? (
+            <SettingsSection
+              title="Ein-/Austritte"
+              description="Listet Teilnehmer-Ein- und Austritte auf, die seit der letzten Verwendung dieses Blocks in einem früheren Protokoll dieser Vorlage passiert sind."
+            >
+              <div className="three-col">
+                <label className="field-stack">
+                  <span className="field-label">Beim ersten Einsatz dieses Blocks</span>
+                  <select
+                    value={createBlockForm.entry_exit_first_use_mode}
+                    onChange={(e) => setCreateBlockForm((c) => ({ ...c, entry_exit_first_use_mode: e.target.value as BlockFormState["entry_exit_first_use_mode"] }))}
+                  >
+                    <option value="all">Alle bisherigen Ein-/Austritte anzeigen</option>
+                    <option value="since_date">Nur ab einem bestimmten Datum</option>
+                  </select>
+                </label>
+                {createBlockForm.entry_exit_first_use_mode === "since_date" && (
+                  <label className="field-stack">
+                    <span className="field-label">Start-Datum</span>
+                    <DateInput value={createBlockForm.entry_exit_first_use_date} onChange={(value) => setCreateBlockForm((c) => ({ ...c, entry_exit_first_use_date: value }))} />
+                  </label>
+                )}
+              </div>
+            </SettingsSection>
+          ) : null}
           <div className="block-editor-footer">
             <button type="submit" className="button-inline">{creatingNewDefinition ? "Element anlegen" : "Block anlegen"}</button>
           </div>
@@ -3047,6 +3097,31 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                       <option value="todos">Todos Übersicht</option>
                     </select>
                   </label>
+                </div>
+              </SettingsSection>
+            ) : null}
+            {blockForm.element_type_id === "16" ? (
+              <SettingsSection
+                title="Ein-/Austritte"
+                description="Listet Teilnehmer-Ein- und Austritte auf, die seit der letzten Verwendung dieses Blocks in einem früheren Protokoll dieser Vorlage passiert sind."
+              >
+                <div className="three-col">
+                  <label className="field-stack">
+                    <span className="field-label">Beim ersten Einsatz dieses Blocks</span>
+                    <select
+                      value={blockForm.entry_exit_first_use_mode}
+                      onChange={(e) => setBlockForm((c) => ({ ...c, entry_exit_first_use_mode: e.target.value as BlockFormState["entry_exit_first_use_mode"] }))}
+                    >
+                      <option value="all">Alle bisherigen Ein-/Austritte anzeigen</option>
+                      <option value="since_date">Nur ab einem bestimmten Datum</option>
+                    </select>
+                  </label>
+                  {blockForm.entry_exit_first_use_mode === "since_date" && (
+                    <label className="field-stack">
+                      <span className="field-label">Start-Datum</span>
+                      <DateInput value={blockForm.entry_exit_first_use_date} onChange={(value) => setBlockForm((c) => ({ ...c, entry_exit_first_use_date: value }))} />
+                    </label>
+                  )}
                 </div>
               </SettingsSection>
             ) : null}

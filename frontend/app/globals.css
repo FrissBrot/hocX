@@ -4404,6 +4404,48 @@ input[type="radio"] {
   flex-wrap: wrap;
 }
 
+.entry-exit-block {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.entry-exit-group-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin-bottom: 4px;
+}
+
+.entry-exit-date {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.entry-exit-row-hidden .attendance-name {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.entry-exit-toggle {
+  min-height: 0;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.entry-exit-toggle:hover {
+  background: color-mix(in srgb, var(--accent) 9%, transparent 91%);
+  color: var(--text);
+}
+
 .event-table-wrap {
   overflow: visible;
   width: fit-content;
