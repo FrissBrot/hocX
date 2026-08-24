@@ -1,30 +1,13 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import { getCurrentBaseUrl, getSiteVariant } from "@/lib/site-config";
+import { getMainAppUrl } from "@/lib/site-config";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 
 export async function generateMetadata(): Promise<Metadata> {
-  const variant = getSiteVariant();
-  const baseUrl = getCurrentBaseUrl();
+  const baseUrl = getMainAppUrl();
   const metadataBase = baseUrl ? new URL(baseUrl) : undefined;
-
-  if (variant === "marketing") {
-    return {
-      metadataBase,
-      title: "hocX – Protokolle, Aufgaben und Vorlagen in einem System",
-      description:
-        "Die professionelle hocX Landingpage für moderne Sitzungsarbeit: Protokolle, Todos, Vorlagen, Finanzen, Abgaben und Administration in einer Plattform.",
-      openGraph: {
-        title: "hocX – professionelle Sitzungsarbeit in einem System",
-        description:
-          "Protokolle, Aufgaben, Vorlagen, Finanzen und Administration – sauber orchestriert in hocX.",
-        type: "website",
-        url: metadataBase,
-      },
-    };
-  }
 
   return {
     metadataBase,
@@ -40,14 +23,12 @@ export async function generateMetadata(): Promise<Metadata> {
 export const dynamic = "force-dynamic";
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const siteVariant = getSiteVariant();
   // Server-seitig gelesen (nicht NEXT_PUBLIC_*), damit dasselbe, in der CI gebaute Image
   // in Test und Prod mit unterschiedlichen Domains/Versionen laufen kann, ohne dass diese
   // Werte zur Build-Zeit im Client-Bundle eingefroren werden.
   const runtimeConfig = {
     mainAppDomain: process.env.TRAEFIK_DOMAIN || null,
-    version: process.env.HOCX_VERSION || "dev",
-    siteVariant
+    version: process.env.HOCX_VERSION || "dev"
   };
 
   return (
@@ -64,13 +45,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
               (function () {
                 try {
                   var stored = localStorage.getItem("hocx-theme");
-                  var isMarketing = ${JSON.stringify(siteVariant === "marketing")};
-                  var preference = isMarketing ? "light" : (stored || "auto");
-                  var theme = isMarketing
-                    ? "light"
-                    : (preference === "auto"
-                      ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
-                      : preference);
+                  var preference = stored || "auto";
+                  var theme = preference === "auto"
+                    ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+                    : preference;
                   document.documentElement.dataset.themePreference = preference;
                   document.documentElement.dataset.theme = theme;
                 } catch (error) {}

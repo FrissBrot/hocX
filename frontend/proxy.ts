@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getMainAppUrl, isMarketingVariant } from "@/lib/site-config";
 
 // Auth-Gating lief bisher ausschliesslich in den Server-Components selbst (requireSession()/
 // requireAdminSession(), siehe lib/api/server.ts + admin-server.ts) über redirect(). Next.js
@@ -28,8 +27,6 @@ import { getMainAppUrl, isMarketingVariant } from "@/lib/site-config";
 // bleibt als zusätzliche Absicherung gegen die (separate, ebenfalls reale) Router-Cache-Replay-
 // Problematik oben bestehen.
 const internalApiUrl = process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-const marketingAppUrl = getMainAppUrl();
-const marketingAllowedPaths = new Set(["/", "/favicon.ico", "/robots.txt", "/sitemap.xml"]);
 
 async function isAuthenticated(cookie: string, sessionPath: string): Promise<boolean | null> {
   try {
@@ -49,19 +46,6 @@ async function isAuthenticated(cookie: string, sessionPath: string): Promise<boo
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-
-  if (isMarketingVariant()) {
-    if (marketingAllowedPaths.has(pathname) || pathname.startsWith("/_next/") || pathname.startsWith("/marketing/")) {
-      return NextResponse.next();
-    }
-
-    if (marketingAppUrl) {
-      const target = new URL(`${pathname}${request.nextUrl.search}`, marketingAppUrl);
-      return NextResponse.redirect(target);
-    }
-
-    return NextResponse.redirect(new URL("/", request.url));
-  }
 
   const isAdmin = pathname.startsWith("/admin");
   const sessionPath = isAdmin ? "/api/admin/auth/session" : "/api/auth/session";

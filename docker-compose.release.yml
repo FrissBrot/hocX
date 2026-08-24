@@ -127,7 +127,7 @@ services:
     image: ghcr.io/${GHCR_NAMESPACE}/hocx-frontend:${HOCX_VERSION}
     restart: unless-stopped
     # Runs a pre-built image's `next start` here (no runtime build, unlike the dev
-    # compose's frontend/website - see their mem_limit comments there), so this is lighter
+    # compose's frontend - see its mem_limit comment there), so this is lighter
     # than the dev value, but still bounded per audit I1.
     mem_limit: 512m
     cpus: 1.0
@@ -161,37 +161,6 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.tls.certresolver=letsencrypt"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.priority=10"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-frontend.loadbalancer.server.port=3000"
-
-  website:
-    image: ghcr.io/${GHCR_NAMESPACE}/hocx-frontend:${HOCX_VERSION}
-    restart: unless-stopped
-    mem_limit: 512m
-    cpus: 0.5
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-    env_file:
-      - .env
-    environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
-      INTERNAL_API_URL: ${INTERNAL_API_URL}
-      HOCX_SITE_VARIANT: marketing
-    healthcheck:
-      # Kein curl/wget im Release-Image, siehe frontend oben.
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/', res => process.exit(res.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website.rule=Host(`${TRAEFIK_WEB_DOMAIN}`)"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website.entrypoints=websecure"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website.priority=10"
-      - "traefik.http.services.${ROUTER_PREFIX:-hocx}-website.loadbalancer.server.port=3000"
 
   abgabebox-backend:
     image: ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-backend:${HOCX_VERSION}

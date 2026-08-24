@@ -61,7 +61,6 @@ docker compose up --build
 3. Open:
 
 - Frontend through Traefik: <https://your-domain.example.com>
-- Marketing site through Traefik: <https://web.your-domain.example.com>
 - Backend API through Traefik: <https://your-domain.example.com/api>
 - OpenAPI docs through Traefik: <https://your-domain.example.com/docs>
 
