@@ -180,7 +180,8 @@ pre {
   min-height: 0;
   padding: 0;
   border: 0;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   border-radius: var(--radius-sm);
   text-align: left;
@@ -363,7 +364,8 @@ pre {
   padding: 0;
   min-height: 0;
   border-radius: 0;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   border: 0;
   text-align: left;
 }
@@ -815,17 +817,19 @@ input[type="number"] {
 
 button {
   border: 1px solid transparent;
-  background: var(--primary);
+  --button-bg: var(--primary);
+  background: var(--button-bg);
   color: var(--primary-contrast);
   font-weight: 600;
   letter-spacing: -0.01em;
 }
 
-/* Buttons that opt out of the default solid background (ghost/icon/text-link
-   buttons) should also set --button-hover-bg on their own base rule, otherwise
-   they inherit this dark solid hover regardless of their own resting style. */
+/* Hover falls back to the button's own resting background (--button-bg) rather
+   than a hardcoded color, so a variant that forgets to set --button-hover-bg
+   simply shows no hover change instead of flashing dark/black. Variants that
+   want a distinct hover color still set --button-hover-bg explicitly. */
 button:hover:not(:disabled) {
-  background: var(--button-hover-bg, var(--primary-strong));
+  background: var(--button-hover-bg, var(--button-bg));
 }
 
 button:disabled {
@@ -907,7 +911,8 @@ button:disabled {
 }
 
 .button-danger { --button-hover-bg: var(--danger);
-  background: var(--danger);
+  --button-bg: var(--danger);
+  background: var(--button-bg);
 }
 
 /* Plain-text row action links (e.g. table Aktionen column) - no button chrome,
@@ -919,7 +924,8 @@ button:disabled {
   min-height: 0;
   padding: 0;
   border: none;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--muted);
   font-weight: 600;
   font-size: 0.85rem;
@@ -945,7 +951,8 @@ button:disabled {
   --button-hover-bg: var(--primary-strong);
   width: auto;
   min-width: 0;
-  background: var(--primary);
+  --button-bg: var(--primary);
+  background: var(--button-bg);
   color: var(--primary-contrast);
   font-weight: 600;
 }
@@ -960,7 +967,8 @@ button:disabled {
   min-height: 0;
   padding: 6px 14px;
   line-height: 1.5;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   border: 1.5px solid var(--border-strong, var(--border));
 }
 
@@ -975,7 +983,8 @@ button:disabled {
   --button-hover-bg: var(--accent-soft);
   width: auto;
   min-width: 0;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   border-color: var(--border);
   box-shadow: none;
@@ -1026,7 +1035,8 @@ button:disabled {
   padding: 8px 10px;
   border-radius: var(--radius-sm);
   border: none;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   font-weight: 500;
   text-align: left;
@@ -1128,7 +1138,8 @@ button:disabled {
   padding: 8px 10px;
   border-radius: 8px;
   border: none;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   font-size: 0.86rem;
   cursor: pointer;
@@ -1356,7 +1367,8 @@ input[type="radio"] {
   gap: 10px;
   padding: 0;
   border: none;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: inherit;
   font: inherit;
   letter-spacing: inherit;
@@ -1571,7 +1583,8 @@ input[type="radio"] {
   padding: 0;
   border-radius: 12px;
   border: 1px solid var(--border);
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   box-shadow: none;
 }
@@ -1705,7 +1718,8 @@ input[type="radio"] {
   border-radius: 999px;
   padding: 10px 16px;
   border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel-solid) 90%, transparent 10%);
+  --button-bg: color-mix(in srgb, var(--panel-solid) 90%, transparent 10%);
+  background: var(--button-bg);
   color: var(--muted);
   font-weight: 700;
 }
@@ -1733,7 +1747,8 @@ input[type="radio"] {
   padding: 18px;
   border-radius: 20px;
   border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel-solid) 92%, transparent 8%);
+  --button-bg: color-mix(in srgb, var(--panel-solid) 92%, transparent 8%);
+  background: var(--button-bg);
   text-align: left;
   color: var(--text);
 }
@@ -1897,7 +1912,8 @@ input[type="radio"] {
   height: 42px;
   border-radius: 14px;
   border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent 76%);
-  background: var(--accent-soft);
+  --button-bg: var(--accent-soft);
+  background: var(--button-bg);
   color: var(--accent);
   font-size: 0.8rem;
   font-weight: 800;
@@ -1913,7 +1929,8 @@ input[type="radio"] {
 .pdf-icon-link-success {
   --button-hover-bg: color-mix(in srgb, var(--success, #22c55e) 24%, transparent 76%);
   border-color: color-mix(in srgb, var(--success, #22c55e) 32%, transparent 68%);
-  background: color-mix(in srgb, var(--success, #22c55e) 14%, transparent 86%);
+  --button-bg: color-mix(in srgb, var(--success, #22c55e) 14%, transparent 86%);
+  background: var(--button-bg);
   color: var(--success, #22c55e);
 }
 
@@ -1995,7 +2012,8 @@ input[type="radio"] {
 .list-snapshot-undo-button {
   --button-hover-bg: color-mix(in srgb, var(--warning) 14%, transparent 86%);
   border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent 70%);
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--warning);
   border-radius: 5px;
   padding: 1px 7px;
@@ -2173,7 +2191,8 @@ input[type="radio"] {
   padding: 0;
   border-radius: 12px;
   border: 1px dashed color-mix(in srgb, var(--accent) 28%, var(--border) 72%);
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--muted);
   font-size: 16px;
   line-height: 1;
@@ -2264,7 +2283,8 @@ input[type="radio"] {
   padding: 0;
   border-radius: 999px;
   border: 1px solid transparent;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   --button-hover-bg: transparent;
   flex-shrink: 0;
 }
@@ -2341,7 +2361,8 @@ input[type="radio"] {
   padding: 0;
   border-radius: 8px;
   border: 1px solid transparent;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: color-mix(in srgb, var(--muted) 55%, transparent 45%);
   flex-shrink: 0;
 }
@@ -2572,7 +2593,8 @@ input[type="radio"] {
   padding: 10px 16px;
   border: none;
   border-radius: 0;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   box-shadow: none;
   color: var(--muted);
   font-weight: 600;
@@ -2714,7 +2736,8 @@ input[type="radio"] {
   padding: 18px;
   border-radius: 24px;
   border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel-solid) 92%, transparent 8%);
+  --button-bg: color-mix(in srgb, var(--panel-solid) 92%, transparent 8%);
+  background: var(--button-bg);
   text-align: left;
   color: var(--text);
   box-shadow: none;
@@ -3042,7 +3065,8 @@ input[type="radio"] {
   width: 100%;
   min-width: 0;
   min-height: 0;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   box-shadow: none;
 }
@@ -3252,7 +3276,8 @@ input[type="radio"] {
   padding: 8px 6px;
   border: none;
   border-radius: 0;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   text-align: left;
   color: var(--text);
   transition: background 0.12s ease;
@@ -3386,7 +3411,8 @@ input[type="radio"] {
   min-height: 0;
   padding: 2px 8px 2px 10px;
   border-radius: 999px;
-  background: var(--accent-soft);
+  --button-bg: var(--accent-soft);
+  background: var(--button-bg);
   border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent 78%);
   font-size: 0.82rem;
   font-weight: 600;
@@ -3402,7 +3428,8 @@ input[type="radio"] {
   padding: 0;
   border-radius: 50%;
   border: none;
-  background: color-mix(in srgb, var(--accent) 18%, transparent 82%);
+  --button-bg: color-mix(in srgb, var(--accent) 18%, transparent 82%);
+  background: var(--button-bg);
   color: var(--muted);
   font-size: 0.8rem;
   line-height: 1;
@@ -3447,7 +3474,8 @@ input[type="radio"] {
   padding: 3px 10px;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--muted);
   font-size: 0.75rem;
   font-weight: 500;
@@ -3462,7 +3490,8 @@ input[type="radio"] {
 }
 
 .tag-filter-chip-active { --button-hover-bg: color-mix(in srgb, var(--accent) 16%, transparent 84%);
-  background: color-mix(in srgb, var(--accent) 16%, transparent 84%);
+  --button-bg: color-mix(in srgb, var(--accent) 16%, transparent 84%);
+  background: var(--button-bg);
   border-color: color-mix(in srgb, var(--accent) 36%, transparent 64%);
   color: var(--accent);
 }
@@ -3571,7 +3600,8 @@ input[type="radio"] {
   padding: 6px 8px;
   border-radius: 8px;
   border: none;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   font-size: 0.86rem;
   cursor: pointer;
@@ -3593,7 +3623,8 @@ input[type="radio"] {
   padding: 0;
   border: none;
   border-radius: 6px;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--muted);
   font-size: 0.82rem;
   cursor: pointer;
@@ -3639,7 +3670,8 @@ input[type="radio"] {
   padding: 0;
   border: none;
   border-radius: 50%;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--muted);
   font-size: 0.8rem;
   cursor: pointer;
@@ -3682,7 +3714,8 @@ input[type="radio"] {
 }
 
 .tag-color-swatch-none { --button-hover-bg: color-mix(in srgb, var(--muted) 20%, transparent 80%);
-  background: color-mix(in srgb, var(--muted) 20%, transparent 80%) !important;
+  --button-bg: color-mix(in srgb, var(--muted) 20%, transparent 80%);
+  background: var(--button-bg) !important;
   color: var(--muted);
   font-size: 0.7rem;
   display: flex;
@@ -3695,7 +3728,8 @@ input[type="radio"] {
   padding: 4px 12px;
   min-height: 0;
   border-radius: 8px;
-  background: var(--accent);
+  --button-bg: var(--accent);
+  background: var(--button-bg);
   color: white;
   border: none;
   cursor: pointer;
@@ -3758,7 +3792,8 @@ input[type="radio"] {
 }
 
 .editor-fixed-actions-close { --button-hover-bg: var(--panel);
-  background: var(--panel);
+  --button-bg: var(--panel);
+  background: var(--button-bg);
   box-shadow: var(--shadow);
 }
 
@@ -3785,7 +3820,8 @@ input[type="radio"] {
   border-radius: 10px;
   border: none;
   border-left: 3px solid transparent;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   text-align: left;
   color: var(--text);
   width: 100%;
@@ -4039,7 +4075,8 @@ input[type="radio"] {
   padding: 0;
   border: none;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  --button-bg: color-mix(in srgb, var(--danger) 12%, transparent);
+  background: var(--button-bg);
   color: var(--danger);
   font-size: 0.72rem;
   line-height: 1;
@@ -4099,7 +4136,8 @@ input[type="radio"] {
   padding: 0;
   border-radius: 50%;
   border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
-  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  --button-bg: color-mix(in srgb, var(--accent) 7%, transparent);
+  background: var(--button-bg);
   color: color-mix(in srgb, var(--accent) 85%, white 15%);
   font-size: 0.78rem;
   box-shadow: none;
@@ -4148,7 +4186,8 @@ input[type="radio"] {
   padding: 0 10px;
   border-radius: 6px;
   border: 1px solid color-mix(in srgb, var(--danger, #ef4444) 30%, transparent);
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--danger, #ef4444);
   font-size: 0.78rem;
   font-weight: 500;
@@ -4195,7 +4234,8 @@ input[type="radio"] {
   padding: 8px 12px;
   border-radius: 14px;
   border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel-solid) 92%, transparent 8%);
+  --button-bg: color-mix(in srgb, var(--panel-solid) 92%, transparent 8%);
+  background: var(--button-bg);
   color: var(--text);
   box-shadow: none;
 }
@@ -4273,7 +4313,8 @@ input[type="radio"] {
   padding: 10px 12px;
   border-radius: 14px;
   border: 1px solid transparent;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   text-align: left;
   box-shadow: none;
@@ -4498,7 +4539,8 @@ input[type="radio"] {
   padding: 7px 10px;
   border-radius: 12px;
   border: 1px solid var(--border);
-  background: var(--panel-solid);
+  --button-bg: var(--panel-solid);
+  background: var(--button-bg);
   color: var(--text);
   white-space: nowrap;
 }
@@ -4653,7 +4695,8 @@ input[type="radio"] {
   height: 28px;
   border-radius: 6px;
   border: 1px solid transparent;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   font-size: 0.9rem;
   cursor: pointer;
@@ -4666,7 +4709,8 @@ input[type="radio"] {
 }
 
 .rich-text-btn.active {
-  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  --button-bg: color-mix(in srgb, var(--accent) 20%, transparent);
+  background: var(--button-bg);
   border-color: color-mix(in srgb, var(--accent) 40%, transparent);
   color: var(--accent);
 }
@@ -4798,7 +4842,9 @@ input[type="radio"] {
   padding: 16px;
   border-radius: 18px;
   border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel-solid) 92%, transparent 8%);
+  --button-bg: color-mix(in srgb, var(--panel-solid) 92%, transparent 8%);
+  --button-hover-bg: color-mix(in srgb, var(--accent) 8%, transparent 92%);
+  background: var(--button-bg);
   color: var(--text);
   text-align: left;
 }
@@ -4816,7 +4862,6 @@ input[type="radio"] {
 .matrix-designer-row-button:hover,
 .matrix-designer-cell:hover {
   border-color: color-mix(in srgb, var(--accent) 34%, transparent 66%);
-  background: color-mix(in srgb, var(--accent) 8%, transparent 92%);
 }
 
 .matrix-designer-column-button-active,
@@ -5290,7 +5335,8 @@ input[type="radio"] {
 .matrix-col-remove {
   --button-hover-bg: color-mix(in srgb, var(--danger) 10%, transparent 90%);
   flex-shrink: 0;
-  background: none;
+  --button-bg: none;
+  background: var(--button-bg);
   border: none;
   cursor: pointer;
   color: var(--muted);
@@ -5534,7 +5580,8 @@ input[type="radio"] {
   padding: 14px 16px;
   border-radius: 18px;
   border: 1.5px solid var(--border);
-  background: color-mix(in srgb, var(--panel-solid) 90%, transparent 10%);
+  --button-bg: color-mix(in srgb, var(--panel-solid) 90%, transparent 10%);
+  background: var(--button-bg);
   cursor: pointer;
   transition: border-color 0.2s ease, background 0.2s ease, transform 0.12s ease;
 }
@@ -5695,7 +5742,8 @@ input[type="radio"] {
   height: 40px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.3);
-  background: rgba(0, 0, 0, 0.4);
+  --button-bg: rgba(0, 0, 0, 0.4);
+  background: var(--button-bg);
   color: #fff;
   cursor: pointer;
 }
@@ -5740,7 +5788,8 @@ input[type="radio"] {
 }
 
 .file-card-preview-button {
-  background: none;
+  --button-bg: none;
+  background: var(--button-bg);
 }
 
 .file-card-preview-button img {
@@ -5757,7 +5806,8 @@ input[type="radio"] {
   justify-content: center;
   gap: 6px;
   color: var(--muted);
-  background: var(--accent-soft);
+  --button-bg: var(--accent-soft);
+  background: var(--button-bg);
   cursor: pointer;
   text-decoration: none;
 }
@@ -5795,7 +5845,8 @@ input[type="radio"] {
   overflow: hidden;
   padding: 0;
   border: none;
-  background: none;
+  --button-bg: none;
+  background: var(--button-bg);
   color: var(--accent);
   font-size: 0.78rem;
   text-align: left;
@@ -6026,7 +6077,8 @@ input[type="radio"] {
   border-radius: 10px;
   font-size: 0.875rem;
   font-weight: 500;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--muted);
   border-color: transparent;
   box-shadow: none;
@@ -6075,7 +6127,8 @@ input[type="radio"] {
   padding: 6px 12px;
   border-radius: var(--radius-sm);
   border: none;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--muted);
   font-size: 0.85rem;
   font-weight: 500;
@@ -6208,7 +6261,8 @@ input[type="radio"] {
 .oidc-button {
   --button-hover-bg: var(--accent-soft);
   width: 100%;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   border: 1.5px solid var(--border-strong);
   box-shadow: none;
@@ -6312,7 +6366,8 @@ input[type="radio"] {
   padding: 18px;
   border-radius: 22px;
   border: 1.5px solid var(--border-strong);
-  background: var(--panel);
+  --button-bg: var(--panel);
+  background: var(--button-bg);
   color: var(--text);
   text-align: left;
   transition:
@@ -6431,7 +6486,8 @@ input[type="radio"] {
   min-height: 60px;
   padding: 16px 18px;
   border-radius: 18px;
-  background: var(--primary);
+  --button-bg: var(--primary);
+  background: var(--button-bg);
   color: var(--primary-contrast);
   font-size: 1.02rem;
   font-weight: 700;
@@ -6564,7 +6620,8 @@ input[type="radio"] {
   --button-hover-bg: transparent;
   padding: 0;
   border: none;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--muted);
   font-size: 1.02rem;
   font-weight: 600;
@@ -7399,7 +7456,9 @@ input[type="radio"] {
   padding: 7px 10px;
   font-size: 0.83rem;
   border: none;
-  background: transparent;
+  --button-bg: transparent;
+  --button-hover-bg: color-mix(in srgb, var(--accent) 10%, transparent);
+  background: var(--button-bg);
   color: var(--text);
   cursor: pointer;
   border-radius: 7px;
@@ -7453,7 +7512,8 @@ input[type="radio"] {
   font-size: 0.82rem;
   padding: 7px 12px;
   border-radius: 8px;
-  background: var(--accent);
+  --button-bg: var(--accent);
+  background: var(--button-bg);
   color: #fff;
   border: none;
   cursor: pointer;
@@ -7609,7 +7669,8 @@ input[type="radio"] {
   width: 26px;
   height: 26px;
   padding: 0;
-  background: none;
+  --button-bg: none;
+  background: var(--button-bg);
   --button-hover-bg: transparent;
   border: none;
   cursor: pointer;
@@ -7648,7 +7709,8 @@ input[type="radio"] {
   gap: 5px;
   width: auto;
   min-height: 0;
-  background: none;
+  --button-bg: none;
+  background: var(--button-bg);
   --button-hover-bg: transparent;
   border: none;
   border-radius: 6px;
@@ -8118,7 +8180,8 @@ input[type="radio"] {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: color-mix(in srgb, var(--accent) 15%, transparent 85%);
+  --button-bg: color-mix(in srgb, var(--accent) 15%, transparent 85%);
+  background: var(--button-bg);
   color: var(--accent);
   border: none;
   cursor: pointer;
@@ -8138,7 +8201,8 @@ input[type="radio"] {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: color-mix(in srgb, var(--muted) 12%, transparent 88%);
+  --button-bg: color-mix(in srgb, var(--muted) 12%, transparent 88%);
+  background: var(--button-bg);
   color: var(--muted);
   border: none;
   cursor: pointer;
@@ -8352,7 +8416,8 @@ input[type="radio"] {
   padding: 0 10px;
   border-radius: 6px;
   border: 1px solid var(--border);
-  background: var(--panel);
+  --button-bg: var(--panel);
+  background: var(--button-bg);
   font-size: 0.95rem;
   cursor: pointer;
   transition: background 0.12s, color 0.12s, border-color 0.12s;
@@ -8530,7 +8595,8 @@ input[type="radio"] {
   padding: 7px 12px;
   border: none;
   border-radius: var(--radius-sm);
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   font-size: 0.85rem;
   cursor: pointer;
@@ -8608,7 +8674,8 @@ input[type="radio"] {
   margin: 0 12px 0 0;
   border-radius: 8px;
   border: none;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--muted);
   font-size: 0.7rem;
   box-shadow: none;
@@ -8730,7 +8797,8 @@ input[type="radio"] {
   padding: 3px 10px;
   border-radius: 20px;
   border: 1.5px solid var(--border, #d1d5db);
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--fg, #111);
   font-size: 0.8rem;
   cursor: pointer;
@@ -8885,20 +8953,24 @@ input[type="radio"] {
   font-size: 0.8rem;
   font-weight: 500;
   color: var(--muted);
-  background: none;
+  --button-bg: none;
+  --button-hover-bg: color-mix(in srgb, var(--accent) 8%, transparent);
+  background: var(--button-bg);
   border: none;
   cursor: pointer;
   transition: background 0.12s, color 0.12s;
 }
 
-.stats-period-btn:hover { color: var(--text); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.stats-period-btn:hover { color: var(--text); }
 
 .stats-period-btn-active {
-  background: var(--accent);
+  --button-bg: var(--accent);
+  --button-hover-bg: var(--accent);
+  background: var(--button-bg);
   color: #fff;
 }
 
-.stats-period-btn-active:hover { background: var(--accent); color: #fff; }
+.stats-period-btn-active:hover { color: #fff; }
 
 .stats-grid {
   display: grid;
@@ -8945,7 +9017,8 @@ input[type="radio"] {
   height: 24px;
   border-radius: 6px;
   border: none;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--muted);
   cursor: pointer;
   opacity: 0;
@@ -9017,7 +9090,8 @@ input[type="radio"] {
   height: 32px;
   border-radius: 8px;
   border: none;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--muted);
   cursor: pointer;
   transition: background 0.12s, color 0.12s;
@@ -9058,7 +9132,8 @@ input[type="radio"] {
   font-size: 0.8rem;
   font-weight: 500;
   color: var(--muted);
-  background: none;
+  --button-bg: none;
+  background: var(--button-bg);
   --button-hover-bg: transparent;
   border: none;
   cursor: pointer;
@@ -9226,7 +9301,8 @@ input[type="radio"] {
   padding: 5px 10px;
   border-radius: 8px;
   border: 1px solid var(--border);
-  background: var(--panel-solid);
+  --button-bg: var(--panel-solid);
+  background: var(--button-bg);
   color: var(--text);
   font-size: 0.75rem;
   font-weight: 500;
@@ -9277,7 +9353,8 @@ input[type="radio"] {
   padding: 7px 10px;
   border-radius: 7px;
   border: none;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   font-size: 0.78rem;
   text-align: left;
@@ -9373,7 +9450,8 @@ input[type="radio"] {
   padding: 8px 16px;
   font-size: 0.85rem;
   justify-self: start;
-  background: var(--primary-contrast);
+  --button-bg: var(--primary-contrast);
+  background: var(--button-bg);
   color: var(--primary);
 }
 
@@ -9416,7 +9494,8 @@ input[type="radio"] {
   padding: 6px 12px 6px 8px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: var(--panel-solid);
+  --button-bg: var(--panel-solid);
+  background: var(--button-bg);
   color: var(--text);
   cursor: pointer;
   text-align: left;
@@ -9490,7 +9569,8 @@ input[type="radio"] {
   border: none;
   border-top: 1px solid var(--border);
   border-radius: 0;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   text-align: left;
   cursor: pointer;
@@ -9667,7 +9747,8 @@ input[type="radio"] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--panel-solid);
+  --button-bg: var(--panel-solid);
+  background: var(--button-bg);
   border: 1px solid var(--border);
   border-radius: 7px;
   cursor: pointer;
@@ -9913,7 +9994,8 @@ input[type="radio"] {
   flex-shrink: 0;
   border-radius: 7px;
   border: 1px solid var(--border);
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   --button-hover-bg: transparent;
   color: var(--muted);
   cursor: pointer;
@@ -10126,7 +10208,8 @@ input[type="radio"] {
   padding: 16px;
   border-radius: 18px;
   border: 1.5px solid var(--border);
-  background: var(--panel-solid);
+  --button-bg: var(--panel-solid);
+  background: var(--button-bg);
   display: grid;
   gap: 4px;
   color: var(--text);
@@ -10141,7 +10224,8 @@ input[type="radio"] {
 
 .wizard-purpose-card.is-selected {
   border-color: var(--accent);
-  background: var(--accent-soft);
+  --button-bg: var(--accent-soft);
+  background: var(--button-bg);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent 84%);
 }
 
@@ -10206,7 +10290,8 @@ input[type="radio"] {
 
 .wizard-copy-button {
   --button-hover-bg: var(--accent-soft);
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--muted);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -10560,7 +10645,8 @@ input[type="radio"] {
   padding: 9px 10px;
   border-radius: 12px;
   border: 1px solid transparent;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   box-shadow: none;
   text-align: left;
   color: var(--text);
@@ -10606,7 +10692,8 @@ input[type="radio"] {
   padding: 10px;
   border-radius: 12px;
   border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent 60%);
-  background: var(--accent-soft);
+  --button-bg: var(--accent-soft);
+  background: var(--button-bg);
   color: var(--accent);
   font-weight: 700;
   font-size: 0.88rem;
@@ -10620,7 +10707,8 @@ input[type="radio"] {
 }
 
 .word-import-nav-phase-btn.is-back {
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   border-color: var(--border);
   color: var(--text);
   font-weight: 600;
@@ -10852,7 +10940,8 @@ input[type="radio"] {
      pastel success background with a solid blue in dark mode instead of just darkening it. */
   --button-hover-bg: var(--success-bg);
   border-color: color-mix(in srgb, var(--success) 46%, transparent 54%);
-  background: var(--success-bg);
+  --button-bg: var(--success-bg);
+  background: var(--button-bg);
   color: var(--success-fg);
 }
 
@@ -10863,7 +10952,8 @@ input[type="radio"] {
 .word-import-decision-btn.is-ignore {
   --button-hover-bg: var(--danger-bg);
   border-color: color-mix(in srgb, var(--danger) 46%, transparent 54%);
-  background: var(--danger-bg);
+  --button-bg: var(--danger-bg);
+  background: var(--button-bg);
   color: var(--danger-fg);
 }
 
@@ -10874,7 +10964,8 @@ input[type="radio"] {
 .word-import-decision-btn.is-incomplete {
   --button-hover-bg: var(--warning-bg);
   border-color: color-mix(in srgb, var(--warning) 46%, transparent 54%);
-  background: var(--warning-bg);
+  --button-bg: var(--warning-bg);
+  background: var(--button-bg);
   color: var(--warning-fg);
 }
 
@@ -10957,7 +11048,8 @@ input[type="radio"] {
   padding: 14px;
   border-radius: 16px;
   border: 1.5px dashed var(--border-strong);
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--muted);
   font-weight: 600;
   width: 100%;
@@ -11015,7 +11107,9 @@ input[type="radio"] {
   padding: 7px 10px;
   border-radius: 8px;
   border: none;
-  background: none;
+  --button-bg: none;
+  --button-hover-bg: var(--accent-soft);
+  background: var(--button-bg);
   color: var(--text);
   cursor: pointer;
   min-height: 0;
@@ -11024,7 +11118,6 @@ input[type="radio"] {
 }
 
 .list-manager-item-button:hover {
-  background: var(--accent-soft);
   transform: none;
   box-shadow: none;
 }
@@ -11048,7 +11141,8 @@ input[type="radio"] {
 
 .list-manager-item-action {
   padding: 3px 5px;
-  background: var(--panel-solid);
+  --button-bg: var(--panel-solid);
+  background: var(--button-bg);
   border: 1px solid var(--border);
   border-radius: 5px;
   cursor: pointer;
