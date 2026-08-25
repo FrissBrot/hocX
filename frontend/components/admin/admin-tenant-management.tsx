@@ -387,7 +387,7 @@ export function AdminTenantManagement({ initialPage }: Props) {
               />
               <span>
                 <strong>Struktur + alle Protokolle</strong>
-                <div className="muted">Zusätzlich Teilnehmer, Termine, Protokolle, Bussen, Todos und Dateien (inkl. Fotos-Galerie). Ohne Abgabebox.</div>
+                <div className="muted">Zusätzlich Teilnehmer, Termine, Protokolle, Bussen, Todos und Dateien. Ohne Abgabebox.</div>
               </span>
             </label>
             <label className="field-radio-option">
