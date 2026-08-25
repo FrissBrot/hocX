@@ -5,8 +5,9 @@ set -euo pipefail
 #
 # Usage: scripts/deploy.sh <test|prod>
 #
-# test: laeuft von diesem Dev-Server aus. Die Compose-Dateien liegen im Git-Repo,
-#       Daten/Storage/.env liegen isoliert in /docker/hocX-test (--project-directory).
+# test: laeuft direkt auf dem dedizierten Test-Host aus dessen Repo-Checkout. Der Stack
+#       ist derselbe wie auf Prod (Release-Images, ClamAV, eigener Traefik), aber mit
+#       test-spezifischer .env und Candidate-Tag in HOCX_VERSION.
 # prod: laeuft direkt auf dem Prod-Server, aus dem Verzeichnis, in dem dieses Repo dort
 #       ausgecheckt ist - Compose-Dateien, .env und Storage liegen dort zusammen.
 #
@@ -21,15 +22,26 @@ ENVIRONMENT="${1:-}"
 case "$ENVIRONMENT" in
   test)
     PROJECT_NAME=hocx-test
-    PROJECT_DIR=/docker/hocX-test
+    PROJECT_DIR="$REPO_DIR"
     ENV_FILE="$PROJECT_DIR/.env"
-    COMPOSE_ARGS=(-f "$REPO_DIR/docker-compose.release.yml" -f "$REPO_DIR/docker-compose.test.yml" --project-directory "$PROJECT_DIR")
+    COMPOSE_ARGS=(
+      -f "$REPO_DIR/docker-compose.release.yml"
+      -f "$REPO_DIR/docker-compose.clamav.yml"
+      -f "$REPO_DIR/docker-compose.traefik.yml"
+      -f "$REPO_DIR/docker-compose.test.yml"
+      --project-directory "$PROJECT_DIR"
+    )
     ;;
   prod)
     PROJECT_NAME=hocx
     PROJECT_DIR="$REPO_DIR"
     ENV_FILE="$PROJECT_DIR/.env"
-    COMPOSE_ARGS=(-f "$REPO_DIR/docker-compose.release.yml" -f "$REPO_DIR/docker-compose.clamav.yml" -f "$REPO_DIR/docker-compose.traefik.yml" --project-directory "$PROJECT_DIR")
+    COMPOSE_ARGS=(
+      -f "$REPO_DIR/docker-compose.release.yml"
+      -f "$REPO_DIR/docker-compose.clamav.yml"
+      -f "$REPO_DIR/docker-compose.traefik.yml"
+      --project-directory "$PROJECT_DIR"
+    )
     ;;
   *)
     echo "Usage: $0 <test|prod>" >&2

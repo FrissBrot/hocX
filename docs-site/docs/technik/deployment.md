@@ -5,22 +5,30 @@ Repository-Root. Diese Seite fasst die Grundzüge zusammen.
 
 | | Dev | Test | Prod |
 |---|---|---|---|
-| Wo | dieser Server | dieser Server (separates Compose-Projekt) | eigener Server |
-| Domain | hocx.example.com | test.hocx.example.com | hocx.ch |
+| Wo | dieser Server | eigener Test-Server | eigener Prod-Server |
+| Domain | hocx.example.com | test.hocx.ch | hocx.ch |
 | Code-Quelle | lokal, `build:` aus Source | Docker-Image von GHCR | Docker-Image von GHCR |
 
 ## Ablauf für ein Release
 
 1. Änderungen werden auf `main` gemerged.
-2. Auf GitHub ein Release mit Semver-Tag erstellen (z. B. `v1.2.0`).
-3. `.github/workflows/release.yml` baut automatisch die Images
-   (`hocx-backend`, `hocx-frontend`, `hocx-abgabebox-backend`,
-   `hocx-abgabebox-frontend`) und pusht sie nach GHCR.
-4. In `hocX-test/.env` `HOCX_VERSION` setzen, `./scripts/deploy.sh test` ausführen.
-   Das Skript macht automatisch: DB-Backup → Images pullen → Neustart (Alembic migriert
-   automatisch) → Health-Check.
-5. Nach erfolgreicher Verifikation auf Test dieselben Schritte auf dem Prod-Server
-   wiederholen.
+2. Auf GitHub den manuellen Workflow `Build test candidate images` starten und dabei in
+   der Actions-UI den gewuenschten Branch/Tag waehlen (typischerweise `main`).
+   Der Workflow baut automatisch den neuesten Commit dieses Refs und erzeugt selbst einen
+   eindeutigen Candidate-Tag wie `test-20260825-abc1234-r42`.
+3. Auf dem Test-Host in `.env` `HOCX_VERSION` auf genau diesen Candidate-Tag setzen und
+   `./scripts/deploy.sh test` ausfuehren. Das Skript macht automatisch:
+   DB-Backup → Images pullen → Neustart (Alembic migriert automatisch) → Health-Check.
+4. Direkt danach `./scripts/verify_release.sh test` ausfuehren. Das prueft die lokalen
+   Services, Alembic-Head und die externen Traefik-Domains.
+5. Wenn Test gruen ist, auf GitHub den manuellen Workflow
+   `Promote tested release images` starten: `source_tag=<candidate>`,
+   `release_tag=vX.Y.Z`. Dieser Schritt baut **nicht** neu, sondern setzt den finalen
+   Release-Tag auf dasselbe bereits getestete Image.
+6. Auf dem Prod-Server in `.env` `HOCX_VERSION=vX.Y.Z` setzen, `./scripts/deploy.sh prod`
+   und danach `./scripts/verify_release.sh prod` ausfuehren.
+7. Optional danach ein GitHub-Release fuer Changelog/Release Notes erstellen. Das ist ab
+   jetzt rein dokumentarisch und triggert keinen zweiten Image-Build mehr.
 
 ## Wichtige Betriebsregeln
 
@@ -41,6 +49,12 @@ Repository-Root. Diese Seite fasst die Grundzüge zusammen.
     `npm run build && npm start` (kein Dev-Server) – nach Code-Änderungen im
     Dev-Betrieb muss der jeweilige Container neu gestartet werden
     (`docker compose restart backend`/`frontend`).
+
+!!! info "Test und Prod nutzen denselben Release-Stack"
+    Der dedizierte Test-Host laeuft bewusst mit denselben Release-Compose-Dateien wie
+    Prod (`docker-compose.release.yml` + ClamAV + Traefik). Unterschiede kommen nur aus
+    `.env`, `PROJECT_NAME` (`hocx-test` vs. `hocx`) und dem jeweils gepinnten
+    `HOCX_VERSION`-Tag.
 
 ## Rollback
 

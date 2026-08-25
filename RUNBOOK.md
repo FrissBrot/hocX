@@ -4,10 +4,10 @@ Drei Umgebungen:
 
 | | Dev | Test | Prod |
 |---|---|---|---|
-| Wo | dieser Server | dieser Server (separates Compose-Projekt) | eigener Server |
-| Domain | hocx.example.com | test.hocx.example.com | hocx.ch |
+| Wo | dieser Server | eigener Test-Server | eigener Prod-Server |
+| Domain | hocx.example.com | test.hocx.ch | hocx.ch |
 | Woher kommt der Code | lokal, `build:` aus Source | Docker-Image von GHCR | Docker-Image von GHCR |
-| Verzeichnis | `/docker/hocX` | `/docker/hocX-test` (Daten) + `/docker/hocX` (Compose-Dateien) | Repo-Checkout auf dem Prod-Server |
+| Verzeichnis | `/docker/hocX` | Repo-Checkout auf dem Test-Server | Repo-Checkout auf dem Prod-Server |
 
 **Wichtig vor dem allerersten Start einer neuen Domain (Test wie Prod)**: DNS-Eintrag
 zuerst setzen, dann erst den Stack starten. Traefik versucht bei jedem Container-Start
@@ -18,53 +18,83 @@ Stacks vor gesetztem DNS kann dieses Limit auslösen - dann muss man bis zu 1h w
 bevor ein neuer Zertifikatsversuch klappt. Betrifft nur die neue Domain, nicht die
 bereits laufenden Zertifikate der anderen Umgebungen.
 
-## 1. Release erstellen
+## 1. Candidate-Images manuell bauen
 
-1. Alle Änderungen sind auf `main` gemerged.
-2. Auf GitHub ein neues Release erstellen mit einem Semver-Tag (z.B. `v1.2.0`).
-3. `.github/workflows/release.yml` läuft automatisch los und baut+pusht 4 Images nach
-   `ghcr.io/<namespace>/hocx-{backend,frontend,abgabebox-backend,abgabebox-frontend}`,
-   getaggt mit `v1.2.0` und `latest`.
-4. Fortschritt in GitHub → Actions verfolgen. Bei Erfolg sind die Images unter
-   GitHub → Packages sichtbar.
+1. Alle Änderungen sind auf `main` gemerged und die PR-CI ist gruen.
+2. In GitHub → Actions den Workflow `Build test candidate images` starten.
+3. In der Actions-UI den gewuenschten Ref auswaehlen (normalerweise `main`). Der
+   Workflow baut automatisch den neuesten Commit dieses Refs.
+4. Der Candidate-Tag wird dabei automatisch erzeugt, Format:
+   `test-<UTC-Datum>-<shortsha>-r<run_number>`, z.B. `test-20260825-abc1234-r42`.
+5. Der Workflow baut+pusht alle Release-Images nach
+   `ghcr.io/<namespace>/hocx-{backend,frontend,abgabebox-backend,abgabebox-frontend,docs}:<image_tag>`.
+6. Diesen Candidate-Tag aus der Workflow-Summary notieren; genau derselbe Tag wird auf
+   dem Test-Host deployed.
 
 ## 2. Testumgebung aktualisieren
 
 ```bash
-# In /docker/hocX-test/.env die Zeile HOCX_VERSION=... auf die neue Version setzen
-vim /docker/hocX-test/.env
+# Auf dem Test-Host im Repo-Root .env pflegen (Startpunkt: .env.test.example)
+vim .env
 
-cd /docker/hocX
+# HOCX_VERSION auf den eben gebauten Candidate-Tag setzen, z.B.:
+# HOCX_VERSION=test-20260825-abc1234-r42
+
 ./scripts/deploy.sh test
+./scripts/verify_release.sh test
 ```
 
-Das Skript macht automatisch: DB-Backup (`/docker/hocX-test/backups/`) → Images pullen →
-Container neu starten (Alembic migriert die Test-DB dabei automatisch) → Health-Check.
+`deploy.sh test` macht automatisch: DB-Backup (`backups/`) → Images pullen →
+Container neu starten (Alembic migriert die Test-DB dabei automatisch) → Basis-Health-Check.
+`verify_release.sh test` prueft danach zusaetzlich:
+- Backend / Abgabebox-Backend lokal erreichbar
+- Frontend / Website / Docs lokal erreichbar
+- Alembic `current == heads`
+- `https://test...`-Domains antworten ueber Traefik
 
 **Verifizieren** (mit einem Wegwerf-Testaccount, danach wieder löschen):
-- https://test.hocx.example.com/login erreichbar, Branding lädt korrekt
+- https://test.hocx.ch/login erreichbar, Branding lädt korrekt
 - Login funktioniert, mindestens eine Tabellen-Seite lädt Daten
-- Abgabebox: https://test-abgabe.hocx.example.com lädt (sofern ein Test-Mandant mit
+- Abgabebox: https://abgabe-test.hocx.ch lädt (sofern ein Test-Mandant mit
   Abgabebox-Konfiguration existiert)
 - `docker compose -p hocx-test logs backend --tail=50` zeigt keine Fehler, insbesondere
   keine Alembic-Fehler beim Start
 
-## 3. Prod aktualisieren
+## 3. Getesteten Candidate zum Release promoten
 
-Erst wenn Test erfolgreich verifiziert ist. Auf dem Prod-Server:
+Wenn Test erfolgreich war:
+
+1. In GitHub → Actions den Workflow `Promote tested release images` starten.
+2. Eingaben:
+   - `source_tag`: genau der getestete Candidate-Tag, z.B. `test-20260825-abc1234-r42`
+   - `release_tag`: finaler Semver-Tag, z.B. `v1.2.0`
+   - `update_latest`: in der Regel `true`
+3. Der Workflow baut **nicht** neu, sondern setzt die finalen GHCR-Tags auf dieselben
+   bereits getesteten Images.
+4. Optional danach ein GitHub-Release fuer Release Notes / Changelog anlegen. Das ist
+   rein dokumentarisch; Images sind zu diesem Zeitpunkt schon gepromoted.
+
+## 4. Prod aktualisieren
+
+Erst wenn Test erfolgreich verifiziert **und** der Promotion-Workflow erfolgreich war.
+Auf dem Prod-Server:
 
 ```bash
 vim .env   # HOCX_VERSION auf die neue Version setzen
 ./scripts/deploy.sh prod
+./scripts/verify_release.sh prod
 ```
 
-## 4. Rollback
+Auf Prod immer den finalen Release-Tag pinnen, nie einen Candidate-Tag.
+
+## 5. Rollback
 
 Falls nach einem Update etwas kaputt ist:
 
 ```bash
-vim .env   # (bzw. /docker/hocX-test/.env fuer Test) HOCX_VERSION auf die vorherige, bekannt gute Version zurücksetzen
+vim .env   # HOCX_VERSION auf die vorherige, bekannt gute Version zuruecksetzen
 ./scripts/deploy.sh prod
+./scripts/verify_release.sh prod
 ```
 
 Das rollt den Code zurück. Falls die Migration der neuen Version das Schema
@@ -87,19 +117,36 @@ bereits produktiv angewendet und wird nicht nachträglich umgeschrieben. Nur als
 stehen gelassen, dass die Regel oben nicht rückwirkend gilt, aber für alle künftigen
 Migrationen bindend bleibt.
 
-## 5. Testumgebung neu aufsetzen (falls die Test-DB mal komplett zurückgesetzt werden soll)
+## 6. Testumgebung neu aufsetzen (falls die Test-DB mal komplett zurückgesetzt werden soll)
 
 ```bash
-cd /docker/hocX
-docker compose -p hocx-test -f docker-compose.release.yml -f docker-compose.test.yml \
-  --env-file /docker/hocX-test/.env --project-directory /docker/hocX-test down -v
+docker compose -p hocx-test -f docker-compose.release.yml -f docker-compose.clamav.yml \
+  -f docker-compose.traefik.yml -f docker-compose.test.yml --env-file .env \
+  --project-directory "$(pwd)" down -v
 ./scripts/deploy.sh test
+./scripts/verify_release.sh test
 ```
 
 `-v` löscht auch das Postgres-Volume - Test startet dann wieder mit leerer DB und
 durchläuft beim nächsten Start die komplette Alembic-Historie von Anfang an.
 
-## 6. Prod-Server das erste Mal aufsetzen (sobald der Server existiert)
+## 7. Test-Host das erste Mal aufsetzen
+
+1. Test-Server provisionieren, Docker + Docker Compose installieren.
+2. DNS: `test.hocx.ch`, `abgabe-test.hocx.ch`, optional `docs-test.hocx.ch` und
+   `web-test.hocx.ch` auf die Test-Server-IP zeigen lassen.
+3. Repo klonen: `git clone git@github.com:FrissBrot/hocX.git`.
+4. `.env.test.example` nach `.env` kopieren, alle `change-me`-Werte durch echte Werte
+   ersetzen und `GHCR_NAMESPACE` setzen.
+5. `mkdir -p storage/abgabebox-uploads infra/traefik/letsencrypt infra/traefik/dynamic`
+   und `chown root:5001 storage/abgabebox-uploads && chmod 775 storage/abgabebox-uploads`
+   - gleiche Begruendung wie bei Prod unten.
+6. In `.env` `HOCX_VERSION` auf einen bereits gebauten Candidate-Tag setzen.
+7. `./scripts/deploy.sh test` und danach `./scripts/verify_release.sh test`.
+8. Test-Admin-Login mit `INITIAL_ADMIN_EMAIL`/`INITIAL_ADMIN_PASSWORD` pruefen, danach
+   weitere Test-Admins anlegen und das Bootstrap-Passwort aendern.
+
+## 8. Prod-Server das erste Mal aufsetzen (sobald der Server existiert)
 
 1. Server provisionieren, Docker + Docker Compose installieren.
 2. DNS: `hocx.ch` und `abgabe.hocx.ch` (oder analog) auf die Server-IP zeigen lassen.
@@ -122,7 +169,7 @@ durchläuft beim nächsten Start die komplette Alembic-Historie von Anfang an.
    prüfen, danach im Admin-Panel weitere Admins anlegen und das Bootstrap-Passwort
    ändern.
 
-## 7. Backup- und Cleanup-Cronjobs
+## 9. Backup- und Cleanup-Cronjobs
 
 Zwei eigenständige Skripte in `scripts/`, gedacht für periodische Ausführung per Cron
 (zusätzlich zum automatischen Pre-Deploy-Backup, das `deploy.sh` bei jedem Update ohnehin
@@ -178,9 +225,9 @@ Fehlern mit Exit-Code ≠ 0 ab (wichtig für Cron-Fehlerbenachrichtigung/Monitor
   45 3 * * * /docker/hocX/scripts/cleanup_storage.sh >> /docker/hocX/backups/cleanup_storage.log 2>&1
   ```
 - **Manuell testen**: erst `./scripts/cleanup_storage.sh --dry-run` (zeigt betroffene
-  Dateien, löscht nichts), danach bei Bedarf ohne Flag für den echten Lauf.
+  Dateien, löscht nichts), danach bei Bedarf ohne Flag fuer den echten Lauf.
 
-## 8. hocx.example.com ist faktisches Prod, nicht Dev
+## 10. hocx.example.com ist faktisches Prod, nicht Dev
 
 Die Tabelle in Abschnitt "Drei Umgebungen" oben führt `hocx.example.com` als "Dev" -
 das beschreibt korrekt, *wie* die Umgebung technisch betrieben wird (lokaler Build aus
@@ -195,7 +242,7 @@ selbst bleibt unverändert - das ist eine bewusste, hier nicht revidierte Entsch
 keine Pipeline-Umstellung auf GHCR-Images ist im Rahmen dieses Punkts vorgesehen):
 
 1. **Vor jedem Update**: Backup ziehen, unabhängig vom nächtlichen Cron-Lauf aus
-   Abschnitt 7 - `./scripts/backup_db.sh` im Repo-Root ausführen und den Erfolg
+   Abschnitt 9 - `./scripts/backup_db.sh` im Repo-Root ausführen und den Erfolg
    (neue Datei unter `backups/`) prüfen, bevor der Code aktualisiert wird.
 2. **Update durchführen**: `git pull` + `docker compose up -d --build` (Alembic migriert
    die DB dabei automatisch, wie bei den anderen Umgebungen auch).
