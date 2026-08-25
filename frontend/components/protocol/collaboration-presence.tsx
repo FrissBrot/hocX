@@ -28,7 +28,6 @@ export function CollaboratorAvatar({ user }: { user: CollaboratorInfo }) {
 }
 
 export function CollaborationPresenceBar({ users, connected }: { users: CollaboratorInfo[]; connected: boolean }) {
-  if (!connected && users.length === 0) return null;
   return (
     <div className="collab-presence-bar" title={connected ? undefined : "Live-Kollaboration nicht verfügbar"}>
       {users.map((user) => (

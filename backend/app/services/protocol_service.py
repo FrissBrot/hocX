@@ -2040,6 +2040,8 @@ class ProtocolService:
         previous_status = protocol.status
         previous_protocol_date = protocol.protocol_date
         values = payload.model_dump(exclude_unset=True)
+        # Concurrency precondition consumed by the route; it is not a database column.
+        values.pop("expected_session_notes", None)
         document_template_id = values.pop("document_template_id", None) if "document_template_id" in values else None
         if values.get("event_id") is not None:
             # event_id is client-supplied - without this check a writer could re-link an

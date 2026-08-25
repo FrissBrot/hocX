@@ -182,6 +182,15 @@ def patch_protocol(
     existing = service.get_protocol(db, protocol_id)
     if existing is None or existing.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Protocol not found")
+    if (
+        payload.session_notes is not None
+        and payload.expected_session_notes is not None
+        and payload.expected_session_notes != (existing.session_notes or "")
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Die Sitzungsnotizen wurden zwischenzeitlich geändert. Der lokale Entwurf bleibt erhalten.",
+        )
     try:
         protocol = service.update_protocol(db, protocol_id, payload)
     except ValueError as exc:

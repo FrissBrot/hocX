@@ -18,6 +18,7 @@ import { useProtocolCollaboration } from "@/lib/hooks/use-protocol-collaboration
 import { useTagConfig } from "@/lib/hooks/use-tag-config";
 import { usePdfExport } from "@/lib/hooks/use-pdf-export";
 import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
+import { clearDraft, queueMutation, readDraft, removeMutation, saveDraft } from "@/lib/offline-store";
 import { getCycleYear } from "@/lib/utils/cycle";
 import { protocolStatusVariant } from "@/components/protocol/protocol-status";
 import {
@@ -395,6 +396,36 @@ export function ProtocolEditor({
     return () => {
       Object.values(timers.current).forEach((timerId) => window.clearTimeout(timerId));
     };
+  }, []);
+
+  // Recover text that was typed before a tab/browser crash or a failed request. A draft is
+  // only ever removed after the backend confirmed the exact value.
+  useEffect(() => {
+    const restoredDrafts = Object.keys(textDrafts).map(Number).flatMap((blockId) => {
+      const draft = readDraft(`protocol-text:${blockId}`);
+      return draft !== null && draft !== textDrafts[blockId] ? [[blockId, draft] as const] : [];
+    });
+    if (restoredDrafts.length === 0) return;
+    setTextDrafts((current) => {
+      const next = { ...current };
+      for (const [blockId, draft] of restoredDrafts) next[blockId] = draft;
+      return next;
+    });
+    showToast(`${restoredDrafts.length} lokaler Textentwurf wurde wiederhergestellt.`, "info");
+  // Initial server values are deliberately compared exactly once per mounted protocol.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [protocol.id]);
+
+  useEffect(() => {
+    const flushed = (event: Event) => {
+      const key = (event as CustomEvent<{ key?: string }>).detail?.key;
+      if (!key?.startsWith("protocol-text:")) return;
+      clearDraft(key);
+      const blockId = Number(key.slice("protocol-text:".length));
+      if (Number.isFinite(blockId)) setStatus(blockId, "saved");
+    };
+    window.addEventListener("hocx:mutation-flushed", flushed);
+    return () => window.removeEventListener("hocx:mutation-flushed", flushed);
   }, []);
 
   useEffect(() => {
@@ -867,6 +898,17 @@ export function ProtocolEditor({
   }
 
   function handleTextChange(protocolElementBlockId: number, content: string) {
+    const mutationKey = `protocol-text:${protocolElementBlockId}`;
+    const expectedContent = elements
+      .flatMap((element) => element.blocks)
+      .find((block) => block.id === protocolElementBlockId)?.text_content ?? "";
+    saveDraft(mutationKey, content);
+    queueMutation({
+      key: mutationKey,
+      path: `/api/protocol-element-blocks/${protocolElementBlockId}/text`,
+      method: "PUT",
+      body: JSON.stringify({ content, expected_content: expectedContent }),
+    });
     setTextDrafts((current) => ({ ...current, [protocolElementBlockId]: content }));
     setStatus(protocolElementBlockId, "saving");
 
@@ -878,7 +920,7 @@ export function ProtocolEditor({
       try {
         const result = await browserApiFetch<{ tracked_dirty: boolean; tracked_baseline_content: string | null }>(
           `/api/protocol-element-blocks/${protocolElementBlockId}/text`,
-          { method: "PUT", body: JSON.stringify({ content }) }
+          { method: "PUT", body: JSON.stringify({ content, expected_content: expectedContent }) }
         );
         updateBlockInState(protocolElementBlockId, (block) => ({
           ...block,
@@ -887,6 +929,8 @@ export function ProtocolEditor({
           tracked_baseline_content: result.tracked_baseline_content,
         }));
         setStatus(protocolElementBlockId, "saved");
+        clearDraft(mutationKey);
+        removeMutation(mutationKey);
         collab.sendFieldUpdate(`block-${protocolElementBlockId}`, {
           text_content: content,
           tracked_dirty: result.tracked_dirty,
@@ -894,7 +938,14 @@ export function ProtocolEditor({
         });
       } catch (err: unknown) {
         setStatus(protocolElementBlockId, "error");
-        showToast(err instanceof Error ? err.message : "Text konnte nicht gespeichert werden", "error");
+        queueMutation({
+          key: mutationKey,
+          path: `/api/protocol-element-blocks/${protocolElementBlockId}/text`,
+          method: "PUT",
+          body: JSON.stringify({ content, expected_content: expectedContent }),
+          lastError: err instanceof Error ? err.message : "Text konnte nicht gespeichert werden",
+        });
+        showToast("Text lokal gesichert – wird nach Wiederherstellung der Verbindung automatisch gespeichert.", "error");
       }
     }, 700);
   }

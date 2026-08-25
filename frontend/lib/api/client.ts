@@ -5,6 +5,12 @@ const internalApiUrl = process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_A
 const publicApiUrl = "";
 export const browserApiBaseUrl = publicApiUrl;
 
+export class ApiError extends Error {
+  constructor(message: string, public readonly kind: "offline" | "timeout" | "backend" | "auth" | "validation" | "conflict", public readonly status?: number) {
+    super(message);
+  }
+}
+
 export async function backendFetch<T>(path: string, init?: RequestInit): Promise<T | null> {
   // Not shared with abgabebox-frontend/lib/api.ts's fetchJson (see that file's comment,
   // audit finding E-Niedrig-4): that app's public endpoints need neither the session-cookie
@@ -40,16 +46,19 @@ export async function backendFetch<T>(path: string, init?: RequestInit): Promise
 
 export async function browserApiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
-  const response = await fetch(`${publicApiUrl}${path}`, {
-    ...init,
-    credentials: "include",
-    headers: isFormData
-      ? init?.headers
-      : {
-          "Content-Type": "application/json",
-          ...(init?.headers ?? {})
-        }
-  });
+  if (typeof navigator !== "undefined" && !navigator.onLine) throw new ApiError("Keine Internetverbindung", "offline");
+  let response: Response;
+  try {
+    response = await fetch(`${publicApiUrl}${path}`, {
+      ...init,
+      signal: init?.signal ?? AbortSignal.timeout(15_000),
+      credentials: "include",
+      headers: isFormData ? init?.headers : { "Content-Type": "application/json", ...(init?.headers ?? {}) }
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "TimeoutError") throw new ApiError("Zeitüberschreitung beim Server", "timeout");
+    throw new ApiError("Backend nicht erreichbar", "backend");
+  }
 
   if (!response.ok) {
     const text = await response.text();
@@ -71,7 +80,10 @@ export async function browserApiFetch<T>(path: string, init?: RequestInit): Prom
     } catch {
       // keep raw text if not parseable JSON
     }
-    throw new Error(message);
+    const kind = response.status === 401 || response.status === 403 ? "auth"
+      : response.status === 409 ? "conflict"
+      : response.status >= 500 ? "backend" : "validation";
+    throw new ApiError(message, kind, response.status);
   }
 
   if (response.status === 204 || response.headers.get("content-length") === "0") {

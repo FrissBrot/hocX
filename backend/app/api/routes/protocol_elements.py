@@ -331,6 +331,13 @@ def put_protocol_text(
     require_writer(user)
     block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     _ensure_block_not_locked_by_other(protocol.id, protocol_element_block_id, user)
+    current_text = autosave_service.text_repository.get_by_protocol_element_block_id(db, protocol_element_block_id)
+    current_content = current_text.content if current_text is not None else ""
+    if payload.expected_content is not None and payload.expected_content != current_content:
+        raise HTTPException(
+            status_code=409,
+            detail="Der Text wurde zwischenzeitlich von einer anderen Person geändert. Der lokale Entwurf bleibt erhalten.",
+        )
     track_changes_active = bool(protocol.status == "geplant" and protocol.track_changes_enabled)
     try:
         result = autosave_service.save_text_block(

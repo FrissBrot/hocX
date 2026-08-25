@@ -17,6 +17,7 @@ import { ConfirmProvider } from "@/contexts/confirm-context";
 import { ProfileModal } from "@/components/ui/profile-modal";
 import { TenantSelectorModal } from "@/components/ui/tenant-selector-modal";
 import { Menu, MenuDivider, MenuItem, Popover } from "@/components/ui/popover";
+import { ConnectivityStatus } from "@/components/ui/connectivity-status";
 
 // Login rendert nie auf einer Mandanten-Custom-Domain — von dort muss eine volle Navigation
 // (nicht SPA-Routing) zur Hauptdomain erfolgen, sonst gäbe es dort keine Login-Seite zu zeigen.
@@ -247,6 +248,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
 
   return (
     <main className={`app-frame${isProtocolWriting ? " app-frame-writing" : ""}`}>
+      <ConnectivityStatus />
       <div className="shell">
         <aside
           className={`sidebar${mobileNavOpen ? " sidebar-open" : ""}${isProtocolWriting ? " sidebar-writing" : ""}`}

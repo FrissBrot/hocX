@@ -42,6 +42,7 @@ class ProtocolUpdate(BaseModel):
     status: ProtocolStatus | None = None
     document_template_id: int | None = None
     session_notes: str | None = None
+    expected_session_notes: str | None = None
     track_changes_enabled: bool | None = None
 
 
@@ -177,6 +178,9 @@ class QuickTodoCreate(BaseModel):
 
 class ProtocolTextUpdate(BaseModel):
     content: str
+    # Optimistic concurrency: clients send the last server value they edited from. Omitted
+    # for backwards compatibility with older clients and internal callers.
+    expected_content: str | None = None
 
 
 class ProtocolTextRead(BaseModel):

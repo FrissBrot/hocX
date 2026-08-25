@@ -27,11 +27,23 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [done, setDone] = useState(false);
+  const [online, setOnline] = useState(true);
   const [uploadedSoFar, setUploadedSoFar] = useState(alreadyUploadedCount);
   const inputRef = useRef<HTMLInputElement>(null);
   // Welche rohe FriendlyCaptcha-Loesung bereits gegen ein Sitzungs-Token eingetauscht wurde -
   // handleSolved kann mehrfach mit derselben Loesung feuern (Callback + DOM-Fallback im Widget).
   const exchangedSolutionRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    update();
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
 
   const accept = allowedFileTypes.length > 0 ? allowedFileTypes.map((t) => `.${t}`).join(",") : undefined;
   const typeLabel = allowedFileTypes.length > 0 ? allowedFileTypes.map((t) => t.toUpperCase()).join(", ") : "Alle Dateitypen";
@@ -125,6 +137,7 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (files.length === 0) { setError("Bitte mindestens eine Datei auswählen"); return; }
+    if (!navigator.onLine) { setError("Keine Internetverbindung – die ausgewählten Dateien bleiben erhalten. Bitte nach dem Verbinden erneut senden."); return; }
 
     if (!captchaSessionToken) {
       setError("Sicherheitscheck läuft noch – bitte kurz warten und nochmals versuchen");
@@ -161,7 +174,9 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
       setFiles([]);
       setDone(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload fehlgeschlagen");
+      setError(navigator.onLine
+        ? (err instanceof Error ? err.message : "Upload fehlgeschlagen")
+        : "Verbindung während des Uploads unterbrochen. Prüfe vor dem erneuten Senden, ob die Abgabe bereits angekommen ist.");
     } finally {
       // Das Sitzungs-Token bleibt bewusst erhalten (ausser beim 401-Fall oben) - der
       // Sicherheitscheck soll nur einmal pro Seitenaufruf laufen, nicht vor jedem Upload.
@@ -198,6 +213,7 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
 
   return (
     <form onSubmit={handleSubmit}>
+      {!online && <div className="upload-error" role="status">Offline – Uploads sind erst nach Wiederherstellung der Verbindung möglich. Die Auswahl bleibt in diesem Tab erhalten.</div>}
       {uploadedSoFar > 0 && (
         <p className="upload-already-count">
           Bereits {uploadedSoFar} Datei{uploadedSoFar === 1 ? "" : "en"} für diese Abgabe hochgeladen.

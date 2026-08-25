@@ -2,6 +2,7 @@
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { browserApiFetch } from "@/lib/api/client";
+import { clearDraft, queueMutation, readDraft, removeMutation, saveDraft } from "@/lib/offline-store";
 import { useToast } from "@/contexts/toast-context";
 import { formatDateRange } from "@/lib/utils/format";
 import { NavIcon } from "@/components/ui/nav-icons";
@@ -41,6 +42,28 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
     const [creatingTodo, setCreatingTodo] = useState(false);
     const [todoSaved, setTodoSaved] = useState(false);
     const [openedByHover, setOpenedByHover] = useState(false);
+    const notesMutationKey = `protocol-notes:${protocol.id}`;
+    const notesServerValueRef = useRef(protocol.session_notes ?? "");
+    const latestNotesRef = useRef(notes);
+    latestNotesRef.current = notes;
+
+    useEffect(() => {
+      const draft = readDraft(notesMutationKey);
+      if (draft !== null && draft !== (protocol.session_notes ?? "")) {
+        setNotes(draft);
+        setNotesSaveState("error");
+        showToast("Lokaler Entwurf der Sitzungsnotizen wurde wiederhergestellt.", "info");
+      }
+      const flushed = (event: Event) => {
+        if ((event as CustomEvent<{ key?: string }>).detail?.key !== notesMutationKey) return;
+        clearDraft(notesMutationKey);
+        notesServerValueRef.current = latestNotesRef.current;
+        setNotesSaveState("saved");
+      };
+      window.addEventListener("hocx:mutation-flushed", flushed);
+      return () => window.removeEventListener("hocx:mutation-flushed", flushed);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [protocol.id]);
 
     // Assignee selection state
     const [assigneeSearch, setAssigneeSearch] = useState("");
@@ -174,23 +197,41 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
 
     const saveNotes = useCallback(
       (value: string) => {
+        const expectedSessionNotes = notesServerValueRef.current;
+        saveDraft(notesMutationKey, value);
+        queueMutation({
+          key: notesMutationKey,
+          path: `/api/protocols/${protocol.id}`,
+          method: "PATCH",
+          body: JSON.stringify({ session_notes: value, expected_session_notes: expectedSessionNotes }),
+        });
         if (notesTimerRef.current) window.clearTimeout(notesTimerRef.current);
         setNotesSaveState("saving");
         notesTimerRef.current = window.setTimeout(async () => {
           try {
-            await browserApiFetch(`/api/protocols/${protocol.id}`, {
+            const updated = await browserApiFetch<ProtocolSummary>(`/api/protocols/${protocol.id}`, {
               method: "PATCH",
-              body: JSON.stringify({ session_notes: value }),
+              body: JSON.stringify({ session_notes: value, expected_session_notes: expectedSessionNotes }),
             });
+            notesServerValueRef.current = updated.session_notes ?? "";
             setNotesSaveState("saved");
+            clearDraft(notesMutationKey);
+            removeMutation(notesMutationKey);
             onSessionNotesChange?.(value);
             window.setTimeout(() => setNotesSaveState("idle"), 1800);
-          } catch {
+          } catch (error) {
             setNotesSaveState("error");
+            queueMutation({
+              key: notesMutationKey,
+              path: `/api/protocols/${protocol.id}`,
+              method: "PATCH",
+              body: JSON.stringify({ session_notes: value, expected_session_notes: expectedSessionNotes }),
+              lastError: error instanceof Error ? error.message : "Notizen konnten nicht gespeichert werden",
+            });
           }
         }, 700);
       },
-      [protocol.id, onSessionNotesChange]
+      [protocol.id, onSessionNotesChange, notesMutationKey]
     );
 
     const handleNotesChange = (value: string) => {
