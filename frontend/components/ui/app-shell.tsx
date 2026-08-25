@@ -71,6 +71,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
   const [tenantModalOpen, setTenantModalOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [language, setLanguage] = useState("de");
+  const [protocolAccordionEnabled, setProtocolAccordionEnabled] = useState(true);
   const [sessionStatus, setSessionStatus] = useState(initialSession?.authenticated ? "Ready" : "Loading workspace...");
 
   const navGroups = useMemo(() => buildNav(session), [session]);
@@ -120,6 +121,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
         }
         setSession(current);
         setLanguage(current.user?.preferred_language ?? "de");
+        setProtocolAccordionEnabled(current.user?.protocol_accordion_enabled ?? true);
         setSessionStatus("Ready");
       } catch {
         // Transient errors (network hiccup, backend 500, timeout) must NOT log
@@ -220,7 +222,8 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
       await browserApiFetch("/api/users/me", {
         method: "PATCH",
         body: JSON.stringify({
-          preferred_language: language
+          preferred_language: language,
+          protocol_accordion_enabled: protocolAccordionEnabled,
         })
       });
       const refreshed = await browserApiFetch<SessionInfo>("/api/auth/session");
@@ -388,6 +391,8 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
         onClose={() => setProfileModalOpen(false)}
         language={language}
         onLanguageChange={setLanguage}
+        protocolAccordionEnabled={protocolAccordionEnabled}
+        onProtocolAccordionChange={setProtocolAccordionEnabled}
         onSave={() => void saveProfile()}
         onLogout={() => void logout()}
       />

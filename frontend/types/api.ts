@@ -11,6 +11,7 @@ export type SessionInfo = {
     display_name: string;
     email: string;
     preferred_language: string;
+    protocol_accordion_enabled: boolean;
     default_tenant_id: number | null;
   } | null;
   current_tenant: TenantSummary | null;

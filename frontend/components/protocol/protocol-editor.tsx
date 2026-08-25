@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -71,6 +71,7 @@ type ProtocolEditorProps = {
   documentTemplates?: DocumentTemplate[];
   forceReadOnly?: boolean;
   canViewFines?: boolean;
+  accordionEnabled?: boolean;
 };
 
 export function ProtocolEditor({
@@ -89,6 +90,7 @@ export function ProtocolEditor({
   documentTemplates = [],
   forceReadOnly = false,
   canViewFines = true,
+  accordionEnabled = true,
 }: ProtocolEditorProps) {
   const router = useRouter();
   const [elements, setElements] = useState(initialElements);
@@ -367,6 +369,9 @@ export function ProtocolEditor({
   };
   const timers = useRef<Record<number, number>>({});
   const shouldScrollToElementRef = useRef(false);
+  const passiveScrollTargetRef = useRef<number | null>(null);
+  const selectedElementIdRef = useRef(selectedElementId);
+  selectedElementIdRef.current = selectedElementId;
   const navRef = useRef<HTMLElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
   const documentRef = useRef<HTMLElement | null>(null);
@@ -491,14 +496,23 @@ export function ProtocolEditor({
         // never shows a scrollbar or responds to wheel input, so it silently absorbed
         // part of the scroll too, leaving the pinned shell offset from the viewport
         // with a matching dead strip of blank space at its bottom edge). The division
-        // below undoes .protocol-document-shell's zoom: 0.9, which scales visual
+        // below undoes .protocol-document-shell's zoom, which scales visual
         // pixels (getBoundingClientRect) relative to scrollTop's own unscaled space.
         const container = documentRef.current;
         const section = document.getElementById(`protocol-element-${selectedElementId}`);
         if (container && section) {
           const zoomHost = container.closest<HTMLElement>(".protocol-document-shell");
           const zoom = zoomHost ? parseFloat(getComputedStyle(zoomHost).zoom) || 1 : 1;
-          const delta = (section.getBoundingClientRect().top - container.getBoundingClientRect().top) / zoom;
+          const containerRect = container.getBoundingClientRect();
+          const sectionRect = section.getBoundingClientRect();
+          const safeInset = 16 * zoom;
+          const isTallSection = sectionRect.height >= containerRect.height - safeInset * 2;
+          const delta = isTallSection
+            ? (sectionRect.top - containerRect.top - safeInset) / zoom
+            : (
+                sectionRect.top + sectionRect.height / 2
+                - (containerRect.top + containerRect.height / 2)
+              ) / zoom;
           container.scrollTo({ top: container.scrollTop + delta, behavior: "smooth" });
         }
       }
@@ -541,19 +555,48 @@ export function ProtocolEditor({
 
   const visibleElementIdsKey = visibleElements.map((element) => element.id).join(",");
 
-  // Scroll-spy for the continuous document layout: tracks whichever section currently sits
-  // at the top of .protocol-document and makes it the active/highlighted one - matching
-  // scroll-snap-align: start below (a short section snapped to the top of a much taller
-  // pane would otherwise never contain the pane's vertical center, so center-based
-  // detection stopped matching scroll-snap-align: start once that was switched from
-  // "center"). Uses plain getBoundingClientRect() math (rAF-throttled on scroll/resize)
+  // Collapsing the previously active accordion section can remove hundreds of pixels above
+  // the viewport. Preserve the newly selected section as the visual anchor so that moving
+  // past a long section lands on its immediate neighbour instead of skipping several points.
+  // useLayoutEffect runs after React changed the open section but before the browser paints
+  // that layout, avoiding a visible jump. This is only used for passive scroll-spy changes;
+  // clicks and keyboard navigation already have their own smooth-scroll path above.
+  useLayoutEffect(() => {
+    if (!accordionEnabled) return;
+    if (passiveScrollTargetRef.current !== selectedElementId) return;
+    passiveScrollTargetRef.current = null;
+
+    const container = documentRef.current;
+    const section = selectedElementId
+      ? document.getElementById(`protocol-element-${selectedElementId}`)
+      : null;
+    if (!container || !section) return;
+
+    const zoomHost = container.closest<HTMLElement>(".protocol-document-shell");
+    const zoom = zoomHost ? parseFloat(getComputedStyle(zoomHost).zoom) || 1 : 1;
+    const containerRect = container.getBoundingClientRect();
+    const sectionRect = section.getBoundingClientRect();
+    const safeInset = 16 * zoom;
+    const isTallSection = sectionRect.height >= containerRect.height - safeInset * 2;
+    const delta = isTallSection
+      ? sectionRect.top - containerRect.top - safeInset
+      : sectionRect.top + sectionRect.height / 2 - (containerRect.top + containerRect.height / 2);
+
+    container.scrollTo({
+      top: container.scrollTop + delta / zoom,
+      behavior: "instant" as ScrollBehavior,
+    });
+  }, [accordionEnabled, selectedElementId]);
+
+  // Scroll-spy for the continuous document layout: tracks whichever section is closest to
+  // the visual centre of .protocol-document. Uses plain
+  // getBoundingClientRect() math (rAF-throttled on scroll/resize)
   // rather than IntersectionObserver - that earlier approach combined a custom `root`,
   // percentage rootMargin and the .protocol-document-shell `zoom` scale in a way that
   // didn't reliably fire (nothing ever got marked active). getBoundingClientRect always
   // reports already-zoomed, viewport-relative coordinates, so it isn't affected by that.
-  // Deliberately only calls setSelectedElementId directly (never focusElement/
-  // shouldScrollToElementRef) so passive scrolling never triggers the jump-effect's own
-  // scroll/focus side effects above.
+  // Deliberately avoids focusElement/shouldScrollToElementRef so passive scrolling never
+  // focuses a form field. The layout effect above only anchors the newly opened neighbour.
   useEffect(() => {
     if (!useDocumentLayout) return;
     const container = documentRef.current;
@@ -564,7 +607,7 @@ export function ProtocolEditor({
     function computeActiveSection() {
       rafId = null;
       const containerRect = container!.getBoundingClientRect();
-      const topY = containerRect.top + 32;
+      const centerY = containerRect.top + containerRect.height / 2;
       const sections = visibleElementIdsKey
         .split(",")
         .filter(Boolean)
@@ -577,18 +620,21 @@ export function ProtocolEditor({
       for (const section of sections) {
         const rect = section.getBoundingClientRect();
         const id = Number(section.id.replace("protocol-element-", ""));
-        if (rect.top <= topY && rect.bottom >= topY) {
+        if (rect.top <= centerY && rect.bottom >= centerY) {
           bestId = id;
           break;
         }
-        const distance = Math.abs(rect.top - topY);
+        const sectionCenter = rect.top + rect.height / 2;
+        const distance = Math.abs(sectionCenter - centerY);
         if (distance < bestDistance) {
           bestDistance = distance;
           bestId = id;
         }
       }
-      if (bestId !== null) {
-        setSelectedElementId((current) => (current === bestId ? current : bestId));
+      if (bestId !== null && selectedElementIdRef.current !== bestId) {
+        passiveScrollTargetRef.current = accordionEnabled ? bestId : null;
+        selectedElementIdRef.current = bestId;
+        setSelectedElementId(bestId);
       }
     }
 
@@ -605,29 +651,7 @@ export function ProtocolEditor({
       window.removeEventListener("resize", scheduleCompute);
       if (rafId !== null) window.cancelAnimationFrame(rafId);
     };
-  }, [useDocumentLayout, visibleElementIdsKey]);
-
-  // Suspend the section blur/opacity transition while .protocol-document is actively being
-  // scrolled - animating `filter: blur()` on a section at the same time the browser is running
-  // its own native scroll-snap animation is what made the whole thing feel janky/buggy;
-  // applying the blur state change instantly (no transition) once scrolling settles avoids the
-  // two animations fighting each other.
-  useEffect(() => {
-    if (!useDocumentLayout) return;
-    const container = documentRef.current;
-    if (!container) return;
-    let settleTimer: number | null = null;
-    function onScroll() {
-      container!.classList.add("is-scrolling");
-      if (settleTimer) window.clearTimeout(settleTimer);
-      settleTimer = window.setTimeout(() => container!.classList.remove("is-scrolling"), 150);
-    }
-    container.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      container.removeEventListener("scroll", onScroll);
-      if (settleTimer) window.clearTimeout(settleTimer);
-    };
-  }, [useDocumentLayout]);
+  }, [accordionEnabled, useDocumentLayout, visibleElementIdsKey]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -1479,7 +1503,10 @@ export function ProtocolEditor({
 
       {useDocumentLayout ? (
         <div className="protocol-document-shell">
-          <article className="protocol-document" ref={documentRef}>
+          <article
+            className={`protocol-document${accordionEnabled ? " protocol-document-accordion" : ""}`}
+            ref={documentRef}
+          >
             {visibleElements.length === 0 && (
               <div className="editor-panel-empty">
                 <div>

@@ -3149,7 +3149,7 @@ input[type="radio"] {
      not a standard CSS property but well supported in the Chromium/Linux target this project
      already commits to (see the backdrop-filter removal note above). Recomputes layout at the
      scaled size (unlike transform: scale), so position: sticky in the sidebar keeps working. */
-  zoom: 0.9;
+  zoom: 0.84;
 }
 
 .protocol-document {
@@ -3158,8 +3158,7 @@ input[type="radio"] {
   gap: 18px;
   min-width: 0;
   /* Self-scrolling, pinned near the top of the viewport (mirrors .protocol-quicknav's own
-     sticky/max-height pattern below) - this is what lets scroll-snap center the active
-     section within it regardless of how tall the page around it is. */
+     sticky/max-height pattern below), independent of the page around it. */
   position: sticky;
   top: 12px;
   max-height: calc(100dvh - 24px);
@@ -3169,10 +3168,6 @@ input[type="radio"] {
      that's even slightly too wide (e.g. a wide table). Force it off explicitly - inner
      content that needs horizontal scroll (.table-shell) handles that itself instead. */
   overflow-x: hidden;
-  /* "Magnetic" scrolling: one wheel/trackpad gesture settles on the next section, centered.
-     A section taller than the viewport still scrolls normally inside itself - per spec, once
-     a snap area is already as centered as it can get, the browser doesn't yank it away. */
-  scroll-snap-type: y mandatory;
   /* Without this, scrolling past this pane's own end chains the leftover wheel delta to
      the next scrollable ancestor up the tree - which, despite the outer .app-frame-writing
      shell being pinned via overflow:hidden for this exact layout, still receives it and
@@ -3180,6 +3175,16 @@ input[type="radio"] {
      Confirmed live: without `contain`, scrolling past the end here moved the outer page by
      thousands of pixels. */
   overscroll-behavior: contain;
+}
+
+/* The accordion scroll-spy activates the heading nearest the pane's centre. Reserve half
+   a pane of scroll space at both ends so the first and final headings can reach that
+   activation line when approaching them in either direction. */
+.protocol-document-accordion::before,
+.protocol-document-accordion::after {
+  content: "";
+  flex: 0 0 50%;
+  pointer-events: none;
 }
 
 .protocol-doc-section {
@@ -3192,22 +3197,6 @@ input[type="radio"] {
   box-shadow: var(--shadow-soft);
   padding: 20px;
   transition: box-shadow 150ms ease, border-color 150ms ease;
-  /* start, not center: centering a short section (e.g. one with just 1-2 small blocks)
-     leaves tall, empty-looking gutters above AND below it, worse the taller .protocol-
-     document gets - reads as "the page scrolled into blank space". Snapping its top edge
-     to the pane's top instead means only ever the space after the very last section can
-     end up blank, same as any normal page falling short of the viewport. */
-  scroll-snap-align: start;
-  scroll-margin-top: 16px;
-  scroll-snap-stop: always;
-}
-
-/* While the document is actively scrolling, apply the active/inactive state change instantly
-   instead of animating it - see the JS comment next to the scroll listener that toggles this
-   class. Animating the highlight at the same time as the native scroll-snap motion is what
-   made the whole thing feel janky. */
-.protocol-document.is-scrolling .protocol-doc-section {
-  transition: none;
 }
 
 /* The active section is marked with an accent ring instead of blurring everything else -
@@ -3216,6 +3205,45 @@ input[type="radio"] {
 .protocol-doc-section-active {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent 65%), var(--shadow-soft);
+}
+
+/* Accordion document: inactive protocol points remain as compact, scannable headings.
+   The scroll-spy promotes the point nearest the viewport centre to active, which reveals
+   its existing block stack without mounting/unmounting editors or losing draft state. */
+.protocol-document-accordion .protocol-doc-section-inactive {
+  padding-block: 14px;
+  margin-inline: 10px;
+  opacity: 0.68;
+  filter: grayscale(0.3) blur(0.3px);
+  background: color-mix(in srgb, var(--panel-solid) 84%, var(--bg) 16%);
+  transition:
+    opacity 140ms ease,
+    filter 140ms ease,
+    background 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.protocol-document-accordion .protocol-doc-section-inactive .editor-panel-header h2 {
+  margin-top: 6px;
+  font-size: 1.05rem;
+}
+
+.protocol-document-accordion .protocol-doc-section-inactive .eyebrow {
+  font-size: 0.68rem;
+}
+
+.protocol-document-accordion .protocol-doc-section-wrap:hover .protocol-doc-section-inactive {
+  opacity: 0.82;
+  filter: grayscale(0.15) blur(0.15px);
+}
+
+.protocol-document-accordion .protocol-doc-section-inactive > .editor-panel-header {
+  margin-bottom: 0;
+}
+
+.protocol-document-accordion .protocol-doc-section-inactive > .element-block-stack {
+  display: none;
 }
 
 /* The section itself is inert while inactive (see focused-element-editor.tsx), so clicks pass
@@ -4731,6 +4759,13 @@ input[type="radio"] {
   outline: none;
   line-height: 1.65;
   color: var(--text);
+}
+
+/* The protocol workspace is intentionally denser than the rest of the application:
+   its document is zoomed out above, while writing surfaces retain a generous working
+   height. At 84% zoom this renders at roughly 160px instead of the previous 108px. */
+.protocol-panel-document .rich-text-editor-content {
+  min-height: 190px;
 }
 
 .rich-text-editor-content:focus {
@@ -6527,7 +6562,6 @@ input[type="radio"] {
   .app-frame-writing .editor-panel {
     height: calc(100dvh - 130px);
     overflow-y: auto;
-    scroll-snap-type: y proximity;
     display: flex;
     flex-direction: column;
   }
@@ -6588,6 +6622,51 @@ input[type="radio"] {
    magic-number match rather than a hard constraint, so it's deliberately left untouched
    here to avoid clipping it if that number is ever slightly off). */
 @media (min-width: 901px) {
+  /* Give protocol writing the feel of a slightly zoomed-out workspace without changing
+     browser zoom or making form controls across the rest of the app smaller. */
+  .app-frame-writing {
+    padding: 12px;
+  }
+
+  .app-frame-writing .shell {
+    gap: 12px;
+    min-height: calc(100vh - 24px);
+  }
+
+  .app-frame-writing .sidebar-writing {
+    height: calc(100vh - 24px);
+    top: 12px;
+    padding: 16px;
+    gap: 16px;
+    border-radius: 22px;
+  }
+
+  .app-frame-writing .sidebar-writing .sidebar-nav {
+    gap: 14px;
+  }
+
+  .app-frame-writing .sidebar-writing .nav-link {
+    min-height: 34px;
+    font-size: 0.9rem;
+  }
+
+  .app-frame-writing .sidebar-writing .brand-mark {
+    width: 38px;
+    height: 38px;
+  }
+
+  .app-frame-writing .shell-main {
+    gap: 12px;
+  }
+
+  .app-frame-writing .topbar {
+    padding: 11px 16px;
+  }
+
+  .app-frame-writing .topbar-breadcrumb {
+    font-size: 1rem;
+  }
+
   /* Belt-and-suspenders alongside .app-frame-writing's own overflow:hidden below: `body`
      only sets overflow-x:hidden (see the base html/body rules near the top of this file),
      never overflow-y - per the CSS Overflow spec, when one axis is non-visible the other's
@@ -6610,7 +6689,7 @@ input[type="radio"] {
   }
 
   .app-frame-writing:has(.protocol-panel-document) .shell {
-    height: calc(100vh - 40px);
+    height: calc(100vh - 24px);
     min-height: 0;
   }
 
@@ -6634,8 +6713,7 @@ input[type="radio"] {
     /* Less top/bottom padding than a regular .panel - the document-mode header is now a
        single compact row, so the panel shell shouldn't add its own large margin on top of
        that; every pixel saved here goes straight to the scrollable document below. */
-    padding-top: 12px;
-    padding-bottom: 12px;
+    padding: 10px 16px;
   }
 
   /* ProtocolEditor's own root element - turn it into the flex column that lays out
@@ -6651,7 +6729,7 @@ input[type="radio"] {
     /* Tighter than the default 18px .grid gap - header/status-row/document-shell are chrome
        stacked above the document, not content rows, so they don't need as much air between
        them. */
-    gap: 10px;
+    gap: 8px;
     overflow: hidden;
   }
 
@@ -6676,6 +6754,25 @@ input[type="radio"] {
     align-items: stretch;
   }
 
+  .protocol-document-actions,
+  .protocol-document-header {
+    gap: 8px;
+  }
+
+  .protocol-document-actions button {
+    min-height: 40px;
+    padding-block: 8px;
+  }
+
+  .protocol-panel-document .status-row {
+    gap: 7px;
+  }
+
+  .protocol-panel-document .pill {
+    min-height: 30px;
+    font-size: 0.82rem;
+  }
+
   .protocol-document,
   .protocol-quicknav {
     position: static;
@@ -6693,9 +6790,10 @@ input[type="radio"] {
   }
 }
 
-.editor-block-card {
-  scroll-snap-align: start;
-  scroll-margin-top: 16px;
+@media (min-width: 1721px) {
+  .app-frame-writing .shell {
+    grid-template-columns: 244px minmax(0, 1fr);
+  }
 }
 
 .editor-block-card-hidden {

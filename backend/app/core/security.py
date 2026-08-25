@@ -45,6 +45,7 @@ class CurrentUser:
     current_tenant_profile_image_path: str | None
     current_role: str | None
     available_tenants: list[TenantMembership]
+    protocol_accordion_enabled: bool = True
     mfa_verified: bool = False
 
     def has_tenant_role(self, *allowed_roles: str) -> bool:
@@ -168,6 +169,7 @@ def build_current_user(db: Session, user: AppUser, selected_tenant_id: int | Non
         display_name=user.display_name,
         email=user.email,
         preferred_language=user.preferred_language,
+        protocol_accordion_enabled=(user.external_identity_json or {}).get("protocol_accordion_enabled", True) is not False,
         is_participant_account=(user.external_identity_json or {}).get("source") == "participant_auto",
         default_tenant_id=user.default_tenant_id,
         current_tenant_id=current_membership.tenant_id if current_membership else user.default_tenant_id,

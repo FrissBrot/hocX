@@ -11,11 +11,22 @@ type Props = {
   onClose: () => void;
   language: string;
   onLanguageChange: (lang: string) => void;
+  protocolAccordionEnabled: boolean;
+  onProtocolAccordionChange: (enabled: boolean) => void;
   onSave: () => void;
   onLogout: () => void;
 };
 
-export function ProfileModal({ open, onClose, language, onLanguageChange, onSave, onLogout }: Props) {
+export function ProfileModal({
+  open,
+  onClose,
+  language,
+  onLanguageChange,
+  protocolAccordionEnabled,
+  onProtocolAccordionChange,
+  onSave,
+  onLogout,
+}: Props) {
   const [activeTab, setActiveTab] = useState("profil");
 
   useEffect(() => {
@@ -49,6 +60,17 @@ export function ProfileModal({ open, onClose, language, onLanguageChange, onSave
                     <option value="fr">Français</option>
                     <option value="it">Italiano</option>
                   </select>
+                </label>
+                <label className="field-radio-option">
+                  <input
+                    type="checkbox"
+                    checked={protocolAccordionEnabled}
+                    onChange={(event) => onProtocolAccordionChange(event.target.checked)}
+                  />
+                  <span className="field-radio-option-label">
+                    <strong>Protokollpunkte automatisch einklappen</strong>
+                    <small className="muted">Nur den aktiven Punkt geöffnet anzeigen.</small>
+                  </span>
                 </label>
                 <div className="table-actions table-actions-start">
                   <button type="button" className="button-inline" onClick={onSave}>

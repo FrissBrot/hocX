@@ -258,6 +258,7 @@ class AuthService:
                 display_name=user.display_name,
                 email=user.email,
                 preferred_language=user.preferred_language,
+                protocol_accordion_enabled=user.protocol_accordion_enabled,
                 default_tenant_id=user.default_tenant_id,
             ),
             current_tenant=current_tenant,

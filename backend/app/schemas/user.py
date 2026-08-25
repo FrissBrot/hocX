@@ -68,6 +68,7 @@ class UserUpdate(BaseModel):
 class UserSelfUpdate(BaseModel):
     preferred_language: str | None = None
     default_tenant_id: int | None = None
+    protocol_accordion_enabled: bool | None = None
 
 
 class UserPasswordChange(BaseModel):
@@ -109,6 +110,7 @@ class SessionUserRead(BaseModel):
     display_name: str
     email: str
     preferred_language: str
+    protocol_accordion_enabled: bool = True
     default_tenant_id: int | None = None
 
 
