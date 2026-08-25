@@ -58,6 +58,15 @@ cp .env.example .env
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
 
+Shortcut via script:
+
+```bash
+./scripts/dev.sh
+./scripts/dev.sh stop
+./scripts/dev.sh down
+./scripts/dev.sh up --profile docs --profile scan
+```
+
 3. Open:
 
 - Main app: <http://localhost:3000>

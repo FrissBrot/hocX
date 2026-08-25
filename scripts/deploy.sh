@@ -81,6 +81,31 @@ wait_for_exec() {
   done
 }
 
+run_smoke_checks() {
+  echo "==> [$ENVIRONMENT] Smoke-Checks"
+  wait_for_exec backend "Backend-API" "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)\""
+
+  if service_exists frontend; then
+    wait_for_exec frontend "Frontend" "node -e \"require('http').get('http://localhost:3000/', res => process.exit(res.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))\""
+  fi
+
+  if service_exists abgabebox-backend; then
+    wait_for_exec abgabebox-backend "Abgabebox-Backend" "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)\""
+  fi
+
+  if service_exists abgabebox-frontend; then
+    wait_for_exec abgabebox-frontend "Abgabebox-Frontend" "node -e \"require('http').get('http://localhost:3000/', res => process.exit(res.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))\""
+  fi
+
+  if service_exists docs; then
+    wait_for_exec docs "Docs" "wget -q --spider http://localhost/"
+  fi
+
+  if service_exists clamav; then
+    wait_for_exec clamav "ClamAV" "clamdcheck.sh" 150 2
+  fi
+}
+
 echo "==> [$ENVIRONMENT] Backup der Datenbank vor dem Update auf $HOCX_VERSION"
 BACKUP_DIR="$PROJECT_DIR/backups"
 mkdir -p "$BACKUP_DIR"
@@ -98,27 +123,6 @@ echo "==> [$ENVIRONMENT] Pull Images ($HOCX_VERSION)"
 echo "==> [$ENVIRONMENT] Deploy"
 "${DC[@]}" up -d
 
-echo "==> [$ENVIRONMENT] Smoke-Checks"
-wait_for_exec backend "Backend-API" "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)\""
-
-if service_exists frontend; then
-  wait_for_exec frontend "Frontend" "node -e \"require('http').get('http://localhost:3000/', res => process.exit(res.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))\""
-fi
-
-if service_exists abgabebox-backend; then
-  wait_for_exec abgabebox-backend "Abgabebox-Backend" "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)\""
-fi
-
-if service_exists abgabebox-frontend; then
-  wait_for_exec abgabebox-frontend "Abgabebox-Frontend" "node -e \"require('http').get('http://localhost:3000/', res => process.exit(res.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))\""
-fi
-
-if service_exists docs; then
-  wait_for_exec docs "Docs" "wget -q --spider http://localhost/"
-fi
-
-if service_exists clamav; then
-  wait_for_exec clamav "ClamAV" "clamdcheck.sh" 150 2
-fi
+run_smoke_checks
 
 echo "==> [$ENVIRONMENT] Fertig: laeuft jetzt auf $HOCX_VERSION"

@@ -20,6 +20,15 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 Optional dazu: `--profile scan` (ClamAV), `--profile docs` (Docs auf localhost:3002),
 `--profile edge` (lokaler Traefik).
 
+Bequemer Wrapper dafuer:
+
+```bash
+./scripts/dev.sh
+./scripts/dev.sh stop
+./scripts/dev.sh down
+./scripts/dev.sh up --profile docs --profile scan
+```
+
 **Wichtig vor dem allerersten Start einer neuen Domain (Test wie Prod)**: DNS-Eintrag
 zuerst setzen, dann erst den Stack starten. Traefik versucht bei jedem Container-Start
 sofort ein Let's-Encrypt-Zertifikat zu beziehen; schlägt die HTTP-01-Challenge fehl

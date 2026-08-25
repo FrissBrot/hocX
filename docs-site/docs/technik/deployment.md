@@ -40,6 +40,12 @@ Repository-Root. Diese Seite fasst die Grundzüge zusammen.
     Für echtes lokales Dev mit Hot-Reload:
     `docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build`
 
+    Alternativ als Wrapper:
+    `./scripts/dev.sh`
+    `./scripts/dev.sh stop`
+    `./scripts/dev.sh down`
+    `./scripts/dev.sh up --profile docs --profile scan`
+
     Optional:
     `--profile scan` für ClamAV,
     `--profile docs` für die Doku auf `localhost:3002`,
