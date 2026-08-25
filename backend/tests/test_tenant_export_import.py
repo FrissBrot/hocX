@@ -18,8 +18,6 @@ Covers:
   with global-uniqueness collisions on the target skipped (not crashed) and warned about
 - tenant.last_word_import_template_id is remapped to the imported template's new id
   instead of crashing the import on a dangling source-installation id
-- gallery_image (the "Fotos" gallery join table) is recreated pointing at the imported
-  stored_file's new id
 """
 from __future__ import annotations
 
@@ -31,7 +29,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import select
 
-from app.models.entities import GalleryImage, Participant, Protocol, StoredFile, Template, TenantDomain
+from app.models.entities import Participant, Protocol, Template, TenantDomain
 from app.services.tenant_export_service import TenantExportService
 from app.services.tenant_import_service import TenantImportService
 from tests.factories import (
@@ -552,41 +550,3 @@ def test_export_import_roundtrip_remaps_last_word_import_template_id(db):
     assert imported_template is not None
     assert imported_template.id != template.id
     assert new_tenant.last_word_import_template_id == imported_template.id
-
-
-# --- gallery_image (the "Fotos" gallery join table) survives export/import --------------
-
-
-def test_export_import_roundtrip_recreates_gallery_image(db, monkeypatch, tmp_path):
-    from app.core.config import settings
-    from app.services import tenant_import_service as import_svc_module
-
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
-    monkeypatch.setattr(import_svc_module.scanner, "scan_file", lambda path, host, port: "clean")
-
-    tenant_a = make_tenant(db, "Tenant A")
-    (tmp_path / "gallery").mkdir()
-    (tmp_path / "gallery" / "photo.png").write_bytes(b"fake-png-bytes")
-    stored_file = StoredFile(
-        tenant_id=tenant_a.id, original_name="photo.png", mime_type="image/png",
-        storage_path="gallery/photo.png", file_size_bytes=14,
-    )
-    db.add(stored_file)
-    db.flush()
-    db.add(GalleryImage(tenant_id=tenant_a.id, stored_file_id=stored_file.id))
-    db.flush()
-
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
-    try:
-        new_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
-    finally:
-        zip_path.unlink(missing_ok=True)
-
-    assert warnings == []
-    imported_stored_file = db.scalar(select(StoredFile).where(StoredFile.tenant_id == new_tenant.id))
-    assert imported_stored_file is not None
-    assert imported_stored_file.id != stored_file.id
-
-    imported_gallery_image = db.scalar(select(GalleryImage).where(GalleryImage.tenant_id == new_tenant.id))
-    assert imported_gallery_image is not None
-    assert imported_gallery_image.stored_file_id == imported_stored_file.id

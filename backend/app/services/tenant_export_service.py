@@ -37,7 +37,6 @@ from app.models import (
     EventCycle,
     FinanceAccount,
     FinanceTransaction,
-    GalleryImage,
     GroupEntity,
     Leader,
     ListDefinition,
@@ -331,10 +330,6 @@ class TenantExportService:
             row["storage_path"] = self._register_file(root, f.storage_path, f"files/stored_files/{f.id}")
             stored_file_rows.append(row)
         tables["stored_file"] = stored_file_rows
-
-        tables["gallery_image"] = self._rows(
-            db.scalars(select(GalleryImage).where(GalleryImage.tenant_id == tenant_id)).all(), "gallery_image"
-        )
 
         if include_abgabebox:
             tables["submission_upload_file"] = self._rows(

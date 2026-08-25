@@ -38,7 +38,6 @@ from app.models import (
     EventCycle,
     FinanceAccount,
     FinanceTransaction,
-    GalleryImage,
     GroupEntity,
     Leader,
     ListDefinition,
@@ -214,7 +213,6 @@ class TenantImportService:
         self._import_submission_upload_logs(submission_assignment_map)
         stored_file_map = self._import_stored_files(new_tenant.id)
         self._import_submission_upload_files(submission_upload_map, stored_file_map)
-        self._import_gallery_images(new_tenant.id, stored_file_map)
         protocol_map = self._import_protocols(new_tenant.id, template_map, document_template_map, event_map)
         protocol_element_map = self._import_protocol_elements(protocol_map, template_element_map)
         protocol_element_block_map = self._import_protocol_element_blocks(
@@ -635,18 +633,6 @@ class TenantImportService:
             if new_upload_id is None or new_stored_file_id is None:
                 continue
             self.db.add(build_row(SubmissionUploadFile, row, {"upload_id": new_upload_id, "stored_file_id": new_stored_file_id}))
-        self.db.commit()
-
-    def _import_gallery_images(self, new_tenant_id: int, stored_file_map: dict[int, int]) -> None:
-        for row in self._t("gallery_image"):
-            data = self._resolve_row("gallery_image", row)
-            new_stored_file_id = stored_file_map.get(row["stored_file_id"])
-            if new_stored_file_id is None:
-                # The underlying file was itself skipped on import (missing from the export,
-                # or flagged infected on re-scan - see _import_stored_files) - nothing left to
-                # mark as a gallery image.
-                continue
-            self.db.add(build_row(GalleryImage, data, {"tenant_id": new_tenant_id, "stored_file_id": new_stored_file_id}))
         self.db.commit()
 
     def _import_protocols(self, new_tenant_id: int, template_map, document_template_map, event_map) -> dict[int, int]:
