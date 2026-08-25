@@ -23,7 +23,12 @@ case "$ENVIRONMENT" in
     PROJECT_NAME=hocx-test
     PROJECT_DIR=/docker/hocX-test
     ENV_FILE="$PROJECT_DIR/.env"
-    COMPOSE_ARGS=(-f "$REPO_DIR/docker-compose.release.yml" -f "$REPO_DIR/docker-compose.test.yml" --project-directory "$PROJECT_DIR")
+    COMPOSE_ARGS=(
+      -f "$REPO_DIR/docker-compose.release.yml"
+      -f "$REPO_DIR/docker-compose.clamav.yml"
+      -f "$REPO_DIR/docker-compose.test.yml"
+      --project-directory "$PROJECT_DIR"
+    )
     ;;
   prod)
     PROJECT_NAME=hocx
@@ -51,6 +56,31 @@ set +a
 
 DC=(docker compose -p "$PROJECT_NAME" --env-file "$ENV_FILE" "${COMPOSE_ARGS[@]}")
 
+service_exists() {
+  "${DC[@]}" config --services | grep -Fxq "$1"
+}
+
+wait_for_exec() {
+  local service="$1"
+  local description="$2"
+  local command="$3"
+  local retries="${4:-30}"
+  local sleep_seconds="${5:-2}"
+
+  echo "    Pruefe $description"
+  for i in $(seq 1 "$retries"); do
+    if "${DC[@]}" exec -T "$service" sh -lc "$command" > /dev/null 2>&1; then
+      echo "    $description: ok"
+      return 0
+    fi
+    if [ "$i" -eq "$retries" ]; then
+      echo "    $description: fehlgeschlagen - bitte Logs pruefen: docker compose -p $PROJECT_NAME logs $service" >&2
+      return 1
+    fi
+    sleep "$sleep_seconds"
+  done
+}
+
 echo "==> [$ENVIRONMENT] Backup der Datenbank vor dem Update auf $HOCX_VERSION"
 BACKUP_DIR="$PROJECT_DIR/backups"
 mkdir -p "$BACKUP_DIR"
@@ -68,17 +98,27 @@ echo "==> [$ENVIRONMENT] Pull Images ($HOCX_VERSION)"
 echo "==> [$ENVIRONMENT] Deploy"
 "${DC[@]}" up -d
 
-echo "==> [$ENVIRONMENT] Health-Check"
-for i in $(seq 1 30); do
-  if "${DC[@]}" exec -T backend python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')" > /dev/null 2>&1; then
-    echo "    Backend healthy."
-    break
-  fi
-  if [ "$i" -eq 30 ]; then
-    echo "    Backend meldet nach 60s keinen Erfolg - bitte Logs pruefen: docker compose -p $PROJECT_NAME logs backend" >&2
-    exit 1
-  fi
-  sleep 2
-done
+echo "==> [$ENVIRONMENT] Smoke-Checks"
+wait_for_exec backend "Backend-API" "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)\""
+
+if service_exists frontend; then
+  wait_for_exec frontend "Frontend" "node -e \"require('http').get('http://localhost:3000/', res => process.exit(res.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))\""
+fi
+
+if service_exists abgabebox-backend; then
+  wait_for_exec abgabebox-backend "Abgabebox-Backend" "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)\""
+fi
+
+if service_exists abgabebox-frontend; then
+  wait_for_exec abgabebox-frontend "Abgabebox-Frontend" "node -e \"require('http').get('http://localhost:3000/', res => process.exit(res.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))\""
+fi
+
+if service_exists docs; then
+  wait_for_exec docs "Docs" "wget -q --spider http://localhost/"
+fi
+
+if service_exists clamav; then
+  wait_for_exec clamav "ClamAV" "clamdcheck.sh" 150 2
+fi
 
 echo "==> [$ENVIRONMENT] Fertig: laeuft jetzt auf $HOCX_VERSION"

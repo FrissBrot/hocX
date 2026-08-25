@@ -1,0 +1,43 @@
+services:
+  backend:
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  frontend:
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+      INTERNAL_API_URL: http://backend:8000
+      FRONTEND_API_PROXY_TARGET: http://backend:8000
+      HOCX_VERSION: dev-local
+    command: npm run dev
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  abgabebox-backend:
+    command: sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    ports:
+      - "127.0.0.1:8001:8000"
+
+  abgabebox-frontend:
+    environment:
+      NEXT_PUBLIC_ABGABEBOX_API_URL: http://localhost:3001
+      INTERNAL_ABGABEBOX_API_URL: http://abgabebox-backend:8000
+      ABGABEBOX_API_PROXY_TARGET: http://abgabebox-backend:8000
+    command: npm run dev
+    ports:
+      - "127.0.0.1:3001:3000"
+
+  traefik:
+    profiles:
+      - edge
+
+  clamav:
+    profiles:
+      - scan
+
+  docs:
+    ports:
+      - "127.0.0.1:3002:80"
+    profiles:
+      - docs

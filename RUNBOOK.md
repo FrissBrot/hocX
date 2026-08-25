@@ -9,6 +9,17 @@ Drei Umgebungen:
 | Woher kommt der Code | lokal, `build:` aus Source | Docker-Image von GHCR | Docker-Image von GHCR |
 | Verzeichnis | `/docker/hocX` | `/docker/hocX-test` (Daten) + `/docker/hocX` (Compose-Dateien) | Repo-Checkout auf dem Prod-Server |
 
+**Lokale Entwicklung** (Laptop/Workspace, nicht `hocx.example.com`) läuft jetzt bewusst separat
+über den Overlay `docker-compose.dev.yml`:
+
+```bash
+cp .env.example .env
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+```
+
+Optional dazu: `--profile scan` (ClamAV), `--profile docs` (Docs auf localhost:3002),
+`--profile edge` (lokaler Traefik).
+
 **Wichtig vor dem allerersten Start einer neuen Domain (Test wie Prod)**: DNS-Eintrag
 zuerst setzen, dann erst den Stack starten. Traefik versucht bei jedem Container-Start
 sofort ein Let's-Encrypt-Zertifikat zu beziehen; schlägt die HTTP-01-Challenge fehl
@@ -39,7 +50,8 @@ cd /docker/hocX
 ```
 
 Das Skript macht automatisch: DB-Backup (`/docker/hocX-test/backups/`) → Images pullen →
-Container neu starten (Alembic migriert die Test-DB dabei automatisch) → Health-Check.
+Container neu starten (Alembic migriert die Test-DB dabei automatisch) → Smoke-Checks
+(Backend, Frontend, Abgabebox, Docs, ClamAV).
 
 **Verifizieren** (mit einem Wegwerf-Testaccount, danach wieder löschen):
 - https://test.hocx.example.com/login erreichbar, Branding lädt korrekt
@@ -180,7 +192,7 @@ Fehlern mit Exit-Code ≠ 0 ab (wichtig für Cron-Fehlerbenachrichtigung/Monitor
 - **Manuell testen**: erst `./scripts/cleanup_storage.sh --dry-run` (zeigt betroffene
   Dateien, löscht nichts), danach bei Bedarf ohne Flag für den echten Lauf.
 
-## 8. hocx.example.com ist faktisches Prod, nicht Dev
+## 8. hocx.example.com ist faktisches Prod, nicht lokales Dev
 
 Die Tabelle in Abschnitt "Drei Umgebungen" oben führt `hocx.example.com` als "Dev" -
 das beschreibt korrekt, *wie* die Umgebung technisch betrieben wird (lokaler Build aus
@@ -189,6 +201,10 @@ davon abhängt. In Wirklichkeit laufen dort echte Mandanten mit echten Daten - d
 wird faktisch wie Prod genutzt, auch wenn sie technisch wie Dev aufgesetzt ist. Ein
 Update dort ohne Vorsicht (kein vorheriges Backup, kein Health-Check danach) ist damit
 ein echtes Ausfallrisiko für echte Nutzer, nicht nur für einen Wegwerf-Testaccount.
+
+Das echte **lokale** Entwickeln ist davon inzwischen bewusst getrennt: dafür ist der
+Overlay `docker-compose.dev.yml` gedacht (siehe Abschnitt oben), nicht die Server-Instanz
+`hocx.example.com`.
 
 **Deshalb gilt für jedes Update von hocx.example.com** (der lokale Source-Build-Mechanismus
 selbst bleibt unverändert - das ist eine bewusste, hier nicht revidierte Entscheidung,

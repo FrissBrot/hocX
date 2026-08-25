@@ -52,17 +52,31 @@ storage/
 cp .env.example .env
 ```
 
-2. Build and start:
+2. Start local development:
 
 ```bash
-docker compose up --build
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
 
 3. Open:
 
-- Frontend through Traefik: <https://your-domain.example.com>
-- Backend API through Traefik: <https://your-domain.example.com/api>
-- OpenAPI docs through Traefik: <https://your-domain.example.com/docs>
+- Main app: <http://localhost:3000>
+- Backend API / OpenAPI: <http://localhost:8000>
+- Abgabebox frontend: <http://localhost:3001>
+- Abgabebox backend: <http://localhost:8001>
+
+Optional dev profiles:
+
+- `--profile scan`: starts `clamav` for real upload scanning
+- `--profile docs`: starts the docs site on <http://localhost:3002>
+- `--profile edge`: starts the local Traefik edge stack
+
+If you explicitly want the source-built server-style stack that mirrors the current
+`hocx.example.com` setup more closely, use:
+
+```bash
+docker compose up --build
+```
 
 ## Database
 

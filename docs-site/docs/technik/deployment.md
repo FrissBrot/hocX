@@ -18,7 +18,7 @@ Repository-Root. Diese Seite fasst die Grundzüge zusammen.
    `hocx-abgabebox-frontend`) und pusht sie nach GHCR.
 4. In `hocX-test/.env` `HOCX_VERSION` setzen, `./scripts/deploy.sh test` ausführen.
    Das Skript macht automatisch: DB-Backup → Images pullen → Neustart (Alembic migriert
-   automatisch) → Health-Check.
+   automatisch) → Smoke-Checks für Backend, Frontend, Abgabebox, Docs und ClamAV.
 5. Nach erfolgreicher Verifikation auf Test dieselben Schritte auf dem Prod-Server
    wiederholen.
 
@@ -36,11 +36,14 @@ Repository-Root. Diese Seite fasst die Grundzüge zusammen.
     So bleibt jeder Schritt rückwärtskompatibel und ein Rollback ohne Backup-Restore
     möglich.
 
-!!! info "Dev-Container laden Code nicht automatisch nach"
-    Backend läuft mit `--workers 2` (kein `--reload`), Frontend mit
-    `npm run build && npm start` (kein Dev-Server) – nach Code-Änderungen im
-    Dev-Betrieb muss der jeweilige Container neu gestartet werden
-    (`docker compose restart backend`/`frontend`).
+!!! info "Lokales Entwickeln nutzt jetzt einen eigenen Overlay"
+    Für echtes lokales Dev mit Hot-Reload:
+    `docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build`
+
+    Optional:
+    `--profile scan` für ClamAV,
+    `--profile docs` für die Doku auf `localhost:3002`,
+    `--profile edge` für lokalen Traefik.
 
 ## Rollback
 
