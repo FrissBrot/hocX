@@ -14,6 +14,12 @@ Covers:
 - import never touches a third, uninvolved tenant's data
 - a corrupted archive (no manifest.json, or a zip-slip path) fails cleanly without leaving
   a half-imported tenant behind
+- verified custom domains (tenant_domain) travel with the same verification_token/status,
+  with global-uniqueness collisions on the target skipped (not crashed) and warned about
+- tenant.last_word_import_template_id is remapped to the imported template's new id
+  instead of crashing the import on a dangling source-installation id
+- gallery_image (the "Fotos" gallery join table) is recreated pointing at the imported
+  stored_file's new id
 """
 from __future__ import annotations
 
@@ -25,7 +31,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import select
 
-from app.models.entities import Participant, Protocol, Template
+from app.models.entities import GalleryImage, Participant, Protocol, StoredFile, Template, TenantDomain
 from app.services.tenant_export_service import TenantExportService
 from app.services.tenant_import_service import TenantImportService
 from tests.factories import (
@@ -393,3 +399,194 @@ def test_export_import_roundtrip_remaps_protocol_block_row_list_entry_link(db):
     assert row["linked_list_entry_id"] == imported_entry.id
     assert row["linked_list_id"] != source_list.id
     assert row["linked_list_entry_id"] != source_entry.id
+
+
+# --- verified custom domains travel with the export, same verification_token -----------
+#
+# TenantDomain (custom app/abgabebox domain + its verification_token/status/verified_at)
+# was previously not exported at all - a tenant transfer silently dropped every domain the
+# admin had already set up and verified, forcing them to redo DNS verification from
+# scratch on the target installation even though the DNS TXT record still holds the exact
+# same token.
+
+
+def test_export_import_roundtrip_keeps_domain_and_same_verification_token(db, monkeypatch, tmp_path):
+    from app.services import tenant_import_service as import_svc_module
+
+    regenerate_calls = []
+    monkeypatch.setattr(import_svc_module.traefik_config_service, "regenerate", lambda db: regenerate_calls.append(db))
+
+    tenant_a = make_tenant(db, "Tenant A")
+    domain = TenantDomain(
+        tenant_id=tenant_a.id, purpose="app", domain="verein-a.example.com",
+        verification_token="original-token-abc123", status="active",
+    )
+    db.add(domain)
+    db.flush()
+    original_token = domain.verification_token
+    original_verified_at = domain.verified_at
+
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "structure")
+    try:
+        manifest = _read_manifest(zip_path)
+        assert manifest["tables"]["tenant_domain"][0]["verification_token"] == original_token
+
+        # Simulates importing onto a genuinely different installation, where this domain
+        # isn't registered to anyone yet - `domain` is globally unique, so re-importing
+        # while the source tenant (and its own domain row) is still around would otherwise
+        # legitimately collide with itself; see
+        # test_import_skips_domain_already_claimed_by_another_tenant_on_target for that case.
+        db.delete(domain)
+        db.flush()
+
+        new_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
+    finally:
+        zip_path.unlink(missing_ok=True)
+
+    assert warnings == []
+    imported_domain = db.scalar(select(TenantDomain).where(TenantDomain.tenant_id == new_tenant.id))
+    assert imported_domain is not None
+    assert imported_domain.domain == "verein-a.example.com"
+    # Same verification code as the source - no re-verification needed, the DNS TXT record
+    # the admin already set up still matches.
+    assert imported_domain.verification_token == original_token
+    assert imported_domain.status == "active"
+    assert imported_domain.verified_at == original_verified_at
+    # An imported *active* domain must trigger a Traefik config regeneration so the target
+    # installation actually starts routing it.
+    assert len(regenerate_calls) == 1
+
+
+def test_import_skips_domain_already_claimed_by_another_tenant_on_target(db, monkeypatch):
+    """`domain` is globally unique across the whole installation - if the exact domain is
+    already registered to a DIFFERENT tenant already present on the target (e.g.
+    re-importing an export while the source tenant still exists there), the row must be
+    skipped with a warning rather than crashing the whole import on an IntegrityError."""
+    from app.services import tenant_import_service as import_svc_module
+
+    monkeypatch.setattr(import_svc_module.traefik_config_service, "regenerate", lambda db: None)
+
+    tenant_a = make_tenant(db, "Tenant A")
+    source_domain = TenantDomain(
+        tenant_id=tenant_a.id, purpose="app", domain="taken.example.com",
+        verification_token="tok-source", status="active",
+    )
+    db.add(source_domain)
+    db.flush()
+
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "structure")
+    try:
+        # `domain` is globally unique - drop the source's own row and give the exact same
+        # domain to a DIFFERENT tenant, simulating that it's already claimed on the target
+        # installation by someone else entirely by the time this export is imported there.
+        db.delete(source_domain)
+        db.flush()
+        existing_owner = make_tenant(db, "Existing Owner")
+        db.add(TenantDomain(
+            tenant_id=existing_owner.id, purpose="app", domain="taken.example.com",
+            verification_token="tok-existing", status="active",
+        ))
+        db.flush()
+
+        new_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
+    finally:
+        zip_path.unlink(missing_ok=True)
+
+    assert any("bereits vergeben" in w for w in warnings)
+    assert db.scalar(select(TenantDomain).where(TenantDomain.tenant_id == new_tenant.id)) is None
+    # The existing owner's domain row must be completely untouched.
+    still_there = db.scalar(select(TenantDomain).where(TenantDomain.tenant_id == existing_owner.id))
+    assert still_there is not None
+    assert still_there.verification_token == "tok-existing"
+
+
+def test_import_skips_domain_reserved_by_the_installation_itself(db, monkeypatch):
+    from app.core.config import settings
+    from app.services import tenant_import_service as import_svc_module
+
+    monkeypatch.setattr(settings, "traefik_domain", "hocx.example.com")
+    monkeypatch.setattr(import_svc_module.traefik_config_service, "regenerate", lambda db: None)
+
+    tenant_a = make_tenant(db, "Tenant A")
+    db.add(TenantDomain(
+        tenant_id=tenant_a.id, purpose="app", domain="hocx.example.com",
+        verification_token="tok-reserved", status="active",
+    ))
+    db.flush()
+
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "structure")
+    try:
+        new_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
+    finally:
+        zip_path.unlink(missing_ok=True)
+
+    assert any("selbst belegt" in w for w in warnings)
+    assert db.scalar(select(TenantDomain).where(TenantDomain.tenant_id == new_tenant.id)) is None
+
+
+# --- tenant.last_word_import_template_id must not carry a source-installation id --------
+#
+# Tenant.last_word_import_template_id is an FK to template.id. Importing it unchanged
+# previously either crashed the whole import outright (no template with that id exists yet
+# on a freshly created target tenant at the point _import_tenant_base commits, long before
+# any template has been imported) or, on a coincidental id collision, silently pointed the
+# new tenant at an unrelated template belonging to a completely different tenant.
+
+
+def test_export_import_roundtrip_remaps_last_word_import_template_id(db):
+    tenant_a = make_tenant(db, "Tenant A")
+    template = make_template(db, tenant_a.id, name="Sitzungsprotokoll")
+    tenant_a.last_word_import_template_id = template.id
+    db.add(tenant_a)
+    db.flush()
+
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "structure")
+    try:
+        # Must not raise an IntegrityError from a dangling/foreign template id.
+        new_tenant, _warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
+    finally:
+        zip_path.unlink(missing_ok=True)
+
+    imported_template = db.scalar(select(Template).where(Template.tenant_id == new_tenant.id))
+    db.refresh(new_tenant)
+    assert imported_template is not None
+    assert imported_template.id != template.id
+    assert new_tenant.last_word_import_template_id == imported_template.id
+
+
+# --- gallery_image (the "Fotos" gallery join table) survives export/import --------------
+
+
+def test_export_import_roundtrip_recreates_gallery_image(db, monkeypatch, tmp_path):
+    from app.core.config import settings
+    from app.services import tenant_import_service as import_svc_module
+
+    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
+    monkeypatch.setattr(import_svc_module.scanner, "scan_file", lambda path, host, port: "clean")
+
+    tenant_a = make_tenant(db, "Tenant A")
+    (tmp_path / "gallery").mkdir()
+    (tmp_path / "gallery" / "photo.png").write_bytes(b"fake-png-bytes")
+    stored_file = StoredFile(
+        tenant_id=tenant_a.id, original_name="photo.png", mime_type="image/png",
+        storage_path="gallery/photo.png", file_size_bytes=14,
+    )
+    db.add(stored_file)
+    db.flush()
+    db.add(GalleryImage(tenant_id=tenant_a.id, stored_file_id=stored_file.id))
+    db.flush()
+
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
+    try:
+        new_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
+    finally:
+        zip_path.unlink(missing_ok=True)
+
+    assert warnings == []
+    imported_stored_file = db.scalar(select(StoredFile).where(StoredFile.tenant_id == new_tenant.id))
+    assert imported_stored_file is not None
+    assert imported_stored_file.id != stored_file.id
+
+    imported_gallery_image = db.scalar(select(GalleryImage).where(GalleryImage.tenant_id == new_tenant.id))
+    assert imported_gallery_image is not None
+    assert imported_gallery_image.stored_file_id == imported_stored_file.id

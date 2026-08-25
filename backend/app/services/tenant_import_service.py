@@ -38,6 +38,7 @@ from app.models import (
     EventCycle,
     FinanceAccount,
     FinanceTransaction,
+    GalleryImage,
     GroupEntity,
     Leader,
     ListDefinition,
@@ -60,10 +61,12 @@ from app.models import (
     TemplateElementBlock,
     TemplateParticipant,
     Tenant,
+    TenantDomain,
     UserProtocolAccess,
     UserTemplateAccess,
     UserTenantRole,
 )
+from app.services import traefik_config_service
 from app.services.document_template_service import DocumentTemplateService
 from app.services.tenant_transfer_common import (
     LOOKUP_COLUMNS,
@@ -177,6 +180,7 @@ class TenantImportService:
         new_tenant = self._import_tenant_base(new_name)
         self._created_tenant_id = new_tenant.id
         self._import_app_users(new_tenant.id, self.tables.get("tenant", {}).get("id"))
+        self._import_tenant_domains(new_tenant.id)
         group_map = self._import_simple(GroupEntity, self._t("group_entity"), "group_entity", {"tenant_id": new_tenant.id})
         self._import_simple(Leader, self._t("leader"), "leader", {"tenant_id": new_tenant.id})
         participant_map = self._import_simple(Participant, self._t("participant"), "participant", {"tenant_id": new_tenant.id})
@@ -203,12 +207,14 @@ class TenantImportService:
             list_entry_map=list_entry_map,
             finance_account_map=finance_account_map,
         )
+        self._restore_last_word_import_template(new_tenant, template_map)
         self._import_template_participants(template_map, participant_map)
         submission_assignment_map = self._import_submission_assignments(new_tenant.id, list_definition_map)
         submission_upload_map = self._import_submission_uploads(submission_assignment_map, event_map, list_entry_map)
         self._import_submission_upload_logs(submission_assignment_map)
         stored_file_map = self._import_stored_files(new_tenant.id)
         self._import_submission_upload_files(submission_upload_map, stored_file_map)
+        self._import_gallery_images(new_tenant.id, stored_file_map)
         protocol_map = self._import_protocols(new_tenant.id, template_map, document_template_map, event_map)
         protocol_element_map = self._import_protocol_elements(protocol_map, template_element_map)
         protocol_element_block_map = self._import_protocol_element_blocks(
@@ -231,7 +237,16 @@ class TenantImportService:
 
     def _import_tenant_base(self, new_name: str) -> Tenant:
         data = self._resolve_row("tenant", self.tables["tenant"])
-        new_tenant = build_row(Tenant, data, {"name": new_name, "profile_image_path": None, "public_slug": None})
+        # last_word_import_template_id is dropped here and reassigned in _run() once
+        # template_map exists (see below) - it's a source-tenant template id, which means
+        # nothing in the freshly assigned target id space and, worse, is an FK the DB
+        # enforces: committing it unchanged would either crash the whole import outright
+        # (no template with that id exists yet on the target) or, on a coincidental id
+        # collision, silently point at a template belonging to a completely different
+        # tenant.
+        new_tenant = build_row(
+            Tenant, data, {"name": new_name, "profile_image_path": None, "public_slug": None, "last_word_import_template_id": None}
+        )
         self.db.add(new_tenant)
         self.db.commit()
         self.db.refresh(new_tenant)
@@ -242,6 +257,17 @@ class TenantImportService:
             self.db.commit()
             self.db.refresh(new_tenant)
         return new_tenant
+
+    def _restore_last_word_import_template(self, new_tenant: Tenant, template_map: dict[int, int]) -> None:
+        old_template_id = self.tables.get("tenant", {}).get("last_word_import_template_id")
+        if old_template_id is None:
+            return
+        new_template_id = template_map.get(old_template_id)
+        if new_template_id is None:
+            return
+        new_tenant.last_word_import_template_id = new_template_id
+        self.db.add(new_tenant)
+        self.db.commit()
 
     def _import_app_users(self, new_tenant_id: int, old_tenant_id: int | None) -> None:
         """Creates a login-capable account (password_hash included) for every exported user
@@ -293,6 +319,37 @@ class TenantImportService:
             self.db.flush()
             self.user_cache.set_id(email, new_user.id)
         self.db.commit()
+
+    def _import_tenant_domains(self, new_tenant_id: int) -> None:
+        """Restores verified custom domains with their original verification_token/status/
+        verified_at unchanged - a tenant import reconstructs the source tenant 1:1, and a
+        domain already verified on the source (its DNS TXT record already holds this exact
+        token) should stay verified on the target rather than forcing the admin through
+        domain verification again. `domain` is globally unique across the whole
+        installation (uq_tenant_domain_domain), so a domain already claimed - by hocX
+        itself (settings.traefik_domain/traefik_abgabebox_domain) or by any tenant already
+        on this installation, e.g. re-importing an export while the source tenant still
+        exists here - is skipped with a warning rather than failing the whole import.
+        Mirrors TenantService.create_domain's reserved-domain check and its
+        traefik_config_service.regenerate() call after any active domain changes."""
+        reserved = {d for d in (settings.traefik_domain, settings.traefik_abgabebox_domain) if d}
+        needs_traefik_regenerate = False
+        for row in self._t("tenant_domain"):
+            data = self._resolve_row("tenant_domain", row)
+            domain = data.get("domain")
+            if domain in reserved:
+                self.warnings.append(f"Domain '{domain}' ist durch die Installation selbst belegt, wurde nicht importiert.")
+                continue
+            if self.db.query(TenantDomain).filter(TenantDomain.domain == domain).first() is not None:
+                self.warnings.append(f"Domain '{domain}' ist auf dieser Installation bereits vergeben, wurde nicht importiert.")
+                continue
+            new_row = build_row(TenantDomain, data, {"tenant_id": new_tenant_id})
+            self.db.add(new_row)
+            if data.get("status") == "active":
+                needs_traefik_regenerate = True
+        self.db.commit()
+        if needs_traefik_regenerate:
+            traefik_config_service.regenerate(self.db)
 
     # ── generic single-tenant-scoped table import ────────────────────────
 
@@ -578,6 +635,18 @@ class TenantImportService:
             if new_upload_id is None or new_stored_file_id is None:
                 continue
             self.db.add(build_row(SubmissionUploadFile, row, {"upload_id": new_upload_id, "stored_file_id": new_stored_file_id}))
+        self.db.commit()
+
+    def _import_gallery_images(self, new_tenant_id: int, stored_file_map: dict[int, int]) -> None:
+        for row in self._t("gallery_image"):
+            data = self._resolve_row("gallery_image", row)
+            new_stored_file_id = stored_file_map.get(row["stored_file_id"])
+            if new_stored_file_id is None:
+                # The underlying file was itself skipped on import (missing from the export,
+                # or flagged infected on re-scan - see _import_stored_files) - nothing left to
+                # mark as a gallery image.
+                continue
+            self.db.add(build_row(GalleryImage, data, {"tenant_id": new_tenant_id, "stored_file_id": new_stored_file_id}))
         self.db.commit()
 
     def _import_protocols(self, new_tenant_id: int, template_map, document_template_map, event_map) -> dict[int, int]:

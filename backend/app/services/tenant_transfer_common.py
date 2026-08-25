@@ -61,6 +61,7 @@ USER_ID_COLUMNS: dict[str, list[str]] = {
     "template": ["created_by"],
     "protocol": ["created_by"],
     "stored_file": ["created_by"],
+    "gallery_image": ["created_by"],
     "protocol_todo": ["assigned_user_id", "created_by"],
     "attendance_fine": ["collected_by_user_id"],
     "user_template_access": ["user_id"],

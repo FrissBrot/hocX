@@ -2,8 +2,8 @@
 
 Three cumulative scopes, mirroring the three options in the admin panel:
 - "structure": config only - cycles, templates/forms, document templates, lists, finance
-  accounts, and which users have which role in this tenant. No participants, events, or
-  protocols.
+  accounts, verified custom domains, and which users have which role in this tenant. No
+  participants, events, or protocols.
 - "full": structure + all operational data - participants, events, protocols (with all
   their content), finance transactions/fines, todos. No Abgabebox (public upload box)
   data.
@@ -37,6 +37,7 @@ from app.models import (
     EventCycle,
     FinanceAccount,
     FinanceTransaction,
+    GalleryImage,
     GroupEntity,
     Leader,
     ListDefinition,
@@ -59,6 +60,7 @@ from app.models import (
     TemplateElementBlock,
     TemplateParticipant,
     Tenant,
+    TenantDomain,
     UserProtocolAccess,
     UserTemplateAccess,
     UserTenantRole,
@@ -224,6 +226,15 @@ class TenantExportService:
         tables["user_tenant_role"] = self._rows(
             db.scalars(select(UserTenantRole).where(UserTenantRole.tenant_id == tenant_id)).all(), "user_tenant_role"
         )
+        # verification_token/status/verified_at travel unchanged (no LOOKUP_COLUMNS/
+        # USER_ID_COLUMNS entry needed) - a tenant import is meant to reconstruct the source
+        # 1:1, and a domain already verified on the source (its DNS TXT record already holds
+        # this exact token) should stay verified on the target instead of forcing the admin
+        # through domain verification again. See TenantImportService._import_tenant_domains
+        # for how a global domain-uniqueness collision on the target is handled.
+        tables["tenant_domain"] = self._rows(
+            db.scalars(select(TenantDomain).where(TenantDomain.tenant_id == tenant_id)).all(), "tenant_domain"
+        )
 
     def _export_list_entries(self, db: Session, tables: dict[str, Any]) -> None:
         list_definition_ids = [row["id"] for row in tables["list_definition"]]
@@ -320,6 +331,10 @@ class TenantExportService:
             row["storage_path"] = self._register_file(root, f.storage_path, f"files/stored_files/{f.id}")
             stored_file_rows.append(row)
         tables["stored_file"] = stored_file_rows
+
+        tables["gallery_image"] = self._rows(
+            db.scalars(select(GalleryImage).where(GalleryImage.tenant_id == tenant_id)).all(), "gallery_image"
+        )
 
         if include_abgabebox:
             tables["submission_upload_file"] = self._rows(
