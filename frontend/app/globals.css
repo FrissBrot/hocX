@@ -7066,11 +7066,13 @@ input[type="radio"] {
 }
 
 .collab-status-tile span {
+  width: 100%;
   font-size: 0.68rem;
   font-weight: 600;
+  line-height: 1.15;
   letter-spacing: 0.02em;
   text-transform: uppercase;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
 }
 
 .collab-status-tile-success {

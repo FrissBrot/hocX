@@ -22,8 +22,9 @@ type SessionPanelProps = {
 };
 
 export type SessionPanelHandle = {
-  openAndFocusTodo: () => void;
-  openAndFocusNotes: () => void;
+  openTodo: (focus?: boolean) => void;
+  openNotes: (focus?: boolean) => void;
+  scheduleClose: () => void;
   close: () => void;
 };
 
@@ -39,6 +40,7 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
     const [todoTag, setTodoTag] = useState(currentSectionName ?? "Sitzungsnotizen");
     const [creatingTodo, setCreatingTodo] = useState(false);
     const [todoSaved, setTodoSaved] = useState(false);
+    const [openedByHover, setOpenedByHover] = useState(false);
 
     // Assignee selection state
     const [assigneeSearch, setAssigneeSearch] = useState("");
@@ -58,23 +60,61 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
     const dueInputRef = useRef<HTMLInputElement | null>(null);
     const assigneeInputRef = useRef<HTMLInputElement | null>(null);
     const notesRef = useRef<HTMLTextAreaElement | null>(null);
+    const openedByHoverRef = useRef(false);
+
+    const setHoverMode = useCallback((value: boolean) => {
+      openedByHoverRef.current = value;
+      setOpenedByHover(value);
+    }, []);
+
+    const scheduleClose = useCallback(() => {
+      if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current);
+      leaveTimerRef.current = window.setTimeout(() => {
+        if (openedByHoverRef.current) setActive(null);
+      }, 300);
+    }, []);
 
     useImperativeHandle(ref, () => ({
-      openAndFocusTodo() {
+      openTodo(focus = true) {
         if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current);
+        setHoverMode(!focus);
         setActive("todo");
-        window.setTimeout(() => todoInputRef.current?.focus(), 60);
+        if (focus) window.setTimeout(() => todoInputRef.current?.focus(), 60);
       },
-      openAndFocusNotes() {
+      openNotes(focus = true) {
         if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current);
+        setHoverMode(!focus);
         setActive("notes");
-        window.setTimeout(() => notesRef.current?.focus(), 60);
+        if (focus) window.setTimeout(() => notesRef.current?.focus(), 60);
+      },
+      scheduleClose() {
+        scheduleClose();
       },
       close() {
         if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current);
+        setHoverMode(false);
         setActive(null);
       },
-    }));
+    }), [scheduleClose, setHoverMode]);
+
+    // A flyout can appear between two pointer events, which means browsers do not always
+    // emit the mouse-leave sequence we would expect. While it was opened by hovering,
+    // observe the actual pointer target and close once neither toolbar nor flyout is under it.
+    useEffect(() => {
+      if (!openedByHover || !active) return;
+      const handlePointerMove = (event: PointerEvent) => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+        const insideQuickMenu = target.closest(".protocol-quick-actions, .quick-flyout-open");
+        if (insideQuickMenu) {
+          if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current);
+        } else {
+          scheduleClose();
+        }
+      };
+      document.addEventListener("pointermove", handlePointerMove);
+      return () => document.removeEventListener("pointermove", handlePointerMove);
+    }, [active, openedByHover, scheduleClose]);
 
     useEffect(() => {
       setNotes(protocol.session_notes ?? "");
@@ -303,6 +343,10 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
     };
 
     const handleMouseLeave = () => {
+      if (openedByHoverRef.current) {
+        scheduleClose();
+        return;
+      }
       leaveTimerRef.current = window.setTimeout(() => {
         const activeEl = document.activeElement;
         const stillEditing =

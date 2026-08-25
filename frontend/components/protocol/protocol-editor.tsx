@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -43,7 +43,6 @@ import {
   TODO_STATUS,
   TodoMenuOption,
   TodoMiniMenu,
-  attendanceParticipants,
   createProtocolEventDraft,
   protocolStatusLabel,
   resequenceProtocolElements,
@@ -289,6 +288,9 @@ export function ProtocolEditor({
       void browserApiFetch(`/api/protocols/${protocol.id}/scroll-position`, {
         method: "PUT",
         body: JSON.stringify({ element_id: selectedElementId }),
+      }).catch(() => {
+        // Remembering the editor position is only a convenience. A transient network
+        // failure must not surface as an unhandled rejection and crash the editor.
       });
     }, 800);
     return () => {
@@ -443,18 +445,26 @@ export function ProtocolEditor({
       : [];
     return tallyAttendance(availableParticipants, entries);
   }, [elements, availableParticipants]);
-  const attendanceRoster = useMemo(() => {
-    const attendanceBlock = elements.flatMap((element) => element.blocks).find((block) => block.element_type_code === "attendance");
-    const entries = attendanceBlock && Array.isArray(attendanceBlock.configuration_snapshot_json.attendance_entries)
-      ? (attendanceBlock.configuration_snapshot_json.attendance_entries as Array<Record<string, any>>)
-      : [];
-    return attendanceParticipants(availableParticipants).map((participant) => ({
-      id: participant.id,
-      name: participant.display_name,
-      status: (entries.find((entry) => Number(entry.participant_id) === participant.id)?.status as string | undefined) ?? null,
-    }));
-  }, [elements, availableParticipants]);
   const [collabStatusPanelOpen, setCollabStatusPanelOpen] = useState(false);
+  const collabHoverCloseTimerRef = useRef<number | undefined>(undefined);
+  const collabOpenedByHoverRef = useRef(false);
+
+  const cancelCollabHoverClose = useCallback(() => {
+    if (collabHoverCloseTimerRef.current) window.clearTimeout(collabHoverCloseTimerRef.current);
+  }, []);
+
+  const scheduleCollabHoverClose = useCallback(() => {
+    cancelCollabHoverClose();
+    collabHoverCloseTimerRef.current = window.setTimeout(() => {
+      if (!collabOpenedByHoverRef.current) return;
+      const pointerStillInside = document.querySelector(
+        ".protocol-quick-actions:hover, .quick-flyout-open:hover"
+      );
+      if (!pointerStillInside) setCollabStatusPanelOpen(false);
+    }, 300);
+  }, [cancelCollabHoverClose]);
+
+  useEffect(() => () => cancelCollabHoverClose(), [cancelCollabHoverClose]);
 
   function setStatus(protocolElementBlockId: number, status: SaveState) {
     setBlockStatus((current) => ({ ...current, [protocolElementBlockId]: status }));
@@ -661,14 +671,14 @@ export function ProtocolEditor({
       // Ctrl+Alt+T → open session panel and focus todo input
       if (event.key === "t" && (event.ctrlKey || event.metaKey) && event.altKey) {
         event.preventDefault();
-        sessionPanelRef.current?.openAndFocusTodo();
+        sessionPanelRef.current?.openTodo();
         return;
       }
 
       // Ctrl+Alt+N → open session panel and focus notes
       if (event.key === "n" && (event.ctrlKey || event.metaKey) && event.altKey) {
         event.preventDefault();
-        sessionPanelRef.current?.openAndFocusNotes();
+        sessionPanelRef.current?.openNotes();
         return;
       }
 
@@ -1846,9 +1856,26 @@ export function ProtocolEditor({
       {protocolStatus === "vorbereitet" && !forceReadOnly && (
         <>
           <QuickActionsPill
-            onNotesClick={() => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openAndFocusNotes(); }}
-            onTodosClick={() => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openAndFocusTodo(); }}
-            onCollabClick={() => { sessionPanelRef.current?.close(); setCollabStatusPanelOpen(true); }}
+            onNotesClick={() => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openNotes(); }}
+            onNotesHover={() => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openNotes(false); }}
+            onTodosClick={() => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openTodo(); }}
+            onTodosHover={() => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openTodo(false); }}
+            onHoverLeave={() => {
+              sessionPanelRef.current?.scheduleClose();
+              scheduleCollabHoverClose();
+            }}
+            onCollabClick={() => {
+              cancelCollabHoverClose();
+              collabOpenedByHoverRef.current = false;
+              sessionPanelRef.current?.close();
+              setCollabStatusPanelOpen(true);
+            }}
+            onCollabHover={() => {
+              cancelCollabHoverClose();
+              collabOpenedByHoverRef.current = true;
+              sessionPanelRef.current?.close();
+              setCollabStatusPanelOpen(true);
+            }}
           />
           <CollaborationStatusPanel
             open={collabStatusPanelOpen}
@@ -1856,7 +1883,6 @@ export function ProtocolEditor({
             protocolNumber={protocol.protocol_number}
             modeLabel={workflowMeta[protocolStatus]?.modeLabel ?? protocolStatusLabel(protocolStatus)}
             attendanceTally={attendanceTally}
-            attendanceRoster={attendanceRoster}
             otherPresence={collab.otherPresence}
             connected={collab.connected}
             ctaLabel={!isReadOnly ? workflowMeta[protocolStatus]?.ctaLabel : undefined}
@@ -1865,6 +1891,8 @@ export function ProtocolEditor({
               transitionStatus();
             }}
             ctaBusy={transitioningStatus}
+            onMouseEnter={cancelCollabHoverClose}
+            onMouseLeave={scheduleCollabHoverClose}
           />
         </>
       )}
