@@ -61,10 +61,12 @@ USER_ID_COLUMNS: dict[str, list[str]] = {
     "template": ["created_by"],
     "protocol": ["created_by"],
     "stored_file": ["created_by"],
+    "word_import_document": ["created_by", "imported_by"],
     "protocol_todo": ["assigned_user_id", "created_by"],
     "attendance_fine": ["collected_by_user_id"],
     "user_template_access": ["user_id"],
     "user_protocol_access": ["user_id"],
+    "user_protocol_scroll": ["user_id"],
     "user_tenant_role": ["user_id"],
 }
 # user_id is part of the primary key on user_template_access/user_protocol_access/

@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 
 from app import scanner
 from app.core.config import settings
+from app.core.secret_crypto import decrypt_secret, encrypt_secret
 from app.core.security import hash_password
 from app.models import (
     AppUser,
@@ -47,6 +48,7 @@ from app.models import (
     ProtocolDisplaySnapshot,
     ProtocolElement,
     ProtocolElementBlock,
+    ProtocolExportCache,
     ProtocolImage,
     ProtocolText,
     ProtocolTodo,
@@ -62,10 +64,15 @@ from app.models import (
     Tenant,
     TenantDomain,
     UserProtocolAccess,
+    UserProtocolScroll,
+    UserMfaFactor,
     UserTemplateAccess,
     UserTenantRole,
+    WordImportDocument,
+    WordImportProfile,
+    WordImportSuggestionOutcome,
 )
-from app.services import traefik_config_service
+from app.services import domain_verification_service, traefik_config_service
 from app.services.document_template_service import DocumentTemplateService
 from app.services.tenant_transfer_common import (
     LOOKUP_COLUMNS,
@@ -179,6 +186,7 @@ class TenantImportService:
         new_tenant = self._import_tenant_base(new_name)
         self._created_tenant_id = new_tenant.id
         self._import_app_users(new_tenant.id, self.tables.get("tenant", {}).get("id"))
+        self._import_user_mfa_factors()
         self._import_tenant_domains(new_tenant.id)
         group_map = self._import_simple(GroupEntity, self._t("group_entity"), "group_entity", {"tenant_id": new_tenant.id})
         self._import_simple(Leader, self._t("leader"), "leader", {"tenant_id": new_tenant.id})
@@ -206,6 +214,7 @@ class TenantImportService:
             list_entry_map=list_entry_map,
             finance_account_map=finance_account_map,
         )
+        self._import_word_import_profiles(new_tenant.id, template_map)
         self._restore_last_word_import_template(new_tenant, template_map)
         self._import_template_participants(template_map, participant_map)
         submission_assignment_map = self._import_submission_assignments(new_tenant.id, list_definition_map)
@@ -214,6 +223,8 @@ class TenantImportService:
         stored_file_map = self._import_stored_files(new_tenant.id)
         self._import_submission_upload_files(submission_upload_map, stored_file_map)
         protocol_map = self._import_protocols(new_tenant.id, template_map, document_template_map, event_map)
+        self._import_word_import_documents(new_tenant.id, template_map, stored_file_map, protocol_map)
+        self._import_word_import_suggestion_outcomes(new_tenant.id, template_map)
         protocol_element_map = self._import_protocol_elements(protocol_map, template_element_map)
         protocol_element_block_map = self._import_protocol_element_blocks(
             protocol_element_map, template_element_block_map, element_definition_map, participant_map,
@@ -223,11 +234,13 @@ class TenantImportService:
         self._import_protocol_texts(protocol_element_block_map)
         self._import_protocol_display_snapshots(protocol_element_block_map)
         self._import_protocol_images(protocol_element_block_map, stored_file_map)
+        self._import_protocol_export_caches(protocol_map, stored_file_map)
         finance_transaction_map = self._import_finance_transactions(finance_account_map, protocol_map)
         self._import_attendance_fines(protocol_map, participant_map, finance_account_map, finance_transaction_map)
         self._import_protocol_todos(new_tenant.id, protocol_element_block_map, participant_map, event_map, protocol_map, submission_assignment_map)
         self._import_user_template_access(new_tenant.id, template_map)
         self._import_user_protocol_access(new_tenant.id, protocol_map)
+        self._import_user_protocol_scrolls(protocol_map)
         self._import_user_tenant_roles(new_tenant.id)
         return new_tenant
 
@@ -318,6 +331,62 @@ class TenantImportService:
             self.user_cache.set_id(email, new_user.id)
         self.db.commit()
 
+    def _import_user_mfa_factors(self) -> None:
+        """Restore member MFA configuration, merging safely into existing target users."""
+        exported_users = {row.get("email"): row for row in self._t("app_user")}
+        imported_factor_types: dict[int, set[str]] = {}
+
+        for row in self._t("user_mfa_factor"):
+            email = row.get("user_id")
+            user_id = self.user_cache.id_for(email)
+            if user_id is None:
+                self._warn_missing_user("user_mfa_factor", email)
+                continue
+
+            factor_type = row.get("factor_type")
+            existing = self.db.query(UserMfaFactor).filter(UserMfaFactor.user_id == user_id).all()
+            if factor_type == "totp":
+                secret = row.get("totp_secret")
+                if not secret:
+                    self.warnings.append(f"MFA von '{email}': TOTP-Secret fehlt - Faktor übersprungen.")
+                    continue
+                if any(f.factor_type == "totp" and f.secret_encrypted and decrypt_secret(f.secret_encrypted) == secret for f in existing):
+                    imported_factor_types.setdefault(user_id, set()).add("totp")
+                    continue
+                overrides = {"user_id": user_id, "secret_encrypted": encrypt_secret(secret)}
+            elif factor_type == "webauthn":
+                credential_id = row.get("webauthn_credential_id")
+                collision = self.db.query(UserMfaFactor).filter(
+                    UserMfaFactor.webauthn_credential_id == credential_id
+                ).first()
+                if collision is not None:
+                    if collision.user_id == user_id:
+                        imported_factor_types.setdefault(user_id, set()).add("webauthn")
+                    else:
+                        self.warnings.append(
+                            f"MFA von '{email}': Passkey-Credential ist bereits einem anderen Benutzer zugeordnet - Faktor übersprungen."
+                        )
+                    continue
+                overrides = {"user_id": user_id, "secret_encrypted": None}
+            else:
+                self.warnings.append(f"MFA von '{email}': Unbekannter Faktor-Typ '{factor_type}' - Faktor übersprungen.")
+                continue
+
+            self.db.add(build_row(UserMfaFactor, row, overrides))
+            imported_factor_types.setdefault(user_id, set()).add(factor_type)
+
+        self.db.flush()
+        for email, user_row in exported_users.items():
+            user_id = self.user_cache.id_for(email)
+            preferred = user_row.get("preferred_mfa_factor_type")
+            if user_id is None or preferred not in imported_factor_types.get(user_id, set()):
+                continue
+            user = self.db.get(AppUser, user_id)
+            if user is not None:
+                user.preferred_mfa_factor_type = preferred
+                self.db.add(user)
+        self.db.commit()
+
     def _import_tenant_domains(self, new_tenant_id: int) -> None:
         """Restores verified custom domains with their original verification_token/status/
         verified_at unchanged - a tenant import reconstructs the source tenant 1:1, and a
@@ -335,6 +404,9 @@ class TenantImportService:
         for row in self._t("tenant_domain"):
             data = self._resolve_row("tenant_domain", row)
             domain = data.get("domain")
+            if not domain or not domain_verification_service.is_valid_domain_format(domain):
+                self.warnings.append(f"Domain '{domain}' hat ein ungültiges Format und wurde nicht importiert.")
+                continue
             if domain in reserved:
                 self.warnings.append(f"Domain '{domain}' ist durch die Installation selbst belegt, wurde nicht importiert.")
                 continue
@@ -551,6 +623,15 @@ class TenantImportService:
             ))
         self.db.commit()
 
+    def _import_word_import_profiles(self, new_tenant_id: int, template_map: dict[int, int]) -> None:
+        for row in self._t("word_import_profile"):
+            old_template_id = row.get("template_id")
+            self.db.add(build_row(WordImportProfile, row, {
+                "tenant_id": new_tenant_id,
+                "template_id": template_map.get(old_template_id) if old_template_id else None,
+            }))
+        self.db.commit()
+
     def _import_submission_assignments(self, new_tenant_id: int, list_definition_map: dict[int, int]) -> dict[int, int]:
         id_map: dict[int, int] = {}
         for row in self._t("submission_assignment"):
@@ -654,6 +735,36 @@ class TenantImportService:
         self.db.commit()
         return id_map
 
+    def _import_word_import_documents(
+        self, new_tenant_id: int, template_map: dict[int, int], stored_file_map: dict[int, int],
+        protocol_map: dict[int, int],
+    ) -> None:
+        for row in self._t("word_import_document"):
+            data = self._resolve_row("word_import_document", row)
+            new_template_id = template_map.get(data["template_id"])
+            new_stored_file_id = stored_file_map.get(data["stored_file_id"])
+            if new_template_id is None or new_stored_file_id is None:
+                self.warnings.append(
+                    f"Word-Import '{data.get('original_filename')}': Vorlage oder Quelldatei fehlt, übersprungen."
+                )
+                continue
+            self.db.add(build_row(WordImportDocument, data, {
+                "tenant_id": new_tenant_id,
+                "template_id": new_template_id,
+                "stored_file_id": new_stored_file_id,
+                "protocol_id": protocol_map.get(data["protocol_id"]) if data.get("protocol_id") else None,
+            }))
+        self.db.commit()
+
+    def _import_word_import_suggestion_outcomes(self, new_tenant_id: int, template_map: dict[int, int]) -> None:
+        for row in self._t("word_import_suggestion_outcome"):
+            old_template_id = row.get("template_id")
+            self.db.add(build_row(WordImportSuggestionOutcome, row, {
+                "tenant_id": new_tenant_id,
+                "template_id": template_map.get(old_template_id) if old_template_id else None,
+            }))
+        self.db.commit()
+
     def _import_protocol_elements(self, protocol_map: dict[int, int], template_element_map: dict[int, int]) -> dict[int, int]:
         id_map: dict[int, int] = {}
         for row in self._t("protocol_element"):
@@ -719,6 +830,18 @@ class TenantImportService:
             if new_block_id is None or new_stored_file_id is None:
                 continue
             self.db.add(build_row(ProtocolImage, row, {"protocol_element_block_id": new_block_id, "stored_file_id": new_stored_file_id}))
+        self.db.commit()
+
+    def _import_protocol_export_caches(self, protocol_map: dict[int, int], stored_file_map: dict[int, int]) -> None:
+        for row in self._t("protocol_export_cache"):
+            new_protocol_id = protocol_map.get(row["protocol_id"])
+            if new_protocol_id is None:
+                continue
+            old_file_id = row.get("generated_file_id")
+            self.db.add(build_row(ProtocolExportCache, row, {
+                "protocol_id": new_protocol_id,
+                "generated_file_id": stored_file_map.get(old_file_id) if old_file_id else None,
+            }))
         self.db.commit()
 
     def _import_finance_transactions(self, finance_account_map: dict[int, int], protocol_map: dict[int, int]) -> dict[int, int]:
@@ -799,6 +922,20 @@ class TenantImportService:
                 self._warn_missing_user("user_tenant_role", row.get("user_id"))
                 continue
             self.db.add(build_row(UserTenantRole, data, {"tenant_id": new_tenant_id}))
+        self.db.commit()
+
+    def _import_user_protocol_scrolls(self, protocol_map: dict[int, int]) -> None:
+        for row in self._t("user_protocol_scroll"):
+            data = self._resolve_row("user_protocol_scroll", row)
+            new_protocol_id = protocol_map.get(row["protocol_id"])
+            if new_protocol_id is None:
+                continue
+            if data.get("user_id") is None:
+                self._warn_missing_user("user_protocol_scroll", row.get("user_id"))
+                continue
+            # Composite primary key: build_row intentionally only drops a literal `id`,
+            # so both remapped key columns are supplied explicitly here.
+            self.db.add(build_row(UserProtocolScroll, data, {"protocol_id": new_protocol_id}))
         self.db.commit()
 
 

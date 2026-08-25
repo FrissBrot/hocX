@@ -29,7 +29,21 @@ from pathlib import Path
 import pytest
 from sqlalchemy import select
 
-from app.models.entities import Participant, Protocol, Template, TenantDomain
+from app.core.secret_crypto import decrypt_secret, encrypt_secret
+from app.core.totp import generate_totp_secret
+from app.models.entities import (
+    Participant,
+    Protocol,
+    ProtocolExportCache,
+    StoredFile,
+    Template,
+    TenantDomain,
+    UserMfaFactor,
+    UserProtocolScroll,
+    WordImportDocument,
+    WordImportProfile,
+    WordImportSuggestionOutcome,
+)
 from app.services.tenant_export_service import TenantExportService
 from app.services.tenant_import_service import TenantImportService
 from tests.factories import (
@@ -127,6 +141,187 @@ def test_export_import_roundtrip_recreates_core_entities_with_new_ids(db):
     assert imported_participant is not None
     assert imported_participant.id != participant.id
     assert imported_participant.display_name == "Anna Muster"
+
+
+def test_export_import_roundtrip_keeps_word_import_document_and_source_file(db, monkeypatch, tmp_path):
+    from app.core.config import settings
+    from app.services import tenant_import_service as import_module
+
+    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
+    monkeypatch.setattr(import_module.scanner, "scan_file", lambda *args, **kwargs: "clean")
+
+    tenant = make_tenant(db, "Word Import Tenant")
+    creator = make_app_user(db, email="word-import@example.com")
+    make_user_tenant_role(db, creator.id, tenant.id, role_code="writer")
+    template = make_template(db, tenant.id, name="Importvorlage")
+    protocol = make_protocol(db, tenant.id, template.id, protocol_number="WI-1")
+    source_path = tmp_path / "word-imports" / "source.docx"
+    source_path.parent.mkdir(parents=True)
+    source_path.write_bytes(b"docx-test-content")
+    stored_file = StoredFile(
+        tenant_id=tenant.id, storage_path="word-imports/source.docx",
+        original_name="Sitzung.docx", mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        file_size_bytes=17, scan_status="clean", created_by=creator.id,
+    )
+    db.add(stored_file)
+    db.flush()
+    document = WordImportDocument(
+        tenant_id=tenant.id, template_id=template.id, stored_file_id=stored_file.id,
+        original_filename="Sitzung.docx", display_name="Sitzung", status="importiert",
+        analysis_snapshot_json={"title": "Test"}, review_draft_json={"approved": True},
+        protocol_id=protocol.id, created_by=creator.id, imported_by=creator.id,
+    )
+    db.add(document)
+    db.flush()
+
+    zip_path, _filename = TenantExportService().export(db, tenant.id, "full")
+    try:
+        manifest = _read_manifest(zip_path)
+        assert manifest["tables"]["word_import_document"][0]["original_filename"] == "Sitzung.docx"
+        new_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Word Import Tenant (Import)")
+    finally:
+        zip_path.unlink(missing_ok=True)
+
+    imported = db.scalar(select(WordImportDocument).where(WordImportDocument.tenant_id == new_tenant.id))
+    imported_template = db.scalar(select(Template).where(Template.tenant_id == new_tenant.id))
+    imported_protocol = db.scalar(select(Protocol).where(Protocol.tenant_id == new_tenant.id))
+    imported_file = db.get(StoredFile, imported.stored_file_id)
+    assert warnings == []
+    assert imported.template_id == imported_template.id
+    assert imported.protocol_id == imported_protocol.id
+    assert imported.created_by == creator.id
+    assert imported.imported_by == creator.id
+    assert imported.analysis_snapshot_json == {"title": "Test"}
+    assert imported.review_draft_json == {"approved": True}
+    assert imported_file.original_name == "Sitzung.docx"
+    assert (tmp_path / imported_file.storage_path).read_bytes() == b"docx-test-content"
+
+
+def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp_path):
+    """Regression guard for tenant-owned tables that used to be silently omitted."""
+    from app.core.config import settings
+    from app.services import tenant_import_service as import_module
+
+    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
+    monkeypatch.setattr(import_module.scanner, "scan_file", lambda *args, **kwargs: "clean")
+
+    tenant = make_tenant(db, "Complete Backup")
+    user = make_app_user(db, email="backup@example.com")
+    make_user_tenant_role(db, user.id, tenant.id, role_code="admin")
+    template = make_template(db, tenant.id, name="Learned Template")
+    protocol = make_protocol(db, tenant.id, template.id, protocol_number="BACKUP-1")
+    generated_path = tmp_path / "exports" / "backup.pdf"
+    generated_path.parent.mkdir(parents=True)
+    generated_path.write_bytes(b"pdf-cache")
+    generated_file = StoredFile(
+        tenant_id=tenant.id, storage_path="exports/backup.pdf", original_name="backup.pdf",
+        mime_type="application/pdf", file_size_bytes=9, scan_status="clean", created_by=user.id,
+    )
+    db.add(generated_file)
+    db.flush()
+    db.add_all([
+        WordImportProfile(
+            tenant_id=tenant.id, template_id=template.id,
+            mapping_config_json={"learned": {"source": "target"}},
+        ),
+        WordImportSuggestionOutcome(
+            tenant_id=tenant.id, template_id=template.id, signal_type="event_match",
+            suggested_score=0.87, was_accepted=True,
+        ),
+        ProtocolExportCache(
+            protocol_id=protocol.id, export_format="pdf", latex_source="source",
+            generated_file_id=generated_file.id, generator_version="test-v1",
+        ),
+        UserProtocolScroll(user_id=user.id, protocol_id=protocol.id, last_element_id=17),
+    ])
+    db.flush()
+
+    zip_path, _ = TenantExportService().export(db, tenant.id, "full")
+    try:
+        manifest = _read_manifest(zip_path)
+        assert len(manifest["tables"]["word_import_profile"]) == 1
+        assert len(manifest["tables"]["word_import_suggestion_outcome"]) == 1
+        assert len(manifest["tables"]["protocol_export_cache"]) == 1
+        assert manifest["tables"]["user_protocol_scroll"][0]["user_id"] == user.email
+        imported_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Complete Backup (Import)")
+    finally:
+        zip_path.unlink(missing_ok=True)
+
+    imported_template = db.scalar(select(Template).where(Template.tenant_id == imported_tenant.id))
+    imported_protocol = db.scalar(select(Protocol).where(Protocol.tenant_id == imported_tenant.id))
+    profile = db.scalar(select(WordImportProfile).where(WordImportProfile.tenant_id == imported_tenant.id))
+    outcome = db.scalar(select(WordImportSuggestionOutcome).where(WordImportSuggestionOutcome.tenant_id == imported_tenant.id))
+    cache = db.scalar(select(ProtocolExportCache).where(ProtocolExportCache.protocol_id == imported_protocol.id))
+    scroll = db.get(UserProtocolScroll, (user.id, imported_protocol.id))
+
+    assert warnings == []
+    assert profile.template_id == imported_template.id
+    assert profile.mapping_config_json == {"learned": {"source": "target"}}
+    assert outcome.template_id == imported_template.id
+    assert outcome.suggested_score == pytest.approx(0.87)
+    assert cache.generated_file_id is not None
+    assert db.get(StoredFile, cache.generated_file_id).tenant_id == imported_tenant.id
+    assert (tmp_path / db.get(StoredFile, cache.generated_file_id).storage_path).read_bytes() == b"pdf-cache"
+    assert scroll.last_element_id == 17
+
+
+def test_export_import_roundtrip_restores_all_member_mfa_factors(db):
+    tenant = make_tenant(db, "MFA Tenant")
+    user = make_app_user(db, email="mfa-transfer@example.com")
+    make_user_tenant_role(db, user.id, tenant.id, role_code="admin")
+    secret = generate_totp_secret()
+    user.preferred_mfa_factor_type = "webauthn"
+    db.add_all([
+        user,
+        UserMfaFactor(
+            user_id=user.id,
+            factor_type="totp",
+            label="Telefon",
+            secret_encrypted=encrypt_secret(secret),
+            totp_last_counter=123,
+        ),
+        UserMfaFactor(
+            user_id=user.id,
+            factor_type="webauthn",
+            label="Security Key",
+            webauthn_credential_id="portable-credential-id",
+            webauthn_public_key_pem="public-key",
+            webauthn_sign_count=7,
+            webauthn_aaguid="test-aaguid",
+            webauthn_rp_id="login.example.com",
+            webauthn_transports_json=["usb", "nfc"],
+        ),
+    ])
+    db.flush()
+
+    zip_path, _filename = TenantExportService().export(db, tenant.id, "full")
+    try:
+        manifest = _read_manifest(zip_path)
+        exported = manifest["tables"]["user_mfa_factor"]
+        assert len(exported) == 2
+        assert next(row for row in exported if row["factor_type"] == "totp")["totp_secret"] == secret
+        assert all("secret_encrypted" not in row for row in exported)
+
+        # Simulate the target installation by removing the source-global account. Its
+        # tenant membership cascades, while the export archive remains self-contained.
+        db.delete(user)
+        db.flush()
+        _new_tenant, warnings = TenantImportService().import_zip(db, zip_path, "MFA Tenant Import")
+    finally:
+        zip_path.unlink(missing_ok=True)
+
+    imported_user = db.scalar(select(type(user)).where(type(user).email == "mfa-transfer@example.com"))
+    factors = db.scalars(select(UserMfaFactor).where(UserMfaFactor.user_id == imported_user.id)).all()
+    assert warnings == []
+    assert imported_user.preferred_mfa_factor_type == "webauthn"
+    assert {factor.factor_type for factor in factors} == {"totp", "webauthn"}
+    imported_totp = next(factor for factor in factors if factor.factor_type == "totp")
+    imported_passkey = next(factor for factor in factors if factor.factor_type == "webauthn")
+    assert decrypt_secret(imported_totp.secret_encrypted) == secret
+    assert imported_totp.totp_last_counter == 123
+    assert imported_passkey.webauthn_credential_id == "portable-credential-id"
+    assert imported_passkey.webauthn_sign_count == 7
+    assert imported_passkey.webauthn_transports_json == ["usb", "nfc"]
 
 
 def test_import_resolves_existing_target_user_by_email_instead_of_creating_duplicate(db):
