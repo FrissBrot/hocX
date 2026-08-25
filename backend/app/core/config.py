@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     word_import_rescan_interval_minutes: int = 15
     export_cleanup_interval_minutes: int = 1440
     export_retention_days: int = 30
+    # Mirrors the abgabebox subapp's ABGABEBOX_TENANT_STORAGE_QUOTA_MB - protocol-image
+    # uploads had only a per-file limit (MAX_UPLOAD_BYTES), no per-tenant total at all
+    # (audit finding, 2026-08-25), a real risk given this app's two prior disk-full
+    # outages. Same 2 GB default.
+    protocol_image_storage_quota_mb: int = 2048
     auth_secret: str = "hocx-local-dev-secret"
     auth_session_cookie: str = "hocx_session"
     auth_session_ttl_hours: int = 72

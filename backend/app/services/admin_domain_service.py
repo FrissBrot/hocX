@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Tenant, TenantDomain
 from app.schemas.admin import AdminDomainPage, AdminDomainRead
+from app.services import traefik_config_service
 
 
 class AdminDomainService:
@@ -20,8 +21,17 @@ class AdminDomainService:
         domain = db.get(TenantDomain, domain_id)
         if domain is None:
             return None
+        # Mirrors TenantService.delete_domain's identical check (audit finding,
+        # 2026-08-25) - this admin-panel path deleted the DB row but never regenerated
+        # Traefik's config for an active domain, leaving its old route pointed at the
+        # now-deleted tenant until some other, unrelated trigger happened to fix the file.
+        # A different tenant claiming the freed-up domain in that window would have their
+        # traffic routed to the wrong (stale) backend the whole time.
+        was_active = domain.status == "active"
         db.delete(domain)
         db.commit()
+        if was_active:
+            traefik_config_service.regenerate(db)
         return domain
 
     def list_domains(self, db: Session, *, limit: int | None = None, offset: int = 0, q: str | None = None) -> AdminDomainPage:

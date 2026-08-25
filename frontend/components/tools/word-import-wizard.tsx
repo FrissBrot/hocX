@@ -399,6 +399,8 @@ type TextDraft = {
   // confirm "yes, this one really has nowhere to go" and the row stayed flagged forever.
   // See ListDraft.dismissed for the same idea elsewhere in this wizard.
   dismissed: boolean;
+  // Creates a protocol-local text block; it is intentionally not added to the template.
+  createNew: boolean;
   isFormBlock: boolean;
   formFields: WordImportFormFieldValue[];
   formFieldsByTarget: Record<string, WordImportFormFieldValue[]>;
@@ -432,6 +434,7 @@ type AttendanceDraft = {
 // Sentinel id for the "create as new participant" option in the attendance assignee menu -
 // distinct from `null` (which means "don't link this row to anyone").
 const CREATE_NEW_PARTICIPANT_ID = -1;
+const CREATE_NEW_TEXT_BLOCK_ID = -2;
 type FieldSource = "doc" | "existing";
 type EventDraft = {
   row_index: number;
@@ -768,7 +771,7 @@ function formFieldsStillOpen(text: TextDraft): boolean {
 function textNeedsReview(text: TextDraft): boolean {
   if (text.dismissed) return false;
   return (
-    text.template_element_id === null ||
+    (text.template_element_id === null && !text.createNew) ||
     (text.isEventRepeat && text.linkedEventId === null && !text.linkedEventNone) ||
     formFieldsStillOpen(text)
   );
@@ -1683,7 +1686,8 @@ export function WordImportWizard({
       eventCandidates: mapping.event_candidates,
       linkedEventId: mapping.matched_event_id,
       linkedEventNone: false,
-      dismissed: false,
+      dismissed: mapping.remembered_dismissed,
+      createNew: mapping.remembered_create_new,
       isFormBlock: mapping.is_form_block,
       formFields: mapping.form_fields,
       formFieldsByTarget: mapping.form_fields_by_target,
@@ -2239,6 +2243,7 @@ export function WordImportWizard({
           is_form_block: text.isFormBlock,
           form_fields: text.isFormBlock ? text.formFields : [],
           dismissed: text.dismissed,
+          create_new: text.createNew,
           sync_field_source: text.syncFieldStatus === "conflict" ? text.syncFieldSource : null,
         })),
         attendance: approvedAttendance.map((entry) => ({
@@ -3025,7 +3030,7 @@ export function WordImportWizard({
                       // doesn't stay flagged forever with no way out. Dismissing skips the
                       // WHOLE section, same row-level granularity Liste/Matrix rows already
                       // use for an unresolved name.
-                      const isIgnorableNoTarget = text.template_element_id === null;
+                      const isIgnorableNoTarget = text.template_element_id === null && !text.createNew;
                       const canDismiss = isIgnorableNoTarget || formFieldsStillOpen(text);
                       const isDismissedNoTarget = canDismiss && text.dismissed;
                       const summaryLabel = textSummaryLabel(text, target, linkedEvent);
@@ -3034,7 +3039,12 @@ export function WordImportWizard({
                           className={`word-import-text-row${flagged ? " word-import-flag" : ""}${
                             isIgnoredEvent || isDismissedNoTarget ? " word-import-text-row-muted" : ""
                           }`}
-                          key={index}
+                          // A composite of stable identifying fields, not the array index
+                          // (audit finding, 2026-08-25) - harmless today since this list's
+                          // order is fixed server-side, but a plain index silently becomes
+                          // wrong (stale component state bleeding across rows on re-render)
+                          // the moment any future filtering/sorting is added here.
+                          key={`${text.template_element_id ?? "none"}-${text.block_sort_index ?? "none"}-${text.extracted_heading}`}
                         >
                           <div
                             className={`word-import-text-row-head${flagged ? "" : " word-import-text-row-head-clickable"}`}
@@ -3046,7 +3056,11 @@ export function WordImportWizard({
                             <span className="word-import-text-row-title">{text.extracted_heading}</span>
                             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                               {!isOpen &&
-                                (isIgnoredEvent ? (
+                                (text.createNew ? (
+                                  <span className="word-import-text-row-summary">
+                                    <CheckIcon /> Neuer Textblock in diesem Protokoll
+                                  </span>
+                                ) : isIgnoredEvent ? (
                                   <span className="word-import-text-row-summary is-ignored">Nicht verknüpft – wird übersprungen</span>
                                 ) : isDismissedNoTarget ? (
                                   <span className="word-import-text-row-summary is-ignored">Ignoriert – wird übersprungen</span>
@@ -3077,22 +3091,31 @@ export function WordImportWizard({
                             <div className="grid" style={{ gap: "10px" }}>
                               <TodoAssigneeMenu
                                 label={
-                                  target
+                                  text.createNew
+                                    ? `🆕 Neuer Textblock: "${text.extracted_heading}"`
+                                    : target
                                     ? `${target.label}${target.is_event_repeat ? " · pro Termin" : ""}${target.is_form_block ? " · Formular" : ""}`
                                     : "– nicht zugewiesen –"
                                 }
                                 nullLabel="– nicht zugewiesen –"
-                                activeId={target ? analysis.text_targets.indexOf(target) : null}
-                                participants={analysis.text_targets.map(
-                                  (candidate, candidateIndex): AssigneeOption => ({
-                                    id: candidateIndex,
-                                    display_name: `${candidate.label}${candidate.is_event_repeat ? " · pro Termin" : ""}${
-                                      candidate.is_form_block ? " · Formular" : ""
-                                    }`,
-                                  })
-                                )}
+                                activeId={text.createNew ? CREATE_NEW_TEXT_BLOCK_ID : target ? analysis.text_targets.indexOf(target) : null}
+                                participants={[
+                                  {
+                                    id: CREATE_NEW_TEXT_BLOCK_ID,
+                                    display_name: `🆕 Als neuen Textblock anlegen: "${text.extracted_heading}"`,
+                                  },
+                                  ...analysis.text_targets.map(
+                                    (candidate, candidateIndex): AssigneeOption => ({
+                                      id: candidateIndex,
+                                      display_name: `${candidate.label}${candidate.is_event_repeat ? " · pro Termin" : ""}${
+                                        candidate.is_form_block ? " · Formular" : ""
+                                      }`,
+                                    })
+                                  ),
+                                ]}
                                 onChange={(option) => {
-                                  const nextTarget = option.id === null ? undefined : analysis.text_targets[option.id];
+                                  const createNew = option.id === CREATE_NEW_TEXT_BLOCK_ID;
+                                  const nextTarget = option.id === null || createNew ? undefined : analysis.text_targets[option.id];
                                   const templateElementId = nextTarget?.template_element_id ?? null;
                                   const blockSortIndex = nextTarget?.block_sort_index ?? null;
                                   setTexts((current) =>
@@ -3106,6 +3129,7 @@ export function WordImportWizard({
                                             linkedEventId: nextTarget?.is_event_repeat ? row.linkedEventId : null,
                                             linkedEventNone: nextTarget?.is_event_repeat ? row.linkedEventNone : false,
                                             dismissed: false,
+                                            createNew,
                                             // Switching to a different target's own row structure - use
                                             // the values already parsed for this target during analyze()
                                             // (see WordImportTextMapping.form_fields_by_target, computed

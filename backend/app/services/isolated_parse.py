@@ -20,6 +20,11 @@ if TYPE_CHECKING:
 PARSE_TIMEOUT_SECONDS = 20.0
 PARSE_MEMORY_LIMIT_BYTES = 512 * 1024 * 1024
 POOL_SIZE = 2
+# Bounds how long a request waits for a free worker slot itself, separate from
+# PARSE_TIMEOUT_SECONDS (which only bounds one already-running parse) - without this, a
+# burst of concurrent uploads across many tenants queued up behind a full POOL_SIZE=2 pool
+# had no upper bound on wait time at all (audit finding, 2026-08-25).
+POOL_WAIT_TIMEOUT_SECONDS = 60.0
 
 _ctx = mp.get_context("spawn")
 
@@ -45,6 +50,23 @@ def _worker_loop(task_queue: "mp.Queue", result_queue: "mp.Queue") -> None:
     os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
     os.environ.setdefault("OMP_NUM_THREADS", "1")
     from app.services.word_import_service import parse_document
+
+    # "Isolated" here only ever meant the RLIMIT_AS/timeout/hard-kill above - no seccomp,
+    # no separate Linux user, no network namespace, no chroot (audit finding, 2026-08-25;
+    # a full OS-level sandbox needs container capabilities/deployment changes this process
+    # can't grant itself and is tracked separately). This closes the one concrete, safely
+    # retrofittable part of that gap: the child inherits the full parent environment via
+    # `spawn` (DB credentials, JWT secret, ...) purely as a side effect of how
+    # multiprocessing launches it, never because parse_document() itself needs any of it -
+    # it's a pure bytes-in/dataclass-out function. Scrub down to a minimal allowlist now,
+    # after the settings-reading imports above have already run but before the loop below
+    # starts feeding it attacker-controlled document bytes for the rest of this worker's
+    # (long, pooled, many-documents) lifetime - an RCE via a malicious .docx/.pdf can no
+    # longer read those secrets straight out of its own environment.
+    _env_allowlist = {"PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "TMP", "OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS"}
+    for key in list(os.environ):
+        if key not in _env_allowlist:
+            del os.environ[key]
 
     while True:
         raw_bytes = task_queue.get()
@@ -108,7 +130,12 @@ def parse_document_isolated(raw_bytes: bytes) -> "ParsedDocx":
     ParsedDocx/ParsedSection/ParsedTable are plain dataclasses of str/date/list, so they
     pickle cleanly across the process boundary."""
     _ensure_pool()
-    worker = _pool.get()
+    try:
+        worker = _pool.get(timeout=POOL_WAIT_TIMEOUT_SECONDS)
+    except queue_module.Empty:
+        raise ValueError(
+            "Server ist aktuell ausgelastet - bitte in Kürze erneut versuchen"
+        )
     worker.task_queue.put(raw_bytes)
     try:
         status, payload = worker.result_queue.get(timeout=PARSE_TIMEOUT_SECONDS)

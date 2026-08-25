@@ -206,7 +206,7 @@ export type AdminTenantUser = {
 
 export type AdminSessionInfo = {
   authenticated: boolean;
-  admin: { id: number; email: string; display_name: string } | null;
+  admin: { id: number; email: string; display_name: string; role: "owner" | "support" } | null;
 };
 
 export type AdminTenantSummary = {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import re
 import shutil
 import subprocess
@@ -345,7 +346,7 @@ class ExportService:
             if list_def is None or list_def.tenant_id != tenant_id:
                 raise ValueError("List not found")
             body_content = self._render_global_list_body(
-                db, list_definition_id=list_definition_id,
+                db, tenant_id, list_definition_id=list_definition_id,
                 group_by=list_group_by, sort_by=list_sort_by, sort_direction=list_sort_direction,
                 filter_column=list_filter_column,
                 filter_participant_id=list_filter_participant_id,
@@ -640,6 +641,7 @@ class ExportService:
 
     def _render_global_list_body(
         self, db: Session,
+        tenant_id: int,
         list_definition_id: int | None = None,
         group_by: str = "", sort_by: str = "", sort_direction: str = "asc",
         filter_column: str = "",
@@ -663,7 +665,7 @@ class ExportService:
                 config["linked_list_filter_event_id"] = filter_event_id
             if filter_text:
                 config["linked_list_filter_text"] = filter_text
-        result = self._linked_list_content(db, list_definition_id, config)
+        result = self._linked_list_content(db, list_definition_id, config, tenant_id)
         return result or "Keine Einträge vorhanden."
 
     def _build_standalone_main_tex(
@@ -738,7 +740,7 @@ class ExportService:
             self._patch_theme_fontspec(template_copy_dir / "styles" / "theme.tex")
 
         body_path = export_dir / "protocol_body.tex"
-        body_content = self._render_protocol_body(db, protocol.id, export_dir)
+        body_content = self._render_protocol_body(db, protocol.id, export_dir, protocol.tenant_id)
         body_path.write_text(body_content, encoding="utf-8")
 
         latex_source = self._build_main_tex(protocol, template_copy_dir, body_path)
@@ -804,14 +806,14 @@ Status: {protocol_status}
     def _trim_section_name(name: str) -> str:
         return re.sub(r"\s*\(.*\)$", "", name).strip()
 
-    def _render_protocol_body(self, db: Session, protocol_id: int, export_dir: Path) -> str:
+    def _render_protocol_body(self, db: Session, protocol_id: int, export_dir: Path, tenant_id: int) -> str:
         parts: list[str] = []
         image_export_dir = export_dir / "images"
         image_export_dir.mkdir(parents=True, exist_ok=True)
         protocol_status = db.scalar(select(ProtocolModel.status).where(ProtocolModel.id == protocol_id)) or ""
 
         elements = self.repository.list_protocol_elements(db, protocol_id)
-        section_titles_by_element_id = resolve_display_section_titles_batch(db, elements, protocol_status)
+        section_titles_by_element_id = resolve_display_section_titles_batch(db, elements, protocol_status, tenant_id)
 
         for element in elements:
             if not element.export_visible_snapshot:
@@ -829,7 +831,7 @@ Status: {protocol_status}
             first = True
             for block in visible_blocks:
                 block_heading = block.block_title_snapshot or block.display_title_snapshot or block.title_snapshot
-                block_content = self._render_block(db, block, block_heading, export_dir, image_export_dir)
+                block_content = self._render_block(db, block, block_heading, export_dir, image_export_dir, tenant_id)
                 if first:
                     # Keep section heading with first block so the title is never
                     # left alone at the bottom of a page.
@@ -852,8 +854,8 @@ Status: {protocol_status}
 
         return "\n".join(parts)
 
-    def _render_block(self, db: Session, block, block_heading: str, export_dir: Path, image_export_dir: Path) -> str:
-        content = self._default_block_content(db, block, image_export_dir)
+    def _render_block(self, db: Session, block, block_heading: str, export_dir: Path, image_export_dir: Path, tenant_id: int) -> str:
+        content = self._default_block_content(db, block, image_export_dir, tenant_id)
         partial_path = self._resolve_partial_path(export_dir, block)
         if partial_path and partial_path.exists():
             template = partial_path.read_text(encoding="utf-8")
@@ -891,7 +893,7 @@ Status: {protocol_status}
         candidate = export_dir / "template" / "elements" / default_name
         return candidate if candidate.exists() else None
 
-    def _default_block_content(self, db: Session, block, image_export_dir: Path) -> str:
+    def _default_block_content(self, db: Session, block, image_export_dir: Path, tenant_id: int) -> str:
         if block.element_type_id == 1:
             text = self.repository.get_protocol_text(db, block.id)
             return self._markdown_to_latex(text.content if text else "")
@@ -926,7 +928,7 @@ Status: {protocol_status}
         if block.element_type_id == 6:
             linked_list_id = int((block.configuration_snapshot_json or {}).get("linked_list_id") or 0)
             if linked_list_id:
-                return self._linked_list_content(db, linked_list_id, block.configuration_snapshot_json or {})
+                return self._linked_list_content(db, linked_list_id, block.configuration_snapshot_json or {}, tenant_id)
             rows = block.configuration_snapshot_json.get("rows", []) if block.configuration_snapshot_json else []
             if not rows:
                 return ""
@@ -941,11 +943,11 @@ Status: {protocol_status}
             for row in rows:
                 row_type = row.get("value_type") or row.get("row_type") or "text"
                 if row_type == "list_entry":
-                    label, value = self._form_row_list_entry_label_and_value(db, row)
+                    label, value = self._form_row_list_entry_label_and_value(db, row, tenant_id)
                     label = label or "Feld"
                 else:
                     label = str(row.get("label") or "Feld").strip()
-                    value = self._form_row_value(db, row)
+                    value = self._form_row_value(db, row, tenant_id)
                 if not str(value).strip():
                     continue
                 parts.append(f"{self._escape_latex(label)} & {self._escape_latex(value)} \\\\")
@@ -1019,9 +1021,9 @@ Status: {protocol_status}
                 return ""
             return self._matrix_block_content(db, block.configuration_snapshot_json or {}, protocol)
         if block.element_type_id == 12:
-            return self._finance_balance_content(db, block.configuration_snapshot_json or {})
+            return self._finance_balance_content(db, block.configuration_snapshot_json or {}, tenant_id)
         if block.element_type_id == 13:
-            return self._finance_transactions_content(db, block.configuration_snapshot_json or {}, block)
+            return self._finance_transactions_content(db, block.configuration_snapshot_json or {}, block, tenant_id)
         if block.element_type_id == 14:
             protocol_element = db.get(ProtocolElement, block.protocol_element_id)
             if protocol_element is None:
@@ -1341,12 +1343,15 @@ Status: {protocol_status}
         lines += ["\\end{tabular}", "\\end{flushleft}"]
         return "\n".join(lines)
 
-    def _finance_balance_content(self, db: Session, config: dict) -> str:
+    def _finance_balance_content(self, db: Session, config: dict, tenant_id: int) -> str:
         account_id = int(config.get("finance_account_id") or 0)
         if not account_id:
             return "Kein Konto konfiguriert."
         account = db.get(FinanceAccount, account_id)
-        if account is None:
+        # finance_account_id is client-supplied via configuration_snapshot_json - without
+        # this check a writer could point a block at another tenant's finance account and
+        # read its balance via PDF export (audit finding, 2026-08-25).
+        if account is None or account.tenant_id != tenant_id:
             return "Konto nicht gefunden."
         from sqlalchemy import func
         result = db.execute(
@@ -1358,12 +1363,13 @@ Status: {protocol_status}
         amount_str = f"{sign}{abs(balance):,.2f}".replace(",", "'")
         return self._escape_latex(f"{account.name}: {amount_str} {account.currency_label}") + "\n\n"
 
-    def _finance_transactions_content(self, db: Session, config: dict, block) -> str:
+    def _finance_transactions_content(self, db: Session, config: dict, block, tenant_id: int) -> str:
         account_id = int(config.get("finance_account_id") or 0)
         if not account_id:
             return "Kein Konto konfiguriert."
         account = db.get(FinanceAccount, account_id)
-        if account is None:
+        # See _finance_balance_content - same client-supplied finance_account_id gap.
+        if account is None or account.tenant_id != tenant_id:
             return "Konto nicht gefunden."
         filter_type = str(config.get("finance_filter_type") or "all")
         last_n = int(config.get("finance_last_n") or 10)
@@ -1424,20 +1430,24 @@ Status: {protocol_status}
                 return f"{day}.{month}.{year}"
             return value
 
-    def _form_row_value(self, db: Session, row: dict) -> str:
+    def _form_row_value(self, db: Session, row: dict, tenant_id: int) -> str:
+        # participant_id/participant_ids/event_id are client-supplied via
+        # configuration_snapshot_json - without the tenant checks below a writer could embed
+        # another tenant's participant/event id into a form row and read its name/title/date
+        # via PDF export (audit finding, 2026-08-25).
         value_type = row.get("value_type") or row.get("row_type") or "text"
         if value_type == "participant" and row.get("participant_id"):
             participant = db.get(Participant, int(row["participant_id"]))
-            return participant.display_name if participant else ""
+            return participant.display_name if participant and participant.tenant_id == tenant_id else ""
         if value_type == "participants" and row.get("participant_ids"):
             participants = [
                 db.get(Participant, int(participant_id))
                 for participant_id in row.get("participant_ids", [])
             ]
-            return ", ".join(participant.display_name for participant in participants if participant)
+            return ", ".join(participant.display_name for participant in participants if participant and participant.tenant_id == tenant_id)
         if value_type == "event" and row.get("event_id"):
             event = db.get(Event, int(row["event_id"]))
-            if not event:
+            if not event or event.tenant_id != tenant_id:
                 return ""
             event_end_date = event.event_end_date or event.event_date
             date_part = (
@@ -1448,7 +1458,7 @@ Status: {protocol_status}
             return f"{date_part} - {event.title}"
         return str(row.get("text_value") or "").strip()
 
-    def _form_row_list_entry_label_and_value(self, db: Session, row: dict) -> tuple[str, str]:
+    def _form_row_list_entry_label_and_value(self, db: Session, row: dict, tenant_id: int) -> tuple[str, str]:
         snapshot = row.get("list_snapshot")
         if isinstance(snapshot, dict):
             if not snapshot.get("entry_exists", True):
@@ -1464,25 +1474,35 @@ Status: {protocol_status}
                 column_two_value_json=snapshot.get("column_two_value") or {},
             )
         else:
+            # linked_list_id/linked_list_entry_id are client-supplied via
+            # configuration_snapshot_json (this fallback runs whenever the row has no frozen
+            # list_snapshot yet, e.g. right after a PATCH and before the next refresh) -
+            # without the tenant check below a writer could point a row at another tenant's
+            # list entry and read it via PDF export (audit finding, 2026-08-25).
             list_id = row.get("linked_list_id")
             entry_id = row.get("linked_list_entry_id")
             if not list_id or not entry_id:
                 return str(row.get("label") or "").strip(), ""
             definition = db.get(ListDefinition, int(list_id))
             entry = db.get(ListEntry, int(entry_id))
-            if definition is None or entry is None:
+            if (
+                definition is None
+                or entry is None
+                or definition.tenant_id != tenant_id
+                or entry.list_definition_id != definition.id
+            ):
                 return str(row.get("label") or "").strip() or "(verknuepfter Listeneintrag wurde geloescht)", ""
         fixed_column = "column_two" if row.get("list_fixed_column") == "column_two" else "column_one"
         variable_column = "column_two" if fixed_column == "column_one" else "column_one"
         fixed_title, fixed_value_type = self._linked_list_column_meta(definition, fixed_column)
         variable_title, variable_value_type = self._linked_list_column_meta(definition, variable_column)
         alias = str(row.get("label") or "").strip()
-        label = alias or self._linked_list_value(db, value_type=fixed_value_type, value=self._linked_list_entry_value(entry, fixed_column))
-        value = self._linked_list_value(db, value_type=variable_value_type, value=self._linked_list_entry_value(entry, variable_column))
+        label = alias or self._linked_list_value(db, value_type=fixed_value_type, value=self._linked_list_entry_value(entry, fixed_column), tenant_id=tenant_id)
+        value = self._linked_list_value(db, value_type=variable_value_type, value=self._linked_list_entry_value(entry, variable_column), tenant_id=tenant_id)
         return label, value
 
-    def _linked_list_value(self, db: Session, *, value_type: str, value: dict) -> str:
-        return self._form_row_value(db, {"value_type": value_type, **(value or {})})
+    def _linked_list_value(self, db: Session, *, value_type: str, value: dict, tenant_id: int) -> str:
+        return self._form_row_value(db, {"value_type": value_type, **(value or {})}, tenant_id)
 
     def _linked_list_column_meta(self, definition: ListDefinition, column_key: str) -> tuple[str, str]:
         if column_key == "column_two":
@@ -1494,13 +1514,13 @@ Status: {protocol_status}
             return dict(entry.column_two_value_json or {})
         return dict(entry.column_one_value_json or {})
 
-    def _linked_list_sort_text(self, db: Session, *, value_type: str, value: dict) -> str:
+    def _linked_list_sort_text(self, db: Session, *, value_type: str, value: dict, tenant_id: int) -> str:
         if value_type == "participant":
             participant_id = int(value.get("participant_id") or 0)
             if not participant_id:
                 return ""
             participant = db.get(Participant, participant_id)
-            return str(participant.display_name if participant else "").strip()
+            return str(participant.display_name if participant and participant.tenant_id == tenant_id else "").strip()
         if value_type == "participants":
             participant_ids = [int(item) for item in (value.get("participant_ids") or []) if int(item)]
             if not participant_ids:
@@ -1509,7 +1529,7 @@ Status: {protocol_status}
                 participant
                 for participant_id in participant_ids
                 for participant in [db.get(Participant, participant_id)]
-                if participant is not None
+                if participant is not None and participant.tenant_id == tenant_id
             ]
             participants.sort(key=lambda participant: (participant.display_name.casefold(), participant.id))
             return ", ".join(participant.display_name for participant in participants)
@@ -1518,7 +1538,7 @@ Status: {protocol_status}
             if not event_id:
                 return ""
             event = db.get(Event, event_id)
-            return str(event.title if event else "").strip()
+            return str(event.title if event and event.tenant_id == tenant_id else "").strip()
         return str(value.get("text_value") or "").strip()
 
     def _linked_list_sort_key(self, value: str) -> str:
@@ -1528,7 +1548,7 @@ Status: {protocol_status}
     def _linked_list_inline_text(self, value: str | None) -> str:
         return " ".join(str(value or "").split()).strip()
 
-    def _linked_list_content(self, db: Session, list_definition_id: int, config: dict | None = None) -> str:
+    def _linked_list_content(self, db: Session, list_definition_id: int, config: dict | None, tenant_id: int) -> str:
         config = config if isinstance(config, dict) else {}
         snapshot = config.get("list_snapshot")
         if isinstance(snapshot, dict) and isinstance(snapshot.get("entries"), list):
@@ -1553,8 +1573,11 @@ Status: {protocol_status}
         else:
             # _render_global_list_body (standalone list export, not tied to a protocol
             # block) always lands here since its config never carries a list_snapshot key.
+            # list_definition_id itself may be client-supplied (block-level linked_list_id
+            # from configuration_snapshot_json) - without this check a writer could read
+            # another tenant's list content via PDF export (audit finding, 2026-08-25).
             definition = db.get(ListDefinition, list_definition_id)
-            if definition is None:
+            if definition is None or definition.tenant_id != tenant_id:
                 return ""
             entries = list(
                 db.scalars(
@@ -1612,11 +1635,13 @@ Status: {protocol_status}
                 db,
                 value_type=definition.column_one_value_type,
                 value=dict(entry.column_one_value_json or {}),
+                tenant_id=tenant_id,
             )
             right_value = self._linked_list_value(
                 db,
                 value_type=definition.column_two_value_type,
                 value=dict(entry.column_two_value_json or {}),
+                tenant_id=tenant_id,
             )
             if not str(left_value).strip() and not str(right_value).strip():
                 continue
@@ -1628,6 +1653,7 @@ Status: {protocol_status}
                     db,
                     value_type=sort_value_type,
                     value=self._linked_list_entry_value(entry, sort_by),
+                    tenant_id=tenant_id,
                 )
 
             group_label = None
@@ -1635,7 +1661,7 @@ Status: {protocol_status}
                 _, group_value_type = self._linked_list_column_meta(definition, group_by)
                 group_raw_value = self._linked_list_entry_value(entry, group_by)
                 group_rendered = self._linked_list_inline_text(
-                    self._linked_list_value(db, value_type=group_value_type, value=group_raw_value)
+                    self._linked_list_value(db, value_type=group_value_type, value=group_raw_value, tenant_id=tenant_id)
                 )
                 group_label = group_rendered or "Ohne Wert"
 
@@ -1885,7 +1911,7 @@ Status: {protocol_status}
         if element_type_id == 6:
             linked_list_id = int(config.get("linked_list_id") or 0)
             if linked_list_id:
-                return self._linked_list_content(db, linked_list_id, config)
+                return self._linked_list_content(db, linked_list_id, config, protocol.tenant_id)
             rows = config.get("rows") if isinstance(config.get("rows"), list) else []
             if not rows:
                 return ""
@@ -1896,11 +1922,11 @@ Status: {protocol_status}
                     continue
                 row_type = row.get("value_type") or row.get("row_type") or "text"
                 if row_type == "list_entry":
-                    row_label, value = self._form_row_list_entry_label_and_value(db, row)
+                    row_label, value = self._form_row_list_entry_label_and_value(db, row, protocol.tenant_id)
                     row_label = row_label or "Feld"
                 else:
                     row_label = str(row.get("label") or "Feld").strip()
-                    value = self._form_row_value(db, row)
+                    value = self._form_row_value(db, row, protocol.tenant_id)
                 if not str(value).strip():
                     continue
                 label = self._escape_latex(row_label)
@@ -1967,24 +1993,28 @@ Status: {protocol_status}
         return ""
 
     def _matrix_single_value(self, db: Session, *, value_type: str, cell: dict, protocol, row: dict, column: dict, prefix: str) -> str:
+        # participant_id(s)/event_id here (cell.*, row.template_*) are client-supplied via
+        # configuration_snapshot_json - without the tenant checks below a writer could embed
+        # another tenant's participant/event id into a matrix cell and read it via PDF export
+        # (audit finding, 2026-08-25).
         if value_type == "participant":
             participant_id = cell.get(f"{prefix}participant_id") or row.get("template_participant_id")
             if not participant_id:
                 return ""
             participant = db.get(Participant, int(participant_id))
-            return self._latex_multiline(participant.display_name if participant else "")
+            return self._latex_multiline(participant.display_name if participant and participant.tenant_id == protocol.tenant_id else "")
         if value_type == "participants":
             participant_ids = cell.get(f"{prefix}participant_ids") or row.get("template_participant_ids") or []
             if not participant_ids:
                 return ""
             participants = [db.get(Participant, int(participant_id)) for participant_id in participant_ids]
-            return self._latex_multiline(", ".join(participant.display_name for participant in participants if participant))
+            return self._latex_multiline(", ".join(participant.display_name for participant in participants if participant and participant.tenant_id == protocol.tenant_id))
         if value_type == "event":
             event_id = cell.get(f"{prefix}event_id") or row.get("template_event_id")
             if not event_id:
                 return ""
             event = db.get(Event, int(event_id))
-            if not event:
+            if not event or event.tenant_id != protocol.tenant_id:
                 return ""
             return self._latex_multiline(self._event_inline_label(event))
         if value_type == "events":
@@ -2195,10 +2225,25 @@ Status: {protocol_status}
             storage_path=str(relative_path),
             latex_path=None,
             file_size_bytes=target_path.stat().st_size,
-            checksum_sha256=None,
+            # SHA-256 was never computed for a generated export file, unlike every other
+            # user-facing StoredFile in this codebase (audit finding, 2026-08-25) - no
+            # security impact (nothing validates against it for this path), but it left
+            # this one file type with no integrity metadata at all.
+            checksum_sha256=hashlib.sha256(target_path.read_bytes()).hexdigest(),
             created_by=None,
         )
-        return self.repository.create_stored_file(db, stored_file)
+        try:
+            return self.repository.create_stored_file(db, stored_file)
+        except Exception:
+            # The physical copy above happens before this DB write with no shared
+            # transaction to roll both back together - a failure caught here (constraint
+            # violation surfaced at flush) previously left the just-copied file orphaned
+            # with no DB row pointing at it at all (audit finding, 2026-08-25). A failure
+            # in some *later*, unrelated step of the caller's own transaction can still
+            # orphan it after a successful flush here - that residual case already self-
+            # heals via cleanup_old_generated_exports' age-based retention sweep.
+            target_path.unlink(missing_ok=True)
+            raise
 
     def cleanup_old_generated_exports(self, *, retention_days: int | None = None) -> dict:
         """Periodic sweep (see main.py's export_cleanup_loop) for old files under

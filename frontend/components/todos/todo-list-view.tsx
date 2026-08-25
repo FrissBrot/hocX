@@ -10,6 +10,7 @@ import { TagInput } from "@/components/ui/tag-input";
 import { TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
 import { TodoDueMenu, DuePatch } from "@/components/todos/todo-due-menu";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { TODO_STATUS } from "@/components/protocol/protocol-editor-shared";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
@@ -327,7 +328,11 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
     const current = todo.todo_status_code ?? "open";
     const isDone = current === "done" || current === "cancelled";
     const next = isDone ? "open" : "done";
-    const nextId = next === "open" ? 1 : 3;
+    // Was a bare 1/3 literal, duplicating (inconsistently with no shared reference) the
+    // TODO_STATUS mapping already centralized elsewhere - the same class of hardcoded-
+    // seed-id fragility already fixed once on the backend side (audit finding,
+    // 2026-08-25).
+    const nextId = next === "open" ? TODO_STATUS.open : TODO_STATUS.done;
     setBusy((b) => ({ ...b, [todo.id]: true }));
     try {
       await browserApiFetch(`/api/protocol-todos/${todo.id}`, {
@@ -356,7 +361,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
         : `/api/todos`;
       const created = await browserApiFetch<TodoListItem>(url, {
         method: "POST",
-        body: JSON.stringify({ task, tags, todo_status_id: 1 }),
+        body: JSON.stringify({ task, tags, todo_status_id: TODO_STATUS.open }),
       });
       if (created) {
         setTodos((prev) => ({ all: [created, ...prev.all], my: prev.my }));

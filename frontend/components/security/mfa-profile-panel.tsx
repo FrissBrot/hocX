@@ -312,21 +312,36 @@ export function MfaProfilePanel({ open }: Props) {
         <div className="field-label">Aktive Faktoren</div>
         <div className="security-factor-list">
           {!overview?.factors.length ? <div className="selection-card muted">Noch keine MFA-Faktoren eingerichtet.</div> : null}
-          {overview?.factors.map((factor) => (
-            <article key={factor.id} className="security-factor-card">
-              <div className="security-factor-main">
-                <div className="security-factor-row">
-                  <strong>{factor.label}</strong>
-                  <span className="pill">{factor.factor_type === "totp" ? "TOTP" : "Passkey"}</span>
+          {overview?.factors.map((factor) => {
+            // The backend already rejects this with a 409 (delete_self_factor requires at
+            // least one factor to remain when MFA is required), but the button here gave
+            // no indication of that until the request failed (audit finding, 2026-08-25).
+            const isLastRequiredFactor = Boolean(overview?.required) && (overview?.factors.length ?? 0) <= 1;
+            return (
+              <article key={factor.id} className="security-factor-card">
+                <div className="security-factor-main">
+                  <div className="security-factor-row">
+                    <strong>{factor.label}</strong>
+                    <span className="pill">{factor.factor_type === "totp" ? "TOTP" : "Passkey"}</span>
+                  </div>
+                  <div className="muted">Eingerichtet: {formatDate(factor.created_at)}</div>
+                  <div className="muted">Zuletzt verwendet: {formatDate(factor.last_used_at)}</div>
+                  {isLastRequiredFactor && (
+                    <div className="muted">Letzter Pflicht-Faktor kann nicht entfernt werden.</div>
+                  )}
                 </div>
-                <div className="muted">Eingerichtet: {formatDate(factor.created_at)}</div>
-                <div className="muted">Zuletzt verwendet: {formatDate(factor.last_used_at)}</div>
-              </div>
-              <button type="button" className="button-inline button-danger" onClick={() => void deleteFactor(factor.id, factor.label)}>
-                Entfernen
-              </button>
-            </article>
-          ))}
+                <button
+                  type="button"
+                  className="button-inline button-danger"
+                  disabled={isLastRequiredFactor}
+                  title={isLastRequiredFactor ? "Tenant-Administratoren müssen mindestens einen MFA-Faktor behalten" : undefined}
+                  onClick={() => void deleteFactor(factor.id, factor.label)}
+                >
+                  Entfernen
+                </button>
+              </article>
+            );
+          })}
         </div>
       </div>
     </div>

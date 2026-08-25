@@ -168,6 +168,13 @@ def delete_document_template_part(
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Document template part could not be deleted") from exc
+    except OSError as exc:
+        # Unlike every other write route in this file, this one had no OSError handling
+        # at all (audit finding, 2026-08-25) - delete_document_template_part's own file
+        # unlink() plus the _refresh_templates_using_part rematerialization it triggers
+        # (mkdir/rmtree/file writes) can both raise one, which would otherwise surface as
+        # an unhandled 500 after the DB delete had already committed.
+        raise HTTPException(status_code=400, detail="Document template part files could not be updated") from exc
     if not deleted:
         raise HTTPException(status_code=404, detail="Document template part not found")
     return {"message": "Document template part deleted"}

@@ -46,7 +46,21 @@ class _Reader:
         if major == 4:
             return [self.decode() for _ in range(self._read_uint(additional_info))]
         if major == 5:
-            return {self.decode(): self.decode() for _ in range(self._read_uint(additional_info))}
+            count = self._read_uint(additional_info)
+            result: dict = {}
+            for _ in range(count):
+                key = self.decode()
+                value = self.decode()
+                try:
+                    result[key] = value
+                except TypeError as exc:
+                    # A CBOR map key can legally decode to a list/map (major type 4/5),
+                    # which Python can't use as a dict key - map that to the same
+                    # CborDecodeError every other malformed-input case raises instead of
+                    # letting an unclassified TypeError propagate as an unhandled 500
+                    # (audit finding, 2026-08-25).
+                    raise CborDecodeError("CBOR map key is not hashable") from exc
+            return result
         if major == 7:
             if additional_info == 20:
                 return False

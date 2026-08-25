@@ -1,7 +1,7 @@
 from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
-from app.models import ElementType, Event, Participant, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolTodo, Template, TemplateParticipant, TodoStatus
+from app.models import ElementType, Event, Participant, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolTodo, Template, TemplateParticipant, TodoStatus, UserTenantRole
 from app.repositories.participant_repository import participant_eligible_on
 
 
@@ -215,6 +215,43 @@ class ProtocolTodoRepository:
         participant_allowed_for_tenant() above."""
         return bool(
             db.scalar(select(func.count(Event.id)).where(Event.id == event_id, Event.tenant_id == tenant_id))
+        )
+
+    def user_allowed_for_tenant(self, db: Session, tenant_id: int, user_id: int) -> bool:
+        """assigned_user_id is client-supplied and, unlike assigned_participant_id/
+        due_event_id, was never validated at all - a writer could assign a todo to any
+        app_user.id, including one with no membership in this tenant (audit finding,
+        2026-08-25)."""
+        return bool(
+            db.scalar(
+                select(func.count(UserTenantRole.user_id)).where(
+                    UserTenantRole.user_id == user_id,
+                    UserTenantRole.tenant_id == tenant_id,
+                    UserTenantRole.is_active.is_(True),
+                )
+            )
+        )
+
+    def tenant_id_for_block(self, db: Session, protocol_element_block_id: int) -> int | None:
+        """Resolves a block-scoped todo's tenant via its owning protocol - block-scoped
+        ProtocolTodo rows don't carry tenant_id themselves (only standalone ones do), so
+        this is needed to validate assigned_user_id/closed_in_protocol_id against the
+        correct tenant for both create_todo and update_todo."""
+        return db.scalar(
+            select(Protocol.tenant_id)
+            .join(ProtocolElement, ProtocolElement.protocol_id == Protocol.id)
+            .join(ProtocolElementBlock, ProtocolElementBlock.protocol_element_id == ProtocolElement.id)
+            .where(ProtocolElementBlock.id == protocol_element_block_id)
+        )
+
+    def protocol_allowed_for_tenant(self, db: Session, tenant_id: int, protocol_id: int) -> bool:
+        """closed_in_protocol_id is client-supplied and was never validated at all - a
+        writer could close a todo "in" an arbitrary, potentially cross-tenant protocol_id
+        (audit finding, 2026-08-25)."""
+        return bool(
+            db.scalar(
+                select(func.count(Protocol.id)).where(Protocol.id == protocol_id, Protocol.tenant_id == tenant_id)
+            )
         )
 
     def list_todo_blocks(self, db: Session, tenant_id: int):

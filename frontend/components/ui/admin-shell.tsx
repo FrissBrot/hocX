@@ -23,6 +23,13 @@ const navLinks = [
 export function AdminShell({ children, session }: { children: ReactNode; session: AdminSessionInfo }) {
   const pathname = usePathname();
   const router = useRouter();
+  // The backend's require_admin_write already rejects every create/update/delete for a
+  // "support"-role admin with a 403 (see core/admin_security.py) - but until this fix,
+  // nothing in the frontend ever read session.admin.role at all (audit finding,
+  // 2026-08-25), so a support admin saw the exact same fully-interactive write UI as an
+  // owner and only discovered the restriction as a confusing failed-request error deep
+  // into some action. This banner makes the actual access level visible up front instead.
+  const isReadOnlyAdmin = session.admin?.role === "support";
 
   async function logout() {
     await browserApiFetch("/api/admin/auth/logout", { method: "POST" });
@@ -81,6 +88,21 @@ export function AdminShell({ children, session }: { children: ReactNode; session
           <header className="topbar">
             <h1 className="topbar-title">Platform-Admin</h1>
           </header>
+          {isReadOnlyAdmin && (
+            <div
+              className="admin-readonly-banner"
+              style={{
+                background: "var(--sev-medium-soft, #f8f0d8)",
+                color: "var(--sev-medium, #8a6d0a)",
+                borderBottom: "1px solid var(--border, #d8dee9)",
+                padding: "8px 24px",
+                fontSize: "13.5px",
+                fontWeight: 500,
+              }}
+            >
+              Nur-Lesezugriff (support): Änderungen sind mit diesem Account nicht möglich.
+            </div>
+          )}
           <div className="shell-content">{children}</div>
         </div>
       </div>

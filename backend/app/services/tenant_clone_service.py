@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import logging
 import shutil
 from pathlib import Path
 from typing import Any
@@ -57,6 +58,7 @@ from app.services.tenant_transfer_common import (
 )
 
 _ALWAYS_EXCLUDE = {"id", "created_at", "updated_at"}
+_logger = logging.getLogger(__name__)
 
 
 def _copy_row(source: Any, overrides: dict[str, Any] | None = None) -> Any:
@@ -129,9 +131,18 @@ class TenantCloneService:
         part_map = self._clone_document_template_parts(db, source.id, new_tenant.id)
         document_template_map = self._clone_document_templates(db, source.id, new_tenant.id, part_map)
         finance_account_map = self._clone_finance_accounts(db, source.id, new_tenant.id)
+        # Cloned before element_definitions/templates (mirrors _clone_full_impl's ordering)
+        # and its returned id map threaded through both, instead of the empty dict used
+        # here before this fix (audit finding, 2026-08-25) - element/template
+        # configuration_json can reference a linked_list_id, and remapping that id is only
+        # possible if the list shells already exist by the time those configs are cloned.
+        # Passing {} silently stripped every "verknuepfte Liste" link a structure clone
+        # copied, even though the (now entry-less) list shell itself was still cloned a
+        # moment later - just never wired back into anything pointing at it.
+        list_definition_map = self._clone_list_definitions(db, source.id, new_tenant.id)
         element_definition_map = self._clone_element_definitions(
             db, source.id, new_tenant.id,
-            participant_map={}, event_map={}, list_definition_map={}, list_entry_map={},
+            participant_map={}, event_map={}, list_definition_map=list_definition_map, list_entry_map={},
             finance_account_map=finance_account_map,
         )
         self._clone_templates(
@@ -141,11 +152,10 @@ class TenantCloneService:
             element_definition_map=element_definition_map,
             event_map={},
             participant_map={},
-            list_definition_map={},
+            list_definition_map=list_definition_map,
             list_entry_map={},
             finance_account_map=finance_account_map,
         )
-        self._clone_list_definitions(db, source.id, new_tenant.id)
         return new_tenant
 
     def _clone_full_impl(self, db: Session, source_tenant_id: int, new_name: str) -> Tenant:
@@ -259,6 +269,12 @@ class TenantCloneService:
             return None
         source = _safe_storage_path(settings.storage_root, source_path)
         if not source.exists():
+            # Unlike the structurally identical import path (which appends a warning the
+            # admin sees), a missing source file here was silently dropped with no signal
+            # at all (audit finding, 2026-08-25) - logged so it's at least discoverable in
+            # server logs instead of leaving zero trace of why the clone's profile image
+            # ended up empty.
+            _logger.warning("tenant clone: source profile image missing at %s (new_tenant_id=%s)", source_path, new_tenant_id)
             return None
         suffix = Path(source_path).suffix or ".png"
         profile_dir = Path(settings.upload_root) / "tenant-profiles"
@@ -276,6 +292,8 @@ class TenantCloneService:
         target_path = target_dir / f"{uuid4().hex}{suffix}"
         if source.exists():
             shutil.copy2(source, target_path)
+        else:
+            _logger.warning("tenant clone: source stored file missing at %s (new_tenant_id=%s)", storage_path, new_tenant_id)
         return str(target_path.relative_to(root_path))
 
     def _clone_document_template_part_file(
@@ -288,6 +306,8 @@ class TenantCloneService:
         target_path = target_dir / f"v{version}{suffix}"
         if source.exists():
             shutil.copy2(source, target_path)
+        else:
+            _logger.warning("tenant clone: source document template part missing at %s (new_tenant_id=%s)", source_storage_path, new_tenant_id)
         return str(target_path.relative_to(Path(settings.storage_root).resolve()))
 
     # ── structure/config tables ─────────────────────────────────────────

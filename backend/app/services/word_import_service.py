@@ -13,7 +13,7 @@ from docx import Document
 from docx.oxml.ns import qn
 from docx.table import Table as DocxTable
 from docx.text.paragraph import Paragraph as DocxParagraph
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -34,6 +34,7 @@ from app.models import (
     ProtocolElement,
     ProtocolElementBlock,
     ProtocolText,
+    RenderType,
     Template,
     TemplateElement,
     TemplateParticipant,
@@ -88,11 +89,11 @@ _DATE_TEXT_PATTERN = re.compile(r"(\d{1,2})\.?\s+(" + "|".join(_GERMAN_MONTHS) +
 _EVENT_MATCH_THRESHOLD = 0.8
 _EVENT_CHANGE_THRESHOLD = 0.45
 _LIST_NAME_MATCH_THRESHOLD = 0.5
-# The lower bar for matching a document section's heading to a template element -
-# looser than _LIST_NAME_MATCH_THRESHOLD's table-heading gate since a section heading
-# is free text (not a fixed table header), and a False negative here means the section
-# falls back to plain, unmapped free text rather than being silently misfiled.
-_SECTION_ELEMENT_MATCH_THRESHOLD = 0.35
+# A wrong text assignment is much worse than leaving a section open for review. Require
+# a clear title resemblance and a useful lead over the runner-up; generic headings such
+# as "Diverses" must not become a catch-all for unrelated document sections.
+_SECTION_ELEMENT_MATCH_THRESHOLD = 0.58
+_SECTION_ELEMENT_MATCH_MARGIN = 0.10
 # _classify_section_kind's ratio-of-lines-matching-a-shape gate for recognizing a
 # tab-aligned paragraph section as an implicit Termine/list table.
 _SECTION_KIND_RATIO_THRESHOLD = 0.6
@@ -1906,6 +1907,8 @@ class WordImportService:
                 "new_event_link_resolutions": profile_config.get("new_event_link_resolutions", {}),
                 "no_link_names": profile_config.get("no_link_names", []),
                 "event_ignored_keys": profile_config.get("event_ignored_keys", []),
+                "custom_text_headings": profile_config.get("custom_text_headings", []),
+                "text_ignored_headings": profile_config.get("text_ignored_headings", []),
             }
         heading_to_target = profile_config.get("heading_to_target", {})
         table_roles_by_signature = profile_config.get("table_roles_by_signature", {})
@@ -1952,8 +1955,11 @@ class WordImportService:
         # dismissed before, so the same recurring non-Termin text (e.g. a dateless
         # category label) defaults to "Ignorieren" again instead of asking every import.
         event_ignored_keys = set(profile_config.get("event_ignored_keys", []))
+        custom_text_headings = set(profile_config.get("custom_text_headings", []))
+        text_ignored_headings = set(profile_config.get("text_ignored_headings", []))
         profile_applied = bool(
             heading_to_target or table_roles_by_signature or participant_name_overrides or matrix_column_overrides
+            or custom_text_headings or text_ignored_headings
         )
 
         def _rejected_ids_for(rejection_key: str) -> set:
@@ -2168,6 +2174,10 @@ class WordImportService:
             if targets_for_element:
                 element_targets[template_element.id] = targets_for_element
 
+        text_target_labels = {
+            (target.template_element_id, target.block_sort_index): target.label for target in text_targets
+        }
+
         all_events = list(db.execute(select(Event).where(Event.tenant_id == tenant_id)).scalars())
         all_events_by_id = {event.id: event for event in all_events}
         # Event-repeat blocks (e.g. "Rückblick", "Scharanlässe") must be linked to a real
@@ -2190,24 +2200,42 @@ class WordImportService:
         text_mappings: list[WordImportTextMapping] = []
         for section in parsed.sections:
             normalized_heading = _normalize(section.heading)
+            remembered_create_new = normalized_heading in custom_text_headings
+            remembered_dismissed = normalized_heading in text_ignored_headings
             saved_target = heading_to_target.get(normalized_heading)
-            if saved_target:
+            saved_key = (
+                saved_target.get("template_element_id"), saved_target.get("block_sort_index")
+            ) if saved_target else None
+            # Old profiles also contain automatic low-confidence assignments. Reuse a
+            # saved target only when it still exists and remains textually plausible;
+            # this actively sheds earlier "assigned somewhere" mistakes.
+            saved_label = text_target_labels.get(saved_key) if saved_key else None
+            if remembered_create_new or remembered_dismissed:
+                template_element_id = None
+                block_sort_index = None
+                confidence = 1.0
+            elif saved_target and saved_label and _similarity(section.heading, saved_label) >= _SECTION_ELEMENT_MATCH_THRESHOLD:
                 template_element_id = saved_target.get("template_element_id")
                 block_sort_index = saved_target.get("block_sort_index")
                 confidence = 1.0
             else:
-                best_element_id: int | None = None
-                best_score = 0.0
-                for candidate_element_id, title in element_titles.items():
-                    if not element_targets.get(candidate_element_id):
-                        continue
-                    score = _similarity(section.heading, title)
-                    if score > best_score:
-                        best_score = score
-                        best_element_id = candidate_element_id
-                if best_element_id is not None and best_score >= _SECTION_ELEMENT_MATCH_THRESHOLD:
-                    template_element_id = best_element_id
-                    block_sort_index = min(sort_index for sort_index, _ in element_targets[best_element_id])
+                scored_targets = sorted(
+                    (
+                        (_similarity(section.heading, target.label), target)
+                        for target in text_targets
+                    ),
+                    key=lambda item: item[0],
+                    reverse=True,
+                )
+                best_score, best_target = scored_targets[0] if scored_targets else (0.0, None)
+                runner_up_score = scored_targets[1][0] if len(scored_targets) > 1 else 0.0
+                if (
+                    best_target is not None
+                    and best_score >= _SECTION_ELEMENT_MATCH_THRESHOLD
+                    and (best_score - runner_up_score >= _SECTION_ELEMENT_MATCH_MARGIN or best_score >= 0.85)
+                ):
+                    template_element_id = best_target.template_element_id
+                    block_sort_index = best_target.block_sort_index
                     confidence = round(best_score, 2)
                 else:
                     template_element_id = None
@@ -2317,6 +2345,8 @@ class WordImportService:
                     sync_target_field=sync_target_field,
                     sync_field_status=sync_field_status,
                     sync_field_existing_value=sync_field_existing_value,
+                    remembered_create_new=remembered_create_new,
+                    remembered_dismissed=remembered_dismissed,
                 )
             )
 
@@ -3256,6 +3286,17 @@ class WordImportService:
         # already means "unbounded" there, so it's left untouched.
         participant_cache: dict[int, Participant] = {}
 
+        # New Event/Participant rows created while populating this protocol commit
+        # internally (event_service.create_event/participant_service.create_participant)
+        # and have no FK to Protocol - unlike everything else _populate() writes, deleting
+        # the Protocol on a later failure (see the except block around _populate() below)
+        # does NOT cascade-clean these up, leaving permanent orphans (audit finding,
+        # 2026-08-25). Tracked here (in commit()'s own scope, not _populate()'s - a failed
+        # nested function's locals aren't reachable from the caller's except block) so the
+        # cleanup path can remove them too.
+        created_event_ids: set[int] = set()
+        created_participant_ids: set[int] = set()
+
         def _get_cached_participant(participant_id: int) -> Participant | None:
             if participant_id not in participant_cache:
                 participant = db.get(Participant, participant_id)
@@ -3488,7 +3529,7 @@ class WordImportService:
                 if event_commit.participant_count is not None:
                     extra_kwargs["participant_count"] = event_commit.participant_count
                 if event_commit.linked_event_id is None:
-                    event_service.create_event(
+                    created_event = event_service.create_event(
                         db,
                         EventCreate(
                             title=event_commit.final_title,
@@ -3499,6 +3540,7 @@ class WordImportService:
                         ),
                         tenant_id=tenant_id,
                     )
+                    created_event_ids.add(created_event.id)
                 else:
                     existing_event = db.get(Event, event_commit.linked_event_id)
                     if existing_event is None or existing_event.tenant_id != tenant_id:
@@ -3544,12 +3586,59 @@ class WordImportService:
             # second time and crash the whole commit on the unique-name constraint).
             created_participants_by_name: dict[str, int] = {}
             for text_commit in payload.texts:
-                if text_commit.template_element_id is None or text_commit.dismissed:
+                if text_commit.dismissed:
                     # dismissed mirrors the wizard's row-level "Ignorieren" (see
                     # TextDraft.dismissed) - skips this section entirely, same as an
                     # unapproved list/matrix/event row never being committed. Previously
                     # had no effect here: a form block with an "ignored" unresolved name
                     # was written anyway (with just that name silently unlinked).
+                    continue
+                if text_commit.create_new:
+                    if text_commit.template_element_id is not None:
+                        raise ValueError("Ein neuer Textblock darf keinen Vorlagenblock als Ziel haben")
+                    text_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "text"))
+                    paragraph_render_id = db.scalar(select(RenderType.id).where(RenderType.code == "paragraph"))
+                    if text_type_id is None or paragraph_render_id is None:
+                        raise ValueError("Textblock-Typ ist nicht konfiguriert")
+                    max_element_sort = db.scalar(
+                        select(func.max(ProtocolElement.sort_index)).where(ProtocolElement.protocol_id == protocol_id)
+                    ) or 0
+                    protocol_element = ProtocolElement(
+                        protocol_id=protocol_id,
+                        template_element_id=None,
+                        sort_index=int(max_element_sort) + 10,
+                        section_name_snapshot=text_commit.extracted_heading,
+                        section_order_snapshot=int(max_element_sort) + 10,
+                        element_title_snapshot=text_commit.extracted_heading,
+                        is_required_snapshot=False,
+                        is_visible_snapshot=True,
+                        export_visible_snapshot=True,
+                    )
+                    db.add(protocol_element)
+                    db.flush()
+                    block = ProtocolElementBlock(
+                        protocol_element_id=protocol_element.id,
+                        template_element_block_id=None,
+                        element_definition_id=None,
+                        element_type_id=text_type_id,
+                        render_type_id=paragraph_render_id,
+                        title_snapshot=text_commit.extracted_heading,
+                        display_title_snapshot=text_commit.extracted_heading,
+                        block_title_snapshot=text_commit.extracted_heading,
+                        is_editable_snapshot=True,
+                        allows_multiple_values_snapshot=False,
+                        sort_index=0,
+                        render_order=0,
+                        is_required_snapshot=False,
+                        is_visible_snapshot=True,
+                        export_visible_snapshot=True,
+                        configuration_snapshot_json={"word_import_custom_block": True},
+                    )
+                    db.add(block)
+                    db.flush()
+                    db.add(ProtocolText(protocol_element_block_id=block.id, content=text_commit.content))
+                    continue
+                if text_commit.template_element_id is None:
                     continue
                 if text_commit.is_event_repeat:
                     if text_commit.linked_event_id is None or text_commit.block_sort_index is None:
@@ -3614,6 +3703,7 @@ class WordImportService:
                                     db.flush()
                                     participant_id = new_participant.id
                                     created_participants_by_name[cache_key] = participant_id
+                                    created_participant_ids.add(participant_id)
                                     db.add(TemplateParticipant(template_id=payload.template_id, participant_id=participant_id, exclude_from_attendance=False))
                             # "participant_match", not the unused "name_match" signal_type
                             # this used to log under - participant_match_threshold's own
@@ -3755,6 +3845,7 @@ class WordImportService:
                             )
                             participant_id = new_participant.id
                             created_participants_by_name[cache_key] = participant_id
+                            created_participant_ids.add(participant_id)
                             # Also add to the template's roster so future protocols/imports for
                             # this template already list them, not just this one-off protocol.
                             db.add(TemplateParticipant(template_id=payload.template_id, participant_id=participant_id, exclude_from_attendance=False))
@@ -3941,6 +4032,14 @@ class WordImportService:
                 # straight past _match_event_repeat_section in analyze().
                 if tc.template_element_id is not None and tc.block_sort_index is not None and not tc.is_event_repeat
             }
+            custom_text_additions = {
+                _normalize(tc.extracted_heading) for tc in payload.texts if tc.create_new and not tc.dismissed
+            }
+            text_ignore_additions = {
+                _normalize(tc.extracted_heading)
+                for tc in payload.texts
+                if tc.dismissed and tc.template_element_id is None
+            }
             table_role_updates: dict[str, dict] = {}
             for tc in payload.tables:
                 _log_outcome(
@@ -3963,6 +4062,7 @@ class WordImportService:
                 heading_updates or table_role_updates or name_updates or rejected_candidate_updates
                 or event_conflict_updates or new_event_link_updates or no_link_name_updates
                 or matrix_column_overrides_updates or event_ignore_additions or event_ignore_removed_titles
+                or custom_text_additions or text_ignore_additions
             ):
                 profile = db.execute(
                     select(WordImportProfile).where(
@@ -4035,6 +4135,17 @@ class WordImportService:
                     for key in event_ignore_set
                     if key.rsplit(":", 1)[-1] not in event_ignore_removed_titles
                 }
+                assigned_heading_keys = set(heading_updates.keys())
+                custom_text_set = (
+                    (set(config.get("custom_text_headings", [])) | custom_text_additions)
+                    - text_ignore_additions
+                    - assigned_heading_keys
+                )
+                text_ignore_set = (
+                    (set(config.get("text_ignored_headings", [])) | text_ignore_additions)
+                    - custom_text_additions
+                    - assigned_heading_keys
+                )
                 profile.mapping_config_json = {
                     "heading_to_target": heading_map,
                     "table_roles_by_signature": table_map,
@@ -4045,6 +4156,8 @@ class WordImportService:
                     "new_event_link_resolutions": new_event_link_map,
                     "no_link_names": sorted(no_link_set),
                     "event_ignored_keys": sorted(event_ignore_set),
+                    "custom_text_headings": sorted(custom_text_set),
+                    "text_ignored_headings": sorted(text_ignore_set),
                 }
 
             protocol_service.update_protocol(db, protocol_id, ProtocolUpdate(status="abgeschlossen"))
@@ -4140,5 +4253,14 @@ class WordImportService:
             # broken protocol in the DB - bypassing that guard here (internal cleanup only,
             # never reachable from a public route) lets this actually clean up instead.
             protocol_service.delete_protocol(db, protocol_id, bypass_freeze_check=True)
+            # Events/Participants created above have no FK to Protocol, so deleting it
+            # doesn't cascade-clean these up - without this they'd survive as permanent
+            # "ghost" records with no protocol reference at all (audit finding,
+            # 2026-08-25). Best-effort: a TemplateParticipant roster row already added for
+            # a newly-created participant is removed by its own FK cascade.
+            for event_id in created_event_ids:
+                event_service.delete_event(db, event_id)
+            for participant_id in created_participant_ids:
+                participant_service.delete_participant(db, participant_id, tenant_id=tenant_id)
             raise
         return WordImportCommitResult(id=protocol_id, warnings=commit_warnings)

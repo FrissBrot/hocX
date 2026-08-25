@@ -184,6 +184,26 @@ async def word_import_rescan_loop() -> None:
         await asyncio.sleep(interval_seconds)
 
 
+async def protocol_image_rescan_loop() -> None:
+    """Periodic sweep for protocol-image StoredFile rows stuck in scan_status='pending'
+    (ClamAV was unreachable at upload time - see file_service.py's save_protocol_image,
+    which previously never scanned protocol images at all). Same every-worker-but-
+    advisory-locked pattern as the loops above; reuses word_import_rescan_interval_minutes
+    rather than adding a dedicated setting for what is the same fail-open-then-rescan
+    convention applied to a second file type."""
+    interval_seconds = settings.word_import_rescan_interval_minutes * 60
+    file_service = FileService()
+    while True:
+        with SessionLocal() as db:
+            acquired = db.execute(text("SELECT pg_try_advisory_lock(202600008)")).scalar()
+            if acquired:
+                try:
+                    file_service.rescan_pending_protocol_images(db)
+                finally:
+                    db.execute(text("SELECT pg_advisory_unlock(202600008)"))
+        await asyncio.sleep(interval_seconds)
+
+
 async def export_cleanup_loop() -> None:
     """Periodic retention sweep for old generated export files under EXPORT_ROOT/generated
     (see export_service.py's cleanup_old_generated_exports). Unlike the rescan loops above
@@ -215,11 +235,13 @@ async def lifespan(_: FastAPI):
     health_check_task = asyncio.create_task(domain_health_check_loop())
     rescan_task = asyncio.create_task(abgabebox_rescan_loop())
     word_import_rescan_task = asyncio.create_task(word_import_rescan_loop())
+    protocol_image_rescan_task = asyncio.create_task(protocol_image_rescan_loop())
     export_cleanup_task = asyncio.create_task(export_cleanup_loop())
     yield
     health_check_task.cancel()
     rescan_task.cancel()
     word_import_rescan_task.cancel()
+    protocol_image_rescan_task.cancel()
     export_cleanup_task.cancel()
     await close_redis_pool()
 

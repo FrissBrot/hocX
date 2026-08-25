@@ -148,7 +148,7 @@ def patch_protocol_element(
         protocol_id=protocol_element.protocol_id,
         template_element_id=protocol_element.template_element_id,
         sort_index=protocol_element.sort_index,
-        section_name_snapshot=resolve_display_section_title(db, protocol_element, protocol.status if protocol else ""),
+        section_name_snapshot=resolve_display_section_title(db, protocol_element, protocol.status if protocol else "", protocol.tenant_id if protocol else None),
         section_order_snapshot=protocol_element.section_order_snapshot,
         is_required_snapshot=protocol_element.is_required_snapshot,
         is_visible_snapshot=protocol_element.is_visible_snapshot,
@@ -189,7 +189,7 @@ def refresh_block_list_snapshot(
     block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     track_changes_active = protocol.status == "geplant" and protocol.track_changes_enabled
     block = list_snapshot_service.refresh_block_list_snapshot(
-        db, block, keep_undo=True, track_changes_active=track_changes_active
+        db, block, protocol.tenant_id, keep_undo=True, track_changes_active=track_changes_active
     )
     _broadcast_block_update(protocol.id, block, user)
     return _block_to_read(block)
@@ -208,7 +208,7 @@ def sync_block_list_snapshot(
     block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     track_changes_active = protocol.status == "geplant" and protocol.track_changes_enabled
     block = list_snapshot_service.refresh_block_list_snapshot(
-        db, block, keep_undo=False, track_changes_active=track_changes_active
+        db, block, protocol.tenant_id, keep_undo=False, track_changes_active=track_changes_active
     )
     _broadcast_block_update(protocol.id, block, user)
     return _block_to_read(block)

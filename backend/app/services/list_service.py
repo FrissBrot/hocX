@@ -20,25 +20,39 @@ class ListService:
     def __init__(self, repository: ListRepository | None = None) -> None:
         self.repository = repository or ListRepository()
 
-    def _normalize_value(self, value_type: str, raw_value: dict[str, Any] | None) -> dict[str, Any]:
+    def _normalize_value(self, db: Session, tenant_id: int, value_type: str, raw_value: dict[str, Any] | None) -> dict[str, Any]:
+        # participant_id(s)/event_id are client-supplied and, before this fix, were only
+        # ever int()-converted - never checked against the tenant. responsible_label_service
+        # then resolves these ids to a real Participant without a tenant filter of its own,
+        # so a writer could store another tenant's (globally-numbered, easily-guessable)
+        # participant_id here and have their name/label displayed - a real cross-tenant PII
+        # leak (audit finding H1, 2026-08-25).
         value = raw_value or {}
         if value_type == "participant":
             participant_id = value.get("participant_id")
-            return {"participant_id": int(participant_id)} if participant_id else {}
+            if not participant_id:
+                return {}
+            participant_id = int(participant_id)
+            if not self.repository.participant_belongs_to_tenant(db, tenant_id, participant_id):
+                raise ValueError("Participant not found")
+            return {"participant_id": participant_id}
         if value_type == "participants":
             participant_ids = value.get("participant_ids")
             if not isinstance(participant_ids, list):
                 return {}
-            return {
-                "participant_ids": [
-                    int(participant_id)
-                    for participant_id in participant_ids
-                    if str(participant_id or "").strip()
-                ]
-            }
+            ids = [int(participant_id) for participant_id in participant_ids if str(participant_id or "").strip()]
+            for participant_id in ids:
+                if not self.repository.participant_belongs_to_tenant(db, tenant_id, participant_id):
+                    raise ValueError("Participant not found")
+            return {"participant_ids": ids}
         if value_type == "event":
             event_id = value.get("event_id")
-            return {"event_id": int(event_id)} if event_id else {}
+            if not event_id:
+                return {}
+            event_id = int(event_id)
+            if not self.repository.event_belongs_to_tenant(db, tenant_id, event_id):
+                raise ValueError("Event not found")
+            return {"event_id": event_id}
         text_value = str(value.get("text_value") or "").strip()
         return {"text_value": text_value} if text_value else {}
 
@@ -108,8 +122,8 @@ class ListService:
         entity = ListEntry(
             list_definition_id=list_definition_id,
             sort_index=payload.sort_index,
-            column_one_value_json=self._normalize_value(definition.column_one_value_type, payload.column_one_value),
-            column_two_value_json=self._normalize_value(definition.column_two_value_type, payload.column_two_value),
+            column_one_value_json=self._normalize_value(db, definition.tenant_id, definition.column_one_value_type, payload.column_one_value),
+            column_two_value_json=self._normalize_value(db, definition.tenant_id, definition.column_two_value_type, payload.column_two_value),
         )
         created = self.repository.create_entry(db, entity)
         return self._entry_read(created)
@@ -124,11 +138,11 @@ class ListService:
         values = payload.model_dump(exclude_unset=True)
         if "column_one_value" in values:
             values["column_one_value_json"] = self._normalize_value(
-                definition.column_one_value_type, values.pop("column_one_value")
+                db, definition.tenant_id, definition.column_one_value_type, values.pop("column_one_value")
             )
         if "column_two_value" in values:
             values["column_two_value_json"] = self._normalize_value(
-                definition.column_two_value_type, values.pop("column_two_value")
+                db, definition.tenant_id, definition.column_two_value_type, values.pop("column_two_value")
             )
         if not values:
             return self._entry_read(entry)

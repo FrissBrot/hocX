@@ -75,7 +75,12 @@ const emptyForm: ParticipantFormState = {
  * protocols' attendance rosters a participant appears in. */
 function membershipStatus(participant: ParticipantSummary): string | null {
   const today = new Date().toISOString().slice(0, 10);
-  if (participant.left_at && participant.left_at <= today) {
+  // left_at is inclusive - the participant is still a member through the end of that day
+  // itself (see participant_eligible_on / the help text "Erscheint ab dem Folgetag nicht
+  // mehr in Anwesenheitslisten") - `<= today` showed the "Ausgetreten" badge one day
+  // early, on left_at itself, contradicting that same help text (audit finding,
+  // 2026-08-25).
+  if (participant.left_at && participant.left_at < today) {
     return `Ausgetreten seit ${formatDate(participant.left_at)}`;
   }
   if (participant.joined_at && participant.joined_at > today) {

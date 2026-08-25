@@ -10,6 +10,10 @@ class StoredFileRepository:
         db.flush()
         return stored_file
 
+    def get_for_tenant(self, db: Session, stored_file_id: int, tenant_id: int) -> StoredFile | None:
+        stored_file = db.get(StoredFile, stored_file_id)
+        return stored_file if stored_file is not None and stored_file.tenant_id == tenant_id else None
+
     def get(self, db: Session, stored_file_id: int) -> StoredFile | None:
         return db.get(StoredFile, stored_file_id)
 
@@ -33,6 +37,20 @@ class StoredFileRepository:
     def update_scan_status(self, db: Session, stored_file: StoredFile, *, scan_status: str) -> None:
         stored_file.scan_status = scan_status
         db.add(stored_file)
+
+    def list_pending_protocol_images(self, db: Session) -> list[StoredFile]:
+        # Joined through ProtocolImage rather than a path prefix (unlike
+        # list_pending_word_import_files) - a protocol image's StoredFile and its
+        # ProtocolImage row are always created together in the same call
+        # (FileService.save_protocol_image), so there's no "not yet linked" gap to worry
+        # about here.
+        return list(
+            db.execute(
+                select(StoredFile)
+                .join(ProtocolImage, ProtocolImage.stored_file_id == StoredFile.id)
+                .where(StoredFile.scan_status == "pending")
+            ).scalars()
+        )
 
 
 class ProtocolImageRepository:

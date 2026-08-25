@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import imagehash
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from PIL import Image
 from sqlalchemy.orm import Session
 
@@ -17,6 +17,18 @@ from app.config import settings
 from app.db import get_db, tenant_upload_lock
 from app.schemas import AssignmentDetailPublic, AssignmentPublic, CaptchaVerifyResult, ElementPublic, UploadResult
 from app.storage import move_from_quarantine, save_to_quarantine, tenant_storage_bytes
+
+
+def _client_ip(request: Request) -> str | None:
+    """The real client address, not request.client.host - this service sits behind Traefik
+    (client -> Traefik -> this container), so request.client.host would always be Traefik's
+    own address. Traefik is the sole hop in front of this service and always sets
+    X-Forwarded-For itself on every request it proxies, so trusting its first entry here
+    doesn't open a spoofing path a request could otherwise reach this code through directly."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip() or None
+    return request.client.host if request.client else None
 
 router = APIRouter()
 
@@ -87,15 +99,22 @@ def _content_matches_extension(content: bytes, extension: str) -> bool:
     return False
 
 
-# H11 (2026-08-12 Audit): hard per-request cap, independent of whatever a tenant's
-# assignment.max_file_size_mb / max_files_per_element happen to be configured to (validated only
-# up to 100 MB / 20 files each in the main backend, see backend/app/schemas/submission.py) - this
-# is the worst-case legitimate total (20 x 100 MB) either of those two DB-driven settings could
-# ever combine to, so it can never reject a real upload while still giving this route its own
-# fixed ceiling instead of an unbounded one. The abgabebox-upload-body-limit Traefik middleware
-# (docker-compose.yml) enforces the same number one layer earlier, before this application code -
-# or even Starlette's multipart parser - ever runs; keep both numbers in sync.
-MAX_UPLOAD_REQUEST_BYTES = 20 * 100 * 1024 * 1024  # 2000 MB
+# H11 (2026-08-12 Audit) had set this to the worst-case legitimate total (20 files x 100 MB
+# = 2000 MB) either of a tenant's assignment.max_file_size_mb/max_files_per_element settings
+# could ever combine to, reasoning it could then never reject a real upload. But every file in
+# `files` gets read into memory and held there (in `contents` below) simultaneously through
+# checksum/perceptual-hash computation and quarantine-writing, all before this request can
+# release any of it - a legitimate-per-that-reasoning ~500 MB-2000 MB upload comfortably clears
+# this cap yet reliably OOM-kills the whole abgabebox-backend container (mem_limit: 384m in
+# docker-compose.yml, 2 workers), taking down every tenant's submission box at once, not just
+# the uploader's (audit finding, 2026-08-25). Lowered to a ceiling this container can actually
+# survive rather than one merely reachable in theory - a proper fix would stream each file to
+# quarantine as it's read instead of accumulating all of them in memory first, but that touches
+# every validation step below (dedup, perceptual-hash cross-comparison, quota) that currently
+# assumes the whole batch is available in memory at once; recalibrating the cap is the safe,
+# contained fix for this pass. The abgabebox-upload-body-limit Traefik middleware
+# (docker-compose.yml) enforces the same number one layer earlier; keep both in sync.
+MAX_UPLOAD_REQUEST_BYTES = 150 * 1024 * 1024  # 150 MB
 
 _IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 # Hamming-Distanz (von 64 Bit) zweier pHashes, ab der zwei Bilder als "wahrscheinlich
@@ -215,6 +234,7 @@ def list_elements(tenant_slug: str, assignment_slug: str, db: Session = Depends(
     response_model=CaptchaVerifyResult,
 )
 async def verify_captcha_for_element(
+    request: Request,
     tenant_slug: str,
     assignment_slug: str,
     element_ref: str,
@@ -231,7 +251,7 @@ async def verify_captcha_for_element(
         raise HTTPException(status_code=400, detail="Element ist nicht (mehr) offen")
     if not await verify_captcha(captcha_solution):
         raise HTTPException(status_code=400, detail="Captcha ungueltig")
-    token = mint_captcha_session_token(tenant_slug, assignment_slug, element_ref)
+    token = mint_captcha_session_token(tenant_slug, assignment_slug, element_ref, client_ip=_client_ip(request))
     return CaptchaVerifyResult(session_token=token, expires_in_seconds=settings.captcha_session_ttl_minutes * 60)
 
 
@@ -240,6 +260,7 @@ async def verify_captcha_for_element(
     response_model=UploadResult,
 )
 async def upload(
+    request: Request,
     tenant_slug: str,
     assignment_slug: str,
     element_ref: str,
@@ -270,7 +291,7 @@ async def upload(
 
     # 401 statt 400: das Frontend unterscheidet daran "Sicherheitscheck abgelaufen, bitte neu
     # verifizieren" (Widget erneut ausloesen) von den echten Validierungsfehlern unten (400).
-    if not verify_captcha_session_token(captcha_session_token, tenant_slug, assignment_slug, element_ref):
+    if not verify_captcha_session_token(captcha_session_token, tenant_slug, assignment_slug, element_ref, client_ip=_client_ip(request)):
         _log("captcha_failed", "Bot-Verifikation fehlgeschlagen oder Sicherheitscheck abgelaufen")
         raise HTTPException(status_code=401, detail="Sicherheitscheck abgelaufen - bitte kurz warten")
 
@@ -281,6 +302,13 @@ async def upload(
     # Kumulatives Modell (seit 2026-08-17): max_files_per_element gilt fuer die Gesamtzahl ueber
     # alle bisherigen Upload-Vorgaenge dieses Elements hinweg, nicht nur fuer diese eine Anfrage.
     # None = unbegrenzt viele Dateien.
+    #
+    # This early check alone is a TOCTOU (audit finding, 2026-08-25): it ran outside
+    # tenant_upload_lock, so two near-simultaneous uploads for the same element could both
+    # read "0 bisher hochgeladen" and both pass here before either had written anything -
+    # together exceeding max_files_per_element, the same bug class H12 already closed for
+    # the storage quota. Kept here too (not just re-checked in the lock below) purely as a
+    # cheap, early reject for the common non-racing case - it must not be the only check.
     max_files = assignment["max_files_per_element"]
     if max_files is not None:
         already_uploaded = repository.count_files_by_element(db, assignment_id=assignment["id"]).get(
@@ -326,6 +354,12 @@ async def upload(
     # Element landen - weder zweimal in diesem Request noch erneut in einem spaeteren.
     # Laeuft bewusst vor jeglichem Quarantaene-Schreiben (siehe Schritt 1 unten), damit ein
     # Duplikat abgelehnt wird, ohne dass ueberhaupt etwas auf Platte geschrieben wurde.
+    #
+    # This is a TOCTOU on its own (audit finding, 2026-08-25): two near-simultaneous
+    # requests uploading the same file content could both read "not yet uploaded" here
+    # before either has written anything. Kept as a cheap early reject for the common
+    # non-racing case; re-checked again inside tenant_upload_lock below (same pattern as
+    # max_files_per_element above) for the actual guarantee.
     checksums = [hashlib.sha256(content).hexdigest() for content, _, _ in contents]
     existing_checksums = repository.list_checksums_for_element(
         db, assignment_id=assignment["id"], event_id=element["event_id"], list_entry_id=element["list_entry_id"]
@@ -374,6 +408,33 @@ async def upload(
             _log("validation_failed", f"Speicherlimit des Mandanten erreicht (max. {settings.tenant_storage_quota_mb} MB)")
             raise HTTPException(status_code=400, detail="Speicherlimit erreicht - bitte den Verein kontaktieren")
 
+        # Authoritative re-check of max_files_per_element, now inside the same per-tenant
+        # lock the quota check above uses (audit finding, 2026-08-25) - this is what
+        # actually closes the TOCTOU the early check above can't: no other upload for this
+        # tenant can be mid-write while this re-count runs, so "already_uploaded" here is
+        # guaranteed accurate at the moment this request commits to writing its own files.
+        if max_files is not None:
+            already_uploaded = repository.count_files_by_element(db, assignment_id=assignment["id"]).get(
+                (element["event_id"], element["list_entry_id"]), 0
+            )
+            if already_uploaded + len(contents) > max_files:
+                remaining = max(0, max_files - already_uploaded)
+                _log("validation_failed", f"Zu viele Dateien (max. {max_files} insgesamt, {remaining} noch moeglich)")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Maximal {max_files} Dateien insgesamt erlaubt ({remaining} noch möglich)",
+                )
+
+        # Authoritative re-check of the exact-duplicate guard above, same reasoning and
+        # same lock (audit finding, 2026-08-25).
+        existing_checksums_locked = repository.list_checksums_for_element(
+            db, assignment_id=assignment["id"], event_id=element["event_id"], list_entry_id=element["list_entry_id"]
+        )
+        for (_content, original_name, _mime), checksum in zip(contents, checksums):
+            if checksum in existing_checksums_locked:
+                _log("validation_failed", f"Datei bereits hochgeladen: {original_name}")
+                raise HTTPException(status_code=400, detail=f"Datei '{original_name}' wurde bereits hochgeladen")
+
         # Step 1: Save ALL files to quarantine first — nothing ever enters regular storage unscanned.
         for i, (content, original_name, mime_type) in enumerate(contents):
             suffix = Path(original_name).suffix.lower()
@@ -415,13 +476,19 @@ async def upload(
         _log("scan_infected", "Schadware gefunden – Upload abgelehnt")
         raise HTTPException(status_code=400, detail="Eine oder mehrere Dateien wurden als Schadware eingestuft")
 
-    overall_scan = "pending" if "pending" in scan_results else "clean"
+    # Per-file, not a single overall_scan applied to the whole batch (audit finding,
+    # 2026-08-25) - ClamAV being unreachable for just one file out of several used to hold
+    # every file in this request back in quarantine, including ones that scanned cleanly,
+    # instead of only the one actually still pending.
+    any_pending = "pending" in scan_results
 
-    # Step 4: Clean → move from quarantine to regular storage before DB insert.
+    # Step 4: Clean → move from quarantine to regular storage before DB insert; pending
+    # stays in quarantine untouched (the rescan sweep resolves it later).
     saved_files: list[dict] = []
-    for f in quarantine_files:
+    for f, status in zip(quarantine_files, scan_results):
         file_info = {k: v for k, v in f.items() if k != "_content"}
-        if overall_scan == "clean":
+        file_info["scan_status"] = status
+        if status == "clean":
             try:
                 file_info["storage_path"] = move_from_quarantine(f["storage_path"])
             except Exception as exc:
@@ -429,7 +496,7 @@ async def upload(
                 raise HTTPException(status_code=500, detail="Datei konnte nicht verschoben werden") from exc
         saved_files.append(file_info)
 
-    if overall_scan == "clean":
+    if not any_pending:
         _log("moved_to_storage", "Aus Quarantäne in die Abgabe verschoben")
 
     # Step 5: Single DB transaction.
@@ -440,7 +507,6 @@ async def upload(
             event_id=element["event_id"],
             list_entry_id=element["list_entry_id"],
             files=saved_files,
-            scan_status=overall_scan,
         )
     except Exception as exc:
         # M16: files were already moved out of quarantine (Step 4) before this insert, and
@@ -458,9 +524,10 @@ async def upload(
         _log("upload_error", f"Datenbankfehler: {exc}")
         raise
 
-    if overall_scan == "pending":
-        _log("scan_pending", "ClamAV nicht erreichbar – Datei in Quarantäne")
-    else:
+    if any_pending:
+        pending_count = sum(1 for status in scan_results if status == "pending")
+        _log("scan_pending", f"ClamAV nicht erreichbar – {pending_count} von {len(scan_results)} Datei(en) in Quarantäne")
+    if any(status == "clean" for status in scan_results):
         _log("scan_clean")
     _log("submitted", "Freigegeben")
     return UploadResult(ok=True, files_received=len(contents), image_duplicate_warnings=image_duplicate_warnings)

@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import traceback as traceback_module
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -9,13 +10,28 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
+from app.captcha import captcha_partially_configured
 from app.config import settings
 from app.db import SessionLocal
 from app.repository import insert_error_log
 from app.routes import public
 from app.storage import cleanup_stale_quarantine_files
 
+_logger = logging.getLogger(__name__)
+
 Path(settings.storage_root).mkdir(parents=True, exist_ok=True)
+
+# Loud, once-at-startup version of captcha.captcha_enabled()'s per-request warning (audit
+# finding, 2026-08-25) - a partial FriendlyCaptcha config (exactly one of sitekey/api_key
+# set) is a real misconfiguration that previously disabled bot verification silently with no
+# signal anywhere. This surfaces it immediately in the deploy/startup logs instead of only
+# lazily on the first upload attempt.
+if captcha_partially_configured():
+    _logger.warning(
+        "STARTUP: FriendlyCaptcha ist nur teilweise konfiguriert (FRIENDLY_CAPTCHA_SITEKEY "
+        "oder FRIENDLY_CAPTCHA_API_KEY fehlt). Bot-Verifikation ist aktiv, schlaegt aber bis "
+        "zur vollstaendigen Konfiguration fehl - Uploads werden abgelehnt."
+    )
 
 
 async def quarantine_cleanup_loop() -> None:

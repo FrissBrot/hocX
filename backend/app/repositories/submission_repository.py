@@ -205,7 +205,22 @@ class SubmissionRepository:
         )
         infected = db.scalar(infected_stmt) or 0
 
-        return {"submitted": submitted, "quarantine": quarantine, "infected": infected}
+        # Computed directly, not derived as submitted - quarantine - infected (audit
+        # finding, 2026-08-25): each of the three counts above is independently
+        # COUNT(DISTINCT element), so an element with both a clean AND an infected/pending
+        # file (or a mix of any two statuses) was counted in more than one bucket at once -
+        # the subtraction then double-deducted it, undercounting (occasionally negative,
+        # masked by the route's max(0, ...) clamp) how many elements actually have a clean
+        # submission.
+        clean_stmt = (
+            select(func.count(func.distinct(*element_key)))
+            .join(SubmissionUploadFile, SubmissionUploadFile.upload_id == SubmissionUpload.id)
+            .join(StoredFile, StoredFile.id == SubmissionUploadFile.stored_file_id)
+            .where(SubmissionUpload.assignment_id == assignment_id, StoredFile.scan_status == "clean")
+        )
+        clean = db.scalar(clean_stmt) or 0
+
+        return {"submitted": submitted, "quarantine": quarantine, "infected": infected, "clean": clean}
 
     def count_list_entries(self, db: Session, *, list_definition_id: int) -> int:
         stmt = select(func.count()).where(ListEntry.list_definition_id == list_definition_id)

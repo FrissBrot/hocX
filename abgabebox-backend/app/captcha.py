@@ -2,30 +2,79 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 from datetime import UTC, datetime, timedelta
 
 import httpx
 
 from app.config import settings
 
+_logger = logging.getLogger(__name__)
+
 
 def _session_scope(tenant_slug: str, assignment_slug: str, element_ref: str) -> str:
     return f"{tenant_slug}:{assignment_slug}:{element_ref}"
 
 
+def captcha_configured() -> bool:
+    """True the moment either FriendlyCaptcha key is set - see captcha_enabled()'s docstring
+    for why this is a different question from "is captcha fully usable"."""
+    return bool(settings.friendly_captcha_api_key or settings.friendly_captcha_sitekey)
+
+
+def captcha_partially_configured() -> bool:
+    """True only for the misconfigured "exactly one of the two keys is set" state - used by
+    main.py's startup check. Deliberately independent of captcha_enabled()'s return value:
+    that function now returns True for this same state (so verification actually runs and
+    fails closed), which makes it useless as a signal for "is this the misconfigured case"."""
+    return bool(settings.friendly_captcha_api_key) != bool(settings.friendly_captcha_sitekey)
+
+
 def captcha_enabled() -> bool:
-    """FriendlyCaptcha ist nur aktiv, wenn Sitekey UND API-Key konfiguriert sind. Ohne beide gilt
-    kein Captcha als noetig (typischerweise lokale Entwicklung oder Test-Stacks ohne eigene
-    FriendlyCaptcha-Keys) - Frontend zeigt dann einen Platzhalter statt des echten Widgets, und
-    verify_captcha/verify_captcha_session_token unten lassen entsprechend alles durch."""
+    """FriendlyCaptcha is only skippable when NEITHER key is set at all (genuine local-dev/
+    test stacks with no FriendlyCaptcha account) - the frontend shows a placeholder instead
+    of the real widget in that case, and verify_captcha/verify_captcha_session_token below
+    let everything through accordingly.
+
+    Exactly ONE key set (a typo, or an incomplete secret rotation touching only one of the
+    two env vars) used to be treated identically to "neither set" - silently disabling every
+    check with no warning at all, while the frontend widget kept rendering as if protection
+    were active (audit finding, 2026-08-25). That's a real misconfiguration, not a deliberate
+    "no captcha needed" choice, so it must not resolve to bypassing verification: this now
+    counts as "enabled", which sends the partial config on to the real FriendlyCaptcha API
+    call below and lets that fail (closed - uploads rejected) instead of skipping the check
+    entirely. A clear warning is logged either way so this doesn't stay silent even while the
+    uploads that would otherwise sail through here are legitimately being blocked."""
+    if captcha_partially_configured():
+        _logger.warning(
+            "FriendlyCaptcha ist nur teilweise konfiguriert (Sitekey oder API-Key fehlt) - "
+            "Verifikation wird durchgefuehrt und schlaegt fehl, bis beide Werte gesetzt sind."
+        )
+        return True
     return bool(settings.friendly_captcha_api_key and settings.friendly_captcha_sitekey)
 
 
-def mint_captcha_session_token(tenant_slug: str, assignment_slug: str, element_ref: str) -> str:
+def _ip_fingerprint(client_ip: str | None) -> str | None:
+    """A hash, not the raw IP, is embedded in the token below - the token round-trips
+    through the client (it's sent back on every upload), so storing the address itself in
+    it would needlessly expose it. None (IP unavailable) is a distinct value from any real
+    hash, so a token minted without one can never accidentally match a later check that also
+    has none."""
+    if not client_ip:
+        return None
+    return hashlib.sha256(f"{client_ip}|{settings.captcha_session_secret}".encode("utf-8")).hexdigest()
+
+
+def mint_captcha_session_token(tenant_slug: str, assignment_slug: str, element_ref: str, client_ip: str | None = None) -> str:
     """Issued once after a real FriendlyCaptcha solve passes verify_captcha() below - lets the
     frontend prove "a human already passed the bot-check on this page" for subsequent uploads
     without re-running the widget each time. Scoped to the exact tenant/assignment/element so a
-    token minted for one upload page can't be replayed against another. Same
+    token minted for one upload page can't be replayed against another, and (client_ip) to the
+    IP that solved the captcha - without that, this 120-minute-TTL bearer token was reusable
+    from any number of different IPs, which quietly defeated the assumption that Traefik's
+    per-IP rate limit on this endpoint (5/min) meaningfully bounds abuse per person: rotating
+    IPs let one solved captcha be replayed indefinitely up to the tenant's storage quota with
+    no further bot-check at all (audit finding, 2026-08-25). Same
     base64url(payload).base64url(hmac) shape as backend/app/core/security.py's
     _sign_payload/create_session_token - deliberately reimplemented rather than imported, this
     service intentionally keeps its own dependency/secret surface (see config.py docstring)."""
@@ -34,6 +83,7 @@ def mint_captcha_session_token(tenant_slug: str, assignment_slug: str, element_r
         {
             "scope": _session_scope(tenant_slug, assignment_slug, element_ref),
             "exp": int((now + timedelta(minutes=settings.captcha_session_ttl_minutes)).timestamp()),
+            "ip": _ip_fingerprint(client_ip),
         },
         separators=(",", ":"),
     ).encode("utf-8")
@@ -41,7 +91,9 @@ def mint_captcha_session_token(tenant_slug: str, assignment_slug: str, element_r
     return base64.urlsafe_b64encode(payload).decode("utf-8") + "." + base64.urlsafe_b64encode(signature).decode("utf-8")
 
 
-def verify_captcha_session_token(token: str, tenant_slug: str, assignment_slug: str, element_ref: str) -> bool:
+def verify_captcha_session_token(
+    token: str, tenant_slug: str, assignment_slug: str, element_ref: str, client_ip: str | None = None
+) -> bool:
     if not captcha_enabled():
         # Kein FriendlyCaptcha konfiguriert -> Sitzungs-Check entfaellt komplett, siehe
         # captcha_enabled() oben.
@@ -64,6 +116,8 @@ def verify_captcha_session_token(token: str, tenant_slug: str, assignment_slug: 
     try:
         data = json.loads(payload.decode("utf-8"))
     except json.JSONDecodeError:
+        return False
+    if data.get("ip") != _ip_fingerprint(client_ip):
         return False
     if data.get("scope") != _session_scope(tenant_slug, assignment_slug, element_ref):
         return False

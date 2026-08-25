@@ -10,6 +10,7 @@ from fastapi import HTTPException, status
 from app.core.security import CurrentUser, hash_password, require_admin, verify_password
 from app.models import AppUser, Participant, UserTenantRole
 from app.services.access_service import AccessService
+from app.services.audit_service import AuditService
 from app.services.tenant_service import build_tenant_profile_image_url
 from app.repositories.user_repository import UserRepository
 from app.schemas.user import (
@@ -27,6 +28,7 @@ class UserService:
     def __init__(self, repository: UserRepository | None = None) -> None:
         self.repository = repository or UserRepository()
         self.access_service = AccessService()
+        self.audit_service = AuditService()
 
     def _role_id_by_code(self, db: Session) -> dict[str, int]:
         return {role.code: role.id for role in self.repository.list_roles(db)}
@@ -379,7 +381,7 @@ class UserService:
             self.repository.update(db, user, values)
 
         if is_promoting_participant_login:
-            user = self._link_or_promote_participant_login(db, user, previous_external)
+            user = self._link_or_promote_participant_login(db, user, previous_external, actor)
 
         if payload.memberships is not None:
             memberships = payload.memberships if actor is None else self._normalize_memberships(actor, payload.memberships)
@@ -387,7 +389,9 @@ class UserService:
         db.commit()
         return self._read_model(db, user)
 
-    def _link_or_promote_participant_login(self, db: Session, user: AppUser, previous_external: dict) -> AppUser:
+    def _link_or_promote_participant_login(
+        self, db: Session, user: AppUser, previous_external: dict, actor: CurrentUser | None
+    ) -> AppUser:
         """When a participant shadow account's login gets enabled, adopt its real email.
 
         If another AppUser already owns that email, merge the shadow account into it
@@ -402,6 +406,23 @@ class UserService:
         existing = self.repository.get_by_email(db, real_email)
         if existing is None or existing.id == user.id:
             return self.repository.update(db, user, {"email": real_email})
+
+        # SECURITY: real_email is admin-typed and unverified (see the password_hash note
+        # below), so this silently grants the target account membership in whichever
+        # tenant the acting admin controls - without the target's consent or, before this
+        # fix, any notification at all (audit finding, 2026-08-25). A full consent/
+        # notification flow is out of scope for this pass (no email-sending
+        # infrastructure exists yet); logging it here at least makes the action
+        # discoverable/reviewable after the fact instead of leaving zero trace.
+        self.audit_service.log(
+            db,
+            action="user.merged_via_participant_login_promotion",
+            actor=actor,
+            tenant_id=actor.current_tenant_id if actor else None,
+            entity_type="app_user",
+            entity_id=existing.id,
+            details={"merged_from_user_id": user.id, "email": real_email},
+        )
 
         # SECURITY: `real_email` is whatever email the tenant admin typed in when creating the
         # participant record - it is never verified to belong to the person setting it. Do NOT

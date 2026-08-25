@@ -123,6 +123,16 @@ class TemplateElementService:
         if not values:
             return self.get_template_element(db, template_element_id)
         if "configuration_json" in values:
+            # An explicit `"configuration_json": null` in the PATCH body is otherwise
+            # indistinguishable from "clear it to an empty object" and, since the DB
+            # column's NOT NULL constraint turned out not to actually be enforced (schema
+            # drift), silently stores a real None instead of {} - breaking every downstream
+            # reader that assumes configuration_json is always a dict (audit finding,
+            # 2026-08-25). Coerce to {} here, matching create_template_element's own
+            # `payload.configuration_json or {}` convention, so this field is never
+            # actually None in storage.
+            if values["configuration_json"] is None:
+                values["configuration_json"] = {}
             template = db.get(Template, entity.template_id)
             self._validate_linked_lists(db, values["configuration_json"], tenant_id=template.tenant_id if template else None)
         updated = self.repository.update(db, entity, values)

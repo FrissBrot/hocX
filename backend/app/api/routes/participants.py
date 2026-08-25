@@ -30,6 +30,23 @@ template_service = TemplateService()
 access_service = AccessService()
 audit = AuditService()
 
+# Participant CSV imports are small by nature (one row per person); unlike word_import.py's
+# uploads there was no limit at all here before this fix - an arbitrarily large "CSV" body
+# was read fully into memory (audit finding, 2026-08-25).
+MAX_PARTICIPANT_CSV_BYTES = 5 * 1024 * 1024  # 5 MB
+
+
+async def _read_upload_within_limit(file: UploadFile, max_bytes: int) -> bytes | None:
+    """Mirrors word_import.py's helper of the same name - rejects an oversized upload using
+    Starlette's already-known `.size` before buffering the whole thing into memory just to
+    measure it. Returns None if too large."""
+    if file.size is not None and file.size > max_bytes:
+        return None
+    content = await file.read()
+    if len(content) > max_bytes:
+        return None
+    return content
+
 
 def _normalized_template_participant_assignments(payload: TemplateParticipantAssignmentUpdate) -> list[tuple[int, bool]]:
     raw_assignments = payload.participants or [
@@ -46,7 +63,13 @@ def _normalized_template_participant_assignments(payload: TemplateParticipantAss
 def list_participants(
     active_only: bool = Query(default=False),
     skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=100, ge=1, le=500),
+    # Ceiling raised from 500 to 2000 (audit finding, 2026-08-25) - the templates/{id} and
+    # elements admin pages fetch the full participant list for their picker UI with a
+    # hardcoded limit=500 and no truncation warning, so a tenant with more than 500
+    # participants silently lost entries from those pickers with zero indication. 2000
+    # covers realistic association sizes; a tenant that still exceeds it would need actual
+    # pagination in those picker components, not just a higher number here.
+    limit: int = Query(default=100, ge=1, le=2000),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -123,8 +146,11 @@ async def import_participants_csv(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
+    raw_bytes = await _read_upload_within_limit(file, MAX_PARTICIPANT_CSV_BYTES)
+    if raw_bytes is None:
+        raise HTTPException(status_code=413, detail=f"Datei zu gross. Maximum {MAX_PARTICIPANT_CSV_BYTES // 1024 // 1024} MB")
     try:
-        content = (await file.read()).decode("utf-8-sig")
+        content = raw_bytes.decode("utf-8-sig")
         return participant_service.import_csv(db, content, tenant_id=user.current_tenant_id)
     except (SQLAlchemyError, UnicodeDecodeError) as exc:
         db.rollback()
@@ -157,7 +183,11 @@ def list_template_participants(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
+    # Was require_reader - inconsistent with GET /participants (require_writer) even
+    # though this returns the same (or more) participant data (audit finding, 2026-08-25):
+    # a reader/Kassier role could read full participant details here despite being denied
+    # by the base list endpoint.
+    require_writer(user)
     template = template_service.get_template(db, template_id)
     if template is None or template.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Template not found")
@@ -198,6 +228,11 @@ def list_participant_templates(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
+    # Deliberately require_reader, not require_writer (audit H6, 2026-08-12) - the
+    # restricted-reader scoping below (a participant-linked reader only ever sees their
+    # own template assignments, an unrestricted reader sees the full tenant list) is the
+    # point of this endpoint; gating it behind require_writer would make it unreachable
+    # for the reader accounts it exists for. See test_audit_2026_08_12_high_fixes_B.py.
     require_reader(user)
     participant = participant_service.get_participant(db, participant_id, tenant_id=user.current_tenant_id)
     if participant is None or participant.tenant_id != user.current_tenant_id:

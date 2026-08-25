@@ -100,9 +100,6 @@ class FinesRepository:
         ).all()
         return [self._to_read(row) for row in rows]
 
-    def get_fine(self, db: Session, fine_id: int) -> AttendanceFine | None:
-        return db.get(AttendanceFine, fine_id)
-
     def find_existing_fine(
         self,
         db: Session,
@@ -134,7 +131,16 @@ class FinesRepository:
         Raises DuplicateFineError if an identical fine (same protocol/participant/fine_type)
         already exists (M18, 2026-08-12 audit: find_existing_fine used to be dead code, so a
         user could create the same Busse for the same participant/protocol any number of times)."""
-        protocol = db.get(Protocol, payload.protocol_id)
+        # Row-locks the protocol for the rest of this transaction (audit finding,
+        # 2026-08-25): create_fine has no existing AttendanceFine row of its own to lock
+        # (unlike collect_fine/delete_fine/reopen_fine, this is an INSERT, not an UPDATE of
+        # a known row), so two near-simultaneous requests for the same
+        # protocol/participant/fine_type could otherwise both pass find_existing_fine's
+        # empty duplicate check before either has committed its INSERT. Locking the parent
+        # protocol row serializes concurrent create_fine calls for the same protocol instead.
+        protocol = db.execute(
+            select(Protocol).where(Protocol.id == payload.protocol_id).with_for_update()
+        ).scalar_one_or_none()
         if protocol is None or protocol.tenant_id != tenant_id:
             return None
         # Freeze-Schutz (audit S6, 2026-08-16): finalized protocols are immutable snapshots
@@ -233,6 +239,14 @@ class FinesRepository:
         effective_protocol_id = collecting_protocol_id
         if effective_protocol_id is None:
             effective_protocol_id = self._next_open_protocol_id(db, tenant_id)
+        elif effective_protocol_id != fine.protocol_id:
+            # collecting_protocol_id is client-supplied - without this check a writer could
+            # point closed_in_protocol_id at an arbitrary (possibly cross-tenant, possibly
+            # permanently-open) protocol, which reopen_fine's freeze check below would then
+            # trust instead of the fine's actual origin protocol (audit finding, 2026-08-25).
+            collecting_protocol = db.get(Protocol, effective_protocol_id)
+            if collecting_protocol is None or collecting_protocol.tenant_id != tenant_id:
+                return None
 
         now = datetime.now(timezone.utc)
         tx = FinanceTransaction(
@@ -258,11 +272,24 @@ class FinesRepository:
         """Reverts a collected fine back to pending and removes the finance transaction it
         created - blocked once the protocol tracking the collection is finalized (abgeschlossen),
         since finalized protocols are immutable snapshots."""
-        fine = db.get(AttendanceFine, fine_id)
+        # Row-locked for the rest of this transaction, same as collect_fine/delete_fine -
+        # without this, two near-simultaneous reopen requests for the same fine could both
+        # read status == "collected" and both proceed, each deleting a finance transaction
+        # and resetting the fine (audit finding, 2026-08-25).
+        fine = db.execute(
+            select(AttendanceFine).where(AttendanceFine.id == fine_id).with_for_update()
+        ).scalar_one_or_none()
         if fine is None or fine.status != "collected":
             return None
         origin_protocol = db.get(Protocol, fine.protocol_id)
         if origin_protocol is None or origin_protocol.tenant_id != tenant_id:
+            return None
+        # Freeze-Schutz must hold for the fine's actual origin protocol regardless of which
+        # protocol it was collected/closed in - collect_fine's collecting_protocol_id is a
+        # separate, independently-abgeschlossen-able protocol, and checking only that one
+        # let a still-open collecting_protocol_id reopen a fine whose own origin protocol had
+        # since been abgeschlossen (audit finding, 2026-08-25).
+        if origin_protocol.status == "abgeschlossen":
             return None
 
         tracking_protocol_id = fine.closed_in_protocol_id or fine.protocol_id

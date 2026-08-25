@@ -331,7 +331,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
                       </label>
                       <label className="field-stack">
                         <span className="field-label">{userForm.id ? "Neues Passwort" : "Passwort"}</span>
-                        <input type="password" value={userForm.password} onChange={(event) => setUserForm((current) => ({ ...current, password: event.target.value }))} required={!userForm.id} minLength={8} />
+                        <input type="password" autoComplete="new-password" value={userForm.password} onChange={(event) => setUserForm((current) => ({ ...current, password: event.target.value }))} required={!userForm.id} minLength={8} />
                       </label>
                       <label className="field-stack">
                         <span className="field-label">Sprache</span>

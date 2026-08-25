@@ -38,6 +38,12 @@ def _move_from_quarantine(quarantine_rel_path: str, storage_root: str) -> str:
     q_full = _safe_storage_path(storage_root, quarantine_rel_path)
     # quarantine/tenant-1/assignment-2/abc.pdf -> tenant-1/assignment-2/abc.pdf
     parts = Path(quarantine_rel_path).parts
+    if not parts or parts[0] != "quarantine":
+        # Blindly dropping parts[0] on the (previously unchecked) assumption that it's
+        # always "quarantine" silently moved the file to the wrong path - stripping a real
+        # tenant-id/assignment-id segment instead - for any path that didn't start with it
+        # (audit finding, 2026-08-25). Fail loudly instead.
+        raise ValueError(f"Expected a quarantine-prefixed path, got {quarantine_rel_path!r}")
     new_rel = str(Path(*parts[1:]))
     new_full = _safe_storage_path(storage_root, new_rel)
     new_full.parent.mkdir(parents=True, exist_ok=True)
@@ -120,6 +126,7 @@ class SubmissionService:
         self, db: Session, payload: SubmissionAssignmentCreate, *, tenant_id: int
     ) -> SubmissionAssignmentRead:
         self._validate_source_fields(payload)
+        self._validate_list_definition_tenant(db, payload.list_definition_id, tenant_id=tenant_id)
         entity = SubmissionAssignment(tenant_id=tenant_id, **payload.model_dump())
         created = self.repository.create_assignment(db, entity)
         return self._assignment_read(created)
@@ -142,8 +149,20 @@ class SubmissionService:
             "deadline": values.get("deadline", assignment.deadline),
         }
         self._validate_source_fields_dict(merged)
+        self._validate_list_definition_tenant(db, merged["list_definition_id"], tenant_id=assignment.tenant_id)
         updated = self.repository.update_assignment(db, assignment, values)
         return self._assignment_read(updated)
+
+    def _validate_list_definition_tenant(self, db: Session, list_definition_id: int | None, *, tenant_id: int) -> None:
+        # list_definition_id is client-supplied and only ever checked for existence, never
+        # tenant ownership - without this, a writer could point a submission assignment at
+        # another tenant's list, exposing its entries both in the admin UI and in the public
+        # Abgabebox (audit finding, 2026-08-25).
+        if list_definition_id is None:
+            return
+        definition = self.repository.get_list_definition(db, list_definition_id)
+        if definition is None or definition.tenant_id != tenant_id:
+            raise ValueError("list_definition_id not found")
 
     def delete_assignment(self, db: Session, assignment_id: int) -> bool:
         assignment = self.repository.get_assignment(db, assignment_id)
@@ -454,7 +473,20 @@ class SubmissionService:
             file_path = _safe_storage_path(settings.abgabebox_storage_root, stored_file.storage_path)
             result = scanner.scan_file(file_path, host=settings.clamav_host, port=settings.clamav_port)
             if result == "clean":
-                new_path = _move_from_quarantine(stored_file.storage_path, settings.abgabebox_storage_root)
+                try:
+                    new_path = _move_from_quarantine(stored_file.storage_path, settings.abgabebox_storage_root)
+                except ValueError:
+                    # _move_from_quarantine now rejects a storage_path that doesn't
+                    # actually start with "quarantine/" instead of silently mismoving it
+                    # (audit finding, 2026-08-25) - caught here specifically so one
+                    # malformed row can't abort the whole rescan batch for every other
+                    # still-pending file behind it in this loop.
+                    self.repository.create_upload_log(
+                        db, assignment_id=assignment_id, element_ref=element_ref,
+                        status="rescan_pending", error_message="Ungültiger Quarantäne-Pfad",
+                    )
+                    results["still_pending"] += 1
+                    continue
                 self.repository.update_stored_file_scan(db, stored_file, scan_status="clean", storage_path=new_path)
                 self.repository.create_upload_log(db, assignment_id=assignment_id, element_ref=element_ref, status="rescan_clean")
                 results["clean"] += 1

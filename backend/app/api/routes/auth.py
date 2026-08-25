@@ -26,9 +26,15 @@ service = AuthService()
 
 
 def _expected_origin(request: Request) -> str:
-    origin = request.headers.get("origin")
-    if origin:
-        return origin
+    # Pinned to the same fixed domain WebAuthn's RP ID uses (see
+    # MfaService.rp_id_for_request_host) instead of trusting the client-supplied Origin
+    # header back at itself - comparing client_data.origin against a value copied from
+    # that same request's own Origin header offered no independent security guarantee
+    # (audit finding, 2026-08-25). The RP-ID-hash check remains the primary anchor either
+    # way; this closes the origin check's own gap to match it. No settings.traefik_domain
+    # (local dev only) still falls back to the request's own host, same as before.
+    if settings.traefik_domain:
+        return f"https://{settings.traefik_domain}"
     host = request.headers.get("host") or request.url.netloc
     if host.startswith("localhost") or host.startswith("127.0.0.1"):
         return f"http://{host}"

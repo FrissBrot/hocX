@@ -58,6 +58,14 @@ def hash_password(password: str) -> str:
     return f"{PASSWORD_SCHEME}${PASSWORD_ITERATIONS}${base64.b64encode(salt).decode()}${base64.b64encode(key).decode()}"
 
 
+# A fixed, valid-shaped hash with no corresponding real password - used to run
+# verify_password's full PBKDF2 work even when no account exists, so a login attempt
+# against an unknown email takes the same time as one against a real email with a wrong
+# password (audit finding, 2026-08-25: short-circuiting straight past verify_password for
+# a missing account was a measurable, account-enumerating timing side channel).
+DUMMY_PASSWORD_HASH = hash_password("hocx-dummy-password-for-timing-only")
+
+
 def verify_password(password: str, password_hash: str) -> bool:
     try:
         scheme, iterations_raw, salt_raw, digest_raw = password_hash.split("$", 3)
@@ -172,7 +180,13 @@ def build_current_user(db: Session, user: AppUser, selected_tenant_id: int | Non
         protocol_accordion_enabled=(user.external_identity_json or {}).get("protocol_accordion_enabled", True) is not False,
         is_participant_account=(user.external_identity_json or {}).get("source") == "participant_auto",
         default_tenant_id=user.default_tenant_id,
-        current_tenant_id=current_membership.tenant_id if current_membership else user.default_tenant_id,
+        # current_membership is only ever None here if the user has zero active tenant
+        # roles at all (a matching default_tenant_id membership, if active, was already
+        # picked up above) - falling back to the possibly-stale default_tenant_id in that
+        # case let login() succeed with a non-None current_tenant_id and an empty
+        # current_role, a "phantom tenant" state that only every endpoint's separate
+        # current_role check happens to make harmless today (audit finding, 2026-08-25).
+        current_tenant_id=current_membership.tenant_id if current_membership else None,
         current_tenant_name=current_membership.tenant_name if current_membership else None,
         current_tenant_profile_image_path=current_membership.tenant_profile_image_path if current_membership else None,
         current_role=current_membership.role_code if current_membership else None,

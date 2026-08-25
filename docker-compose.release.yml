@@ -111,6 +111,17 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.service=${ROUTER_PREFIX:-hocx}-admin-auth"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.middlewares=${ROUTER_PREFIX:-hocx}-auth-ratelimit"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-admin-auth.loadbalancer.server.port=8000"
+      # Dedicated live router for tenant ZIP imports. The 2050 MiB request limit covers the
+      # backend's 2 GiB ZIP limit plus multipart/form-data overhead without raising the limit
+      # for any other admin/API endpoint.
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.rule=Host(`${TRAEFIK_DOMAIN}`) && Path(`/api/admin/tenants/import`) && Method(`POST`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.entrypoints=websecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.priority=200"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.service=${ROUTER_PREFIX:-hocx}-tenant-import"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.middlewares=${ROUTER_PREFIX:-hocx}-tenant-import-body-limit"
+      - "traefik.http.services.${ROUTER_PREFIX:-hocx}-tenant-import.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-tenant-import-body-limit.buffering.maxRequestBodyBytes=2149580800"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-word-import.rule=Host(`${TRAEFIK_DOMAIN}`) && PathPrefix(`/api/tools/word-import`) && Method(`POST`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-word-import.entrypoints=websecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-word-import.tls.certresolver=letsencrypt"
@@ -218,11 +229,12 @@ services:
       # what the regression test in abgabebox-backend/tests/test_upload_size_limits.py
       # actually checked, not this file - the file `deploy.sh` really uses). Without it,
       # Starlette buffers the whole request body for this unauthenticated public POST
-      # endpoint before the app-level size check ever runs. 2000 MB = 20 files x 100 MB
-      # (max_files_per_element/max_file_size_mb ceilings, see
-      # backend/app/schemas/submission.py) - keep in sync with MAX_UPLOAD_REQUEST_BYTES in
-      # abgabebox-backend/app/routes/public.py if that changes.
-      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-body-limit.buffering.maxRequestBodyBytes=2097152000"
+      # endpoint before the app-level size check ever runs. Lowered from 2000 MB (audit
+      # finding, 2026-08-25) - routes/public.py's upload() holds every file's full content
+      # in memory at once, and 2000 MB reliably OOM-kills the abgabebox-backend container
+      # (384m mem_limit, 2 workers) for every tenant at once. Keep in sync with
+      # MAX_UPLOAD_REQUEST_BYTES in abgabebox-backend/app/routes/public.py.
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-body-limit.buffering.maxRequestBodyBytes=157286400"
 
   abgabebox-frontend:
     image: ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-frontend:${HOCX_VERSION}

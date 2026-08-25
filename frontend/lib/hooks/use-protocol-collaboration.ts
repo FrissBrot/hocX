@@ -113,12 +113,26 @@ export function useProtocolCollaboration(protocolId: number | null | undefined) 
         }
         switch (message.type) {
           case "snapshot": {
-            selfUserIdRef.current = message.self?.user_id ?? null;
-            setSelfUserId(message.self?.user_id ?? null);
+            const selfId = message.self?.user_id ?? null;
+            selfUserIdRef.current = selfId;
+            setSelfUserId(selfId);
             setCanEdit(message.self?.can_edit !== false);
             const presenceList = Array.isArray(message.presence) ? (message.presence as CollaboratorInfo[]) : [];
             setPresence(presenceList);
-            setLocks((message.locks as Record<string, CollaboratorInfo>) ?? {});
+            const serverLocks = (message.locks as Record<string, CollaboratorInfo>) ?? {};
+            setLocks(serverLocks);
+            // Reconciled against the server's authoritative snapshot on every (re)connect,
+            // not left as whatever this client last knew locally (audit finding,
+            // 2026-08-25) - ownLocksRef otherwise still listed a field this client held
+            // before a disconnect even if the server no longer agrees (expired/reassigned
+            // during the gap), so the heartbeat loop above kept renewing a lock on the new
+            // connection that the server never actually granted it, and this client's own
+            // editor could still believe it holds a field lock that's silently gone.
+            for (const fieldKey of Array.from(ownLocksRef.current)) {
+              if (serverLocks[fieldKey]?.user_id !== selfId) {
+                ownLocksRef.current.delete(fieldKey);
+              }
+            }
             break;
           }
           case "presence_join": {

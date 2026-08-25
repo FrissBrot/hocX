@@ -163,6 +163,18 @@ services:
       - "traefik.http.routers.hocx-admin-auth.service=hocx-admin-auth"
       - "traefik.http.routers.hocx-admin-auth.middlewares=auth-ratelimit"
       - "traefik.http.services.hocx-admin-auth.loadbalancer.server.port=8000"
+      # Mandantenimporte koennen bis zu 2 GiB gross sein (siehe
+      # MAX_TENANT_IMPORT_UPLOAD_BYTES in backend/app/api/routes/admin.py). Ein eigener
+      # Router begrenzt nur diesen privilegierten Upload; 2050 MiB enthalten etwas Reserve
+      # fuer den multipart/form-data-Overhead um die maximal grosse ZIP-Datei.
+      - "traefik.http.routers.hocx-tenant-import.rule=Host(`${TRAEFIK_DOMAIN}`) && Path(`/api/admin/tenants/import`) && Method(`POST`)"
+      - "traefik.http.routers.hocx-tenant-import.entrypoints=websecure"
+      - "traefik.http.routers.hocx-tenant-import.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.hocx-tenant-import.priority=200"
+      - "traefik.http.routers.hocx-tenant-import.service=hocx-tenant-import"
+      - "traefik.http.routers.hocx-tenant-import.middlewares=tenant-import-body-limit"
+      - "traefik.http.services.hocx-tenant-import.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.tenant-import-body-limit.buffering.maxRequestBodyBytes=2149580800"
       # Dedicated router for the Word/PDF/ZIP import upload endpoints - defense in depth
       # in front of the application-level checks in routes/word_import.py (MAX_UPLOAD_BYTES/
       # MAX_WORD_IMPORT_BATCH_BYTES etc.): rejects an oversized request body at the proxy
@@ -297,8 +309,14 @@ services:
       - "traefik.http.middlewares.abgabebox-upload-ratelimit.ratelimit.average=5"
       - "traefik.http.middlewares.abgabebox-upload-ratelimit.ratelimit.burst=3"
       - "traefik.http.middlewares.abgabebox-upload-ratelimit.ratelimit.period=1m"
-      # 2000 MB = 20 Dateien x 100 MB (max_files_per_element/max_file_size_mb Obergrenzen)
-      - "traefik.http.middlewares.abgabebox-upload-body-limit.buffering.maxRequestBodyBytes=2097152000"
+      # Lowered from 2000 MB (audit finding, 2026-08-25) - that figure was the worst-case
+      # legitimate total per the assignment's own max_file_size_mb/max_files_per_element
+      # settings, but routes/public.py's upload() holds every file's full content in memory
+      # at once (dedup/perceptual-hash/quarantine steps), and this container only has 384m
+      # (mem_limit above) across 2 workers - a request anywhere near 2000 MB reliably OOM-
+      # kills the whole service for every tenant. Keep in sync with
+      # abgabebox-backend/app/routes/public.py's MAX_UPLOAD_REQUEST_BYTES.
+      - "traefik.http.middlewares.abgabebox-upload-body-limit.buffering.maxRequestBodyBytes=157286400"
       # Dedizierter Router fuer die oeffentlichen, unauthentifizierten GET-Endpunkte
       # (assignments/elements listing+detail) - ohne dieses Limit liessen sich Mandanten-
       # Slugs, Auftraege und Elemente unbegrenzt durchprobieren/enumerieren. Grosszuegiger

@@ -4,7 +4,7 @@ import re
 import shutil
 from pathlib import Path
 
-from fastapi import UploadFile
+from fastapi import HTTPException, UploadFile
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
@@ -88,7 +88,7 @@ class DocumentTemplateService:
         return self.repository.update(db, template, {"filesystem_path": path})
 
     def create_document_template(self, db: Session, payload: DocumentTemplateCreate, *, tenant_id: int) -> DocumentTemplateRead:
-        code = payload.code or self._generate_template_code(db, tenant_id=tenant_id, name=payload.name)
+        code = payload.code or self._generate_template_code(db, tenant_id=tenant_id, name=payload.name, version=payload.version)
         entity = DocumentTemplate(
             tenant_id=tenant_id,
             code=code,
@@ -170,12 +170,19 @@ class DocumentTemplateService:
         part = self.part_repository.get(db, part_id)
         return DocumentTemplatePartRead.model_validate(part) if part else None
 
-    def _generate_template_code(self, db: Session, *, tenant_id: int, name: str, exclude_id: int | None = None) -> str:
+    def _generate_template_code(self, db: Session, *, tenant_id: int, name: str, version: int) -> str:
+        # Scoped to `version`, mirroring _generate_part_code below (audit finding,
+        # 2026-08-25) - the DB constraint is (tenant_id, code, version), so a template at
+        # a different version can legitimately reuse the same code; treating any same-code
+        # template as a collision regardless of version bumped the suggested code (-2, -3,
+        # ...) unnecessarily far past what the constraint actually requires. exclude_id was
+        # dropped - this is only ever called from create_document_template (a brand new
+        # row has no id of its own to exclude yet), so it was always None/dead.
         base = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "vorlage"
         existing_codes = {
             t.code
             for t in self.repository.list(db, tenant_id)
-            if t.id != exclude_id and t.code
+            if t.version == version and t.code
         }
         if base not in existing_codes:
             return base
@@ -255,18 +262,25 @@ class DocumentTemplateService:
         if not values:
             return DocumentTemplatePartRead.model_validate(entity)
         updated = self.part_repository.update(db, entity, values)
-        self._refresh_templates_using_part(db, updated.id)
+        self._refresh_templates_using_part(db, updated.id, updated.tenant_id)
         return DocumentTemplatePartRead.model_validate(updated)
 
     def delete_document_template_part(self, db: Session, part_id: int) -> bool:
         entity = self.part_repository.get(db, part_id)
         if entity is None:
             return False
+        # Captured before delete (audit finding, 2026-08-25): _refresh_templates_using_part
+        # used to re-fetch the part by id to find its tenant_id, but by the time it ran
+        # below the part had already been deleted - it always found None and returned
+        # immediately, silently no-op'ing every delete-triggered refresh. Templates still
+        # referencing this now-deleted part in their slots config were never
+        # rematerialized, leaving the dangling reference in configuration_json untouched.
+        tenant_id = entity.tenant_id
         path = _safe_storage_path(settings.storage_root, entity.storage_path)
         self.part_repository.delete(db, entity)
         if path.exists():
             path.unlink()
-        self._refresh_templates_using_part(db, part_id)
+        self._refresh_templates_using_part(db, part_id, tenant_id)
         return True
 
     def snapshot_template_for_protocol(self, db: Session, protocol: Protocol, document_template_id: int | None) -> Protocol:
@@ -310,14 +324,11 @@ class DocumentTemplateService:
         return protocol
 
     async def _save_part_file(self, payload: DocumentTemplatePartCreate, file: UploadFile, *, tenant_id: int) -> str:
+        if payload.part_type not in self.part_type_choices():
+            raise HTTPException(status_code=400, detail="Invalid part_type")
         suffix = Path(file.filename or "part.tex").suffix or ".tex"
-        target_dir = (
-            Path(settings.storage_root)
-            / "document_template_parts"
-            / f"tenant-{tenant_id}"
-            / payload.part_type
-            / payload.code
-        )
+        relative_dir = Path("document_template_parts") / f"tenant-{tenant_id}" / payload.part_type / (payload.code or "")
+        target_dir = _safe_storage_path(settings.storage_root, str(relative_dir))
         target_dir.mkdir(parents=True, exist_ok=True)
         target_path = target_dir / f"v{payload.version}{suffix}"
         content = await file.read()
@@ -325,12 +336,8 @@ class DocumentTemplateService:
         return str(target_path.relative_to(settings.storage_root))
 
     def _materialize_template(self, db: Session, template: DocumentTemplate) -> str:
-        output_dir = (
-            Path(settings.storage_root)
-            / "document_templates"
-            / f"tenant-{template.tenant_id}"
-            / f"{template.code}-v{template.version}"
-        )
+        relative_dir = Path("document_templates") / f"tenant-{template.tenant_id}" / f"{template.code}-v{template.version}"
+        output_dir = _safe_storage_path(settings.storage_root, str(relative_dir))
         if output_dir.exists():
             shutil.rmtree(output_dir)
         (output_dir / "elements").mkdir(parents=True, exist_ok=True)
@@ -779,11 +786,8 @@ class DocumentTemplateService:
         )
         db.commit()
 
-    def _refresh_templates_using_part(self, db: Session, part_id: int) -> None:
-        part = self.part_repository.get(db, part_id)
-        if part is None:
-            return
-        templates = self.repository.list(db, tenant_id=part.tenant_id)
+    def _refresh_templates_using_part(self, db: Session, part_id: int, tenant_id: int) -> None:
+        templates = self.repository.list(db, tenant_id=tenant_id)
         for template in templates:
             slots = (template.configuration_json or {}).get("slots", {})
             if part_id in slots.values():

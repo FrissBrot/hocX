@@ -160,6 +160,18 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
       return "";
     }
 
+    // Unlike every other debounce timer in this codebase, this one was never cleared on
+    // unmount (audit finding, 2026-08-25) - typing into the notes field and navigating
+    // away within the 700ms debounce window let the pending callback fire afterwards
+    // anyway, calling setState on an already-unmounted component and firing an unwanted
+    // PATCH request.
+    useEffect(() => {
+      return () => {
+        if (notesTimerRef.current) window.clearTimeout(notesTimerRef.current);
+        if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current);
+      };
+    }, []);
+
     const saveNotes = useCallback(
       (value: string) => {
         if (notesTimerRef.current) window.clearTimeout(notesTimerRef.current);

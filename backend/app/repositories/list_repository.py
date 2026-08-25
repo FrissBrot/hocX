@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.models import ListDefinition, ListEntry
+from app.models import Event, ListDefinition, ListEntry, Participant
 
 _COLUMN_STRUCTURE_FIELDS = {
     "column_one_title", "column_one_value_type", "column_two_title", "column_two_value_type",
@@ -32,6 +32,14 @@ class ListRepository:
 
     def get_definition(self, db: Session, list_definition_id: int) -> ListDefinition | None:
         return db.get(ListDefinition, list_definition_id)
+
+    def participant_belongs_to_tenant(self, db: Session, tenant_id: int, participant_id: int) -> bool:
+        participant = db.get(Participant, participant_id)
+        return participant is not None and participant.tenant_id == tenant_id
+
+    def event_belongs_to_tenant(self, db: Session, tenant_id: int, event_id: int) -> bool:
+        event = db.get(Event, event_id)
+        return event is not None and event.tenant_id == tenant_id
 
     def create_definition(self, db: Session, definition: ListDefinition) -> ListDefinition:
         db.add(definition)

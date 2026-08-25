@@ -255,7 +255,13 @@ def export_tenant(
     tenant_id: int,
     scope: Literal["structure", "structure_lists", "full", "full_abgabebox"] = "structure",
     db: Session = Depends(get_db),
-    current_admin: CurrentAdmin = Depends(get_current_admin),
+    # Was get_current_admin (audit finding, 2026-08-25) - a "full"/"full_abgabebox" scope
+    # export includes every member's real, immediately-usable password hash (see
+    # TenantExportService), so this must be gated the same as every other sensitive
+    # mutation in this file: require_admin_write, not merely being any authenticated
+    # admin. A read-only "support" admin could otherwise download live credentials for
+    # any tenant.
+    current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
     try:
         zip_path, filename = export_service.export(db, tenant_id, scope)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -50,6 +50,29 @@ class TenantCleanupService:
                 select(func.count(SubmissionUpload.id))
                 .join(SubmissionAssignment, SubmissionAssignment.id == SubmissionUpload.assignment_id)
                 .where(SubmissionAssignment.tenant_id == tenant_id)
+            )
+            or 0
+        )
+        # _cleanup_documents also deletes every stored_file row this newly orphans (RESTRICT
+        # into stored_file means the row survives the WordImportDocument/SubmissionUploadFile
+        # delete on its own) - preview() previously never counted those at all, understating
+        # how much "documents" actually removes (audit finding, 2026-08-25).
+        documents += int(
+            db.scalar(
+                select(func.count(StoredFile.id.distinct())).where(
+                    StoredFile.tenant_id == tenant_id,
+                    ~select(ProtocolImage.id).where(ProtocolImage.stored_file_id == StoredFile.id).exists(),
+                    or_(
+                        select(WordImportDocument.id)
+                        .where(WordImportDocument.stored_file_id == StoredFile.id, WordImportDocument.tenant_id == tenant_id)
+                        .exists(),
+                        select(SubmissionUploadFile.id)
+                        .join(SubmissionUpload, SubmissionUpload.id == SubmissionUploadFile.upload_id)
+                        .join(SubmissionAssignment, SubmissionAssignment.id == SubmissionUpload.assignment_id)
+                        .where(SubmissionUploadFile.stored_file_id == StoredFile.id, SubmissionAssignment.tenant_id == tenant_id)
+                        .exists(),
+                    ),
+                )
             )
             or 0
         )
@@ -125,11 +148,30 @@ class TenantCleanupService:
         result = db.execute(delete(WordImportDocument).where(WordImportDocument.tenant_id == tenant_id))
         deleted += result.rowcount or 0
 
-        upload_ids = select(SubmissionUpload.id).join(
-            SubmissionAssignment, SubmissionAssignment.id == SubmissionUpload.assignment_id
-        ).where(SubmissionAssignment.tenant_id == tenant_id)
-        result = db.execute(delete(SubmissionUpload).where(SubmissionUpload.id.in_(upload_ids)))
-        deleted += result.rowcount or 0
+        upload_ids = list(
+            db.scalars(
+                select(SubmissionUpload.id)
+                .join(SubmissionAssignment, SubmissionAssignment.id == SubmissionUpload.assignment_id)
+                .where(SubmissionAssignment.tenant_id == tenant_id)
+            )
+        )
+        # Captured before the SubmissionUpload delete below cascades SubmissionUploadFile
+        # away with it (audit finding, 2026-08-25) - that join row is the only signal that
+        # distinguishes an abgabebox-storage-root file from a regular app-storage-root one,
+        # and the orphan sweep further down needs it to pick the correct root, same as the
+        # three other places in this codebase that make this same distinction
+        # (submission_service.py, tenant_export_service.py, tenant_clone_service.py).
+        # Using settings.storage_root unconditionally here (as before this fix) meant
+        # file_path.exists() was always false for an abgabebox upload, so the physical
+        # file was silently never deleted even though the DB row was.
+        abgabebox_stored_file_ids: set[int] = (
+            set(db.scalars(select(SubmissionUploadFile.stored_file_id).where(SubmissionUploadFile.upload_id.in_(upload_ids))))
+            if upload_ids
+            else set()
+        )
+        if upload_ids:
+            result = db.execute(delete(SubmissionUpload).where(SubmissionUpload.id.in_(upload_ids)))
+            deleted += result.rowcount or 0
 
         # Sweep stored_file rows this tenant owns that nothing references anymore - includes
         # files newly orphaned above, plus e.g. protocol-image files left behind by a
@@ -144,7 +186,8 @@ class TenantCleanupService:
             )
         ).all()
         for stored_file in orphaned:
-            file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
+            root = settings.abgabebox_storage_root if stored_file.id in abgabebox_stored_file_ids else settings.storage_root
+            file_path = _safe_storage_path(root, stored_file.storage_path)
             if file_path.exists():
                 file_path.unlink()
             db.delete(stored_file)

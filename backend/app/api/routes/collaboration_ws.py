@@ -12,7 +12,13 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.redis_client import get_redis
-from app.core.security import CurrentUser, build_current_user, parse_session_token
+from app.core.security import (
+    CurrentUser,
+    _has_active_mfa_factor,
+    _requires_mfa,
+    build_current_user,
+    parse_session_token,
+)
 from app.models import AppUser, ListDefinition
 from app.services import list_snapshot_service
 from app.services.access_service import AccessService
@@ -42,7 +48,17 @@ def _authenticate(token: str | None) -> CurrentUser | None:
             token_iat = int(session_data.get("iat", 0))
             if int(user.session_revoke_at.timestamp()) > token_iat:
                 return None
-        return build_current_user(db, user, session_data.get("tenant_id"))
+        current_user = build_current_user(db, user, session_data.get("tenant_id"), mfa_verified=bool(session_data.get("mfa")))
+        # Mirrors get_optional_current_user's MFA enforcement (audit finding, 2026-08-25) -
+        # without this, a user who becomes MFA-required (promoted to admin) or whose only
+        # factor is administratively deleted keeps full read/write WebSocket access with
+        # their existing cookie even though the REST path now correctly locks them out.
+        has_mfa_factor = _has_active_mfa_factor(db, user.id)
+        if has_mfa_factor and not current_user.mfa_verified:
+            return None
+        if _requires_mfa(current_user) and (not has_mfa_factor or not current_user.mfa_verified):
+            return None
+        return current_user
     finally:
         db.close()
 
@@ -83,8 +99,28 @@ def _list_content_versions(list_ids: set[int]) -> dict[int, int]:
         db.close()
 
 
+def _origin_allowed(websocket: WebSocket) -> bool:
+    # Mirrors main.py's CORSMiddleware allowlist - the WS handshake otherwise relied only
+    # on the SameSite=Lax session cookie with no Origin check of its own (audit finding,
+    # 2026-08-25). Defensive: this is a same-site collaboration channel with no state-
+    # changing side effect a bare cross-origin page load could trigger, but it does allow
+    # writing field locks/patches once connected, so it's worth closing regardless.
+    origin = websocket.headers.get("origin")
+    if not origin:
+        return False
+    allowed = {o for o in (
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        f"https://{settings.traefik_domain}" if settings.traefik_domain else None,
+    ) if o}
+    return origin in allowed
+
+
 @router.websocket("/api/ws/protocols/{protocol_id}")
 async def protocol_collaboration(websocket: WebSocket, protocol_id: int) -> None:
+    if not _origin_allowed(websocket):
+        await websocket.close(code=4403)
+        return
     token = websocket.cookies.get(settings.auth_session_cookie)
     user = await asyncio.to_thread(_authenticate, token)
     if user is None:

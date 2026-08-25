@@ -162,9 +162,6 @@ class FinanceRepository:
         ).all()
         return [self._tx_read(row.FinanceTransaction, running_balance=row.running_balance) for row in rows]
 
-    def get_transaction(self, db: Session, tx_id: int) -> FinanceTransaction | None:
-        return db.scalar(select(FinanceTransaction).where(FinanceTransaction.id == tx_id))
-
     def _get_transaction_scoped(self, db: Session, tx_id: int, tenant_id: int) -> FinanceTransaction | None:
         return db.scalar(
             select(FinanceTransaction)

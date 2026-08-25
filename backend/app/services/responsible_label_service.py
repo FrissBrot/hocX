@@ -86,6 +86,7 @@ def resolve_responsible_label(
     name_display_mode: str | None,
     *,
     live: bool,
+    tenant_id: int | None,
     entries_by_id: dict[int, ListEntry] | None = None,
     definitions_by_id: dict[int, ListDefinition] | None = None,
     participants_by_id: dict[int, Participant] | None = None,
@@ -101,13 +102,20 @@ def resolve_responsible_label(
     names: list[str] = []
     for pid in resolved_ids:
         participant = participants_by_id.get(pid) if participants_by_id is not None else db.get(Participant, pid)
+        # resolved_ids can come from a directly-embedded assignment.participant_id or from a
+        # list entry's stored value (list_service._normalize_value tenant-checks new writes,
+        # but pre-existing rows/legacy config could still hold a foreign id) - never resolve
+        # and display a participant belonging to a different tenant (audit finding H1,
+        # 2026-08-25).
+        if participant is not None and participant.tenant_id != tenant_id:
+            participant = None
         name = _responsible_participant_name(participant, mode=mode, fallback_id=pid)
         if name:
             names.append(name)
     return ", ".join(names)
 
 
-def resolve_responsible_labels_batch(db: Session, elements: list[ProtocolElement]) -> dict[int, str]:
+def resolve_responsible_labels_batch(db: Session, elements: list[ProtocolElement], tenant_id: int | None) -> dict[int, str]:
     """Batch equivalent of calling resolve_responsible_label(..., live=True) once per element:
     collects every list_entry_id/list_definition_id/participant_id referenced across all
     elements' responsible_assignments_snapshot up front and loads ListEntry/ListDefinition/
@@ -157,8 +165,17 @@ def resolve_responsible_labels_batch(db: Session, elements: list[ProtocolElement
         for element in elements
     }
     participant_ids = {pid for ids in resolved_ids_by_element_id.values() for pid in ids}
+    # Scoped to tenant_id at the query itself, not just filtered afterwards - a resolved id
+    # from a directly-embedded assignment.participant_id or a legacy/pre-fix list entry
+    # value could belong to a different tenant, and must never resolve to a real name here
+    # (audit finding H1, 2026-08-25).
     participants_by_id: dict[int, Participant] = (
-        {row.id: row for row in db.scalars(select(Participant).where(Participant.id.in_(participant_ids)))}
+        {
+            row.id: row
+            for row in db.scalars(
+                select(Participant).where(Participant.id.in_(participant_ids), Participant.tenant_id == tenant_id)
+            )
+        }
         if participant_ids
         else {}
     )
@@ -176,7 +193,7 @@ def resolve_responsible_labels_batch(db: Session, elements: list[ProtocolElement
     return labels_by_element_id
 
 
-def resolve_display_section_title(db: Session, element: ProtocolElement, protocol_status: str) -> str:
+def resolve_display_section_title(db: Session, element: ProtocolElement, protocol_status: str, tenant_id: int | None) -> str:
     """The title shown for a ProtocolElement: live-resolved from a linked list entry's
     current value while the protocol is not yet finalized, otherwise the frozen
     section_name_snapshot (also used for elements without any list-linked responsibility)."""
@@ -190,13 +207,14 @@ def resolve_display_section_title(db: Session, element: ProtocolElement, protoco
             element.responsible_assignments_snapshot,
             element.responsible_name_display_mode,
             live=True,
+            tenant_id=tenant_id,
         )
         return f"{element.element_title_snapshot} ({label})" if label else element.element_title_snapshot
     return element.section_name_snapshot
 
 
 def resolve_display_section_titles_batch(
-    db: Session, elements: list[ProtocolElement], protocol_status: str
+    db: Session, elements: list[ProtocolElement], protocol_status: str, tenant_id: int | None
 ) -> dict[int, str]:
     """Batch equivalent of calling resolve_display_section_title() once per element: collects
     every list_entry_id/list_definition_id/participant_id referenced across all elements'
@@ -256,8 +274,15 @@ def resolve_display_section_titles_batch(
         for element in live_elements
     }
     participant_ids = {pid for ids in resolved_ids_by_element_id.values() for pid in ids}
+    # See resolve_responsible_labels_batch's identical comment - scoped to tenant_id at the
+    # query itself (audit finding H1, 2026-08-25).
     participants_by_id: dict[int, Participant] = (
-        {row.id: row for row in db.scalars(select(Participant).where(Participant.id.in_(participant_ids)))}
+        {
+            row.id: row
+            for row in db.scalars(
+                select(Participant).where(Participant.id.in_(participant_ids), Participant.tenant_id == tenant_id)
+            )
+        }
         if participant_ids
         else {}
     )

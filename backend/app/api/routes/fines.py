@@ -33,7 +33,7 @@ def list_fines(
     """Every role sees all fines in the tenant, except restricted readers (participant-linked
     or otherwise scoped accounts) who only see fines from protocols they have access to."""
     require_reader(user)
-    if access_service._is_restricted_reader(db, user):
+    if access_service.is_restricted_reader(db, user):
         protocol_ids = access_service.repository.list_protocol_ids(db, user_id=user.user_id, tenant_id=user.current_tenant_id)
         return repo.list_fines_for_protocols(db, user.current_tenant_id, protocol_ids, skip=skip, limit=limit)
     return repo.list_fines_for_tenant(db, user.current_tenant_id, skip=skip, limit=limit)

@@ -8,12 +8,15 @@ import { CycleConfigSummary, DocumentTemplate, ElementDefinition, EventSummary, 
 export default async function TemplateDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await requireSession();
+  if (session.current_role !== "admin") {
+    redirect("/");
+  }
   const [template, elements, definitions, events, participants, selectedParticipants, lists, documentTemplates, cycleConfigs] = await Promise.all([
     backendFetchWithSession<TemplateSummary>(`/api/templates/${id}`),
     backendFetchWithSession<TemplateElement[]>(`/api/templates/${id}/elements`),
     backendFetchWithSession<ElementDefinition[]>("/api/element-definitions"),
     backendFetchWithSession<EventSummary[]>("/api/events"),
-    backendFetchWithSession<ParticipantSummary[]>("/api/participants?limit=500"),
+    backendFetchWithSession<ParticipantSummary[]>("/api/participants?limit=2000"),
     backendFetchWithSession<ParticipantSummary[]>(`/api/templates/${id}/participants`),
     backendFetchWithSession<StructuredListDefinition[]>("/api/lists"),
     backendFetchWithSession<DocumentTemplate[]>("/api/document-templates"),

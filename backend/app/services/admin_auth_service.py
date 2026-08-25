@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.admin_security import CurrentAdmin, issue_admin_session_cookie
 from app.core.config import settings
 from app.core.rate_limit import check_account_lockout, record_failed_attempt
-from app.core.security import verify_password
+from app.core.security import DUMMY_PASSWORD_HASH, verify_password
 from app.models import PlatformAdmin
 from app.schemas.admin import AdminLoginRequest, AdminSelfRead, AdminSessionRead
 
@@ -24,7 +24,10 @@ class AdminAuthService:
         check_account_lockout(lockout_key, limit=_ACCOUNT_LOGIN_ATTEMPT_LIMIT)
 
         admin = db.query(PlatformAdmin).filter(PlatformAdmin.email == payload.email).one_or_none()
-        if admin is None or not admin.is_active or not verify_password(payload.password, admin.password_hash):
+        # See auth_service.py's identical fix - always run verify_password's full PBKDF2
+        # work to avoid an email-enumeration timing side channel (audit finding, 2026-08-25).
+        password_ok = verify_password(payload.password, admin.password_hash if admin is not None else DUMMY_PASSWORD_HASH)
+        if admin is None or not admin.is_active or not password_ok:
             record_failed_attempt(lockout_key, period_seconds=_ACCOUNT_LOGIN_WINDOW_SECONDS)
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
 

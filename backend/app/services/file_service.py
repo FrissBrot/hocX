@@ -3,10 +3,14 @@ from __future__ import annotations
 import hashlib
 import io
 import zipfile
+import zlib
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Iterator
 from uuid import uuid4
 
 from fastapi import HTTPException, UploadFile
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app import scanner
@@ -16,6 +20,24 @@ from app.repositories.file_repository import ProtocolImageRepository, StoredFile
 from app.schemas.protocol import ProtocolImageRead
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
+# Distinct namespace (paired with tenant_id as the advisory lock's two int32 keys) from
+# the fixed single-bigint lock ids main.py's background loops use (202600xxx range).
+_PROTOCOL_IMAGE_QUOTA_LOCK_NAMESPACE = 909100001
+
+
+@contextmanager
+def _tenant_protocol_image_upload_lock(db: Session, tenant_id: int) -> Iterator[None]:
+    """Serializes the storage-quota check-then-write sequence in save_protocol_image per
+    tenant (mirrors the abgabebox subapp's tenant_upload_lock, closing the same H12-class
+    TOCTOU: two near-simultaneous uploads for the same tenant could otherwise both observe
+    "under quota" before either has written its bytes). A Postgres advisory lock, not an
+    in-process lock - this app runs multiple uvicorn workers (separate OS processes), and
+    Postgres is the one piece of state they all already share."""
+    db.execute(text("SELECT pg_advisory_lock(:ns, :tenant_id)"), {"ns": _PROTOCOL_IMAGE_QUOTA_LOCK_NAMESPACE, "tenant_id": tenant_id})
+    try:
+        yield
+    finally:
+        db.execute(text("SELECT pg_advisory_unlock(:ns, :tenant_id)"), {"ns": _PROTOCOL_IMAGE_QUOTA_LOCK_NAMESPACE, "tenant_id": tenant_id})
 ALLOWED_IMAGE_MIME_TYPES = {
     "image/jpeg",
     "image/png",
@@ -97,7 +119,15 @@ def extract_word_import_files_from_zip(content: bytes) -> tuple[list[tuple[str, 
         if total_bytes > MAX_ZIP_TOTAL_BYTES:
             notes.append("ZIP-Inhalt zu gross - restliche Dateien wurden ignoriert")
             break
-        entry_bytes = archive.read(info)
+        try:
+            entry_bytes = archive.read(info)
+        except (zipfile.BadZipFile, zlib.error, OSError):
+            # A single corrupt entry (CRC mismatch, truncated data) previously aborted
+            # the whole upload with an unhandled 500 instead of a clean partial-success
+            # response, unlike every other per-entry issue here (oversized, wrong mime),
+            # which is skipped with a note (audit finding, 2026-08-25).
+            notes.append(f"{name}: beschädigter ZIP-Eintrag, übersprungen")
+            continue
         if _sniff_word_import_mime(entry_bytes) is None:
             continue  # weder .docx noch .pdf - wird bewusst ignoriert, nie gespeichert
         matched.append((name, entry_bytes))
@@ -173,38 +203,73 @@ class FileService:
         if not _content_matches_mime(content, mime):
             raise HTTPException(status_code=400, detail="Dateiinhalt passt nicht zum angegebenen Bildformat")
 
+        # Unlike word-import documents and abgabebox uploads, protocol images were never
+        # scanned at all (audit finding, 2026-08-25) - scan_status defaulted to "clean" in
+        # the DB, so the image was treated as already-verified even though it never was.
+        # Same convention as save_word_import_document: scan before anything touches disk,
+        # reject outright on 'infected', fail-open + mark 'pending' (blocked from download
+        # by get_stored_file_content until the periodic rescan resolves it) if ClamAV is
+        # unreachable.
+        scan_status = scanner.scan_bytes(content, host=settings.clamav_host, port=settings.clamav_port)
+        if scan_status == "infected":
+            raise HTTPException(status_code=400, detail="Datei wurde von der Virenprüfung als infiziert erkannt und wurde nicht gespeichert")
+
         suffix = Path(file.filename or "").suffix.lower() or ".bin"
         tenant_id = self._resolve_tenant_id(db, protocol_element_block.id)
-        storage_dir = Path(settings.upload_root) / f"tenant-{tenant_id}" / f"block-{protocol_element_block.id}"
-        storage_dir.mkdir(parents=True, exist_ok=True)
-        generated_name = f"{uuid4().hex}{suffix}"
-        target_path = storage_dir / generated_name
 
-        checksum = hashlib.sha256(content).hexdigest()
-        target_path.write_bytes(content)
+        # No per-tenant total quota existed at all before this fix (audit finding,
+        # 2026-08-25) - only the per-file MAX_UPLOAD_BYTES check above. Quota check and
+        # the write that changes what the next check sees (the StoredFile insert, flushed
+        # but not committed until the very end of this method) both happen inside a
+        # per-tenant advisory lock so two near-simultaneous uploads can't both pass the
+        # check before either has committed - see _tenant_protocol_image_upload_lock.
+        quota_bytes = settings.protocol_image_storage_quota_mb * 1024 * 1024
+        with _tenant_protocol_image_upload_lock(db, tenant_id):
+            current_bytes = int(
+                db.scalar(
+                    select(func.coalesce(func.sum(StoredFile.file_size_bytes), 0))
+                    .join(ProtocolImage, ProtocolImage.stored_file_id == StoredFile.id)
+                    .where(StoredFile.tenant_id == tenant_id)
+                )
+                or 0
+            )
+            if current_bytes + len(content) > quota_bytes:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Speicherlimit für Protokollbilder erreicht (max. {settings.protocol_image_storage_quota_mb} MB pro Mandant)",
+                )
 
-        relative_path = target_path.relative_to(settings.storage_root)
-        stored_file = StoredFile(
-            tenant_id=tenant_id,
-            original_name=file.filename or generated_name,
-            mime_type=mime,
-            storage_path=str(relative_path),
-            latex_path=None,
-            file_size_bytes=len(content),
-            checksum_sha256=checksum,
-            created_by=created_by,
-        )
-        stored_file = self.stored_file_repository.create(db, stored_file)
+            storage_dir = Path(settings.upload_root) / f"tenant-{tenant_id}" / f"block-{protocol_element_block.id}"
+            storage_dir.mkdir(parents=True, exist_ok=True)
+            generated_name = f"{uuid4().hex}{suffix}"
+            target_path = storage_dir / generated_name
 
-        protocol_image = ProtocolImage(
-            protocol_element_block_id=protocol_element_block.id,
-            stored_file_id=stored_file.id,
-            sort_index=self.protocol_image_repository.next_sort_index(db, protocol_element_block.id),
-            title=title,
-            caption=caption,
-        )
-        protocol_image = self.protocol_image_repository.create(db, protocol_image)
-        db.commit()
+            checksum = hashlib.sha256(content).hexdigest()
+            target_path.write_bytes(content)
+
+            relative_path = target_path.relative_to(settings.storage_root)
+            stored_file = StoredFile(
+                tenant_id=tenant_id,
+                original_name=file.filename or generated_name,
+                mime_type=mime,
+                storage_path=str(relative_path),
+                latex_path=None,
+                file_size_bytes=len(content),
+                checksum_sha256=checksum,
+                created_by=created_by,
+                scan_status=scan_status,
+            )
+            stored_file = self.stored_file_repository.create(db, stored_file)
+
+            protocol_image = ProtocolImage(
+                protocol_element_block_id=protocol_element_block.id,
+                stored_file_id=stored_file.id,
+                sort_index=self.protocol_image_repository.next_sort_index(db, protocol_element_block.id),
+                title=title,
+                caption=caption,
+            )
+            protocol_image = self.protocol_image_repository.create(db, protocol_image)
+            db.commit()
 
         return ProtocolImageRead(
             id=protocol_image.id,
@@ -292,6 +357,23 @@ class FileService:
         db.commit()
         return results
 
+    def rescan_pending_protocol_images(self, db: Session) -> dict:
+        """Periodic sweep for protocol-image StoredFile rows still marked 'pending'
+        because ClamAV was unreachable at upload time - same fail-open + rescan
+        convention as rescan_pending_word_import_files above."""
+        pending = self.stored_file_repository.list_pending_protocol_images(db)
+        results = {"scanned": len(pending), "clean": 0, "infected": 0, "still_pending": 0}
+        for stored_file in pending:
+            file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
+            result = scanner.scan_file(file_path, host=settings.clamav_host, port=settings.clamav_port)
+            if result == "pending":
+                results["still_pending"] += 1
+                continue
+            self.stored_file_repository.update_scan_status(db, stored_file, scan_status=result)
+            results["clean" if result == "clean" else "infected"] += 1
+        db.commit()
+        return results
+
     def read_stored_file_bytes(self, stored_file: StoredFile) -> bytes:
         file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
         if not file_path.exists():
@@ -299,12 +381,28 @@ class FileService:
         return file_path.read_bytes()
 
     def delete_stored_file(self, db: Session, stored_file: StoredFile) -> None:
+        # DB delete (flushed, so a constraint violation surfaces here) before the
+        # irreversible filesystem unlink, not after - the previous order meant a failure
+        # in the caller's own later commit left a DB row referencing an already-deleted
+        # file (audit finding, 2026-08-25). stored_file_repository.delete() doesn't commit
+        # itself (the caller controls that transaction boundary), so this can't guarantee
+        # against a caller-side rollback recreating the opposite inconsistency (row
+        # survives, file gone) - but flush() catches the far more common failure mode.
         file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
+        self.stored_file_repository.delete(db, stored_file)
+        db.flush()
         if file_path.exists():
             file_path.unlink()
-        self.stored_file_repository.delete(db, stored_file)
 
-    def get_stored_file(self, db: Session, stored_file_id: int) -> StoredFile | None:
+    def get_stored_file(self, db: Session, stored_file_id: int, *, tenant_id: int | None = None) -> StoredFile | None:
+        # tenant_id is optional only for callers that already did their own equivalent
+        # check upstream (e.g. files.py's ensure_can_read_stored_file) - every other
+        # caller should pass it. A bare PK lookup with no tenant filter at all was a
+        # latent IDOR trap for any future caller that reused this without adding its own
+        # check (audit finding, 2026-08-25); not currently reachable cross-tenant since
+        # every existing caller already reaches this via a separately tenant-checked path.
+        if tenant_id is not None:
+            return self.stored_file_repository.get_for_tenant(db, stored_file_id, tenant_id)
         return self.stored_file_repository.get(db, stored_file_id)
 
     def delete_protocol_image(self, db: Session, image_id: int) -> bool:

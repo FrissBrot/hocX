@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from app.models import ElementDefinition, ListDefinition
+from app.models import ElementDefinition, Event, ListDefinition, Participant
 from app.repositories.element_definition_repository import ElementDefinitionRepository
 from app.schemas.template import (
     ElementDefinitionCreate,
@@ -46,20 +46,75 @@ class ElementDefinitionService:
                     ids.add(int(row["linked_list_id"]))
         return ids
 
+    def _referenced_auto_source_list_ids(self, config: dict | None) -> set[int]:
+        """Matrix-Automodus: a block's configuration_json can carry auto_source.list_id (or
+        the legacy matrix_column_source_list_id) instead of linked_list_id - the id that
+        drives the "auto" column generation in ProtocolService.create_from_template."""
+        config = config or {}
+        ids: set[int] = set()
+        auto_source = config.get("auto_source")
+        old_list_id = config.get("matrix_column_source_list_id")
+        list_id = (auto_source or {}).get("list_id") if isinstance(auto_source, dict) else None
+        for candidate in (list_id, old_list_id):
+            if candidate:
+                ids.add(int(candidate))
+        return ids
+
+    def _referenced_participant_and_event_ids(self, config: dict | None) -> tuple[set[int], set[int]]:
+        """template_participant_id/template_participant_ids/template_event_id are embedded
+        per-row values (matrix/form rows) baked directly into every protocol created from
+        this element definition, via ProtocolService.create_from_template - without a tenant
+        check here, a definition could permanently embed another tenant's participant/event
+        data into every protocol using it."""
+        config = config or {}
+        participant_ids: set[int] = set()
+        event_ids: set[int] = set()
+        rows = config.get("rows")
+        if isinstance(rows, list):
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                if row.get("template_participant_id"):
+                    participant_ids.add(int(row["template_participant_id"]))
+                for pid in row.get("template_participant_ids") or []:
+                    if pid:
+                        participant_ids.add(int(pid))
+                if row.get("template_event_id"):
+                    event_ids.add(int(row["template_event_id"]))
+        return participant_ids, event_ids
+
     def _validate_linked_lists(self, db: Session, blocks: list[dict], *, tenant_id: int) -> None:
-        """Every linked_list_id referenced from any of this element definition's blocks must
-        point at a ListDefinition belonging to the same tenant - otherwise a matrix/list block
-        built from this element definition would spread a foreign tenant's list content
-        (column titles, row contents, potentially participant data) into every protocol that
-        uses it (audit D8, 2026-08-16). Mirrors TemplateElementService._validate_linked_lists,
-        which already closes the equivalent gap for template-element-level configuration."""
-        referenced_ids: set[int] = set()
+        """Every linked_list_id/auto_source.list_id referenced from any of this element
+        definition's blocks must point at a ListDefinition belonging to the same tenant -
+        otherwise a matrix/list block built from this element definition would spread a
+        foreign tenant's list content (column titles, row contents, potentially participant
+        data) into every protocol that uses it (audit D8, 2026-08-16; matrix-automode gap
+        closed 2026-08-25). Mirrors TemplateElementService._validate_linked_lists, which
+        already closes the equivalent gap for template-element-level configuration. Also
+        validates embedded template_participant_id(s)/template_event_id row values for the
+        same reason - see _referenced_participant_and_event_ids."""
+        referenced_list_ids: set[int] = set()
+        referenced_participant_ids: set[int] = set()
+        referenced_event_ids: set[int] = set()
         for block in blocks:
-            referenced_ids |= self._referenced_list_definition_ids(block.get("configuration_json"))
-        for list_id in referenced_ids:
+            config = block.get("configuration_json")
+            referenced_list_ids |= self._referenced_list_definition_ids(config)
+            referenced_list_ids |= self._referenced_auto_source_list_ids(config)
+            participant_ids, event_ids = self._referenced_participant_and_event_ids(config)
+            referenced_participant_ids |= participant_ids
+            referenced_event_ids |= event_ids
+        for list_id in referenced_list_ids:
             list_definition = db.get(ListDefinition, list_id)
             if list_definition is None or list_definition.tenant_id != tenant_id:
                 raise ValueError(f"Linked list {list_id} not found")
+        for participant_id in referenced_participant_ids:
+            participant = db.get(Participant, participant_id)
+            if participant is None or participant.tenant_id != tenant_id:
+                raise ValueError(f"Participant {participant_id} not found")
+        for event_id in referenced_event_ids:
+            event = db.get(Event, event_id)
+            if event is None or event.tenant_id != tenant_id:
+                raise ValueError(f"Event {event_id} not found")
 
     def _normalize_blocks(self, blocks: list[dict]) -> list[dict]:
         normalized: list[dict] = []

@@ -105,6 +105,10 @@ class ProtocolTodoService:
             db, tenant_id, payload.due_event_id
         ):
             raise ValueError("Due event is not available for this tenant")
+        if payload.assigned_user_id is not None and not self.repository.user_allowed_for_tenant(
+            db, tenant_id, payload.assigned_user_id
+        ):
+            raise ValueError("Assigned user is not available for this tenant")
         values = self._normalize_due_fields(payload.model_dump())
         todo = ProtocolTodo(
             tenant_id=tenant_id,
@@ -138,6 +142,10 @@ class ProtocolTodoService:
             payload.due_event_id,
         ):
             raise ValueError("Due event is not available for this tenant")
+        if payload.assigned_user_id is not None:
+            tenant_id = self.repository.tenant_id_for_block(db, protocol_element_block_id)
+            if tenant_id is None or not self.repository.user_allowed_for_tenant(db, tenant_id, payload.assigned_user_id):
+                raise ValueError("Assigned user is not available for this tenant")
         values = self._normalize_due_fields(payload.model_dump())
         todo = ProtocolTodo(
             protocol_element_block_id=protocol_element_block_id,
@@ -186,6 +194,20 @@ class ProtocolTodoService:
             )
             if not allowed:
                 raise ValueError("Due event is not available for this tenant")
+        # assigned_user_id/closed_in_protocol_id were, unlike the two checks above, never
+        # validated against the tenant at all (audit finding, 2026-08-25) - a writer could
+        # assign a todo to an arbitrary app_user.id or close it "in" an arbitrary,
+        # potentially cross-tenant protocol_id.
+        assigned_user_id = values.get("assigned_user_id")
+        closed_in_protocol_id = values.get("closed_in_protocol_id")
+        if assigned_user_id is not None or closed_in_protocol_id is not None:
+            tenant_id = todo.tenant_id if is_standalone else self.repository.tenant_id_for_block(db, todo.protocol_element_block_id)
+            if tenant_id is None:
+                raise ValueError("Todo has no resolvable tenant")
+            if assigned_user_id is not None and not self.repository.user_allowed_for_tenant(db, tenant_id, assigned_user_id):
+                raise ValueError("Assigned user is not available for this tenant")
+            if closed_in_protocol_id is not None and not self.repository.protocol_allowed_for_tenant(db, tenant_id, closed_in_protocol_id):
+                raise ValueError("closed_in_protocol_id is not available for this tenant")
         # completed_at is server-authoritative and derived solely from the status
         # transition: a client-supplied value is always ignored/overridden here so
         # statistics/charts (which key off completed_at) can't drift from the actual

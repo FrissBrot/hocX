@@ -22,20 +22,11 @@ export const TODO_STATUS = {
   cancelled: 4
 } as const;
 
-export function protocolStatusLabel(status: string) {
-  switch (status) {
-    case "geplant":
-      return "Geplant";
-    case "vorbereitet":
-      return "Vorbereitet";
-    case "durchgeführt":
-      return "Durchgeführt";
-    case "abgeschlossen":
-      return "Abgeschlossen";
-    default:
-      return status;
-  }
-}
+// Re-exported, not a second hand-duplicated copy (audit finding, 2026-08-25): this file
+// used to define its own byte-for-byte identical protocolStatusLabel, so a future status
+// label change made in only one of the two places would silently let the protocol list
+// and the editor disagree on what a status displays as.
+export { protocolStatusLabel } from "@/components/protocol/protocol-status";
 
 export function resequenceProtocolElements(items: ProtocolElement[]) {
   return items.map((item, index) => ({ ...item, sort_index: (index + 1) * 10 }));

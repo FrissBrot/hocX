@@ -12,6 +12,7 @@ from app.models import (
     ElementDefinition,
     ElementType,
     Event,
+    ListDefinition,
     ListEntry,
     Participant,
     Protocol,
@@ -1275,10 +1276,20 @@ class ProtocolService:
                 "{cycle_year_end}": str(counts["cycle_year_end"]),
             }
 
+        _has_counter_token = any(
+            self._pattern_uses_token(template.protocol_number_pattern, token)
+            for token in ("n", "n_year", "n_month", "n_cycle", "n_cycle_all")
+        )
+
         def _pick_protocol_number(current_counts: dict[str, int]) -> tuple[str | None, dict[str, int]]:
             if payload.protocol_number:
                 return payload.protocol_number, current_counts
-            for bump in range(100):
+            # A pattern with no counter token at all formats identically regardless of
+            # `bump` - every one of the 100 iterations below would recompute the exact
+            # same candidate and re-run the exact same collision SELECT (audit finding,
+            # 2026-08-25). Try it exactly once instead.
+            bump_range = range(100) if _has_counter_token else range(1)
+            for bump in bump_range:
                 bumped = {**current_counts, "n": current_counts["n"] + bump, "n_year": current_counts["n_year"] + bump, "n_month": current_counts["n_month"] + bump, "n_cycle": current_counts["n_cycle"] + bump, "n_cycle_all": current_counts["n_cycle_all"] + bump}
                 candidate = self._format_pattern(template.protocol_number_pattern, counts=bumped, protocol_date=payload.protocol_date)
                 if not candidate:
@@ -1585,7 +1596,7 @@ class ProtocolService:
                     for _field_row in field_rows:
                         if _field_row.get("linked_list_id") and _field_row.get("linked_list_entry_id"):
                             _live_row_snapshot = list_snapshot_service.compute_row_list_snapshot(
-                                db, _field_row["linked_list_id"], _field_row["linked_list_entry_id"]
+                                db, _field_row["linked_list_id"], _field_row["linked_list_entry_id"], tenant_id
                             )
                             _field_row["list_snapshot"] = list_snapshot_service.tag_initial_row_snapshot(
                                 _live_row_snapshot,
@@ -1597,7 +1608,7 @@ class ProtocolService:
                                 track_changes_active=protocol.track_changes_enabled and last_completed_element is not None,
                             )
                     _whole_list_snapshot = (
-                        list_snapshot_service.compute_whole_list_snapshot(db, linked_list_id) if linked_list_id else None
+                        list_snapshot_service.compute_whole_list_snapshot(db, linked_list_id, tenant_id) if linked_list_id else None
                     )
                     if _whole_list_snapshot is not None:
                         _last_completed_whole = last_completed_payload.get("list_snapshot")
@@ -1669,13 +1680,19 @@ class ProtocolService:
                     _matrix_mode = _matrix_cfg.get("mode") or "manual"
                     if _matrix_mode == "auto" and isinstance(_auto_source, dict) and _auto_source.get("type") == "list":
                         _list_id = int(_auto_source.get("list_id") or 0)
+                        # Defense in depth: ElementDefinitionService._validate_linked_lists
+                        # already rejects a cross-tenant auto_source.list_id at definition
+                        # save time, but re-check tenant ownership here too rather than
+                        # trusting the stored configuration_json alone.
+                        _auto_list_def = db.get(ListDefinition, _list_id) if _list_id else None
                         _list_entries = (
                             list(db.scalars(
                                 select(ListEntry)
                                 .where(ListEntry.list_definition_id == _list_id)
                                 .order_by(ListEntry.sort_index.asc(), ListEntry.id.asc())
                             ))
-                            if _list_id else []
+                            if _auto_list_def is not None and _auto_list_def.tenant_id == tenant_id
+                            else []
                         )
                         matrix_columns = []
                         for _idx, _entry in enumerate(_list_entries):
@@ -1889,7 +1906,7 @@ class ProtocolService:
             db.add(refreshed_template)
             db.commit()
 
-    def _freeze_responsible_titles(self, db: Session, protocol_id: int, *, commit: bool = True) -> None:
+    def _freeze_responsible_titles(self, db: Session, protocol_id: int, tenant_id: int, *, commit: bool = True) -> None:
         """Called right when a protocol transitions to abgeschlossen: resolves each
         list-linked responsible name one last time and bakes it into section_name_snapshot
         for good, so it keeps showing what the user last saw instead of reverting to the
@@ -1901,7 +1918,7 @@ class ProtocolService:
             )
         ).all()
         titled_elements = [element for element in elements if element.element_title_snapshot]
-        labels_by_element_id = resolve_responsible_labels_batch(db, titled_elements)
+        labels_by_element_id = resolve_responsible_labels_batch(db, titled_elements, tenant_id)
 
         changed = False
         for element in titled_elements:
@@ -2004,8 +2021,8 @@ class ProtocolService:
                 if stage_from == "vorbereitet" and stage_to == "durchgeführt":
                     self._clear_tracked_changes(db, protocol_id, commit=False)
                 if stage_to == "abgeschlossen":
-                    self._freeze_responsible_titles(db, protocol_id, commit=False)
-                    list_snapshot_service.freeze_list_snapshots_for_protocol(db, protocol_id, commit=False)
+                    self._freeze_responsible_titles(db, protocol_id, updated.tenant_id, commit=False)
+                    list_snapshot_service.freeze_list_snapshots_for_protocol(db, protocol_id, updated.tenant_id, commit=False)
                     crossed_into_abgeschlossen = True
         try:
             db.commit()
@@ -2119,7 +2136,7 @@ class ProtocolService:
         self.repository.delete(db, protocol)
         return True
 
-    def _build_event_repeat_form_snapshot(self, db: Session, *, raw_config: dict, repeat_context: dict) -> dict:
+    def _build_event_repeat_form_snapshot(self, db: Session, *, raw_config: dict, repeat_context: dict, tenant_id: int) -> dict:
         """Same rows/value_type transform as create_from_template's form_type_id branch
         (raw ElementDefinition row schema -> runtime schema with text_value/participant_id/
         participant_ids/etc.), for a freshly-added single event-repeat "form" block. There
@@ -2136,12 +2153,12 @@ class ProtocolService:
         for field_row in field_rows:
             if field_row.get("linked_list_id") and field_row.get("linked_list_entry_id"):
                 live_row_snapshot = list_snapshot_service.compute_row_list_snapshot(
-                    db, field_row["linked_list_id"], field_row["linked_list_entry_id"]
+                    db, field_row["linked_list_id"], field_row["linked_list_entry_id"], tenant_id
                 )
                 field_row["list_snapshot"] = list_snapshot_service.tag_initial_row_snapshot(
                     live_row_snapshot, None, track_changes_active=False
                 )
-        whole_list_snapshot = list_snapshot_service.compute_whole_list_snapshot(db, linked_list_id) if linked_list_id else None
+        whole_list_snapshot = list_snapshot_service.compute_whole_list_snapshot(db, linked_list_id, tenant_id) if linked_list_id else None
         if whole_list_snapshot is not None:
             whole_list_snapshot["entries"] = list_snapshot_service.tag_initial_list_entries(
                 whole_list_snapshot["entries"], None, track_changes_active=False
@@ -2164,6 +2181,12 @@ class ProtocolService:
         """Manually add an auto-generated event block to an existing protocol element."""
         protocol_element = db.get(ProtocolElement, protocol_element_id)
         if protocol_element is None:
+            raise ValueError("Protocol element not found")
+        protocol = db.get(Protocol, protocol_element.protocol_id)
+        if protocol is None or protocol.tenant_id != tenant_id:
+            # Both current callers already validate this before calling, but this method
+            # offered no defense of its own for a future caller that doesn't (audit
+            # finding, 2026-08-25).
             raise ValueError("Protocol element not found")
 
         event = db.get(Event, event_id)
@@ -2253,7 +2276,7 @@ class ProtocolService:
 
         rendered_default_content = self._render_context_text(event_block_template.get("default_content"), repeat_context) or ""
         form_snapshot = (
-            self._build_event_repeat_form_snapshot(db, raw_config=block_config, repeat_context=repeat_context)
+            self._build_event_repeat_form_snapshot(db, raw_config=block_config, repeat_context=repeat_context, tenant_id=tenant_id)
             if event_block_template["element_type_id"] == form_type_id
             else {}
         )
@@ -2342,14 +2365,17 @@ class ProtocolService:
     ) -> ProtocolElementBlock:
         """Find or create a todo block inside the session element for the given tag."""
         tag_lower = tag.strip().lower()
-        existing = db.scalar(
-            select(ProtocolElementBlock).where(
-                ProtocolElementBlock.protocol_element_id == session_element.id,
-                ProtocolElementBlock.block_title_snapshot == tag,
-            )
-        )
-        if existing is not None:
-            return existing
+        # Match on the canonicalized quick_todo_tag stored in configuration_snapshot_json
+        # (see below), not the raw display title - comparing against block_title_snapshot
+        # directly compared the *unnormalized* tag, so "Küche" and "küche " each created
+        # their own separate session block instead of sharing one (audit finding,
+        # 2026-08-25).
+        existing_blocks = db.scalars(
+            select(ProtocolElementBlock).where(ProtocolElementBlock.protocol_element_id == session_element.id)
+        ).all()
+        for block in existing_blocks:
+            if (block.configuration_snapshot_json or {}).get("quick_todo_tag") == tag_lower:
+                return block
 
         todo_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "todo"))
         render_type_id = db.scalar(select(RenderType.id).where(RenderType.code == "todo_list"))

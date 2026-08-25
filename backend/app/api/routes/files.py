@@ -96,10 +96,17 @@ def get_stored_file_content(
         raise HTTPException(status_code=404, detail="File missing on filesystem")
     # SECURITY: set nosniff so a browser never MIME-sniffs the content and renders it
     # inline against our wishes, mirroring submission_assignments.get_submission_file_content.
+    # inline also covers images now, not just PDF (audit finding, 2026-08-25) - protocol
+    # images are rendered directly via <img src> pointing at this same endpoint (see
+    # focused-element-editor.tsx's LightboxImage/content_url), which "attachment" would
+    # otherwise force browsers to treat as a download instead of image data to paint.
+    # nosniff already closes the MIME-confusion risk "attachment" was guarding against
+    # for a real image mime type.
+    is_inline_safe = stored_file.mime_type == "application/pdf" or (stored_file.mime_type or "").startswith("image/")
     return FileResponse(
         path=file_path,
         media_type=stored_file.mime_type,
         filename=stored_file.original_name,
-        content_disposition_type="inline" if stored_file.mime_type == "application/pdf" else "attachment",
+        content_disposition_type="inline" if is_inline_safe else "attachment",
         headers={"X-Content-Type-Options": "nosniff"},
     )

@@ -351,13 +351,16 @@ export function StatisticsView({ data }: Props) {
   const [financeAccount, setFinanceAccount] = useState<string>("all");
   const [selectedCycle, setSelectedCycle] = useState<string>("all");
 
-  if (!data) {
-    return <div className="stats-empty"><p className="muted">Keine Statistikdaten verfügbar.</p></div>;
-  }
-
-  const attendanceTime = useMemo(() => filterByPeriod(data.attendance_over_time, period), [data, period]);
+  // Rules-of-Hooks fix (audit finding, 2026-08-25): the four useMemo calls below used to
+  // sit after an early `if (!data) return ...`, so they were skipped entirely whenever
+  // data was null - harmless today only because data is a static SSR prop that never
+  // actually changes within one mounted instance of this component, but the moment that
+  // stopped being true, React would see a different number of hooks between renders and
+  // crash. Hooks now always run (each body is null-safe on its own); the early return
+  // moves below them instead, gating everything that isn't a hook call.
+  const attendanceTime = useMemo(() => filterByPeriod(data?.attendance_over_time ?? [], period), [data, period]);
   const financeMonths = useMemo(() => {
-    const byPeriod = filterByPeriod(data.finance_by_month, period);
+    const byPeriod = filterByPeriod(data?.finance_by_month ?? [], period);
     if (financeAccount === "all") {
       const merged: Record<string, { month: string; income: number; expenses: number; net: number }> = {};
       for (const r of byPeriod) {
@@ -371,10 +374,10 @@ export function StatisticsView({ data }: Props) {
     return byPeriod.filter((r) => r.account_name === financeAccount);
   }, [data, period, financeAccount]);
 
-  const accounts = useMemo(() => [...new Set(data.finance_by_month.map((r) => r.account_name))], [data]);
+  const accounts = useMemo(() => [...new Set((data?.finance_by_month ?? []).map((r) => r.account_name))], [data]);
 
   const groupsFiltered = useMemo(() => {
-    const stats = data.groups_stats;
+    const stats = data?.groups_stats ?? [];
     if (selectedCycle === "all") {
       // Weighted "Ø Teilnehmer" merge across cycles - this is a THIRD, hand-duplicated copy
       // of the same logic that already lives twice in the backend (now de-duplicated into
@@ -410,6 +413,10 @@ export function StatisticsView({ data }: Props) {
       }))
       .sort((a, b) => b["Alle Termine"] - a["Alle Termine"]);
   }, [data, selectedCycle]);
+
+  if (!data) {
+    return <div className="stats-empty"><p className="muted">Keine Statistikdaten verfügbar.</p></div>;
+  }
 
   const todoData: PieEntry[] = [
     { name: "Erledigt", value: data.todos.done, color: COLORS.done },

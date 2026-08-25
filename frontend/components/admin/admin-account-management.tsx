@@ -143,7 +143,7 @@ export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props)
           </label>
           <label className="field-stack">
             <span className="field-label">Passwort</span>
-            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={8} />
+            <input type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={8} />
           </label>
           <label className="field-stack">
             <span className="field-label">Rolle</span>

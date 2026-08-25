@@ -11,7 +11,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 
 from app.core.base64url import b64url_decode, b64url_encode
-from app.core.cbor import decode_cbor, decode_cbor_prefix
+from app.core.cbor import CborDecodeError, decode_cbor, decode_cbor_prefix
 
 
 FLAG_USER_PRESENT = 0x01
@@ -118,7 +118,13 @@ def parse_authenticator_data(data: bytes) -> ParsedAuthenticatorData:
         cursor += 2
         credential_id = data[cursor : cursor + credential_id_length]
         cursor += credential_id_length
-        credential_public_key, consumed = decode_cbor_prefix(data[cursor:])
+        try:
+            credential_public_key, consumed = decode_cbor_prefix(data[cursor:])
+        except CborDecodeError as exc:
+            # A malformed/attacker-crafted CBOR payload here must reach the caller as the
+            # same clean 400 every other malformed-input case in this module produces, not
+            # as an unclassified 500 (audit finding, 2026-08-25).
+            raise WebauthnError("Credential public key is malformed") from exc
         if not isinstance(credential_public_key, dict):
             raise WebauthnError("Credential public key is malformed")
         parsed.credential_id = credential_id
@@ -140,7 +146,10 @@ def register_credential(
     client_data = _parse_client_data(client_data_raw, expected_type="webauthn.create")
     _verify_client_data(client_data, expected_challenge=expected_challenge, expected_origin=expected_origin)
 
-    attestation = decode_cbor(attestation_object)
+    try:
+        attestation = decode_cbor(attestation_object)
+    except CborDecodeError as exc:
+        raise WebauthnError("Attestation object is malformed") from exc
     if not isinstance(attestation, dict):
         raise WebauthnError("Attestation object is malformed")
     auth_data = attestation.get("authData")
@@ -249,7 +258,10 @@ def _verify_rp_id_hash(rp_id_hash: bytes, expected_rp_id: str) -> None:
 
 
 def _cose_public_key_to_pem(cose_raw: bytes) -> str:
-    cose = decode_cbor(cose_raw)
+    try:
+        cose = decode_cbor(cose_raw)
+    except CborDecodeError as exc:
+        raise WebauthnError("Credential public key CBOR is malformed") from exc
     if not isinstance(cose, dict):
         raise WebauthnError("Credential public key CBOR is malformed")
 

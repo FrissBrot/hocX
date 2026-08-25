@@ -263,13 +263,25 @@ def test_k5_word_import_commit_rejects_foreign_tenant_linked_event(db, monkeypat
     original_add_event_block = ProtocolService.add_event_block_to_element
 
     def _pre_k2_add_event_block_to_element(self, db, *, protocol_element_id, event_id, tenant_id, block_sort_index=None):
-        # Reproduces the pre-fix behavior: ignore the caller's tenant_id and use the
-        # Event's own tenant, i.e. no cross-tenant rejection at this layer at all.
+        # Reproduces the pre-fix behavior: no effective cross-tenant rejection at this
+        # layer at all - not just the original event.tenant_id check, but also the
+        # protocol-ownership check added to this same function later (audit finding,
+        # 2026-08-25), which a bare tenant_id substitution alone would now also trip
+        # (comparing the real protocol's tenant against the substituted one) before ever
+        # reaching the event check this test means to bypass. Temporarily masking the
+        # Event's own tenant_id for the duration of the call sails past both, then
+        # restores the true (foreign) tenant_id immediately after - K5's independent
+        # guard below does its own fresh db.get(Event, ...) and must see the real value.
         event = db.get(Event, event_id)
-        return original_add_event_block(
-            self, db, protocol_element_id=protocol_element_id, event_id=event_id,
-            tenant_id=event.tenant_id, block_sort_index=block_sort_index,
-        )
+        original_tenant_id = event.tenant_id
+        event.tenant_id = tenant_id
+        try:
+            return original_add_event_block(
+                self, db, protocol_element_id=protocol_element_id, event_id=event_id,
+                tenant_id=tenant_id, block_sort_index=block_sort_index,
+            )
+        finally:
+            event.tenant_id = original_tenant_id
 
     monkeypatch.setattr(ProtocolService, "add_event_block_to_element", _pre_k2_add_event_block_to_element)
 

@@ -68,21 +68,22 @@ class TemplateService:
                 raise ValueError(f"{label} does not belong to current tenant")
 
     def create_template(self, db: Session, payload: TemplateCreate, *, tenant_id: int, created_by: int | None):
+        # An explicitly-supplied document_template_id that doesn't belong to this tenant
+        # used to be silently swapped for the tenant's default instead of rejected -
+        # unlike every other reference here (next_event_id/last_event_id/cycle_config_id)
+        # and unlike update_template's identical check just below, which both raise
+        # (audit finding, 2026-08-25). Only an *omitted* document_template_id (None) is a
+        # legitimate default-fill case.
         document_template_id = payload.document_template_id
         if document_template_id is None:
             document_template_id = self.document_template_service.default_document_template_id(db, tenant_id)
-        else:
-            available_document_template_ids = {
-                item.id for item in self.document_template_service.repository.list(db, tenant_id)
-            }
-            if document_template_id not in available_document_template_ids:
-                document_template_id = self.document_template_service.default_document_template_id(db, tenant_id)
         self._validate_tenant_refs(
             db,
             tenant_id=tenant_id,
             next_event_id=payload.next_event_id,
             last_event_id=payload.last_event_id,
             cycle_config_id=payload.cycle_config_id,
+            document_template_id=document_template_id,
         )
         template = Template(
             tenant_id=tenant_id,
