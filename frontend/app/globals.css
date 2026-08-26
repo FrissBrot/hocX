@@ -332,6 +332,15 @@ pre {
   border-top: 1px solid var(--border);
 }
 
+.copyright-notice {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1.4;
+  text-align: center;
+  opacity: 0.65;
+}
+
 .identity-panel {
   display: grid;
   gap: 12px;
@@ -6380,6 +6389,10 @@ input[type="radio"] {
 .login-version-in-panel {
   font-size: 0.88rem;
   opacity: 0.8;
+}
+
+.login-copyright {
+  max-width: min(90vw, 28rem);
 }
 
 @media (max-width: 760px) {

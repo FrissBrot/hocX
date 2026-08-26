@@ -8,6 +8,7 @@ import { browserApiFetch } from "@/lib/api/client";
 import { getRuntimeConfig } from "@/lib/runtime-config";
 import { browserSupportsPasskeys, createPasskeyCredential, getPasskeyAssertion } from "@/lib/webauthn";
 import { LoginResponse, PasskeyAssertionStart, PasskeyRegistrationStart, PendingMfaLogin, SessionInfo, TotpEnrollmentStart } from "@/types/api";
+import { CopyrightNotice } from "@/components/ui/copyright-notice";
 
 type ResolvedTenant = { tenant_id: number; tenant_name: string; profile_image_url: string | null };
 const MFA_CODE_LENGTH = 6;
@@ -774,6 +775,7 @@ export default function LoginPage() {
         {appVersion && isVerifyScreen ? <p className="login-version login-version-in-panel">hocX {appVersion}</p> : null}
       </section>
       {appVersion && !isVerifyScreen ? <p className="login-version">hocX {appVersion}</p> : null}
+      {!isVerifyScreen ? <CopyrightNotice className="login-copyright" /> : null}
     </main>
   );
 }

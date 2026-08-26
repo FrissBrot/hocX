@@ -72,6 +72,15 @@ body {
   letter-spacing: -0.01em;
 }
 
+.page-footer {
+  margin-top: 28px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.4;
+  text-align: center;
+  opacity: 0.65;
+}
+
 h1 {
   font-size: 1.5rem;
   margin: 0 0 6px;

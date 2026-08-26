@@ -18,6 +18,7 @@ import { ProfileModal } from "@/components/ui/profile-modal";
 import { TenantSelectorModal } from "@/components/ui/tenant-selector-modal";
 import { Menu, MenuDivider, MenuItem, Popover } from "@/components/ui/popover";
 import { ConnectivityStatus } from "@/components/ui/connectivity-status";
+import { CopyrightNotice } from "@/components/ui/copyright-notice";
 
 // Login rendert nie auf einer Mandanten-Custom-Domain — von dort muss eine volle Navigation
 // (nicht SPA-Routing) zur Hauptdomain erfolgen, sonst gäbe es dort keine Login-Seite zu zeigen.
@@ -314,6 +315,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
                 </button>
               </div>
             </div>
+            <CopyrightNotice />
           </div>
         </aside>
         <div className="shell-main">

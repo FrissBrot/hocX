@@ -9,6 +9,7 @@ import { browserApiFetch } from "@/lib/api/client";
 import { ToastProvider } from "@/contexts/toast-context";
 import { ConfirmProvider } from "@/contexts/confirm-context";
 import { AdminSessionInfo } from "@/types/api";
+import { CopyrightNotice } from "@/components/ui/copyright-notice";
 
 const navLinks = [
   { href: "/admin", label: "Dashboard" },
@@ -82,6 +83,7 @@ export function AdminShell({ children, session }: { children: ReactNode; session
                 </button>
               </div>
             </div>
+            <CopyrightNotice />
           </div>
         </aside>
         <div className="shell-main">

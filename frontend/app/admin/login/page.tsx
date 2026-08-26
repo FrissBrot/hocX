@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { browserApiFetch, browserApiBaseUrl } from "@/lib/api/client";
 import { AdminSessionInfo, PlatformOidcConfigPublic } from "@/types/api";
+import { CopyrightNotice } from "@/components/ui/copyright-notice";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -94,6 +95,7 @@ export default function AdminLoginPage() {
 
         {statusMsg && <p className="muted">{statusMsg}</p>}
       </section>
+      <CopyrightNotice className="login-copyright" />
     </main>
   );
 }
