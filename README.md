@@ -164,6 +164,19 @@ The first platform-admin account is bootstrapped from `INITIAL_ADMIN_EMAIL` /
 `INITIAL_ADMIN_PASSWORD` env vars on first startup (only when the `platform_admin` table is
 still empty); further admins are managed through the panel itself under `/admin/admins`.
 
+In the Traefik deployment, both `/admin` and `/api/admin` are removed from the public main
+domain. They are served on `https://${TRAEFIK_ADMIN_DOMAIN}` through the `adminsecure`
+entrypoint, whose host port defaults to `127.0.0.1:8443`. It is intended as the host-side
+target for an OpenZiti service; do not add a public `0.0.0.0` binding. The public TLS
+certificate is issued using Cloudflare DNS-01 with the restricted `CF_DNS_API_TOKEN`.
+The token needs `Zone:Zone:Read` and `Zone:DNS:Edit` for the `hocx.ch` zone only; Traefik
+receives this token explicitly and does not inherit the application's other `.env` secrets.
+
+The corresponding OpenZiti service must intercept `${TRAEFIK_ADMIN_DOMAIN}:443` on clients and use
+`127.0.0.1:8443` as its host-side TCP target. TLS is passed through to Traefik (do not
+terminate or replace TLS in the tunnel), so the browser's SNI and `Host` remain
+`${TRAEFIK_ADMIN_DOMAIN}` and match the public certificate.
+
 ## Public Access With Traefik
 
 The stack includes Traefik for public HTTPS access under `your-domain.example.com`.

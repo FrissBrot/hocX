@@ -14,13 +14,15 @@ services:
     depends_on:
       - frontend
       - backend
-    env_file:
-      - .env
     environment:
       TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL: ${ACME_EMAIL}
+      TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPTDNS_ACME_EMAIL: ${ACME_EMAIL}
+      CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN}
     ports:
       - "80:80"
       - "443:443"
+      # Nur lokal gebunden: vorgesehen als Ziel fuer den OpenZiti-Host-Tunnel.
+      - "127.0.0.1:${TRAEFIK_ADMIN_PORT:-8443}:8443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./infra/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
@@ -130,12 +132,19 @@ services:
     labels:
       - "traefik.enable=true"
       # Main API router (all non-auth paths)
-      - "traefik.http.routers.hocx-backend.rule=Host(`${TRAEFIK_DOMAIN}`) && (PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`))"
+      - "traefik.http.routers.hocx-backend.rule=Host(`${TRAEFIK_DOMAIN}`) && ((PathPrefix(`/api`) && !PathPrefix(`/api/admin`)) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`))"
       - "traefik.http.routers.hocx-backend.entrypoints=websecure"
       - "traefik.http.routers.hocx-backend.tls.certresolver=letsencrypt"
       - "traefik.http.routers.hocx-backend.priority=100"
       - "traefik.http.routers.hocx-backend.service=hocx-backend"
       - "traefik.http.services.hocx-backend.loadbalancer.server.port=8000"
+      # Platform-Admin-API: nur auf dem lokal gebundenen OpenZiti-EntryPoint.
+      - "traefik.http.routers.hocx-admin-api.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`) && PathPrefix(`/api/admin`)"
+      - "traefik.http.routers.hocx-admin-api.entrypoints=adminsecure"
+      - "traefik.http.routers.hocx-admin-api.tls.certresolver=letsencryptdns"
+      - "traefik.http.routers.hocx-admin-api.priority=100"
+      - "traefik.http.routers.hocx-admin-api.service=hocx-admin-api"
+      - "traefik.http.services.hocx-admin-api.loadbalancer.server.port=8000"
       # Dedicated router for the login endpoint specifically, with rate limiting - narrowly
       # scoped to just POST /api/auth/login (not all of /api/auth/*), since /api/auth/session
       # and /api/auth/tenant-by-domain are read-only, non-brute-forceable, and get polled on
@@ -156,9 +165,9 @@ services:
       # Dedicated router for the platform-admin login, same rationale/pattern as hocx-auth
       # above - was previously falling through to the generic hocx-backend router with no
       # rate limiting at all, leaving the highest-privilege account unprotected from bruteforce.
-      - "traefik.http.routers.hocx-admin-auth.rule=Host(`${TRAEFIK_DOMAIN}`) && Path(`/api/admin/auth/login`) && Method(`POST`)"
-      - "traefik.http.routers.hocx-admin-auth.entrypoints=websecure"
-      - "traefik.http.routers.hocx-admin-auth.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.hocx-admin-auth.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`) && Path(`/api/admin/auth/login`) && Method(`POST`)"
+      - "traefik.http.routers.hocx-admin-auth.entrypoints=adminsecure"
+      - "traefik.http.routers.hocx-admin-auth.tls.certresolver=letsencryptdns"
       - "traefik.http.routers.hocx-admin-auth.priority=200"
       - "traefik.http.routers.hocx-admin-auth.service=hocx-admin-auth"
       - "traefik.http.routers.hocx-admin-auth.middlewares=auth-ratelimit"
@@ -167,9 +176,9 @@ services:
       # MAX_TENANT_IMPORT_UPLOAD_BYTES in backend/app/api/routes/admin.py). Ein eigener
       # Router begrenzt nur diesen privilegierten Upload; 2050 MiB enthalten etwas Reserve
       # fuer den multipart/form-data-Overhead um die maximal grosse ZIP-Datei.
-      - "traefik.http.routers.hocx-tenant-import.rule=Host(`${TRAEFIK_DOMAIN}`) && Path(`/api/admin/tenants/import`) && Method(`POST`)"
-      - "traefik.http.routers.hocx-tenant-import.entrypoints=websecure"
-      - "traefik.http.routers.hocx-tenant-import.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.hocx-tenant-import.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`) && Path(`/api/admin/tenants/import`) && Method(`POST`)"
+      - "traefik.http.routers.hocx-tenant-import.entrypoints=adminsecure"
+      - "traefik.http.routers.hocx-tenant-import.tls.certresolver=letsencryptdns"
       - "traefik.http.routers.hocx-tenant-import.priority=200"
       - "traefik.http.routers.hocx-tenant-import.service=hocx-tenant-import"
       - "traefik.http.routers.hocx-tenant-import.middlewares=tenant-import-body-limit"
@@ -235,11 +244,18 @@ services:
       start_period: 120s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.hocx-frontend.rule=Host(`${TRAEFIK_DOMAIN}`)"
+      - "traefik.http.routers.hocx-frontend.rule=Host(`${TRAEFIK_DOMAIN}`) && !PathPrefix(`/admin`)"
       - "traefik.http.routers.hocx-frontend.entrypoints=websecure"
       - "traefik.http.routers.hocx-frontend.tls.certresolver=letsencrypt"
       - "traefik.http.routers.hocx-frontend.priority=10"
       - "traefik.http.services.hocx-frontend.loadbalancer.server.port=3000"
+      # Admin-UI inklusive /_next-Assets auf der privaten Admin-Domain. Der
+      # EntryPoint selbst ist auf dem Host nur via 127.0.0.1 erreichbar.
+      - "traefik.http.routers.hocx-admin-frontend.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`)"
+      - "traefik.http.routers.hocx-admin-frontend.entrypoints=adminsecure"
+      - "traefik.http.routers.hocx-admin-frontend.tls.certresolver=letsencryptdns"
+      - "traefik.http.routers.hocx-admin-frontend.priority=10"
+      - "traefik.http.routers.hocx-admin-frontend.service=hocx-frontend"
 
   # Oeffentliche Abgabebox (kein Login) auf eigener Subdomain, eigener Codebase,
   # eigene restricted DB-Rolle (siehe backend/alembic/versions/0020_abgabebox.py).

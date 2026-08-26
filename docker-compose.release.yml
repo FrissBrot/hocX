@@ -88,12 +88,18 @@ services:
       start_period: 40s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.rule=Host(`${TRAEFIK_DOMAIN}`) && (PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`))"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.rule=Host(`${TRAEFIK_DOMAIN}`) && ((PathPrefix(`/api`) && !PathPrefix(`/api/admin`)) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`))"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.entrypoints=websecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.tls.certresolver=letsencrypt"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.priority=100"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.service=${ROUTER_PREFIX:-hocx}-backend"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-backend.loadbalancer.server.port=8000"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-api.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`) && PathPrefix(`/api/admin`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-api.entrypoints=adminsecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-api.tls.certresolver=letsencryptdns"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-api.priority=100"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-api.service=${ROUTER_PREFIX:-hocx}-admin-api"
+      - "traefik.http.services.${ROUTER_PREFIX:-hocx}-admin-api.loadbalancer.server.port=8000"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-auth.rule=Host(`${TRAEFIK_DOMAIN}`) && Path(`/api/auth/login`) && Method(`POST`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-auth.entrypoints=websecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-auth.tls.certresolver=letsencrypt"
@@ -104,9 +110,9 @@ services:
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-auth-ratelimit.ratelimit.average=10"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-auth-ratelimit.ratelimit.burst=5"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-auth-ratelimit.ratelimit.period=1m"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.rule=Host(`${TRAEFIK_DOMAIN}`) && Path(`/api/admin/auth/login`) && Method(`POST`)"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.entrypoints=websecure"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`) && Path(`/api/admin/auth/login`) && Method(`POST`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.entrypoints=adminsecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.tls.certresolver=letsencryptdns"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.priority=200"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.service=${ROUTER_PREFIX:-hocx}-admin-auth"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.middlewares=${ROUTER_PREFIX:-hocx}-auth-ratelimit"
@@ -114,9 +120,9 @@ services:
       # Dedicated live router for tenant ZIP imports. The 2050 MiB request limit covers the
       # backend's 2 GiB ZIP limit plus multipart/form-data overhead without raising the limit
       # for any other admin/API endpoint.
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.rule=Host(`${TRAEFIK_DOMAIN}`) && Path(`/api/admin/tenants/import`) && Method(`POST`)"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.entrypoints=websecure"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`) && Path(`/api/admin/tenants/import`) && Method(`POST`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.entrypoints=adminsecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.tls.certresolver=letsencryptdns"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.priority=200"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.service=${ROUTER_PREFIX:-hocx}-tenant-import"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.middlewares=${ROUTER_PREFIX:-hocx}-tenant-import-body-limit"
@@ -167,11 +173,16 @@ services:
       start_period: 20s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.rule=Host(`${TRAEFIK_DOMAIN}`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.rule=Host(`${TRAEFIK_DOMAIN}`) && !PathPrefix(`/admin`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.entrypoints=websecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.tls.certresolver=letsencrypt"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.priority=10"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-frontend.loadbalancer.server.port=3000"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.entrypoints=adminsecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.tls.certresolver=letsencryptdns"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.priority=10"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.service=${ROUTER_PREFIX:-hocx}-frontend"
 
   abgabebox-backend:
     image: ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-backend:${HOCX_VERSION}

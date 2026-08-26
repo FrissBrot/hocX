@@ -17,6 +17,11 @@ entryPoints:
           scheme: https
   websecure:
     address: ":443"
+  # Private Admin-Einstieg. Der Host-Port wird in Compose ausschliesslich an
+  # 127.0.0.1 gebunden und ist damit als Ziel fuer den OpenZiti-Host-Tunnel
+  # erreichbar, aber nicht direkt aus dem Internet.
+  adminsecure:
+    address: ":8443"
 
 providers:
   docker:
@@ -35,4 +40,11 @@ certificatesResolvers:
       storage: /letsencrypt/acme.json
       httpChallenge:
         entryPoint: web
-
+  # Der private Admin-Listener ist fuer Let's Encrypt nicht erreichbar. DNS-01
+  # weist die Domaininhaberschaft stattdessen ueber einen kurzlebigen Cloudflare-
+  # TXT-Record nach. CF_DNS_API_TOKEN kommt aus .env.
+  letsencryptdns:
+    acme:
+      storage: /letsencrypt/acme-dns.json
+      dnsChallenge:
+        provider: cloudflare

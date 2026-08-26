@@ -5,13 +5,15 @@ services:
     depends_on:
       - frontend
       - backend
-    env_file:
-      - .env
     environment:
       TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL: ${ACME_EMAIL}
+      TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPTDNS_ACME_EMAIL: ${ACME_EMAIL}
+      CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN}
     ports:
       - "80:80"
       - "443:443"
+      # OpenZiti terminiert den privaten Admin-Service auf diesem Loopback-Port.
+      - "127.0.0.1:${TRAEFIK_ADMIN_PORT:-8443}:8443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./infra/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
