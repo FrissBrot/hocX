@@ -8,7 +8,9 @@ services:
     environment:
       TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL: ${ACME_EMAIL}
       TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPTDNS_ACME_EMAIL: ${ACME_EMAIL}
-      CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN}
+      CF_DNS_API_TOKEN_FILE: /run/secrets/cf_dns_api_token
+    secrets:
+      - cf_dns_api_token
     ports:
       - "80:80"
       - "443:443"
@@ -21,3 +23,7 @@ services:
       - ./infra/traefik/dynamic:/etc/traefik/dynamic:ro
     command:
       - --configFile=/etc/traefik/traefik.yml
+
+secrets:
+  cf_dns_api_token:
+    environment: CF_DNS_API_TOKEN

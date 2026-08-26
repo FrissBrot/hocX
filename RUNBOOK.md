@@ -53,8 +53,13 @@ bereits laufenden Zertifikate der anderen Umgebungen.
 
 ## 2. Testumgebung aktualisieren
 
+Einmalig nach der Umstellung auf den sicheren Env-Loader sicherstellen, dass nur der
+Eigentuemer die vorhandene Secret-Datei lesen kann: `chmod 600 .env`. Symlinks und
+gruppen- oder weltlesbare `.env`-Dateien werden vom Deploy bewusst abgelehnt.
+
 ```bash
-# Auf dem Test-Host im Repo-Root .env pflegen (Startpunkt: .env.test.example)
+# Auf dem Test-Host im Repo-Root .env pflegen. Fehlt sie beim ersten Deploy,
+# fragt deploy.sh die externen Werte ab und erzeugt alle Secrets automatisch.
 vim .env
 
 # HOCX_VERSION auf den eben gebauten Candidate-Tag setzen, z.B.:
@@ -64,8 +69,9 @@ vim .env
 ./scripts/verify_release.sh test
 ```
 
-`deploy.sh test` macht automatisch: DB-Backup (`backups/`) → Images pullen →
-Container neu starten (Alembic migriert die Test-DB dabei automatisch) → Smoke-Checks
+`deploy.sh test` macht automatisch: Preflight + exklusiver Deploy-Lock → DB-Backup
+(`backups/`) → Images pullen → Cosign-Signaturen pruefen → Digest-Manifest schreiben →
+Alembic explizit ausfuehren → Container neu starten → Smoke-Checks
 (Backend, Frontend, Abgabebox, Docs, ClamAV).
 `verify_release.sh test` prueft danach zusaetzlich:
 - Backend / Abgabebox-Backend lokal erreichbar
@@ -110,7 +116,12 @@ Auf Prod immer den finalen Release-Tag pinnen, nie einen Candidate-Tag.
 
 ## 5. Rollback
 
-Falls nach einem Update etwas kaputt ist:
+Schlagen Containerstart oder Smoke-Checks fehl, startet `deploy.sh` automatisch das
+letzte erfolgreiche Image-Set aus `.releases/current.env`. Das Manifest enthaelt
+unveraenderliche Image-Digests, nicht nur Tags. Eine bereits erfolgreiche
+Datenbankmigration wird dabei bewusst nicht automatisch zurueckgerollt.
+
+Falls ein Problem erst spaeter auffaellt:
 
 ```bash
 vim .env   # HOCX_VERSION auf die vorherige, bekannt gute Version zuruecksetzen
@@ -156,14 +167,16 @@ durchläuft beim nächsten Start die komplette Alembic-Historie von Anfang an.
 1. Test-Server provisionieren, Docker + Docker Compose installieren.
 2. DNS: `test.hocx.ch`, `abgabe-test.hocx.ch`, optional `docs-test.hocx.ch` und
    `web-test.hocx.ch` auf die Test-Server-IP zeigen lassen.
-3. Repo klonen: `git clone git@github.com:FrissBrot/hocX.git`.
-4. `.env.test.example` nach `.env` kopieren, alle `change-me`-Werte durch echte Werte
-   ersetzen und `GHCR_NAMESPACE` setzen.
-5. `mkdir -p storage/abgabebox-uploads infra/traefik/letsencrypt infra/traefik/dynamic`
-   und `chown root:5001 storage/abgabebox-uploads && chmod 775 storage/abgabebox-uploads`
-   - gleiche Begruendung wie bei Prod unten.
-6. In `.env` `HOCX_VERSION` auf einen bereits gebauten Candidate-Tag setzen.
-7. `./scripts/deploy.sh test` und danach `./scripts/verify_release.sh test`.
+3. Repo als root klonen: `git clone git@github.com:FrissBrot/hocX.git`.
+4. Im Repo als root `./scripts/provision_deploy_user.sh` ausfuehren. Das Skript erstellt
+   `hocx-deploy`, richtet Docker-Zugriff und alle Besitz-/Runtime-Rechte ein und zeigt
+   danach den erforderlichen Benutzerwechsel an.
+5. Mit `sudo -iu hocx-deploy` wechseln, ins Repository gehen und
+   `./scripts/deploy.sh test` starten. Falls `.env` fehlt, fragt das Skript die nicht
+   automatisch erzeugbaren Werte interaktiv ab, legt die Datei mit zufaelligen Secrets
+   und Dateirechten 600 an und startet danach direkt die Umgebung.
+6. Bei spaeteren Deploys in `.env` `HOCX_VERSION` auf den neuen Candidate-Tag setzen.
+7. Nach dem ersten Deploy und nach Updates `./scripts/verify_release.sh test` ausfuehren.
 8. Test-Admin-Login mit `INITIAL_ADMIN_EMAIL`/`INITIAL_ADMIN_PASSWORD` pruefen, danach
    weitere Test-Admins anlegen und das Bootstrap-Passwort aendern.
 
@@ -171,21 +184,21 @@ durchläuft beim nächsten Start die komplette Alembic-Historie von Anfang an.
 
 1. Server provisionieren, Docker + Docker Compose installieren.
 2. DNS: `hocx.ch` und `abgabe.hocx.ch` (oder analog) auf die Server-IP zeigen lassen.
-3. Repo klonen (nur für die Compose-Dateien und `infra/traefik/` nötig, kein
+3. Repo als root klonen (nur für die Compose-Dateien und `infra/traefik/` nötig, kein
    Source-Build): `git clone git@github.com:FrissBrot/hocX.git`.
-4. `.env.prod.example` nach `.env` kopieren (im Repo-Root auf dem Prod-Server), alle
-   `change-me`-Werte durch echte, zufällige Werte ersetzen (`openssl rand -hex 32` für
-   Secrets).
-5. `mkdir -p storage/abgabebox-uploads infra/traefik/letsencrypt infra/traefik/dynamic`
-   und `chown root:5001 storage/abgabebox-uploads && chmod 775 storage/abgabebox-uploads`
-   - `abgabebox-backend` läuft im Container als nicht-root User `abgabebox` (uid/gid 5001,
-   siehe `abgabebox-backend/Dockerfile`), `backend` schreibt als root in denselben
-   Host-Ordner (unterschiedliche Mountpunkte, siehe `docker-compose.yml`). Ohne die
-   Gruppen-Freigabe bräuchte es sonst 777 (Audit I3, 2026-08-16 - genau das lag hier vorher
-   unbemerkt vor).
-6. `./scripts/deploy.sh prod` - zieht die in `.env` gepinnte Version, startet den
+4. Im Repo als root `./scripts/provision_deploy_user.sh` ausfuehren. Danach mit
+   `sudo -iu hocx-deploy` zum dedizierten Deploy-Benutzer wechseln. Direkte
+   `deploy.sh`-Aufrufe als root werden bewusst abgelehnt.
+5. Im Repo `./scripts/deploy.sh prod` starten. Falls `.env` fehlt, fragt das Skript Domains,
+   Image-Version und externe Zugangsdaten interaktiv ab. Ableitbare Werte und sichere
+   Zufalls-Secrets erzeugt es selbst; die neue `.env` erhaelt Dateirechte 600.
+6. Das Skript zieht die in `.env` gepinnte Version und startet den
    kompletten Stack inkl. eigenem Traefik (Let's-Encrypt-Zertifikate werden beim ersten
    Start automatisch bezogen, dauert ein paar Minuten).
+   Vor dem Start verifiziert es jedes Image gegen die Signatur des
+   `build-test-images.yml`-Workflows. Eine fest gepinnte Cosign-Version wird bei Bedarf
+   nach `.tools/` geladen und gegen die im Skript hinterlegte SHA-256-Pruefsumme geprueft;
+   eine systemweite Installation ist nicht erforderlich.
 7. Bootstrap-Admin-Login mit `INITIAL_ADMIN_EMAIL`/`INITIAL_ADMIN_PASSWORD` aus `.env`
    prüfen, danach im Admin-Panel weitere Admins anlegen und das Bootstrap-Passwort
    ändern.

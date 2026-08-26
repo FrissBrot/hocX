@@ -110,6 +110,9 @@ def upgrade() -> None:
     #    bzw. wieder offen sind. Baseline ist REVOKE ALL, danach explizites Allowlisting,
     #    damit künftige Migrationen der restricted Rolle nicht versehentlich Rechte vererben.
     password = os.environ.get("ABGABEBOX_DB_PASSWORD")
+    if not password and (password_file := os.environ.get("ABGABEBOX_DB_PASSWORD_FILE")):
+        with open(password_file, encoding="utf-8") as secret_file:
+            password = secret_file.read().rstrip("\r\n")
     if not password:
         raise RuntimeError(
             "ABGABEBOX_DB_PASSWORD muss vor dieser Migration gesetzt sein "

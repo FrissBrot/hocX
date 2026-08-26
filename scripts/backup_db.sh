@@ -32,6 +32,9 @@ ENV_FILE="$PROJECT_DIR/.env"
 BACKUP_DIR="$PROJECT_DIR/backups"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
 
+# shellcheck source=scripts/lib/env.sh
+source "$REPO_DIR/scripts/lib/env.sh"
+
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 fail() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $*" >&2; exit 1; }
 
@@ -39,10 +42,7 @@ if [ ! -f "$ENV_FILE" ]; then
   fail "Env-Datei $ENV_FILE fehlt."
 fi
 
-set -a
-# shellcheck disable=SC1090
-source "$ENV_FILE"
-set +a
+load_env_file "$ENV_FILE"
 
 : "${POSTGRES_USER:?POSTGRES_USER fehlt in $ENV_FILE}"
 : "${POSTGRES_DB:?POSTGRES_DB fehlt in $ENV_FILE}"

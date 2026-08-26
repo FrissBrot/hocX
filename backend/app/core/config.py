@@ -1,8 +1,21 @@
+import os
 import sys
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _INSECURE_DEFAULTS = {"hocx-local-dev-secret", "changeme", "secret", ""}
+
+
+def _load_file_secrets() -> None:
+    """Resolve Docker-style VAR_FILE inputs without exposing values in Config.Env."""
+    for variable in ("DATABASE_URL", "AUTH_SECRET", "ADMIN_AUTH_SECRET", "INITIAL_ADMIN_PASSWORD"):
+        file_variable = f"{variable}_FILE"
+        if variable not in os.environ and (path := os.environ.get(file_variable)):
+            os.environ[variable] = Path(path).read_text(encoding="utf-8").rstrip("\r\n")
+
+
+_load_file_secrets()
 
 
 class Settings(BaseSettings):

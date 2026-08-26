@@ -12,12 +12,12 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    env_file:
-      - .env
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -43,30 +43,61 @@ services:
       retries: 10
 
   backend:
-    image: ghcr.io/${GHCR_NAMESPACE}/hocx-backend:${HOCX_VERSION}
+    image: ${HOCX_BACKEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-backend:${HOCX_VERSION}}
     restart: unless-stopped
     mem_limit: 768m
     cpus: 1.5
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,mode=1777
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
-    env_file:
-      - .env
     environment:
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL_FILE: /run/secrets/database_url
+      AUTH_SECRET_FILE: /run/secrets/auth_secret
+      ADMIN_AUTH_SECRET_FILE: /run/secrets/admin_auth_secret
+      INITIAL_ADMIN_PASSWORD_FILE: /run/secrets/initial_admin_password
+      ABGABEBOX_DB_PASSWORD_FILE: /run/secrets/abgabebox_db_password
       PYTHONPATH: /app
       STORAGE_ROOT: /app/storage
       LATEX_TEMPLATE_ROOT: /app/storage/latex_templates
       EXPORT_ROOT: /app/storage/exports
       UPLOAD_ROOT: /app/storage/uploads
       ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
-      ABGABEBOX_DB_PASSWORD: ${ABGABEBOX_DB_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL}
+      TRAEFIK_DOMAIN: ${TRAEFIK_DOMAIN}
+      TRAEFIK_ABGABEBOX_DOMAIN: ${TRAEFIK_ABGABEBOX_DOMAIN}
+      ABGABEBOX_BASE_URL: https://${TRAEFIK_ABGABEBOX_DOMAIN}
       CLAMAV_HOST: clamav
       REDIS_URL: redis://redis:6379/0
       TRAEFIK_DYNAMIC_CONFIG_DIR: /app/traefik_dynamic
+      DOMAIN_HEALTH_CHECK_INTERVAL_MINUTES: ${DOMAIN_HEALTH_CHECK_INTERVAL_MINUTES:-30}
+      ABGABEBOX_RESCAN_INTERVAL_MINUTES: ${ABGABEBOX_RESCAN_INTERVAL_MINUTES:-15}
+      WORD_IMPORT_RESCAN_INTERVAL_MINUTES: ${WORD_IMPORT_RESCAN_INTERVAL_MINUTES:-15}
+      EXPORT_CLEANUP_INTERVAL_MINUTES: ${EXPORT_CLEANUP_INTERVAL_MINUTES:-1440}
+      EXPORT_RETENTION_DAYS: ${EXPORT_RETENTION_DAYS:-30}
+      PROTOCOL_IMAGE_STORAGE_QUOTA_MB: ${PROTOCOL_IMAGE_STORAGE_QUOTA_MB:-2048}
+      AUTH_SESSION_TTL_HOURS: ${AUTH_SESSION_TTL_HOURS:-72}
+      AUTH_SESSION_COOKIE: ${AUTH_SESSION_COOKIE:-hocx_session}
+      AUTH_SECURE_COOKIES: ${AUTH_SECURE_COOKIES:-true}
+      ADMIN_SESSION_TTL_HOURS: ${ADMIN_SESSION_TTL_HOURS:-12}
+      ADMIN_SESSION_COOKIE: ${ADMIN_SESSION_COOKIE:-hocx_admin_session}
+      CLAMAV_PORT: ${CLAMAV_PORT:-3310}
+    secrets:
+      - database_url
+      - auth_secret
+      - admin_auth_secret
+      - initial_admin_password
+      - abgabebox_db_password
     depends_on:
       db:
         condition: service_healthy
@@ -141,23 +172,33 @@ services:
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-word-import-body-limit.buffering.maxRequestBodyBytes=157286400"
 
   frontend:
-    image: ghcr.io/${GHCR_NAMESPACE}/hocx-frontend:${HOCX_VERSION}
+    image: ${HOCX_FRONTEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-frontend:${HOCX_VERSION}}
     restart: unless-stopped
     # Runs a pre-built image's `next start` here (no runtime build, unlike the dev
     # compose's frontend - see its mem_limit comment there), so this is lighter
     # than the dev value, but still bounded per audit I1.
     mem_limit: 512m
     cpus: 1.0
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,mode=1777
+      - /app/.next/cache:rw,noexec,nosuid,nodev,uid=1000,gid=1000,mode=0750
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
-    env_file:
-      - .env
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
       INTERNAL_API_URL: ${INTERNAL_API_URL}
+      TRAEFIK_DOMAIN: ${TRAEFIK_DOMAIN}
+      HOCX_VERSION: ${HOCX_VERSION}
+      HOCX_APP_URL: ${HOCX_APP_URL:-}
     depends_on:
       - backend
     healthcheck:
@@ -185,25 +226,41 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.service=${ROUTER_PREFIX:-hocx}-frontend"
 
   abgabebox-backend:
-    image: ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-backend:${HOCX_VERSION}
+    image: ${HOCX_ABGABEBOX_BACKEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-backend:${HOCX_VERSION}}
     restart: unless-stopped
     mem_limit: 384m
     cpus: 1.0
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,mode=1777
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
-    env_file:
-      - .env
     environment:
-      ABGABEBOX_DATABASE_URL: ${ABGABEBOX_DATABASE_URL}
+      ABGABEBOX_DATABASE_URL_FILE: /run/secrets/abgabebox_database_url
       ABGABEBOX_STORAGE_ROOT: /app/storage
       ABGABEBOX_CORS_ORIGIN: https://${TRAEFIK_ABGABEBOX_DOMAIN}
       FRIENDLY_CAPTCHA_SITEKEY: ${FRIENDLY_CAPTCHA_SITEKEY}
-      FRIENDLY_CAPTCHA_API_KEY: ${FRIENDLY_CAPTCHA_API_KEY}
-      ABGABEBOX_CAPTCHA_SESSION_SECRET: ${ABGABEBOX_CAPTCHA_SESSION_SECRET}
+      FRIENDLY_CAPTCHA_API_KEY_FILE: /run/secrets/friendly_captcha_api_key
+      ABGABEBOX_CAPTCHA_SESSION_SECRET_FILE: /run/secrets/abgabebox_captcha_session_secret
       CLAMAV_HOST: clamav
+      CLAMAV_PORT: ${CLAMAV_PORT:-3310}
+      FRIENDLY_CAPTCHA_VERIFY_URL: ${FRIENDLY_CAPTCHA_VERIFY_URL:-https://api.friendlycaptcha.com/api/v2/captcha/siteverify}
+      ABGABEBOX_CAPTCHA_SESSION_TTL_MINUTES: ${ABGABEBOX_CAPTCHA_SESSION_TTL_MINUTES:-120}
+      ABGABEBOX_TENANT_STORAGE_QUOTA_MB: ${ABGABEBOX_TENANT_STORAGE_QUOTA_MB:-2048}
+      ABGABEBOX_QUARANTINE_MAX_AGE_MINUTES: ${ABGABEBOX_QUARANTINE_MAX_AGE_MINUTES:-60}
+      ABGABEBOX_QUARANTINE_CLEANUP_INTERVAL_MINUTES: ${ABGABEBOX_QUARANTINE_CLEANUP_INTERVAL_MINUTES:-30}
+    secrets:
+      - abgabebox_database_url
+      - friendly_captcha_api_key
+      - abgabebox_captcha_session_secret
     depends_on:
       db:
         condition: service_healthy
@@ -248,21 +305,29 @@ services:
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-body-limit.buffering.maxRequestBodyBytes=157286400"
 
   abgabebox-frontend:
-    image: ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-frontend:${HOCX_VERSION}
+    image: ${HOCX_ABGABEBOX_FRONTEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-frontend:${HOCX_VERSION}}
     restart: unless-stopped
     mem_limit: 512m
     cpus: 0.5
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,mode=1777
+      - /app/.next/cache:rw,noexec,nosuid,nodev,uid=1000,gid=1000,mode=0750
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
-    env_file:
-      - .env
     environment:
       NEXT_PUBLIC_ABGABEBOX_API_URL: https://${TRAEFIK_ABGABEBOX_DOMAIN}
       INTERNAL_ABGABEBOX_API_URL: https://${TRAEFIK_ABGABEBOX_DOMAIN}
       NEXT_PUBLIC_FRIENDLY_CAPTCHA_SITEKEY: ${FRIENDLY_CAPTCHA_SITEKEY}
+      DEFAULT_TENANT_SLUG: ${DEFAULT_TENANT_SLUG:-}
     depends_on:
       - abgabebox-backend
     healthcheck:
@@ -286,10 +351,22 @@ services:
   # intentional. Image is built by the same release workflow as the other services now
   # (.github/workflows/release.yml).
   docs:
-    image: ghcr.io/${GHCR_NAMESPACE}/hocx-docs:${HOCX_VERSION}
+    image: ${HOCX_DOCS_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-docs:${HOCX_VERSION}}
     restart: unless-stopped
     mem_limit: 128m
     cpus: 0.25
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,mode=1777
+      - /var/cache/nginx:rw,noexec,nosuid,nodev,mode=1777
+      - /var/run:rw,noexec,nosuid,nodev,mode=1777
     logging:
       driver: json-file
       options:
@@ -311,3 +388,23 @@ services:
 
 volumes:
   postgres_data:
+
+secrets:
+  postgres_password:
+    environment: POSTGRES_PASSWORD
+  database_url:
+    environment: DATABASE_URL
+  auth_secret:
+    environment: AUTH_SECRET
+  admin_auth_secret:
+    environment: ADMIN_AUTH_SECRET
+  initial_admin_password:
+    environment: INITIAL_ADMIN_PASSWORD
+  abgabebox_db_password:
+    environment: ABGABEBOX_DB_PASSWORD
+  abgabebox_database_url:
+    environment: ABGABEBOX_DATABASE_URL
+  friendly_captcha_api_key:
+    environment: FRIENDLY_CAPTCHA_API_KEY
+  abgabebox_captcha_session_secret:
+    environment: ABGABEBOX_CAPTCHA_SESSION_SECRET

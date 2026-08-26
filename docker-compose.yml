@@ -79,6 +79,10 @@ services:
   backend:
     build:
       context: ./backend
+    # Der lokale/source-basierte Stack bind-mountet den Quellcode und fuehrt Dev-Builds
+    # aus. Release-Deployments nutzen stattdessen den gehaerteten Non-Root-Service aus
+    # docker-compose.release.yml.
+    user: "0:0"
     restart: unless-stopped
     mem_limit: 768m
     cpus: 1.5
@@ -427,6 +431,8 @@ services:
     build:
       context: ./docs-site
     restart: unless-stopped
+    cap_add:
+      - NET_BIND_SERVICE
     mem_limit: 128m
     cpus: 0.25
     logging:

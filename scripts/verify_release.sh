@@ -12,6 +12,9 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENVIRONMENT="${1:-}"
 
+# shellcheck source=scripts/lib/env.sh
+source "$REPO_DIR/scripts/lib/env.sh"
+
 case "$ENVIRONMENT" in
   test)
     PROJECT_NAME=hocx-test
@@ -47,10 +50,7 @@ if [ ! -f "$ENV_FILE" ]; then
   exit 1
 fi
 
-set -a
-# shellcheck disable=SC1090
-source "$ENV_FILE"
-set +a
+load_env_file "$ENV_FILE"
 
 : "${HOCX_VERSION:?HOCX_VERSION fehlt in $ENV_FILE}"
 : "${TRAEFIK_DOMAIN:?TRAEFIK_DOMAIN fehlt in $ENV_FILE}"

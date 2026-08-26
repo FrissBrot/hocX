@@ -1,5 +1,23 @@
+import os
+from pathlib import Path
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _load_file_secrets() -> None:
+    """Resolve Docker-style VAR_FILE inputs without exposing values in Config.Env."""
+    for variable in (
+        "ABGABEBOX_DATABASE_URL",
+        "FRIENDLY_CAPTCHA_API_KEY",
+        "ABGABEBOX_CAPTCHA_SESSION_SECRET",
+    ):
+        file_variable = f"{variable}_FILE"
+        if variable not in os.environ and (path := os.environ.get(file_variable)):
+            os.environ[variable] = Path(path).read_text(encoding="utf-8").rstrip("\r\n")
+
+
+_load_file_secrets()
 
 
 class Settings(BaseSettings):
