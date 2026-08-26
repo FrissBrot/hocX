@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models import DocumentTemplate, DocumentTemplatePart, Protocol
-from app.services.file_service import _safe_storage_path
+from app.services.file_service import MAX_UPLOAD_BYTES, _safe_storage_path
 from app.repositories.document_template_repository import (
     DocumentTemplatePartRepository,
     DocumentTemplateRepository,
@@ -326,12 +326,20 @@ class DocumentTemplateService:
     async def _save_part_file(self, payload: DocumentTemplatePartCreate, file: UploadFile, *, tenant_id: int) -> str:
         if payload.part_type not in self.part_type_choices():
             raise HTTPException(status_code=400, detail="Invalid part_type")
+        # Unlike every other upload path in this codebase (see file_service.py), this one
+        # had no size check at all - an admin account (or a hijacked admin session) could
+        # write arbitrarily large files to disk here (audit finding, 2026-08-26). Checking
+        # file.size first rejects an oversized upload without buffering it into memory.
+        if file.size is not None and file.size > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail=f"Datei zu gross. Maximum {MAX_UPLOAD_BYTES // 1024 // 1024} MB")
         suffix = Path(file.filename or "part.tex").suffix or ".tex"
         relative_dir = Path("document_template_parts") / f"tenant-{tenant_id}" / payload.part_type / (payload.code or "")
         target_dir = _safe_storage_path(settings.storage_root, str(relative_dir))
         target_dir.mkdir(parents=True, exist_ok=True)
         target_path = target_dir / f"v{payload.version}{suffix}"
         content = await file.read()
+        if len(content) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail=f"Datei zu gross. Maximum {MAX_UPLOAD_BYTES // 1024 // 1024} MB")
         target_path.write_bytes(content)
         return str(target_path.relative_to(settings.storage_root))
 

@@ -11,12 +11,16 @@ stack it is bind-mounted to the host's ./storage directory (see docker-compose.y
 into it unmonkeypatched would leave real files behind on disk."""
 from __future__ import annotations
 
+import asyncio
+import io
 from pathlib import Path
 
 import pytest
+from fastapi import HTTPException, UploadFile
 
-from app.schemas.document_template import DocumentTemplateCreate, DocumentTemplateUpdate
+from app.schemas.document_template import DocumentTemplateCreate, DocumentTemplatePartCreate, DocumentTemplateUpdate
 from app.services.document_template_service import DocumentTemplateService
+from app.services.file_service import MAX_UPLOAD_BYTES
 from tests.factories import make_tenant
 
 
@@ -184,3 +188,34 @@ def test_update_document_template_partial_payload_rematerializes(db):
 
     assert updated.name == "Neuer Name"
     assert Path(updated.filesystem_path).exists()
+
+
+def test_save_part_file_rejects_upload_over_the_size_limit(db):
+    """Security regression (audit finding, 2026-08-26): document-template parts (the raw
+    .tex theme/preamble/macros snippets a tenant admin uploads, later \\input'd verbatim
+    into every export) had no size check at all, unlike every other upload path in this
+    codebase - an admin account, or a hijacked admin session, could write an arbitrarily
+    large file to disk here."""
+    tenant = make_tenant(db, "Oversized Upload Verein")
+    service = DocumentTemplateService()
+    payload = DocumentTemplatePartCreate(name="Huge Preamble", part_type="preamble", version=1)
+    oversized = io.BytesIO(b"x" * (MAX_UPLOAD_BYTES + 1))
+    upload = UploadFile(oversized, size=MAX_UPLOAD_BYTES + 1, filename="preamble.tex")
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(service._save_part_file(payload, upload, tenant_id=tenant.id))
+    assert exc_info.value.status_code == 413
+
+
+def test_save_part_file_accepts_upload_within_the_size_limit(db):
+    tenant = make_tenant(db, "Normal Upload Verein")
+    service = DocumentTemplateService()
+    payload = DocumentTemplatePartCreate(name="Small Preamble", part_type="preamble", version=1)
+    content = b"\\usepackage{xcolor}\n"
+    upload = UploadFile(io.BytesIO(content), size=len(content), filename="preamble.tex")
+
+    storage_path = asyncio.run(service._save_part_file(payload, upload, tenant_id=tenant.id))
+
+    from app.core.config import settings
+
+    assert (Path(settings.storage_root) / storage_path).read_bytes() == content

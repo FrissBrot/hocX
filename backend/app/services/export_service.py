@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import re
+import resource
 import shutil
 import subprocess
 import unicodedata
@@ -20,6 +21,27 @@ from app.services.event_cycle_service import list_cycle_event_ids, resolve_proto
 from app.services.file_service import _safe_storage_path
 from app.services.responsible_label_service import resolve_display_section_titles_batch
 from app.schemas.protocol import ProtocolExportRead
+
+
+# LaTeX source compiled here ultimately derives from tenant-controlled template content
+# (custom themes/preambles/macros uploaded via the document-template-parts endpoint), so
+# the compiler is run under the same restrictions as any other untrusted-input processor:
+# bounded memory/CPU regardless of the wall-clock timeout below, and no more than a
+# handful running at once so a burst of exports can't exhaust the container's RAM.
+_COMPILE_MEMORY_LIMIT_BYTES = 2 * 1024 * 1024 * 1024  # 2 GB address space per compile
+_COMPILE_CPU_LIMIT_SECONDS = 90
+_COMPILE_CONCURRENCY_LIMIT = 4
+_compile_semaphore = asyncio.Semaphore(_COMPILE_CONCURRENCY_LIMIT)
+
+
+def _limit_compile_resources() -> None:
+    """preexec_fn for the pdflatex/xelatex subprocess (POSIX-only, runs in the forked
+    child before exec). TeX is Turing-complete, so a malicious or careless macro can
+    expand without bound - the 120s wait_for timeout in _compile_pdf_async only bounds
+    wall-clock time, not memory, and a runaway allocation could OOM the whole backend
+    container before that timeout fires."""
+    resource.setrlimit(resource.RLIMIT_AS, (_COMPILE_MEMORY_LIMIT_BYTES, _COMPILE_MEMORY_LIMIT_BYTES))
+    resource.setrlimit(resource.RLIMIT_CPU, (_COMPILE_CPU_LIMIT_SECONDS, _COMPILE_CPU_LIMIT_SECONDS))
 
 
 class ExportService:
@@ -2188,27 +2210,39 @@ Status: {protocol_status}
             # source here ultimately derives from tenant-controlled template content, and
             # \write18 shell-escape would let compiled TeX run arbitrary shell commands.
             "-no-shell-escape",
+            # -no-shell-escape blocks command execution, but \input/\openin can still read
+            # any file the process can see (kpathsea's default openin_any=a has no path
+            # restriction at all) - a tenant-authored template could otherwise do
+            # \input{/app/.env} and have the secret embedded straight into the exported
+            # PDF. 'p' (paranoid) confines reads/writes to the compile directory: no
+            # absolute paths, no '..' components, no leading-dot files. All of this
+            # export's own \input targets are plain relative paths under main_tex_path's
+            # directory, so legitimate templates are unaffected.
+            "-cnf-line=openin_any=p",
+            "-cnf-line=openout_any=p",
             f"-output-directory={main_tex_path.parent.as_posix()}",
             main_tex_path.as_posix(),
         ]
         result = None
-        # Run twice: first pass writes .toc/.aux, second pass uses them for TOC/refs.
-        for _ in range(2):
-            proc = await asyncio.create_subprocess_exec(
-                *command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=main_tex_path.parent,
-            )
-            try:
-                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
-            except asyncio.TimeoutError:
-                proc.kill()
-                await proc.communicate()
-                raise RuntimeError("PDF compilation timed out after 120s")
-            result = proc
-            result.stdout_text = stdout.decode(errors="replace")
-            result.stderr_text = stderr.decode(errors="replace")
+        async with _compile_semaphore:
+            # Run twice: first pass writes .toc/.aux, second pass uses them for TOC/refs.
+            for _ in range(2):
+                proc = await asyncio.create_subprocess_exec(
+                    *command,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    cwd=main_tex_path.parent,
+                    preexec_fn=_limit_compile_resources,
+                )
+                try:
+                    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
+                except asyncio.TimeoutError:
+                    proc.kill()
+                    await proc.communicate()
+                    raise RuntimeError("PDF compilation timed out after 120s")
+                result = proc
+                result.stdout_text = stdout.decode(errors="replace")
+                result.stderr_text = stderr.decode(errors="replace")
         if result is not None and result.returncode != 0:
             raise RuntimeError(f"pdflatex failed: {result.stderr_text or result.stdout_text}")
 
