@@ -13,7 +13,7 @@ jobs:
 
       - name: Test secure env loader and shell syntax
         run: |
-          bash -n scripts/lib/env.sh scripts/deploy.sh scripts/provision_deploy_user.sh scripts/verify_release.sh scripts/backup_db.sh scripts/tests/*.sh
+          bash -n scripts/lib/env.sh scripts/deploy.sh scripts/dev.sh scripts/provision_deploy_user.sh scripts/update_deploy_code.sh scripts/verify_release.sh scripts/backup_db.sh scripts/tests/*.sh
           bash scripts/tests/test_env.sh
           bash scripts/tests/test_release_config.sh
 

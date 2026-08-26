@@ -2,6 +2,64 @@
 
 # Load a dotenv file as data. Deliberately does not use `source`: a server-side
 # .env must never become executable shell code during a privileged deploy.
+read_host_environment() {
+  local marker="${1:-/etc/hocx/environment}"
+  local owner_uid mode environment
+
+  if [ ! -f "$marker" ] || [ -L "$marker" ]; then
+    echo "Host ist nicht sicher als hocX-Umgebung provisioniert: $marker fehlt oder ist ein Symlink." >&2
+    return 1
+  fi
+  owner_uid="$(stat -c '%u' "$marker")"
+  if [ "$marker" = /etc/hocx/environment ]; then
+    [ "$owner_uid" = 0 ] || {
+      echo "$marker muss root gehoeren." >&2
+      return 1
+    }
+  elif [ "$owner_uid" != "$EUID" ] && [ "$owner_uid" != 0 ]; then
+    echo "Unsicherer Eigentuemer der Environment-Markierung $marker." >&2
+    return 1
+  fi
+  mode="$(stat -c '%a' "$marker")"
+  if (( (8#$mode & 022) != 0 )); then
+    echo "$marker darf nicht gruppen- oder weltbeschreibbar sein (aktuell: $mode)." >&2
+    return 1
+  fi
+  IFS= read -r environment < "$marker" || true
+  case "$environment" in
+    prod|test)
+      printf '%s\n' "$environment"
+      ;;
+    *)
+      echo "Ungueltige hocX-Umgebung in $marker: $environment" >&2
+      return 1
+      ;;
+  esac
+}
+
+require_host_environment() {
+  local expected="$1"
+  local marker="${2:-/etc/hocx/environment}"
+  local actual
+  actual="$(read_host_environment "$marker")" || return 1
+  if [ "$actual" != "$expected" ]; then
+    echo "Dieser Host ist dauerhaft als '$actual' provisioniert." >&2
+    echo "Die angeforderte Umgebung '$expected' wurde blockiert." >&2
+    return 1
+  fi
+}
+
+require_unprovisioned_dev_host() {
+  local marker="${1:-/etc/hocx/environment}"
+  local actual
+  if [ ! -e "$marker" ]; then
+    return 0
+  fi
+  actual="$(read_host_environment "$marker")" || return 1
+  echo "Der Dev-Stack ist auf einem als '$actual' provisionierten Server gesperrt." >&2
+  return 1
+}
+
 is_allowed_env_key() {
   case "$1" in
     ABGABEBOX_BASE_URL|ABGABEBOX_CAPTCHA_SESSION_SECRET|ABGABEBOX_CAPTCHA_SESSION_TTL_MINUTES|\

@@ -35,6 +35,8 @@ RETENTION_DAYS="${RETENTION_DAYS:-14}"
 # shellcheck source=scripts/lib/env.sh
 source "$REPO_DIR/scripts/lib/env.sh"
 
+require_host_environment prod
+
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 fail() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $*" >&2; exit 1; }
 

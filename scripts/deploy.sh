@@ -61,6 +61,8 @@ if [ "$EUID" -eq 0 ]; then
   exit 1
 fi
 
+require_host_environment "$ENVIRONMENT"
+
 if ! command -v flock > /dev/null 2>&1; then
   echo "flock wird fuer den Schutz vor parallelen Deployments benoetigt." >&2
   exit 1

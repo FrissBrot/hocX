@@ -16,6 +16,11 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT_NAME=hocx-dev
 ENV_FILE="$REPO_DIR/.env"
 
+# shellcheck source=scripts/lib/env.sh
+source "$REPO_DIR/scripts/lib/env.sh"
+
+require_unprovisioned_dev_host
+
 usage() {
   cat >&2 <<EOF
 Usage:

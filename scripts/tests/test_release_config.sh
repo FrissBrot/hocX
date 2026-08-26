@@ -30,5 +30,8 @@ if grep -q 'alembic upgrade head.*uvicorn' backend/Dockerfile; then
 fi
 grep -q 'Deployments als root sind fuer hocX gesperrt' scripts/deploy.sh
 grep -q 'DEPLOY_USER="hocx-deploy"' scripts/provision_deploy_user.sh
+grep -q 'Usage:.*provision_deploy_user.sh.*test|prod' scripts/provision_deploy_user.sh
+grep -q 'git merge --ff-only refs/remotes/origin/main' scripts/update_deploy_code.sh
+grep -q 'require_unprovisioned_dev_host' scripts/dev.sh
 
 echo "release config tests: ok"

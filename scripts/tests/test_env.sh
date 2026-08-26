@@ -38,4 +38,18 @@ if load_env_file "$TEST_DIR/symlink.env" 2> /dev/null; then
   exit 1
 fi
 
+ENVIRONMENT_MARKER="$TEST_DIR/environment"
+printf 'prod\n' > "$ENVIRONMENT_MARKER"
+chmod 444 "$ENVIRONMENT_MARKER"
+test "$(read_host_environment "$ENVIRONMENT_MARKER")" = prod
+require_host_environment prod "$ENVIRONMENT_MARKER"
+if require_host_environment test "$ENVIRONMENT_MARKER" 2> /dev/null; then
+  echo "Falsche Host-Umgebung wurde akzeptiert." >&2
+  exit 1
+fi
+if require_unprovisioned_dev_host "$ENVIRONMENT_MARKER" 2> /dev/null; then
+  echo "Dev wurde auf provisioniertem Host akzeptiert." >&2
+  exit 1
+fi
+
 echo "env loader tests: ok"

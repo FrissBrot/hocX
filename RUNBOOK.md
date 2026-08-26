@@ -168,9 +168,10 @@ durchläuft beim nächsten Start die komplette Alembic-Historie von Anfang an.
 2. DNS: `test.hocx.ch`, `abgabe-test.hocx.ch`, optional `docs-test.hocx.ch` und
    `web-test.hocx.ch` auf die Test-Server-IP zeigen lassen.
 3. Repo als root klonen: `git clone git@github.com:FrissBrot/hocX.git`.
-4. Im Repo als root `./scripts/provision_deploy_user.sh` ausfuehren. Das Skript erstellt
+4. Im Repo als root `./scripts/provision_deploy_user.sh test` ausfuehren. Das Skript erstellt
    `hocx-deploy`, richtet Docker-Zugriff und alle Besitz-/Runtime-Rechte ein und zeigt
-   danach den erforderlichen Benutzerwechsel an.
+   danach den erforderlichen Benutzerwechsel an. `/etc/hocx/environment` bindet den Host
+   dauerhaft an `test`; Prod- und Dev-Starts werden auf diesem Host abgelehnt.
 5. Mit `sudo -iu hocx-deploy` wechseln, ins Repository gehen und
    `./scripts/deploy.sh test` starten. Falls `.env` fehlt, fragt das Skript die nicht
    automatisch erzeugbaren Werte interaktiv ab, legt die Datei mit zufaelligen Secrets
@@ -186,9 +187,10 @@ durchläuft beim nächsten Start die komplette Alembic-Historie von Anfang an.
 2. DNS: `hocx.ch` und `abgabe.hocx.ch` (oder analog) auf die Server-IP zeigen lassen.
 3. Repo als root klonen (nur für die Compose-Dateien und `infra/traefik/` nötig, kein
    Source-Build): `git clone git@github.com:FrissBrot/hocX.git`.
-4. Im Repo als root `./scripts/provision_deploy_user.sh` ausfuehren. Danach mit
+4. Im Repo als root `./scripts/provision_deploy_user.sh prod` ausfuehren. Danach mit
    `sudo -iu hocx-deploy` zum dedizierten Deploy-Benutzer wechseln. Direkte
-   `deploy.sh`-Aufrufe als root werden bewusst abgelehnt.
+   `deploy.sh`-Aufrufe als root werden bewusst abgelehnt. Die Root-eigene Markierung
+   `/etc/hocx/environment` blockiert auf diesem Host Test- und Dev-Starts.
 5. Im Repo `./scripts/deploy.sh prod` starten. Falls `.env` fehlt, fragt das Skript Domains,
    Image-Version und externe Zugangsdaten interaktiv ab. Ableitbare Werte und sichere
    Zufalls-Secrets erzeugt es selbst; die neue `.env` erhaelt Dateirechte 600.
@@ -203,7 +205,30 @@ durchläuft beim nächsten Start die komplette Alembic-Historie von Anfang an.
    prüfen, danach im Admin-Panel weitere Admins anlegen und das Bootstrap-Passwort
    ändern.
 
-## 9. Backup- und Cleanup-Cronjobs
+## 9. Deploy-Code kontrolliert aktualisieren
+
+Ein normaler `deploy.sh`-Lauf aktualisiert Skripte und Compose-Dateien niemals selbst.
+Als `hocx-deploy` wird ein Update bewusst separat ausgefuehrt:
+
+```bash
+cd /docker/hocX
+./scripts/update_deploy_code.sh
+./scripts/deploy.sh prod  # auf dem Testhost entsprechend: test
+```
+
+Optional kann das erfolgreiche Fast-Forward-Update direkt den an den Host gebundenen
+Deploy starten:
+
+```bash
+./scripts/update_deploy_code.sh --deploy
+```
+
+Der Updater akzeptiert nur die fest hinterlegte hocX-GitHub-Remote, den Branch `main`,
+einen sauberen tracked Worktree und einen reinen Fast-Forward auf `origin/main`. Er nutzt
+denselben exklusiven Lock wie `deploy.sh`. `.env`, Storage, Backups, `.tools` und
+`.releases` sind ignoriert und werden nicht veraendert.
+
+## 10. Backup- und Cleanup-Cronjobs
 
 Zwei eigenständige Skripte in `scripts/`, gedacht für periodische Ausführung per Cron
 (zusätzlich zum automatischen Pre-Deploy-Backup, das `deploy.sh` bei jedem Update ohnehin
@@ -261,7 +286,7 @@ Fehlern mit Exit-Code ≠ 0 ab (wichtig für Cron-Fehlerbenachrichtigung/Monitor
 - **Manuell testen**: erst `./scripts/cleanup_storage.sh --dry-run` (zeigt betroffene
   Dateien, löscht nichts), danach bei Bedarf ohne Flag fuer den echten Lauf.
 
-## 10. hocx.example.com ist faktisches Prod, nicht lokales Dev
+## 11. hocx.example.com ist faktisches Prod, nicht lokales Dev
 
 Die Tabelle in Abschnitt "Drei Umgebungen" oben führt `hocx.example.com` als "Dev" -
 das beschreibt korrekt, *wie* die Umgebung technisch betrieben wird (lokaler Build aus
@@ -280,7 +305,7 @@ selbst bleibt unverändert - das ist eine bewusste, hier nicht revidierte Entsch
 keine Pipeline-Umstellung auf GHCR-Images ist im Rahmen dieses Punkts vorgesehen):
 
 1. **Vor jedem Update**: Backup ziehen, unabhängig vom nächtlichen Cron-Lauf aus
-   Abschnitt 9 - `./scripts/backup_db.sh` im Repo-Root ausführen und den Erfolg
+   Abschnitt 10 - `./scripts/backup_db.sh` im Repo-Root ausführen und den Erfolg
    (neue Datei unter `backups/`) prüfen, bevor der Code aktualisiert wird.
 2. **Update durchführen**: `git pull` + `docker compose up -d --build` (Alembic migriert
    die DB dabei automatisch, wie bei den anderen Umgebungen auch).

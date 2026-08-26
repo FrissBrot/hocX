@@ -45,6 +45,8 @@ case "$ENVIRONMENT" in
     ;;
 esac
 
+require_host_environment "$ENVIRONMENT"
+
 if [ ! -f "$ENV_FILE" ]; then
   echo "Env-Datei $ENV_FILE fehlt." >&2
   exit 1
