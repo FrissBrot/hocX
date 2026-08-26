@@ -180,3 +180,12 @@ Wichtige Skripte:
 Für ein öffentliches Deployment müssen die DNS-Einträge vor dem ersten Start auf den
 Server zeigen, damit Traefik die Let's-Encrypt-Zertifikate ohne fehlgeschlagene
 Autorisierungen beziehen kann.
+
+## Lizenz
+
+Copyright © 2026 hocX Project. All rights reserved.
+
+Dieses Projekt ist proprietäre Software. Nutzung, Vervielfältigung, Veränderung oder
+Weitergabe ist nur mit vorheriger schriftlicher Genehmigung des Rechteinhabers erlaubt.
+Weitere Einzelheiten stehen in der [LICENSE](LICENSE). Eingebundene Komponenten von
+Drittanbietern unterliegen weiterhin ihren jeweiligen Lizenzen.
