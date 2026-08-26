@@ -37,6 +37,32 @@ services:
     restart: unless-stopped
     mem_limit: 768m
     cpus: 1.0
+    # Audit finding, 2026-08-26: Postgres ran with pure factory defaults (shared_buffers
+    # 128MB, effective_cache_size 4GB(!) despite this container's 768m mem_limit above -
+    # a wrong effective_cache_size misleads the query planner's cost estimates) and no
+    # pg_stat_statements, so there was no way to see which queries are actually
+    # expensive/frequent in production. shared_buffers/effective_cache_size/work_mem sized
+    # off the 768m limit above (25%/~60%/conservative per-connection); adjust together if
+    # mem_limit changes. pg_stat_statements needs shared_preload_libraries at server start
+    # (can't be added later via ALTER SYSTEM) - the extension itself still needs
+    # `CREATE EXTENSION IF NOT EXISTS pg_stat_statements;` run once (superuser) before
+    # pg_stat_statements/pg_stat_statements_* views become queryable.
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.max=5000
+      - -c
+      - pg_stat_statements.track=all
+      - -c
+      - shared_buffers=192MB
+      - -c
+      - effective_cache_size=460MB
+      - -c
+      - work_mem=8MB
+      - -c
+      - maintenance_work_mem=64MB
     logging:
       driver: json-file
       options:
@@ -95,6 +121,8 @@ services:
       - .env
     environment:
       DATABASE_URL: ${DATABASE_URL}
+      APP_DATABASE_URL: ${APP_DATABASE_URL}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
       PYTHONPATH: /app
       STORAGE_ROOT: /app/storage
       LATEX_TEMPLATE_ROOT: /app/storage/latex_templates

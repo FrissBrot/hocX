@@ -42,3 +42,16 @@ class AuditService:
             },
         )
         db.commit()
+
+    def cleanup_old_entries(self, db: Session, *, retention_days: int) -> dict:
+        """Periodic retention sweep (see main.py's log_cleanup_loop) - audit_log had no
+        cleanup at all before this (audit finding, 2026-08-26), so it grew unbounded
+        forever. retention_days is intentionally the caller's call (settings.audit_log_
+        retention_days), not hardcoded here - this is the compliance/security trail, so the
+        right retention period is a legal question, not an engineering one."""
+        result = db.execute(
+            text("DELETE FROM audit_log WHERE created_at < NOW() - make_interval(days => :retention_days)"),
+            {"retention_days": retention_days},
+        )
+        db.commit()
+        return {"deleted": result.rowcount}

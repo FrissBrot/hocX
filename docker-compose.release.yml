@@ -7,6 +7,25 @@ services:
     # whole host with nothing to stop it. Values mirror docker-compose.yml's equivalents.
     mem_limit: 768m
     cpus: 1.0
+    # Audit finding, 2026-08-16/2026-08-26: mirrors docker-compose.yml's (dev) equivalent -
+    # see the comment there for the reasoning (tuned to this container's 768m mem_limit
+    # above, plus pg_stat_statements so slow/frequent queries are diagnosable in prod).
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.max=5000
+      - -c
+      - pg_stat_statements.track=all
+      - -c
+      - shared_buffers=192MB
+      - -c
+      - effective_cache_size=460MB
+      - -c
+      - work_mem=8MB
+      - -c
+      - maintenance_work_mem=64MB
     logging:
       driver: json-file
       options:
@@ -62,6 +81,8 @@ services:
         max-file: "3"
     environment:
       DATABASE_URL_FILE: /run/secrets/database_url
+      APP_DATABASE_URL_FILE: /run/secrets/app_database_url
+      APP_DB_PASSWORD_FILE: /run/secrets/app_db_password
       AUTH_SECRET_FILE: /run/secrets/auth_secret
       ADMIN_AUTH_SECRET_FILE: /run/secrets/admin_auth_secret
       INITIAL_ADMIN_PASSWORD_FILE: /run/secrets/initial_admin_password
@@ -85,6 +106,9 @@ services:
       WORD_IMPORT_RESCAN_INTERVAL_MINUTES: ${WORD_IMPORT_RESCAN_INTERVAL_MINUTES:-15}
       EXPORT_CLEANUP_INTERVAL_MINUTES: ${EXPORT_CLEANUP_INTERVAL_MINUTES:-1440}
       EXPORT_RETENTION_DAYS: ${EXPORT_RETENTION_DAYS:-30}
+      LOG_CLEANUP_INTERVAL_MINUTES: ${LOG_CLEANUP_INTERVAL_MINUTES:-1440}
+      AUDIT_LOG_RETENTION_DAYS: ${AUDIT_LOG_RETENTION_DAYS:-730}
+      ERROR_LOG_RETENTION_DAYS: ${ERROR_LOG_RETENTION_DAYS:-90}
       PROTOCOL_IMAGE_STORAGE_QUOTA_MB: ${PROTOCOL_IMAGE_STORAGE_QUOTA_MB:-2048}
       AUTH_SESSION_TTL_HOURS: ${AUTH_SESSION_TTL_HOURS:-72}
       AUTH_SESSION_COOKIE: ${AUTH_SESSION_COOKIE:-hocx_session}
@@ -94,6 +118,8 @@ services:
       CLAMAV_PORT: ${CLAMAV_PORT:-3310}
     secrets:
       - database_url
+      - app_database_url
+      - app_db_password
       - auth_secret
       - admin_auth_secret
       - initial_admin_password
@@ -394,6 +420,10 @@ secrets:
     environment: POSTGRES_PASSWORD
   database_url:
     environment: DATABASE_URL
+  app_database_url:
+    environment: APP_DATABASE_URL
+  app_db_password:
+    environment: APP_DB_PASSWORD
   auth_secret:
     environment: AUTH_SECRET
   admin_auth_secret:

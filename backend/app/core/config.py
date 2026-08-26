@@ -9,7 +9,7 @@ _INSECURE_DEFAULTS = {"hocx-local-dev-secret", "changeme", "secret", ""}
 
 def _load_file_secrets() -> None:
     """Resolve Docker-style VAR_FILE inputs without exposing values in Config.Env."""
-    for variable in ("DATABASE_URL", "AUTH_SECRET", "ADMIN_AUTH_SECRET", "INITIAL_ADMIN_PASSWORD"):
+    for variable in ("DATABASE_URL", "APP_DATABASE_URL", "AUTH_SECRET", "ADMIN_AUTH_SECRET", "INITIAL_ADMIN_PASSWORD"):
         file_variable = f"{variable}_FILE"
         if variable not in os.environ and (path := os.environ.get(file_variable)):
             os.environ[variable] = Path(path).read_text(encoding="utf-8").rstrip("\r\n")
@@ -20,7 +20,17 @@ _load_file_secrets()
 
 class Settings(BaseSettings):
     app_name: str = "hocX API"
+    # Admin/migration connection (superuser role) - used by alembic (see alembic/env.py).
     database_url: str = "postgresql+psycopg://hocx:hocx@db:5432/hocx"
+    # Runtime connection for the FastAPI app itself, using the least-privilege
+    # 'hocx_app' role (see alembic/versions/0070_restrict_app_db_role.py) instead of the
+    # superuser role above - audit finding, 2026-08-26: previously the app served every
+    # request as Postgres superuser, so a SQL-injection bug or a compromised backend
+    # process would have had full control over the whole Postgres server (all databases,
+    # CREATE ROLE, RLS bypass, ...), not just this app's tables. Falls back to
+    # database_url when unset so existing local/CI setups that only define DATABASE_URL
+    # keep working unchanged.
+    app_database_url: str = ""
     storage_root: str = "/app/storage"
     latex_template_root: str = "/app/storage/latex_templates"
     export_root: str = "/app/storage/exports"
@@ -35,6 +45,13 @@ class Settings(BaseSettings):
     word_import_rescan_interval_minutes: int = 15
     export_cleanup_interval_minutes: int = 1440
     export_retention_days: int = 30
+    # Retention sweep for audit_log/system_error_log (audit finding, 2026-08-26: neither
+    # table had any cleanup, both grow unbounded forever). audit_log default is
+    # deliberately long (~2 years) since it's the compliance/security trail - review
+    # against your own legal retention duty before relying on this default.
+    log_cleanup_interval_minutes: int = 1440
+    audit_log_retention_days: int = 730
+    error_log_retention_days: int = 90
     # Mirrors the abgabebox subapp's ABGABEBOX_TENANT_STORAGE_QUOTA_MB - protocol-image
     # uploads had only a per-file limit (MAX_UPLOAD_BYTES), no per-tenant total at all
     # (audit finding, 2026-08-25), a real risk given this app's two prior disk-full

@@ -15,6 +15,8 @@ from app.core.redis_client import close_redis_pool
 from app.core.security import hash_password
 from app.models import ElementType, PlatformAdmin, Role, Tenant
 from app.services import domain_health_check_service, traefik_config_service
+from app.services.admin_error_log_service import AdminErrorLogService
+from app.services.audit_service import AuditService
 from app.services.submission_service import SubmissionService
 from app.services.document_template_service import DocumentTemplateService
 from app.services.export_service import ExportService
@@ -224,6 +226,25 @@ async def export_cleanup_loop() -> None:
         await asyncio.sleep(interval_seconds)
 
 
+async def log_cleanup_loop() -> None:
+    """Periodic retention sweep for audit_log/system_error_log (audit finding, 2026-08-26:
+    neither table had any cleanup, both grew unbounded forever - unlike the export cleanup
+    loop above, which already existed). Same every-worker-but-advisory-locked pattern."""
+    interval_seconds = settings.log_cleanup_interval_minutes * 60
+    audit_service = AuditService()
+    error_log_service = AdminErrorLogService()
+    while True:
+        with SessionLocal() as db:
+            acquired = db.execute(text("SELECT pg_try_advisory_lock(202600009)")).scalar()
+            if acquired:
+                try:
+                    audit_service.cleanup_old_entries(db, retention_days=settings.audit_log_retention_days)
+                    error_log_service.cleanup_old_entries(db, retention_days=settings.error_log_retention_days)
+                finally:
+                    db.execute(text("SELECT pg_advisory_unlock(202600009)"))
+        await asyncio.sleep(interval_seconds)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     FileService().ensure_storage()
@@ -237,12 +258,14 @@ async def lifespan(_: FastAPI):
     word_import_rescan_task = asyncio.create_task(word_import_rescan_loop())
     protocol_image_rescan_task = asyncio.create_task(protocol_image_rescan_loop())
     export_cleanup_task = asyncio.create_task(export_cleanup_loop())
+    log_cleanup_task = asyncio.create_task(log_cleanup_loop())
     yield
     health_check_task.cancel()
     rescan_task.cancel()
     word_import_rescan_task.cancel()
     protocol_image_rescan_task.cancel()
     export_cleanup_task.cancel()
+    log_cleanup_task.cancel()
     await close_redis_pool()
 
 
