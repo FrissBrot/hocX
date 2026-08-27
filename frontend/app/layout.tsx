@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import Script from "next/script";
 import { getMainAppUrl } from "@/lib/site-config";
 import "./globals.css";
 
@@ -34,12 +35,16 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="de" className={inter.variable} suppressHydrationWarning>
       <body suppressHydrationWarning>
-        <script
+        <Script
+          id="hocx-runtime-config"
+          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `window.__HOCX_CONFIG__ = ${JSON.stringify(runtimeConfig).replace(/</g, "\\u003c")};`
           }}
         />
-        <script
+        <Script
+          id="hocx-theme"
+          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `
               (function () {

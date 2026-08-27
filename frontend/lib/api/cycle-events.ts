@@ -2,7 +2,7 @@ import { browserApiFetch } from "@/lib/api/client";
 import { EventSummary } from "@/types/api";
 
 export type ProtocolCycleInfo = {
-  cycle_config_id: number;
+  cycle_config_id: string;
   cycle_year: number;
   label: string;
 };
@@ -21,7 +21,7 @@ export type ProtocolCycleEvents = {
  * the newest 100 tenant-wide events (GET /api/events default limit).
  */
 export async function fetchCycleEvents(
-  protocolId: number,
+  protocolId: string,
   options: { scope?: "current" | "all"; search?: string; skip?: number; limit?: number } = {}
 ): Promise<ProtocolCycleEvents> {
   const params = new URLSearchParams();

@@ -3,25 +3,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export type CollaboratorInfo = {
-  user_id: number;
+  user_id: string;
   display_name: string;
 };
 
 export type FieldUpdateEvent = {
   field_key: string;
   patch: unknown;
-  user_id: number;
+  user_id: string;
   display_name: string;
 };
 
 type StatusChangedEvent = {
   status: string;
-  user_id: number;
+  user_id: string;
   display_name: string;
 };
 
 export type ListChangedEvent = {
-  list_definition_id: number;
+  list_definition_id: string;
   content_version: number;
 };
 
@@ -29,7 +29,7 @@ const HEARTBEAT_INTERVAL_MS = 20_000;
 const RECONNECT_BASE_DELAY_MS = 1_000;
 const RECONNECT_MAX_DELAY_MS = 15_000;
 
-function wsUrlForProtocol(protocolId: number): string {
+function wsUrlForProtocol(protocolId: string): string {
   // Same-origin: WS-Scheme + aktueller Host, damit das auf jeder Domain (Haupt- oder
   // Mandanten-Custom-Domain) automatisch gegen die richtige Origin geht.
   const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
@@ -42,10 +42,10 @@ function wsUrlForProtocol(protocolId: number): string {
  * normal REST autosave endpoints - this hook only carries the collaboration layer on top,
  * so it can fail/reconnect without affecting the ability to save.
  */
-export function useProtocolCollaboration(protocolId: number | null | undefined) {
+export function useProtocolCollaboration(protocolId: string | null | undefined) {
   const [connected, setConnected] = useState(false);
   const [canEdit, setCanEdit] = useState(true);
-  const [selfUserId, setSelfUserId] = useState<number | null>(null);
+  const [selfUserId, setSelfUserId] = useState<string | null>(null);
   const [presence, setPresence] = useState<CollaboratorInfo[]>([]);
   const [locks, setLocks] = useState<Record<string, CollaboratorInfo>>({});
 
@@ -56,7 +56,7 @@ export function useProtocolCollaboration(protocolId: number | null | undefined) 
   const ownLocksRef = useRef<Set<string>>(new Set());
   // Mirrors selfUserId for the onmessage closure, which is created once per connection and
   // would otherwise only ever see the selfUserId value from the render that opened the socket.
-  const selfUserIdRef = useRef<number | null>(null);
+  const selfUserIdRef = useRef<string | null>(null);
   const fieldUpdateListenersRef = useRef<Set<(event: FieldUpdateEvent) => void>>(new Set());
   const statusChangedListenersRef = useRef<Set<(event: StatusChangedEvent) => void>>(new Set());
   const listChangedListenersRef = useRef<Set<(event: ListChangedEvent) => void>>(new Set());

@@ -402,9 +402,9 @@ export function StatisticsView({ data }: Props) {
         "Ø Teilnehmer": v.sessions_with_p > 0 ? Math.round((v.weighted_participants / v.sessions_with_p) * 10) / 10 : 0,
       })).sort((a, b) => b["Alle Termine"] - a["Alle Termine"]);
     }
-    const [configId, year] = selectedCycle.split(":").map(Number);
+    const [configId, year] = selectedCycle.split(":");
     return stats
-      .filter((g) => g.cycle_config_id === configId && g.cycle_year === year)
+      .filter((g) => g.cycle_config_id === configId && g.cycle_year === Number(year))
       .map((g) => ({
         name: g.group_name,
         "Alle Termine": g.session_count,

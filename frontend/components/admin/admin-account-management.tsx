@@ -11,7 +11,7 @@ import { PlatformAdminSummary } from "@/types/api";
 
 type Props = {
   initialAdmins: PlatformAdminSummary[];
-  currentAdminId: number;
+  currentAdminId: string;
 };
 
 export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props) {

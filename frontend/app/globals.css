@@ -168,6 +168,21 @@ pre {
   overflow: hidden;
 }
 
+.sidebar-edge-trigger,
+.sidebar-overlay {
+  display: none;
+}
+
+.app-frame-writing .shell-main {
+  transform-origin: 50% 18%;
+  animation: protocol-editor-zoom-out 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.app-frame-protocol-exit .shell-main {
+  transform-origin: 50% 18%;
+  animation: protocol-editor-zoom-in 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 .brand-lockup {
   display: flex;
   align-items: center;
@@ -240,7 +255,8 @@ pre {
 
 .sidebar-nav {
   display: grid;
-  gap: 20px;
+  align-content: start;
+  gap: 8px;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
@@ -272,12 +288,39 @@ pre {
 }
 
 .nav-group-label {
+  --button-hover-bg: var(--accent-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 32px;
   padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
   font-size: 0.73rem;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--muted);
+  box-shadow: none;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.nav-group-label:hover {
+  background: var(--accent-soft);
+  color: var(--text);
+  transform: none;
+  box-shadow: none;
+}
+
+.nav-group-label svg {
+  flex-shrink: 0;
+  transition: transform 140ms ease;
+}
+
+.nav-group-expanded > .nav-group-label svg {
+  transform: rotate(90deg);
 }
 
 .nav-links {
@@ -349,8 +392,8 @@ pre {
 .identity-card {
   --button-hover-bg: color-mix(in srgb, var(--accent) 8%, var(--panel-solid) 92%);
   display: grid;
-  padding: 12px;
-  border-radius: 22px;
+  padding: 8px;
+  border-radius: 16px;
   background: color-mix(in srgb, var(--panel-solid) 88%, transparent 12%);
   border: 1px solid var(--border);
   transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
@@ -364,8 +407,8 @@ pre {
 .identity-button {
   --button-hover-bg: transparent;
   display: grid;
-  grid-template-columns: 46px minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 10px;
   align-items: center;
   width: 100%;
   height: 100%;
@@ -379,8 +422,7 @@ pre {
 
 .identity-button strong {
   display: block;
-  margin-top: 3px;
-  font-size: 1rem;
+  font-size: 0.92rem;
   line-height: 1.15;
   letter-spacing: -0.02em;
 }
@@ -393,9 +435,9 @@ pre {
 }
 
 .identity-subtle {
-  margin-top: 5px;
+  margin-top: 2px;
   color: var(--muted);
-  font-size: 0.92rem;
+  font-size: 0.82rem;
   line-height: 1.25;
   min-height: 1.25em;
 }
@@ -403,9 +445,9 @@ pre {
 .identity-avatar {
   display: grid;
   place-items: center;
-  width: 46px;
-  height: 46px;
-  border-radius: 16px;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
   overflow: hidden;
   background: color-mix(in srgb, var(--accent) 18%, transparent 82%);
   color: var(--text);
@@ -522,6 +564,7 @@ pre {
 
 .panel {
   display: grid;
+  align-content: start;
   gap: 16px;
   padding: 20px;
   border-radius: var(--radius-lg);
@@ -579,6 +622,7 @@ pre {
 
 .grid {
   display: grid;
+  align-content: start;
   gap: 18px;
 }
 
@@ -1165,6 +1209,89 @@ button:disabled {
   color: var(--danger);
 }
 
+/* Indeterminate progress for tenant ZIP imports. The import endpoint uploads and
+   processes in one request, so no trustworthy byte percentage is available. */
+.tenant-import-status {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border) 76%);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--accent) 7%, var(--panel-solid) 93%);
+}
+
+.tenant-import-status-copy {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tenant-import-status-copy > span:last-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tenant-import-upload-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: white;
+  font-size: 1.15rem;
+  font-weight: 800;
+  animation: tenant-import-upload-bounce 1s ease-in-out infinite;
+}
+
+.tenant-import-filename,
+.tenant-import-status-hint {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.tenant-import-filename {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tenant-import-progress-track {
+  position: relative;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--border) 86%);
+}
+
+.tenant-import-progress-bar {
+  position: absolute;
+  inset-block: 0;
+  left: -42%;
+  width: 42%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, var(--accent) 35%, var(--accent) 65%, transparent);
+  animation: tenant-import-progress-sweep 1.25s ease-in-out infinite;
+}
+
+@keyframes tenant-import-progress-sweep {
+  to { left: 100%; }
+}
+
+@keyframes tenant-import-upload-bounce {
+  0%, 100% { transform: translateY(2px); }
+  50% { transform: translateY(-2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tenant-import-upload-icon,
+  .tenant-import-progress-bar {
+    animation-duration: 2.5s;
+  }
+}
+
 input[type="checkbox"],
 input[type="radio"] {
   width: auto;
@@ -1328,6 +1455,8 @@ input[type="radio"] {
 }
 
 .table-shell {
+  align-self: start;
+  height: fit-content;
   overflow-x: auto;
   overflow-y: hidden;
   border: 1px solid var(--border);
@@ -1616,6 +1745,14 @@ input[type="radio"] {
 .record-list {
   display: flex;
   flex-direction: column;
+}
+
+/* List-shaped cards must stay content-sized. Without this, a parent grid with spare
+   viewport height can make a single-entry list look taller than the same row in a
+   multi-entry list. */
+.card:has(> .record-list) {
+  align-self: start;
+  height: fit-content;
 }
 
 .record-list-row {
@@ -4077,6 +4214,7 @@ input[type="radio"] {
   width: 18px;
   height: 18px;
   min-width: 18px;
+  min-height: 18px;
   margin-left: 4px;
   padding: 0;
   border: none;
@@ -6480,6 +6618,23 @@ input[type="radio"] {
     transform: translateX(0);
   }
 
+  .app-frame-writing .sidebar-edge-trigger {
+    display: block;
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: 24px;
+    z-index: 119;
+  }
+
+  .app-frame-writing .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 110;
+    background: color-mix(in srgb, var(--text) 10%, transparent);
+    animation: sidebar-overlay-in 160ms ease-out both;
+  }
+
   .app-frame-writing .shell-main {
     margin-left: 0;
   }
@@ -6800,6 +6955,60 @@ input[type="radio"] {
      the row. */
   .protocol-quicknav {
     align-self: stretch;
+  }
+}
+
+@keyframes protocol-editor-zoom-out {
+  from {
+    opacity: 0.35;
+    transform: scale(1.025);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes protocol-editor-zoom-in {
+  from {
+    opacity: 0.35;
+    transform: scale(0.975);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes sidebar-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-frame-writing .shell-main,
+  .app-frame-protocol-exit .shell-main,
+  .app-frame-writing .sidebar-overlay {
+    animation: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .app-frame-writing .sidebar-edge-trigger {
+    display: block;
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: 28px;
+    z-index: 119;
+  }
+
+  .app-frame-writing .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 110;
+    background: color-mix(in srgb, var(--text) 10%, transparent);
+    animation: sidebar-overlay-in 160ms ease-out both;
   }
 }
 

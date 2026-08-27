@@ -49,13 +49,13 @@ export function EventDetailForm({
   const [activeRoleField, setActiveRoleField] = useState<RoleField | null>(null);
   const [roleSearch, setRoleSearch] = useState("");
 
-  function participantNames(ids: number[] | null | undefined) {
+  function participantNames(ids: string[] | null | undefined) {
     const list = availableParticipants.filter((p) => (ids ?? []).includes(p.id));
     return list.length ? list.map((p) => p.display_name).join(", ") : "Niemand ausgewählt";
   }
 
-  function toggleParticipant(field: RoleField, participantId: number) {
-    const current = ((event[field] as number[] | null) ?? []) as number[];
+  function toggleParticipant(field: RoleField, participantId: string) {
+    const current = ((event[field] as string[] | null) ?? []) as string[];
     const next = current.includes(participantId)
       ? current.filter((id) => id !== participantId)
       : [...current, participantId];
@@ -160,7 +160,7 @@ export function EventDetailForm({
                           setRoleSearch("");
                         }}
                       >
-                        {participantNames(event[field] as number[])}
+                        {participantNames(event[field] as string[])}
                       </button>
                     </div>
                   ))}
@@ -186,7 +186,7 @@ export function EventDetailForm({
                     {availableParticipants
                       .filter((p) => p.display_name.toLowerCase().includes(roleSearch.trim().toLowerCase()))
                       .map((p) => {
-                        const checked = ((event[activeRoleField] as number[] | null) ?? []).includes(p.id);
+                        const checked = ((event[activeRoleField] as string[] | null) ?? []).includes(p.id);
                         return (
                           <label
                             key={p.id}

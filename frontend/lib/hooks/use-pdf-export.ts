@@ -15,10 +15,10 @@ export type PdfExportResult = {
 /** Shared "generate/open protocol PDF" logic, used by both the protocol list and the protocol detail header. */
 export function usePdfExport() {
   const showToast = useToast();
-  const [busyByProtocol, setBusyByProtocol] = useState<Record<number, boolean>>({});
+  const [busyByProtocol, setBusyByProtocol] = useState<Record<string, boolean>>({});
 
   async function generatePdf(
-    protocolId: number,
+    protocolId: string,
     protocolNumber: string,
     onExported?: (result: PdfExportResult) => void
   ) {
@@ -45,7 +45,7 @@ export function usePdfExport() {
 
   /** Opens the already-generated PDF if one exists, otherwise generates a fresh one. */
   function openOrGeneratePdf(
-    protocol: { id: number; protocol_number: string; latest_pdf_url?: string | null },
+    protocol: { id: string; protocol_number: string; latest_pdf_url?: string | null },
     onExported?: (result: PdfExportResult) => void
   ) {
     if (protocol.latest_pdf_url) {

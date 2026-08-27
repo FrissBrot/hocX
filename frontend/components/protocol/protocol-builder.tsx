@@ -58,8 +58,8 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [availableTemplates, setAvailableTemplates] = useState(templates);
   const { busyByProtocol: pdfBusyByProtocol, generatePdf, openOrGeneratePdf } = usePdfExport();
-  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
-  const menuBtnRefs = useRef<Record<number, HTMLButtonElement | null>>({});
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const menuBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const activeMenuAnchorRef = useRef<HTMLButtonElement | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -121,10 +121,10 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
     event.preventDefault();
 
     try {
-      const created = await browserApiFetch<{ id: number }>("/api/protocols/from-template", {
+      const created = await browserApiFetch<{ id: string }>("/api/protocols/from-template", {
         method: "POST",
         body: JSON.stringify({
-          template_id: Number(form.template_id),
+          template_id: form.template_id,
           protocol_number: autoProtocolNumber ? null : form.protocol_number || null,
           protocol_date: form.protocol_date,
           title: autoTitle ? null : form.title || null,
@@ -148,7 +148,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
     }
   }
 
-  async function deleteProtocol(protocolId: number) {
+  async function deleteProtocol(protocolId: string) {
     const ok = await confirm({
       message: "Protokoll endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
       tone: "danger",
@@ -165,7 +165,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
     }
   }
 
-  function handlePdfExported(protocolId: number, result: PdfExportResult) {
+  function handlePdfExported(protocolId: string, result: PdfExportResult) {
     // Update version in local protocol list
     if (result.version_major != null && result.version_minor != null) {
       setProtocols((current) =>
@@ -195,7 +195,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
     onLoadMore: () => void loadMore(),
   });
 
-  async function revertStatus(protocolId: number) {
+  async function revertStatus(protocolId: string) {
     try {
       const updated = await browserApiFetch<ProtocolSummary>(`/api/protocols/${protocolId}/revert-status`, { method: "POST" });
       setProtocols((current) => current.map((p) => (p.id === protocolId ? updated : p)));

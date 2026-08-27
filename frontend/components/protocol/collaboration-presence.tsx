@@ -4,8 +4,14 @@ import type { CollaboratorInfo } from "@/lib/hooks/use-protocol-collaboration";
 
 const AVATAR_COLORS = ["#e07a5f", "#3d8bfd", "#588157", "#9c6ade", "#e8a33d", "#2a9d8f", "#d1495b"];
 
-function colorForUser(userId: number): string {
-  return AVATAR_COLORS[Math.abs(userId) % AVATAR_COLORS.length];
+function colorForUser(userId: string): string {
+  // userId is now a UUID string rather than a small integer, so derive a stable numeric
+  // hash from its characters instead of relying on it already being a number.
+  let hash = 0;
+  for (let i = 0; i < userId.length; i += 1) {
+    hash = (hash * 31 + userId.charCodeAt(i)) | 0;
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
 function initials(name: string): string {

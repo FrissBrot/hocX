@@ -25,8 +25,8 @@ type ElementDefinitionManagerProps = {
   availableParticipants?: ParticipantSummary[];
   availableEvents?: EventSummary[];
   availableLists?: StructuredListDefinition[];
-  availableAccounts?: { id: number; name: string; currency_label: string }[];
-  tenantId: number | null;
+  availableAccounts?: { id: string; name: string; currency_label: string }[];
+  tenantId: string | null;
 };
 
 type DefinitionFormState = {
@@ -621,18 +621,18 @@ function blockPayload(form: BlockFormState): ElementDefinitionBlock {
       allow_column_management: form.allow_column_management,
       auto_source: form.auto_source_type ? {
         type: form.auto_source_type,
-        list_id: form.auto_source_type === "list" && form.auto_source_list_id ? Number(form.auto_source_list_id) : null,
+        list_id: form.auto_source_type === "list" && form.auto_source_list_id ? form.auto_source_list_id : null,
         event_tag_filter: form.auto_source_type === "events" ? (form.auto_source_event_tag || null) : null,
       } : null,
       todo_block_title_filter: form.todo_block_title_filter || null,
       todo_task_filter: form.todo_task_filter || null,
       todo_open_only: form.todo_open_only,
       todo_due_tag_filter: form.todo_due_tag_filter || null,
-      finance_account_id: form.finance_account_id ? Number(form.finance_account_id) : null,
+      finance_account_id: form.finance_account_id || null,
       finance_filter_type: form.finance_filter_type,
       finance_last_n: form.finance_filter_type === "last_n" ? Number(form.finance_last_n) : null,
       finance_since_date: form.finance_filter_type === "since_last_session" ? (form.finance_since_date || null) : null,
-      fine_account_id: form.fine_account_id ? Number(form.fine_account_id) : null,
+      fine_account_id: form.fine_account_id || null,
       fine_amount_late: form.fine_amount_late ? parseFloat(form.fine_amount_late) : null,
       fine_amount_absent: form.fine_amount_absent ? parseFloat(form.fine_amount_absent) : null,
       chart_type: form.chart_type || null,
@@ -642,7 +642,7 @@ function blockPayload(form: BlockFormState): ElementDefinitionBlock {
       left_column_heading: form.left_column_heading || null,
       value_column_heading: form.value_column_heading || null,
       linked_list_id:
-        form.element_type_id === "6" && form.linked_list_id ? Number(form.linked_list_id) : null,
+        form.element_type_id === "6" && form.linked_list_id ? form.linked_list_id : null,
       linked_list_group_by:
         form.element_type_id === "6" && form.linked_list_id && form.linked_list_group_by ? form.linked_list_group_by : null,
       linked_list_sort_by:
@@ -838,7 +838,7 @@ export function ElementDefinitionManager({
   const showToast = useToast();
   const confirm = useConfirm();
   const [definitions, setDefinitions] = useState(initialDefinitions);
-  const [selectedDefinitionId, setSelectedDefinitionId] = useState<number | null>(initialDefinitions[0]?.id ?? null);
+  const [selectedDefinitionId, setSelectedDefinitionId] = useState<string | null>(initialDefinitions[0]?.id ?? null);
   const [definitionForm, setDefinitionForm] = useState<DefinitionFormState>(
     initialDefinitions[0] ? definitionFormFromDefinition(initialDefinitions[0]) : initialDefinitionForm
   );
@@ -869,7 +869,7 @@ export function ElementDefinitionManager({
   const [draggedBlockId, setDraggedBlockId] = useState<number | null>(null);
   const [matrixPreviewColumns, setMatrixPreviewColumns] = useState<Array<{ id: string; title: string }> | null>(null);
   const [matrixPreviewLoading, setMatrixPreviewLoading] = useState(false);
-  const [listEntryOptionsByListId, setListEntryOptionsByListId] = useState<Record<number, StructuredListEntry[]>>({});
+  const [listEntryOptionsByListId, setListEntryOptionsByListId] = useState<Record<string, StructuredListEntry[]>>({});
   const participantOptions = Array.isArray(availableParticipants) ? availableParticipants : [];
   const eventOptions = Array.isArray(availableEvents) ? availableEvents : [];
   const listOptions = Array.isArray(availableLists) ? availableLists : [];
@@ -911,11 +911,11 @@ export function ElementDefinitionManager({
   // entry-picker shows the currently selected entry when re-opening a saved block.
   const referencedListEntryListIds = [...createBlockForm.table_fields, ...blockForm.table_fields]
     .filter((field) => field.row_type === "list_entry")
-    .map((field) => Number((field.row_config as Record<string, unknown> | undefined)?.linked_list_id ?? 0))
-    .filter((id) => id > 0);
-  const referencedListEntryListIdsKey = [...new Set(referencedListEntryListIds)].sort((a, b) => a - b).join(",");
+    .map((field) => (field.row_config as Record<string, unknown> | undefined)?.linked_list_id)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+  const referencedListEntryListIdsKey = [...new Set(referencedListEntryListIds)].sort().join(",");
   useEffect(() => {
-    for (const listId of referencedListEntryListIdsKey.split(",").filter(Boolean).map(Number)) {
+    for (const listId of referencedListEntryListIdsKey.split(",").filter(Boolean)) {
       void ensureListEntriesLoaded(listId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -937,7 +937,7 @@ export function ElementDefinitionManager({
           : sortedAvailableEvents;
         setMatrixPreviewColumns(filtered.map((e) => ({ id: `prev-e-${e.id}`, title: e.title })));
       } else if (source === "list") {
-        const listDefId = Number(matrixDesignerForm.auto_source_list_id || 0);
+        const listDefId = matrixDesignerForm.auto_source_list_id || null;
         if (!listDefId) {
           setMatrixPreviewColumns([]);
         } else {
@@ -977,11 +977,11 @@ export function ElementDefinitionManager({
   const selectedTableRow =
     tableDesignerRows.find((row) => row.id === selectedTableRowId) ?? tableDesignerRows[0] ?? null;
   const createLinkedList = useMemo(
-    () => listOptions.find((entry) => entry.id === Number(createBlockForm.linked_list_id || 0)) ?? null,
+    () => listOptions.find((entry) => entry.id === createBlockForm.linked_list_id) ?? null,
     [createBlockForm.linked_list_id, listOptions]
   );
   const editLinkedList = useMemo(
-    () => listOptions.find((entry) => entry.id === Number(blockForm.linked_list_id || 0)) ?? null,
+    () => listOptions.find((entry) => entry.id === blockForm.linked_list_id) ?? null,
     [blockForm.linked_list_id, listOptions]
   );
 
@@ -995,7 +995,7 @@ export function ElementDefinitionManager({
     }
   }
 
-  async function ensureListEntriesLoaded(listId: number) {
+  async function ensureListEntriesLoaded(listId: string) {
     if (!listId || listEntryOptionsByListId[listId]) {
       return;
     }
@@ -1012,18 +1012,18 @@ export function ElementDefinitionManager({
       return "";
     }
     if (valueType === "participant") {
-      const id = Number(value.participant_id ?? 0);
+      const id = typeof value.participant_id === "string" ? value.participant_id : null;
       return participantOptions.find((participant) => participant.id === id)?.display_name ?? "";
     }
     if (valueType === "participants") {
-      const ids = Array.isArray(value.participant_ids) ? (value.participant_ids as unknown[]).map(Number) : [];
+      const ids = Array.isArray(value.participant_ids) ? (value.participant_ids as unknown[]).filter((id): id is string => typeof id === "string") : [];
       return participantOptions
         .filter((participant) => ids.includes(participant.id))
         .map((participant) => participant.display_name)
         .join(", ");
     }
     if (valueType === "event") {
-      const id = Number(value.event_id ?? 0);
+      const id = typeof value.event_id === "string" ? value.event_id : null;
       const eventRow = sortedAvailableEvents.find((entry) => entry.id === id);
       return eventRow ? `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}` : "";
     }
@@ -1038,22 +1038,22 @@ export function ElementDefinitionManager({
 
   function tableRowPreviewValue(field: BlockFormState["table_fields"][number]): string {
     if (field.row_type === "participant") {
-      const participant = participantOptions.find((entry) => entry.id === Number(field.template_participant_id || 0));
+      const participant = participantOptions.find((entry) => entry.id === field.template_participant_id);
       return participant?.display_name ?? "—";
     }
     if (field.row_type === "participants") {
-      const ids = (field.template_participant_ids ?? []).map(Number);
+      const ids = field.template_participant_ids ?? [];
       const names = participantOptions.filter((entry) => ids.includes(entry.id)).map((entry) => entry.display_name);
       return names.length ? names.join(", ") : "—";
     }
     if (field.row_type === "event") {
-      const eventRow = sortedAvailableEvents.find((entry) => entry.id === Number(field.template_event_id || 0));
+      const eventRow = sortedAvailableEvents.find((entry) => entry.id === field.template_event_id);
       return eventRow ? `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}` : "—";
     }
     if (field.row_type === "list_entry") {
       const rowConfig = (field.row_config && typeof field.row_config === "object" ? field.row_config : {}) as Record<string, unknown>;
-      const listId = Number(rowConfig.linked_list_id ?? 0);
-      const entryId = Number(rowConfig.linked_list_entry_id ?? 0);
+      const listId = typeof rowConfig.linked_list_id === "string" ? rowConfig.linked_list_id : null;
+      const entryId = typeof rowConfig.linked_list_entry_id === "string" ? rowConfig.linked_list_entry_id : null;
       const listDefinition = listOptions.find((entry) => entry.id === listId);
       const listEntry = listId ? (listEntryOptionsByListId[listId] ?? []).find((entry) => entry.id === entryId) : undefined;
       if (!listDefinition || !listEntry) {
@@ -1097,8 +1097,8 @@ export function ElementDefinitionManager({
             options={participantOptions}
             getId={(participant) => participant.id}
             getLabel={(participant) => participant.display_name}
-            value={field.template_participant_id ? Number(field.template_participant_id) : null}
-            onChange={(participant) => applyPatch({ template_participant_id: participant ? String(participant.id) : "" })}
+            value={field.template_participant_id || null}
+            onChange={(participant) => applyPatch({ template_participant_id: participant ? participant.id : "" })}
             nullLabel="Kein Standardwert"
           />
         </label>
@@ -1113,8 +1113,8 @@ export function ElementDefinitionManager({
             options={participantOptions}
             getId={(participant) => participant.id}
             getLabel={(participant) => participant.display_name}
-            values={(field.template_participant_ids ?? []).map(Number)}
-            onChange={(ids) => applyPatch({ template_participant_ids: ids.map((id) => String(id)) })}
+            values={field.template_participant_ids ?? []}
+            onChange={(ids) => applyPatch({ template_participant_ids: ids })}
             emptySelectionLabel="Kein Standardwert"
           />
         </label>
@@ -1129,8 +1129,8 @@ export function ElementDefinitionManager({
             options={sortedAvailableEvents}
             getId={(eventRow) => eventRow.id}
             getLabel={(eventRow) => `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}`}
-            value={field.template_event_id ? Number(field.template_event_id) : null}
-            onChange={(eventRow) => applyPatch({ template_event_id: eventRow ? String(eventRow.id) : "" })}
+            value={field.template_event_id || null}
+            onChange={(eventRow) => applyPatch({ template_event_id: eventRow ? eventRow.id : "" })}
             nullLabel="Kein Standardwert"
           />
         </label>
@@ -1143,7 +1143,7 @@ export function ElementDefinitionManager({
 
     if (field.row_type === "list_entry") {
       const rowConfig = (field.row_config && typeof field.row_config === "object" ? field.row_config : {}) as Record<string, unknown>;
-      const selectedListId = Number(rowConfig.linked_list_id ?? 0) || 0;
+      const selectedListId = typeof rowConfig.linked_list_id === "string" ? rowConfig.linked_list_id : null;
       const selectedListDefinition = listOptions.find((entry) => entry.id === selectedListId) ?? null;
       const entryOptions = selectedListId ? listEntryOptionsByListId[selectedListId] ?? [] : [];
       const fixedColumn = rowConfig.list_fixed_column === "column_two" ? "column_two" : "column_one";
@@ -1155,13 +1155,13 @@ export function ElementDefinitionManager({
               options={listOptions}
               getId={(listDefinition) => listDefinition.id}
               getLabel={(listDefinition) => listDefinition.name}
-              value={selectedListId || null}
+              value={selectedListId}
               onChange={(listDefinition) => {
-                const nextListId = listDefinition ? listDefinition.id : 0;
+                const nextListId = listDefinition ? listDefinition.id : null;
                 if (nextListId) {
                   void ensureListEntriesLoaded(nextListId);
                 }
-                applyPatch({ row_config: { ...rowConfig, linked_list_id: nextListId || null, linked_list_entry_id: null } });
+                applyPatch({ row_config: { ...rowConfig, linked_list_id: nextListId, linked_list_entry_id: null } });
               }}
               nullLabel="Liste wählen"
             />
@@ -1174,7 +1174,7 @@ export function ElementDefinitionManager({
                   options={entryOptions}
                   getId={(entry) => entry.id}
                   getLabel={(entry) => (selectedListDefinition ? describeListEntry(entry, selectedListDefinition) : `Eintrag ${entry.id}`)}
-                  value={Number(rowConfig.linked_list_entry_id ?? 0) || null}
+                  value={typeof rowConfig.linked_list_entry_id === "string" ? rowConfig.linked_list_entry_id : null}
                   onChange={(entry) =>
                     applyPatch({
                       row_config: { ...rowConfig, linked_list_entry_id: entry ? entry.id : null },
@@ -1299,7 +1299,7 @@ export function ElementDefinitionManager({
     }
   }
 
-  async function deleteDefinition(definitionId: number) {
+  async function deleteDefinition(definitionId: string) {
     const ok = await confirm({
       message: "Element endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
       tone: "danger",
@@ -2153,7 +2153,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                     options={availableAccounts}
                     getId={(a) => a.id}
                     getLabel={(a) => `${a.name} (${a.currency_label})`}
-                    value={createBlockForm.fine_account_id ? Number(createBlockForm.fine_account_id) : null}
+                    value={createBlockForm.fine_account_id || null}
                     onChange={(a) => setCreateBlockForm((c) => ({ ...c, fine_account_id: a ? String(a.id) : "" }))}
                     nullLabel="— Kein Bussen-Konto —"
                   />
@@ -2185,7 +2185,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                     options={availableAccounts}
                     getId={(a) => a.id}
                     getLabel={(a) => `${a.name} (${a.currency_label})`}
-                    value={createBlockForm.finance_account_id ? Number(createBlockForm.finance_account_id) : null}
+                    value={createBlockForm.finance_account_id || null}
                     onChange={(a) => setCreateBlockForm((c) => ({ ...c, finance_account_id: a ? String(a.id) : "" }))}
                     nullLabel="— Konto wählen —"
                   />
@@ -2278,7 +2278,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                   options={listOptions}
                   getId={(listDefinition) => listDefinition.id}
                   getLabel={(listDefinition) => listDefinition.name}
-                  value={createBlockForm.linked_list_id ? Number(createBlockForm.linked_list_id) : null}
+                  value={createBlockForm.linked_list_id || null}
                   onChange={(listDefinition) =>
                     setCreateBlockForm((current) => ({
                       ...current,
@@ -2739,7 +2739,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                       options={availableAccounts}
                       getId={(a) => a.id}
                       getLabel={(a) => `${a.name} (${a.currency_label})`}
-                      value={blockForm.fine_account_id ? Number(blockForm.fine_account_id) : null}
+                      value={blockForm.fine_account_id || null}
                       onChange={(a) => setBlockForm((c) => ({ ...c, fine_account_id: a ? String(a.id) : "" }))}
                       nullLabel="— Kein Bussen-Konto —"
                     />
@@ -2771,7 +2771,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                       options={availableAccounts}
                       getId={(a) => a.id}
                       getLabel={(a) => `${a.name} (${a.currency_label})`}
-                      value={blockForm.finance_account_id ? Number(blockForm.finance_account_id) : null}
+                      value={blockForm.finance_account_id || null}
                       onChange={(a) => setBlockForm((c) => ({ ...c, finance_account_id: a ? String(a.id) : "" }))}
                       nullLabel="— Konto wählen —"
                     />
@@ -2864,7 +2864,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                   options={listOptions}
                   getId={(listDefinition) => listDefinition.id}
                   getLabel={(listDefinition) => listDefinition.name}
-                  value={blockForm.linked_list_id ? Number(blockForm.linked_list_id) : null}
+                  value={blockForm.linked_list_id || null}
                   onChange={(listDefinition) =>
                     setBlockForm((current) => ({
                       ...current,
@@ -3241,7 +3241,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                             options={listOptions}
                             getId={(list) => list.id}
                             getLabel={(list) => list.name}
-                            value={matrixDesignerForm.auto_source_list_id ? Number(matrixDesignerForm.auto_source_list_id) : null}
+                            value={matrixDesignerForm.auto_source_list_id || null}
                             onChange={(list) => updateMatrixDesignerForm((c) => ({ ...c, auto_source_list_id: list ? String(list.id) : "" }))}
                             nullLabel="Liste wählen..."
                           />

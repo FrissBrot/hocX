@@ -47,7 +47,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("task");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
-  const [busy, setBusy] = useState<Record<number, boolean>>({});
+  const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [todos, setTodos] = useState<{ all: TodoListItem[]; my: TodoListItem[] }>({
     all: allTodos ?? [],
     my: myTodos,
@@ -62,15 +62,15 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
 
   // Export modal state
   const [exportModalOpen, setExportModalOpen] = useState(false);
-  const [exportTemplateId, setExportTemplateId] = useState<number | "">(landscapeTemplates[0]?.id ?? "");
+  const [exportTemplateId, setExportTemplateId] = useState<string | "">(landscapeTemplates[0]?.id ?? "");
   const [exportBusyKind, setExportBusyKind] = useState<"pdf" | "md" | null>(null);
   const [exportPdfUrl, setExportPdfUrl] = useState<string | null>(null);
   const [exportMarkdownCopied, setExportMarkdownCopied] = useState(false);
   const [exportFilter, setExportFilter] = useState<"all" | "open">("open");
   const [exportPersonMode, setExportPersonMode] = useState<"all" | "filter" | "group">("all");
-  const [exportParticipantId, setExportParticipantId] = useState<number | "">("");
+  const [exportParticipantId, setExportParticipantId] = useState<string | "">("");
   const [exportDateMode, setExportDateMode] = useState<"all" | "next-hock" | "until-event" | "custom-date">("all");
-  const [exportUntilEventId, setExportUntilEventId] = useState<number | "">("");
+  const [exportUntilEventId, setExportUntilEventId] = useState<string | "">("");
   const [exportCustomDate, setExportCustomDate] = useState("");
   const [templateDropdownOpen, setTemplateDropdownOpen] = useState(false);
   const templateDropdownRef = useRef<HTMLDivElement>(null);
@@ -223,7 +223,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
   const [createBlockId, setCreateBlockId] = useState<string>("");
   const [createTags, setCreateTags] = useState("");
   const [creating, setCreating] = useState(false);
-  const [editTodoId, setEditTodoId] = useState<number | null>(null);
+  const [editTodoId, setEditTodoId] = useState<string | null>(null);
   const editingTodo = editTodoId != null ? [...todos.all, ...todos.my].find((t) => t.id === editTodoId) ?? null : null;
 
   const activeTodos = scope === "all" ? todos.all : todos.my;
@@ -376,7 +376,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
     }
   }
 
-  async function updateTodoAssignee(todoId: number, participantId: number | null, participantName: string | null) {
+  async function updateTodoAssignee(todoId: string, participantId: string | null, participantName: string | null) {
     const previous = [...todos.all, ...todos.my].find((t) => t.id === todoId) ?? null;
     function applyUpdate(list: TodoListItem[]) {
       return list.map((t) => t.id === todoId ? { ...t, assigned_participant_id: participantId, assigned_participant_name: participantName } : t);
@@ -399,7 +399,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
     }
   }
 
-  async function updateTodoFields(todoId: number, patch: { task?: string; tags?: string[] }) {
+  async function updateTodoFields(todoId: string, patch: { task?: string; tags?: string[] }) {
     const previous = [...todos.all, ...todos.my].find((t) => t.id === todoId) ?? null;
     function applyUpdate(list: TodoListItem[]) {
       return list.map((t) => (t.id === todoId ? { ...t, ...patch } : t));
@@ -422,7 +422,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
     }
   }
 
-  async function updateTodoDue(todoId: number, patch: DuePatch) {
+  async function updateTodoDue(todoId: string, patch: DuePatch) {
     const previous = [...todos.all, ...todos.my].find((t) => t.id === todoId) ?? null;
     try {
       const updated = await browserApiFetch<TodoListItem>(`/api/protocol-todos/${todoId}`, {
@@ -483,8 +483,8 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
             Export
           </button>
           {canEdit && (
-            <button type="button" className="button-inline" onClick={() => setShowCreate((v) => !v)}>
-              {showCreate ? "Abbrechen" : "+ Todo"}
+            <button type="button" className="button-inline" onClick={() => setShowCreate(true)}>
+              + Todo
             </button>
           )}
         </div>
@@ -507,34 +507,6 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
           <SearchInput value={search} onChange={setSearch} placeholder="Todos durchsuchen" />
         </div>
       </div>
-
-      {showCreate && (
-        <div className="todo-create-panel">
-          <div className="todo-create-fields">
-            <input
-              className="todo-create-task-input"
-              value={createTask}
-              onChange={(e) => setCreateTask(e.target.value)}
-              placeholder="Aufgabe…"
-              onKeyDown={(e) => { if (e.key === "Enter") void createTodo(); }}
-              autoFocus
-            />
-            <TagInput value={createTags} onChange={setCreateTags} suggestions={allTagSuggestions} placeholder="Tags…" />
-            <SearchableSelect
-              className="todo-create-block-select"
-              options={todoBlocks}
-              getId={(b) => b.block_id}
-              getLabel={(b) => `${b.protocol_number}${b.protocol_title ? ` · ${b.protocol_title}` : ""}${b.block_title ? ` — ${b.block_title}` : ""}`}
-              value={createBlockId ? Number(createBlockId) : null}
-              onChange={(b) => setCreateBlockId(b ? String(b.block_id) : "")}
-              nullLabel="Kein Protokoll"
-            />
-            <button type="button" className="button-inline" onClick={() => void createTodo()} disabled={creating || !createTask.trim()}>
-              {creating ? "…" : "Erstellen"}
-            </button>
-          </div>
-        </div>
-      )}
 
       <DataTable
         className="data-table-lg"
@@ -636,6 +608,61 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
           )}
         </div>
       )}
+
+      <Modal
+        open={showCreate}
+        title="Todo erstellen"
+        description="Erfasse eine neue Aufgabe und ordne sie bei Bedarf einem Protokoll zu."
+        onClose={() => setShowCreate(false)}
+      >
+        <form
+          className="grid"
+          style={{ gap: 14, minWidth: 320 }}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void createTodo();
+          }}
+        >
+          <label className="field-stack">
+            <span className="field-label">Aufgabe</span>
+            <input
+              value={createTask}
+              onChange={(event) => setCreateTask(event.target.value)}
+              placeholder="Was ist zu erledigen?"
+              autoFocus
+              required
+            />
+          </label>
+
+          <label className="field-stack">
+            <span className="field-label">Tags</span>
+            <TagInput
+              value={createTags}
+              onChange={setCreateTags}
+              suggestions={allTagSuggestions}
+              placeholder="Tags…"
+            />
+            <span className="field-help">Optional. Mehrere Tags können hinzugefügt werden.</span>
+          </label>
+
+          <div className="field-stack">
+            <span className="field-label">Protokoll</span>
+            <SearchableSelect
+              options={todoBlocks}
+              getId={(block) => block.block_id}
+              getLabel={(block) => `${block.protocol_number}${block.protocol_title ? ` · ${block.protocol_title}` : ""}${block.block_title ? ` — ${block.block_title}` : ""}`}
+              value={createBlockId || null}
+              onChange={(block) => setCreateBlockId(block ? String(block.block_id) : "")}
+              nullLabel="Kein Protokoll"
+            />
+            <span className="field-help">Optional. Verknüpft das Todo direkt mit einem Protokollpunkt.</span>
+          </div>
+
+          <button type="submit" disabled={creating || !createTask.trim()}>
+            {creating ? "Wird erstellt…" : "Todo erstellen"}
+          </button>
+        </form>
+      </Modal>
 
       <Modal
         open={editingTodo !== null}

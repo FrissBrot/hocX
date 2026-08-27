@@ -11,7 +11,7 @@ import { EventSummary, ParticipantSummary, ProtocolSummary } from "@/types/api";
 type DueDraft =
   | { type: "none" }
   | { type: "next_session" }
-  | { type: "event"; eventId: number; eventTitle: string };
+  | { type: "event"; eventId: string; eventTitle: string };
 
 type SessionPanelProps = {
   protocol: ProtocolSummary;
@@ -19,7 +19,7 @@ type SessionPanelProps = {
   dueEvents?: EventSummary[];
   currentSectionName?: string | null;
   onSessionNotesChange?: (notes: string) => void;
-  onQuickTodoCreated?: (blockId: number, todoId: number, elementId: number) => void;
+  onQuickTodoCreated?: (blockId: string, todoId: string, elementId: string) => void;
 };
 
 export type SessionPanelHandle = {
@@ -67,7 +67,7 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
 
     // Assignee selection state
     const [assigneeSearch, setAssigneeSearch] = useState("");
-    const [assigneeId, setAssigneeId] = useState<number | null>(null);
+    const [assigneeId, setAssigneeId] = useState<string | null>(null);
     const [assigneeConfirmed, setAssigneeConfirmed] = useState(false);
     const [assigneeHighlighted, setAssigneeHighlighted] = useState(0);
 
@@ -244,7 +244,7 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
       if (!task) return;
       setCreatingTodo(true);
       try {
-        const result = await browserApiFetch<{ block_id: number; todo_id: number; element_id: number }>(
+        const result = await browserApiFetch<{ block_id: string; todo_id: string; element_id: string }>(
           `/api/protocols/${protocol.id}/quick-todos`,
           {
             method: "POST",

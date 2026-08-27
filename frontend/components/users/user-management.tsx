@@ -140,14 +140,14 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
     if (!userForm.pickerTenantId) {
       return;
     }
-    const tenantId = Number(userForm.pickerTenantId);
+    const tenantId = userForm.pickerTenantId;
     setUserForm((current) => ({
       ...current,
       memberships: addOrUpsertMembership(current.memberships, tenantId, current.pickerRoleCode, "upsert")
     }));
   }
 
-  function removeMembership(tenantId: number) {
+  function removeMembership(tenantId: string) {
     setUserForm((current) => ({
       ...current,
       memberships: removeMembershipEntry(current.memberships, tenantId)
@@ -183,7 +183,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
     }
   }
 
-  async function deleteUser(userId: number, displayName: string) {
+  async function deleteUser(userId: string, displayName: string) {
     const ok = await confirm({
       message: `Benutzer "${displayName}" endgültig löschen? Der Zugriff auf alle Mandanten geht sofort verloren.`,
       tone: "danger",

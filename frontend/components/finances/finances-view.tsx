@@ -42,7 +42,7 @@ export function FinancesView({ initialAccounts }: Props) {
     await reloadFirstPage(account.id);
   }
 
-  async function reloadFirstPage(accountId: number) {
+  async function reloadFirstPage(accountId: string) {
     setLoadingTx(true);
     try {
       const data = await browserApiFetch<FinanceTransaction[]>(
@@ -78,7 +78,7 @@ export function FinancesView({ initialAccounts }: Props) {
   // The account's balance/transaction_count are only authoritative from the backend's
   // aggregate query (list_accounts) — refetch it instead of resumming the currently
   // loaded transaction page, which since pagination only ever holds a partial view.
-  async function refreshAccounts(accountId: number) {
+  async function refreshAccounts(accountId: string) {
     const data = await browserApiFetch<FinanceAccount[]>("/api/finance/accounts");
     if (!data) return;
     setAccounts(data);

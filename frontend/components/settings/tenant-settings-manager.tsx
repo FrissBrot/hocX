@@ -40,7 +40,7 @@ export function TenantSettingsManager({ initialTenant }: Props) {
   });
 
   const [domains, setDomains] = useState<TenantDomain[]>([]);
-  const [domainBusyId, setDomainBusyId] = useState<number | null>(null);
+  const [domainBusyId, setDomainBusyId] = useState<string | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardDomain, setWizardDomain] = useState<TenantDomain | null>(null);
 
@@ -91,7 +91,7 @@ export function TenantSettingsManager({ initialTenant }: Props) {
     setWizardOpen(true);
   }
 
-  async function deleteDomain(domainId: number, hostname: string) {
+  async function deleteDomain(domainId: string, hostname: string) {
     const ok = await confirm({
       message: `Domain "${hostname}" wirklich entfernen? Der Zugriff über diese Adresse endet sofort.`,
       tone: "danger",

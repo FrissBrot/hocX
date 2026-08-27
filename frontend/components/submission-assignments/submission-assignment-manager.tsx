@@ -94,7 +94,7 @@ type FormState = {
   tag_filter: string;
   offset_days_before: number | "";
   offset_days_after: number | "";
-  list_definition_id: number | "";
+  list_definition_id: string | "";
   deadline: string;
   allowed_file_types: string[];
   max_files_per_element: number | "";
@@ -323,15 +323,15 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
   const confirm = useConfirm();
   const [assignments, setAssignments] = useState(initialAssignments);
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(initialForm);
 
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [zipLoading, setZipLoading] = useState(false);
   const [elements, setElements] = useState<SubmissionElementStatusEntry[]>([]);
   const [elementsLoading, setElementsLoading] = useState(false);
   const [clamavStatus, setClamavStatus] = useState<"online" | "offline" | "unknown">("unknown");
-  const [summaries, setSummaries] = useState<Record<number, AssignmentSummary>>({});
+  const [summaries, setSummaries] = useState<Record<string, AssignmentSummary>>({});
   const rescanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [elementModal, setElementModal] = useState<SubmissionElementStatusEntry | null>(null);
   const [logEntries, setLogEntries] = useState<SubmissionUploadLogEntry[]>([]);
@@ -408,7 +408,7 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
     }
   }
 
-  async function refreshElements(assignmentId: number): Promise<SubmissionElementStatusEntry[]> {
+  async function refreshElements(assignmentId: string): Promise<SubmissionElementStatusEntry[]> {
     const data = await browserApiFetch<SubmissionElementStatusEntry[]>(
       `/api/submission-assignments/${assignmentId}/elements`
     );
@@ -424,7 +424,7 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
     return data;
   }
 
-  async function scheduleAutoRescan(assignmentId: number, delayMs = 5000) {
+  async function scheduleAutoRescan(assignmentId: string, delayMs = 5000) {
     clearRescanTimer();
     rescanTimerRef.current = setTimeout(async () => {
       try {
@@ -451,7 +451,7 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
     }, delayMs);
   }
 
-  async function loadElements(assignmentId: number) {
+  async function loadElements(assignmentId: string) {
     clearRescanTimer();
     setSelectedId(assignmentId);
     setElementsLoading(true);
@@ -500,7 +500,7 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
             tag_filter: null,
             offset_days_before: null,
             offset_days_after: null,
-            list_definition_id: form.list_definition_id === "" ? null : Number(form.list_definition_id),
+            list_definition_id: form.list_definition_id === "" ? null : form.list_definition_id,
             deadline: form.deadline || null,
             allowed_file_types: form.allowed_file_types,
             max_files_per_element: form.max_files_per_element === "" ? null : Number(form.max_files_per_element),
@@ -533,7 +533,7 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
     }
   }
 
-  async function deleteAssignment(id: number) {
+  async function deleteAssignment(id: string) {
     const ok = await confirm({
       message: "Abgabe wirklich löschen? Alle zugehörigen Elemente und Verweise werden entfernt.",
       tone: "danger",
@@ -553,7 +553,7 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
     }
   }
 
-  async function downloadZip(assignmentId: number) {
+  async function downloadZip(assignmentId: string) {
     setZipLoading(true);
     try {
       const { browserApiBaseUrl } = await import("@/lib/api/client");
@@ -594,7 +594,7 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
     }
   }
 
-  async function openElementModal(assignmentId: number, element: SubmissionElementStatusEntry) {
+  async function openElementModal(assignmentId: string, element: SubmissionElementStatusEntry) {
     setElementModal(element);
     setLogEntries([]);
     setLogLoading(true);
@@ -610,7 +610,7 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
     }
   }
 
-  async function reopenElement(assignmentId: number, elementRef: string) {
+  async function reopenElement(assignmentId: string, elementRef: string) {
     try {
       const updated = await browserApiFetch<SubmissionElementStatusEntry>(
         `/api/submission-assignments/${assignmentId}/elements/${elementRef}/reopen`,
@@ -624,7 +624,7 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
     }
   }
 
-  async function closeElement(assignmentId: number, elementRef: string) {
+  async function closeElement(assignmentId: string, elementRef: string) {
     try {
       const updated = await browserApiFetch<SubmissionElementStatusEntry>(
         `/api/submission-assignments/${assignmentId}/elements/${elementRef}/close`,
@@ -1076,7 +1076,7 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
 
           {(() => {
             const selectedList = form.source_type === "list" && form.list_definition_id !== ""
-              ? availableLists.find((l) => l.id === Number(form.list_definition_id))
+              ? availableLists.find((l) => l.id === form.list_definition_id)
               : null;
             const listParticipantCols: { value: string; label: string }[] = [];
             if (selectedList) {

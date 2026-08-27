@@ -46,7 +46,7 @@ function parseCsvForPreview(text: string): CsvPreviewRow[] {
 type ParticipantManagerProps = {
   initialParticipants: ParticipantSummary[];
   templates: TemplateSummary[];
-  tenantId: number | null;
+  tenantId: string | null;
 };
 
 type ParticipantFormState = {
@@ -97,8 +97,8 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");
   const [form, setForm] = useState<ParticipantFormState>(emptyForm);
-  const [selectedParticipantIds, setSelectedParticipantIds] = useState<number[]>([]);
-  const [assignedTemplateIds, setAssignedTemplateIds] = useState<number[]>([]);
+  const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
+  const [assignedTemplateIds, setAssignedTemplateIds] = useState<string[]>([]);
   const [csvPreview, setCsvPreview] = useState<{ rows: CsvPreviewRow[]; file: File } | null>(null);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importing, setImporting] = useState(false);
@@ -200,7 +200,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
         left_at: form.left_at || null,
       };
 
-      let participantId: number;
+      let participantId: string;
       let updatedParticipant: ParticipantSummary;
       let successMessage = "";
 
@@ -237,7 +237,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
     }
   }
 
-  async function deleteParticipant(participantId: number) {
+  async function deleteParticipant(participantId: string) {
     const ok = await confirm({
       message: "Teilnehmer endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
       tone: "danger",

@@ -149,65 +149,65 @@ export function FocusedElementEditor({
   trackChangesActive: boolean;
   element: ProtocolElement;
   elementIndex: number;
-  textDrafts: Record<number, string>;
-  todosByBlock: Record<number, ProtocolTodo[]>;
-  imagesByBlock: Record<number, ProtocolImage[]>;
-  newTodoTask: Record<number, string>;
+  textDrafts: Record<string, string>;
+  todosByBlock: Record<string, ProtocolTodo[]>;
+  imagesByBlock: Record<string, ProtocolImage[]>;
+  newTodoTask: Record<string, string>;
   browserApiBaseUrl: string;
   protocol: ProtocolSummary;
   availableParticipants: ParticipantSummary[];
   availableEvents: EventSummary[];
   availableTemplates: TemplateSummary[];
   availableAccounts: FinanceAccount[];
-  financeTransactions: Record<number, FinanceTransaction[]>;
+  financeTransactions: Record<string, FinanceTransaction[]>;
   protocolFines: AttendanceFine[];
   setProtocolFines: Dispatch<SetStateAction<AttendanceFine[]>>;
   pendingFines: AttendanceFineListItem[];
   setPendingFines: Dispatch<SetStateAction<AttendanceFineListItem[]>>;
-  newEventDrafts: Record<number, ProtocolEventDraft>;
-  selectedFiles: Record<number, File | null>;
-  setTodosByBlock: Dispatch<SetStateAction<Record<number, ProtocolTodo[]>>>;
-  setNewEventDrafts: Dispatch<SetStateAction<Record<number, ProtocolEventDraft>>>;
-  setSelectedFiles: Dispatch<SetStateAction<Record<number, File | null>>>;
-  setNewTodoTask: Dispatch<SetStateAction<Record<number, string>>>;
-  saveBlockConfiguration: (blockId: number, configurationSnapshotJson: Record<string, unknown>) => Promise<void>;
-  updateBlockInState: (blockId: number, updater: (current: ProtocolElement["blocks"][number]) => ProtocolElement["blocks"][number]) => void;
-  handleTextChange: (protocolElementBlockId: number, content: string) => void;
+  newEventDrafts: Record<string, ProtocolEventDraft>;
+  selectedFiles: Record<string, File | null>;
+  setTodosByBlock: Dispatch<SetStateAction<Record<string, ProtocolTodo[]>>>;
+  setNewEventDrafts: Dispatch<SetStateAction<Record<string, ProtocolEventDraft>>>;
+  setSelectedFiles: Dispatch<SetStateAction<Record<string, File | null>>>;
+  setNewTodoTask: Dispatch<SetStateAction<Record<string, string>>>;
+  saveBlockConfiguration: (blockId: string, configurationSnapshotJson: Record<string, unknown>) => Promise<void>;
+  updateBlockInState: (blockId: string, updater: (current: ProtocolElement["blocks"][number]) => ProtocolElement["blocks"][number]) => void;
+  handleTextChange: (protocolElementBlockId: string, content: string) => void;
   forceEditable: boolean;
   isReadOnly: boolean;
-  addTodo: (protocolElementBlockId: number) => Promise<void>;
-  updateTodo: (protocolElementBlockId: number, todoId: number, patch: Partial<ProtocolTodo>) => Promise<void>;
-  deleteTodo: (protocolElementBlockId: number, todoId: number) => Promise<void>;
-  acceptTodoTrackedChange: (protocolElementBlockId: number, todoId: number) => Promise<void>;
-  acceptTrackedListEntry: (blockId: number, entryId: number) => Promise<void>;
-  acceptTrackedRow: (blockId: number, rowId: string) => Promise<void>;
-  acceptTextTrackedChanges: (protocolElementBlockId: number) => Promise<void>;
-  createEventFromBlock: (protocolElementBlockId: number, blockConfig: Record<string, any>, draftOverride?: ProtocolEventDraft) => Promise<EventSummary | null>;
-  updateEventFromBlock: (protocolElementBlockId: number, eventId: number, patch: Partial<EventSummary>) => Promise<boolean>;
-  deleteEventFromBlock: (protocolElementBlockId: number, eventId: number) => Promise<void>;
-  onEventContextMenu: (nativeEvent: React.MouseEvent, eventRow: EventSummary, protocolElementBlockId: number) => void;
-  uploadImage: (protocolElementBlockId: number) => Promise<void>;
-  deleteImage: (protocolElementBlockId: number, imageId: number) => Promise<void>;
-  listDefinitionsById: Map<number, StructuredListDefinition>;
-  listEntriesByDefinition: Record<number, StructuredListEntry[]>;
-  createListEntryFromBlock: (protocolElementBlockId: number, listDefinitionId: number, payload: { sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }) => Promise<boolean>;
-  updateListEntryFromBlock: (protocolElementBlockId: number, listDefinitionId: number, entryId: number, payload: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>) => Promise<boolean>;
-  deleteListEntryFromBlock: (protocolElementBlockId: number, listDefinitionId: number, entryId: number) => Promise<void>;
-  refreshBlockListSnapshot: (blockId: number) => Promise<void>;
-  undoBlockListSnapshot: (blockId: number) => Promise<void>;
-  refreshListEntries: (listDefinitionId: number) => Promise<void>;
-  todoTagFilter: Record<number, string | null>;
-  setTodoTagFilter: Dispatch<SetStateAction<Record<number, string | null>>>;
-  newTodoTags: Record<number, string>;
-  setNewTodoTags: Dispatch<SetStateAction<Record<number, string>>>;
+  addTodo: (protocolElementBlockId: string) => Promise<void>;
+  updateTodo: (protocolElementBlockId: string, todoId: string, patch: Partial<ProtocolTodo>) => Promise<void>;
+  deleteTodo: (protocolElementBlockId: string, todoId: string) => Promise<void>;
+  acceptTodoTrackedChange: (protocolElementBlockId: string, todoId: string) => Promise<void>;
+  acceptTrackedListEntry: (blockId: string, entryId: string) => Promise<void>;
+  acceptTrackedRow: (blockId: string, rowId: string) => Promise<void>;
+  acceptTextTrackedChanges: (protocolElementBlockId: string) => Promise<void>;
+  createEventFromBlock: (protocolElementBlockId: string, blockConfig: Record<string, any>, draftOverride?: ProtocolEventDraft) => Promise<EventSummary | null>;
+  updateEventFromBlock: (protocolElementBlockId: string, eventId: string, patch: Partial<EventSummary>) => Promise<boolean>;
+  deleteEventFromBlock: (protocolElementBlockId: string, eventId: string) => Promise<void>;
+  onEventContextMenu: (nativeEvent: React.MouseEvent, eventRow: EventSummary, protocolElementBlockId: string) => void;
+  uploadImage: (protocolElementBlockId: string) => Promise<void>;
+  deleteImage: (protocolElementBlockId: string, imageId: string) => Promise<void>;
+  listDefinitionsById: Map<string, StructuredListDefinition>;
+  listEntriesByDefinition: Record<string, StructuredListEntry[]>;
+  createListEntryFromBlock: (protocolElementBlockId: string, listDefinitionId: string, payload: { sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }) => Promise<boolean>;
+  updateListEntryFromBlock: (protocolElementBlockId: string, listDefinitionId: string, entryId: string, payload: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>) => Promise<boolean>;
+  deleteListEntryFromBlock: (protocolElementBlockId: string, listDefinitionId: string, entryId: string) => Promise<void>;
+  refreshBlockListSnapshot: (blockId: string) => Promise<void>;
+  undoBlockListSnapshot: (blockId: string) => Promise<void>;
+  refreshListEntries: (listDefinitionId: string) => Promise<void>;
+  todoTagFilter: Record<string, string | null>;
+  setTodoTagFilter: Dispatch<SetStateAction<Record<string, string | null>>>;
+  newTodoTags: Record<string, string>;
+  setNewTodoTags: Dispatch<SetStateAction<Record<string, string>>>;
   isPlanningMode: boolean;
-  unhideEventBlock: (blockId: number) => Promise<void>;
-  removeEventBlock: (blockId: number) => Promise<void>;
-  addEventBlockToElement: (elementId: number, eventId: number) => Promise<ProtocolElement["blocks"][number] | null>;
-  onQuickTodoCreated: (blockId: number, todoId: number, elementId: number) => void | Promise<void>;
+  unhideEventBlock: (blockId: string) => Promise<void>;
+  removeEventBlock: (blockId: string) => Promise<void>;
+  addEventBlockToElement: (elementId: string, eventId: string) => Promise<ProtocolElement["blocks"][number] | null>;
+  onQuickTodoCreated: (blockId: string, todoId: string, elementId: string) => void | Promise<void>;
   pendingTodos: TodoListItem[];
-  onPendingUpdate: (updated: Partial<TodoListItem> & { id: number }) => void;
-  onPendingDone: (todoId: number) => void;
+  onPendingUpdate: (updated: Partial<TodoListItem> & { id: string }) => void;
+  onPendingDone: (todoId: string) => void;
   documentTemplates: DocumentTemplate[];
   /** True while this section is the one currently in focus in the scrollable document (see protocol-editor.tsx's scroll-spy); defaults to true for the legacy single-section "abgeschlossen" view, which always renders exactly one instance. */
   isActive?: boolean;
@@ -237,9 +237,9 @@ export function FocusedElementEditor({
 
   const bulletSkipBlurRef = useRef(false);
   // Planning-mode ("geplant") popups: which block's edit/overview modal is currently open.
-  const [listEditModalBlockId, setListEditModalBlockId] = useState<number | null>(null);
-  const [eventOverviewBlockId, setEventOverviewBlockId] = useState<number | null>(null);
-  const [matrixPickerBlockId, setMatrixPickerBlockId] = useState<number | null>(null);
+  const [listEditModalBlockId, setListEditModalBlockId] = useState<string | null>(null);
+  const [eventOverviewBlockId, setEventOverviewBlockId] = useState<string | null>(null);
+  const [matrixPickerBlockId, setMatrixPickerBlockId] = useState<string | null>(null);
   // Planning-mode consolidated checkbox popup for "Termine pro Element".
   const [showEventBlockPicker, setShowEventBlockPicker] = useState(false);
   const [eventBlockScope, setEventBlockScope] = useState<"current" | "all">("current");
@@ -257,17 +257,17 @@ export function FocusedElementEditor({
     : null;
   const [multiParticipantPicker, setMultiParticipantPicker] = useState<{
     kind: "form" | "matrix" | "embedded_form" | "event_field" | "list_entry";
-    blockId: number;
+    blockId: string;
     rowId: string;
     rowLabel: string;
-    selectedIds: number[];
+    selectedIds: string[];
     columnId?: string;
     embeddedRowId?: string;
     singleSelect?: boolean;
-    eventId?: number;
+    eventId?: string;
     eventFieldName?: string;
-    listDefinitionId?: number;
-    listEntryId?: number;
+    listDefinitionId?: string;
+    listEntryId?: string;
     listColumnKey?: "column_one_value" | "column_two_value";
   } | null>(null);
   const [eventFieldDrafts, setEventFieldDrafts] = useState<Record<string, string>>({});
@@ -275,9 +275,9 @@ export function FocusedElementEditor({
   const [multiParticipantSearch, setMultiParticipantSearch] = useState("");
   const multiParticipantSearchRef = useRef<HTMLInputElement | null>(null);
   const pickerTriggerRef = useRef<HTMLElement | null>(null);
-  const [eventDrafts, setEventDrafts] = useState<Record<number, Partial<EventSummary>>>({});
-  const [openNewEventRows, setOpenNewEventRows] = useState<Record<number, boolean>>({});
-  const [creatingNewEventRows, setCreatingNewEventRows] = useState<Record<number, boolean>>({});
+  const [eventDrafts, setEventDrafts] = useState<Record<string, Partial<EventSummary>>>({});
+  const [openNewEventRows, setOpenNewEventRows] = useState<Record<string, boolean>>({});
+  const [creatingNewEventRows, setCreatingNewEventRows] = useState<Record<string, boolean>>({});
   const knownEventTags = useMemo(
     () => Array.from(new Set(availableEvents.map((e) => (e.tag ?? "").trim()).filter(Boolean))).sort(),
     [availableEvents]
@@ -306,8 +306,8 @@ export function FocusedElementEditor({
       cancelled = true;
     };
   }, [showEventBlockPicker, eventBlockScope, protocol.id, eventBlockCandidatesRefreshKey, showToast]);
-  const eventAutosaveTimers = useRef<Record<number, number>>({});
-  const newEventCreateTimers = useRef<Record<number, number>>({});
+  const eventAutosaveTimers = useRef<Record<string, number>>({});
+  const newEventCreateTimers = useRef<Record<string, number>>({});
   const upcomingEvents = useMemo(
     () => [...availableEvents].sort((left, right) => left.event_date.localeCompare(right.event_date)).slice(0, 8),
     [availableEvents]
@@ -364,17 +364,17 @@ export function FocusedElementEditor({
     target.style.height = `${Math.max(40, target.scrollHeight)}px`;
   }
 
-  function setBlockConfigLocal(blockId: number, nextConfig: Record<string, unknown>) {
+  function setBlockConfigLocal(blockId: string, nextConfig: Record<string, unknown>) {
     updateBlockInState(blockId, (current) => ({ ...current, configuration_snapshot_json: nextConfig }));
   }
 
-  function patchBlockConfigValue(blockId: number, key: string, value: unknown, currentConfig: Record<string, unknown>) {
+  function patchBlockConfigValue(blockId: string, key: string, value: unknown, currentConfig: Record<string, unknown>) {
     const nextConfig = { ...currentConfig, [key]: value };
     setBlockConfigLocal(blockId, nextConfig);
     void saveBlockConfiguration(blockId, nextConfig);
   }
 
-  function openMultiParticipantPicker(blockId: number, rowIndex: number, row: Record<string, any>) {
+  function openMultiParticipantPicker(blockId: string, rowIndex: number, row: Record<string, any>) {
     pickerTriggerRef.current = document.activeElement as HTMLElement;
     setMultiParticipantSearch("");
     setMultiParticipantPicker({
@@ -382,17 +382,17 @@ export function FocusedElementEditor({
       blockId,
       rowId: String(row.id ?? rowIndex),
       rowLabel: String(row.label ?? `Feld ${rowIndex + 1}`),
-      selectedIds: Array.isArray(row.participant_ids) ? row.participant_ids.map(Number) : [],
+      selectedIds: Array.isArray(row.participant_ids) ? row.participant_ids.map(String) : [],
     });
   }
 
   function openMatrixParticipantPicker(
-    blockId: number,
+    blockId: string,
     columnId: string,
     row: Record<string, any>
   ) {
     pickerTriggerRef.current = document.activeElement as HTMLElement;
-    const selectedIds = Array.isArray(row.participant_ids) ? row.participant_ids.map(Number) : [];
+    const selectedIds = Array.isArray(row.participant_ids) ? row.participant_ids.map(String) : [];
     setMultiParticipantSearch("");
     setMultiParticipantPicker({
       kind: "matrix",
@@ -405,7 +405,7 @@ export function FocusedElementEditor({
   }
 
   function openEmbeddedFormParticipantPicker(
-    blockId: number,
+    blockId: string,
     columnId: string,
     matrixRowId: string,
     matrixRowLabel: string,
@@ -418,13 +418,13 @@ export function FocusedElementEditor({
       blockId,
       rowId: matrixRowId,
       rowLabel: `${matrixRowLabel} · ${String(embeddedRow.label ?? "Teilnehmer")}`,
-      selectedIds: Array.isArray(embeddedRow.participant_ids) ? embeddedRow.participant_ids.map(Number) : [],
+      selectedIds: Array.isArray(embeddedRow.participant_ids) ? embeddedRow.participant_ids.map(String) : [],
       columnId,
       embeddedRowId: String(embeddedRow.id ?? ""),
     });
   }
 
-  function toggleMultiParticipantSelection(participantId: number) {
+  function toggleMultiParticipantSelection(participantId: string) {
     setMultiParticipantPicker((current) => {
       if (!current) {
         return current;
@@ -438,31 +438,31 @@ export function FocusedElementEditor({
     });
   }
 
-  function singleParticipantSummary(participantId: number | null | undefined): string {
+  function singleParticipantSummary(participantId: string | null | undefined): string {
     if (!participantId) return "Teilnehmer waehlen";
-    const p = availableParticipants.find((entry) => entry.id === Number(participantId));
+    const p = availableParticipants.find((entry) => entry.id === participantId);
     return p?.display_name ?? "Teilnehmer waehlen";
   }
 
   function formatListEntryColumnValue(value: Record<string, any> | null | undefined, valueType: string): string {
     if (!value) return "";
     if (valueType === "participant") {
-      const id = Number(value.participant_id ?? 0);
+      const id = String(value.participant_id ?? "");
       return availableParticipants.find((p) => p.id === id)?.display_name ?? "";
     }
     if (valueType === "participants") {
-      const ids = Array.isArray(value.participant_ids) ? value.participant_ids.map(Number) : [];
+      const ids = Array.isArray(value.participant_ids) ? value.participant_ids.map(String) : [];
       return availableParticipants.filter((p) => ids.includes(p.id)).map((p) => p.display_name).join(", ");
     }
     if (valueType === "event") {
-      const id = Number(value.event_id ?? 0);
+      const id = String(value.event_id ?? "");
       const eventRow = availableEvents.find((e) => e.id === id);
       return eventRow ? `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}` : "";
     }
     return String(value.text_value ?? "").trim();
   }
 
-  function selectSingleParticipant(participantId: number) {
+  function selectSingleParticipant(participantId: string) {
     if (!multiParticipantPicker?.singleSelect) return;
     const { blockId, kind, rowId, columnId, listDefinitionId, listEntryId, listColumnKey } = multiParticipantPicker;
     if (kind === "list_entry" && listDefinitionId && listEntryId && listColumnKey) {
@@ -486,7 +486,7 @@ export function FocusedElementEditor({
   }
 
   function multiParticipantSummary(row: Record<string, any>) {
-    const selectedIds = Array.isArray(row.participant_ids) ? row.participant_ids.map(Number) : [];
+    const selectedIds = Array.isArray(row.participant_ids) ? row.participant_ids.map(String) : [];
     if (!selectedIds.length) {
       return "Teilnehmer waehlen";
     }
@@ -528,7 +528,7 @@ export function FocusedElementEditor({
     }
   }
 
-  function applyMultiParticipantSelection(currentBlockId: number, currentConfig: Record<string, unknown>) {
+  function applyMultiParticipantSelection(currentBlockId: string, currentConfig: Record<string, unknown>) {
     if (!multiParticipantPicker || multiParticipantPicker.blockId !== currentBlockId) {
       return;
     }
@@ -659,7 +659,7 @@ export function FocusedElementEditor({
     };
   }
 
-  function updateEventDraft(eventId: number, patch: Partial<EventSummary>) {
+  function updateEventDraft(eventId: string, patch: Partial<EventSummary>) {
     setEventDrafts((current) => ({
       ...current,
       [eventId]: {
@@ -669,7 +669,7 @@ export function FocusedElementEditor({
     }));
   }
 
-  function resetEventDraft(eventId: number) {
+  function resetEventDraft(eventId: string) {
     setEventDrafts((current) => {
       if (!current[eventId]) {
         return current;
@@ -701,7 +701,7 @@ export function FocusedElementEditor({
   }
 
   function queueEventRowSave(
-    protocolElementBlockId: number,
+    protocolElementBlockId: string,
     eventRow: EventSummary,
     patch: Partial<EventSummary>,
     options: { forcedTag: string; allowEndDate: boolean }
@@ -732,7 +732,7 @@ export function FocusedElementEditor({
     return createInlineProtocolEventDraft(protocol.protocol_date, forcedTag, columns.showTitle);
   }
 
-  function resetNewEventRow(blockId: number) {
+  function resetNewEventRow(blockId: string) {
     if (newEventCreateTimers.current[blockId]) {
       window.clearTimeout(newEventCreateTimers.current[blockId]);
       delete newEventCreateTimers.current[blockId];
@@ -763,7 +763,7 @@ export function FocusedElementEditor({
     });
   }
 
-  function scheduleNewEventCreate(blockId: number, blockConfig: Record<string, any>, nextDraft: ProtocolEventDraft) {
+  function scheduleNewEventCreate(blockId: string, blockConfig: Record<string, any>, nextDraft: ProtocolEventDraft) {
     if (newEventCreateTimers.current[blockId]) {
       window.clearTimeout(newEventCreateTimers.current[blockId]);
       delete newEventCreateTimers.current[blockId];
@@ -788,7 +788,7 @@ export function FocusedElementEditor({
     }, 500);
   }
 
-  function patchNewEventDraft(blockId: number, blockConfig: Record<string, any>, patch: Partial<ProtocolEventDraft>) {
+  function patchNewEventDraft(blockId: string, blockConfig: Record<string, any>, patch: Partial<ProtocolEventDraft>) {
     setNewEventDrafts((current) => {
       const base = current[blockId] ?? newEventRowDraft(blockConfig);
       const nextDraft = { ...base, ...patch };
@@ -855,15 +855,15 @@ export function FocusedElementEditor({
       return {};
     }
     if (rowType === "participant") {
-      return row.template_participant_id ? { participant_id: Number(row.template_participant_id) } : {};
+      return row.template_participant_id ? { participant_id: String(row.template_participant_id) } : {};
     }
     if (rowType === "participants") {
       return Array.isArray(row.template_participant_ids) && row.template_participant_ids.length
-        ? { participant_ids: row.template_participant_ids.map(Number).filter(Boolean) }
+        ? { participant_ids: row.template_participant_ids.map(String).filter(Boolean) }
         : {};
     }
     if (rowType === "event") {
-      return row.template_event_id ? { event_id: Number(row.template_event_id) } : {};
+      return row.template_event_id ? { event_id: String(row.template_event_id) } : {};
     }
     return String(row.template_value ?? "").trim() ? { text_value: String(row.template_value) } : {};
   }
@@ -902,16 +902,16 @@ export function FocusedElementEditor({
     );
   }
 
-  function setMatrixColumnsLocal(blockId: number, blockConfig: Record<string, any>, nextColumns: Array<Record<string, any>>) {
+  function setMatrixColumnsLocal(blockId: string, blockConfig: Record<string, any>, nextColumns: Array<Record<string, any>>) {
     setBlockConfigLocal(blockId, { ...blockConfig, columns: nextColumns });
   }
 
-  function saveMatrixColumns(blockId: number, blockConfig: Record<string, any>, nextColumns: Array<Record<string, any>>) {
+  function saveMatrixColumns(blockId: string, blockConfig: Record<string, any>, nextColumns: Array<Record<string, any>>) {
     void saveBlockConfiguration(blockId, { ...blockConfig, columns: nextColumns });
   }
 
   function updateMatrixColumn(
-    blockId: number,
+    blockId: string,
     blockConfig: Record<string, any>,
     columnId: string,
     updater: (column: Record<string, any>) => Record<string, any>,
@@ -928,7 +928,7 @@ export function FocusedElementEditor({
   }
 
   function updateMatrixCell(
-    blockId: number,
+    blockId: string,
     blockConfig: Record<string, any>,
     columnId: string,
     rowId: string,
@@ -959,7 +959,7 @@ export function FocusedElementEditor({
   }
 
   function updateMatrixEmbeddedBlock(
-    blockId: number,
+    blockId: string,
     blockConfig: Record<string, any>,
     columnId: string,
     row: Record<string, any>,
@@ -982,11 +982,11 @@ export function FocusedElementEditor({
       return multiParticipantSummary(value);
     }
     if (rowType === "participant") {
-      const participant = availableParticipants.find((entry) => entry.id === Number(value.participant_id ?? 0));
+      const participant = availableParticipants.find((entry) => entry.id === String(value.participant_id ?? ""));
       return participant?.display_name ?? "Teilnehmer waehlen";
     }
     if (rowType === "event") {
-      const eventRow = sortedAvailableEvents.find((entry) => entry.id === Number(value.event_id ?? 0));
+      const eventRow = sortedAvailableEvents.find((entry) => entry.id === String(value.event_id ?? ""));
       return eventRow ? `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}` : "Termin waehlen";
     }
     return String(value.text_value ?? row.template_value ?? "").trim() || "Kein Inhalt";
@@ -1075,11 +1075,11 @@ export function FocusedElementEditor({
       const rowType = matrixRowType(row);
       // Participant(s) values from list entry
       if (Array.isArray(colVal.participant_ids)) {
-        const ids = colVal.participant_ids as number[];
+        const ids = colVal.participant_ids as string[];
         if (rowType === "participants") row_values[rowId] = { participant_ids: ids };
         else if (rowType === "participant") row_values[rowId] = ids.length ? { participant_id: ids[0] } : {};
       } else if (colVal.participant_id != null) {
-        const id = colVal.participant_id as number;
+        const id = colVal.participant_id as string;
         if (rowType === "participants") row_values[rowId] = { participant_ids: [id] };
         else row_values[rowId] = { participant_id: id };
       } else if (colVal.event_id != null) {
@@ -1101,14 +1101,14 @@ export function FocusedElementEditor({
       (autoSrc && typeof autoSrc === "object" ? autoSrc.event_tag_filter : null) ??
       blockConfig.matrix_column_source_event_tag ?? ""
     ).trim().toLowerCase();
-    const listId = Number(
+    const rawListId =
       (autoSrc && typeof autoSrc === "object" ? autoSrc.list_id : null) ??
-      blockConfig.matrix_column_source_list_id ?? 0
-    );
+      blockConfig.matrix_column_source_list_id ?? null;
+    const listId = rawListId ? String(rawListId) : null;
     return { source, eventTagFilter, listId };
   }
 
-  function generateMatrixColumns(blockId: number, blockConfig: Record<string, any>) {
+  function generateMatrixColumns(blockId: string, blockConfig: Record<string, any>) {
     const { source, eventTagFilter, listId } = matrixAutoSourceInfo(blockConfig);
     const rows = matrixRows(blockConfig);
 
@@ -1172,7 +1172,7 @@ export function FocusedElementEditor({
     return [];
   }
 
-  function toggleMatrixColumn(blockId: number, blockConfig: Record<string, any>, candidateId: string, nextChecked: boolean) {
+  function toggleMatrixColumn(blockId: string, blockConfig: Record<string, any>, candidateId: string, nextChecked: boolean) {
     const { source } = matrixAutoSourceInfo(blockConfig);
     const columns = matrixColumns(blockConfig);
     const existing = columns.find((c) => String(c.id ?? "") === candidateId);
@@ -1664,8 +1664,8 @@ export function FocusedElementEditor({
 
               {elementType === "form" && (
                 (() => {
-                  const linkedListId = Number(blockConfig.linked_list_id ?? 0);
-                  const linkedListDefinition = listDefinitionsById.get(linkedListId);
+                  const linkedListId = blockConfig.linked_list_id ? String(blockConfig.linked_list_id) : null;
+                  const linkedListDefinition = linkedListId ? listDefinitionsById.get(linkedListId) : undefined;
                   if (linkedListId && linkedListDefinition) {
                     // The list may have changed since this block's snapshot was taken (or
                     // there may be no snapshot yet on an old/abgeschlossen protocol) - the
@@ -1700,7 +1700,7 @@ export function FocusedElementEditor({
                     // Diffing already happened server-side at the last sync (see
                     // list_snapshot_service._merge_tracked_list_entries) - this just reads
                     // the '_tracked'/'_tracked_before' markers already embedded per entry.
-                    const entryTrackedStatusById: Record<number, TrackedEntryInfo> | undefined = trackChangesActive && wholeListSnapshot
+                    const entryTrackedStatusById: Record<string, TrackedEntryInfo> | undefined = trackChangesActive && wholeListSnapshot
                       ? Object.fromEntries(
                           wholeListSnapshot.entries
                             .filter((entry) => !!entry._tracked)
@@ -1838,7 +1838,7 @@ export function FocusedElementEditor({
                     );
                   }
                   const linkedEvent = isAutoEventBlock
-                    ? availableEvents.find((e) => e.id === Number(blockConfig.repeat_source_id))
+                    ? availableEvents.find((e) => e.id === String(blockConfig.repeat_source_id))
                     : undefined;
                   const configuredEventFields = isAutoEventBlock && Array.isArray(blockConfig.event_fields)
                     ? (blockConfig.event_fields as Array<{ field: string; label: string }>)
@@ -1859,8 +1859,8 @@ export function FocusedElementEditor({
                             const isParticipantsField = ef.field.endsWith("_ids");
                             const isDateField = ef.field === "event_date" || ef.field === "event_end_date";
                             const isNumberField = ef.field === "participant_count";
-                            const currentIds: number[] = isParticipantsField
-                              ? ((linkedEvent as unknown as Record<string, unknown>)[ef.field] as number[] | undefined ?? [])
+                            const currentIds: string[] = isParticipantsField
+                              ? ((linkedEvent as unknown as Record<string, unknown>)[ef.field] as string[] | undefined ?? [])
                               : [];
                             const participantSummary = isParticipantsField
                               ? currentIds.length === 0
@@ -1928,7 +1928,7 @@ export function FocusedElementEditor({
                         const rowsAreStale = !isReadOnly && listEntryRows.some((row) => {
                           const snapshot = row.list_snapshot as RowListSnapshot | undefined;
                           if (!snapshot) return false;
-                          const liveDefinition = listDefinitionsById.get(Number(row.linked_list_id ?? 0));
+                          const liveDefinition = row.linked_list_id ? listDefinitionsById.get(String(row.linked_list_id)) : undefined;
                           return !!liveDefinition && liveDefinition.content_version > snapshot.synced_version;
                         });
                         const rowsHaveUndo = listEntryRows.some((row) => {
@@ -1955,11 +1955,11 @@ export function FocusedElementEditor({
                         {((Array.isArray(blockConfig.rows) ? blockConfig.rows : []) as Array<Record<string, any>>).map((row, index) => {
                           const rowType = String(row.value_type ?? row.row_type ?? "text");
                           if (rowType === "list_entry") {
-                            const linkedListId = Number(row.linked_list_id ?? 0);
-                            const linkedListEntryId = Number(row.linked_list_entry_id ?? 0);
+                            const linkedListId = row.linked_list_id ? String(row.linked_list_id) : null;
+                            const linkedListEntryId = row.linked_list_entry_id ? String(row.linked_list_entry_id) : null;
                             const rowSnapshot = row.list_snapshot as RowListSnapshot | undefined;
-                            const liveListDefinition = listDefinitionsById.get(linkedListId);
-                            const liveListEntry = (listEntriesByDefinition[linkedListId] ?? []).find((entry) => entry.id === linkedListEntryId);
+                            const liveListDefinition = linkedListId ? listDefinitionsById.get(linkedListId) : undefined;
+                            const liveListEntry = (linkedListId ? listEntriesByDefinition[linkedListId] ?? [] : []).find((entry) => entry.id === linkedListEntryId);
                             const entryExists = rowSnapshot ? rowSnapshot.entry_exists : !!liveListDefinition && !!liveListEntry;
                             if (!entryExists) {
                               return (
@@ -2060,10 +2060,10 @@ export function FocusedElementEditor({
                                         blockId: block.id,
                                         rowId: String(row.id ?? index),
                                         rowLabel: aliasOrFixedValue || "Wert",
-                                        selectedIds: variableRawValue?.participant_id ? [Number(variableRawValue.participant_id)] : [],
+                                        selectedIds: variableRawValue?.participant_id ? [String(variableRawValue.participant_id)] : [],
                                         singleSelect: true,
-                                        listDefinitionId: linkedListId,
-                                        listEntryId: linkedListEntryId,
+                                        listDefinitionId: linkedListId ?? undefined,
+                                        listEntryId: linkedListEntryId ?? undefined,
                                         listColumnKey: variableColumnKey,
                                       });
                                     }}
@@ -2085,9 +2085,9 @@ export function FocusedElementEditor({
                                         blockId: block.id,
                                         rowId: String(row.id ?? index),
                                         rowLabel: aliasOrFixedValue || "Wert",
-                                        selectedIds: Array.isArray(variableRawValue?.participant_ids) ? variableRawValue.participant_ids.map(Number) : [],
-                                        listDefinitionId: linkedListId,
-                                        listEntryId: linkedListEntryId,
+                                        selectedIds: Array.isArray(variableRawValue?.participant_ids) ? variableRawValue.participant_ids.map(String) : [],
+                                        listDefinitionId: linkedListId ?? undefined,
+                                        listEntryId: linkedListEntryId ?? undefined,
                                         listColumnKey: variableColumnKey,
                                       });
                                     }}
@@ -2102,6 +2102,7 @@ export function FocusedElementEditor({
                                     value={variableRawValue?.event_id ?? null}
                                     disabled={!blockEditable}
                                     onChange={(eventRow) => {
+                                      if (!linkedListId || !linkedListEntryId) return;
                                       void updateListEntryFromBlock(block.id, linkedListId, linkedListEntryId, {
                                         [variableColumnKey]: { event_id: eventRow ? eventRow.id : null },
                                       });
@@ -2125,6 +2126,7 @@ export function FocusedElementEditor({
                                         delete next[draftKey];
                                         return next;
                                       });
+                                      if (!linkedListId || !linkedListEntryId) return;
                                       void updateListEntryFromBlock(block.id, linkedListId, linkedListEntryId, {
                                         [variableColumnKey]: { text_value: event.target.value },
                                       });
@@ -2152,7 +2154,7 @@ export function FocusedElementEditor({
                                     blockId: block.id,
                                     rowId: String(row.id ?? index),
                                     rowLabel: String(row.label ?? `Feld ${index + 1}`),
-                                    selectedIds: row.participant_id ? [Number(row.participant_id)] : [],
+                                    selectedIds: row.participant_id ? [String(row.participant_id)] : [],
                                     singleSelect: true,
                                   });
                                 }}
@@ -2409,7 +2411,7 @@ export function FocusedElementEditor({
                                                   blockId: block.id,
                                                   rowId: rowId!,
                                                   rowLabel: String(row.label ?? "Teilnehmer"),
-                                                  selectedIds: value.participant_id ? [Number(value.participant_id)] : [],
+                                                  selectedIds: value.participant_id ? [String(value.participant_id)] : [],
                                                   columnId: columnId!,
                                                   singleSelect: true,
                                                 });
@@ -2813,14 +2815,14 @@ export function FocusedElementEditor({
 
               {elementType === "attendance" && (() => {
                 const attendanceEntries = Array.isArray(blockConfig.attendance_entries) ? (blockConfig.attendance_entries as Array<Record<string, any>>) : [];
-                const fineAccountId = Number(blockConfig.fine_account_id ?? 0);
+                const fineAccountId = blockConfig.fine_account_id ? String(blockConfig.fine_account_id) : null;
                 const fineAmountLate = Number(blockConfig.fine_amount_late ?? 0);
                 const fineAmountAbsent = Number(blockConfig.fine_amount_absent ?? 0);
-                const hasFineConfig = fineAccountId > 0 && (fineAmountLate > 0 || fineAmountAbsent > 0);
+                const hasFineConfig = fineAccountId != null && (fineAmountLate > 0 || fineAmountAbsent > 0);
 
                 async function handleAttendanceChange(participant: ParticipantSummary, newStatus: string) {
                   const previousEntries = attendanceEntries;
-                  const nextEntries = attendanceEntries.filter((entry) => Number(entry.participant_id) !== participant.id);
+                  const nextEntries = attendanceEntries.filter((entry) => String(entry.participant_id) !== participant.id);
                   nextEntries.push({ participant_id: participant.id, participant_name: participant.display_name, status: newStatus });
                   try {
                     await saveBlockConfiguration(block.id, { ...blockConfig, attendance_entries: nextEntries });
@@ -2883,7 +2885,7 @@ export function FocusedElementEditor({
                   <>
                     <div className="attendance-list">
                       {eligibleAttendanceParticipants.map((participant) => {
-                        const currentEntry = attendanceEntries.find((entry) => Number(entry.participant_id) === participant.id);
+                        const currentEntry = attendanceEntries.find((entry) => String(entry.participant_id) === participant.id);
                         const selectedStatus = currentEntry?.status ?? null;
                         const pendingFine = hasFineConfig ? protocolFines.find((f) => f.participant_id === participant.id && f.status === "pending") : null;
                         return (
@@ -2983,7 +2985,7 @@ export function FocusedElementEditor({
                   </div>
                   {availableTemplates.filter((t) => t.status !== "archived").length > 1 && (() => {
                     const activeFollowupId = blockConfig.followup_template_id
-                      ? Number(blockConfig.followup_template_id)
+                      ? String(blockConfig.followup_template_id)
                       : null;
                     const selectedTemplate = activeFollowupId
                       ? availableTemplates.find((t) => t.id === activeFollowupId)
@@ -3026,9 +3028,9 @@ export function FocusedElementEditor({
               )}
 
               {(elementType === "finance_balance" || elementType === "finance_transactions") && (() => {
-                const accountId = Number(blockConfig.finance_account_id ?? 0);
-                const account = availableAccounts.find((a) => a.id === accountId) ?? null;
-                const txAll = accountId > 0 ? (financeTransactions[accountId] ?? []) : [];
+                const accountId = blockConfig.finance_account_id ? String(blockConfig.finance_account_id) : null;
+                const account = accountId ? availableAccounts.find((a) => a.id === accountId) ?? null : null;
+                const txAll = accountId != null ? (financeTransactions[accountId] ?? []) : [];
 
                 if (!account) {
                   return (
@@ -3093,7 +3095,7 @@ export function FocusedElementEditor({
               })()}
 
               {elementType === "fine_list" && (() => {
-                const fineAccount = (accountId: number) => availableAccounts.find((a) => a.id === accountId);
+                const fineAccount = (accountId: string) => availableAccounts.find((a) => a.id === accountId);
                 return (
                   <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                     {/* Pending fines from earlier protocols */}
@@ -3253,7 +3255,6 @@ export function FocusedElementEditor({
 
               {elementType === "chart" && (
                 <ChartBlockRenderer
-                  blockId={block.id}
                   config={blockConfig as { chart_type?: string; cycle_key?: string }}
                   editable={false}
                   onSave={(cfg) => void saveBlockConfiguration(block.id, cfg)}
@@ -3320,13 +3321,13 @@ export function FocusedElementEditor({
         element.blocks
           .map((b) => asObject(b.configuration_snapshot_json).repeat_source_id)
           .filter((id) => id != null)
-          .map(Number)
+          .map(String)
       );
       const existingItems: CandidateItem[] = element.blocks
         .filter((b) => asObject(b.configuration_snapshot_json).repeat_source_type === "event")
         .map((b) => {
           const config = asObject(b.configuration_snapshot_json);
-          const eventId = Number(config.repeat_source_id);
+          const eventId = String(config.repeat_source_id);
           const evt = availableEvents.find((e) => e.id === eventId);
           return {
             id: `block-${b.id}`,
@@ -3361,10 +3362,10 @@ export function FocusedElementEditor({
       function findCandidateEvent(item: CandidateItem): EventSummary | undefined {
         if (item.id.startsWith("block-")) {
           const b = element.blocks.find((blk) => `block-${blk.id}` === item.id);
-          const eventId = b ? Number(asObject(b.configuration_snapshot_json).repeat_source_id) : NaN;
+          const eventId = b ? String(asObject(b.configuration_snapshot_json).repeat_source_id) : undefined;
           return availableEvents.find((e) => e.id === eventId);
         }
-        const eventId = Number(item.id.slice("event-".length));
+        const eventId = item.id.slice("event-".length);
         return eventBlockCandidates.find((e) => e.id === eventId);
       }
       // Unchecking a "Bereits vorhanden" Termin removes its block outright (not just hides it) so
@@ -3374,7 +3375,7 @@ export function FocusedElementEditor({
       // restore prior text.
       async function handleToggle(item: CandidateItem, nextChecked: boolean) {
         if (item.id.startsWith("block-")) {
-          const blockId = Number(item.id.slice("block-".length));
+          const blockId = item.id.slice("block-".length);
           if (nextChecked) {
             await unhideEventBlock(blockId);
           } else {
@@ -3387,14 +3388,14 @@ export function FocusedElementEditor({
             await removeEventBlock(blockId);
           }
         } else if (item.id.startsWith("event-") && nextChecked) {
-          const eventId = Number(item.id.slice("event-".length));
+          const eventId = item.id.slice("event-".length);
           await addEventBlockToElement(element.id, eventId);
         }
       }
       async function handleCreateNew() {
         if (!eventBlockNewDraft.event_date.trim() || !eventBlockNewDraft.title.trim()) return;
         setCreatingEventBlockNew(true);
-        const created = await createEventFromBlock(referenceBlock?.id ?? 0, referenceConfig, eventBlockNewDraft);
+        const created = await createEventFromBlock(referenceBlock?.id ?? "", referenceConfig, eventBlockNewDraft);
         if (created) {
           await addEventBlockToElement(element.id, created.id);
           setEventBlockNewDraft(createProtocolEventDraft(protocol.protocol_date, String(referenceConfig.event_tag_filter ?? "").trim()));
@@ -3425,7 +3426,7 @@ export function FocusedElementEditor({
                 onTagColorChange={updateTagColor}
                 onTagRename={renameTag}
                 onUpdate={(patch) =>
-                  updateEventFromBlock(referenceBlock?.id ?? 0, evt.id, patch).then(refreshEventBlockCandidates)
+                  updateEventFromBlock(referenceBlock?.id ?? "", evt.id, patch).then(refreshEventBlockCandidates)
                 }
               />
             );

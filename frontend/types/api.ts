@@ -5,14 +5,14 @@ export type MfaFactorType = "totp" | "webauthn";
 export type SessionInfo = {
   authenticated: boolean;
   user: {
-    id: number;
+    id: string;
     first_name: string;
     last_name: string;
     display_name: string;
     email: string;
     preferred_language: string;
     protocol_accordion_enabled: boolean;
-    default_tenant_id: number | null;
+    default_tenant_id: string | null;
   } | null;
   current_tenant: TenantSummary | null;
   current_role: string | null;
@@ -44,7 +44,7 @@ export type LoginResponse = SessionInfo & {
 };
 
 export type MfaFactor = {
-  id: number;
+  id: string;
   factor_type: MfaFactorType;
   label: string;
   created_at: string;
@@ -80,7 +80,7 @@ export type PasskeyAssertionStart = {
 };
 
 export type TenantSummary = {
-  id: number;
+  id: string;
   name: string;
   profile_image_path: string | null;
   profile_image_url: string | null;
@@ -92,7 +92,7 @@ export type TenantSummary = {
 export type TenantDomainPurpose = "app" | "abgabebox";
 
 export type TenantDomain = {
-  id: number;
+  id: string;
   purpose: TenantDomainPurpose;
   domain: string;
   status: "pending" | "active";
@@ -109,8 +109,8 @@ export type SubmissionElementStatus = "open" | "submitted" | "closed";
 export type SubmissionSortOrder = "alphabetical" | "date" | "proximity";
 
 export type SubmissionAssignment = {
-  id: number;
-  tenant_id: number;
+  id: string;
+  tenant_id: string;
   title: string;
   description: string | null;
   public_slug: string;
@@ -118,7 +118,7 @@ export type SubmissionAssignment = {
   tag_filter: string | null;
   offset_days_before: number | null;
   offset_days_after: number | null;
-  list_definition_id: number | null;
+  list_definition_id: string | null;
   deadline: string | null;
   allowed_file_types: string[];
   max_files_per_element: number | null;
@@ -137,7 +137,7 @@ export type AssignmentSummary = {
 };
 
 export type SubmissionFile = {
-  id: number;
+  id: string;
   original_name: string;
   mime_type: string | null;
   file_size_bytes: number | null;
@@ -146,7 +146,7 @@ export type SubmissionFile = {
 };
 
 export type SubmissionUploadLogEntry = {
-  id: number;
+  id: string;
   element_ref: string;
   status: string;
   error_message: string | null;
@@ -160,9 +160,9 @@ export type SubmissionElementStatusEntry = {
   window_end: string | null;
   status: SubmissionElementStatus;
   submitted_at: string | null;
-  upload_id: number | null;
+  upload_id: string | null;
   files: SubmissionFile[];
-  responsible_participant_id: number | null;
+  responsible_participant_id: string | null;
 };
 
 export type PlatformOidcConfigPublic = { enabled: boolean; issuer_url: string };
@@ -170,7 +170,7 @@ export type PlatformOidcConfigRead = { enabled: boolean; issuer_url: string; cli
 export type PlatformOidcConfigWrite = { enabled: boolean; issuer_url: string; client_id: string; client_secret: string; scopes: string };
 
 export type TenantMembership = {
-  tenant_id: number;
+  tenant_id: string;
   tenant_name: string;
   tenant_profile_image_path: string | null;
   tenant_profile_image_url: string | null;
@@ -179,7 +179,7 @@ export type TenantMembership = {
 };
 
 export type UserSummary = {
-  id: number;
+  id: string;
   first_name: string;
   last_name: string;
   display_name: string;
@@ -187,7 +187,7 @@ export type UserSummary = {
   preferred_language: string;
   is_active: boolean;
   external_identity_json: Record<string, unknown>;
-  default_tenant_id: number | null;
+  default_tenant_id: string | null;
   memberships: TenantMembership[];
   login_enabled: boolean;
   is_participant_account: boolean;
@@ -196,7 +196,7 @@ export type UserSummary = {
 };
 
 export type AdminTenantUser = {
-  user_id: number;
+  user_id: string;
   email: string;
   display_name: string;
   role_code: string;
@@ -206,11 +206,11 @@ export type AdminTenantUser = {
 
 export type AdminSessionInfo = {
   authenticated: boolean;
-  admin: { id: number; email: string; display_name: string; role: "owner" | "support" } | null;
+  admin: { id: string; email: string; display_name: string; role: "owner" | "support" } | null;
 };
 
 export type AdminTenantSummary = {
-  id: number;
+  id: string;
   name: string;
   profile_image_path: string | null;
   profile_image_url: string | null;
@@ -238,8 +238,8 @@ export type TenantCleanupCounts = {
 };
 
 export type AdminDomainSummary = {
-  id: number;
-  tenant_id: number;
+  id: string;
+  tenant_id: string;
   tenant_name: string;
   purpose: TenantDomainPurpose;
   domain: string;
@@ -261,9 +261,9 @@ export type AdminUserPage = {
 };
 
 export type SystemErrorLogEntry = {
-  id: number;
+  id: string;
   source: string;
-  tenant_id: number | null;
+  tenant_id: string | null;
   tenant_name: string | null;
   actor_email: string | null;
   request_method: string | null;
@@ -286,7 +286,7 @@ export type SystemErrorLogFilterOptions = {
 };
 
 export type PlatformAdminSummary = {
-  id: number;
+  id: string;
   email: string;
   display_name: string;
   is_active: boolean;
@@ -296,29 +296,29 @@ export type PlatformAdminSummary = {
 };
 
 export type TemplateSummary = {
-  id: number;
-  tenant_id?: number;
+  id: string;
+  tenant_id?: string;
   name: string;
   description?: string | null;
-  next_event_id?: number | null;
-  last_event_id?: number | null;
+  next_event_id?: string | null;
+  last_event_id?: string | null;
   todo_due_event_tag?: string | null;
   protocol_number_pattern?: string | null;
   title_pattern?: string | null;
   auto_create_next_protocol?: boolean;
-  cycle_config_id?: number | null;
+  cycle_config_id?: string | null;
   cycle_config?: CycleConfigSummary | null;
   version: number;
   status: string;
-  document_template_id?: number | null;
-  created_by?: number | null;
+  document_template_id?: string | null;
+  created_by?: string | null;
   created_at?: string;
   updated_at?: string;
 };
 
 export type CycleConfigSummary = {
-  id: number;
-  tenant_id: number;
+  id: string;
+  tenant_id: string;
   name: string;
   reset_month: number;
   reset_day: number;
@@ -328,7 +328,7 @@ export type CycleConfigSummary = {
 };
 
 export type CycleAssignment = {
-  cycle_config_id: number;
+  cycle_config_id: string;
   cycle_year: number;
 };
 
@@ -338,9 +338,9 @@ export type CycleInfo = {
 };
 
 export type ParticipantSummary = {
-  id: number;
-  tenant_id: number;
-  app_user_id?: number | null;
+  id: string;
+  tenant_id: string;
+  app_user_id?: string | null;
   first_name: string | null;
   last_name: string | null;
   display_name: string;
@@ -354,22 +354,23 @@ export type ParticipantSummary = {
 };
 
 export type EventSummary = {
-  id: number;
-  tenant_id: number;
+  id: string;
+  tenant_id: string;
   event_date: string;
   event_end_date: string | null;
+  // Lookup-table code, deliberately kept as a small numeric id - not migrated to public_id.
   event_category_id: number;
   tag: string | null;
   title: string;
   description: string | null;
   participant_count: number;
   is_cancelled: boolean;
-  organizer_ids: number[] | null;
-  leadership_ids: number[] | null;
-  participant_ids: number[] | null;
-  spezial1_ids: number[] | null;
-  spezial2_ids: number[] | null;
-  spezial3_ids: number[] | null;
+  organizer_ids: string[] | null;
+  leadership_ids: string[] | null;
+  participant_ids: string[] | null;
+  spezial1_ids: string[] | null;
+  spezial2_ids: string[] | null;
+  spezial3_ids: string[] | null;
   location: string | null;
   spezial_text1: string | null;
   spezial_text2: string | null;
@@ -401,8 +402,8 @@ export type EventImportPreview = {
 export type StructuredListValueType = "text" | "participant" | "participants" | "event";
 
 export type StructuredListDefinition = {
-  id: number;
-  tenant_id: number;
+  id: string;
+  tenant_id: string;
   name: string;
   description: string | null;
   column_one_title: string;
@@ -428,7 +429,7 @@ export type TrackedListValues = { column_one_value: Record<string, unknown>; col
 
 export type WholeListSnapshot = ListSnapshot & {
   entries: {
-    id: number;
+    id: string;
     sort_index: number;
     column_one_value: Record<string, unknown>;
     column_two_value: Record<string, unknown>;
@@ -448,8 +449,8 @@ export type RowListSnapshot =
     });
 
 export type StructuredListEntry = {
-  id: number;
-  list_definition_id: number;
+  id: string;
+  list_definition_id: string;
   sort_index: number;
   column_one_value: Record<string, unknown>;
   column_two_value: Record<string, unknown>;
@@ -458,23 +459,23 @@ export type StructuredListEntry = {
 };
 
 export type ProtocolSummary = {
-  id: number;
-  tenant_id?: number;
-  template_id?: number;
+  id: string;
+  tenant_id?: string;
+  template_id?: string;
   template_version?: number;
-  document_template_id?: number | null;
+  document_template_id?: string | null;
   document_template_version?: number | null;
   protocol_number: string;
   title: string | null;
   protocol_date?: string;
-  event_id?: number | null;
+  event_id?: string | null;
   status: string;
   version_major?: number;
   version_minor?: number;
   version_final_minor?: number;
   session_notes?: string | null;
   track_changes_enabled?: boolean;
-  created_by?: number | null;
+  created_by?: string | null;
   created_at?: string;
   updated_at?: string;
   latest_pdf_url?: string | null;
@@ -483,20 +484,20 @@ export type ProtocolSummary = {
 };
 
 export type NextSessionAttendanceEntry = {
-  participant_id: number;
+  participant_id: string;
   participant_name: string;
   status: string;
 };
 
 export type NextSessionInfo = {
   protocol: ProtocolSummary | null;
-  attendance_block_id: number | null;
+  attendance_block_id: string | null;
   entries: NextSessionAttendanceEntry[];
 };
 
 export type DocumentTemplatePart = {
-  id: number;
-  tenant_id: number;
+  id: string;
+  tenant_id: string;
   code: string;
   name: string;
   part_type: string;
@@ -509,8 +510,8 @@ export type DocumentTemplatePart = {
 };
 
 export type DocumentTemplate = {
-  id: number;
-  tenant_id: number;
+  id: string;
+  tenant_id: string;
   code: string;
   name: string;
   description: string | null;
@@ -524,12 +525,15 @@ export type DocumentTemplate = {
 };
 
 export type ElementDefinitionBlock = {
+  // Client-owned opaque id living inside ElementDefinition.configuration_json["blocks"][].id -
+  // not a database row/FK, deliberately left as plain number (unaffected by the public_id migration).
   id: number;
   title: string;
   description: string | null;
   block_title: string | null;
   default_content: string | null;
   copy_from_last_protocol?: boolean;
+  // Lookup-table codes, deliberately kept as small numeric ids.
   element_type_id: number;
   render_type_id: number;
   is_editable: boolean;
@@ -543,8 +547,8 @@ export type ElementDefinitionBlock = {
 };
 
 export type ElementDefinition = {
-  id: number;
-  tenant_id: number;
+  id: string;
+  tenant_id: string;
   title: string;
   description: string | null;
   is_active: boolean;
@@ -554,14 +558,16 @@ export type ElementDefinition = {
 };
 
 export type TemplateElementBlock = {
+  // Client-owned opaque ids (see ElementDefinitionBlock.id) - deliberately left as plain number.
   id: number;
-  template_element_id: number;
+  template_element_id: string;
   element_definition_block_id: number | null;
   title: string;
   description: string | null;
   block_title: string | null;
   default_content: string | null;
   copy_from_last_protocol: boolean;
+  // Lookup-table codes, deliberately kept as small numeric ids.
   element_type_id: number;
   render_type_id: number;
   is_editable: boolean;
@@ -579,9 +585,9 @@ export type TemplateElementBlock = {
 export type TemplateElementBehaviorField = "is_editable" | "is_visible" | "export_visible" | "copy_from_last_protocol" | "title_as_subtitle";
 
 export type TemplateElement = {
-  id: number;
-  template_id: number;
-  element_definition_id: number;
+  id: string;
+  template_id: string;
+  element_definition_id: string;
   sort_index: number;
   title: string;
   description: string | null;
@@ -592,17 +598,18 @@ export type TemplateElement = {
 };
 
 export type ProtocolTodo = {
-  id: number;
-  protocol_element_block_id: number;
+  id: string;
+  protocol_element_block_id: string;
   sort_index: number;
   task: string;
-  assigned_user_id: number | null;
-  assigned_participant_id: number | null;
+  assigned_user_id: string | null;
+  assigned_participant_id: string | null;
   assigned_participant_name: string | null;
+  // Lookup-table code, deliberately kept as a small numeric id.
   todo_status_id: number;
   todo_status_code: string | null;
   due_date: string | null;
-  due_event_id: number | null;
+  due_event_id: string | null;
   due_event_title?: string | null;
   due_event_date?: string | null;
   due_marker?: string | null;
@@ -611,39 +618,39 @@ export type ProtocolTodo = {
   completed_at: string | null;
   reference_link: string | null;
   tags: string[];
-  created_by: number | null;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
-  closed_in_protocol_id: number | null;
+  closed_in_protocol_id: string | null;
   tracked_change?: "added" | "changed" | null;
   tracked_change_before_json?: { task?: string; tags?: string[] } | null;
   pending_delete?: boolean;
 };
 
 export type TodoListItem = ProtocolTodo & {
-  protocol_id: number | null;
+  protocol_id: string | null;
   protocol_number: string | null;
   protocol_date: string | null;
   protocol_title: string | null;
   protocol_status: string | null;
   block_title: string | null;
-  submission_assignment_id: number | null;
+  submission_assignment_id: string | null;
   element_ref: string | null;
 };
 
 export type TodoBlock = {
-  block_id: number;
+  block_id: string;
   block_title: string | null;
-  protocol_id: number;
+  protocol_id: string;
   protocol_number: string;
   protocol_title: string | null;
   protocol_date: string;
 };
 
 export type ProtocolImage = {
-  id: number;
-  protocol_element_block_id: number;
-  stored_file_id: number;
+  id: string;
+  protocol_element_block_id: string;
+  stored_file_id: string;
   sort_index: number;
   title: string | null;
   caption: string | null;
@@ -654,10 +661,11 @@ export type ProtocolImage = {
 };
 
 export type ProtocolElementBlock = {
-  id: number;
-  protocol_element_id: number;
-  template_element_block_id: number | null;
-  element_definition_id: number | null;
+  id: string;
+  protocol_element_id: string;
+  template_element_block_id: string | null;
+  element_definition_id: string | null;
+  // Lookup-table codes, deliberately kept as small numeric ids.
   element_type_id: number;
   render_type_id: number;
   element_type_code: string | null;
@@ -684,9 +692,9 @@ export type ProtocolElementBlock = {
 };
 
 export type ProtocolElement = {
-  id: number;
-  protocol_id: number;
-  template_element_id: number | null;
+  id: string;
+  protocol_id: string;
+  template_element_id: string | null;
   sort_index: number;
   section_name_snapshot: string;
   section_order_snapshot: number | null;
@@ -698,7 +706,7 @@ export type ProtocolElement = {
 };
 
 export type FinanceAccount = {
-  id: number;
+  id: string;
   name: string;
   currency_label: string;
   description: string | null;
@@ -709,18 +717,18 @@ export type FinanceAccount = {
 };
 
 export type AttendanceFine = {
-  id: number;
-  protocol_id: number;
-  participant_id: number | null;
+  id: string;
+  protocol_id: string;
+  participant_id: string | null;
   participant_name_snapshot: string;
   fine_type: "late" | "absent";
   amount: number;
-  account_id: number;
+  account_id: string;
   status: "pending" | "collected";
   collected_at: string | null;
-  collected_transaction_id: number | null;
-  closed_in_protocol_id: number | null;
-  collected_by_user_id: number | null;
+  collected_transaction_id: string | null;
+  closed_in_protocol_id: string | null;
+  collected_by_user_id: string | null;
   collected_by_display_name: string | null;
   can_reopen: boolean;
   created_at: string;
@@ -733,12 +741,12 @@ export type AttendanceFineListItem = AttendanceFine & {
 };
 
 export type FinanceTransaction = {
-  id: number;
-  account_id: number;
+  id: string;
+  account_id: string;
   amount: number;
   description: string;
   transaction_date: string;
-  protocol_id: number | null;
+  protocol_id: string | null;
   created_at: string;
   running_balance: number | null;
 };
@@ -749,10 +757,10 @@ export type StatisticsOverview = {
   todos: { open: number; done: number; total: number };
   fines_by_participant: { name: string; count: number; amount: number }[];
   fines_by_type: { fine_type: string; label: string; count: number; amount: number }[];
-  finance_by_month: { month: string; account_id: number; account_name: string; income: number; expenses: number; net: number }[];
+  finance_by_month: { month: string; account_id: string; account_name: string; income: number; expenses: number; net: number }[];
   participants_total: number;
   participants_active: number;
   protocols_total: number;
-  cycles: { cycle_config_id: number; cycle_config_name: string; cycle_year: number; label: string }[];
-  groups_stats: { group_name: string; cycle_config_id: number | null; cycle_year: number | null; session_count: number; session_count_with_participants: number; avg_participants: number }[];
+  cycles: { cycle_config_id: string; cycle_config_name: string; cycle_year: number; label: string }[];
+  groups_stats: { group_name: string; cycle_config_id: string | null; cycle_year: number | null; session_count: number; session_count_with_participants: number; avg_participants: number }[];
 };

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { Route } from "next";
-import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { attemptBridgeRedirect } from "@/lib/bridge-redirect";
@@ -72,12 +72,36 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
   const [session, setSession] = useState<SessionInfo | null>(initialSession);
   const [tenantModalOpen, setTenantModalOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [protocolExitAnimation, setProtocolExitAnimation] = useState(false);
   const [language, setLanguage] = useState("de");
   const [protocolAccordionEnabled, setProtocolAccordionEnabled] = useState(true);
   const [sessionStatus, setSessionStatus] = useState(initialSession?.authenticated ? "Ready" : "Loading workspace...");
 
   const navGroups = useMemo(() => buildNav(session), [session]);
+  const activeNavGroup = useMemo(
+    () => navGroups.find((group) => group.links.some((link) => pathname === link.href || pathname.startsWith(`${link.href}/`)))?.title ?? null,
+    [navGroups, pathname]
+  );
+  const [expandedNavGroup, setExpandedNavGroup] = useState<string | null>(null);
   const isProtocolWriting = pathname.startsWith("/protocols/") && pathname !== "/protocols";
+
+  useEffect(() => {
+    setExpandedNavGroup(activeNavGroup);
+  }, [activeNavGroup, pathname]);
+
+  const previousProtocolWritingRef = useRef(isProtocolWriting);
+  useLayoutEffect(() => {
+    const wasProtocolWriting = previousProtocolWritingRef.current;
+    previousProtocolWritingRef.current = isProtocolWriting;
+
+    if (!isProtocolWriting && wasProtocolWriting) {
+      setProtocolExitAnimation(true);
+      const timer = window.setTimeout(() => setProtocolExitAnimation(false), 240);
+      return () => window.clearTimeout(timer);
+    }
+
+    setProtocolExitAnimation(false);
+  }, [isProtocolWriting]);
 
   useEffect(() => {
     setThemePreference(readStoredThemePreference());
@@ -203,7 +227,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
     router.push(`/tenant-settings?tenantId=${membership.tenant_id}`);
   }
 
-  async function setDefaultTenant(tenantId: number | null) {
+  async function setDefaultTenant(tenantId: string | null) {
     // Optimistic update: the PATCH result already tells us the new value, no need
     // to wait for a second round-trip (GET /api/auth/session) before the checkbox reacts.
     setSession((current) => (current?.user ? { ...current, user: { ...current.user, default_tenant_id: tenantId } } : current));
@@ -248,14 +272,24 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
   }
 
   return (
-    <main className={`app-frame${isProtocolWriting ? " app-frame-writing" : ""}`}>
+    <main className={`app-frame${isProtocolWriting ? " app-frame-writing" : ""}${protocolExitAnimation ? " app-frame-protocol-exit" : ""}`}>
       <ConnectivityStatus />
       <div className="shell">
+        {isProtocolWriting && (
+          <div
+            className="sidebar-edge-trigger"
+            aria-hidden="true"
+            onMouseEnter={() => setMobileNavOpen(true)}
+          />
+        )}
+        {isProtocolWriting && mobileNavOpen && (
+          <div className="sidebar-overlay" aria-hidden="true" onClick={() => setMobileNavOpen(false)} />
+        )}
         <aside
           className={`sidebar${mobileNavOpen ? " sidebar-open" : ""}${isProtocolWriting ? " sidebar-writing" : ""}`}
           onMouseLeave={() => {
-            // Opens only via the ☰ button next to the page title, never on hover — but once
-            // open, moving the mouse away from it during protocol writing closes it again.
+            // In protocol writing, the sidebar is a temporary overlay opened from either
+            // the left-edge hotspot or the menu button.
             if (isProtocolWriting && mobileNavOpen) {
               setMobileNavOpen(false);
             }
@@ -272,27 +306,42 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
             </svg>
           </button>
           <nav className="sidebar-nav">
-            {navGroups.map((group) => (
-              <div className="nav-group" key={group.title}>
-                <div className="nav-group-label">{group.title}</div>
-                <div className="nav-links">
-                  {group.links.map((link) => {
-                    const isActive = pathname === link.href || pathname.startsWith(`${link.href}/`);
-                    return (
-                      <Link
-                        href={link.href as Route}
-                        key={link.href}
-                        className={isActive ? "nav-link nav-link-active" : "nav-link"}
-                        onClick={() => setMobileNavOpen(false)}
-                      >
-                        <NavIcon name={link.icon} className="nav-link-icon" />
-                        <span className="nav-link-label">{link.label}</span>
-                      </Link>
-                    );
-                  })}
+            {navGroups.map((group) => {
+              const isExpanded = expandedNavGroup === group.title;
+              return (
+                <div className={`nav-group${isExpanded ? " nav-group-expanded" : ""}`} key={group.title}>
+                  <button
+                    type="button"
+                    className="nav-group-label"
+                    aria-expanded={isExpanded}
+                    onClick={() => setExpandedNavGroup(group.title)}
+                  >
+                    <span>{group.title}</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" width={14} height={14} aria-hidden="true">
+                      <path d="M9 18l6-6-6-6" />
+                    </svg>
+                  </button>
+                  {isExpanded && (
+                    <div className="nav-links">
+                      {group.links.map((link) => {
+                        const isActive = pathname === link.href || pathname.startsWith(`${link.href}/`);
+                        return (
+                          <Link
+                            href={link.href as Route}
+                            key={link.href}
+                            className={isActive ? "nav-link nav-link-active" : "nav-link"}
+                            onClick={() => setMobileNavOpen(false)}
+                          >
+                            <NavIcon name={link.icon} className="nav-link-icon" />
+                            <span className="nav-link-label">{link.label}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </nav>
           <div className="sidebar-footer">
             <div className="identity-panel">

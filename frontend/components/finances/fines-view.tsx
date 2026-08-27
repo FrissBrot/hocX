@@ -32,7 +32,7 @@ export function FinesView({ initialFines, accounts, isAdmin }: Props) {
   const [fines, setFines] = useState<AttendanceFineListItem[]>(initialFines);
   const [statusFilter, setStatusFilter] = useState<"pending" | "collected" | "all">("pending");
   const [search, setSearch] = useState("");
-  const [busy, setBusy] = useState<Record<number, boolean>>({});
+  const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [sortKey, setSortKey] = useState<SortKey>("participant_name_snapshot");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [hasMore, setHasMore] = useState(initialFines.length === PAGE_SIZE);

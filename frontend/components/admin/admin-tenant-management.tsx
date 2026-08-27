@@ -442,14 +442,16 @@ export function AdminTenantManagement({ initialPage }: Props) {
 
       <Modal
         open={importModalOpen}
-        onClose={() => setImportModalOpen(false)}
+        onClose={() => {
+          if (!importBusy) setImportModalOpen(false);
+        }}
         title="Mandant importieren"
         description="Legt anhand einer zuvor exportierten ZIP-Datei einen neuen Mandanten an."
       >
         <form className="grid" onSubmit={submitImport}>
           <label className="field-stack">
             <span className="field-label">Name des neuen Mandanten</span>
-            <input value={importName} onChange={(event) => setImportName(event.target.value)} required />
+            <input value={importName} onChange={(event) => setImportName(event.target.value)} disabled={importBusy} required />
           </label>
           <label className="field-stack">
             <span className="field-label">Export-Datei (.zip)</span>
@@ -457,9 +459,30 @@ export function AdminTenantManagement({ initialPage }: Props) {
               type="file"
               accept=".zip"
               onChange={(event) => setImportFile(event.target.files?.[0] ?? null)}
+              disabled={importBusy}
               required
             />
           </label>
+          {importBusy ? (
+            <div className="tenant-import-status" role="status" aria-live="polite">
+              <div className="tenant-import-status-copy">
+                <span className="tenant-import-upload-icon" aria-hidden="true">↑</span>
+                <span>
+                  <strong>Datei wird hochgeladen und verarbeitet …</strong>
+                  <span className="tenant-import-filename">{importFile?.name}</span>
+                </span>
+              </div>
+              <div
+                className="tenant-import-progress-track"
+                role="progressbar"
+                aria-label="Upload und Import laufen"
+                aria-valuetext="Upload und Import laufen"
+              >
+                <span className="tenant-import-progress-bar" />
+              </div>
+              <span className="tenant-import-status-hint">Das kann je nach Dateigrösse einen Moment dauern.</span>
+            </div>
+          ) : null}
           <div className="table-actions table-actions-start">
             <button type="submit" className="button-inline" disabled={importBusy || !importFile}>
               {importBusy ? "Wird importiert…" : "Importieren"}

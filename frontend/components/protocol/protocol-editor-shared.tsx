@@ -74,7 +74,7 @@ export function tallyAttendance(
   const eligible = attendanceParticipants(participants);
   const countByStatus = (status: string) =>
     eligible.filter((participant) => {
-      const entry = attendanceEntries.find((candidate) => Number(candidate.participant_id) === participant.id);
+      const entry = attendanceEntries.find((candidate) => String(candidate.participant_id) === participant.id);
       return (entry?.status ?? null) === status;
     }).length;
   return {
@@ -412,7 +412,7 @@ export function embeddedBlockSummary(
     const entries = (Array.isArray(config.attendance_entries) ? config.attendance_entries : []) as Array<Record<string, any>>;
     const eligibleParticipants = attendanceParticipants(availableParticipants);
     const presentCount = eligibleParticipants.filter((participant) => {
-      const entry = entries.find((currentEntry) => Number(currentEntry.participant_id) === participant.id);
+      const entry = entries.find((currentEntry) => String(currentEntry.participant_id) === participant.id);
       return String(entry?.status ?? "") === "present";
     }).length;
     return eligibleParticipants.length ? `${presentCount}/${eligibleParticipants.length} anwesend` : "0 Teilnehmer";

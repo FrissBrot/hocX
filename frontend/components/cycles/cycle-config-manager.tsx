@@ -141,7 +141,7 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
   const [configs, setConfigs] = useState(initialConfigs);
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState<CycleConfigForm>(emptyForm);
-  const [editId, setEditId] = useState<number | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<CycleConfigForm>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -215,7 +215,7 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
     }
   }
 
-  async function handleDelete(id: number) {
+  async function handleDelete(id: string) {
     if (
       !(await confirm({
         message: "Zyklus-Konfiguration löschen? Nur möglich solange kein Template zugeordnet ist.",

@@ -39,7 +39,7 @@ export function DashboardView({ todos, fines, nextSession, canExcuse }: Props) {
   const router = useRouter();
   const showToast = useToast();
   const [entries, setEntries] = useState<NextSessionAttendanceEntry[]>(nextSession.entries);
-  const [busy, setBusy] = useState<Record<number, boolean>>({});
+  const [busy, setBusy] = useState<Record<string, boolean>>({});
 
   const overdueTodos = useMemo(
     () =>

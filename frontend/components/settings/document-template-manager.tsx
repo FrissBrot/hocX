@@ -16,7 +16,7 @@ import { DocumentTemplate, DocumentTemplatePart } from "@/types/api";
 type Props = {
   initialTemplates: DocumentTemplate[];
   initialParts: DocumentTemplatePart[];
-  tenantId: number | null;
+  tenantId: string | null;
 };
 
 type PartFormState = {
@@ -194,7 +194,7 @@ function templateFormFromTemplate(template: DocumentTemplate): TemplateFormState
   };
 }
 
-function buildTemplatePayload(form: TemplateFormState, tenantId: number | null) {
+function buildTemplatePayload(form: TemplateFormState, tenantId: string | null) {
   return {
     tenant_id: tenantId,
     name: form.name,
@@ -1084,7 +1084,7 @@ export function DocumentTemplateManager({ initialTemplates, initialParts, tenant
   const [showTemplateForm, setShowTemplateForm] = useState(false);
   const [partForm, setPartForm] = useState(initialPartForm);
   const [templateForm, setTemplateForm] = useState(initialTemplateForm);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(initialTemplates[0]?.id ?? null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(initialTemplates[0]?.id ?? null);
   const [selectedTemplateForm, setSelectedTemplateForm] = useState<TemplateFormState>(
     initialTemplates[0] ? templateFormFromTemplate(initialTemplates[0]) : initialTemplateForm
   );
@@ -1138,7 +1138,7 @@ export function DocumentTemplateManager({ initialTemplates, initialParts, tenant
     }
   }
 
-  async function deletePart(partId: number) {
+  async function deletePart(partId: string) {
     const part = parts.find((p) => p.id === partId);
     if (!(await confirm({ message: `Part${part ? ` "${part.name}"` : ""} wirklich löschen?`, tone: "danger", confirmLabel: "Löschen" }))) return;
     try {
@@ -1181,7 +1181,7 @@ export function DocumentTemplateManager({ initialTemplates, initialParts, tenant
     }
   }
 
-  async function deleteTemplate(templateId: number) {
+  async function deleteTemplate(templateId: string) {
     const template = templates.find((t) => t.id === templateId);
     if (!(await confirm({ message: `Layout${template ? ` "${template.name}"` : ""} wirklich löschen?`, tone: "danger", confirmLabel: "Löschen" }))) return;
     try {

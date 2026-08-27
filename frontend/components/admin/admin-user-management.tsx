@@ -49,7 +49,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
   const [userForm, setUserForm] = useState<UserFormState>(() => emptyUserForm(allTenants));
   const [formError, setFormError] = useState<string | null>(null);
   const [mergeModalOpen, setMergeModalOpen] = useState(false);
-  const [mergeSourceUserId, setMergeSourceUserId] = useState<number | null>(null);
+  const [mergeSourceUserId, setMergeSourceUserId] = useState<string | null>(null);
   const [mergeTargetUserId, setMergeTargetUserId] = useState("");
   const [mfaModalUser, setMfaModalUser] = useState<UserSummary | null>(null);
   // The merge target can be any eligible user tenant-wide, not just one on the currently
@@ -126,7 +126,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
     setUserModalOpen(true);
   }
 
-  function changeMembershipRole(tenantId: number, roleCode: string) {
+  function changeMembershipRole(tenantId: string, roleCode: string) {
     setUserForm((current) => ({
       ...current,
       memberships: current.memberships.map((membership) =>
@@ -137,14 +137,14 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
 
   function addMembership() {
     if (!userForm.pickerTenantId) return;
-    const tenantId = Number(userForm.pickerTenantId);
+    const tenantId = userForm.pickerTenantId;
     setUserForm((current) => ({
       ...current,
       memberships: addOrUpsertMembership(current.memberships, tenantId, current.pickerRoleCode, "add")
     }));
   }
 
-  function removeMembership(tenantId: number) {
+  function removeMembership(tenantId: string) {
     setUserForm((current) => ({
       ...current,
       memberships: removeMembershipEntry(current.memberships, tenantId)

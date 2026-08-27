@@ -35,28 +35,28 @@ type StructuredListTableProps = {
   sortByColumn?: "" | StructuredListDisplayColumn;
   sortDirection?: "asc" | "desc";
   onHeaderSort?: (column: "column_one" | "column_two") => void;
-  entryTrackedStatusById?: Record<number, TrackedEntryInfo>;
-  onAcceptTrackedEntry?: (entryId: number) => void;
+  entryTrackedStatusById?: Record<string, TrackedEntryInfo>;
+  onAcceptTrackedEntry?: (entryId: string) => void;
   onCreateEntry: (payload: {
     sort_index: number;
     column_one_value: StructuredListValue;
     column_two_value: StructuredListValue;
   }) => Promise<boolean>;
   onUpdateEntry: (
-    entryId: number,
+    entryId: string,
     payload: Partial<{
       sort_index: number;
       column_one_value: StructuredListValue;
       column_two_value: StructuredListValue;
     }>
   ) => Promise<boolean>;
-  onDeleteEntry: (entryId: number) => Promise<void>;
+  onDeleteEntry: (entryId: string) => Promise<void>;
 };
 
 type ParticipantPickerState = {
   columnKey: StructuredListColumnKey;
-  selectedIds: number[];
-  entryId?: number;
+  selectedIds: string[];
+  entryId?: string;
   isNewRow: boolean;
 };
 
@@ -82,18 +82,18 @@ function emptyValueForType(valueType: StructuredListValueType): StructuredListVa
 
 function normalizeValueForType(valueType: StructuredListValueType, rawValue: StructuredListValue): StructuredListValue {
   if (valueType === "participant") {
-    const participantId = Number(rawValue.participant_id ?? 0);
-    return participantId ? { participant_id: participantId } : { participant_id: null };
+    const participantId = typeof rawValue.participant_id === "string" && rawValue.participant_id ? rawValue.participant_id : null;
+    return { participant_id: participantId };
   }
   if (valueType === "participants") {
     const participantIds = Array.isArray(rawValue.participant_ids)
-      ? rawValue.participant_ids.map((participantId) => Number(participantId)).filter(Boolean)
+      ? rawValue.participant_ids.map((participantId) => String(participantId)).filter(Boolean)
       : [];
     return { participant_ids: participantIds };
   }
   if (valueType === "event") {
-    const eventId = Number(rawValue.event_id ?? 0);
-    return eventId ? { event_id: eventId } : { event_id: null };
+    const eventId = typeof rawValue.event_id === "string" && rawValue.event_id ? rawValue.event_id : null;
+    return { event_id: eventId };
   }
   return { text_value: String(rawValue.text_value ?? "") };
 }
@@ -105,13 +105,13 @@ function valuesEqual(left: StructuredListValue | undefined, right: StructuredLis
 function hasValueContent(valueType: StructuredListValueType, rawValue: StructuredListValue) {
   const value = normalizeValueForType(valueType, rawValue);
   if (valueType === "participant") {
-    return Number(value.participant_id ?? 0) > 0;
+    return value.participant_id != null;
   }
   if (valueType === "participants") {
     return Array.isArray(value.participant_ids) && value.participant_ids.length > 0;
   }
   if (valueType === "event") {
-    return Number(value.event_id ?? 0) > 0;
+    return value.event_id != null;
   }
   return String(value.text_value ?? "").trim().length > 0;
 }
@@ -124,11 +124,11 @@ function valueSummary(
 ) {
   const value = normalizeValueForType(valueType, rawValue);
   if (valueType === "participant") {
-    const participant = participants.find((item) => item.id === Number(value.participant_id ?? 0));
+    const participant = participants.find((item) => item.id === value.participant_id);
     return participant?.display_name ?? "—";
   }
   if (valueType === "participants") {
-    const selectedIds = Array.isArray(value.participant_ids) ? value.participant_ids.map(Number) : [];
+    const selectedIds = Array.isArray(value.participant_ids) ? (value.participant_ids as string[]) : [];
     if (!selectedIds.length) {
       return "—";
     }
@@ -139,7 +139,7 @@ function valueSummary(
     return selectedParticipants.map((item) => item.display_name).join(", ");
   }
   if (valueType === "event") {
-    const eventRow = events.find((item) => item.id === Number(value.event_id ?? 0));
+    const eventRow = events.find((item) => item.id === value.event_id);
     return eventRow ? `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}` : "—";
   }
   return String(value.text_value ?? "").trim() || "—";
@@ -160,11 +160,11 @@ function valueSortText(
 ) {
   const value = normalizeValueForType(valueType, rawValue);
   if (valueType === "participant") {
-    const participant = participants.find((item) => item.id === Number(value.participant_id ?? 0));
+    const participant = participants.find((item) => item.id === value.participant_id);
     return participant?.display_name ?? "";
   }
   if (valueType === "participants") {
-    const selectedIds = Array.isArray(value.participant_ids) ? value.participant_ids.map(Number) : [];
+    const selectedIds = Array.isArray(value.participant_ids) ? (value.participant_ids as string[]) : [];
     if (!selectedIds.length) {
       return "";
     }
@@ -174,7 +174,7 @@ function valueSortText(
       .join(", ");
   }
   if (valueType === "event") {
-    const eventRow = events.find((item) => item.id === Number(value.event_id ?? 0));
+    const eventRow = events.find((item) => item.id === value.event_id);
     return eventRow ? `${eventRow.title} ${formatDate(eventRow.event_date)}`.trim() : "";
   }
   return String(value.text_value ?? "").trim();
@@ -203,14 +203,14 @@ export function StructuredListTable({
     [availableEvents]
   );
   const [entryDrafts, setEntryDrafts] = useState<
-    Record<number, Partial<{ column_one_value: StructuredListValue; column_two_value: StructuredListValue }>>
+    Record<string, Partial<{ column_one_value: StructuredListValue; column_two_value: StructuredListValue }>>
   >({});
   const [showNewRow, setShowNewRow] = useState(false);
   const [newRowDraft, setNewRowDraft] = useState(() => createNewRowDraft(definition));
   const [creatingNewRow, setCreatingNewRow] = useState(false);
   const [participantPicker, setParticipantPicker] = useState<ParticipantPickerState | null>(null);
   const [participantSearch, setParticipantSearch] = useState("");
-  const rowTimers = useRef<Record<number, number>>({});
+  const rowTimers = useRef<Record<string, number>>({});
   const newRowTimer = useRef<number | null>(null);
 
   useEffect(() => {
@@ -248,7 +248,7 @@ export function StructuredListTable({
   }
 
   function queueRowSave(
-    entryId: number,
+    entryId: string,
     payload: Partial<{ column_one_value: StructuredListValue; column_two_value: StructuredListValue }>
   ) {
     const nextDraft = {
@@ -348,13 +348,13 @@ export function StructuredListTable({
   function openParticipantPicker(
     columnKey: StructuredListColumnKey,
     value: StructuredListValue,
-    options: { entryId?: number; isNewRow: boolean }
+    options: { entryId?: string; isNewRow: boolean }
   ) {
     setParticipantPicker({
       columnKey,
       entryId: options.entryId,
       isNewRow: options.isNewRow,
-      selectedIds: Array.isArray(value.participant_ids) ? value.participant_ids.map(Number) : [],
+      selectedIds: Array.isArray(value.participant_ids) ? value.participant_ids.map(String) : [],
     });
     setParticipantSearch("");
   }
@@ -374,7 +374,7 @@ export function StructuredListTable({
   }
 
   function renderEditableCell(
-    entryId: number | null,
+    entryId: string | null,
     columnKey: StructuredListColumnKey,
     valueType: StructuredListValueType,
     value: StructuredListValue,
@@ -386,7 +386,7 @@ export function StructuredListTable({
           options={availableParticipants}
           getId={(participant) => participant.id}
           getLabel={(participant) => participant.display_name}
-          value={(value.participant_id as number | null | undefined) ?? null}
+          value={(value.participant_id as string | null | undefined) ?? null}
           disabled={options.disabled}
           nullLabel="Teilnehmer"
           onChange={(participant) => {
@@ -420,7 +420,7 @@ export function StructuredListTable({
           options={sortedEvents}
           getId={(eventRow) => eventRow.id}
           getLabel={(eventRow) => `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}`}
-          value={(value.event_id as number | null | undefined) ?? null}
+          value={(value.event_id as string | null | undefined) ?? null}
           disabled={options.disabled}
           nullLabel="Termin"
           onChange={(eventRow) => {
@@ -470,7 +470,7 @@ export function StructuredListTable({
 
   const sortedEntries = useMemo(() => {
     const manualCompare = (left: StructuredListEntry, right: StructuredListEntry) =>
-      (left.sort_index - right.sort_index) || (left.id - right.id);
+      (left.sort_index - right.sort_index) || compareIsoDate(left.created_at, right.created_at);
 
     return [...entries].sort((left, right) => {
       if (sortByColumn) {

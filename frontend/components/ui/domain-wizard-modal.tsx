@@ -11,7 +11,7 @@ import { TenantDomain, TenantDomainPurpose } from "@/types/api";
 type Props = {
   open: boolean;
   onClose: () => void;
-  tenantId: number;
+  tenantId: string;
   /** Pending domain to resume verification for, or null to start a fresh "add domain" flow. */
   domain: TenantDomain | null;
   onChanged: () => void;

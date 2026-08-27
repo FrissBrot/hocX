@@ -58,15 +58,15 @@ import { FocusedElementEditor } from "@/components/protocol/focused-element-edit
 type ProtocolEditorProps = {
   protocol: ProtocolSummary;
   initialElements: ProtocolElement[];
-  initialTodos: Record<number, ProtocolTodo[]>;
-  initialImages: Record<number, ProtocolImage[]>;
+  initialTodos: Record<string, ProtocolTodo[]>;
+  initialImages: Record<string, ProtocolImage[]>;
   availableParticipants: ParticipantSummary[];
   availableEvents: EventSummary[];
   availableLists: StructuredListDefinition[];
-  initialListEntries: Record<number, StructuredListEntry[]>;
+  initialListEntries: Record<string, StructuredListEntry[]>;
   availableTemplates: TemplateSummary[];
   availableAccounts: FinanceAccount[];
-  initialFinanceTransactions: Record<number, FinanceTransaction[]>;
+  initialFinanceTransactions: Record<string, FinanceTransaction[]>;
   initialPendingTodos?: TodoListItem[];
   documentTemplates?: DocumentTemplate[];
   forceReadOnly?: boolean;
@@ -96,7 +96,7 @@ export function ProtocolEditor({
   const [elements, setElements] = useState(initialElements);
   const [events, setEvents] = useState(availableEvents);
   const [lists, setLists] = useState(availableLists);
-  const [eventContextMenu, setEventContextMenu] = useState<{ x: number; y: number; eventRow: EventSummary; blockId: number } | null>(null);
+  const [eventContextMenu, setEventContextMenu] = useState<{ x: number; y: number; eventRow: EventSummary; blockId: string } | null>(null);
   const eventContextMenuRef = useRef<HTMLDivElement | null>(null);
 
   usePopoverDismiss(!!eventContextMenu, () => setEventContextMenu(null), [eventContextMenuRef]);
@@ -117,16 +117,16 @@ export function ProtocolEditor({
   const currentCycleYear: number | null = protocol.protocol_date && currentTemplate?.cycle_config
     ? getCycleYear(protocol.protocol_date, currentTemplate.cycle_config.reset_month, currentTemplate.cycle_config.reset_day)
     : null;
-  const [listEntriesByDefinition, setListEntriesByDefinition] = useState<Record<number, StructuredListEntry[]>>(initialListEntries);
-  const [todosByBlock, setTodosByBlock] = useState<Record<number, ProtocolTodo[]>>(initialTodos);
+  const [listEntriesByDefinition, setListEntriesByDefinition] = useState<Record<string, StructuredListEntry[]>>(initialListEntries);
+  const [todosByBlock, setTodosByBlock] = useState<Record<string, ProtocolTodo[]>>(initialTodos);
   const [pendingTodos, setPendingTodos] = useState<TodoListItem[]>(initialPendingTodos);
-  const [imagesByBlock, setImagesByBlock] = useState<Record<number, ProtocolImage[]>>(initialImages);
-  const [financeTransactions, setFinanceTransactions] = useState<Record<number, FinanceTransaction[]>>(initialFinanceTransactions);
+  const [imagesByBlock, setImagesByBlock] = useState<Record<string, ProtocolImage[]>>(initialImages);
+  const [financeTransactions, setFinanceTransactions] = useState<Record<string, FinanceTransaction[]>>(initialFinanceTransactions);
   const [protocolFines, setProtocolFines] = useState<AttendanceFine[]>([]);
   const [pendingFines, setPendingFines] = useState<AttendanceFineListItem[]>([]);
   // Refresh chart blocks whenever fines change (add/delete)
   useEffect(() => { bumpStatsCharts(); }, [protocolFines.length]);
-  const [textDrafts, setTextDrafts] = useState<Record<number, string>>(
+  const [textDrafts, setTextDrafts] = useState<Record<string, string>>(
     Object.fromEntries(
       initialElements.flatMap((element) =>
         element.blocks
@@ -135,14 +135,14 @@ export function ProtocolEditor({
       )
     )
   );
-  const [newTodoTask, setNewTodoTask] = useState<Record<number, string>>({});
-  const [newTodoTags, setNewTodoTags] = useState<Record<number, string>>({});
-  const [todoTagFilter, setTodoTagFilter] = useState<Record<number, string | null>>({});
-  const [newEventDrafts, setNewEventDrafts] = useState<Record<number, ProtocolEventDraft>>({});
-  const [selectedFiles, setSelectedFiles] = useState<Record<number, File | null>>({});
-  const [blockStatus, setBlockStatus] = useState<Record<number, SaveState>>({});
-  const [selectedElementId, setSelectedElementId] = useState<number | null>(initialElements[0]?.id ?? null);
-  const [draggedElementId, setDraggedElementId] = useState<number | null>(null);
+  const [newTodoTask, setNewTodoTask] = useState<Record<string, string>>({});
+  const [newTodoTags, setNewTodoTags] = useState<Record<string, string>>({});
+  const [todoTagFilter, setTodoTagFilter] = useState<Record<string, string | null>>({});
+  const [newEventDrafts, setNewEventDrafts] = useState<Record<string, ProtocolEventDraft>>({});
+  const [selectedFiles, setSelectedFiles] = useState<Record<string, File | null>>({});
+  const [blockStatus, setBlockStatus] = useState<Record<string, SaveState>>({});
+  const [selectedElementId, setSelectedElementId] = useState<string | null>(initialElements[0]?.id ?? null);
+  const [draggedElementId, setDraggedElementId] = useState<string | null>(null);
   const [protocolStatus, setProtocolStatus] = useState(protocol.status);
   const [trackChangesEnabled, setTrackChangesEnabledState] = useState(protocol.track_changes_enabled ?? false);
   // Tracking applies during "geplant" - confusingly, that's the status the app's own
@@ -158,7 +158,7 @@ export function ProtocolEditor({
   const isRestoringRef = useRef(true);
   const [showSavedIndicator, setShowSavedIndicator] = useState(false);
   const savedIndicatorTimerRef = useRef<number | null>(null);
-  const prevBlockStatusRef = useRef<Record<number, SaveState>>({});
+  const prevBlockStatusRef = useRef<Record<string, SaveState>>({});
   const collab = useProtocolCollaboration(protocol.id);
   const [showStatusChangeWarning, setShowStatusChangeWarning] = useState(false);
 
@@ -196,15 +196,15 @@ export function ProtocolEditor({
         // addTodo/updateTodo/deleteTodo, uploadImage/deleteImage,
         // createEventFromBlock/updateEventFromBlock/deleteEventFromBlock.
         if (field_key.endsWith("-todos") && field_key.startsWith("block-")) {
-          const blockId = Number(field_key.slice("block-".length, -"-todos".length));
-          if (Number.isFinite(blockId) && Array.isArray(patch)) {
+          const blockId = field_key.slice("block-".length, -"-todos".length);
+          if (blockId && Array.isArray(patch)) {
             setTodosByBlock((current) => ({ ...current, [blockId]: patch as ProtocolTodo[] }));
           }
           return;
         }
         if (field_key.endsWith("-images") && field_key.startsWith("block-")) {
-          const blockId = Number(field_key.slice("block-".length, -"-images".length));
-          if (Number.isFinite(blockId) && Array.isArray(patch)) {
+          const blockId = field_key.slice("block-".length, -"-images".length);
+          if (blockId && Array.isArray(patch)) {
             setImagesByBlock((current) => ({ ...current, [blockId]: patch as ProtocolImage[] }));
           }
           return;
@@ -220,13 +220,13 @@ export function ProtocolEditor({
           return;
         }
         if (field_key === "event-deleted" && patch && typeof patch === "object") {
-          const { id } = patch as { id: number };
+          const { id } = patch as { id: string };
           setEvents((current) => current.filter((event) => event.id !== id));
           return;
         }
         if (!field_key.startsWith("block-")) return;
-        const blockId = Number(field_key.slice("block-".length).split("-cell-")[0]);
-        if (!Number.isFinite(blockId) || !patch || typeof patch !== "object") return;
+        const blockId = field_key.slice("block-".length).split("-cell-")[0];
+        if (!blockId || !patch || typeof patch !== "object") return;
         updateBlockInState(blockId, (block) => ({ ...block, ...(patch as Partial<typeof block>) }));
         // textDrafts (what the <textarea> actually renders, see handleTextChange) is
         // separate from the elements/blocks state updated above - without this, a text
@@ -267,7 +267,7 @@ export function ProtocolEditor({
 
   // Restore last active element from backend
   useEffect(() => {
-    browserApiFetch<{ element_id: number | null }>(`/api/protocols/${protocol.id}/scroll-position`)
+    browserApiFetch<{ element_id: string | null }>(`/api/protocols/${protocol.id}/scroll-position`)
       .then((data) => {
         isRestoringRef.current = false;
         if (!data?.element_id) return;
@@ -370,9 +370,9 @@ export function ProtocolEditor({
   const closeProtocol = () => {
     router.push("/protocols");
   };
-  const timers = useRef<Record<number, number>>({});
+  const timers = useRef<Record<string, number>>({});
   const shouldScrollToElementRef = useRef(false);
-  const passiveScrollTargetRef = useRef<number | null>(null);
+  const passiveScrollTargetRef = useRef<string | null>(null);
   const selectedElementIdRef = useRef(selectedElementId);
   selectedElementIdRef.current = selectedElementId;
   const navRef = useRef<HTMLElement | null>(null);
@@ -401,7 +401,7 @@ export function ProtocolEditor({
   // Recover text that was typed before a tab/browser crash or a failed request. A draft is
   // only ever removed after the backend confirmed the exact value.
   useEffect(() => {
-    const restoredDrafts = Object.keys(textDrafts).map(Number).flatMap((blockId) => {
+    const restoredDrafts = Object.keys(textDrafts).flatMap((blockId) => {
       const draft = readDraft(`protocol-text:${blockId}`);
       return draft !== null && draft !== textDrafts[blockId] ? [[blockId, draft] as const] : [];
     });
@@ -421,8 +421,8 @@ export function ProtocolEditor({
       const key = (event as CustomEvent<{ key?: string }>).detail?.key;
       if (!key?.startsWith("protocol-text:")) return;
       clearDraft(key);
-      const blockId = Number(key.slice("protocol-text:".length));
-      if (Number.isFinite(blockId)) setStatus(blockId, "saved");
+      const blockId = key.slice("protocol-text:".length);
+      if (blockId) setStatus(blockId, "saved");
     };
     window.addEventListener("hocx:mutation-flushed", flushed);
     return () => window.removeEventListener("hocx:mutation-flushed", flushed);
@@ -431,7 +431,7 @@ export function ProtocolEditor({
   useEffect(() => {
     const prev = prevBlockStatusRef.current;
     const justSaved = Object.entries(blockStatus).some(
-      ([id, state]) => state === "saved" && prev[Number(id)] === "saving"
+      ([id, state]) => state === "saved" && prev[id] === "saving"
     );
     prevBlockStatusRef.current = { ...blockStatus };
     if (justSaved) {
@@ -497,11 +497,11 @@ export function ProtocolEditor({
 
   useEffect(() => () => cancelCollabHoverClose(), [cancelCollabHoverClose]);
 
-  function setStatus(protocolElementBlockId: number, status: SaveState) {
+  function setStatus(protocolElementBlockId: string, status: SaveState) {
     setBlockStatus((current) => ({ ...current, [protocolElementBlockId]: status }));
   }
 
-  function focusElement(protocolElementId: number) {
+  function focusElement(protocolElementId: string) {
     shouldScrollToElementRef.current = true;
     setSelectedElementId(protocolElementId);
   }
@@ -656,11 +656,11 @@ export function ProtocolEditor({
         .filter((section): section is HTMLElement => Boolean(section));
       if (!sections.length) return;
 
-      let bestId: number | null = null;
+      let bestId: string | null = null;
       let bestDistance = Infinity;
       for (const section of sections) {
         const rect = section.getBoundingClientRect();
-        const id = Number(section.id.replace("protocol-element-", ""));
+        const id = section.id.replace("protocol-element-", "");
         if (rect.top <= centerY && rect.bottom >= centerY) {
           bestId = id;
           break;
@@ -760,7 +760,7 @@ export function ProtocolEditor({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [selectedElementId, visibleElements]);
 
-  async function reorderElements(sourceId: number, targetId: number) {
+  async function reorderElements(sourceId: string, targetId: string) {
     if (sourceId === targetId) return;
     const ordered = [...elements].sort((left, right) => left.sort_index - right.sort_index);
     const sourceIndex = ordered.findIndex((item) => item.id === sourceId);
@@ -771,7 +771,7 @@ export function ProtocolEditor({
     const [moved] = ordered.splice(sourceIndex, 1);
     ordered.splice(targetIndex, 0, moved);
     const resequenced = resequenceProtocolElements(ordered);
-    const nextStatus: Record<number, SaveState> = {};
+    const nextStatus: Record<string, SaveState> = {};
     resequenced.forEach((element) => {
       element.blocks.forEach((block) => {
         nextStatus[block.id] = "saving";
@@ -819,7 +819,7 @@ export function ProtocolEditor({
     }
   }
 
-  function updateBlockInState(blockId: number, updater: (current: ProtocolElement["blocks"][number]) => ProtocolElement["blocks"][number]) {
+  function updateBlockInState(blockId: string, updater: (current: ProtocolElement["blocks"][number]) => ProtocolElement["blocks"][number]) {
     setElements((current) =>
       current.map((element) => ({
         ...element,
@@ -877,7 +877,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function saveBlockConfiguration(blockId: number, configurationSnapshotJson: Record<string, unknown>) {
+  async function saveBlockConfiguration(blockId: string, configurationSnapshotJson: Record<string, unknown>) {
     setStatus(blockId, "saving");
     updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: configurationSnapshotJson }));
     try {
@@ -897,7 +897,7 @@ export function ProtocolEditor({
     }
   }
 
-  function handleTextChange(protocolElementBlockId: number, content: string) {
+  function handleTextChange(protocolElementBlockId: string, content: string) {
     const mutationKey = `protocol-text:${protocolElementBlockId}`;
     const expectedContent = elements
       .flatMap((element) => element.blocks)
@@ -952,7 +952,7 @@ export function ProtocolEditor({
 
   // "Ausblenden" for a text block's red tracked-change highlight (whole block at once -
   // see AutosaveService.accept_tracked_changes for why not per-word).
-  async function acceptTextTrackedChanges(protocolElementBlockId: number) {
+  async function acceptTextTrackedChanges(protocolElementBlockId: string) {
     try {
       const result = await browserApiFetch<{ tracked_dirty: boolean; tracked_baseline_content: string | null }>(
         `/api/protocol-element-blocks/${protocolElementBlockId}/text/accept-tracked-changes`,
@@ -972,7 +972,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function addTodo(protocolElementBlockId: number) {
+  async function addTodo(protocolElementBlockId: string) {
     const task = newTodoTask[protocolElementBlockId]?.trim();
     if (!task) return;
     setStatus(protocolElementBlockId, "saving");
@@ -997,7 +997,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function updateTodo(protocolElementBlockId: number, todoId: number, patch: Partial<ProtocolTodo>) {
+  async function updateTodo(protocolElementBlockId: string, todoId: string, patch: Partial<ProtocolTodo>) {
     setStatus(protocolElementBlockId, "saving");
     try {
       const updated = await browserApiFetch<ProtocolTodo>(`/api/protocol-todos/${todoId}`, {
@@ -1014,7 +1014,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function deleteTodo(protocolElementBlockId: number, todoId: number) {
+  async function deleteTodo(protocolElementBlockId: string, todoId: string) {
     const ok = await confirm({
       message: "Todo endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
       tone: "danger",
@@ -1037,7 +1037,7 @@ export function ProtocolEditor({
   // "Ausblenden" on a todo's red tracked-change highlight: keeps the todo, just stops
   // marking it as changed/added/pending-delete. A pending-delete ghost is hard-deleted
   // server-side, so it disappears from the list entirely.
-  async function acceptTodoTrackedChange(protocolElementBlockId: number, todoId: number) {
+  async function acceptTodoTrackedChange(protocolElementBlockId: string, todoId: string) {
     try {
       const result = await browserApiFetch<{ todo: ProtocolTodo | null }>(
         `/api/protocol-todos/${todoId}/accept-tracked-change`,
@@ -1054,7 +1054,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function uploadImage(protocolElementBlockId: number) {
+  async function uploadImage(protocolElementBlockId: string) {
     const file = selectedFiles[protocolElementBlockId];
     if (!file) return;
     setStatus(protocolElementBlockId, "saving");
@@ -1076,7 +1076,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function deleteImage(protocolElementBlockId: number, imageId: number) {
+  async function deleteImage(protocolElementBlockId: string, imageId: string) {
     const ok = await confirm({
       message: "Bild endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
       tone: "danger",
@@ -1096,7 +1096,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function createEventFromBlock(protocolElementBlockId: number, blockConfig: Record<string, any>, draftOverride?: ProtocolEventDraft): Promise<EventSummary | null> {
+  async function createEventFromBlock(protocolElementBlockId: string, blockConfig: Record<string, any>, draftOverride?: ProtocolEventDraft): Promise<EventSummary | null> {
     const configuredTag = String(blockConfig.event_tag_filter ?? "").trim();
     const allowEndDate = blockConfig.event_allow_end_date === true;
     const draft = draftOverride ?? newEventDrafts[protocolElementBlockId] ?? createProtocolEventDraft(protocol.protocol_date, configuredTag);
@@ -1105,7 +1105,7 @@ export function ProtocolEditor({
       return null;
     }
     setStatus(protocolElementBlockId, "saving");
-    const cycleAssignments: { cycle_config_id: number; cycle_year: number }[] = [];
+    const cycleAssignments: { cycle_config_id: string; cycle_year: number }[] = [];
     if (currentCycleYear !== null && currentTemplate?.cycle_config_id && currentTemplate.cycle_config) {
       cycleAssignments.push({ cycle_config_id: currentTemplate.cycle_config_id, cycle_year: currentCycleYear });
       const eventCycleYear = draft.event_date
@@ -1145,7 +1145,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function updateEventFromBlock(protocolElementBlockId: number, eventId: number, patch: Partial<EventSummary>) {
+  async function updateEventFromBlock(protocolElementBlockId: string, eventId: string, patch: Partial<EventSummary>) {
     setStatus(protocolElementBlockId, "saving");
     try {
       const updated = await browserApiFetch<EventSummary>(`/api/events/${eventId}`, {
@@ -1163,7 +1163,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function deleteEventFromBlock(protocolElementBlockId: number, eventId: number) {
+  async function deleteEventFromBlock(protocolElementBlockId: string, eventId: string) {
     setStatus(protocolElementBlockId, "saving");
     try {
       await browserApiFetch(`/api/events/${eventId}`, { method: "DELETE" });
@@ -1176,7 +1176,7 @@ export function ProtocolEditor({
     }
   }
 
-  function openEventContextMenu(nativeEvent: React.MouseEvent, eventRow: EventSummary, protocolElementBlockId: number) {
+  function openEventContextMenu(nativeEvent: React.MouseEvent, eventRow: EventSummary, protocolElementBlockId: string) {
     nativeEvent.preventDefault();
     nativeEvent.stopPropagation();
     setEventContextMenu({ x: nativeEvent.clientX, y: nativeEvent.clientY, eventRow, blockId: protocolElementBlockId });
@@ -1200,7 +1200,7 @@ export function ProtocolEditor({
   // of these three handlers spread the whole response and nulled out element_type_code,
   // which made the block fall back to an "unknown" type and stop rendering its content
   // at all - found via Timo's own browser test.
-  async function refreshBlockListSnapshot(blockId: number) {
+  async function refreshBlockListSnapshot(blockId: string) {
     try {
       const updated = await browserApiFetch<ProtocolElement["blocks"][number]>(
         `/api/protocol-element-blocks/${blockId}/list-snapshot/refresh`,
@@ -1214,7 +1214,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function undoBlockListSnapshot(blockId: number) {
+  async function undoBlockListSnapshot(blockId: string) {
     try {
       const updated = await browserApiFetch<ProtocolElement["blocks"][number]>(
         `/api/protocol-element-blocks/${blockId}/list-snapshot/undo`,
@@ -1229,7 +1229,7 @@ export function ProtocolEditor({
   }
 
   // "Ausblenden" on one whole-list entry's or row-link row's red tracked-change highlight.
-  async function acceptTrackedListEntry(blockId: number, entryId: number) {
+  async function acceptTrackedListEntry(blockId: string, entryId: string) {
     try {
       const updated = await browserApiFetch<ProtocolElement["blocks"][number]>(
         `/api/protocol-element-blocks/${blockId}/list-snapshot/entries/${entryId}/accept-tracked-change`,
@@ -1241,7 +1241,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function acceptTrackedRow(blockId: number, rowId: string) {
+  async function acceptTrackedRow(blockId: string, rowId: string) {
     try {
       const updated = await browserApiFetch<ProtocolElement["blocks"][number]>(
         `/api/protocol-element-blocks/${blockId}/rows/${rowId}/accept-tracked-change`,
@@ -1258,7 +1258,7 @@ export function ProtocolEditor({
   // so the editor never shows a stale hint for a change it just made itself. Best-effort:
   // a failure here just leaves a stale badge until the next sync/manual refresh, never
   // corrupts data.
-  async function syncBlockListSnapshot(blockId: number) {
+  async function syncBlockListSnapshot(blockId: string) {
     try {
       const updated = await browserApiFetch<ProtocolElement["blocks"][number]>(
         `/api/protocol-element-blocks/${blockId}/list-snapshot/sync`,
@@ -1295,7 +1295,7 @@ export function ProtocolEditor({
   // so it goes stale the moment the list changes through any other route (another tab,
   // another protocol, or this block's own "Daten aktualisieren"). Refetch right before
   // opening the popup so it always starts from the real current list state.
-  async function refreshListEntries(listDefinitionId: number) {
+  async function refreshListEntries(listDefinitionId: string) {
     try {
       const fresh = await browserApiFetch<StructuredListEntry[]>(`/api/lists/${listDefinitionId}/entries`);
       setListEntriesByDefinition((current) => ({ ...current, [listDefinitionId]: fresh }));
@@ -1305,8 +1305,8 @@ export function ProtocolEditor({
   }
 
   async function createListEntryFromBlock(
-    protocolElementBlockId: number,
-    listDefinitionId: number,
+    protocolElementBlockId: string,
+    listDefinitionId: string,
     payload: { sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }
   ) {
     setStatus(protocolElementBlockId, "saving");
@@ -1318,7 +1318,7 @@ export function ProtocolEditor({
       setListEntriesByDefinition((current) => ({
         ...current,
         [listDefinitionId]: [...(current[listDefinitionId] ?? []), created].sort(
-          (left, right) => left.sort_index - right.sort_index || left.id - right.id
+          (left, right) => left.sort_index - right.sort_index || left.created_at.localeCompare(right.created_at)
         ),
       }));
       setStatus(protocolElementBlockId, "saved");
@@ -1332,9 +1332,9 @@ export function ProtocolEditor({
   }
 
   async function updateListEntryFromBlock(
-    protocolElementBlockId: number,
-    listDefinitionId: number,
-    entryId: number,
+    protocolElementBlockId: string,
+    listDefinitionId: string,
+    entryId: string,
     payload: Partial<{
       sort_index: number;
       column_one_value: Record<string, unknown>;
@@ -1361,7 +1361,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function deleteListEntryFromBlock(protocolElementBlockId: number, listDefinitionId: number, entryId: number) {
+  async function deleteListEntryFromBlock(protocolElementBlockId: string, listDefinitionId: string, entryId: string) {
     const ok = await confirm({
       message: "Eintrag endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
       tone: "danger",
@@ -1383,7 +1383,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function unhideEventBlock(blockId: number) {
+  async function unhideEventBlock(blockId: string) {
     const block = elements.flatMap((e) => e.blocks).find((b) => b.id === blockId);
     if (!block) return;
     const newConfig = { ...(block.configuration_snapshot_json ?? {}), manually_hidden: false };
@@ -1399,11 +1399,11 @@ export function ProtocolEditor({
     }
   }
 
-  async function removeEventBlock(blockId: number) {
+  async function removeEventBlock(blockId: string) {
     // Optimistic removal, rolled back on failure by re-inserting the removed block into its
     // original element at its original position - mirrors the rollback pattern used for todo
     // updates in todos/todo-list-view.tsx.
-    let removedFrom: { elementId: number; block: ProtocolElement["blocks"][number]; index: number } | null = null;
+    let removedFrom: { elementId: string; block: ProtocolElement["blocks"][number]; index: number } | null = null;
     setElements((current) =>
       current.map((element) => {
         const index = element.blocks.findIndex((b) => b.id === blockId);
@@ -1430,7 +1430,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function handleQuickTodoCreated(blockId: number, _todoId: number, elementId: number) {
+  async function handleQuickTodoCreated(blockId: string, _todoId: string, elementId: string) {
     // Fetch updated element (may be newly created session element)
     try {
       const updatedElements = await browserApiFetch<ProtocolElement[]>(`/api/protocols/${protocol.id}/elements`);
@@ -1457,7 +1457,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function addEventBlockToElement(elementId: number, eventId: number): Promise<ProtocolElement["blocks"][number] | null> {
+  async function addEventBlockToElement(elementId: string, eventId: string): Promise<ProtocolElement["blocks"][number] | null> {
     try {
       const newBlock = await browserApiFetch<ProtocolElement["blocks"][number]>(
         `/api/protocol-elements/${elementId}/blocks/from-event`,

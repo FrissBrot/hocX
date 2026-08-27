@@ -130,7 +130,7 @@ export function MfaProfilePanel({ open }: Props) {
     }
   }
 
-  async function deleteFactor(factorId: number, label: string) {
+  async function deleteFactor(factorId: string, label: string) {
     const ok = await confirm({
       message: `MFA-Faktor "${label}" wirklich entfernen?`,
       tone: "danger",
