@@ -129,21 +129,69 @@ verändern daher keine bereits angelegten Protokolle oder deren Exporte.
 
 ## Tests
 
-```bash
-# Backend
-docker compose -p hocx-dev exec backend pytest
+Der einheitliche Test-Runner baut bei Bedarf eigene Python-Test-Images. Die Python-Tests
+verwenden eine flüchtige PostgreSQL-Instanz und niemals die Entwicklungsdatenbank. Der
+Browserlauf startet ebenfalls einen vollständig separaten Stack unter dem Projektnamen
+`hocx-e2e`, verwendet eigene Ports und löscht anschließend Datenbank-Volume sowie
+E2E-Dateispeicher. Für die beiden Vitest-Befehle muss der Entwicklungs-Stack laufen:
 
-# Frontend
-docker compose -p hocx-dev exec frontend npm test
+```bash
+# Gesamte Testsuite
+./scripts/test.sh all
+
+# Einzelne Bereiche
+./scripts/test.sh backend
+./scripts/test.sh abgabebox-backend
+./scripts/test.sh frontend
+./scripts/test.sh abgabebox-frontend
+./scripts/test.sh e2e
+```
+
+Die Browser-Suite verwendet Playwright und prüft aktuell Anmeldung, Ablehnung falscher
+Zugangsdaten, den Schutz angemeldeter Seiten, die zentrale Workspace- und
+Admin-Navigation sowie das Erstellen von Todos und Terminen. Für Todo-Exporte werden
+sowohl der Markdown-Inhalt als auch eine erzeugte und abrufbare PDF-Datei kontrolliert.
+Zusätzlich werden vollständige Erstellen-/Ändern-/Lesen-/Löschen-Abläufe für Teilnehmer,
+Listen und Einträge, Benutzer, Vorlagenkopien, Protokolle und Termine geprüft. Writer- und
+Reader-Rechte sowie die Trennung zweier Mandanten werden mit getrennten Sitzungen
+kontrolliert. Der Abgabebox-Test veröffentlicht einen Auftrag, lädt über die öffentliche
+Oberfläche eine echte Testdatei hoch und kontrolliert den Eingang im Hauptsystem.
+Temporäre Datensätze werden nach jedem Test gelöscht. Screenshots, Videos, Traces und
+Dienstlogs werden bei Fehlern unter `frontend/test-results/` abgelegt.
+
+```bash
+./scripts/test.sh e2e
+```
+
+Der isolierte Stack kann zur Fehlersuche auch getrennt gesteuert werden:
+
+```bash
+./scripts/e2e.sh up
+./scripts/e2e.sh test
+./scripts/e2e.sh down
+```
+
+Standardmässig läuft Playwright lokal in einem passenden Browser-Container. Wenn Chromium
+bereits auf dem Host installiert ist, spart `E2E_USE_HOST_PLAYWRIGHT=1 ./scripts/e2e.sh all`
+mehrere Gigabyte Docker-Speicher. Die CI verwendet diese platzsparende Variante.
+
+Einzelne Tests können weiterhin direkt gestartet werden:
+
+```bash
+docker compose -p hocx-dev exec frontend npm test -- lib/offline-store.test.ts
+docker compose -p hocx-dev exec abgabebox-frontend npm test
 
 # Status und Logs des Entwicklungs-Stacks
 docker compose -p hocx-dev ps
 docker compose -p hocx-dev logs --tail=100 backend frontend
 ```
 
-Die CI baut und testet Hauptanwendung und Abgabebox. Release-Kandidaten werden als
-signierte Images gebaut, zuerst in der Testumgebung verifiziert und anschließend ohne
-erneuten Build zu unveränderten Release-Images promotet.
+Die CI läuft bei Pull Requests gegen `main` und bei Pushes auf `main`. Sie testet beide
+Backends, beide Frontends, Datenbankmigrationen, Builds, Deployment-Skripte und die
+Playwright-Browser-Suite. Bei fehlgeschlagenen Browser-Tests werden Diagnose-Artefakte
+hochgeladen. Release-Kandidaten werden als signierte Images gebaut, zuerst in der
+Testumgebung verifiziert und anschließend ohne erneuten Build zu unveränderten
+Release-Images promotet.
 
 ## Rollen und Sicherheitsgrenzen
 

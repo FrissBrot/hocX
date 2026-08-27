@@ -96,10 +96,19 @@ Wenn Test erfolgreich war:
    - `source_tag`: genau der getestete Candidate-Tag, z.B. `test-20260825-abc1234-r42`
    - `release_tag`: finaler Semver-Tag, z.B. `v1.2.0`
    - `update_latest`: in der Regel `true`
-3. Der Workflow baut **nicht** neu, sondern setzt die finalen GHCR-Tags auf dieselben
+   - `confirm_production`: zur Fehlklick-Sicherung exakt `DEPLOY`
+3. Der Workflow verlangt einen erfolgreichen, von `verify_release.sh test` erzeugten
+   GitHub-Testnachweis fuer genau den `source_tag`. Danach laeuft er in der GitHub-
+   Umgebung `production`. Fuer deinen Solo-Workflow muss dort kein Required Reviewer
+   konfiguriert werden.
+4. Der Workflow baut **nicht** neu, sondern setzt die finalen GHCR-Tags auf dieselben
    bereits getesteten Images.
-4. Optional danach ein GitHub-Release fuer Release Notes / Changelog anlegen. Das ist
+5. Optional danach ein GitHub-Release fuer Release Notes / Changelog anlegen. Das ist
    rein dokumentarisch; Images sind zu diesem Zeitpunkt schon gepromoted.
+
+Die GitHub-Umgebung wird beim ersten Workflow-Lauf automatisch angelegt. In
+**Settings → Environments → production** keine Reviewer-Regel aktivieren, solange du
+allein arbeitest. Die technische Test-Gate- und `DEPLOY`-Pruefung bleiben aktiv.
 
 ## 4. Prod aktualisieren
 
@@ -169,7 +178,8 @@ durchläuft beim nächsten Start die komplette Alembic-Historie von Anfang an.
    `web-test.hocx.ch` auf die Test-Server-IP zeigen lassen.
 3. Repo als root klonen: `git clone git@github.com:FrissBrot/hocX.git`.
 4. Im Repo als root `./scripts/provision_deploy_user.sh test` ausfuehren. Das Skript erstellt
-   `hocx-deploy`, richtet Docker-Zugriff und alle Besitz-/Runtime-Rechte ein und zeigt
+   `hocx-deploy`, installiert bei Debian/Ubuntu fehlende Werkzeuge (`gh`, `jq`, `curl`),
+   richtet Docker-Zugriff und alle Besitz-/Runtime-Rechte ein und zeigt
    danach den erforderlichen Benutzerwechsel an. `/etc/hocx/environment` bindet den Host
    dauerhaft an `test`; Prod- und Dev-Starts werden auf diesem Host abgelehnt.
 5. Mit `sudo -iu hocx-deploy` wechseln, ins Repository gehen und
@@ -178,8 +188,34 @@ durchläuft beim nächsten Start die komplette Alembic-Historie von Anfang an.
    und Dateirechten 600 an und startet danach direkt die Umgebung.
 6. Bei spaeteren Deploys in `.env` `HOCX_VERSION` auf den neuen Candidate-Tag setzen.
 7. Nach dem ersten Deploy und nach Updates `./scripts/verify_release.sh test` ausfuehren.
+   Bei erfolgreichen Checks schreibt das Skript automatisch einen maschinenlesbaren
+   GitHub-Deployment-Status fuer exakt diesen Candidate-Tag. Dieser Nachweis ist die
+   technische Voraussetzung fuer eine spaetere Prod-Promotion.
 8. Test-Admin-Login mit `INITIAL_ADMIN_EMAIL`/`INITIAL_ADMIN_PASSWORD` pruefen, danach
    weitere Test-Admins anlegen und das Bootstrap-Passwort aendern.
+
+Beim ersten Deploy fragt `deploy.sh` zwei getrennte Tokens verdeckt ab. Empfohlen sind:
+
+- ein Fine-grained PAT, ausschliesslich fuer `FrissBrot/hocX`, mit `Contents: read`,
+  `Actions: read` und `Deployments: read and write`;
+- ein klassischer PAT mit ausschliesslich `read:packages` fuer GHCR.
+
+Die Trennung verhindert, dass der Registry-Token auch Repository-Rechte erhaelt. Beide
+werden mit Modus 600 unter `.tools/` statt in `.env` gespeichert. Das Skript prueft
+Repository-, Actions-, Deployment- und GHCR-Anmeldung bei jedem Deploy erneut.
+
+Der Status kann bei Bedarf manuell kontrolliert werden:
+
+```bash
+sudo -iu hocx-deploy
+gh auth status
+```
+
+Der Token wird von `gh` im geschuetzten Benutzer-Credential-Speicher verwaltet und
+gehoert nicht in `.env`. Die Deployment-Schreibberechtigung kann ohne einen kuenstlichen
+Testeintrag nicht vorab geprueft werden; sie wird spaetestens beim ersten erfolgreichen
+`verify_release.sh test` real validiert. Scheitert dieser Eintrag, bleibt die
+Prod-Promotion gesperrt.
 
 ## 8. Prod-Server das erste Mal aufsetzen (sobald der Server existiert)
 
@@ -224,9 +260,15 @@ Deploy starten:
 ```
 
 Der Updater akzeptiert nur die fest hinterlegte hocX-GitHub-Remote, den Branch `main`,
-einen sauberen tracked Worktree und einen reinen Fast-Forward auf `origin/main`. Er nutzt
-denselben exklusiven Lock wie `deploy.sh`. `.env`, Storage, Backups, `.tools` und
-`.releases` sind ignoriert und werden nicht veraendert.
+einen sauberen tracked Worktree und einen reinen Fast-Forward auf `origin/main`. Vor dem
+Fast-Forward lädt er den zum Commit gehoerenden CI-Nachweis, prueft dessen keyless
+Cosign-Signatur gegen den festen `build-test-images.yml`-Workflow und verifiziert die
+Hashes aller Deploy-Skripte, Compose- und Traefik-Dateien. Damit reicht ein blosses
+Manipulieren von Git oder `origin/main` nicht mehr aus. Hierfuer wird dieselbe einmalige
+GitHub-Anmeldung wie fuer den Testnachweis benoetigt; fehlt sie, wird der Token auch hier
+verdeckt abgefragt und geprueft. Der Updater nutzt denselben
+exklusiven Lock wie `deploy.sh`. `.env`, Storage, Backups, `.tools` und `.releases` sind
+ignoriert und werden nicht veraendert.
 
 ## 10. Backup- und Cleanup-Cronjobs
 
