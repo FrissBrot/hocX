@@ -1,5 +1,11 @@
 services:
   backend:
+    environment:
+      # Local development does not run through the HTTPS/Traefik domain. An empty
+      # main domain disables the cross-domain auth bridge; otherwise `.env`'s
+      # placeholder `localhost` redirects sessions to https://localhost/api/...
+      # instead of keeping them on the frontend proxy at localhost:3000.
+      TRAEFIK_DOMAIN: ""
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     ports:
       - "127.0.0.1:8000:8000"
