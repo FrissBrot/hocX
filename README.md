@@ -120,8 +120,7 @@ angelegt, solange die Plattform-Admin-Tabelle noch leer ist.
 
 Die Demo-Daten werden nur durch den lokalen Compose-Override mit dem expliziten Alembic-
 Schalter `-x seed_demo=true` angelegt. Normale Migrationen und der Release-/Produktionspfad
-legen weder Demo-Mandanten noch `@hocx.local`-Konten an. Beim Upgrade älterer Installationen
-deaktiviert Migration `0074_demo_account_lockout` noch vorhandene bekannte Demo-Konten.
+legen weder Demo-Mandanten noch `@hocx.local`-Konten an.
 
 ## Konfiguration
 
