@@ -269,11 +269,25 @@ def require_writer(user: CurrentUser) -> CurrentUser:
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Writer role required")
 
 
-def require_finance_access(user: CurrentUser) -> CurrentUser:
-    """Kassier, Writer and Admin may access finance and fines."""
-    if user.current_role in {"kassier", "writer", "admin"}:
+def require_finance_read(user: CurrentUser) -> CurrentUser:
+    """Every tenant role may inspect finance data."""
+    if user.current_role in {"reader", "kassier", "writer", "admin"}:
         return user
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Finance access required")
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Finance read access required")
+
+
+def require_finance_write(user: CurrentUser) -> CurrentUser:
+    """Only the dedicated cashier role and tenant admins may mutate finance data."""
+    if user.current_role in {"kassier", "admin"}:
+        return user
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Finance write access required")
+
+
+def require_all_fines_read(user: CurrentUser) -> CurrentUser:
+    """Reader accounts may only use the self-scoped fines listing."""
+    if user.current_role in {"writer", "kassier", "admin"}:
+        return user
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="All-fines read access required")
 
 
 def require_admin(user: CurrentUser) -> CurrentUser:

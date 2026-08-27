@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.db import get_db
-from app.core.security import CurrentUser, get_current_user, require_finance_access
+from app.core.security import CurrentUser, get_current_user, require_finance_read, require_finance_write
 from app.models.entities import FinanceAccount
 from app.repositories.finance_repository import FinanceRepository
 from app.schemas.finance import (
@@ -32,7 +32,7 @@ def list_accounts(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_finance_access(user)
+    require_finance_read(user)
     return repo.list_accounts(db, user.current_tenant_id)
 
 
@@ -42,7 +42,7 @@ def create_account(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_finance_access(user)
+    require_finance_write(user)
     try:
         return repo.create_account(db, user.current_tenant_id, payload)
     except SQLAlchemyError as exc:
@@ -57,7 +57,7 @@ def update_account(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_finance_access(user)
+    require_finance_write(user)
     internal_id = public_id_service.resolve_internal_id(db, FinanceAccount, account_id, tenant_id=user.current_tenant_id)
     if internal_id is None:
         raise HTTPException(status_code=404, detail="Account not found")
@@ -73,7 +73,7 @@ def delete_account(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_finance_access(user)
+    require_finance_write(user)
     internal_id = public_id_service.resolve_internal_id(db, FinanceAccount, account_id, tenant_id=user.current_tenant_id)
     if internal_id is None or not repo.delete_account(db, internal_id, user.current_tenant_id):
         raise HTTPException(status_code=404, detail="Account not found")
@@ -91,7 +91,7 @@ def list_transactions(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_finance_access(user)
+    require_finance_read(user)
     internal_id = public_id_service.resolve_internal_id(db, FinanceAccount, account_id, tenant_id=user.current_tenant_id)
     if internal_id is None:
         raise HTTPException(status_code=404, detail="Account not found")
@@ -105,7 +105,7 @@ def create_transaction(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_finance_access(user)
+    require_finance_write(user)
     internal_id = public_id_service.resolve_internal_id(db, FinanceAccount, account_id, tenant_id=user.current_tenant_id)
     if internal_id is None:
         raise HTTPException(status_code=404, detail="Account not found")
@@ -132,7 +132,7 @@ def update_transaction(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_finance_access(user)
+    require_finance_write(user)
     existing = repo._get_transaction_scoped_by_public_id(db, tx_id, user.current_tenant_id)
     if existing is None:
         raise HTTPException(status_code=404, detail="Transaction not found")
@@ -152,7 +152,7 @@ def delete_transaction(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_finance_access(user)
+    require_finance_write(user)
     existing = repo._get_transaction_scoped_by_public_id(db, tx_id, user.current_tenant_id)
     if existing is None or not repo.delete_transaction(db, existing.id, user.current_tenant_id):
         raise HTTPException(status_code=404, detail="Transaction not found")

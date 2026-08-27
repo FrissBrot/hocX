@@ -9,6 +9,18 @@ Kunden-Login:
 - Einzige Stelle mit mandantenübergreifender Sicht: Mandanten anlegen, Benutzer über
   Mandanten hinweg verwalten/mergen, globales SSO für Admin-Accounts konfigurieren.
 
+## Betreiberrollen
+
+| Rolle | Zugriff |
+|---|---|
+| `owner` | Vollzugriff auf Plattformverwaltung, Mandanten, Benutzer, Exporte, MFA-Metadaten und Error-Logs |
+| `support` | Nur lesender Zugriff auf nicht sensible technische Mandanten- und Domaininformationen |
+
+Mandantenübergreifende Benutzer- und Mitgliederdaten, MFA-Informationen, Error-Logs,
+Platform-Admin-Konten und Tenant-Exporte sind wegen der enthaltenen personenbezogenen
+oder sicherheitsrelevanten Daten ausschliesslich für `owner` sichtbar. `support` kann
+keine Daten verändern und erhält keinen Zugriff auf diese Ansichten.
+
 ## Bootstrap
 
 Der erste Admin-Account wird beim ersten Start aus `INITIAL_ADMIN_EMAIL` /

@@ -22,10 +22,11 @@ type SortKey = "participant_name_snapshot" | "protocol_number" | "fine_type" | "
 type Props = {
   initialFines: AttendanceFineListItem[];
   accounts: FinanceAccount[];
-  isAdmin: boolean;
+  canWrite: boolean;
+  ownOnly: boolean;
 };
 
-export function FinesView({ initialFines, accounts, isAdmin }: Props) {
+export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) {
   const router = useRouter();
   const confirm = useConfirm();
   const showToast = useToast();
@@ -138,7 +139,7 @@ export function FinesView({ initialFines, accounts, isAdmin }: Props) {
       <div className="page-header">
         <div>
           <h1 className="page-title">Bussen</h1>
-          <p className="muted">Alle Verspätungs- und Absenzbussen dieses Mandanten.</p>
+          <p className="muted">{ownOnly ? "Deine Verspätungs- und Absenzbussen." : "Alle Verspätungs- und Absenzbussen dieses Mandanten."}</p>
         </div>
       </div>
 
@@ -160,14 +161,14 @@ export function FinesView({ initialFines, accounts, isAdmin }: Props) {
       <DataTable
         className="data-table-lg"
         columns={[
-          ...(isAdmin ? [{ key: "collect", label: "" }] : []),
+          ...(canWrite ? [{ key: "collect", label: "" }] : []),
           { key: "participant_name_snapshot", label: "Teilnehmer", sortable: true, sortDirection: sd("participant_name_snapshot"), onSort: () => toggleSort("participant_name_snapshot") },
           { key: "protocol_number", label: "Protokoll", sortable: true, sortDirection: sd("protocol_number"), onSort: () => toggleSort("protocol_number") },
           { key: "fine_type", label: "Grund", sortable: true, sortDirection: sd("fine_type"), onSort: () => toggleSort("fine_type") },
           "Konto",
           { key: "amount", label: "Betrag", sortable: true, sortDirection: sd("amount"), onSort: () => toggleSort("amount") },
           { key: "status", label: "Status", sortable: true, sortDirection: sd("status"), onSort: () => toggleSort("status") },
-          ...(isAdmin ? ["Aktionen"] : []),
+          ...(canWrite ? ["Aktionen"] : []),
         ]}
         emptyMessage="Keine Bussen gefunden."
       >
@@ -177,7 +178,7 @@ export function FinesView({ initialFines, accounts, isAdmin }: Props) {
           const cur = fine.currency_label ?? account?.currency_label ?? "";
           return (
             <tr key={fine.id} className={isCollected ? "table-row-done" : ""}>
-              {isAdmin && (
+              {canWrite && (
                 <td>
                   <button
                     type="button"
@@ -213,7 +214,7 @@ export function FinesView({ initialFines, accounts, isAdmin }: Props) {
                   </div>
                 ) : null}
               </td>
-              {isAdmin && (
+              {canWrite && (
                 <td>
                   <div className="table-actions table-actions-start">
                     {!isCollected && (

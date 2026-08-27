@@ -7,7 +7,7 @@ import resource
 import shutil
 import subprocess
 import unicodedata
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -213,7 +213,7 @@ class ExportService:
         export_dir = (
             Path(settings.export_root)
             / f"protocol-{protocol_id}"
-            / f"{export_type}-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8]}"
+            / f"{export_type}-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8]}"
         )
         export_dir.mkdir(parents=True, exist_ok=True)
         template_copy_dir = export_dir / "template"
@@ -333,7 +333,7 @@ class ExportService:
         export_dir = (
             Path(settings.export_root)
             / f"tenant-{tenant_id}"
-            / f"global-{export_type}-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8]}"
+            / f"global-{export_type}-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8]}"
         )
         export_dir.mkdir(parents=True, exist_ok=True)
         template_copy_dir = export_dir / "template"
@@ -344,7 +344,7 @@ class ExportService:
             shutil.copytree(template_fonts_dir, export_dir / "fonts", dirs_exist_ok=True)
             self._patch_theme_fontspec(template_copy_dir / "styles" / "theme.tex")
 
-        today = datetime.utcnow().date()
+        today = datetime.now(UTC).date()
         fake_protocol = SimpleNamespace(
             protocol_number="",
             title="",
@@ -408,7 +408,7 @@ class ExportService:
             generated_file_id=stored_file.public_id,
             content_url=f"/api/stored-files/{stored_file.public_id}/content",
             storage_path=stored_file.storage_path,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
             status="generated",
         )
 
@@ -508,7 +508,7 @@ class ExportService:
         until_date: str | None,
         date_summary: str | None,
     ) -> str:
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         title = "Offene Todos" if todo_filter == "open" else "Todo-Übersicht"
         open_count = sum(1 for row in rows if (getattr(row, "todo_status_code", None) or "open") in ("open", "in_progress"))
         done_count = sum(1 for row in rows if getattr(row, "todo_status_code", None) == "done")
@@ -746,7 +746,7 @@ class ExportService:
         export_dir = (
             Path(settings.export_root)
             / f"protocol-{protocol.id}"
-            / f"{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8]}"
+            / f"{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8]}"
         )
         export_dir.mkdir(parents=True, exist_ok=True)
         template_copy_dir = export_dir / "template"

@@ -263,33 +263,37 @@ def test_commit_document_rejects_a_document_already_marked_importiert(db):
     # within one test's savepoint-wrapped session (documented, pre-existing limitation, see
     # test_protocol_number_cycle_rank.py's module docstring) - orthogonal to what this test
     # needs to verify.
-    from app.models import WordImportDocument
+    from app.models import StoredFile, WordImportDocument
     from app.services.word_import_queue_service import WordImportQueueService
-    from tests.test_word_import_e2e import _build_template, _commit_payload_from_analysis
-    from tests.word_import_fixtures import default_spec, render_docx
+    from tests.test_word_import_e2e import _build_template
 
     ctx = _build_template(db)
     queue_service = WordImportQueueService()
-    raw_bytes = render_docx(default_spec())
-    documents, _warnings = queue_service.ingest(
-        db, tenant_id=ctx["tenant"].id, template_id=ctx["template"].id,
-        created_by=None, files=[("test.docx", raw_bytes)],
+    stored_file = StoredFile(
+        tenant_id=ctx["tenant"].id,
+        original_name="test.docx",
+        mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        storage_path="uploads/word-imports/test.docx",
+        scan_status="clean",
     )
-    document = documents[0]
+    db.add(stored_file)
     db.flush()
-    analysis = queue_service.word_import_service.analyze(
-        db, tenant_id=ctx["tenant"].id, template_id=ctx["template"].id,
-        protocol_date_hint=None, raw_bytes=raw_bytes,
+    document = WordImportDocument(
+        tenant_id=ctx["tenant"].id,
+        template_id=ctx["template"].id,
+        stored_file_id=stored_file.id,
+        original_filename="test.docx",
+        display_name="Test",
+        status="importiert",
+        analysis_snapshot_json={},
     )
-    payload = _commit_payload_from_analysis(analysis, template_id=ctx["template"].id)
-
-    # Simulates "another request already committed this document" instead of racing a real
-    # second transaction.
-    document.status = "importiert"
+    db.add(document)
     db.flush()
 
     with pytest.raises(ValueError, match="bereits importiert"):
-        queue_service.commit_document(db, document=document, tenant_id=ctx["tenant"].id, user_id=1, payload=payload)
+        # The already-imported guard runs before payload inspection; None keeps this regression
+        # test focused on the atomic claim rather than constructing an unrelated import review.
+        queue_service.commit_document(db, document=document, tenant_id=ctx["tenant"].id, user_id=1, payload=None)  # type: ignore[arg-type]
 
 
 def test_commit_document_claims_the_row_atomically_before_importing():

@@ -56,6 +56,9 @@ services:
       AUTH_SECRET: test-auth-secret-0123456789-not-a-real-secret
       ADMIN_AUTH_SECRET: test-admin-auth-secret-0123456789
       STORAGE_ROOT: /tmp/hocx-test-storage
+      EXPORT_ROOT: /tmp/hocx-test-storage/exports
+      UPLOAD_ROOT: /tmp/hocx-test-storage/uploads
+      LATEX_TEMPLATE_ROOT: /tmp/hocx-test-storage/latex_templates
       # Account-lockout/rate-limit primitives (login, MFA verify, password-change,
       # tenant-by-domain lookup) are Redis-backed - without this service the whole
       # `tests` profile could only ever pass by pointing at an ad-hoc container

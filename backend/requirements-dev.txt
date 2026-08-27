@@ -1,5 +1,7 @@
 -r requirements.txt
 pytest==8.3.4
+# Required by starlette.testclient for HTTP-level FastAPI integration tests.
+httpx2>=2.0.0,<3
 # Only used to synthesize PDF test fixtures for the word-import E2E tests
 # (tests/word_import_fixtures.py) - never imported by the app itself.
 reportlab==5.0.0

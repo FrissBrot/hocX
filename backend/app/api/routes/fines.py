@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.db import get_db
-from app.core.security import CurrentUser, get_current_user, require_finance_access, require_reader
+from app.core.security import CurrentUser, get_current_user, require_all_fines_read, require_finance_write, require_reader
 from app.models.entities import AttendanceFine, Protocol
 from app.repositories.fines_repository import DuplicateFineError, FinesRepository
 from app.schemas.fines import (
@@ -18,12 +18,10 @@ from app.schemas.fines import (
     CollectFinePayload,
 )
 from app.services import public_id_service
-from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
 
 router = APIRouter()
 repo = FinesRepository()
-access_service = AccessService()
 audit = AuditService()
 
 
@@ -34,12 +32,14 @@ def list_fines(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    """Every role sees all fines in the tenant, except restricted readers (participant-linked
-    or otherwise scoped accounts) who only see fines from protocols they have access to."""
+    """Readers only see fines assigned to their own participant identity.
+
+    Writer, kassier and admin may inspect all fines in the current tenant; mutation remains
+    restricted to kassier and admin below.
+    """
     require_reader(user)
-    if access_service.is_restricted_reader(db, user):
-        protocol_ids = access_service.repository.list_protocol_ids(db, user_id=user.user_id, tenant_id=user.current_tenant_id)
-        return repo.list_fines_for_protocols(db, user.current_tenant_id, protocol_ids, skip=skip, limit=limit)
+    if user.current_role == "reader":
+        return repo.list_fines_for_user(db, user.current_tenant_id, user.user_id, skip=skip, limit=limit)
     return repo.list_fines_for_tenant(db, user.current_tenant_id, skip=skip, limit=limit)
 
 
@@ -66,7 +66,7 @@ def list_pending_fines(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_finance_access(user)
+    require_all_fines_read(user)
     internal_id = _resolve_protocol_id(db, protocol_id, user)
     return repo.list_pending_fines_for_protocol(db, internal_id, user.current_tenant_id)
 
@@ -77,7 +77,7 @@ def list_protocol_fines(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_finance_access(user)
+    require_all_fines_read(user)
     internal_id = _resolve_protocol_id(db, protocol_id, user)
     return repo.list_fines_for_protocol(db, internal_id, user.current_tenant_id)
 
@@ -88,7 +88,7 @@ def create_fine(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_finance_access(user)
+    require_finance_write(user)
     try:
         result = repo.create_fine(db, payload, user.current_tenant_id)
     except DuplicateFineError as exc:
@@ -113,7 +113,7 @@ def delete_fine(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_finance_access(user)
+    require_finance_write(user)
     internal_id = _resolve_fine_id(db, fine_id)
     try:
         deleted = repo.delete_fine(db, internal_id, user.current_tenant_id)
@@ -132,7 +132,7 @@ def collect_fine(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_finance_access(user)
+    require_finance_write(user)
     internal_id = _resolve_fine_id(db, fine_id)
     collecting_protocol_internal_id = None
     if payload.collecting_protocol_id is not None:
@@ -158,7 +158,7 @@ def reopen_fine(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_finance_access(user)
+    require_finance_write(user)
     internal_id = _resolve_fine_id(db, fine_id)
     try:
         result = repo.reopen_fine(db, internal_id, user.current_tenant_id)

@@ -67,6 +67,24 @@ class FinesRepository:
         ).all()
         return [self._to_list_item(db, row) for row in rows]
 
+    def list_fines_for_user(
+        self, db: Session, tenant_id: int, user_id: int, skip: int = 0, limit: int = 50
+    ) -> list[AttendanceFineListItem]:
+        """Return only fines belonging to participant records linked to this account."""
+        rows = db.execute(
+            self._base_query()
+            .join(Participant, Participant.id == AttendanceFine.participant_id)
+            .where(
+                Protocol.tenant_id == tenant_id,
+                Participant.tenant_id == tenant_id,
+                Participant.app_user_id == user_id,
+            )
+            .order_by(AttendanceFine.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        ).all()
+        return [self._to_list_item(db, row) for row in rows]
+
     def list_pending_fines_for_protocol(self, db: Session, protocol_id: int, tenant_id: int) -> list[AttendanceFineListItem]:
         """Fines from other protocols relevant to this protocol:
         - Still-pending fines from earlier protocols

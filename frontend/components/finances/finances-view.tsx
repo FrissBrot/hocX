@@ -11,9 +11,9 @@ import { formatDate } from "@/lib/utils/format";
 
 const PAGE_SIZE = 50;
 
-type Props = { initialAccounts: FinanceAccount[] };
+type Props = { initialAccounts: FinanceAccount[]; canWrite: boolean };
 
-export function FinancesView({ initialAccounts }: Props) {
+export function FinancesView({ initialAccounts, canWrite }: Props) {
   const confirm = useConfirm();
   const showToast = useToast();
   const [accounts, setAccounts] = useState(initialAccounts);
@@ -203,7 +203,7 @@ export function FinancesView({ initialAccounts }: Props) {
       <aside className="finance-sidebar">
         <div className="finance-sidebar-header">
           <span className="finance-sidebar-title">Konten</span>
-          <button type="button" className="btn-icon" onClick={startCreateAccount} title="Konto erstellen">＋</button>
+          {canWrite && <button type="button" className="btn-icon" onClick={startCreateAccount} title="Konto erstellen">＋</button>}
         </div>
 
         {accounts.length === 0 ? (
@@ -231,15 +231,15 @@ export function FinancesView({ initialAccounts }: Props) {
                 {account.description ? <div className="finance-account-desc">{account.description}</div> : null}
                 <div className="finance-account-actions">
                   <span className="finance-account-count">{account.transaction_count} Transaktionen</span>
-                  <button type="button" className="btn-icon-sm" onClick={(e) => startEditAccount(account, e)} title="Bearbeiten">✎</button>
-                  <button type="button" className="btn-icon-sm btn-icon-danger" onClick={(e) => void deleteAccount(account, e)} title="Löschen">✕</button>
+                  {canWrite && <button type="button" className="btn-icon-sm" onClick={(e) => startEditAccount(account, e)} title="Bearbeiten">✎</button>}
+                  {canWrite && <button type="button" className="btn-icon-sm btn-icon-danger" onClick={(e) => void deleteAccount(account, e)} title="Löschen">✕</button>}
                 </div>
               </div>
             ))}
           </div>
         )}
 
-        {showAccountForm && (
+        {canWrite && showAccountForm && (
           <div className="finance-form-overlay" onClick={() => setShowAccountForm(false)}>
             <div className="finance-form-modal" onClick={(e) => e.stopPropagation()}>
               <h3>{editingAccount ? "Konto bearbeiten" : "Neues Konto"}</h3>
@@ -286,10 +286,10 @@ export function FinancesView({ initialAccounts }: Props) {
                   </div>
                 ) : null}
               </div>
-              <button type="button" className="button-inline" onClick={startCreateTx}>+ Transaktion</button>
+              {canWrite && <button type="button" className="button-inline" onClick={startCreateTx}>+ Transaktion</button>}
             </div>
 
-            {showTxForm && (
+            {canWrite && showTxForm && (
               <div className="finance-tx-form">
                 <div className="finance-tx-form-row">
                   <label className="field-stack finance-tx-field-amount">
@@ -354,8 +354,8 @@ export function FinancesView({ initialAccounts }: Props) {
                         {formatAmount(running, currency)}
                       </span>
                       <span className="finance-tx-actions">
-                        <button type="button" className="btn-icon-sm" onClick={() => startEditTx(tx)} title="Bearbeiten">✎</button>
-                        <button type="button" className="btn-icon-sm btn-icon-danger" onClick={() => void deleteTx(tx)} title="Löschen">✕</button>
+                        {canWrite && <button type="button" className="btn-icon-sm" onClick={() => startEditTx(tx)} title="Bearbeiten">✎</button>}
+                        {canWrite && <button type="button" className="btn-icon-sm btn-icon-danger" onClick={() => void deleteTx(tx)} title="Löschen">✕</button>}
                       </span>
                     </div>
                   );
