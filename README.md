@@ -89,6 +89,21 @@ Stack anhalten oder inklusive Container und Netzwerk entfernen:
 ./scripts/dev.sh down
 ```
 
+## Secret-Scan-Hook
+
+Damit private Domains, echte Mandantennamen oder Secrets nicht versehentlich committet
+werden, gibt es einen gitleaks-basierten `pre-commit`-Hook (`.githooks/pre-commit`,
+Regeln in `.gitleaks.toml`). Einmalig pro Klon aktivieren:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Für vollen Schutz zusätzlich `gitleaks` installieren (z. B. `apt-get install gitleaks`);
+ohne gitleaks greift ein eingeschränkter Fallback-Check. Der gleiche Scan läuft
+zusätzlich als GitHub-Actions-Workflow (`.github/workflows/secret-scan.yml`) auf jeden
+Push und jede PR, unabhängig davon, ob der lokale Hook aktiviert ist.
+
 ## Lokale Testkonten
 
 Eine frisch migrierte Entwicklungsdatenbank enthält folgende Mandantenkonten:
