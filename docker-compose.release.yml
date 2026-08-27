@@ -80,6 +80,7 @@ services:
         max-size: "10m"
         max-file: "3"
     environment:
+      HOCX_ENVIRONMENT: ${HOCX_ENVIRONMENT:-production}
       DATABASE_URL_FILE: /run/secrets/database_url
       APP_DATABASE_URL_FILE: /run/secrets/app_database_url
       APP_DB_PASSWORD_FILE: /run/secrets/app_db_password

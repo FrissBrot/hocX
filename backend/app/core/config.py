@@ -4,7 +4,15 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-_INSECURE_DEFAULTS = {"hocx-local-dev-secret", "changeme", "secret", ""}
+_INSECURE_DEFAULTS = {
+    "hocx-local-dev-secret",
+    "hocx-local-dev-admin-secret",
+    "change-me-to-a-random-32-plus-char-value",
+    "change-me-to-a-different-random-32-plus-char-value",
+    "changeme",
+    "secret",
+    "",
+}
 
 
 def _load_file_secrets() -> None:
@@ -20,6 +28,7 @@ _load_file_secrets()
 
 class Settings(BaseSettings):
     app_name: str = "hocX API"
+    environment: str = "production"
     # Admin/migration connection (superuser role) - used by alembic (see alembic/env.py).
     database_url: str = "postgresql+psycopg://hocx:hocx@db:5432/hocx"
     # Runtime connection for the FastAPI app itself, using the least-privilege
@@ -87,6 +96,20 @@ class Settings(BaseSettings):
                 file=sys.stderr,
             )
             sys.exit(1)
+        if self.environment.strip().lower() == "production":
+            if not self.auth_secure_cookies:
+                print("FATAL: AUTH_SECURE_COOKIES must be true in production.", file=sys.stderr)
+                sys.exit(1)
+            if self.initial_admin_email and self.initial_admin_email.lower().endswith("@hocx.local"):
+                print("FATAL: A local development admin identity is forbidden in production.", file=sys.stderr)
+                sys.exit(1)
+            if self.initial_admin_password == "ChangeMe123!":
+                print("FATAL: The known development admin password is forbidden in production.", file=sys.stderr)
+                sys.exit(1)
+
+    @property
+    def is_production(self) -> bool:
+        return self.environment.strip().lower() == "production"
 
 
 settings = Settings()

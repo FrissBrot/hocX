@@ -190,6 +190,7 @@ create_env_file() {
   trap 'rm -f "$ENV_TMP_FILE"' EXIT
   printf '# Automatisch durch scripts/deploy.sh fuer %s erzeugt. Nicht committen.\n' "$ENVIRONMENT" > "$ENV_TMP_FILE"
   write_env_value HOCX_VERSION "$HOCX_VERSION"
+  write_env_value HOCX_ENVIRONMENT "$ENVIRONMENT"
   write_env_value GHCR_NAMESPACE "$GHCR_NAMESPACE"
   write_env_value HOCX_SIGNING_IDENTITY_REGEXP "(?i)^https://github.com/${GHCR_NAMESPACE}/hocx/.github/workflows/build-test-images[.]yml@refs/heads/main$"
   write_env_value ROUTER_PREFIX "$PROJECT_NAME"
@@ -269,6 +270,41 @@ run_preflight() {
   docker compose version > /dev/null
   ensure_github_auth
   "${DC[@]}" config --quiet
+
+  if [ "${HOCX_ENVIRONMENT:-}" != "$ENVIRONMENT" ]; then
+    echo "HOCX_ENVIRONMENT muss auf diesem Host '$ENVIRONMENT' sein." >&2
+    return 1
+  fi
+  if [ "${AUTH_SECURE_COOKIES:-true}" != true ]; then
+    echo "AUTH_SECURE_COOKIES darf in Release-Umgebungen nicht deaktiviert sein." >&2
+    return 1
+  fi
+  case "${INITIAL_ADMIN_EMAIL,,}" in
+    *@hocx.local)
+      echo "Lokale Demo-Admin-Adresse ist in Release-Umgebungen verboten." >&2
+      return 1
+      ;;
+  esac
+  for value in "$POSTGRES_PASSWORD" "$APP_DB_PASSWORD" "$AUTH_SECRET" \
+    "$ADMIN_AUTH_SECRET" "$INITIAL_ADMIN_PASSWORD" "$ABGABEBOX_DB_PASSWORD" \
+    "$ABGABEBOX_CAPTCHA_SESSION_SECRET"; do
+    case "$value" in
+      ""|ChangeMe123\!*|change-me*|changeme*|secret|hocx|hocx_app|hocx_abgabebox|*keep-local-only*)
+        echo "Unsicherer Entwicklungs- oder Platzhalterwert in der Release-Konfiguration." >&2
+        return 1
+        ;;
+    esac
+    if [ "${#value}" -lt 20 ]; then
+      echo "Release-Secrets muessen mindestens 20 Zeichen lang sein." >&2
+      return 1
+    fi
+  done
+  case "$TRAEFIK_DOMAIN" in
+    localhost|*.local|*.example.com)
+      echo "Entwicklungs-/Beispieldomain ist in einer Release-Umgebung verboten: $TRAEFIK_DOMAIN" >&2
+      return 1
+      ;;
+  esac
 
   minimum_kb="${HOCX_MIN_FREE_KB:-2097152}"
   [[ "$minimum_kb" =~ ^[1-9][0-9]*$ ]] || {

@@ -120,6 +120,7 @@ services:
     env_file:
       - .env
     environment:
+      HOCX_ENVIRONMENT: development
       DATABASE_URL: ${DATABASE_URL}
       APP_DATABASE_URL: ${APP_DATABASE_URL}
       APP_DB_PASSWORD: ${APP_DB_PASSWORD}

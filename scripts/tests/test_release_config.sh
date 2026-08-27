@@ -47,5 +47,13 @@ grep -q 'DEPLOY_USER="hocx-deploy"' scripts/provision_deploy_user.sh
 grep -q 'Usage:.*provision_deploy_user.sh.*test|prod' scripts/provision_deploy_user.sh
 grep -q 'git merge --ff-only refs/remotes/origin/main' scripts/update_deploy_code.sh
 grep -q 'require_unprovisioned_dev_host' scripts/dev.sh
+grep -q 'alembic -x seed_demo=true upgrade head' docker-compose.dev.yml
+if grep -q 'seed_demo=true' docker-compose.release.yml scripts/deploy.sh; then
+  echo "Release-Pfade duerfen Demo-Seeding nie aktivieren." >&2
+  exit 1
+fi
+grep -q 'HOCX_ENVIRONMENT:.*production' docker-compose.release.yml
+grep -q 'docs_url=None if settings.is_production' backend/app/main.py
+grep -q 'Lokale Demo-Admin-Adresse ist in Release-Umgebungen verboten' scripts/deploy.sh
 
 echo "release config tests: ok"

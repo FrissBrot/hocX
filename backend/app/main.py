@@ -13,7 +13,7 @@ from app.core.config import settings
 from app.core.error_log import best_effort_actor_from_request, record_system_error
 from app.core.redis_client import close_redis_pool
 from app.core.security import hash_password
-from app.models import ElementType, PlatformAdmin, Role, Tenant
+from app.models import AppUser, ElementType, PlatformAdmin, Role, Tenant
 from app.services import domain_health_check_service, traefik_config_service
 from app.services.admin_error_log_service import AdminErrorLogService
 from app.services.audit_service import AuditService
@@ -64,6 +64,41 @@ def ensure_platform_admin_bootstrap() -> None:
             )
         )
         db.commit()
+
+
+def ensure_no_production_demo_data() -> None:
+    """Fail closed if legacy/accidentally seeded demo identities remain in production."""
+    if not settings.is_production:
+        return
+    demo_emails = {
+        "superadmin@hocx.local",
+        "admin@hocx.local",
+        "writer@hocx.local",
+        "reader@hocx.local",
+    }
+    with SessionLocal() as db:
+        active = set(
+            db.scalars(
+                select(AppUser.email).where(
+                    AppUser.is_active.is_(True),
+                    AppUser.email.in_(demo_emails),
+                )
+            )
+        )
+        demo_tenants = set(
+            db.scalars(
+                select(Tenant.name).where(
+                    Tenant.name.in_({"hocX Workspace", "Regional Workspace"})
+                )
+            )
+        )
+    if active or demo_tenants:
+        raise RuntimeError(
+            "Production startup blocked: local demo identities exist: accounts="
+            + ",".join(sorted(active))
+            + "; tenants="
+            + ",".join(sorted(demo_tenants))
+        )
 
 
 def ensure_startup_seed_data() -> None:
@@ -250,6 +285,7 @@ async def lifespan(_: FastAPI):
     FileService().ensure_storage()
     warm_up_word_import_parse_pool()
     ensure_runtime_columns()
+    ensure_no_production_demo_data()
     ensure_startup_seed_data()
     ensure_default_document_templates()
     ensure_traefik_dynamic_config()
@@ -269,7 +305,14 @@ async def lifespan(_: FastAPI):
     await close_redis_pool()
 
 
-app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
+app = FastAPI(
+    title=settings.app_name,
+    version="0.1.0",
+    lifespan=lifespan,
+    docs_url=None if settings.is_production else "/docs",
+    redoc_url=None,
+    openapi_url=None if settings.is_production else "/openapi.json",
+)
 
 app.add_middleware(
     CORSMiddleware,
