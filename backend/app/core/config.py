@@ -2,6 +2,7 @@ import os
 import sys
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _INSECURE_DEFAULTS = {
@@ -28,7 +29,14 @@ _load_file_secrets()
 
 class Settings(BaseSettings):
     app_name: str = "hocX API"
-    environment: str = "production"
+    # docker-compose.yml/docker-compose.release.yml set HOCX_ENVIRONMENT (matching the
+    # HOCX_* naming every other operator-facing variable uses, see scripts/lib/env.sh's
+    # allowlist) - without this alias pydantic-settings looks for a bare ENVIRONMENT, which
+    # nothing ever sets, so this silently stayed on the "production" default in every
+    # environment including local dev. Harmless before the demo-data production guard below
+    # existed; now it makes that guard fire in dev too, since INITIAL_ADMIN_EMAIL there is
+    # an @hocx.local address. Mirrors abgabebox-backend/app/config.py's Settings.environment.
+    environment: str = Field(default="production", validation_alias="HOCX_ENVIRONMENT")
     # Admin/migration connection (superuser role) - used by alembic (see alembic/env.py).
     database_url: str = "postgresql+psycopg://hocx:hocx@db:5432/hocx"
     # Runtime connection for the FastAPI app itself, using the least-privilege
