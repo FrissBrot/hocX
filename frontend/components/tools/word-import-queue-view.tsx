@@ -1,30 +1,29 @@
 "use client";
 
+import type { Route } from "next";
 import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { useConfirm } from "@/contexts/confirm-context";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { WordImportWizard } from "@/components/tools/word-import-wizard";
 import {
   deleteWordImportDocument,
   ingestWordImportDocuments,
-  listWordImportDocuments,
   setLastWordImportTemplate,
   WordImportDocumentSummary,
 } from "@/lib/api/word-import";
 import { formatDateTime } from "@/lib/utils/format";
-import { ParticipantSummary, TemplateSummary } from "@/types/api";
+import { TemplateSummary } from "@/types/api";
 
 type StatusFilter = "eingelesen" | "importiert" | "all";
 
 type Props = {
   templates: TemplateSummary[];
-  participants: ParticipantSummary[];
   initialDocuments: WordImportDocumentSummary[];
-  initialTemplateId: number | null;
+  initialTemplateId: string | null;
 };
 
 function UploadIcon() {
@@ -51,14 +50,14 @@ type PendingUpload = {
   name: string;
 };
 
-export function WordImportQueueView({ templates, participants, initialDocuments, initialTemplateId }: Props) {
+export function WordImportQueueView({ templates, initialDocuments, initialTemplateId }: Props) {
+  const router = useRouter();
   const confirm = useConfirm();
   const [documents, setDocuments] = useState<WordImportDocumentSummary[]>(initialDocuments);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("eingelesen");
-  const [openDocumentId, setOpenDocumentId] = useState<number | null>(null);
   // Zuletzt gewählte Vorlage (tenant.last_word_import_template_id) wird vorausgewählt,
   // solange sie noch existiert/aktiv ist - sonst Fallback auf die erste verfügbare.
-  const [uploadTemplateId, setUploadTemplateId] = useState<number | null>(
+  const [uploadTemplateId, setUploadTemplateId] = useState<string | null>(
     (initialTemplateId && templates.some((template) => template.id === initialTemplateId) ? initialTemplateId : null) ??
       templates[0]?.id ??
       null
@@ -66,18 +65,12 @@ export function WordImportQueueView({ templates, participants, initialDocuments,
   const [uploading, setUploading] = useState(false);
   const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [deleteErrors, setDeleteErrors] = useState<string[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  async function refresh() {
-    const result = await listWordImportDocuments();
-    setDocuments(result);
-    setSelectedIds([]);
-  }
 
   async function handleFilesSelected(fileList: FileList | null) {
     const files = Array.from(fileList ?? []).filter((file) => /\.(docx|pdf|zip)$/i.test(file.name));
@@ -142,7 +135,7 @@ export function WordImportQueueView({ templates, participants, initialDocuments,
       // never ran) until a manual reload. Promise.allSettled lets the successful ones
       // through and only reports the ones that actually failed.
       const results = await Promise.allSettled(selectedIds.map((id) => deleteWordImportDocument(id)));
-      const failedIds = new Set<number>();
+      const failedIds = new Set<string>();
       const errors: string[] = [];
       results.forEach((result, index) => {
         if (result.status === "rejected") {
@@ -166,20 +159,6 @@ export function WordImportQueueView({ templates, participants, initialDocuments,
   };
   const filtered = documents.filter((doc) => statusFilter === "all" || doc.status === statusFilter);
   const allFilteredSelected = filtered.length > 0 && filtered.every((doc) => selectedIds.includes(doc.id));
-
-  if (openDocumentId !== null) {
-    return (
-      <WordImportWizard
-        templates={templates}
-        participants={participants}
-        documentId={openDocumentId}
-        onExitQueueMode={() => {
-          setOpenDocumentId(null);
-          void refresh();
-        }}
-      />
-    );
-  }
 
   return (
     <div className="grid">
@@ -336,7 +315,7 @@ export function WordImportQueueView({ templates, participants, initialDocuments,
             </td>
             <td>
               {document.status === "eingelesen" ? (
-                <button type="button" className="row-text-action" onClick={() => setOpenDocumentId(document.id)}>
+                <button type="button" className="row-text-action" onClick={() => router.push(`/tools/import/${document.id}` as Route)}>
                   <strong>{document.display_name}</strong>
                 </button>
               ) : (
@@ -359,7 +338,7 @@ export function WordImportQueueView({ templates, participants, initialDocuments,
                           <button
                             type="button"
                             className="row-text-action"
-                            onClick={() => setOpenDocumentId(duplicate.id)}
+                            onClick={() => router.push(`/tools/import/${duplicate.id}` as Route)}
                           >
                             „{duplicate.display_name}“ (noch offen)
                           </button>
@@ -381,7 +360,7 @@ export function WordImportQueueView({ templates, participants, initialDocuments,
               <div className="table-actions table-actions-start">
                 {document.status === "eingelesen" ? (
                   <>
-                    <button type="button" className="row-text-action" onClick={() => setOpenDocumentId(document.id)}>
+                    <button type="button" className="row-text-action" onClick={() => router.push(`/tools/import/${document.id}` as Route)}>
                       Prüfen &amp; importieren
                     </button>
                     <button

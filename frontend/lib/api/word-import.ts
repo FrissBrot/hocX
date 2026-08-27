@@ -16,7 +16,7 @@ export type TablePreview = {
   header_cells: string[];
   sample_rows: string[][];
   role: TableRole;
-  list_definition_id: number | null;
+  list_definition_id: string | null;
   matrix_key: string | null;
   has_snapshot_target: boolean;
   grouping_strategy: ListGroupingStrategy | null;
@@ -33,7 +33,7 @@ export type TablePreview = {
 
 export type WordImportNameResolution = {
   raw_name: string;
-  participant_id: number | null;
+  participant_id: string | null;
   create_new: boolean;
   // True when the reviewer explicitly resolved this name as "Keinen verknüpfen" -
   // participant_id stays null either way, so this is what lets buildRecurringNameGroups
@@ -45,7 +45,7 @@ export type WordImportNameResolution = {
   // is first built, never touched again by our own edit handlers (they only spread-
   // update participant_id), so the backend can tell "still the algorithm's own
   // suggestion" apart from "human picked something else" at commit time.
-  originally_suggested_participant_id: number | null;
+  originally_suggested_participant_id: string | null;
   originally_suggested_score: number | null;
   // Ranked near-miss alternatives (best first), populated even when nothing cleared
   // the auto-link threshold - see WordImportAttendanceCandidate, reused here so the
@@ -71,11 +71,11 @@ export type WordImportFormFieldValue = {
 export type WordImportTextMapping = {
   extracted_heading: string;
   extracted_text: string;
-  template_element_id: number | null;
+  template_element_id: string | null;
   block_sort_index: number | null;
   confidence: number;
   is_event_repeat: boolean;
-  matched_event_id: number | null;
+  matched_event_id: string | null;
   event_candidates: WordImportEventCandidate[];
   is_form_block: boolean;
   form_fields: WordImportFormFieldValue[];
@@ -94,10 +94,12 @@ export type WordImportTextMapping = {
   // texts[].sync_field_source), default "existing".
   sync_field_status: "empty" | "match" | "conflict" | null;
   sync_field_existing_value: string | null;
+  remembered_create_new: boolean;
+  remembered_dismissed: boolean;
 };
 
 export type WordImportTextTarget = {
-  template_element_id: number;
+  template_element_id: string;
   block_sort_index: number;
   label: string;
   is_event_repeat: boolean;
@@ -106,7 +108,7 @@ export type WordImportTextTarget = {
 };
 
 export type WordImportAttendanceCandidate = {
-  participant_id: number;
+  participant_id: string;
   score: number;
   reason: string;
 };
@@ -114,7 +116,7 @@ export type WordImportAttendanceCandidate = {
 export type WordImportAttendanceMapping = {
   raw_name: string;
   status: string;
-  suggested_participant_id: number | null;
+  suggested_participant_id: string | null;
   candidates: WordImportAttendanceCandidate[];
   // Set when suggested_participant_id is null AND this exact raw name was already
   // explicitly resolved as "Keinen verknüpfen" in an earlier commit - the wizard
@@ -123,7 +125,7 @@ export type WordImportAttendanceMapping = {
 };
 
 export type WordImportEventCandidate = {
-  event_id: number;
+  event_id: string;
   title: string;
   event_date: string;
   event_end_date: string | null;
@@ -141,7 +143,7 @@ export type WordImportEventMapping = {
   // raw_date alone. null for an ordinary single-day row.
   raw_end_date: string | null;
   status: EventMatchStatus;
-  matched_event_id: number | null;
+  matched_event_id: string | null;
   matched_event_title: string | null;
   matched_event_date: string | null;
   matched_event_end_date: string | null;
@@ -176,12 +178,12 @@ export type WordImportEventMapping = {
 };
 
 export type WordImportListDefinitionOption = {
-  id: number;
+  id: string;
   name: string;
 };
 
 export type WordImportListEntryCandidate = {
-  entry_id: number;
+  entry_id: string;
   column_one_display: string;
   column_two_display: string;
   score: number;
@@ -196,7 +198,7 @@ export type WordImportListRowMapping = {
   column_one_type: string;
   column_two_type: string;
   status: ListRowStatus;
-  matched_entry_id: number | null;
+  matched_entry_id: string | null;
   column_one_names: WordImportNameResolution[];
   column_two_names: WordImportNameResolution[];
   candidates: WordImportListEntryCandidate[];
@@ -235,7 +237,7 @@ export type WordImportMatrixCellMapping = {
 };
 
 export type WordImportDuplicateProtocol = {
-  id: number;
+  id: string;
   protocol_number: string;
   title: string | null;
   protocol_date: string;
@@ -259,7 +261,7 @@ export type WordImportAnalysis = {
 
 export type TableRoleOverride = {
   role: TableRole;
-  list_definition_id: number | null;
+  list_definition_id: string | null;
   matrix_key?: string | null;
   // Only meaningful for role "list" - forces a specific grouping interpretation
   // instead of letting analyze() auto-score variants (see ListGroupingStrategy).
@@ -268,17 +270,19 @@ export type TableRoleOverride = {
 };
 
 export type WordImportCommitPayload = {
-  template_id: number;
+  template_id: string;
   protocol_date: string;
   texts: {
     extracted_heading: string;
     content: string;
-    template_element_id: number | null;
+    template_element_id: string | null;
     block_sort_index: number | null;
     is_event_repeat: boolean;
-    linked_event_id: number | null;
+    linked_event_id: string | null;
     is_form_block: boolean;
     form_fields: WordImportFormFieldValue[];
+    dismissed: boolean;
+    create_new: boolean;
     // Reviewer's pick when sync_field_status === "conflict" - "doc" keeps the extracted
     // text (written into both the block and the Event field), "existing" keeps the
     // Event's current value (written into both instead). Omit/null when there was no
@@ -287,16 +291,16 @@ export type WordImportCommitPayload = {
   }[];
   attendance: {
     raw_name: string;
-    participant_id: number | null;
+    participant_id: string | null;
     participant_name: string;
     status: string;
     create_new: boolean;
-    originally_suggested_participant_id: number | null;
+    originally_suggested_participant_id: string | null;
     originally_suggested_score: number | null;
   }[];
   events: {
     approved: boolean;
-    linked_event_id: number | null;
+    linked_event_id: string | null;
     final_title: string;
     final_date: string;
     final_end_date: string | null;
@@ -305,7 +309,7 @@ export type WordImportCommitPayload = {
     raw_end_date: string | null;
     tag: string | null;
     participant_count: number | null;
-    originally_suggested_event_id: number | null;
+    originally_suggested_event_id: string | null;
     originally_suggested_score: number | null;
   }[];
   // Not written anywhere (an ignored proposal creates/links nothing) - only feeds
@@ -319,14 +323,14 @@ export type WordImportCommitPayload = {
   }[];
   lists: {
     table_index: number;
-    list_definition_id: number;
+    list_definition_id: string;
     column_one_raw: string;
     column_two_raw: string;
     column_one_names: WordImportNameResolution[];
     column_two_names: WordImportNameResolution[];
     approved: boolean;
-    linked_entry_id: number | null;
-    originally_suggested_entry_id: number | null;
+    linked_entry_id: string | null;
+    originally_suggested_entry_id: string | null;
     originally_suggested_score: number | null;
   }[];
   matrices: {
@@ -344,7 +348,7 @@ export type WordImportCommitPayload = {
   tables: {
     header_signature: string;
     role: TableRole;
-    list_definition_id: number | null;
+    list_definition_id: string | null;
     matrix_key: string | null;
     list_grouping_strategy: ListGroupingStrategy | null;
     originally_suggested_role: TableRole | null;
@@ -354,19 +358,19 @@ export type WordImportCommitPayload = {
 
 export async function analyzeWordImport(
   file: File,
-  templateId: number,
+  templateId: string,
   protocolDateHint: string | null,
   tableRoles?: Record<number, TableRoleOverride>
 ): Promise<WordImportAnalysis> {
   const formData = new FormData();
   formData.append("file", file);
-  formData.append("template_id", String(templateId));
+  formData.append("template_id", templateId);
   if (protocolDateHint) formData.append("protocol_date_hint", protocolDateHint);
   if (tableRoles) formData.append("table_roles_json", JSON.stringify(tableRoles));
   return browserApiFetch<WordImportAnalysis>("/api/tools/word-import/analyze", { method: "POST", body: formData });
 }
 
-export type WordImportCommitResult = { id: number; warnings: string[] };
+export type WordImportCommitResult = { id: string; warnings: string[] };
 
 export async function commitWordImport(payload: WordImportCommitPayload): Promise<WordImportCommitResult> {
   return browserApiFetch<WordImportCommitResult>("/api/tools/word-import/commit", {
@@ -378,25 +382,25 @@ export async function commitWordImport(payload: WordImportCommitPayload): Promis
 export type WordImportDocumentStatus = "eingelesen" | "importiert";
 
 export type WordImportDuplicateCandidate = {
-  id: number;
+  id: string;
   display_name: string;
   original_filename: string;
   status: WordImportDocumentStatus;
-  protocol_id: number | null;
+  protocol_id: string | null;
 };
 
 export type WordImportDocumentSummary = {
-  id: number;
-  template_id: number;
+  id: string;
+  template_id: string;
   template_name: string;
   display_name: string;
   original_filename: string;
   status: WordImportDocumentStatus;
-  protocol_id: number | null;
+  protocol_id: string | null;
   protocol_date: string | null;
   created_at: string;
   imported_at: string | null;
-  stored_file_id: number;
+  stored_file_id: string;
   // Other queue documents (open or already imported) sharing the same recognized
   // protocol_date + template - likely the same protocol uploaded twice, e.g. once as
   // .docx and once as .pdf, or under a different filename.
@@ -419,9 +423,9 @@ export type WordImportDocumentUploadResult = {
 
 // One batch = one template (see the queue's upload panel) - files are analyzed
 // immediately server-side and land in the queue with status "eingelesen".
-export async function ingestWordImportDocuments(templateId: number, files: File[]): Promise<WordImportDocumentUploadResult> {
+export async function ingestWordImportDocuments(templateId: string, files: File[]): Promise<WordImportDocumentUploadResult> {
   const formData = new FormData();
-  formData.append("template_id", String(templateId));
+  formData.append("template_id", templateId);
   files.forEach((file) => formData.append("files", file));
   return browserApiFetch<WordImportDocumentUploadResult>("/api/tools/word-import/documents", { method: "POST", body: formData });
 }
@@ -431,12 +435,12 @@ export async function listWordImportDocuments(status?: WordImportDocumentStatus)
   return browserApiFetch<WordImportDocumentSummary[]>(`/api/tools/word-import/documents${query}`);
 }
 
-export async function getWordImportDocument(documentId: number): Promise<WordImportDocumentDetail> {
+export async function getWordImportDocument(documentId: string): Promise<WordImportDocumentDetail> {
   return browserApiFetch<WordImportDocumentDetail>(`/api/tools/word-import/documents/${documentId}`);
 }
 
 export async function reanalyzeWordImportDocument(
-  documentId: number,
+  documentId: string,
   protocolDate: string | null,
   tableRoles: Record<number, TableRoleOverride>
 ): Promise<WordImportAnalysis> {
@@ -446,25 +450,25 @@ export async function reanalyzeWordImportDocument(
   });
 }
 
-export async function commitWordImportDocument(documentId: number, payload: WordImportCommitPayload): Promise<WordImportCommitResult> {
+export async function commitWordImportDocument(documentId: string, payload: WordImportCommitPayload): Promise<WordImportCommitResult> {
   return browserApiFetch<WordImportCommitResult>(`/api/tools/word-import/documents/${documentId}/commit`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
-export async function saveWordImportDocumentDraft(documentId: number, draft: WordImportReviewDraftJson): Promise<void> {
+export async function saveWordImportDocumentDraft(documentId: string, draft: WordImportReviewDraftJson): Promise<void> {
   await browserApiFetch(`/api/tools/word-import/documents/${documentId}/draft`, {
     method: "PUT",
     body: JSON.stringify({ draft }),
   });
 }
 
-export async function deleteWordImportDocument(documentId: number): Promise<void> {
+export async function deleteWordImportDocument(documentId: string): Promise<void> {
   await browserApiFetch(`/api/tools/word-import/documents/${documentId}`, { method: "DELETE" });
 }
 
-export async function setLastWordImportTemplate(templateId: number | null): Promise<void> {
+export async function setLastWordImportTemplate(templateId: string | null): Promise<void> {
   await browserApiFetch("/api/tools/word-import/last-template", {
     method: "PUT",
     body: JSON.stringify({ template_id: templateId }),

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
@@ -377,7 +378,7 @@ function normalizeHeaderSignature(headerCells: string[]): string {
   return folded.replace(/\s+/g, " ");
 }
 
-function targetKey(templateElementId: number | null, blockSortIndex: number | null): string {
+function targetKey(templateElementId: string | null, blockSortIndex: number | null): string {
   if (templateElementId === null || blockSortIndex === null) return "";
   return `${templateElementId}:${blockSortIndex}`;
 }
@@ -385,11 +386,11 @@ function targetKey(templateElementId: number | null, blockSortIndex: number | nu
 type TextDraft = {
   extracted_heading: string;
   content: string;
-  template_element_id: number | null;
+  template_element_id: string | null;
   block_sort_index: number | null;
   isEventRepeat: boolean;
   eventCandidates: WordImportEventCandidate[];
-  linkedEventId: number | null;
+  linkedEventId: string | null;
   // Records that the user explicitly chose "nicht verknüpfen" - without it, that choice
   // is indistinguishable from "not yet decided" (both leave linkedEventId null), so the
   // row would stay flagged as needing review forever. Mirrors AttendanceDraft.linkedNone.
@@ -419,21 +420,24 @@ type TextDraft = {
 type AttendanceDraft = {
   raw_name: string;
   status: string;
-  participant_id: number | null;
+  participant_id: string | null;
   createNew: boolean;
   linkedNone: boolean;
   // What analyze() originally suggested for this row - set once when a fresh analysis
   // is applied, never touched by edit handlers afterward. Lets the backend learn from
   // rows where the human picked someone other than the top auto-suggestion.
-  originallySuggestedParticipantId: number | null;
+  originallySuggestedParticipantId: string | null;
   originallySuggestedScore: number | null;
   // Ranked near-miss alternatives from analyze(), carried along purely for the
   // recurring-name clarifier (see RecurringNameGroup) - never sent back to the server.
   candidates: WordImportAttendanceCandidate[];
 };
 // Sentinel id for the "create as new participant" option in the attendance assignee menu -
-// distinct from `null` (which means "don't link this row to anyone").
-const CREATE_NEW_PARTICIPANT_ID = -1;
+// distinct from `null` (which means "don't link this row to anyone"). A string sentinel
+// (participant ids are UUIDs now) that can never collide with a real public_id.
+const CREATE_NEW_PARTICIPANT_ID = "__create_new_participant__";
+// Unrelated to entity ids - this is a sentinel for an index into analysis.text_targets
+// (see the TodoAssigneeMenu usage below), so it stays numeric.
 const CREATE_NEW_TEXT_BLOCK_ID = -2;
 type FieldSource = "doc" | "existing";
 type EventDraft = {
@@ -447,7 +451,7 @@ type EventDraft = {
   raw_end_date: string | null;
   status: EventMatchStatus;
   candidates: WordImportEventCandidate[];
-  linked_event_id: number | null;
+  linked_event_id: string | null;
   title_source: FieldSource;
   date_source: FieldSource;
   approved: boolean;
@@ -465,7 +469,7 @@ type EventDraft = {
   column_label: string | null;
   // See AttendanceDraft.originallySuggestedParticipantId - same purpose, for the
   // top-ranked event candidate this row started with.
-  originallySuggestedEventId: number | null;
+  originallySuggestedEventId: string | null;
   originallySuggestedScore: number | null;
 };
 type ListDraft = {
@@ -479,7 +483,7 @@ type ListDraft = {
   column_two_names: WordImportNameResolution[];
   status: ListRowStatus;
   candidates: WordImportListEntryCandidate[];
-  linked_entry_id: number | null;
+  linked_entry_id: string | null;
   column_two_source: FieldSource;
   has_snapshot_target: boolean;
   approved: boolean;
@@ -493,7 +497,7 @@ type ListDraft = {
   group_filled: boolean;
   // See AttendanceDraft.originallySuggestedParticipantId - same purpose, for the
   // matched_entry_id this row started with.
-  originallySuggestedEntryId: number | null;
+  originallySuggestedEntryId: string | null;
   originallySuggestedScore: number | null;
 };
 
@@ -823,7 +827,7 @@ function buildRecurringNameGroups(
 ): RecurringNameGroup[] {
   const groups = new Map<
     string,
-    { label: string; counts: RecurringNameCounts; candidateScores: Map<number, WordImportAttendanceCandidate> }
+    { label: string; counts: RecurringNameCounts; candidateScores: Map<string, WordImportAttendanceCandidate> }
   >();
 
   function touch(rawName: string, kind: keyof RecurringNameCounts, candidates: WordImportAttendanceCandidate[]) {
@@ -891,19 +895,23 @@ export function WordImportWizard({
   templates,
   participants,
   documentId,
-  onExitQueueMode,
 }: {
   templates: TemplateSummary[];
   participants: ParticipantSummary[];
-  // When set, the wizard resumes an already-uploaded queue document (/tools/import)
+  // When set, the wizard resumes an already-uploaded queue document (/tools/import/[id])
   // instead of starting from the "upload a file" step - loaded once on mount, review
   // reruns via the document-scoped reanalyze/commit endpoints (the original bytes are
   // already stored server-side, no File object needed).
-  documentId?: number;
-  onExitQueueMode?: () => void;
+  documentId?: string;
 }) {
+  const router = useRouter();
+  // Queue documents live at their own URL (/tools/import/[id], mirroring /protocols/[id])
+  // so opening one is a real navigation - browser back lands back on the queue overview.
+  function exitToQueue() {
+    router.push("/tools/import");
+  }
   const [step, setStep] = useState<Step>(documentId ? "structure" : "upload");
-  const [templateId, setTemplateId] = useState<number | null>(templates[0]?.id ?? null);
+  const [templateId, setTemplateId] = useState<string | null>(templates[0]?.id ?? null);
   const [file, setFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -919,7 +927,7 @@ export function WordImportWizard({
   const [events, setEvents] = useState<EventDraft[]>([]);
   const [lists, setLists] = useState<ListDraft[]>([]);
   const [matrices, setMatrices] = useState<MatrixDraft[]>([]);
-  const [createdProtocolId, setCreatedProtocolId] = useState<number | null>(null);
+  const [createdProtocolId, setCreatedProtocolId] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<Category>("tables");
   const [pendingTableIndex, setPendingTableIndex] = useState<number | null>(null);
   const [expandedTexts, setExpandedTexts] = useState<Set<number>>(new Set());
@@ -1225,7 +1233,7 @@ export function WordImportWizard({
               nullLabel="🆕 Neu anlegen"
               activeId={entry.linked_event_id}
               participants={entry.candidates.map(
-                (candidate): AssigneeOption => ({
+                (candidate): AssigneeOption<string> => ({
                   id: candidate.event_id,
                   display_name: `${candidate.title} (${formatDateRange(candidate.event_date, candidate.event_end_date)})`,
                 })
@@ -1323,12 +1331,12 @@ export function WordImportWizard({
       attendance
         .filter((row, rowIndex) => rowIndex !== index && row.raw_name)
         .map((row) => row.participant_id)
-        .filter((id): id is number => id !== null)
+        .filter((id): id is string => id !== null)
     );
-    const assigneeOptions: AssigneeOption[] = (entry.raw_name
+    const assigneeOptions: AssigneeOption<string>[] = (entry.raw_name
       ? [{ id: CREATE_NEW_PARTICIPANT_ID, display_name: `🆕 Als neuen Teilnehmer anlegen: "${entry.raw_name}"` }, ...attendanceParticipants]
       : attendanceParticipants
-    ).filter((option) => option.id === CREATE_NEW_PARTICIPANT_ID || !takenElsewhere.has(option.id as number));
+    ).filter((option) => option.id === CREATE_NEW_PARTICIPANT_ID || !takenElsewhere.has(option.id as string));
     const label = entry.createNew
       ? `🆕 Neuer Teilnehmer: "${entry.raw_name}"`
       : attendanceParticipants.find((participant) => participant.id === entry.participant_id)?.display_name ??
@@ -1496,7 +1504,7 @@ export function WordImportWizard({
               nullLabel="🆕 Neu (nur in diesem Protokoll)"
               activeId={entry.linked_entry_id}
               participants={entry.candidates.map(
-                (candidate): AssigneeOption => ({
+                (candidate): AssigneeOption<string> => ({
                   id: candidate.entry_id,
                   display_name: `${candidate.column_one_display} → ${candidate.column_two_display}`,
                 })
@@ -1970,7 +1978,7 @@ export function WordImportWizard({
   // optionId here follows the same convention as the attendance table's assignee menu:
   // null = "keinen verknüpfen", CREATE_NEW_PARTICIPANT_ID = "als neuen Teilnehmer
   // anlegen", any other id = link to that existing Participant.
-  function updateFormFieldSingleName(textIndex: number, fieldIndex: number, optionId: number | null, rawName: string) {
+  function updateFormFieldSingleName(textIndex: number, fieldIndex: number, optionId: string | null, rawName: string) {
     setTexts((current) =>
       current.map((row, rowIndex) => {
         if (rowIndex !== textIndex) return row;
@@ -2012,7 +2020,7 @@ export function WordImportWizard({
     );
   }
 
-  function updateFormFieldNameAt(textIndex: number, fieldIndex: number, nameIndex: number, optionId: number | null) {
+  function updateFormFieldNameAt(textIndex: number, fieldIndex: number, nameIndex: number, optionId: string | null) {
     setTexts((current) =>
       current.map((row, rowIndex) => {
         if (rowIndex !== textIndex) return row;
@@ -2050,7 +2058,7 @@ export function WordImportWizard({
   // every remaining issue on it (all names matched, no lingering column-2 conflict) is
   // actually resolved, not just because *a* name was touched (a multi-name row with one
   // name still unmatched must stay open, see listStillOpen).
-  function updateListName(rowIndex: number, column: "one" | "two", nameIndex: number, participantId: number | null) {
+  function updateListName(rowIndex: number, column: "one" | "two", nameIndex: number, participantId: string | null) {
     setLists((current) =>
       current.map((row, index) => {
         if (index !== rowIndex) return row;
@@ -2064,7 +2072,7 @@ export function WordImportWizard({
     );
   }
 
-  function updateMatrixName(rowIndex: number, nameIndex: number, participantId: number | null) {
+  function updateMatrixName(rowIndex: number, nameIndex: number, participantId: string | null) {
     setMatrices((current) =>
       current.map((row, index) => {
         if (index !== rowIndex) return row;
@@ -2089,7 +2097,7 @@ export function WordImportWizard({
   // per-row picker (no such option is offered there), so the createNew case simply
   // leaves those entries at participant_id=null - already their unresolved state, i.e.
   // a no-op for them, same as the plain "Keinen verknüpfen" case.
-  function applyRecurringNameEverywhere(key: string, optionId: number | null) {
+  function applyRecurringNameEverywhere(key: string, optionId: string | null) {
     const participantId = optionId === CREATE_NEW_PARTICIPANT_ID ? null : optionId;
     const createNew = optionId === CREATE_NEW_PARTICIPANT_ID;
 
@@ -2228,7 +2236,7 @@ export function WordImportWizard({
       const approvedEvents = events.filter((entry) => entry.approved);
       const approvedLists = lists
         .filter((entry) => entry.approved && entry.has_snapshot_target)
-        .filter((entry) => (tableRoles[entry.table_index]?.list_definition_id ?? 0) > 0);
+        .filter((entry) => tableRoles[entry.table_index]?.list_definition_id != null);
       const approvedMatrices = matrices.filter((entry) => entry.approved && entry.column_key !== null);
       const payload = {
         template_id: templateId,
@@ -2288,7 +2296,8 @@ export function WordImportWizard({
           })),
         lists: approvedLists.map((entry) => ({
           table_index: entry.table_index,
-          list_definition_id: tableRoles[entry.table_index]?.list_definition_id ?? 0,
+          // Non-null: approvedLists is already filtered to rows with a resolved list_definition_id above.
+          list_definition_id: tableRoles[entry.table_index]?.list_definition_id as string,
           column_one_raw: entry.column_one_raw,
           column_two_raw: resolveListColumnTwoRaw(entry),
           column_one_names: entry.column_one_names,
@@ -2339,7 +2348,7 @@ export function WordImportWizard({
           approvedAttendance.length +
           (events.length - approvedEvents.length) +
           (lists.filter(
-            (entry) => entry.has_snapshot_target && (tableRoles[entry.table_index]?.list_definition_id ?? 0) > 0
+            (entry) => entry.has_snapshot_target && tableRoles[entry.table_index]?.list_definition_id != null
           ).length -
             approvedLists.length) +
           (matrices.length - approvedMatrices.length) +
@@ -2717,7 +2726,7 @@ export function WordImportWizard({
                                       nullLabel="– auswählen –"
                                       activeId={current.list_definition_id}
                                       participants={analysis.list_definitions.map(
-                                        (definition): AssigneeOption => ({ id: definition.id, display_name: definition.name })
+                                        (definition): AssigneeOption<string> => ({ id: definition.id, display_name: definition.name })
                                       )}
                                       onChange={(option) => updateTableRole(table.index, { list_definition_id: option.id })}
                                     />
@@ -2790,7 +2799,7 @@ export function WordImportWizard({
                         if (group.counts.list) whereParts.push(`${group.counts.list}× Liste`);
                         if (group.counts.matrix) whereParts.push(`${group.counts.matrix}× Matrix`);
                         if (group.counts.text) whereParts.push(`${group.counts.text}× Text`);
-                        const menuOptions: AssigneeOption[] = [
+                        const menuOptions: AssigneeOption<string>[] = [
                           { id: CREATE_NEW_PARTICIPANT_ID, display_name: `🆕 Als neuen Teilnehmer anlegen: "${group.label}"` },
                           ...participants,
                         ];
@@ -3161,7 +3170,7 @@ export function WordImportWizard({
                                     nullLabel="– nicht verknüpfen (Text wird nicht übernommen) –"
                                     activeId={text.linkedEventId}
                                     participants={text.eventCandidates.map(
-                                      (candidate): AssigneeOption => ({
+                                      (candidate): AssigneeOption<string> => ({
                                         id: candidate.event_id,
                                         display_name: `${candidate.title} (${formatDate(candidate.event_date)})`,
                                       })
@@ -3345,7 +3354,7 @@ export function WordImportWizard({
               <button
                 type="button"
                 className="button-ghost"
-                onClick={() => (documentId ? onExitQueueMode?.() : setStep("upload"))}
+                onClick={() => (documentId ? exitToQueue() : setStep("upload"))}
               >
                 {documentId ? "Zurück zur Warteschlange" : "Abbrechen"}
               </button>
@@ -3395,7 +3404,7 @@ export function WordImportWizard({
             <button
               type="button"
               className="button-ghost"
-              onClick={() => (documentId ? onExitQueueMode?.() : resetWizard())}
+              onClick={() => (documentId ? exitToQueue() : resetWizard())}
             >
               {documentId ? "Zurück zur Warteschlange" : "Neuer Import"}
             </button>

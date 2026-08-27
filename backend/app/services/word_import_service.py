@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import uuid
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date
@@ -3369,7 +3370,15 @@ class WordImportService:
         protocol_id = protocol_service.create_from_template(
             db,
             ProtocolCreateFromTemplate(
-                template_id=payload.template_id,
+                # payload.template_id is already an internal id (resolved by the route
+                # before constructing this internal-only payload) - create_from_template
+                # now expects a client-facing public UUID and re-resolves it itself, so it
+                # must be re-encoded here. When the internal id doesn't resolve to a real
+                # Template (template is None, see above), a fresh random UUID is passed
+                # instead - guaranteed not to resolve either, so create_from_template still
+                # raises its own "Template not found" ValueError rather than a confusing
+                # pydantic validation error on a raw int.
+                template_id=template.public_id if template is not None else uuid.uuid4(),
                 protocol_date=payload.protocol_date,
                 event_id=None,
             ),
@@ -3382,11 +3391,10 @@ class WordImportService:
         # content now also records why, so the reviewer isn't left thinking the import
         # fully succeeded when part of it didn't.
         commit_warnings: list[str] = []
-        # ProtocolElementBlock.id -> the FIRST text_commit's own extracted_heading that
-        # already claimed this target - a second section resolving to the identical
-        # block (e.g. two similarly-titled headings both best-matching the same
-        # element) would otherwise overwrite the first's content with no warning at all
-        # (last write wins).
+        # ProtocolElementBlock.id -> the first section assigned to that block. Additional
+        # ordinary text sections are appended in document order instead of overwriting
+        # earlier content. Form blocks cannot be concatenated generically because their
+        # values are structured by row, so they still produce a warning.
         claimed_text_blocks: dict[int, str] = {}
 
         def _populate() -> None:
@@ -3666,12 +3674,14 @@ class WordImportService:
                 # DIFFERENT block instances and must not warn; two ordinary sections
                 # sharing a block_sort_index resolve to the SAME instance and should.
                 claimed_by = claimed_text_blocks.get(block.id)
-                if claimed_by is not None:
+                if claimed_by is not None and text_commit.is_form_block:
                     commit_warnings.append(
                         f'Abschnitt "{text_commit.extracted_heading}" zielt auf denselben Block wie '
-                        f'"{claimed_by}" - nur einer der beiden wurde übernommen.'
+                        f'"{claimed_by}". Formularwerte können nicht als Freitext angehängt werden; '
+                        "die späteren Werte wurden übernommen."
                     )
-                claimed_text_blocks[block.id] = text_commit.extracted_heading
+                if claimed_by is None:
+                    claimed_text_blocks[block.id] = text_commit.extracted_heading
                 if text_commit.is_form_block:
                     config = dict(block.configuration_snapshot_json or {})
                     fields_by_row_id = {field.row_id: field for field in text_commit.form_fields}
@@ -3739,7 +3749,15 @@ class WordImportService:
                         select(ProtocolText).where(ProtocolText.protocol_element_block_id == block.id)
                     ).scalar_one_or_none()
                     if protocol_text is not None:
-                        final_content = text_commit.content
+                        if claimed_by is not None:
+                            # Markdown paragraphs need one blank line between sections.
+                            # Avoid manufacturing whitespace when either section is empty.
+                            content_parts = [
+                                part for part in (protocol_text.content.rstrip(), text_commit.content.lstrip()) if part
+                            ]
+                            final_content = "\n\n".join(content_parts)
+                        else:
+                            final_content = text_commit.content
                         sync_field = str((block.configuration_snapshot_json or {}).get("sync_target_field") or "")
                         if sync_field and text_commit.is_event_repeat and text_commit.linked_event_id is not None:
                             linked_event = db.get(Event, text_commit.linked_event_id)

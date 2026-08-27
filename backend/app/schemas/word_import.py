@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import date, datetime
 from typing import Any, Literal
 
@@ -171,6 +172,11 @@ class WordImportTextMapping(BaseModel):
     # WordImportTextCommit.sync_field_source, default "existing").
     sync_field_status: Literal["empty", "match", "conflict"] | None = None
     sync_field_existing_value: str | None = None
+    # Exact-heading memory for one-off protocol blocks. These blocks never become part
+    # of the template; the profile only remembers how the same legacy heading should be
+    # handled on a later import.
+    remembered_create_new: bool = False
+    remembered_dismissed: bool = False
 
 
 class WordImportTextTarget(BaseModel):
@@ -385,6 +391,8 @@ class WordImportTextCommit(BaseModel):
     # this section's block entirely, same row-level "Ignorieren" granularity the list/
     # matrix/event commit rows already have via their own `approved` flag.
     dismissed: bool = False
+    # Create a text block in this protocol only. Valid only without a template target.
+    create_new: bool = False
     # Reviewer's pick for WordImportTextMapping.sync_field_status == "conflict" - "doc" keeps
     # the extracted text (written into both the block and the Event field), "existing" keeps
     # the Event's current field value (written into both instead, so block and Event field
@@ -615,3 +623,324 @@ class WordImportQualityBucket(BaseModel):
 
 class WordImportQualityStats(BaseModel):
     buckets: list[WordImportQualityBucket] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# "Public" mirror models - identical shape to the internal (int-id) models
+# above, except every entity-referencing id field is a UUID public_id instead
+# of an internal BIGINT. These are the ONLY word-import models that ever
+# appear in an HTTP request/response body; the internal models above remain
+# exactly as they are today and keep flowing through WordImportService /
+# WordImportQueueService unchanged. Translation between the two only happens
+# in app/api/routes/word_import.py, at the HTTP boundary. See that file's
+# _encode_*/_decode_* functions.
+#
+# Models with zero entity-id fields (WordImportFormRow, WordImportMatrixOption,
+# WordImportMatrixColumnCandidate, WordImportQualityBucket, WordImportQualityStats,
+# WordImportDraftSave, WordImportDocumentReanalyzeRequest, WordImportEventIgnore)
+# have no Public mirror - they're reused as-is on both sides of the boundary.
+# ---------------------------------------------------------------------------
+
+
+class PublicTablePreview(BaseModel):
+    index: int
+    header_cells: list[str] = Field(default_factory=list)
+    sample_rows: list[list[str]] = Field(default_factory=list)
+    role: TableRole = "ignore"
+    list_definition_id: uuid.UUID | None = None
+    matrix_key: str | None = None
+    has_snapshot_target: bool = True
+    grouping_strategy: str | None = None
+    needs_manual_grouping: bool = False
+    available_grouping_strategies: list[str] = Field(default_factory=list)
+    role_is_explicit: bool = False
+
+
+class PublicWordImportEventCandidate(BaseModel):
+    event_id: uuid.UUID
+    title: str
+    event_date: date
+    event_end_date: date | None = None
+    score: float = 0.0
+    reason: str = ""
+
+
+class PublicWordImportAttendanceCandidate(BaseModel):
+    participant_id: uuid.UUID
+    score: float = 0.0
+    reason: str = ""
+
+
+class PublicWordImportNameResolution(BaseModel):
+    raw_name: str
+    participant_id: uuid.UUID | None = None
+    create_new: bool = False
+    no_link: bool = False
+    originally_suggested_participant_id: uuid.UUID | None = None
+    originally_suggested_score: float | None = None
+    candidates: list[PublicWordImportAttendanceCandidate] = Field(default_factory=list)
+
+
+class PublicWordImportFormFieldValue(BaseModel):
+    row_id: str
+    label: str
+    row_type: str
+    raw_value: str = ""
+    names: list[PublicWordImportNameResolution] = Field(default_factory=list)
+
+
+class PublicWordImportTextMapping(BaseModel):
+    extracted_heading: str
+    extracted_text: str
+    template_element_id: uuid.UUID | None = None
+    block_sort_index: int | None = None
+    confidence: float = 0.0
+    is_event_repeat: bool = False
+    matched_event_id: uuid.UUID | None = None
+    event_candidates: list[PublicWordImportEventCandidate] = Field(default_factory=list)
+    is_form_block: bool = False
+    form_fields: list[PublicWordImportFormFieldValue] = Field(default_factory=list)
+    form_fields_by_target: dict[str, list[PublicWordImportFormFieldValue]] = Field(default_factory=dict)
+    sync_target_field: str | None = None
+    sync_field_status: Literal["empty", "match", "conflict"] | None = None
+    sync_field_existing_value: str | None = None
+    remembered_create_new: bool = False
+    remembered_dismissed: bool = False
+
+
+class PublicWordImportTextTarget(BaseModel):
+    template_element_id: uuid.UUID
+    block_sort_index: int
+    label: str
+    is_event_repeat: bool = False
+    is_form_block: bool = False
+    form_rows: list[WordImportFormRow] = Field(default_factory=list)
+
+
+class PublicWordImportAttendanceMapping(BaseModel):
+    raw_name: str
+    status: str = "present"
+    suggested_participant_id: uuid.UUID | None = None
+    candidates: list[PublicWordImportAttendanceCandidate] = Field(default_factory=list)
+    remembered_no_link: bool = False
+
+
+class PublicWordImportEventMapping(BaseModel):
+    row_index: int
+    raw_title: str
+    raw_date: date | None = None
+    raw_end_date: date | None = None
+    status: EventMatchStatus
+    matched_event_id: uuid.UUID | None = None
+    matched_event_title: str | None = None
+    matched_event_date: date | None = None
+    matched_event_end_date: date | None = None
+    candidates: list[PublicWordImportEventCandidate] = Field(default_factory=list)
+    tag: str | None = None
+    participant_count: int | None = None
+    matrix_key: str | None = None
+    matrix_title: str | None = None
+    row_id: str | None = None
+    row_label: str | None = None
+    column_key: str | None = None
+    column_label: str | None = None
+    remembered_title_source: Literal["doc", "existing"] | None = None
+    remembered_date_source: Literal["doc", "existing"] | None = None
+    remembered_dismissed: bool = False
+
+
+class PublicWordImportListDefinitionOption(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
+class PublicWordImportListEntryCandidate(BaseModel):
+    entry_id: uuid.UUID
+    column_one_display: str
+    column_two_display: str
+    score: float = 0.0
+    reason: str = ""
+
+
+class PublicWordImportListRowMapping(BaseModel):
+    table_index: int
+    row_index: int
+    column_one_raw: str
+    column_two_raw: str
+    column_one_type: str
+    column_two_type: str
+    status: ListRowStatus
+    matched_entry_id: uuid.UUID | None = None
+    column_one_names: list[PublicWordImportNameResolution] = Field(default_factory=list)
+    column_two_names: list[PublicWordImportNameResolution] = Field(default_factory=list)
+    candidates: list[PublicWordImportListEntryCandidate] = Field(default_factory=list)
+    has_snapshot_target: bool = True
+    group_filled: bool = False
+
+
+class PublicWordImportMatrixCellMapping(BaseModel):
+    table_index: int
+    matrix_key: str
+    matrix_title: str
+    row_id: str
+    row_label: str
+    row_label_raw: str
+    row_type: str
+    column_label_raw: str
+    column_key: str | None = None
+    column_candidates: list[WordImportMatrixColumnCandidate] = Field(default_factory=list)
+    raw_value: str
+    names: list[PublicWordImportNameResolution] = Field(default_factory=list)
+
+
+class PublicWordImportDuplicateProtocol(BaseModel):
+    id: uuid.UUID
+    protocol_number: str
+    title: str | None = None
+    protocol_date: date
+
+
+class PublicWordImportAnalysis(BaseModel):
+    protocol_date: date | None = None
+    tables: list[PublicTablePreview] = Field(default_factory=list)
+    text_mappings: list[PublicWordImportTextMapping] = Field(default_factory=list)
+    text_targets: list[PublicWordImportTextTarget] = Field(default_factory=list)
+    attendance_mappings: list[PublicWordImportAttendanceMapping] = Field(default_factory=list)
+    event_mappings: list[PublicWordImportEventMapping] = Field(default_factory=list)
+    list_definitions: list[PublicWordImportListDefinitionOption] = Field(default_factory=list)
+    list_mappings: list[PublicWordImportListRowMapping] = Field(default_factory=list)
+    matrix_options: list[WordImportMatrixOption] = Field(default_factory=list)
+    matrix_mappings: list[PublicWordImportMatrixCellMapping] = Field(default_factory=list)
+    profile_applied: bool = False
+    warnings: list[str] = Field(default_factory=list)
+    duplicate_protocols: list[PublicWordImportDuplicateProtocol] = Field(default_factory=list)
+
+
+class PublicWordImportTextCommit(BaseModel):
+    extracted_heading: str
+    content: str
+    template_element_id: uuid.UUID | None = None
+    block_sort_index: int | None = None
+    is_event_repeat: bool = False
+    linked_event_id: uuid.UUID | None = None
+    is_form_block: bool = False
+    form_fields: list[PublicWordImportFormFieldValue] = Field(default_factory=list)
+    dismissed: bool = False
+    create_new: bool = False
+    sync_field_source: Literal["doc", "existing"] | None = None
+
+
+class PublicWordImportAttendanceCommit(BaseModel):
+    raw_name: str
+    participant_id: uuid.UUID | None = None
+    participant_name: str
+    status: str
+    create_new: bool = False
+    originally_suggested_participant_id: uuid.UUID | None = None
+    originally_suggested_score: float | None = None
+
+
+class PublicWordImportEventCommit(BaseModel):
+    approved: bool
+    linked_event_id: uuid.UUID | None = None
+    final_title: str
+    final_date: date
+    final_end_date: date | None = None
+    raw_title: str
+    raw_date: date | None = None
+    raw_end_date: date | None = None
+    tag: str | None = None
+    participant_count: int | None = None
+    originally_suggested_event_id: uuid.UUID | None = None
+    originally_suggested_score: float | None = None
+
+
+class PublicWordImportListRowCommit(BaseModel):
+    table_index: int
+    list_definition_id: uuid.UUID
+    column_one_raw: str
+    column_two_raw: str
+    column_one_names: list[PublicWordImportNameResolution] = Field(default_factory=list)
+    column_two_names: list[PublicWordImportNameResolution] = Field(default_factory=list)
+    approved: bool
+    linked_entry_id: uuid.UUID | None = None
+    originally_suggested_entry_id: uuid.UUID | None = None
+    originally_suggested_score: float | None = None
+
+
+class PublicWordImportMatrixCellCommit(BaseModel):
+    matrix_key: str
+    row_id: str
+    row_type: str
+    column_key: str
+    column_label: str
+    column_label_raw: str
+    raw_value: str
+    names: list[PublicWordImportNameResolution] = Field(default_factory=list)
+    approved: bool
+    originally_suggested_column_key: str | None = None
+    originally_suggested_score: float | None = None
+
+
+class PublicWordImportTableRoleCommit(BaseModel):
+    header_signature: str
+    role: TableRole
+    list_definition_id: uuid.UUID | None = None
+    matrix_key: str | None = None
+    list_grouping_strategy: str | None = None
+    originally_suggested_role: TableRole | None = None
+    originally_suggested_score: float | None = None
+
+
+class PublicWordImportCommit(BaseModel):
+    template_id: uuid.UUID
+    protocol_date: date
+    texts: list[PublicWordImportTextCommit] = Field(default_factory=list)
+    attendance: list[PublicWordImportAttendanceCommit] = Field(default_factory=list)
+    events: list[PublicWordImportEventCommit] = Field(default_factory=list)
+    dismissed_events: list[WordImportEventIgnore] = Field(default_factory=list)
+    lists: list[PublicWordImportListRowCommit] = Field(default_factory=list)
+    matrices: list[PublicWordImportMatrixCellCommit] = Field(default_factory=list)
+    tables: list[PublicWordImportTableRoleCommit] = Field(default_factory=list)
+
+
+class PublicWordImportCommitResult(BaseModel):
+    id: uuid.UUID
+    warnings: list[str] = Field(default_factory=list)
+
+
+class PublicWordImportDuplicateCandidate(BaseModel):
+    id: uuid.UUID
+    display_name: str
+    original_filename: str
+    status: WordImportDocumentStatus
+    protocol_id: uuid.UUID | None = None
+
+
+class PublicWordImportDocumentSummary(BaseModel):
+    id: uuid.UUID
+    template_id: uuid.UUID
+    template_name: str
+    display_name: str
+    original_filename: str
+    status: WordImportDocumentStatus
+    protocol_id: uuid.UUID | None = None
+    protocol_date: date | None = None
+    created_at: datetime
+    imported_at: datetime | None = None
+    stored_file_id: uuid.UUID
+    duplicates: list[PublicWordImportDuplicateCandidate] = Field(default_factory=list)
+
+
+class PublicWordImportDocumentDetail(PublicWordImportDocumentSummary):
+    analysis: PublicWordImportAnalysis
+    review_draft: dict[str, Any] = Field(default_factory=dict)
+
+
+class PublicWordImportDocumentUploadResult(BaseModel):
+    documents: list[PublicWordImportDocumentSummary] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+
+
+class PublicWordImportLastTemplate(BaseModel):
+    template_id: uuid.UUID | None = None

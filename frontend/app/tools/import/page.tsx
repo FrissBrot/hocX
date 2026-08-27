@@ -2,18 +2,16 @@ import { AppShell } from "@/components/ui/app-shell";
 import { WordImportQueueView } from "@/components/tools/word-import-queue-view";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { WordImportDocumentSummary } from "@/lib/api/word-import";
-import { ParticipantSummary, TemplateSummary } from "@/types/api";
+import { TemplateSummary } from "@/types/api";
 
 export default async function WordImportQueuePage() {
   const session = await requireSession();
-  const [templates, participants, documents, lastTemplate] = await Promise.all([
+  const [templates, documents, lastTemplate] = await Promise.all([
     backendFetchWithSession<TemplateSummary[]>("/api/templates"),
-    backendFetchWithSession<ParticipantSummary[]>("/api/participants"),
     backendFetchWithSession<WordImportDocumentSummary[]>("/api/tools/word-import/documents"),
-    backendFetchWithSession<{ template_id: number | null }>("/api/tools/word-import/last-template"),
+    backendFetchWithSession<{ template_id: string | null }>("/api/tools/word-import/last-template"),
   ]);
   const activeTemplates = (templates ?? []).filter((template) => template.status === "active");
-  const activeParticipants = (participants ?? []).filter((participant) => participant.is_active);
 
   return (
     <AppShell initialSession={session}>
@@ -30,7 +28,6 @@ export default async function WordImportQueuePage() {
         </div>
         <WordImportQueueView
           templates={activeTemplates}
-          participants={activeParticipants}
           initialDocuments={documents ?? []}
           initialTemplateId={lastTemplate?.template_id ?? null}
         />
