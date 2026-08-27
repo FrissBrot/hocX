@@ -57,7 +57,7 @@ from app.services.tenant_transfer_common import (
     remap_template_element_config,
 )
 
-_ALWAYS_EXCLUDE = {"id", "created_at", "updated_at"}
+_ALWAYS_EXCLUDE = {"id", "public_id", "created_at", "updated_at"}
 _logger = logging.getLogger(__name__)
 
 

@@ -3,7 +3,7 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Event, EventCategory, Protocol, ProtocolElement, ProtocolElementBlock, Template
+from app.models import ElementDefinition, Event, EventCategory, Protocol, ProtocolElement, ProtocolElementBlock, Template, TemplateElement, TemplateElementBlock
 from app.repositories.protocol_element_repository import (
     ProtocolElementBlockRepository,
     ProtocolElementRepository,
@@ -14,6 +14,7 @@ from app.schemas.protocol import (
     ProtocolElementRead,
     ProtocolElementUpdate,
 )
+from app.services import public_id_service
 from app.services.responsible_label_service import resolve_display_section_titles_batch
 
 
@@ -56,10 +57,14 @@ class ProtocolElementService:
                         config[fine_key] = fine_source[fine_key]
             blocks_by_element.setdefault(block.protocol_element_id, []).append(
                 ProtocolElementBlockRead(
-                    id=block.id,
-                    protocol_element_id=block.protocol_element_id,
-                    template_element_block_id=block.template_element_block_id,
-                    element_definition_id=block.element_definition_id,
+                    id=block.public_id,
+                    protocol_element_id=public_id_service.resolve_public_id(db, ProtocolElement, block.protocol_element_id),
+                    template_element_block_id=public_id_service.resolve_public_id(db, TemplateElementBlock, block.template_element_block_id)
+                    if block.template_element_block_id is not None
+                    else None,
+                    element_definition_id=public_id_service.resolve_public_id(db, ElementDefinition, block.element_definition_id)
+                    if block.element_definition_id is not None
+                    else None,
                     element_type_id=block.element_type_id,
                     render_type_id=block.render_type_id,
                     element_type_code=row.element_type_code,
@@ -88,9 +93,11 @@ class ProtocolElementService:
 
         return [
             ProtocolElementRead(
-                id=element.id,
-                protocol_id=element.protocol_id,
-                template_element_id=element.template_element_id,
+                id=element.public_id,
+                protocol_id=public_id_service.resolve_public_id(db, Protocol, element.protocol_id),
+                template_element_id=public_id_service.resolve_public_id(db, TemplateElement, element.template_element_id)
+                if element.template_element_id is not None
+                else None,
                 sort_index=element.sort_index,
                 section_name_snapshot=section_titles_by_element_id[element.id],
                 section_order_snapshot=element.section_order_snapshot,

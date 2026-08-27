@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import os
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -15,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db import get_db
 from app.models import AppUser, Role, Tenant, UserMfaFactor, UserTenantRole
+from app.services import public_id_service
 
 
 PASSWORD_SCHEME = "pbkdf2_sha256"
@@ -24,6 +26,7 @@ PASSWORD_ITERATIONS = 600000
 @dataclass
 class TenantMembership:
     tenant_id: int
+    tenant_public_id: uuid.UUID
     tenant_name: str
     tenant_profile_image_path: str | None
     role_code: str
@@ -33,6 +36,7 @@ class TenantMembership:
 @dataclass
 class CurrentUser:
     user_id: int
+    user_public_id: uuid.UUID
     first_name: str
     last_name: str
     display_name: str
@@ -40,7 +44,9 @@ class CurrentUser:
     preferred_language: str
     is_participant_account: bool
     default_tenant_id: int | None
+    default_tenant_public_id: uuid.UUID | None
     current_tenant_id: int | None
+    current_tenant_public_id: uuid.UUID | None
     current_tenant_name: str | None
     current_tenant_profile_image_path: str | None
     current_role: str | None
@@ -150,6 +156,7 @@ def _load_memberships(db: Session, user_id: int) -> list[TenantMembership]:
     return [
         TenantMembership(
             tenant_id=tenant.id,
+            tenant_public_id=tenant.public_id,
             tenant_name=tenant.name,
             tenant_profile_image_path=tenant.profile_image_path,
             role_code=role.code,
@@ -170,8 +177,16 @@ def build_current_user(db: Session, user: AppUser, selected_tenant_id: int | Non
     if current_membership is None and memberships:
         current_membership = memberships[0]
 
+    default_tenant_public_id = None
+    if user.default_tenant_id is not None:
+        default_tenant_public_id = next(
+            (m.tenant_public_id for m in memberships if m.tenant_id == user.default_tenant_id),
+            None,
+        ) or public_id_service.resolve_public_id(db, Tenant, user.default_tenant_id)
+
     return CurrentUser(
         user_id=user.id,
+        user_public_id=user.public_id,
         first_name=user.first_name,
         last_name=user.last_name,
         display_name=user.display_name,
@@ -180,6 +195,7 @@ def build_current_user(db: Session, user: AppUser, selected_tenant_id: int | Non
         protocol_accordion_enabled=(user.external_identity_json or {}).get("protocol_accordion_enabled", True) is not False,
         is_participant_account=(user.external_identity_json or {}).get("source") == "participant_auto",
         default_tenant_id=user.default_tenant_id,
+        default_tenant_public_id=default_tenant_public_id,
         # current_membership is only ever None here if the user has zero active tenant
         # roles at all (a matching default_tenant_id membership, if active, was already
         # picked up above) - falling back to the possibly-stale default_tenant_id in that
@@ -187,6 +203,7 @@ def build_current_user(db: Session, user: AppUser, selected_tenant_id: int | Non
         # current_role, a "phantom tenant" state that only every endpoint's separate
         # current_role check happens to make harmless today (audit finding, 2026-08-25).
         current_tenant_id=current_membership.tenant_id if current_membership else None,
+        current_tenant_public_id=current_membership.tenant_public_id if current_membership else None,
         current_tenant_name=current_membership.tenant_name if current_membership else None,
         current_tenant_profile_image_path=current_membership.tenant_profile_image_path if current_membership else None,
         current_role=current_membership.role_code if current_membership else None,

@@ -224,7 +224,7 @@ def test_import_zip_aborts_when_stored_file_manifest_entry_uses_path_traversal(d
     evil_zip = tmp_path / "traversal-manifest.zip"
     with zipfile.ZipFile(evil_zip, "w") as zf:
         manifest = {
-            "format_version": 1,
+            "format_version": 2,
             "scope": "full",
             "tables": {
                 "tenant": {"id": 1, "name": "Attacker Tenant"},
@@ -296,7 +296,7 @@ def test_import_zip_forces_pending_scan_status_despite_manifest_claiming_clean(d
     evil_zip = tmp_path / "spoofed-scan-status.zip"
     with zipfile.ZipFile(evil_zip, "w") as zf:
         manifest = {
-            "format_version": 1,
+            "format_version": 2,
             "scope": "full",
             "tables": {
                 "tenant": {"id": 1, "name": "Attacker Tenant"},
@@ -346,16 +346,18 @@ def test_s1_export_latex_rejects_protocol_from_foreign_tenant(db):
     user_a = make_current_user(tenant_a.id, role="admin")
 
     with pytest.raises(HTTPException) as exc_info:
-        exports_route.export_latex(protocol_b.id, request=None, db=db, user=user_a)
-    assert exc_info.value.status_code == 403
+        exports_route.export_latex(protocol_b.public_id, request=None, db=db, user=user_a)
+    # Tenant-scoped public_id resolution now rejects a foreign tenant's protocol id before
+    # the object-level access check ever runs, so it's 404 (not-found), not 403.
+    assert exc_info.value.status_code == 404
 
 
 def test_s1_export_latex_tenant_check_passes_through_for_own_tenant_protocol(db):
     """Sanity check that the new access check doesn't break same-tenant access: a Tenant-A
     admin exporting their own protocol must get past the tenant check. The protocol has no
     materialized document-template snapshot, so it still fails - but with a 404 ValueError
-    from deeper in the service (not the 403 the cross-tenant case gets), proving the tenant
-    check itself passed."""
+    from deeper in the service, proving the tenant check itself passed (rather than a 404
+    from public_id resolution itself, as the cross-tenant case gets)."""
     from app.api.routes import exports as exports_route
     from tests.factories import make_current_user
 
@@ -369,7 +371,7 @@ def test_s1_export_latex_tenant_check_passes_through_for_own_tenant_protocol(db)
     user_a = make_current_user(tenant_a.id, role="admin")
 
     with pytest.raises(HTTPException) as exc_info:
-        exports_route.export_latex(protocol_a.id, request=None, db=db, user=user_a)
+        exports_route.export_latex(protocol_a.public_id, request=None, db=db, user=user_a)
     assert exc_info.value.status_code == 404
 
 
@@ -413,8 +415,8 @@ def test_s2_export_global_list_rejects_list_definition_from_foreign_tenant(db):
     user_a = make_current_user(tenant_a.id, role="admin")
 
     body = exports_route.GlobalListExportRequest(
-        template_id=doc_template_a.id,
-        list_definition_id=list_def_b.id,
+        template_id=doc_template_a.public_id,
+        list_definition_id=list_def_b.public_id,
     )
 
     with pytest.raises(HTTPException) as exc_info:
@@ -510,13 +512,13 @@ def test_create_element_definition_rejects_linked_list_from_foreign_tenant(db):
                 element_type_id=11,
                 render_type_id=5,
                 sort_index=1,
-                configuration_json={"linked_list_id": foreign_list.id},
+                configuration_json={"linked_list_id": foreign_list.public_id},
             )
         ],
     )
 
     service = ElementDefinitionService()
-    with pytest.raises(ValueError, match="Linked list"):
+    with pytest.raises(ValueError, match="ListDefinition"):
         service.create_element_definition(db, payload, tenant_id=tenant_a.id)
 
 
@@ -537,22 +539,24 @@ def test_create_element_definition_accepts_linked_list_from_own_tenant(db):
                 element_type_id=11,
                 render_type_id=5,
                 sort_index=1,
-                configuration_json={"linked_list_id": own_list.id},
+                configuration_json={"linked_list_id": own_list.public_id},
             )
         ],
     )
 
     service = ElementDefinitionService()
     result = service.create_element_definition(db, payload, tenant_id=tenant_a.id)
-    assert result.blocks[0].configuration_json["linked_list_id"] == own_list.id
+    assert result.blocks[0].configuration_json["linked_list_id"] == own_list.public_id
 
 
 def test_update_element_definition_rejects_linked_list_from_foreign_tenant(db):
+    from app.models import ElementDefinition
     from app.schemas.template import (
         ElementDefinitionBlockCreate,
         ElementDefinitionCreate,
         ElementDefinitionUpdate,
     )
+    from app.services import public_id_service
     from app.services.element_definition_service import ElementDefinitionService
     from tests.factories import make_list_definition
 
@@ -578,9 +582,10 @@ def test_update_element_definition_rejects_linked_list_from_foreign_tenant(db):
         blocks=[
             ElementDefinitionBlockCreate(
                 id=1, title="Matrix", element_type_id=11, render_type_id=5, sort_index=1,
-                configuration_json={"linked_list_id": foreign_list.id},
+                configuration_json={"linked_list_id": foreign_list.public_id},
             )
         ]
     )
-    with pytest.raises(ValueError, match="Linked list"):
-        service.update_element_definition(db, created.id, update_payload)
+    created_internal_id = public_id_service.resolve_internal_id(db, ElementDefinition, created.id)
+    with pytest.raises(ValueError, match="ListDefinition"):
+        service.update_element_definition(db, created_internal_id, update_payload)

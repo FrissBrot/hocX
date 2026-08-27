@@ -11,6 +11,7 @@ from app.models import AppUser, ListDefinition, ListEntry, Participant, Role, Te
 from app.repositories.participant_repository import ParticipantRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.participant import ParticipantCreate, ParticipantImportResult, ParticipantUpdate
+from app.services import public_id_service
 from app.services.access_service import AccessService
 
 
@@ -143,11 +144,15 @@ class ParticipantService:
             )
 
     def create_participant(self, db: Session, payload: ParticipantCreate, *, tenant_id: int) -> Participant:
+        app_user_id: int | None = None
         if payload.app_user_id is not None:
-            self._ensure_app_user_belongs_to_tenant(db, payload.app_user_id, tenant_id=tenant_id)
+            app_user_id = public_id_service.resolve_internal_id(db, AppUser, payload.app_user_id)
+            if app_user_id is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App user not found")
+            self._ensure_app_user_belongs_to_tenant(db, app_user_id, tenant_id=tenant_id)
         participant = Participant(
             tenant_id=tenant_id,
-            app_user_id=payload.app_user_id,
+            app_user_id=app_user_id,
             first_name=payload.first_name,
             last_name=payload.last_name,
             display_name=payload.display_name,

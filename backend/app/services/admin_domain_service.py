@@ -52,8 +52,8 @@ class AdminDomainService:
         rows = query.all()
         items = [
             AdminDomainRead(
-                id=domain.id,
-                tenant_id=tenant.id,
+                id=domain.public_id,
+                tenant_id=tenant.public_id,
                 tenant_name=tenant.name,
                 purpose=domain.purpose,
                 domain=domain.domain,

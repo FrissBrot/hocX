@@ -66,7 +66,7 @@ def test_k1_patch_protocol_element_blocked_when_frozen(db):
     user = make_current_user(tenant.id)
 
     with pytest.raises(HTTPException) as exc_info:
-        protocol_elements.patch_protocol_element(element.id, ProtocolElementUpdate(sort_index=99), db=db, user=user)
+        protocol_elements.patch_protocol_element(element.public_id, ProtocolElementUpdate(sort_index=99), db=db, user=user)
     assert exc_info.value.status_code == 409
 
 
@@ -79,7 +79,7 @@ def test_k1_delete_protocol_element_block_blocked_when_frozen(db):
     user = make_current_user(tenant.id)
 
     with pytest.raises(HTTPException) as exc_info:
-        protocol_elements.delete_protocol_element_block(block.id, db=db, user=user)
+        protocol_elements.delete_protocol_element_block(block.public_id, db=db, user=user)
     assert exc_info.value.status_code == 409
     # Block must still exist - the guard needs to reject before the delete runs.
     assert db.get(type(block), block.id) is not None
@@ -95,7 +95,7 @@ def test_k1_create_block_from_event_blocked_when_frozen(db):
 
     with pytest.raises(HTTPException) as exc_info:
         protocol_elements.create_protocol_element_block_from_event(
-            element.id, ProtocolElementBlockFromEventCreate(event_id=event.id), db=db, user=user,
+            element.public_id, ProtocolElementBlockFromEventCreate(event_id=event.public_id), db=db, user=user,
         )
     assert exc_info.value.status_code == 409
 
@@ -128,7 +128,7 @@ def test_k2_create_protocol_element_block_from_event_route_rejects_foreign_tenan
 
     with pytest.raises(HTTPException) as exc_info:
         protocol_elements.create_protocol_element_block_from_event(
-            element.id, ProtocolElementBlockFromEventCreate(event_id=foreign_event.id), db=db, user=user,
+            element.public_id, ProtocolElementBlockFromEventCreate(event_id=foreign_event.public_id), db=db, user=user,
         )
     assert exc_info.value.status_code == 400
 
@@ -144,7 +144,9 @@ def test_k2_create_from_template_rejects_foreign_tenant_event_id(db):
     with pytest.raises(ValueError, match="Event does not belong to current tenant"):
         ProtocolService().create_from_template(
             db,
-            ProtocolCreateFromTemplate(template_id=template.id, protocol_date=date(2026, 1, 1), event_id=foreign_event.id),
+            ProtocolCreateFromTemplate(
+                template_id=template.public_id, protocol_date=date(2026, 1, 1), event_id=foreign_event.public_id
+            ),
             tenant_id=tenant_a.id,
             created_by=None,
         )
@@ -158,7 +160,7 @@ def test_k2_update_protocol_rejects_foreign_tenant_event_id(db):
     foreign_event = make_event(db, tenant_b.id, title="Fremdes Event")
 
     with pytest.raises(ValueError, match="Event does not belong to current tenant"):
-        ProtocolService().update_protocol(db, protocol.id, ProtocolUpdate(event_id=foreign_event.id))
+        ProtocolService().update_protocol(db, protocol.id, ProtocolUpdate(event_id=foreign_event.public_id))
 
 
 # --- K3: Cross-Tenant-FK-Injection: fremde Dokumentvorlage per PATCH einschleusen -----------
@@ -171,7 +173,9 @@ def test_k3_update_template_rejects_foreign_tenant_document_template(db):
     foreign_doc_template = _make_document_template(db, tenant_b.id)
 
     with pytest.raises(ValueError, match="document_template_id does not belong to current tenant"):
-        TemplateService().update_template(db, template.id, TemplateUpdate(document_template_id=foreign_doc_template.id))
+        TemplateService().update_template(
+            db, template.id, TemplateUpdate(document_template_id=foreign_doc_template.public_id)
+        )
 
 
 def test_k3_update_protocol_rejects_foreign_tenant_document_template(db):
@@ -181,8 +185,10 @@ def test_k3_update_protocol_rejects_foreign_tenant_document_template(db):
     protocol = make_protocol(db, tenant_a.id, template.id)
     foreign_doc_template = _make_document_template(db, tenant_b.id)
 
-    with pytest.raises(ValueError, match="Document template not found"):
-        ProtocolService().update_protocol(db, protocol.id, ProtocolUpdate(document_template_id=foreign_doc_template.id))
+    with pytest.raises(ValueError, match="Document template does not belong to current tenant"):
+        ProtocolService().update_protocol(
+            db, protocol.id, ProtocolUpdate(document_template_id=foreign_doc_template.public_id)
+        )
 
 
 # --- K4: Kein Freeze-Schutz beim Löschen ganzer Protokolle + kein Audit-Log -----------------
@@ -205,7 +211,7 @@ def test_k4_delete_protocol_writes_audit_log(db):
     protocol_id = protocol.id
     user = make_current_user(tenant.id)
 
-    result = protocols_route.delete_protocol(protocol_id, db=db, user=user)
+    result = protocols_route.delete_protocol(protocol.public_id, db=db, user=user)
     assert result == {"message": "Protocol deleted"}
 
     rows = db.execute(
@@ -374,7 +380,7 @@ def test_k8_create_event_rolls_back_on_foreign_cycle_config(db):
             db,
             EventCreate(
                 event_date=date(2026, 1, 1), title="Testanlass",
-                cycle_assignments=[CycleAssignment(cycle_config_id=foreign_cycle.id, cycle_year=2026)],
+                cycle_assignments=[CycleAssignment(cycle_config_id=foreign_cycle.public_id, cycle_year=2026)],
             ),
             tenant_id=tenant_a.id,
         )

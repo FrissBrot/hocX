@@ -1,7 +1,10 @@
+import uuid
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import ProtocolImage, StoredFile
+from app.services import public_id_service
 
 
 class StoredFileRepository:
@@ -16,6 +19,9 @@ class StoredFileRepository:
 
     def get(self, db: Session, stored_file_id: int) -> StoredFile | None:
         return db.get(StoredFile, stored_file_id)
+
+    def get_by_public_id(self, db: Session, public_id: uuid.UUID, *, tenant_id: int) -> StoredFile | None:
+        return public_id_service.get_by_public_id(db, StoredFile, public_id, tenant_id=tenant_id)
 
     def delete(self, db: Session, stored_file: StoredFile) -> None:
         db.delete(stored_file)
@@ -76,6 +82,13 @@ class ProtocolImageRepository:
 
     def get(self, db: Session, image_id: int) -> ProtocolImage | None:
         return db.get(ProtocolImage, image_id)
+
+    def get_by_public_id(self, db: Session, public_id: uuid.UUID) -> ProtocolImage | None:
+        # ProtocolImage has no tenant_id column of its own (scoped transitively via
+        # protocol_element_block -> protocol_element -> protocol) - callers must verify
+        # tenant/access via access_repository on the resolved row, same as for the
+        # numeric-id path this replaces.
+        return public_id_service.get_by_public_id(db, ProtocolImage, public_id)
 
     def delete(self, db: Session, protocol_image: ProtocolImage) -> None:
         db.delete(protocol_image)

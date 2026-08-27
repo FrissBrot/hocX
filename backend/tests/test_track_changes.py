@@ -55,11 +55,11 @@ def test_text_edit_pins_baseline_once_and_marks_dirty(db):
     block = _block(db, protocol)
     user = make_current_user(tenant.id)
 
-    result1 = protocol_elements.put_protocol_text(block.id, ProtocolTextUpdate(content="v1"), db=db, user=user)
+    result1 = protocol_elements.put_protocol_text(block.public_id, ProtocolTextUpdate(content="v1"), db=db, user=user)
     assert result1.tracked_dirty is True
     assert result1.tracked_baseline_content == ""
 
-    result2 = protocol_elements.put_protocol_text(block.id, ProtocolTextUpdate(content="v2"), db=db, user=user)
+    result2 = protocol_elements.put_protocol_text(block.public_id, ProtocolTextUpdate(content="v2"), db=db, user=user)
     assert result2.tracked_dirty is True
     assert result2.tracked_baseline_content == ""  # still the ORIGINAL value, not "v1"
     assert result2.content == "v2"
@@ -71,7 +71,7 @@ def test_text_edit_when_not_active_is_unmarked(db):
     block = _block(db, protocol)
     user = make_current_user(tenant.id)
 
-    result = protocol_elements.put_protocol_text(block.id, ProtocolTextUpdate(content="v1"), db=db, user=user)
+    result = protocol_elements.put_protocol_text(block.public_id, ProtocolTextUpdate(content="v1"), db=db, user=user)
     assert result.tracked_dirty is False
     assert result.tracked_baseline_content is None
 
@@ -85,7 +85,7 @@ def test_text_edit_while_vorbereitet_is_unmarked(db):
     user = make_current_user(tenant.id)
     protocol_service.update_protocol(db, protocol.id, ProtocolUpdate(status="vorbereitet"))
 
-    result = protocol_elements.put_protocol_text(block.id, ProtocolTextUpdate(content="v1"), db=db, user=user)
+    result = protocol_elements.put_protocol_text(block.public_id, ProtocolTextUpdate(content="v1"), db=db, user=user)
     assert result.tracked_dirty is False
     assert result.tracked_baseline_content is None
 
@@ -96,9 +96,9 @@ def test_text_toggle_off_mid_geplant_stops_new_marking_without_erasing(db):
     block = _block(db, protocol)
     user = make_current_user(tenant.id)
 
-    protocol_elements.put_protocol_text(block.id, ProtocolTextUpdate(content="v1"), db=db, user=user)
+    protocol_elements.put_protocol_text(block.public_id, ProtocolTextUpdate(content="v1"), db=db, user=user)
     protocol_service.update_protocol(db, protocol.id, ProtocolUpdate(track_changes_enabled=False))
-    result = protocol_elements.put_protocol_text(block.id, ProtocolTextUpdate(content="v2"), db=db, user=user)
+    result = protocol_elements.put_protocol_text(block.public_id, ProtocolTextUpdate(content="v2"), db=db, user=user)
 
     assert result.tracked_dirty is True  # existing mark persists
     assert result.tracked_baseline_content == ""  # untouched
@@ -113,12 +113,12 @@ def test_todo_created_while_active_and_deleted_hard_deletes(db):
     block = _block(db, protocol, element_type_code="todo")
     user = make_current_user(tenant.id)
 
-    created = todos.create_todo(block.id, ProtocolTodoCreate(task="New todo"), db=db, user=user)
+    created = todos.create_todo(block.public_id, ProtocolTodoCreate(task="New todo"), db=db, user=user)
     assert created.tracked_change == "added"
 
     result = todos.delete_todo(created.id, db=db, user=user)
     assert result["pending_delete"] is False
-    assert todo_service.repository.get(db, created.id) is None
+    assert todo_service.repository.get_by_public_id(db, created.id, tenant_id=tenant.id) is None
 
 
 def test_todo_updated_while_active_pins_original_before_value(db):
@@ -128,8 +128,8 @@ def test_todo_updated_while_active_pins_original_before_value(db):
     todo = make_protocol_todo(db, block.id, task="Original")
     user = make_current_user(tenant.id)
 
-    todos.patch_todo(todo.id, ProtocolTodoUpdate(task="Edit 1"), db=db, user=user)
-    result = todos.patch_todo(todo.id, ProtocolTodoUpdate(task="Edit 2"), db=db, user=user)
+    todos.patch_todo(todo.public_id, ProtocolTodoUpdate(task="Edit 1"), db=db, user=user)
+    result = todos.patch_todo(todo.public_id, ProtocolTodoUpdate(task="Edit 2"), db=db, user=user)
 
     assert result.tracked_change == "changed"
     assert result.tracked_change_before_json["task"] == "Original"
@@ -143,7 +143,7 @@ def test_todo_deleted_while_active_soft_deletes_and_is_filtered_from_global_list
     todo = make_protocol_todo(db, block.id, task="Pre-existing")
     user = make_current_user(tenant.id)
 
-    result = todos.delete_todo(todo.id, db=db, user=user)
+    result = todos.delete_todo(todo.public_id, db=db, user=user)
     assert result["pending_delete"] is True
     assert result["todo"].pending_delete is True
 
@@ -162,7 +162,7 @@ def test_todo_toggle_off_mid_geplant_stops_new_marking(db):
     user = make_current_user(tenant.id)
 
     protocol_service.update_protocol(db, protocol.id, ProtocolUpdate(track_changes_enabled=False))
-    result = todos.patch_todo(todo.id, ProtocolTodoUpdate(task="Edit"), db=db, user=user)
+    result = todos.patch_todo(todo.public_id, ProtocolTodoUpdate(task="Edit"), db=db, user=user)
     assert result.tracked_change is None
     assert result.task == "Edit"
 
@@ -186,12 +186,12 @@ def _row_link_block(db, protocol, list_definition_id, list_entry_id):
             }],
         },
     )
-    return list_snapshot_service.refresh_block_list_snapshot(db, block, keep_undo=False, track_changes_active=False)
+    return list_snapshot_service.refresh_block_list_snapshot(db, block, protocol.tenant_id, keep_undo=False, track_changes_active=False)
 
 
 def _whole_list_block(db, protocol, list_definition_id):
     block = _block(db, protocol, configuration={"linked_list_id": list_definition_id})
-    return list_snapshot_service.refresh_block_list_snapshot(db, block, keep_undo=False, track_changes_active=False)
+    return list_snapshot_service.refresh_block_list_snapshot(db, block, protocol.tenant_id, keep_undo=False, track_changes_active=False)
 
 
 def test_whole_list_sync_marks_added_changed_removed_and_is_stable_across_repeat_syncs(db):
@@ -205,7 +205,7 @@ def test_whole_list_sync_marks_added_changed_removed_and_is_stable_across_repeat
     user = make_current_user(tenant.id)
 
     # Baseline sync (nothing changed yet relative to itself).
-    protocol_elements.sync_block_list_snapshot(block.id, db=db, user=user)
+    protocol_elements.sync_block_list_snapshot(block.public_id, db=db, user=user)
 
     to_change.column_one_value_json = {"text_value": "after"}
     db.add(to_change)
@@ -213,7 +213,7 @@ def test_whole_list_sync_marks_added_changed_removed_and_is_stable_across_repeat
     db.delete(to_remove)
     db.commit()
 
-    result = protocol_elements.sync_block_list_snapshot(block.id, db=db, user=user)
+    result = protocol_elements.sync_block_list_snapshot(block.public_id, db=db, user=user)
     entries = {e["id"]: e for e in result.configuration_snapshot_json["list_snapshot"]["entries"]}
 
     assert entries[kept.id].get("_tracked") is None
@@ -225,7 +225,7 @@ def test_whole_list_sync_marks_added_changed_removed_and_is_stable_across_repeat
     assert removed[0]["column_one_value"]["text_value"] == "gone-soon"
 
     # A second, no-op sync must not lose the markers or duplicate the removed phantom.
-    again = protocol_elements.sync_block_list_snapshot(block.id, db=db, user=user)
+    again = protocol_elements.sync_block_list_snapshot(block.public_id, db=db, user=user)
     entries_again = {e["id"]: e for e in again.configuration_snapshot_json["list_snapshot"]["entries"]}
     assert entries_again[to_change.id]["_tracked"] == "changed"
     assert entries_again[to_change.id]["_tracked_before"]["column_one_value"]["text_value"] == "before"
@@ -241,19 +241,19 @@ def test_row_link_sync_marks_changed_and_removed(db):
     block = _row_link_block(db, protocol, definition.id, entry.id)
     user = make_current_user(tenant.id)
 
-    protocol_elements.sync_block_list_snapshot(block.id, db=db, user=user)
+    protocol_elements.sync_block_list_snapshot(block.public_id, db=db, user=user)
 
     entry.column_one_value_json = {"text_value": "after"}
     db.add(entry)
     db.commit()
-    result = protocol_elements.sync_block_list_snapshot(block.id, db=db, user=user)
+    result = protocol_elements.sync_block_list_snapshot(block.public_id, db=db, user=user)
     row_snapshot = result.configuration_snapshot_json["rows"][0]["list_snapshot"]
     assert row_snapshot["_tracked"] == "changed"
     assert row_snapshot["_tracked_before"]["column_one_value"]["text_value"] == "before"
 
     db.delete(entry)
     db.commit()
-    removed_result = protocol_elements.sync_block_list_snapshot(block.id, db=db, user=user)
+    removed_result = protocol_elements.sync_block_list_snapshot(block.public_id, db=db, user=user)
     removed_row_snapshot = removed_result.configuration_snapshot_json["rows"][0]["list_snapshot"]
     assert removed_row_snapshot["_tracked"] == "removed"
 
@@ -266,17 +266,17 @@ def test_list_toggle_off_mid_geplant_stops_new_marking_without_erasing(db):
     block = _whole_list_block(db, protocol, definition.id)
     user = make_current_user(tenant.id)
 
-    protocol_elements.sync_block_list_snapshot(block.id, db=db, user=user)
+    protocol_elements.sync_block_list_snapshot(block.public_id, db=db, user=user)
     entry.column_one_value_json = {"text_value": "changed-while-active"}
     db.add(entry)
     db.commit()
-    protocol_elements.sync_block_list_snapshot(block.id, db=db, user=user)
+    protocol_elements.sync_block_list_snapshot(block.public_id, db=db, user=user)
 
     protocol_service.update_protocol(db, protocol.id, ProtocolUpdate(track_changes_enabled=False))
     entry.column_one_value_json = {"text_value": "changed-while-inactive"}
     db.add(entry)
     db.commit()
-    result = protocol_elements.sync_block_list_snapshot(block.id, db=db, user=user)
+    result = protocol_elements.sync_block_list_snapshot(block.public_id, db=db, user=user)
     entries = {e["id"]: e for e in result.configuration_snapshot_json["list_snapshot"]["entries"]}
     assert entries[entry.id]["_tracked"] == "changed"
     # The pinned before-value is the ORIGINAL, from before tracking was toggled off.
@@ -297,15 +297,15 @@ def test_clear_on_vorbereitet_to_durchgefuehrt(db):
     user = make_current_user(tenant.id)
 
     # All marking happens while still "geplant" (the tracked phase).
-    protocol_elements.put_protocol_text(text_block.id, ProtocolTextUpdate(content="edited"), db=db, user=user)
-    added_todo = todos.create_todo(todo_block.id, ProtocolTodoCreate(task="added"), db=db, user=user)
+    protocol_elements.put_protocol_text(text_block.public_id, ProtocolTextUpdate(content="edited"), db=db, user=user)
+    added_todo = todos.create_todo(todo_block.public_id, ProtocolTodoCreate(task="added"), db=db, user=user)
     pre_existing_todo = make_protocol_todo(db, todo_block.id, task="pre-existing", sort_index=1)
-    todos.delete_todo(pre_existing_todo.id, db=db, user=user)
-    protocol_elements.sync_block_list_snapshot(list_block.id, db=db, user=user)
+    todos.delete_todo(pre_existing_todo.public_id, db=db, user=user)
+    protocol_elements.sync_block_list_snapshot(list_block.public_id, db=db, user=user)
     kept_entry.column_one_value_json = {"text_value": "v2"}
     db.add(kept_entry)
     db.commit()
-    protocol_elements.sync_block_list_snapshot(list_block.id, db=db, user=user)
+    protocol_elements.sync_block_list_snapshot(list_block.public_id, db=db, user=user)
 
     # Marks must survive the geplant -> vorbereitet transition (still visible during the
     # live session) and only actually disappear at vorbereitet -> durchgeführt.
@@ -323,7 +323,10 @@ def test_clear_on_vorbereitet_to_durchgefuehrt(db):
     assert saved_text.tracked_baseline_content is None
 
     assert todo_service.repository.get(db, pre_existing_todo.id) is None  # hard-deleted for real
-    added_todo_after = todo_service.repository.get(db, added_todo.id)
+    # Block-linked todos (unlike standalone ones) never get tenant_id set on their own row -
+    # it's derived via the block/element/protocol chain - so a tenant-scoped lookup would
+    # wrongly filter out this NULL-tenant_id row. Look it up unscoped.
+    added_todo_after = todo_service.repository.get_by_public_id(db, added_todo.id, tenant_id=None)
     assert added_todo_after.tracked_change is None
 
     from app.models.entities import ProtocolElementBlock

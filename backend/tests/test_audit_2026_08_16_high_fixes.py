@@ -121,7 +121,8 @@ def test_update_todo_on_standalone_todo_accepts_own_tenant_participant(db):
     )
     db.flush()
 
-    updated = service.update_todo(db, todo.id, ProtocolTodoUpdate(assigned_participant_id=participant.id))
+    updated = service.update_todo(db, todo.id, ProtocolTodoUpdate(assigned_participant_id=participant.public_id))
+    # update_todo returns the raw ORM entity (internal ints), not a public schema.
     assert updated.assigned_participant_id == participant.id
 
 
@@ -140,7 +141,7 @@ def test_update_todo_on_standalone_todo_rejects_foreign_tenant_participant(db):
     db.flush()
 
     with pytest.raises(ValueError, match="not available"):
-        service.update_todo(db, todo.id, ProtocolTodoUpdate(assigned_participant_id=foreign_participant.id))
+        service.update_todo(db, todo.id, ProtocolTodoUpdate(assigned_participant_id=foreign_participant.public_id))
 
 
 def test_create_standalone_todo_rejects_foreign_tenant_participant(db):
@@ -155,7 +156,7 @@ def test_create_standalone_todo_rejects_foreign_tenant_participant(db):
     with pytest.raises(ValueError, match="not available"):
         service.create_standalone_todo(
             db, tenant_a.id,
-            ProtocolTodoCreate(task="Task", todo_status_id=1, assigned_participant_id=foreign_participant.id),
+            ProtocolTodoCreate(task="Task", todo_status_id=1, assigned_participant_id=foreign_participant.public_id),
         )
 
 
@@ -171,7 +172,7 @@ def test_create_standalone_todo_rejects_foreign_tenant_event(db):
     with pytest.raises(ValueError, match="not available"):
         service.create_standalone_todo(
             db, tenant_a.id,
-            ProtocolTodoCreate(task="Task", todo_status_id=1, due_event_id=foreign_event.id),
+            ProtocolTodoCreate(task="Task", todo_status_id=1, due_event_id=foreign_event.public_id),
         )
 
 
@@ -291,19 +292,30 @@ def test_commit_document_rejects_a_document_already_marked_importiert(db):
         queue_service.commit_document(db, document=document, tenant_id=ctx["tenant"].id, user_id=1, payload=payload)
 
 
-def test_commit_document_locks_the_row_before_checking_status():
-    # Static check that the fix's SELECT ... FOR UPDATE is actually present and precedes
-    # the status check - the two-real-transactions race itself isn't practically
-    # reproducible inside this suite's single-connection-per-test db fixture (see the
-    # module-level note above), so this pins the concrete implementation instead.
+def test_commit_document_claims_the_row_atomically_before_importing():
+    # Static check that the fix's atomic claim (UPDATE ... WHERE status == "eingelesen",
+    # committed in its own short transaction) is actually present and precedes the call
+    # into word_import_service.commit() - the two-real-transactions race itself isn't
+    # practically reproducible inside this suite's single-connection-per-test db fixture
+    # (see the module-level note above), so this pins the concrete implementation instead.
+    #
+    # A plain SELECT ... FOR UPDATE held across the word_import_service.commit() call (the
+    # previous fix attempt) does NOT actually close the race: that call performs several
+    # internal db.commit()s of its own, each of which releases the lock long before this
+    # method would have written status="importiert" - a near-simultaneous second commit
+    # request can still read "eingelesen" in that window and also proceed (audit finding,
+    # 2026-08-25). Flipping the status to "importiert" up front, in its own committed
+    # transaction, closes that window instead of merely narrowing it.
     import inspect
 
     from app.services.word_import_queue_service import WordImportQueueService
 
     source = inspect.getsource(WordImportQueueService.commit_document)
-    with_update_pos = source.index("with_for_update")
-    status_check_pos = source.index('document.status == "importiert"')
-    assert with_update_pos < status_check_pos, (
-        "the row lock must be acquired before the status is checked, otherwise the lock "
-        "doesn't actually close the race"
+    claim_pos = source.index('WordImportDocument.status == "eingelesen"')
+    claim_commit_pos = source.index("db.commit()", claim_pos)
+    import_call_pos = source.index("self.word_import_service.commit(")
+    assert claim_pos < claim_commit_pos < import_call_pos, (
+        "the eingelesen -> importiert claim must be committed in its own transaction "
+        "before word_import_service.commit() runs, otherwise a concurrent request can "
+        "still slip through the window opened by that call's own internal commits"
     )

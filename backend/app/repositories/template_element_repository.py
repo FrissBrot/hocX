@@ -1,7 +1,10 @@
+import uuid
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import ElementDefinition, TemplateElement
+from app.services import public_id_service
 
 
 class TemplateElementRepository:
@@ -22,6 +25,11 @@ class TemplateElementRepository:
 
     def get(self, db: Session, template_element_id: int) -> TemplateElement | None:
         return db.get(TemplateElement, template_element_id)
+
+    def get_by_public_id(self, db: Session, public_id: uuid.UUID) -> TemplateElement | None:
+        # No tenant_id column of its own (scoped via template_id) - callers must verify
+        # tenant/access on the resolved row's template, same as for the numeric-id path.
+        return public_id_service.get_by_public_id(db, TemplateElement, public_id)
 
     def get_with_definition(self, db: Session, template_element_id: int):
         # See list_for_template's identical comment above.

@@ -1,7 +1,10 @@
+import uuid
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import DocumentTemplate, DocumentTemplatePart
+from app.services import public_id_service
 
 
 class DocumentTemplateRepository:
@@ -16,6 +19,9 @@ class DocumentTemplateRepository:
 
     def get(self, db: Session, document_template_id: int) -> DocumentTemplate | None:
         return db.get(DocumentTemplate, document_template_id)
+
+    def get_by_public_id(self, db: Session, public_id: uuid.UUID, *, tenant_id: int) -> DocumentTemplate | None:
+        return public_id_service.get_by_public_id(db, DocumentTemplate, public_id, tenant_id=tenant_id)
 
     def create(self, db: Session, entity: DocumentTemplate) -> DocumentTemplate:
         db.add(entity)
@@ -48,6 +54,9 @@ class DocumentTemplatePartRepository:
 
     def get(self, db: Session, part_id: int) -> DocumentTemplatePart | None:
         return db.get(DocumentTemplatePart, part_id)
+
+    def get_by_public_id(self, db: Session, public_id: uuid.UUID, *, tenant_id: int) -> DocumentTemplatePart | None:
+        return public_id_service.get_by_public_id(db, DocumentTemplatePart, public_id, tenant_id=tenant_id)
 
     def create(self, db: Session, entity: DocumentTemplatePart) -> DocumentTemplatePart:
         db.add(entity)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated
@@ -34,9 +35,10 @@ class FinanceAccountUpdate(BaseModel):
 
 
 class FinanceAccountRead(BaseModel):
-    model_config = {"from_attributes": True}
-
-    id: int
+    # Built via explicit keyword construction in FinanceRepository (balance/provisional
+    # come from aggregate queries, not plain ORM attributes) - id is set from the account
+    # row's public_id there directly.
+    id: uuid.UUID
     name: str
     currency_label: str
     description: str | None
@@ -50,7 +52,7 @@ class FinanceTransactionCreate(BaseModel):
     amount: FinanceDecimal
     description: str
     transaction_date: date
-    protocol_id: int | None = None
+    protocol_id: uuid.UUID | None = None
 
 
 class FinanceTransactionUpdate(BaseModel):
@@ -60,14 +62,14 @@ class FinanceTransactionUpdate(BaseModel):
 
 
 class FinanceTransactionRead(BaseModel):
-    model_config = {"from_attributes": True}
-
-    id: int
-    account_id: int
+    # Built via explicit keyword construction (FinanceRepository._tx_read) - see
+    # FinanceAccountRead's identical note.
+    id: uuid.UUID
+    account_id: uuid.UUID
     amount: FinanceDecimal
     description: str
     transaction_date: date
-    protocol_id: int | None
+    protocol_id: uuid.UUID | None
     created_at: datetime
     # Cumulative account balance up to and including this transaction (chronological
     # order), computed server-side so pagination doesn't break the running total.

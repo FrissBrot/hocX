@@ -40,6 +40,7 @@ from app.services.responsible_label_service import (
 )
 from app.repositories.protocol_repository import ProtocolRepository
 from app.schemas.protocol import NextSessionAttendanceEntry, NextSessionRead, ProtocolCreateFromTemplate, ProtocolUpdate
+from app.services import public_id_service
 
 
 def _matrix_row_type(row: dict) -> str:
@@ -185,16 +186,20 @@ class ProtocolService:
             for entry in (block.configuration_snapshot_json or {}).get("attendance_entries", []):
                 if entry.get("participant_id") is None:
                     continue
+                participant_public_id = public_id_service.resolve_public_id(db, Participant, entry["participant_id"])
+                if participant_public_id is None:
+                    continue
                 entries.append(
                     NextSessionAttendanceEntry(
-                        participant_id=entry["participant_id"],
+                        participant_id=participant_public_id,
                         participant_name=entry.get("participant_name") or "",
                         status=entry.get("status") or "absent",
                     )
                 )
             entries.sort(key=lambda e: e.participant_name.lower())
 
-        return NextSessionRead(protocol=protocol, attendance_block_id=block.id if block else None, entries=entries)
+        attendance_block_public_id = public_id_service.resolve_public_id(db, ProtocolElementBlock, block.id) if block else None
+        return NextSessionRead(protocol=protocol, attendance_block_id=attendance_block_public_id, entries=entries)
 
     def set_attendance_excused(self, db: Session, protocol_id: int, participant_id: int, excused: bool) -> bool:
         """Toggles a participant between excused and unentschuldigt (absent) in every attendance
@@ -1244,16 +1249,18 @@ class ProtocolService:
         }
 
     def create_from_template(self, db: Session, payload: ProtocolCreateFromTemplate, *, tenant_id: int, created_by: int | None) -> int:
-        template = db.get(Template, payload.template_id)
-        if template is None:
+        # payload's ids arrive as public UUIDs from the API - resolve to internal ids here,
+        # scoped to tenant_id, before any of them are used as a raw PK/FK value below.
+        template_id = public_id_service.resolve_internal_id(db, Template, payload.template_id, tenant_id=tenant_id)
+        if template_id is None:
             raise ValueError("Template not found")
-        if template.tenant_id != tenant_id:
-            raise ValueError("Template does not belong to current tenant")
+        template = db.get(Template, template_id)
+        event_id: int | None = None
         if payload.event_id is not None:
             # event_id is client-supplied - without this check a writer could link a
             # freshly created protocol to another tenant's Event.
-            linked_event = db.get(Event, payload.event_id)
-            if linked_event is None or linked_event.tenant_id != tenant_id:
+            event_id = public_id_service.resolve_internal_id(db, Event, payload.event_id, tenant_id=tenant_id)
+            if event_id is None:
                 raise ValueError("Event does not belong to current tenant")
 
         selected_document_template_id = template.document_template_id
@@ -1347,7 +1354,7 @@ class ProtocolService:
                 protocol_number=protocol_number,
                 title=title,
                 protocol_date=payload.protocol_date,
-                event_id=payload.event_id,
+                event_id=event_id,
                 status="geplant",
                 created_by=created_by,
             )
@@ -2042,13 +2049,24 @@ class ProtocolService:
         values = payload.model_dump(exclude_unset=True)
         # Concurrency precondition consumed by the route; it is not a database column.
         values.pop("expected_session_notes", None)
-        document_template_id = values.pop("document_template_id", None) if "document_template_id" in values else None
+        # document_template_id/event_id arrive as public UUIDs - resolve to internal ids,
+        # scoped to this protocol's tenant, before they're used as raw PK/FK values below.
+        document_template_id: int | None = None
+        if "document_template_id" in values:
+            raw_document_template_id = values.pop("document_template_id")
+            if raw_document_template_id is not None:
+                document_template_id = public_id_service.resolve_internal_id(
+                    db, DocumentTemplate, raw_document_template_id, tenant_id=protocol.tenant_id
+                )
+                if document_template_id is None:
+                    raise ValueError("Document template does not belong to current tenant")
         if values.get("event_id") is not None:
             # event_id is client-supplied - without this check a writer could re-link an
             # existing protocol to another tenant's Event (see create_from_template above).
-            linked_event = db.get(Event, values["event_id"])
-            if linked_event is None or linked_event.tenant_id != protocol.tenant_id:
+            resolved_event_id = public_id_service.resolve_internal_id(db, Event, values["event_id"], tenant_id=protocol.tenant_id)
+            if resolved_event_id is None:
                 raise ValueError("Event does not belong to current tenant")
+            values["event_id"] = resolved_event_id
         new_status = values.get("status")
         if new_status is not None and new_status != previous_status:
             self._validate_status_transition(previous_status, new_status)

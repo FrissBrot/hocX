@@ -19,7 +19,7 @@ class AdminTenantUserService:
 
     def _read_model(self, user: AppUser, role_code: str) -> AdminTenantUserRead:
         return AdminTenantUserRead(
-            user_id=user.id,
+            user_id=user.public_id,
             email=user.email,
             display_name=user.display_name,
             role_code=role_code,

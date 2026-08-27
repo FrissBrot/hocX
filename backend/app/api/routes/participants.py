@@ -1,3 +1,4 @@
+import uuid
 from datetime import date
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -7,6 +8,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, require_admin, require_reader, require_writer
+from app.models.entities import Participant, Template
 from app.schemas.participant import (
     ParticipantBulkDelete,
     ParticipantCreate,
@@ -18,6 +20,7 @@ from app.schemas.participant import (
     ParticipantUpdate,
     TemplateParticipantAssignmentUpdate,
 )
+from app.services import public_id_service
 from app.services.participant_service import ParticipantService
 from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
@@ -29,6 +32,13 @@ participant_service = ParticipantService()
 template_service = TemplateService()
 access_service = AccessService()
 audit = AuditService()
+
+
+def _get_participant_or_404(db: Session, participant_id: uuid.UUID, user: CurrentUser) -> Participant:
+    participant = public_id_service.get_by_public_id(db, Participant, participant_id, tenant_id=user.current_tenant_id)
+    if participant is None:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    return participant
 
 # Participant CSV imports are small by nature (one row per person); unlike word_import.py's
 # uploads there was no limit at all here before this fix - an arbitrarily large "CSV" body
@@ -48,14 +58,21 @@ async def _read_upload_within_limit(file: UploadFile, max_bytes: int) -> bytes |
     return content
 
 
-def _normalized_template_participant_assignments(payload: TemplateParticipantAssignmentUpdate) -> list[tuple[int, bool]]:
+def _normalized_template_participant_assignments(
+    db: Session, payload: TemplateParticipantAssignmentUpdate, *, tenant_id: int
+) -> list[tuple[int, bool]]:
     raw_assignments = payload.participants or [
         TemplateParticipantAssignment(participant_id=participant_id)
         for participant_id in payload.participant_ids
     ]
+    participant_public_ids = [assignment.participant_id for assignment in raw_assignments]
+    id_map = public_id_service.resolve_internal_ids(db, Participant, participant_public_ids, tenant_id=tenant_id)
     assignments_by_participant_id: dict[int, bool] = {}
     for assignment in raw_assignments:
-        assignments_by_participant_id[int(assignment.participant_id)] = bool(assignment.exclude_from_attendance)
+        internal_id = id_map.get(assignment.participant_id)
+        if internal_id is None:
+            raise HTTPException(status_code=400, detail="One or more participants do not belong to the current tenant")
+        assignments_by_participant_id[internal_id] = bool(assignment.exclude_from_attendance)
     return sorted(assignments_by_participant_id.items())
 
 
@@ -95,17 +112,15 @@ def create_participant(
 
 @router.patch("/participants/{participant_id}", response_model=ParticipantRead)
 def patch_participant(
-    participant_id: int,
+    participant_id: uuid.UUID,
     payload: ParticipantUpdate,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
-    participant = participant_service.get_participant(db, participant_id, tenant_id=user.current_tenant_id)
-    if participant is None or participant.tenant_id != user.current_tenant_id:
-        raise HTTPException(status_code=404, detail="Participant not found")
+    participant = _get_participant_or_404(db, participant_id, user)
     try:
-        updated = participant_service.update_participant(db, participant_id, payload, tenant_id=user.current_tenant_id)
+        updated = participant_service.update_participant(db, participant.id, payload, tenant_id=user.current_tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
@@ -118,16 +133,14 @@ def patch_participant(
 
 @router.delete("/participants/{participant_id}", response_model=dict[str, str])
 def delete_participant(
-    participant_id: int,
+    participant_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
-    participant = participant_service.get_participant(db, participant_id, tenant_id=user.current_tenant_id)
-    if participant is None or participant.tenant_id != user.current_tenant_id:
-        raise HTTPException(status_code=404, detail="Participant not found")
+    participant = _get_participant_or_404(db, participant_id, user)
     try:
-        deleted = participant_service.delete_participant(db, participant_id, tenant_id=user.current_tenant_id)
+        deleted = participant_service.delete_participant(db, participant.id, tenant_id=user.current_tenant_id)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Participant could not be deleted") from exc
@@ -135,7 +148,7 @@ def delete_participant(
         raise HTTPException(status_code=404, detail="Participant not found")
     # Audit S10, 2026-08-16: this route had no audit trail at all, unlike finance.py/
     # fines.py/users.py/protocols.py/todos.py.
-    audit.log(db, action="participant.deleted", actor=user, entity_type="participant", entity_id=participant_id)
+    audit.log(db, action="participant.deleted", actor=user, entity_type="participant", entity_id=participant.id)
     return {"message": "Participant deleted"}
 
 
@@ -164,21 +177,22 @@ def bulk_delete_participants(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
+    id_map = public_id_service.resolve_internal_ids(db, Participant, payload.participant_ids, tenant_id=user.current_tenant_id)
     try:
-        deleted_count = participant_service.delete_participants(db, payload.participant_ids, tenant_id=user.current_tenant_id)
+        deleted_count = participant_service.delete_participants(db, list(id_map.values()), tenant_id=user.current_tenant_id)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Participants could not be deleted") from exc
     audit.log(
         db, action="participant.bulk_deleted", actor=user, entity_type="participant",
-        details={"participant_ids": payload.participant_ids, "deleted_count": deleted_count},
+        details={"participant_ids": [str(i) for i in payload.participant_ids], "deleted_count": deleted_count},
     )
     return {"deleted_count": deleted_count}
 
 
 @router.get("/templates/{template_id}/participants", response_model=list[TemplateParticipantAssignmentRead])
 def list_template_participants(
-    template_id: int,
+    template_id: uuid.UUID,
     as_of: date | None = Query(default=None, description="Only include participants who were members on this date (joined_at/left_at)"),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
@@ -188,35 +202,30 @@ def list_template_participants(
     # a reader/Kassier role could read full participant details here despite being denied
     # by the base list endpoint.
     require_writer(user)
-    template = template_service.get_template(db, template_id)
-    if template is None or template.tenant_id != user.current_tenant_id:
+    template = public_id_service.get_by_public_id(db, Template, template_id, tenant_id=user.current_tenant_id)
+    if template is None:
         raise HTTPException(status_code=404, detail="Template not found")
-    access_service.ensure_can_read_template(db, user, template_id)
-    return template_service.list_template_participants(db, template_id, as_of=as_of)
+    access_service.ensure_can_read_template(db, user, template.id)
+    return template_service.list_template_participants(db, template.id, as_of=as_of)
 
 
 @router.put("/templates/{template_id}/participants", response_model=list[TemplateParticipantAssignmentRead])
 def replace_template_participants(
-    template_id: int,
+    template_id: uuid.UUID,
     payload: TemplateParticipantAssignmentUpdate,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
-    template = template_service.get_template(db, template_id)
-    if template is None or template.tenant_id != user.current_tenant_id:
+    template = public_id_service.get_by_public_id(db, Template, template_id, tenant_id=user.current_tenant_id)
+    if template is None:
         raise HTTPException(status_code=404, detail="Template not found")
 
-    allowed_ids = {
-        participant.id
-        for participant in participant_service.list_participants(db, tenant_id=user.current_tenant_id)
-    }
-    assignments = _normalized_template_participant_assignments(payload)
-    if any(participant_id not in allowed_ids for participant_id, _ in assignments):
-        raise HTTPException(status_code=400, detail="One or more participants do not belong to the current tenant")
+    # Raises 400 itself if a participant_id doesn't resolve within this tenant.
+    assignments = _normalized_template_participant_assignments(db, payload, tenant_id=user.current_tenant_id)
 
     try:
-        return template_service.replace_template_participants(db, template_id, assignments)
+        return template_service.replace_template_participants(db, template.id, assignments)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Template participants could not be updated") from exc
@@ -224,7 +233,7 @@ def replace_template_participants(
 
 @router.get("/participants/{participant_id}/templates", response_model=list[TemplateRead])
 def list_participant_templates(
-    participant_id: int,
+    participant_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -234,10 +243,8 @@ def list_participant_templates(
     # point of this endpoint; gating it behind require_writer would make it unreachable
     # for the reader accounts it exists for. See test_audit_2026_08_12_high_fixes_B.py.
     require_reader(user)
-    participant = participant_service.get_participant(db, participant_id, tenant_id=user.current_tenant_id)
-    if participant is None or participant.tenant_id != user.current_tenant_id:
-        raise HTTPException(status_code=404, detail="Participant not found")
-    templates = participant_service.list_templates_for_participant(db, participant_id)
+    participant = _get_participant_or_404(db, participant_id, user)
+    templates = participant_service.list_templates_for_participant(db, participant.id)
     if access_service.is_restricted_reader(db, user):
         return [template for template in templates if access_service.can_read_template(db, user, template.id)]
     return templates
@@ -245,23 +252,18 @@ def list_participant_templates(
 
 @router.put("/participants/{participant_id}/templates", response_model=list[TemplateRead])
 def replace_participant_templates(
-    participant_id: int,
+    participant_id: uuid.UUID,
     payload: ParticipantTemplateAssignmentUpdate,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
-    participant = participant_service.get_participant(db, participant_id, tenant_id=user.current_tenant_id)
-    if participant is None or participant.tenant_id != user.current_tenant_id:
-        raise HTTPException(status_code=404, detail="Participant not found")
-    tenant_template_ids = {
-        template.id
-        for template in template_service.list_templates(db, tenant_id=user.current_tenant_id)
-    }
-    if any(template_id not in tenant_template_ids for template_id in payload.template_ids):
+    participant = _get_participant_or_404(db, participant_id, user)
+    template_id_map = public_id_service.resolve_internal_ids(db, Template, payload.template_ids, tenant_id=user.current_tenant_id)
+    if len(template_id_map) != len(set(payload.template_ids)):
         raise HTTPException(status_code=400, detail="One or more templates do not belong to the current tenant")
     try:
-        return participant_service.replace_templates_for_participant(db, participant_id, sorted(set(payload.template_ids)))
+        return participant_service.replace_templates_for_participant(db, participant.id, sorted(set(template_id_map.values())))
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Participant templates could not be updated") from exc

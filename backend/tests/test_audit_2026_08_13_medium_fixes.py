@@ -87,7 +87,7 @@ def test_m13_list_cycles_includes_current_cycle_year_without_matching_protocol(d
     db.flush()
     user = make_current_user(tenant.id, role="reader")
 
-    result = cycle_configs_route.list_cycles(cfg.id, db=db, user=user)
+    result = cycle_configs_route.list_cycles(cfg.public_id, db=db, user=user)
 
     current_cycle_year = get_cycle_year(date.today(), cfg.reset_month, cfg.reset_day)
     years = {c.cycle_year for c in result}
@@ -222,7 +222,7 @@ def test_m15_create_event_accepts_own_tenant_participant_id(db):
         EventCreate(
             event_date=date(2026, 1, 1),
             title="Test Event",
-            leadership_ids=[participant.id],
+            leadership_ids=[participant.public_id],
         ),
         tenant_id=tenant.id,
     )

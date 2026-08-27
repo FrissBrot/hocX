@@ -67,7 +67,7 @@ def test_login_succeeds_with_correct_password(db):
 
     assert session.authenticated is True
     assert session.user.email == "alice@example.com"
-    assert session.current_tenant.id == tenant.id
+    assert session.current_tenant.id == tenant.public_id
     assert session.current_role == "writer"
     # A session cookie must actually be issued.
     assert any(h[0] == b"set-cookie" for h in response.raw_headers)
@@ -302,7 +302,9 @@ def test_admin_logout_revokes_existing_session_tokens(db):
     # A token minted before logout must stop working afterwards - logout must not just
     # clear the cookie, it must bump session_revoke_at like customer logout / deactivation do.
     service = AdminAuthService()
-    service.logout(db, Response(), CurrentAdmin(admin_id=admin.id, email=admin.email, display_name=admin.display_name))
+    service.logout(
+        db, Response(), CurrentAdmin(admin_id=admin.id, admin_public_id=admin.public_id, email=admin.email, display_name=admin.display_name)
+    )
 
     assert admin.session_revoke_at is not None
     assert get_optional_current_admin(request=None, db=db, session_cookie=token) is None

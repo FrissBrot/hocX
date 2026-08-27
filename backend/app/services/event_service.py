@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import uuid
 from datetime import date, datetime
 from io import StringIO
 
@@ -12,6 +13,7 @@ from app.models.entities import CycleConfig, EventCycle
 from app.repositories.event_repository import EventRepository
 from app.schemas.event import CycleAssignment, EventCreate, EventUpdate
 from app.schemas.protocol import ProtocolCycleInfo
+from app.services import public_id_service
 from app.services.event_cycle_service import list_cycle_event_ids, resolve_protocol_cycle
 
 
@@ -47,7 +49,7 @@ class EventService:
                 cycle_cfg, cycle_year = resolved
                 event_ids = list_cycle_event_ids(db, cycle_cfg.id, cycle_year)
                 cycle_info = ProtocolCycleInfo(
-                    cycle_config_id=cycle_cfg.id,
+                    cycle_config_id=cycle_cfg.public_id,
                     cycle_year=cycle_year,
                     label=format_cycle_name(cycle_cfg.name_pattern, cycle_year),
                 )
@@ -70,32 +72,36 @@ class EventService:
         "spezial3_ids",
     )
 
-    def _validate_participant_ids(self, db: Session, *, tenant_id: int, id_lists: dict[str, list[int] | None]) -> None:
-        """Every id referenced by organizer_ids/leadership_ids/participant_ids/spezial1-3_ids
-        must exist and belong to the same tenant as the event - otherwise an event could
-        reference a deleted or cross-tenant participant (e.g. via a raw API call), which
-        would then surface that foreign participant's name/data through the event."""
-        requested_ids: set[int] = set()
+    def _resolve_participant_ids(
+        self, db: Session, *, tenant_id: int, id_lists: dict[str, list[uuid.UUID] | None]
+    ) -> dict[str, list[int] | None]:
+        """Resolves organizer_ids/leadership_ids/participant_ids/spezial1-3_ids from public
+        UUIDs to internal ids, scoped to tenant_id. Also serves as this data's tenant-
+        ownership validation (what a separate _validate_participant_ids used to do): an id
+        from another tenant or a deleted participant simply fails to resolve here, exactly
+        as it would have failed the old ownership check - otherwise an event could reference
+        a foreign participant (e.g. via a raw API call), surfacing that participant's name."""
+        requested_ids: set[uuid.UUID] = set()
         for ids in id_lists.values():
             if ids:
                 requested_ids.update(ids)
-        if not requested_ids:
-            return
-        owned_ids = {
-            row[0]
-            for row in db.query(Participant.id)
-            .filter(Participant.id.in_(requested_ids), Participant.tenant_id == tenant_id)
-            .all()
-        }
-        foreign_ids = requested_ids - owned_ids
-        if foreign_ids:
-            raise ValueError(f"Unknown participant id(s): {sorted(foreign_ids)}")
+        mapping = public_id_service.resolve_internal_ids(db, Participant, list(requested_ids), tenant_id=tenant_id) if requested_ids else {}
+        resolved: dict[str, list[int] | None] = {}
+        for field, ids in id_lists.items():
+            if not ids:
+                resolved[field] = ids
+                continue
+            unknown = [i for i in ids if i not in mapping]
+            if unknown:
+                raise ValueError(f"Unknown participant id(s): {sorted(str(i) for i in unknown)}")
+            resolved[field] = [mapping[i] for i in ids]
+        return resolved
 
     def create_event(self, db: Session, payload: EventCreate, *, tenant_id: int) -> Event:
         category_id = self.repository.category_id_by_code(db, "other")
         if category_id is None:
             raise ValueError("Default event category missing")
-        self._validate_participant_ids(
+        resolved_ids = self._resolve_participant_ids(
             db,
             tenant_id=tenant_id,
             id_lists={field: getattr(payload, field) for field in self._PARTICIPANT_ID_FIELDS},
@@ -110,12 +116,12 @@ class EventService:
             description=payload.description,
             participant_count=payload.participant_count,
             is_cancelled=payload.is_cancelled,
-            organizer_ids=payload.organizer_ids,
-            leadership_ids=payload.leadership_ids,
-            participant_ids=payload.participant_ids,
-            spezial1_ids=payload.spezial1_ids,
-            spezial2_ids=payload.spezial2_ids,
-            spezial3_ids=payload.spezial3_ids,
+            organizer_ids=resolved_ids["organizer_ids"],
+            leadership_ids=resolved_ids["leadership_ids"],
+            participant_ids=resolved_ids["participant_ids"],
+            spezial1_ids=resolved_ids["spezial1_ids"],
+            spezial2_ids=resolved_ids["spezial2_ids"],
+            spezial3_ids=resolved_ids["spezial3_ids"],
             location=payload.location,
             spezial_text1=payload.spezial_text1,
             spezial_text2=payload.spezial_text2,
@@ -146,11 +152,12 @@ class EventService:
             raise ValueError("Event end date must be on or after the start date")
         if "participant_count" in values and values["participant_count"] is not None:
             values["participant_count"] = max(0, int(values["participant_count"]))
-        self._validate_participant_ids(
+        resolved_ids = self._resolve_participant_ids(
             db,
             tenant_id=event.tenant_id,
             id_lists={field: values[field] for field in self._PARTICIPANT_ID_FIELDS if field in values},
         )
+        values.update(resolved_ids)
         try:
             if values:
                 event = self.repository.update(db, event, values, commit=False)
@@ -173,20 +180,14 @@ class EventService:
     def _set_cycle_assignments(
         self, db: Session, event_id: int, assignments: list[CycleAssignment], *, tenant_id: int, commit: bool = True
     ) -> None:
-        cycle_config_ids = {a.cycle_config_id for a in assignments}
-        if cycle_config_ids:
-            owned_ids = {
-                row[0]
-                for row in db.query(CycleConfig.id)
-                .filter(CycleConfig.id.in_(cycle_config_ids), CycleConfig.tenant_id == tenant_id)
-                .all()
-            }
-            foreign_ids = cycle_config_ids - owned_ids
-            if foreign_ids:
-                raise ValueError(f"Unknown cycle_config_id: {sorted(foreign_ids)}")
+        cycle_config_public_ids = {a.cycle_config_id for a in assignments}
+        cycle_config_map = public_id_service.resolve_internal_ids(db, CycleConfig, list(cycle_config_public_ids), tenant_id=tenant_id)
+        unknown = cycle_config_public_ids - cycle_config_map.keys()
+        if unknown:
+            raise ValueError(f"Unknown cycle_config_id: {sorted(str(i) for i in unknown)}")
         db.query(EventCycle).filter(EventCycle.event_id == event_id).delete(synchronize_session=False)
         for a in assignments:
-            db.add(EventCycle(event_id=event_id, cycle_config_id=a.cycle_config_id, cycle_year=a.cycle_year))
+            db.add(EventCycle(event_id=event_id, cycle_config_id=cycle_config_map[a.cycle_config_id], cycle_year=a.cycle_year))
         if commit:
             db.commit()
 

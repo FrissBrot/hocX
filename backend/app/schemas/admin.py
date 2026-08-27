@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.base import PublicIdModel
 from app.schemas.user import UserRead
 
 
@@ -14,7 +16,7 @@ class AdminLoginRequest(BaseModel):
 
 
 class AdminSelfRead(BaseModel):
-    id: int
+    id: uuid.UUID
     email: str
     display_name: str
     role: Literal["owner", "support"] = "owner"
@@ -40,8 +42,8 @@ class PlatformAdminUpdate(BaseModel):
     role: Literal["owner", "support"] | None = None
 
 
-class PlatformAdminRead(BaseModel):
-    id: int
+class PlatformAdminRead(PublicIdModel):
+    id: uuid.UUID
     email: str
     display_name: str
     is_active: bool
@@ -49,15 +51,15 @@ class PlatformAdminRead(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = {"from_attributes": True}
-
 
 class AdminTenantCreate(BaseModel):
     name: str
 
 
 class AdminTenantRead(BaseModel):
-    id: int
+    # Built via explicit keyword construction (AdminTenantService - participant_count/
+    # user_count are aggregate query results, not plain ORM attributes).
+    id: uuid.UUID
     name: str
     profile_image_path: str | None = None
     profile_image_url: str | None = None
@@ -66,8 +68,6 @@ class AdminTenantRead(BaseModel):
     user_count: int = 0
     created_at: datetime
 
-    model_config = {"from_attributes": True}
-
 
 class AdminTenantPage(BaseModel):
     items: list[AdminTenantRead]
@@ -75,8 +75,10 @@ class AdminTenantPage(BaseModel):
 
 
 class AdminDomainRead(BaseModel):
-    id: int
-    tenant_id: int
+    # Built via explicit keyword construction (AdminDomainService - tenant_name is a join
+    # column, not a plain ORM attribute).
+    id: uuid.UUID
+    tenant_id: uuid.UUID
     tenant_name: str
     purpose: str
     domain: str
@@ -85,8 +87,6 @@ class AdminDomainRead(BaseModel):
     last_checked_at: datetime | None = None
     verified_at: datetime | None = None
     created_at: datetime
-
-    model_config = {"from_attributes": True}
 
 
 class AdminDomainPage(BaseModel):
@@ -100,8 +100,8 @@ class AdminUserPage(BaseModel):
 
 
 class AdminUserMergeRequest(BaseModel):
-    source_user_id: int
-    target_user_id: int
+    source_user_id: uuid.UUID
+    target_user_id: uuid.UUID
 
 
 class TenantCloneRequest(BaseModel):
@@ -115,7 +115,7 @@ class TenantImportResult(BaseModel):
 
 
 class AdminTenantUserRead(BaseModel):
-    user_id: int
+    user_id: uuid.UUID
     email: str
     display_name: str
     role_code: str
@@ -128,9 +128,11 @@ class AdminTenantUserGrant(BaseModel):
 
 
 class SystemErrorLogRead(BaseModel):
-    id: int
+    # Built via explicit keyword construction (AdminErrorLogService - tenant_name is a
+    # join column, not a plain ORM attribute).
+    id: uuid.UUID
     source: str
-    tenant_id: int | None = None
+    tenant_id: uuid.UUID | None = None
     tenant_name: str | None = None
     actor_email: str | None = None
     request_method: str | None = None
@@ -140,8 +142,6 @@ class SystemErrorLogRead(BaseModel):
     error_message: str
     traceback: str | None = None
     created_at: datetime
-
-    model_config = {"from_attributes": True}
 
 
 class SystemErrorLogPage(BaseModel):

@@ -149,7 +149,7 @@ class MfaService:
 
     def _factor_read(self, factor: UserMfaFactor) -> MfaFactorRead:
         return MfaFactorRead(
-            id=factor.id,
+            id=factor.public_id,
             factor_type=factor.factor_type,  # type: ignore[arg-type]
             label=factor.label,
             created_at=factor.created_at,

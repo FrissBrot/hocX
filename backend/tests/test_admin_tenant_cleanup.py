@@ -272,7 +272,11 @@ def test_cleanup_returns_none_for_unknown_tenant(db, service):
 
 
 def _admin() -> CurrentAdmin:
-    return CurrentAdmin(admin_id=1, email="admin@example.com", display_name="Test Admin", role="owner")
+    import uuid
+
+    return CurrentAdmin(
+        admin_id=1, admin_public_id=uuid.uuid4(), email="admin@example.com", display_name="Test Admin", role="owner"
+    )
 
 
 def test_route_rejects_name_mismatch(db):
@@ -281,7 +285,7 @@ def test_route_rejects_name_mismatch(db):
 
     with pytest.raises(HTTPException) as exc_info:
         admin_routes.cleanup_tenant(
-            tenant.id,
+            tenant.public_id,
             TenantCleanupRequest(categories=["participants"], confirm_name="wrong name"),
             db=db,
             current_admin=_admin(),
@@ -296,7 +300,7 @@ def test_route_rejects_empty_categories(db):
 
     with pytest.raises(HTTPException) as exc_info:
         admin_routes.cleanup_tenant(
-            tenant.id,
+            tenant.public_id,
             TenantCleanupRequest(categories=[], confirm_name=tenant.name),
             db=db,
             current_admin=_admin(),
@@ -310,7 +314,7 @@ def test_route_success_returns_counts(db):
     make_event(db, tenant.id)
 
     result = admin_routes.cleanup_tenant(
-        tenant.id,
+        tenant.public_id,
         TenantCleanupRequest(categories=["participants", "events"], confirm_name=tenant.name),
         db=db,
         current_admin=_admin(),
@@ -325,6 +329,6 @@ def test_preview_matches_pre_cleanup_counts(db):
     make_participant(db, tenant.id)
     make_participant(db, tenant.id, display_name="Second Person")
 
-    preview = admin_routes.preview_tenant_cleanup(tenant.id, db=db)
+    preview = admin_routes.preview_tenant_cleanup(tenant.public_id, db=db)
 
     assert preview.participants == 2

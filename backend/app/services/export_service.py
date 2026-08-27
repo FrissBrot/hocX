@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models import AttendanceFine, DocumentTemplate, ElementType, Event, FinanceAccount, FinanceTransaction, ListDefinition, ListEntry, Participant, Protocol as ProtocolModel, ProtocolElement, ProtocolExportCache, StoredFile, Tenant
 from app.repositories.export_repository import ExportRepository
+from app.services import public_id_service
 from app.services.event_cycle_service import list_cycle_event_ids, resolve_protocol_cycle
 from app.services.file_service import _safe_storage_path
 from app.services.responsible_label_service import resolve_display_section_titles_batch
@@ -74,10 +75,10 @@ class ExportService:
         db.commit()
 
         return ProtocolExportRead(
-            protocol_id=protocol.id,
+            protocol_id=protocol.public_id,
             export_format="latex",
-            generated_file_id=stored_file.id,
-            content_url=f"/api/stored-files/{stored_file.id}/content",
+            generated_file_id=stored_file.public_id,
+            content_url=f"/api/stored-files/{stored_file.public_id}/content",
             storage_path=stored_file.storage_path,
             created_at=cache.created_at,
             status="generated",
@@ -162,10 +163,10 @@ class ExportService:
         db.refresh(protocol)
 
         return ProtocolExportRead(
-            protocol_id=protocol.id,
+            protocol_id=protocol.public_id,
             export_format="pdf",
-            generated_file_id=stored_file.id,
-            content_url=f"/api/stored-files/{stored_file.id}/content",
+            generated_file_id=stored_file.public_id,
+            content_url=f"/api/stored-files/{stored_file.public_id}/content",
             storage_path=stored_file.storage_path,
             created_at=cache.created_at,
             status="generated",
@@ -176,14 +177,15 @@ class ExportService:
     def latest_export_metadata(self, db: Session, protocol_id: int) -> ProtocolExportRead:
         cache = self.repository.latest_export_cache(db, protocol_id)
         if cache is None:
-            return ProtocolExportRead(protocol_id=protocol_id, export_format="none", status="missing")
+            protocol_public_id = public_id_service.resolve_public_id(db, ProtocolModel, protocol_id)
+            return ProtocolExportRead(protocol_id=protocol_public_id, export_format="none", status="missing")
 
         stored_file = self.repository.get_stored_file(db, cache.generated_file_id)
         return ProtocolExportRead(
-            protocol_id=protocol_id,
+            protocol_id=public_id_service.resolve_public_id(db, ProtocolModel, protocol_id),
             export_format=cache.export_format,
-            generated_file_id=cache.generated_file_id,
-            content_url=f"/api/stored-files/{stored_file.id}/content" if stored_file else None,
+            generated_file_id=stored_file.public_id if stored_file else None,
+            content_url=f"/api/stored-files/{stored_file.public_id}/content" if stored_file else None,
             storage_path=stored_file.storage_path if stored_file else None,
             created_at=cache.created_at,
             status="generated",
@@ -275,10 +277,10 @@ class ExportService:
         db.commit()
 
         return ProtocolExportRead(
-            protocol_id=protocol.id,
+            protocol_id=protocol.public_id,
             export_format=f"pdf-{export_type}",
-            generated_file_id=stored_file.id,
-            content_url=f"/api/stored-files/{stored_file.id}/content",
+            generated_file_id=stored_file.public_id,
+            content_url=f"/api/stored-files/{stored_file.public_id}/content",
             storage_path=stored_file.storage_path,
             created_at=cache.created_at,
             status="generated",
@@ -401,10 +403,10 @@ class ExportService:
         shutil.rmtree(export_dir, ignore_errors=True)
         db.commit()
         return ProtocolExportRead(
-            protocol_id=0,
+            protocol_id=None,
             export_format=f"pdf-global-{export_type}",
-            generated_file_id=stored_file.id,
-            content_url=f"/api/stored-files/{stored_file.id}/content",
+            generated_file_id=stored_file.public_id,
+            content_url=f"/api/stored-files/{stored_file.public_id}/content",
             storage_path=stored_file.storage_path,
             created_at=datetime.utcnow(),
             status="generated",

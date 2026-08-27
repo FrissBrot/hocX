@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.models import ListDefinition, ListEntry
+from app.models import Event, ListDefinition, ListEntry, Participant
 from app.repositories.list_repository import ListRepository
 from app.schemas.list_definition import (
     ListDefinitionCreate,
@@ -14,6 +15,7 @@ from app.schemas.list_definition import (
     ListEntryRead,
     ListEntryUpdate,
 )
+from app.services import public_id_service
 
 
 class ListService:
@@ -21,51 +23,70 @@ class ListService:
         self.repository = repository or ListRepository()
 
     def _normalize_value(self, db: Session, tenant_id: int, value_type: str, raw_value: dict[str, Any] | None) -> dict[str, Any]:
-        # participant_id(s)/event_id are client-supplied and, before this fix, were only
-        # ever int()-converted - never checked against the tenant. responsible_label_service
-        # then resolves these ids to a real Participant without a tenant filter of its own,
-        # so a writer could store another tenant's (globally-numbered, easily-guessable)
-        # participant_id here and have their name/label displayed - a real cross-tenant PII
-        # leak (audit finding H1, 2026-08-25).
+        # participant_id(s)/event_id arrive as public UUIDs from the API - resolve to
+        # internal ids scoped to tenant_id here, which also serves as their ownership
+        # validation (an id from another tenant simply fails to resolve): before the
+        # underlying tenant check existed at all, responsible_label_service resolved these
+        # ids to a real Participant without a tenant filter of its own, so a writer could
+        # store another tenant's participant_id here and have their name/label displayed -
+        # a cross-tenant PII leak (audit finding H1, 2026-08-25).
         value = raw_value or {}
         if value_type == "participant":
             participant_id = value.get("participant_id")
             if not participant_id:
                 return {}
-            participant_id = int(participant_id)
-            if not self.repository.participant_belongs_to_tenant(db, tenant_id, participant_id):
+            internal_id = public_id_service.resolve_internal_id(db, Participant, uuid.UUID(str(participant_id)), tenant_id=tenant_id)
+            if internal_id is None:
                 raise ValueError("Participant not found")
-            return {"participant_id": participant_id}
+            return {"participant_id": internal_id}
         if value_type == "participants":
             participant_ids = value.get("participant_ids")
             if not isinstance(participant_ids, list):
                 return {}
-            ids = [int(participant_id) for participant_id in participant_ids if str(participant_id or "").strip()]
-            for participant_id in ids:
-                if not self.repository.participant_belongs_to_tenant(db, tenant_id, participant_id):
-                    raise ValueError("Participant not found")
-            return {"participant_ids": ids}
+            public_ids = [uuid.UUID(str(pid)) for pid in participant_ids if str(pid or "").strip()]
+            id_map = public_id_service.resolve_internal_ids(db, Participant, public_ids, tenant_id=tenant_id)
+            if len(id_map) != len(set(public_ids)):
+                raise ValueError("Participant not found")
+            return {"participant_ids": [id_map[pid] for pid in public_ids]}
         if value_type == "event":
             event_id = value.get("event_id")
             if not event_id:
                 return {}
-            event_id = int(event_id)
-            if not self.repository.event_belongs_to_tenant(db, tenant_id, event_id):
+            internal_id = public_id_service.resolve_internal_id(db, Event, uuid.UUID(str(event_id)), tenant_id=tenant_id)
+            if internal_id is None:
                 raise ValueError("Event not found")
-            return {"event_id": event_id}
+            return {"event_id": internal_id}
         text_value = str(value.get("text_value") or "").strip()
         return {"text_value": text_value} if text_value else {}
+
+    def _denormalize_value(self, db: Session, value_type: str, stored_value: dict[str, Any] | None) -> dict[str, Any]:
+        """Inverse of _normalize_value - translates the internal ids stored in
+        column_one/two_value_json back to public UUIDs before a value crosses the API."""
+        value = stored_value or {}
+        if value_type == "participant" and value.get("participant_id") is not None:
+            public_id = public_id_service.resolve_public_id(db, Participant, value["participant_id"])
+            return {"participant_id": public_id} if public_id else {}
+        if value_type == "participants" and isinstance(value.get("participant_ids"), list):
+            mapping = public_id_service.resolve_public_ids(db, Participant, value["participant_ids"])
+            return {"participant_ids": [mapping[i] for i in value["participant_ids"] if i in mapping]}
+        if value_type == "event" and value.get("event_id") is not None:
+            public_id = public_id_service.resolve_public_id(db, Event, value["event_id"])
+            return {"event_id": public_id} if public_id else {}
+        return dict(value)
 
     def _definition_read(self, definition: ListDefinition) -> ListDefinitionRead:
         return ListDefinitionRead.model_validate(definition)
 
-    def _entry_read(self, entry: ListEntry) -> ListEntryRead:
+    def _entry_read(self, db: Session, entry: ListEntry, *, definition: ListDefinition | None = None) -> ListEntryRead:
+        definition = definition or self.repository.get_definition(db, entry.list_definition_id)
+        column_one_type = definition.column_one_value_type if definition else "text"
+        column_two_type = definition.column_two_value_type if definition else "text"
         return ListEntryRead(
-            id=entry.id,
-            list_definition_id=entry.list_definition_id,
+            id=entry.public_id,
+            list_definition_id=public_id_service.resolve_public_id(db, ListDefinition, entry.list_definition_id),
             sort_index=entry.sort_index,
-            column_one_value=dict(entry.column_one_value_json or {}),
-            column_two_value=dict(entry.column_two_value_json or {}),
+            column_one_value=self._denormalize_value(db, column_one_type, entry.column_one_value_json),
+            column_two_value=self._denormalize_value(db, column_two_type, entry.column_two_value_json),
             created_at=entry.created_at,
             updated_at=entry.updated_at,
         )
@@ -110,7 +131,11 @@ class ListService:
         return True
 
     def list_entries(self, db: Session, *, list_definition_id: int) -> list[ListEntryRead]:
-        return [self._entry_read(item) for item in self.repository.list_entries(db, list_definition_id=list_definition_id)]
+        definition = self.repository.get_definition(db, list_definition_id)
+        return [
+            self._entry_read(db, item, definition=definition)
+            for item in self.repository.list_entries(db, list_definition_id=list_definition_id)
+        ]
 
     def get_entry(self, db: Session, list_entry_id: int) -> ListEntry | None:
         return self.repository.get_entry(db, list_entry_id)
@@ -126,7 +151,7 @@ class ListService:
             column_two_value_json=self._normalize_value(db, definition.tenant_id, definition.column_two_value_type, payload.column_two_value),
         )
         created = self.repository.create_entry(db, entity)
-        return self._entry_read(created)
+        return self._entry_read(db, created, definition=definition)
 
     def update_entry(self, db: Session, list_entry_id: int, payload: ListEntryUpdate) -> ListEntryRead | None:
         entry = self.repository.get_entry(db, list_entry_id)
@@ -145,9 +170,9 @@ class ListService:
                 db, definition.tenant_id, definition.column_two_value_type, values.pop("column_two_value")
             )
         if not values:
-            return self._entry_read(entry)
+            return self._entry_read(db, entry, definition=definition)
         updated = self.repository.update_entry(db, entry, values)
-        return self._entry_read(updated)
+        return self._entry_read(db, updated, definition=definition)
 
     def delete_entry(self, db: Session, list_entry_id: int) -> bool:
         entry = self.repository.get_entry(db, list_entry_id)

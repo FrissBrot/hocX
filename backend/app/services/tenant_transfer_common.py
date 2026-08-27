@@ -25,6 +25,7 @@ point outside the exported tenant's own row set entirely:
 from __future__ import annotations
 
 import copy
+import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
@@ -80,6 +81,8 @@ def json_safe(value: Any) -> Any:
         return value.isoformat()
     if isinstance(value, Decimal):
         return str(value)
+    if isinstance(value, uuid.UUID):
+        return str(value)
     return value
 
 
@@ -122,16 +125,19 @@ file bytes through ClamAV) - `overrides` is applied after this loop and wins."""
 def build_row(model: type, data: dict[str, Any], overrides: dict[str, Any] | None = None) -> Any:
     """Builds a new, unattached ORM instance from an exported row dict.
 
-    `id` is always dropped (the DB assigns a fresh one); so is any DB-computed column (e.g.
-    app_user.name is `GENERATED ALWAYS AS (display_name)` - Postgres rejects an explicit
-    value for it). `created_at`/`updated_at` are kept as-is so imported historical data
-    keeps its real timestamps instead of getting "now". See FORCED_SECURE_DEFAULTS for the
-    (small) set of columns that are never trusted from the manifest regardless.
+    `id` is always dropped (the DB assigns a fresh one); so is `public_id` (the imported row
+    gets its own fresh UUIDv7 via the column's server_default - reusing the exported value
+    would collide with the still-existing source row's public_id under the UNIQUE
+    constraint). So is any DB-computed column (e.g. app_user.name is `GENERATED ALWAYS AS
+    (display_name)` - Postgres rejects an explicit value for it). `created_at`/`updated_at`
+    are kept as-is so imported historical data keeps its real timestamps instead of getting
+    "now". See FORCED_SECURE_DEFAULTS for the (small) set of columns that are never trusted
+    from the manifest regardless.
     """
     mapper = sa_inspect(model)
     values: dict[str, Any] = {}
     for column in mapper.columns:
-        if column.key == "id" or column.computed is not None:
+        if column.key in ("id", "public_id") or column.computed is not None:
             continue
         if column.key in FORCED_SECURE_DEFAULTS:
             values[column.key] = FORCED_SECURE_DEFAULTS[column.key]

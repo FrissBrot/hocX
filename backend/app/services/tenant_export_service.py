@@ -81,7 +81,11 @@ from app.services.tenant_transfer_common import (
     row_to_dict,
 )
 
-FORMAT_VERSION = 1
+# Bumped 1 -> 2: exported rows now include a public_id column (see build_row in
+# tenant_transfer_common.py, which drops it on import so each row gets a fresh UUIDv7) -
+# older exports remain readable in principle but importers should be explicit about the
+# format they were generated against.
+FORMAT_VERSION = 2
 ExportScope = Literal["structure", "structure_lists", "full", "full_abgabebox"]
 
 

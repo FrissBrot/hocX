@@ -1,3 +1,5 @@
+import uuid
+
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -5,6 +7,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, require_admin, require_reader
+from app.models.entities import DocumentTemplate, DocumentTemplatePart
 from app.schemas.document_template import (
     DocumentTemplateCreate,
     DocumentTemplatePartCreate,
@@ -13,10 +16,25 @@ from app.schemas.document_template import (
     DocumentTemplateRead,
     DocumentTemplateUpdate,
 )
+from app.services import public_id_service
 from app.services.document_template_service import DocumentTemplateService
 
 router = APIRouter()
 service = DocumentTemplateService()
+
+
+def _resolve_document_template_id(db: Session, user: CurrentUser, document_template_id: uuid.UUID) -> int:
+    internal_id = public_id_service.resolve_internal_id(db, DocumentTemplate, document_template_id, tenant_id=user.current_tenant_id)
+    if internal_id is None:
+        raise HTTPException(status_code=404, detail="Document template not found")
+    return internal_id
+
+
+def _resolve_part_id(db: Session, user: CurrentUser, part_id: uuid.UUID) -> int:
+    internal_id = public_id_service.resolve_internal_id(db, DocumentTemplatePart, part_id, tenant_id=user.current_tenant_id)
+    if internal_id is None:
+        raise HTTPException(status_code=404, detail="Document template part not found")
+    return internal_id
 
 
 @router.get("/document-templates", response_model=list[DocumentTemplateRead])
@@ -43,17 +61,15 @@ def create_document_template(
 
 @router.patch("/document-templates/{document_template_id}", response_model=DocumentTemplateRead)
 def patch_document_template(
-    document_template_id: int,
+    document_template_id: uuid.UUID,
     payload: DocumentTemplateUpdate,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_admin(user)
-    current = service.get_document_template(db, document_template_id)
-    if current is None or current.tenant_id != user.current_tenant_id:
-        raise HTTPException(status_code=404, detail="Document template not found")
+    internal_id = _resolve_document_template_id(db, user, document_template_id)
     try:
-        updated = service.update_document_template(db, document_template_id, payload)
+        updated = service.update_document_template(db, internal_id, payload)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Document template could not be updated") from exc
@@ -66,16 +82,14 @@ def patch_document_template(
 
 @router.delete("/document-templates/{document_template_id}", response_model=dict[str, str])
 def delete_document_template(
-    document_template_id: int,
+    document_template_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_admin(user)
-    current = service.get_document_template(db, document_template_id)
-    if current is None or current.tenant_id != user.current_tenant_id:
-        raise HTTPException(status_code=404, detail="Document template not found")
+    internal_id = _resolve_document_template_id(db, user, document_template_id)
     try:
-      deleted = service.delete_document_template(db, document_template_id)
+      deleted = service.delete_document_template(db, internal_id)
     except SQLAlchemyError as exc:
       db.rollback()
       raise HTTPException(status_code=400, detail="Document template could not be deleted") from exc
@@ -120,7 +134,7 @@ async def create_document_template_part(
 
 @router.patch("/document-template-parts/{part_id}", response_model=DocumentTemplatePartRead)
 async def patch_document_template_part(
-    part_id: int,
+    part_id: uuid.UUID,
     code: str | None = Form(default=None),
     name: str | None = Form(default=None),
     part_type: str | None = Form(default=None),
@@ -132,9 +146,7 @@ async def patch_document_template_part(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_admin(user)
-    current = service.get_document_template_part(db, part_id)
-    if current is None or current.tenant_id != user.current_tenant_id:
-        raise HTTPException(status_code=404, detail="Document template part not found")
+    internal_id = _resolve_part_id(db, user, part_id)
     payload = DocumentTemplatePartUpdate(
         code=code,
         name=name,
@@ -144,7 +156,7 @@ async def patch_document_template_part(
         is_active=is_active,
     )
     try:
-        updated = await service.update_document_template_part(db, part_id, payload, file)
+        updated = await service.update_document_template_part(db, internal_id, payload, file)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Document template part could not be updated") from exc
@@ -155,16 +167,14 @@ async def patch_document_template_part(
 
 @router.delete("/document-template-parts/{part_id}", response_model=dict[str, str])
 def delete_document_template_part(
-    part_id: int,
+    part_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_admin(user)
-    current = service.get_document_template_part(db, part_id)
-    if current is None or current.tenant_id != user.current_tenant_id:
-        raise HTTPException(status_code=404, detail="Document template part not found")
+    internal_id = _resolve_part_id(db, user, part_id)
     try:
-        deleted = service.delete_document_template_part(db, part_id)
+        deleted = service.delete_document_template_part(db, internal_id)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Document template part could not be deleted") from exc

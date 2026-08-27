@@ -4,6 +4,7 @@ import base64
 import hashlib
 import hmac
 import json
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -23,6 +24,7 @@ or forged token for one system must never be valid for the other."""
 @dataclass
 class CurrentAdmin:
     admin_id: int
+    admin_public_id: uuid.UUID
     email: str
     display_name: str
     role: str = "owner"
@@ -99,7 +101,9 @@ def get_optional_current_admin(
         token_iat = int(session_data.get("iat", 0))
         if int(admin.session_revoke_at.timestamp()) > token_iat:
             return None
-    return CurrentAdmin(admin_id=admin.id, email=admin.email, display_name=admin.display_name, role=admin.role)
+    return CurrentAdmin(
+        admin_id=admin.id, admin_public_id=admin.public_id, email=admin.email, display_name=admin.display_name, role=admin.role
+    )
 
 
 def get_current_admin(admin: CurrentAdmin | None = Depends(get_optional_current_admin)) -> CurrentAdmin:

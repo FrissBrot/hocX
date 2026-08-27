@@ -88,7 +88,7 @@ from app.services.tenant_transfer_common import (
     remap_template_element_config,
 )
 
-SUPPORTED_FORMAT_VERSION = 1
+SUPPORTED_FORMAT_VERSION = 2
 
 # Zip-bomb guard, same idea as file_service.py's MAX_ZIP_ENTRIES/MAX_ZIP_TOTAL_BYTES for the
 # word-import ZIP upload, just scaled up: a full-tenant export can legitimately contain many

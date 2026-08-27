@@ -3,9 +3,10 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import ProtocolTodo, TodoStatus
+from app.models import AppUser, Event, Participant, Protocol, ProtocolElementBlock, ProtocolTodo, SubmissionAssignment, TodoStatus
 from app.repositories.protocol_todo_repository import ProtocolTodoRepository
 from app.schemas.protocol import ProtocolTodoCreate, ProtocolTodoRead, ProtocolTodoUpdate, TodoListItem
+from app.services import public_id_service
 
 # Status codes that count as "closed"/completed for completed_at purposes - mirrors the
 # closed_status_ids grouping used elsewhere (e.g. ProtocolService._open_todos_for_template_block)
@@ -19,11 +20,32 @@ class ProtocolTodoService:
 
     def list_todos(self, db: Session, protocol_element_block_id: int) -> list[ProtocolTodoRead]:
         rows = self.repository.list_for_protocol_block(db, protocol_element_block_id)
-        return [self._row_to_todo_read(row) for row in rows]
+        return [self._row_to_todo_read(db, row) for row in rows]
 
-    def _common_fields(self, row) -> dict:
+    def _common_fields(self, db: Session, row) -> dict:
+        todo = row.ProtocolTodo
         return {
-            **row.ProtocolTodo.__dict__,
+            **todo.__dict__,
+            "id": todo.public_id,
+            "protocol_element_block_id": public_id_service.resolve_public_id(db, ProtocolElementBlock, todo.protocol_element_block_id)
+            if todo.protocol_element_block_id is not None
+            else None,
+            "assigned_user_id": public_id_service.resolve_public_id(db, AppUser, todo.assigned_user_id)
+            if todo.assigned_user_id is not None
+            else None,
+            "assigned_participant_id": public_id_service.resolve_public_id(db, Participant, todo.assigned_participant_id)
+            if todo.assigned_participant_id is not None
+            else None,
+            "due_event_id": public_id_service.resolve_public_id(db, Event, todo.due_event_id)
+            if todo.due_event_id is not None
+            else None,
+            "created_by": public_id_service.resolve_public_id(db, AppUser, todo.created_by) if todo.created_by is not None else None,
+            "closed_in_protocol_id": public_id_service.resolve_public_id(db, Protocol, todo.closed_in_protocol_id)
+            if todo.closed_in_protocol_id is not None
+            else None,
+            "submission_assignment_id": public_id_service.resolve_public_id(db, SubmissionAssignment, todo.submission_assignment_id)
+            if todo.submission_assignment_id is not None
+            else None,
             "todo_status_code": row.todo_status_code,
             "assigned_participant_name": row.assigned_participant_name,
             "due_event_title": row.due_event_title,
@@ -32,13 +54,13 @@ class ProtocolTodoService:
             "resolved_due_label": row.resolved_due_label,
         }
 
-    def _row_to_todo_read(self, row) -> ProtocolTodoRead:
-        return ProtocolTodoRead(**self._common_fields(row))
+    def _row_to_todo_read(self, db: Session, row) -> ProtocolTodoRead:
+        return ProtocolTodoRead(**self._common_fields(db, row))
 
-    def _row_to_list_item(self, row) -> TodoListItem:
+    def _row_to_list_item(self, db: Session, row) -> TodoListItem:
         return TodoListItem(
-            **self._common_fields(row),
-            protocol_id=row.protocol_id,
+            **self._common_fields(db, row),
+            protocol_id=public_id_service.resolve_public_id(db, Protocol, row.protocol_id) if row.protocol_id is not None else None,
             protocol_number=row.protocol_number,
             protocol_date=row.protocol_date,
             protocol_title=row.protocol_title,
@@ -62,21 +84,21 @@ class ProtocolTodoService:
 
     def list_todos_for_tenant(self, db: Session, tenant_id: int, skip: int = 0, limit: int = 100) -> list[TodoListItem]:
         rows = self.repository.list_for_tenant(db, tenant_id, skip=skip, limit=limit)
-        return [self._row_to_list_item(row) for row in rows]
+        return [self._row_to_list_item(db, row) for row in rows]
 
     def list_todos_for_user(self, db: Session, tenant_id: int, user_id: int, skip: int = 0, limit: int = 100) -> list[TodoListItem]:
         rows = self.repository.list_for_user(db, tenant_id, user_id, skip=skip, limit=limit)
-        return [self._row_to_list_item(row) for row in rows]
+        return [self._row_to_list_item(db, row) for row in rows]
 
     def list_todos_for_protocols_or_assigned(
         self, db: Session, tenant_id: int, protocol_ids: list[int], user_id: int, skip: int = 0, limit: int = 100
     ) -> list[TodoListItem]:
         rows = self.repository.list_for_protocols_or_assigned(db, tenant_id, protocol_ids, user_id, skip=skip, limit=limit)
-        return [self._row_to_list_item(row) for row in rows]
+        return [self._row_to_list_item(db, row) for row in rows]
 
     def list_pending_for_protocol(self, db: Session, protocol_id: int, template_id: int, protocol_date) -> list[TodoListItem]:
         rows = self.repository.list_pending_for_protocol(db, protocol_id, template_id, protocol_date)
-        return [self._row_to_list_item(row) for row in rows]
+        return [self._row_to_list_item(db, row) for row in rows]
 
     def _normalize_due_fields(self, values: dict) -> dict:
         if values.get("due_marker"):
@@ -92,21 +114,24 @@ class ProtocolTodoService:
         return values
 
     def create_standalone_todo(self, db: Session, tenant_id: int, payload: ProtocolTodoCreate) -> ProtocolTodo:
-        # Unlike create_todo() below, this had no validation at all before the fix (audit D6,
-        # 2026-08-16): an assigned_participant_id/due_event_id from a different tenant was
-        # stored unvalidated and then leaked back out via the todo list's outerjoin on
-        # Participant.display_name. Uses the tenant-scoped counterparts (no protocol/template
-        # context exists for a standalone todo) - see participant_allowed_for_tenant().
-        if payload.assigned_participant_id is not None and not self.repository.participant_allowed_for_tenant(
-            db, tenant_id, payload.assigned_participant_id
+        # assigned_participant_id/due_event_id/assigned_user_id arrive as public UUIDs -
+        # resolve to internal ids first (unscoped; the *_allowed_for_tenant checks right
+        # below are the actual authorization boundary, unchanged from before this migration
+        # - see their docstrings, e.g. audit D6 2026-08-16 for why they exist at all).
+        assigned_participant_id = public_id_service.resolve_internal_id(db, Participant, payload.assigned_participant_id) if payload.assigned_participant_id else None
+        due_event_id = public_id_service.resolve_internal_id(db, Event, payload.due_event_id) if payload.due_event_id else None
+        assigned_user_id = public_id_service.resolve_internal_id(db, AppUser, payload.assigned_user_id) if payload.assigned_user_id else None
+        created_by = public_id_service.resolve_internal_id(db, AppUser, payload.created_by) if payload.created_by else None
+        if payload.assigned_participant_id is not None and (
+            assigned_participant_id is None or not self.repository.participant_allowed_for_tenant(db, tenant_id, assigned_participant_id)
         ):
             raise ValueError("Assigned participant is not available for this tenant")
-        if payload.due_event_id is not None and not self.repository.event_allowed_for_tenant(
-            db, tenant_id, payload.due_event_id
+        if payload.due_event_id is not None and (
+            due_event_id is None or not self.repository.event_allowed_for_tenant(db, tenant_id, due_event_id)
         ):
             raise ValueError("Due event is not available for this tenant")
-        if payload.assigned_user_id is not None and not self.repository.user_allowed_for_tenant(
-            db, tenant_id, payload.assigned_user_id
+        if payload.assigned_user_id is not None and (
+            assigned_user_id is None or not self.repository.user_allowed_for_tenant(db, tenant_id, assigned_user_id)
         ):
             raise ValueError("Assigned user is not available for this tenant")
         values = self._normalize_due_fields(payload.model_dump())
@@ -115,51 +140,52 @@ class ProtocolTodoService:
             protocol_element_block_id=None,
             sort_index=self.repository.next_sort_index(db, None),
             task=payload.task,
-            assigned_user_id=payload.assigned_user_id,
-            assigned_participant_id=payload.assigned_participant_id,
+            assigned_user_id=assigned_user_id,
+            assigned_participant_id=assigned_participant_id,
             todo_status_id=payload.todo_status_id,
             due_date=values.get("due_date"),
-            due_event_id=values.get("due_event_id"),
+            due_event_id=due_event_id,
             due_marker=values.get("due_marker"),
             reference_link=payload.reference_link,
             tags=payload.tags,
-            created_by=payload.created_by,
+            created_by=created_by,
         )
         return self.repository.create(db, todo)
 
     def create_todo(
         self, db: Session, protocol_element_block_id: int, payload: ProtocolTodoCreate, *, track_changes_active: bool = False
     ) -> ProtocolTodo:
-        if payload.assigned_participant_id is not None and not self.repository.participant_allowed_for_block(
-            db,
-            protocol_element_block_id,
-            payload.assigned_participant_id,
+        assigned_participant_id = public_id_service.resolve_internal_id(db, Participant, payload.assigned_participant_id) if payload.assigned_participant_id else None
+        due_event_id = public_id_service.resolve_internal_id(db, Event, payload.due_event_id) if payload.due_event_id else None
+        assigned_user_id = public_id_service.resolve_internal_id(db, AppUser, payload.assigned_user_id) if payload.assigned_user_id else None
+        created_by = public_id_service.resolve_internal_id(db, AppUser, payload.created_by) if payload.created_by else None
+        if payload.assigned_participant_id is not None and (
+            assigned_participant_id is None
+            or not self.repository.participant_allowed_for_block(db, protocol_element_block_id, assigned_participant_id)
         ):
             raise ValueError("Assigned participant is not available for this template")
-        if payload.due_event_id is not None and not self.repository.event_allowed_for_block(
-            db,
-            protocol_element_block_id,
-            payload.due_event_id,
+        if payload.due_event_id is not None and (
+            due_event_id is None or not self.repository.event_allowed_for_block(db, protocol_element_block_id, due_event_id)
         ):
             raise ValueError("Due event is not available for this tenant")
         if payload.assigned_user_id is not None:
             tenant_id = self.repository.tenant_id_for_block(db, protocol_element_block_id)
-            if tenant_id is None or not self.repository.user_allowed_for_tenant(db, tenant_id, payload.assigned_user_id):
+            if tenant_id is None or assigned_user_id is None or not self.repository.user_allowed_for_tenant(db, tenant_id, assigned_user_id):
                 raise ValueError("Assigned user is not available for this tenant")
         values = self._normalize_due_fields(payload.model_dump())
         todo = ProtocolTodo(
             protocol_element_block_id=protocol_element_block_id,
             sort_index=self.repository.next_sort_index(db, protocol_element_block_id),
             task=payload.task,
-            assigned_user_id=payload.assigned_user_id,
-            assigned_participant_id=payload.assigned_participant_id,
+            assigned_user_id=assigned_user_id,
+            assigned_participant_id=assigned_participant_id,
             todo_status_id=payload.todo_status_id,
             due_date=values.get("due_date"),
-            due_event_id=values.get("due_event_id"),
+            due_event_id=due_event_id,
             due_marker=values.get("due_marker"),
             reference_link=payload.reference_link,
             tags=payload.tags,
-            created_by=payload.created_by,
+            created_by=created_by,
             tracked_change="added" if track_changes_active else None,
         )
         return self.repository.create(db, todo)
@@ -170,6 +196,19 @@ class ProtocolTodoService:
             return None
         values = payload.model_dump(exclude_unset=True)
         values = self._normalize_due_fields(values)
+        # assigned_participant_id/due_event_id/assigned_user_id/closed_in_protocol_id arrive
+        # as public UUIDs - resolve to internal ids in place before any of the checks/DB
+        # writes below, which all expect internal ints. Unscoped resolution here is fine -
+        # the *_allowed_for_* checks right below are the actual authorization boundary.
+        for field, model in (
+            ("assigned_participant_id", Participant),
+            ("due_event_id", Event),
+            ("assigned_user_id", AppUser),
+            ("closed_in_protocol_id", Protocol),
+        ):
+            if field in values and values[field] is not None:
+                resolved = public_id_service.resolve_internal_id(db, model, values[field])
+                values[field] = resolved if resolved is not None else -1  # sentinel: fails the ownership check below
         # Standalone todos (protocol_element_block_id is None) must use the tenant-scoped
         # checks, not the block-scoped ones - the block-scoped queries INNER JOIN through
         # ProtocolElementBlock.id == protocol_element_block_id, which can never match NULL,

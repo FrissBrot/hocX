@@ -1,3 +1,5 @@
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
@@ -5,6 +7,8 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, get_optional_current_user
+from app.models import Tenant
+from app.services import public_id_service
 from app.schemas.mfa import (
     LoginResponse,
     MfaTicketRequest,
@@ -108,9 +112,9 @@ def tenant_by_domain(domain: str, db: Session = Depends(get_db)):
     if tenant is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown domain")
     return TenantByDomainRead(
-        tenant_id=tenant.id,
+        tenant_id=tenant.public_id,
         tenant_name=tenant.name,
-        profile_image_url=build_tenant_profile_image_url(tenant.id, tenant.profile_image_path),
+        profile_image_url=build_tenant_profile_image_url(tenant.public_id, tenant.profile_image_path),
     )
 
 
@@ -144,13 +148,16 @@ def session(request: Request, db: Session = Depends(get_db), user: CurrentUser |
 
 @router.post("/select-tenant/{tenant_id}", response_model=SessionRead)
 def select_tenant(
-    tenant_id: int,
+    tenant_id: uuid.UUID,
     response: Response,
     request: Request,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    return service.select_tenant(db, response, user, tenant_id, request_host=request.url.hostname)
+    internal_id = public_id_service.resolve_internal_id(db, Tenant, tenant_id)
+    if internal_id is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    return service.select_tenant(db, response, user, internal_id, request_host=request.url.hostname)
 
 
 @router.get("/bridge")

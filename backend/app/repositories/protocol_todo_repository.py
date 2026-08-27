@@ -1,8 +1,11 @@
+import uuid
+
 from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import ElementType, Event, Participant, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolTodo, Template, TemplateParticipant, TodoStatus, UserTenantRole
 from app.repositories.participant_repository import participant_eligible_on
+from app.services import public_id_service
 
 
 class ProtocolTodoRepository:
@@ -147,6 +150,9 @@ class ProtocolTodoRepository:
     def get(self, db: Session, todo_id: int) -> ProtocolTodo | None:
         return db.get(ProtocolTodo, todo_id)
 
+    def get_by_public_id(self, db: Session, public_id: uuid.UUID, *, tenant_id: int) -> ProtocolTodo | None:
+        return public_id_service.get_by_public_id(db, ProtocolTodo, public_id, tenant_id=tenant_id)
+
     def get_row(self, db: Session, todo_id: int):
         """Same joined shape as the list_* queries (status code, participant name, resolved
         due date/label, ...) but for exactly one todo - used to build a TodoListItem response
@@ -258,9 +264,9 @@ class ProtocolTodoRepository:
         """Return all protocol-element blocks of type 'todo' for a tenant, ordered by protocol date desc."""
         return db.execute(
             select(
-                ProtocolElementBlock.id.label("block_id"),
+                ProtocolElementBlock.public_id.label("block_id"),
                 ProtocolElementBlock.block_title_snapshot.label("block_title"),
-                Protocol.id.label("protocol_id"),
+                Protocol.public_id.label("protocol_id"),
                 Protocol.protocol_number.label("protocol_number"),
                 Protocol.title.label("protocol_title"),
                 Protocol.protocol_date.label("protocol_date"),

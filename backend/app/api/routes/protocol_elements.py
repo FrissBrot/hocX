@@ -1,4 +1,5 @@
 import json
+import uuid
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -8,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.core.db import get_db
 from app.core.redis_client import get_redis_sync
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
-from app.models import ProtocolElementBlock
+from app.models import ElementDefinition, Event, Protocol, ProtocolElement, ProtocolElementBlock, TemplateElement, TemplateElementBlock
 from app.schemas.protocol import (
     ProtocolElementBlockFromEventCreate,
     ProtocolElementBlockRead,
@@ -18,7 +19,7 @@ from app.schemas.protocol import (
     ProtocolTextRead,
     ProtocolTextUpdate,
 )
-from app.services import list_snapshot_service
+from app.services import list_snapshot_service, public_id_service
 from app.services.autosave_service import AutosaveService
 from app.services.access_service import AccessService
 from app.services.collaboration_service import conflicting_lock_holder_sync, protocol_channel
@@ -49,17 +50,17 @@ def _broadcast_block_update(protocol_id: int, block: ProtocolElementBlock, user:
     )
 
 
-def _block_and_protocol_or_404(db: Session, user: CurrentUser, protocol_element_block_id: int):
+def _block_and_protocol_or_404(db: Session, user: CurrentUser, protocol_element_block_id: uuid.UUID):
     """Shared guard for the list-snapshot/text/config routes below: resolves the block + its
     protocol, 404s if either is missing/inaccessible, 409s if the protocol is already
     abgeschlossen (permanently frozen, edits/refresh/undo no longer apply). The 404/409
     protocol check itself lives on ProtocolService so app/api/routes/todos.py can share the
     exact same logic for todos, which hang off a protocol_id rather than a block."""
-    access_service.ensure_can_read_protocol_block(db, user, protocol_element_block_id)
-    block = db.get(ProtocolElementBlock, protocol_element_block_id)
+    block = public_id_service.get_by_public_id(db, ProtocolElementBlock, protocol_element_block_id)
     if block is None:
         raise HTTPException(status_code=404, detail="Protocol element block not found")
-    protocol_id = access_service.repository.protocol_id_for_block(db, protocol_element_block_id=protocol_element_block_id)
+    access_service.ensure_can_read_protocol_block(db, user, block.id)
+    protocol_id = access_service.repository.protocol_id_for_block(db, protocol_element_block_id=block.id)
     protocol = protocol_service.get_protocol_or_404_not_frozen(db, protocol_id)
     return block, protocol
 
@@ -84,12 +85,16 @@ def _ensure_block_not_locked_by_other(protocol_id: int, protocol_element_block_i
         )
 
 
-def _block_to_read(block) -> ProtocolElementBlockRead:
+def _block_to_read(db: Session, block) -> ProtocolElementBlockRead:
     return ProtocolElementBlockRead(
-        id=block.id,
-        protocol_element_id=block.protocol_element_id,
-        template_element_block_id=block.template_element_block_id,
-        element_definition_id=block.element_definition_id,
+        id=block.public_id,
+        protocol_element_id=public_id_service.resolve_public_id(db, ProtocolElement, block.protocol_element_id),
+        template_element_block_id=public_id_service.resolve_public_id(db, TemplateElementBlock, block.template_element_block_id)
+        if block.template_element_block_id is not None
+        else None,
+        element_definition_id=public_id_service.resolve_public_id(db, ElementDefinition, block.element_definition_id)
+        if block.element_definition_id is not None
+        else None,
         element_type_id=block.element_type_id,
         render_type_id=block.render_type_id,
         element_type_code=None,
@@ -115,28 +120,34 @@ def _block_to_read(block) -> ProtocolElementBlockRead:
 
 @router.get("/protocols/{protocol_id}/elements", response_model=list[ProtocolElementRead])
 def list_protocol_elements(
-    protocol_id: int,
+    protocol_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_reader(user)
-    access_service.ensure_can_read_protocol(db, user, protocol_id)
-    return service.list_protocol_elements(db, protocol_id)
+    protocol = public_id_service.get_by_public_id(db, Protocol, protocol_id, tenant_id=user.current_tenant_id)
+    if protocol is None:
+        raise HTTPException(status_code=404, detail="Protocol not found")
+    access_service.ensure_can_read_protocol(db, user, protocol.id)
+    return service.list_protocol_elements(db, protocol.id)
 
 
 @router.patch("/protocol-elements/{protocol_element_id}", response_model=ProtocolElementRead)
 def patch_protocol_element(
-    protocol_element_id: int,
+    protocol_element_id: uuid.UUID,
     payload: ProtocolElementUpdate,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
-    access_service.ensure_can_read_protocol_element(db, user, protocol_element_id)
-    protocol_id = access_service.repository.protocol_id_for_element(db, protocol_element_id=protocol_element_id)
+    element = public_id_service.get_by_public_id(db, ProtocolElement, protocol_element_id)
+    if element is None:
+        raise HTTPException(status_code=404, detail="Protocol element not found")
+    access_service.ensure_can_read_protocol_element(db, user, element.id)
+    protocol_id = access_service.repository.protocol_id_for_element(db, protocol_element_id=element.id)
     protocol_service.get_protocol_or_404_not_frozen(db, protocol_id)
     try:
-        protocol_element = service.update_protocol_element(db, protocol_element_id, payload)
+        protocol_element = service.update_protocol_element(db, element.id, payload)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Protocol element could not be updated") from exc
@@ -144,9 +155,11 @@ def patch_protocol_element(
         raise HTTPException(status_code=404, detail="Protocol element not found")
     protocol = protocol_service.get_protocol(db, protocol_element.protocol_id)
     return ProtocolElementRead(
-        id=protocol_element.id,
-        protocol_id=protocol_element.protocol_id,
-        template_element_id=protocol_element.template_element_id,
+        id=protocol_element.public_id,
+        protocol_id=public_id_service.resolve_public_id(db, Protocol, protocol_element.protocol_id),
+        template_element_id=public_id_service.resolve_public_id(db, TemplateElement, protocol_element.template_element_id)
+        if protocol_element.template_element_id is not None
+        else None,
         sort_index=protocol_element.sort_index,
         section_name_snapshot=resolve_display_section_title(db, protocol_element, protocol.status if protocol else "", protocol.tenant_id if protocol else None),
         section_order_snapshot=protocol_element.section_order_snapshot,
@@ -159,27 +172,27 @@ def patch_protocol_element(
 
 @router.patch("/protocol-element-blocks/{protocol_element_block_id}", response_model=ProtocolElementBlockRead)
 def patch_protocol_element_block(
-    protocol_element_block_id: int,
+    protocol_element_block_id: uuid.UUID,
     payload: ProtocolElementBlockUpdate,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
-    _, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
-    _ensure_block_not_locked_by_other(protocol.id, protocol_element_block_id, user)
+    existing, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
+    _ensure_block_not_locked_by_other(protocol.id, existing.id, user)
     try:
-        protocol_element_block = service.update_protocol_element_block(db, protocol_element_block_id, payload)
+        protocol_element_block = service.update_protocol_element_block(db, existing.id, payload)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Protocol element block could not be updated") from exc
     if protocol_element_block is None:
         raise HTTPException(status_code=404, detail="Protocol element block not found")
-    return _block_to_read(protocol_element_block)
+    return _block_to_read(db, protocol_element_block)
 
 
 @router.post("/protocol-element-blocks/{protocol_element_block_id}/list-snapshot/refresh", response_model=ProtocolElementBlockRead)
 def refresh_block_list_snapshot(
-    protocol_element_block_id: int,
+    protocol_element_block_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -192,12 +205,12 @@ def refresh_block_list_snapshot(
         db, block, protocol.tenant_id, keep_undo=True, track_changes_active=track_changes_active
     )
     _broadcast_block_update(protocol.id, block, user)
-    return _block_to_read(block)
+    return _block_to_read(db, block)
 
 
 @router.post("/protocol-element-blocks/{protocol_element_block_id}/list-snapshot/sync", response_model=ProtocolElementBlockRead)
 def sync_block_list_snapshot(
-    protocol_element_block_id: int,
+    protocol_element_block_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -211,12 +224,12 @@ def sync_block_list_snapshot(
         db, block, protocol.tenant_id, keep_undo=False, track_changes_active=track_changes_active
     )
     _broadcast_block_update(protocol.id, block, user)
-    return _block_to_read(block)
+    return _block_to_read(db, block)
 
 
 @router.post("/protocol-element-blocks/{protocol_element_block_id}/list-snapshot/undo", response_model=ProtocolElementBlockRead)
 def undo_block_list_snapshot(
-    protocol_element_block_id: int,
+    protocol_element_block_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -226,19 +239,19 @@ def undo_block_list_snapshot(
     if updated is None:
         raise HTTPException(status_code=409, detail="Nothing to undo")
     _broadcast_block_update(protocol.id, updated, user)
-    return _block_to_read(updated)
+    return _block_to_read(db, updated)
 
 
 @router.delete("/protocol-element-blocks/{protocol_element_block_id}", status_code=204)
 def delete_protocol_element_block(
-    protocol_element_block_id: int,
+    protocol_element_block_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
-    _block_and_protocol_or_404(db, user, protocol_element_block_id)
+    existing, _ = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     try:
-        found = service.delete_protocol_element_block(db, protocol_element_block_id)
+        found = service.delete_protocol_element_block(db, existing.id)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Protocol element block could not be deleted") from exc
@@ -248,20 +261,26 @@ def delete_protocol_element_block(
 
 @router.post("/protocol-elements/{protocol_element_id}/blocks/from-event", response_model=ProtocolElementBlockRead)
 def create_protocol_element_block_from_event(
-    protocol_element_id: int,
+    protocol_element_id: uuid.UUID,
     payload: ProtocolElementBlockFromEventCreate,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
-    access_service.ensure_can_read_protocol_element(db, user, protocol_element_id)
-    protocol_id = access_service.repository.protocol_id_for_element(db, protocol_element_id=protocol_element_id)
+    element = public_id_service.get_by_public_id(db, ProtocolElement, protocol_element_id)
+    if element is None:
+        raise HTTPException(status_code=404, detail="Protocol element not found")
+    access_service.ensure_can_read_protocol_element(db, user, element.id)
+    protocol_id = access_service.repository.protocol_id_for_element(db, protocol_element_id=element.id)
     protocol_service.get_protocol_or_404_not_frozen(db, protocol_id)
+    event_internal_id = public_id_service.resolve_internal_id(db, Event, payload.event_id, tenant_id=user.current_tenant_id)
+    if event_internal_id is None:
+        raise HTTPException(status_code=400, detail="Event does not belong to current tenant")
     try:
         protocol_block = protocol_service.add_event_block_to_element(
             db,
-            protocol_element_id=protocol_element_id,
-            event_id=payload.event_id,
+            protocol_element_id=element.id,
+            event_id=event_internal_id,
             tenant_id=user.current_tenant_id,
         )
     except ValueError as exc:
@@ -269,27 +288,30 @@ def create_protocol_element_block_from_event(
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Block could not be created") from exc
-    return _block_to_read(protocol_block)
+    return _block_to_read(db, protocol_block)
 
 
 @router.post("/protocol-element-blocks/{protocol_element_block_id}/list-snapshot/entries/{entry_id}/accept-tracked-change", response_model=ProtocolElementBlockRead)
 def accept_tracked_list_entry(
-    protocol_element_block_id: int,
+    protocol_element_block_id: uuid.UUID,
     entry_id: int,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    """'Ausblenden' for one whole-list entry's red tracked-change highlight."""
+    """'Ausblenden' for one whole-list entry's red tracked-change highlight. entry_id here
+    is the *frozen snapshot's* copy of a ListEntry id inside configuration_snapshot_json,
+    not a live lookup - deliberately left as the internal int the snapshot already stores
+    (see the public_id migration's deferred scope for block/snapshot JSON payloads)."""
     require_writer(user)
     block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     block = list_snapshot_service.accept_tracked_list_entry(db, block, entry_id)
     _broadcast_block_update(protocol.id, block, user)
-    return _block_to_read(block)
+    return _block_to_read(db, block)
 
 
 @router.post("/protocol-element-blocks/{protocol_element_block_id}/rows/{row_id}/accept-tracked-change", response_model=ProtocolElementBlockRead)
 def accept_tracked_row(
-    protocol_element_block_id: int,
+    protocol_element_block_id: uuid.UUID,
     row_id: str,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
@@ -299,20 +321,20 @@ def accept_tracked_row(
     block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     block = list_snapshot_service.accept_tracked_row(db, block, row_id)
     _broadcast_block_update(protocol.id, block, user)
-    return _block_to_read(block)
+    return _block_to_read(db, block)
 
 
 @router.post("/protocol-element-blocks/{protocol_element_block_id}/text/accept-tracked-changes", response_model=ProtocolTextRead)
 def accept_text_tracked_changes(
-    protocol_element_block_id: int,
+    protocol_element_block_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     """'Ausblenden' for a text block's red tracked-change highlight (whole block)."""
     require_writer(user)
-    _block_and_protocol_or_404(db, user, protocol_element_block_id)
+    existing, _ = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     try:
-        result = autosave_service.accept_tracked_changes(db, protocol_element_block_id)
+        result = autosave_service.accept_tracked_changes(db, existing.id)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Change could not be accepted") from exc
@@ -323,15 +345,15 @@ def accept_text_tracked_changes(
 
 @router.put("/protocol-element-blocks/{protocol_element_block_id}/text", response_model=ProtocolTextRead)
 def put_protocol_text(
-    protocol_element_block_id: int,
+    protocol_element_block_id: uuid.UUID,
     payload: ProtocolTextUpdate,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
     block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
-    _ensure_block_not_locked_by_other(protocol.id, protocol_element_block_id, user)
-    current_text = autosave_service.text_repository.get_by_protocol_element_block_id(db, protocol_element_block_id)
+    _ensure_block_not_locked_by_other(protocol.id, block.id, user)
+    current_text = autosave_service.text_repository.get_by_protocol_element_block_id(db, block.id)
     current_content = current_text.content if current_text is not None else ""
     if payload.expected_content is not None and payload.expected_content != current_content:
         raise HTTPException(
@@ -342,7 +364,7 @@ def put_protocol_text(
     try:
         result = autosave_service.save_text_block(
             db,
-            protocol_element_block_id,
+            block.id,
             payload.content,
             tenant_id=protocol.tenant_id,
             track_changes_active=track_changes_active,

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import uuid
 from datetime import date, datetime
-from typing import Literal
+from typing import ClassVar, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.models.entities import AppUser, DocumentTemplate, Event, Template, Tenant
+from app.schemas.base import PublicIdModel
 from app.schemas.event import EventRead
 
 # Mirrors the DB's ck_protocol_status CHECK constraint (models/entities.py) and
@@ -26,44 +29,53 @@ def _validate_reference_link(value: str | None) -> str | None:
 
 
 class ProtocolCreateFromTemplate(BaseModel):
-    template_id: int
-    document_template_id: int | None = None
+    # UUIDs as received from the client - the router resolves these to internal ids
+    # (see app.services.public_id_service) before calling into ProtocolService.
+    template_id: uuid.UUID
+    document_template_id: uuid.UUID | None = None
     protocol_number: str | None = None
     protocol_date: date
-    created_by: int | None = None
     title: str | None = None
-    event_id: int | None = None
+    event_id: uuid.UUID | None = None
 
 
 class ProtocolUpdate(BaseModel):
     title: str | None = None
     protocol_date: date | None = None
-    event_id: int | None = None
+    event_id: uuid.UUID | None = None
     status: ProtocolStatus | None = None
-    document_template_id: int | None = None
+    document_template_id: uuid.UUID | None = None
     session_notes: str | None = None
     expected_session_notes: str | None = None
     track_changes_enabled: bool | None = None
 
 
-class ProtocolRead(BaseModel):
-    id: int
-    tenant_id: int
-    template_id: int
+class ProtocolRead(PublicIdModel):
+    _fk_models: ClassVar[dict[str, type]] = {
+        "tenant_id": Tenant,
+        "template_id": Template,
+        "document_template_id": DocumentTemplate,
+        "event_id": Event,
+        "created_by": AppUser,
+    }
+
+    id: uuid.UUID
+    tenant_id: uuid.UUID
+    template_id: uuid.UUID
     template_version: int
-    document_template_id: int | None = None
+    document_template_id: uuid.UUID | None = None
     document_template_version: int | None = None
     protocol_number: str
     title: str | None = None
     protocol_date: date
-    event_id: int | None = None
+    event_id: uuid.UUID | None = None
     status: str
     version_major: int = 0
     version_minor: int = 0
     version_final_minor: int = 0
     session_notes: str | None = None
     track_changes_enabled: bool = False
-    created_by: int | None = None
+    created_by: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
     latest_pdf_url: str | None = None
@@ -72,23 +84,21 @@ class ProtocolRead(BaseModel):
     import_source_filename: str | None = None
     import_source_url: str | None = None
 
-    model_config = {"from_attributes": True}
-
 
 class NextSessionAttendanceEntry(BaseModel):
-    participant_id: int
+    participant_id: uuid.UUID
     participant_name: str
     status: str
 
 
 class NextSessionRead(BaseModel):
     protocol: ProtocolRead | None = None
-    attendance_block_id: int | None = None
+    attendance_block_id: uuid.UUID | None = None
     entries: list[NextSessionAttendanceEntry] = Field(default_factory=list)
 
 
 class ProtocolCycleInfo(BaseModel):
-    cycle_config_id: int
+    cycle_config_id: uuid.UUID
     cycle_year: int
     label: str
 
@@ -104,10 +114,14 @@ class AttendanceExcusePayload(BaseModel):
 
 
 class ProtocolElementBlockRead(BaseModel):
-    id: int
-    protocol_element_id: int
-    template_element_block_id: int | None = None
-    element_definition_id: int | None = None
+    # Built via explicit keyword construction (protocol_elements.py's _block_to_read) - not
+    # from_attributes, so id/protocol_element_id/template_element_block_id/
+    # element_definition_id are resolved to public UUIDs there directly. element_type_id/
+    # render_type_id are lookup-table codes, deliberately kept as small numeric ids.
+    id: uuid.UUID
+    protocol_element_id: uuid.UUID
+    template_element_block_id: uuid.UUID | None = None
+    element_definition_id: uuid.UUID | None = None
     element_type_id: int
     render_type_id: int
     element_type_code: str | None = None
@@ -134,9 +148,11 @@ class ProtocolElementBlockRead(BaseModel):
 
 
 class ProtocolElementRead(BaseModel):
-    id: int
-    protocol_id: int
-    template_element_id: int | None = None
+    # Built via explicit keyword construction (protocol_element_service.py) - see
+    # ProtocolElementBlockRead's identical note.
+    id: uuid.UUID
+    protocol_id: uuid.UUID
+    template_element_id: uuid.UUID | None = None
     sort_index: int
     section_name_snapshot: str
     section_order_snapshot: int | None = None
@@ -168,7 +184,7 @@ class ProtocolElementBlockUpdate(BaseModel):
 
 
 class ProtocolElementBlockFromEventCreate(BaseModel):
-    event_id: int
+    event_id: uuid.UUID
 
 
 class QuickTodoCreate(BaseModel):
@@ -184,7 +200,7 @@ class ProtocolTextUpdate(BaseModel):
 
 
 class ProtocolTextRead(BaseModel):
-    protocol_element_block_id: int
+    protocol_element_block_id: uuid.UUID
     content: str
     status: str
     tracked_dirty: bool = False
@@ -193,47 +209,49 @@ class ProtocolTextRead(BaseModel):
 
 class ProtocolTodoCreate(BaseModel):
     task: str
-    assigned_user_id: int | None = None
-    assigned_participant_id: int | None = None
+    assigned_user_id: uuid.UUID | None = None
+    assigned_participant_id: uuid.UUID | None = None
     todo_status_id: int = 1
     due_date: date | None = None
-    due_event_id: int | None = None
+    due_event_id: uuid.UUID | None = None
     due_marker: str | None = None
     reference_link: str | None = None
     tags: list[str] = []
-    created_by: int | None = None
+    created_by: uuid.UUID | None = None
 
     _validate_reference_link = field_validator("reference_link")(_validate_reference_link)
 
 
 class ProtocolTodoUpdate(BaseModel):
     task: str | None = None
-    assigned_user_id: int | None = None
-    assigned_participant_id: int | None = None
+    assigned_user_id: uuid.UUID | None = None
+    assigned_participant_id: uuid.UUID | None = None
     todo_status_id: int | None = None
     due_date: date | None = None
-    due_event_id: int | None = None
+    due_event_id: uuid.UUID | None = None
     due_marker: str | None = None
     completed_at: datetime | None = None
     reference_link: str | None = None
     tags: list[str] | None = None
-    closed_in_protocol_id: int | None = None
+    closed_in_protocol_id: uuid.UUID | None = None
 
     _validate_reference_link = field_validator("reference_link")(_validate_reference_link)
 
 
 class ProtocolTodoRead(BaseModel):
-    id: int
-    protocol_element_block_id: int | None = None
+    # Built via explicit keyword construction in ProtocolTodoService (joined query rows,
+    # not a plain ORM object) - see _common_fields, which resolves every FK field below.
+    id: uuid.UUID
+    protocol_element_block_id: uuid.UUID | None = None
     sort_index: int
     task: str
-    assigned_user_id: int | None = None
-    assigned_participant_id: int | None = None
+    assigned_user_id: uuid.UUID | None = None
+    assigned_participant_id: uuid.UUID | None = None
     assigned_participant_name: str | None = None
     todo_status_id: int
     todo_status_code: str | None = None
     due_date: date | None = None
-    due_event_id: int | None = None
+    due_event_id: uuid.UUID | None = None
     due_event_title: str | None = None
     due_event_date: date | None = None
     due_marker: str | None = None
@@ -242,10 +260,10 @@ class ProtocolTodoRead(BaseModel):
     completed_at: datetime | None = None
     reference_link: str | None = None
     tags: list[str] = []
-    created_by: int | None = None
+    created_by: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
-    closed_in_protocol_id: int | None = None
+    closed_in_protocol_id: uuid.UUID | None = None
     tracked_change: str | None = None
     tracked_change_before_json: dict | None = None
     pending_delete: bool = False
@@ -254,20 +272,23 @@ class ProtocolTodoRead(BaseModel):
 
 
 class TodoListItem(ProtocolTodoRead):
-    protocol_id: int | None = None
+    protocol_id: uuid.UUID | None = None
     protocol_number: str | None = None
     protocol_date: date | None = None
     protocol_title: str | None = None
     protocol_status: str | None = None
     block_title: str | None = None
-    submission_assignment_id: int | None = None
+    submission_assignment_id: uuid.UUID | None = None
     element_ref: str | None = None
 
 
 class ProtocolImageRead(BaseModel):
-    id: int
-    protocol_element_block_id: int
-    stored_file_id: int
+    # Built via explicit keyword construction in FileService (joins ProtocolImage with its
+    # StoredFile) - id/protocol_element_block_id/stored_file_id are set from the respective
+    # rows' public_id there directly.
+    id: uuid.UUID
+    protocol_element_block_id: uuid.UUID
+    stored_file_id: uuid.UUID
     sort_index: int
     title: str | None = None
     caption: str | None = None
@@ -278,9 +299,11 @@ class ProtocolImageRead(BaseModel):
 
 
 class ProtocolExportRead(BaseModel):
-    protocol_id: int
+    # None for a "global" export (todos/list/events spanning the whole tenant, not tied
+    # to one protocol) - was the sentinel protocol_id=0 before the public_id migration.
+    protocol_id: uuid.UUID | None = None
     export_format: str
-    generated_file_id: int | None = None
+    generated_file_id: uuid.UUID | None = None
     content_url: str | None = None
     storage_path: str | None = None
     created_at: datetime | None = None

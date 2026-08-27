@@ -82,6 +82,13 @@ def get_participants(db: Session, *, participant_ids: list[int]) -> dict[int, di
     return {row["id"]: dict(row) for row in rows}
 
 
+def get_events(db: Session, *, event_ids: list[int]) -> dict[int, dict]:
+    if not event_ids:
+        return {}
+    rows = db.execute(select(event_table).where(event_table.c.id.in_(event_ids))).mappings()
+    return {row["id"]: dict(row) for row in rows}
+
+
 def latest_status_by_element(db: Session, *, assignment_id: int) -> dict[tuple[int | None, int | None], str]:
     """Letzter Status je (event_id, list_entry_id), berechnet aus der append-only Log-Tabelle.
 

@@ -38,7 +38,7 @@ def _participant_initials(participant: dict) -> str:
     return "—"
 
 
-def _value_label(value_type: str, value_json: dict, *, participants_by_id: dict[int, dict]) -> str:
+def _value_label(value_type: str, value_json: dict, *, participants_by_id: dict[int, dict], events_by_id: dict[int, dict]) -> str:
     if value_type == "text":
         return str(value_json.get("text_value") or "—")
     if value_type == "participant":
@@ -51,11 +51,13 @@ def _value_label(value_type: str, value_json: dict, *, participants_by_id: dict[
             if int(pid) in participants_by_id
         ]
         return ", ".join(initials) if initials else "—"
-    # 'event' value type in a list entry: kein Event-SELECT auf Namensebene noetig,
-    # die Abgabebox zeigt hier nur die Termin-ID (kein Datenverlust, aber unauffaellig -
-    # in der Praxis werden Listen-Abgaben kaum auf Termin-Spalten verweisen).
     if value_type == "event":
-        return f"Termin {value_json.get('event_id', '—')}"
+        # Was "Termin {internal id}" - a raw sequential DB id shown on an unauthenticated
+        # public endpoint (audit-equivalent finding from the public_id migration). Shows
+        # the event's title now, same as the main backend's equivalent _value_label - no
+        # extra SELECT needed since events_by_id is already batch-fetched below.
+        event = events_by_id.get(int(value_json.get("event_id") or 0))
+        return event["title"] if event else "—"
     return "—"
 
 
@@ -108,7 +110,7 @@ def resolve_open_elements(db: Session, assignment: dict) -> list[dict]:
             status = latest_status.get((event["id"], None))
             if status == "closed":
                 continue
-            element_ref = f"event-{event['id']}"
+            element_ref = f"event-{event['public_id']}"
             sort_dates[element_ref] = event["event_date"]
             elements.append(
                 {
@@ -131,6 +133,7 @@ def resolve_open_elements(db: Session, assignment: dict) -> list[dict]:
         return []
     entries = repository.list_list_entries(db, list_definition_id=definition["id"])
     participant_ids: set[int] = set()
+    event_ids: set[int] = set()
     for entry in entries:
         value_type = definition["column_one_value_type"]
         value_json = entry["column_one_value_json"] or {}
@@ -138,13 +141,16 @@ def resolve_open_elements(db: Session, assignment: dict) -> list[dict]:
             participant_ids.add(int(value_json["participant_id"]))
         elif value_type == "participants":
             participant_ids.update(int(pid) for pid in value_json.get("participant_ids", []))
+        elif value_type == "event" and value_json.get("event_id"):
+            event_ids.add(int(value_json["event_id"]))
     participants_by_id = repository.get_participants(db, participant_ids=list(participant_ids))
+    events_by_id = repository.get_events(db, event_ids=list(event_ids))
 
     for entry in entries:
         status = latest_status.get((None, entry["id"]))
         if status == "closed":
             continue
-        element_ref = f"entry-{entry['id']}"
+        element_ref = f"entry-{entry['public_id']}"
         # Listen-Eintraege haben kein eigenes Datum (nur der gemeinsame, optionale Stichtag) -
         # "date"/"proximity"-Sortierung kann sie nicht unterscheiden, siehe _sort_elements.
         sort_dates[element_ref] = None
@@ -154,7 +160,10 @@ def resolve_open_elements(db: Session, assignment: dict) -> list[dict]:
                 "event_id": None,
                 "list_entry_id": entry["id"],
                 "label": _value_label(
-                    definition["column_one_value_type"], entry["column_one_value_json"] or {}, participants_by_id=participants_by_id
+                    definition["column_one_value_type"],
+                    entry["column_one_value_json"] or {},
+                    participants_by_id=participants_by_id,
+                    events_by_id=events_by_id,
                 ),
                 "window_start": None,
                 "window_end": deadline.isoformat() if deadline else None,

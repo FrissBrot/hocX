@@ -1,4 +1,5 @@
 """Regression tests for NIEDRIG findings from the 2026-08-16 audit."""
+import uuid
 from datetime import date
 
 import pytest
@@ -20,7 +21,7 @@ def test_get_element_position_rejects_foreign_tenant_protocol(db):
     user_a = make_current_user(tenant_a.id, role="writer")
 
     with pytest.raises(HTTPException) as exc_info:
-        protocols_route.get_element_position(protocol_b.id, db=db, user=user_a)
+        protocols_route.get_element_position(protocol_b.public_id, db=db, user=user_a)
     assert exc_info.value.status_code == 404
 
 
@@ -35,7 +36,7 @@ def test_save_element_position_rejects_foreign_tenant_protocol(db):
 
     with pytest.raises(HTTPException) as exc_info:
         protocols_route.save_element_position(
-            protocol_b.id, protocols_route.ElementPositionPayload(element_id=1), db=db, user=user_a
+            protocol_b.public_id, protocols_route.ElementPositionPayload(element_id=uuid.uuid4()), db=db, user=user_a
         )
     assert exc_info.value.status_code == 404
 

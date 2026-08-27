@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import uuid
+
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.models import Event, ListDefinition, ListEntry, Participant
+from app.services import public_id_service
 
 _COLUMN_STRUCTURE_FIELDS = {
     "column_one_title", "column_one_value_type", "column_two_title", "column_two_value_type",
@@ -32,6 +35,9 @@ class ListRepository:
 
     def get_definition(self, db: Session, list_definition_id: int) -> ListDefinition | None:
         return db.get(ListDefinition, list_definition_id)
+
+    def get_definition_by_public_id(self, db: Session, public_id: uuid.UUID, *, tenant_id: int) -> ListDefinition | None:
+        return public_id_service.get_by_public_id(db, ListDefinition, public_id, tenant_id=tenant_id)
 
     def participant_belongs_to_tenant(self, db: Session, tenant_id: int, participant_id: int) -> bool:
         participant = db.get(Participant, participant_id)
@@ -93,6 +99,11 @@ class ListRepository:
 
     def get_entry(self, db: Session, list_entry_id: int) -> ListEntry | None:
         return db.get(ListEntry, list_entry_id)
+
+    def get_entry_by_public_id(self, db: Session, public_id: uuid.UUID) -> ListEntry | None:
+        # No tenant_id column of its own (scoped via list_definition_id) - callers must
+        # verify tenant/access on the resolved row's list definition.
+        return public_id_service.get_by_public_id(db, ListEntry, public_id)
 
     def create_entry(self, db: Session, entry: ListEntry) -> ListEntry:
         db.add(entry)

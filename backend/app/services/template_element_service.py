@@ -3,22 +3,29 @@ from sqlalchemy.orm import Session
 from app.models import ElementDefinition, ListDefinition, Template, TemplateElement
 from app.repositories.template_element_repository import TemplateElementRepository
 from app.schemas.template import TemplateElementBehaviorUpdate, TemplateElementCreate, TemplateElementRead, TemplateElementUpdate
+from app.services import public_id_service
 from app.services.block_behavior import BEHAVIOR_FIELDS, resolve_block_behavior, resolve_element_wide_behavior
+from app.services.block_config_ids import decode_block_config, encode_block_config
 
 
 class TemplateElementService:
     def __init__(self, repository: TemplateElementRepository | None = None) -> None:
         self.repository = repository or TemplateElementRepository()
 
-    def _read_model(self, row) -> TemplateElementRead:
+    def _read_model(self, db: Session, row) -> TemplateElementRead:
         template_element, definition = row
         config = definition.configuration_json or {}
-        template_element_config = template_element.configuration_json or {}
+        # Both configs are stored with internal ints embedded (linked_list_id, ...) -
+        # encode to public ids for this API response, see block_config_ids.py.
+        # resolve_block_behavior/resolve_element_wide_behavior only ever look at
+        # block_behavior_overrides/block_overrides, never the id fields, so passing the
+        # already-encoded config into them below is safe.
+        template_element_config = encode_block_config(db, template_element.configuration_json)
         raw_blocks = sorted(config.get("blocks", []), key=lambda entry: (entry.get("sort_index", 0), entry.get("id", 0)))
         blocks = [
             {
                 "id": block["id"],
-                "template_element_id": template_element.id,
+                "template_element_id": template_element.public_id,
                 "element_definition_block_id": block["id"],
                 "title": block["title"],
                 "description": block.get("description"),
@@ -30,16 +37,16 @@ class TemplateElementService:
                 "sort_index": block["sort_index"],
                 "render_order": block.get("render_order"),
                 "latex_template": block.get("latex_template"),
-                "configuration_json": block.get("configuration_json", {}),
+                "configuration_json": encode_block_config(db, block.get("configuration_json")),
                 "created_at": template_element.created_at,
                 **resolve_block_behavior(template_element_config, block),
             }
             for block in raw_blocks
         ]
         return TemplateElementRead(
-            id=template_element.id,
-            template_id=template_element.template_id,
-            element_definition_id=template_element.element_definition_id,
+            id=template_element.public_id,
+            template_id=public_id_service.resolve_public_id(db, Template, template_element.template_id),
+            element_definition_id=public_id_service.resolve_public_id(db, ElementDefinition, template_element.element_definition_id),
             sort_index=template_element.sort_index,
             title=definition.title,
             description=definition.description,
@@ -50,11 +57,11 @@ class TemplateElementService:
         )
 
     def list_template_elements(self, db: Session, template_id: int) -> list[TemplateElementRead]:
-        return [self._read_model(row) for row in self.repository.list_for_template(db, template_id)]
+        return [self._read_model(db, row) for row in self.repository.list_for_template(db, template_id)]
 
     def get_template_element(self, db: Session, template_element_id: int):
         row = self.repository.get_with_definition(db, template_element_id)
-        return self._read_model(row) if row else None
+        return self._read_model(db, row) if row else None
 
     def _referenced_list_definition_ids(self, config: dict | None) -> set[int]:
         """Collects both whole-list `linked_list_id` and any row-link `rows[].linked_list_id`
@@ -89,28 +96,33 @@ class TemplateElementService:
         next_sort_index = payload.sort_index
         if next_sort_index in existing_sort_indexes or next_sort_index <= 0:
             next_sort_index = (max(existing_sort_indexes) if existing_sort_indexes else 0) + 10
-        definition = db.get(ElementDefinition, payload.element_definition_id)
-        if definition is None:
-            raise ValueError("Element definition not found")
         template = db.get(Template, template_id)
         # Route already confirmed template.tenant_id == the caller's tenant before calling
-        # here; this closes the remaining gap where an admin could link a *different*
-        # tenant's ElementDefinition id into their own (rightfully owned) template. Same
-        # "404, no existence leak" convention as the rest of this file - no distinct error
-        # for "wrong tenant" vs "doesn't exist".
-        if template is None or definition.tenant_id != template.tenant_id:
+        # here; resolving element_definition_id scoped to that same tenant closes the
+        # remaining gap where an admin could link a *different* tenant's ElementDefinition
+        # into their own (rightfully owned) template. Same "404, no existence leak"
+        # convention as the rest of this file - no distinct error for "wrong tenant" vs
+        # "doesn't exist".
+        element_definition_id = (
+            public_id_service.resolve_internal_id(db, ElementDefinition, payload.element_definition_id, tenant_id=template.tenant_id)
+            if template is not None
+            else None
+        )
+        if element_definition_id is None:
             raise ValueError("Element definition not found")
-        self._validate_linked_lists(db, payload.configuration_json, tenant_id=template.tenant_id)
+        definition = db.get(ElementDefinition, element_definition_id)
+        decoded_config = decode_block_config(db, payload.configuration_json, tenant_id=template.tenant_id)
+        self._validate_linked_lists(db, decoded_config, tenant_id=template.tenant_id)
         entity = TemplateElement(
             template_id=template_id,
-            element_definition_id=payload.element_definition_id,
+            element_definition_id=element_definition_id,
             sort_index=next_sort_index,
             section_name=definition.title,
             section_order=next_sort_index,
             is_required=False,
             is_visible=True,
             export_visible=True,
-            configuration_json=payload.configuration_json or {},
+            configuration_json=decoded_config,
         )
         created = self.repository.create(db, entity)
         return self.get_template_element(db, created.id)
@@ -134,6 +146,9 @@ class TemplateElementService:
             if values["configuration_json"] is None:
                 values["configuration_json"] = {}
             template = db.get(Template, entity.template_id)
+            values["configuration_json"] = decode_block_config(
+                db, values["configuration_json"], tenant_id=template.tenant_id if template else 0
+            )
             self._validate_linked_lists(db, values["configuration_json"], tenant_id=template.tenant_id if template else None)
         updated = self.repository.update(db, entity, values)
         return self.get_template_element(db, updated.id)

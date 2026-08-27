@@ -8,6 +8,8 @@ boundary on get_user/update_user/delete_user (an admin in tenant A must not mana
 only belong to tenant B)."""
 from __future__ import annotations
 
+import uuid
+
 import pytest
 from fastapi import HTTPException
 
@@ -18,13 +20,22 @@ from tests.factories import make_app_user, make_current_user, make_participant, 
 
 
 def _admin_actor(tenant_id: int, *, user_id: int = 999999, extra_tenants: list[TenantMembership] | None = None) -> CurrentUser:
+    # tenant_id/user_id are frequently synthetic ints with no backing row here, so - like
+    # tests/factories.py's make_current_user - the *_public_id fields are just fresh
+    # random UUIDs rather than resolved from a real row.
     memberships = [
         TenantMembership(
-            tenant_id=tenant_id, tenant_name="Admin Tenant", tenant_profile_image_path=None, role_code="admin", is_active=True
+            tenant_id=tenant_id,
+            tenant_public_id=uuid.uuid4(),
+            tenant_name="Admin Tenant",
+            tenant_profile_image_path=None,
+            role_code="admin",
+            is_active=True,
         )
     ] + (extra_tenants or [])
     return CurrentUser(
         user_id=user_id,
+        user_public_id=uuid.uuid4(),
         first_name="Admin",
         last_name="Actor",
         display_name="Admin Actor",
@@ -32,7 +43,9 @@ def _admin_actor(tenant_id: int, *, user_id: int = 999999, extra_tenants: list[T
         preferred_language="de",
         is_participant_account=False,
         default_tenant_id=tenant_id,
+        default_tenant_public_id=uuid.uuid4(),
         current_tenant_id=tenant_id,
+        current_tenant_public_id=uuid.uuid4(),
         current_tenant_name="Admin Tenant",
         current_tenant_profile_image_path=None,
         current_role="admin",
@@ -53,7 +66,7 @@ def test_merge_users_prefers_higher_role_writer_over_reader(db):
     service = UserService()
     result = service.merge_users(db, source_user_id=source.id, target_user_id=target.id)
 
-    membership = next(m for m in result.memberships if m.tenant_id == tenant.id)
+    membership = next(m for m in result.memberships if m.tenant_id == tenant.public_id)
     assert membership.role_code == "writer"
 
 
@@ -69,7 +82,7 @@ def test_merge_users_kassier_sits_between_reader_and_writer(db):
 
     service = UserService()
     result_a = service.merge_users(db, source_user_id=source_a.id, target_user_id=target_a.id)
-    membership_a = next(m for m in result_a.memberships if m.tenant_id == tenant.id)
+    membership_a = next(m for m in result_a.memberships if m.tenant_id == tenant.public_id)
     assert membership_a.role_code == "kassier"
 
     tenant_b = make_tenant(db, "Kassier Merge Tenant B")
@@ -79,7 +92,7 @@ def test_merge_users_kassier_sits_between_reader_and_writer(db):
     make_user_tenant_role(db, source_b.id, tenant_b.id, role_code="writer")
 
     result_b = service.merge_users(db, source_user_id=source_b.id, target_user_id=target_b.id)
-    membership_b = next(m for m in result_b.memberships if m.tenant_id == tenant_b.id)
+    membership_b = next(m for m in result_b.memberships if m.tenant_id == tenant_b.public_id)
     assert membership_b.role_code == "writer"
 
 
@@ -93,7 +106,7 @@ def test_merge_users_prefers_active_membership_when_role_priority_equal(db):
     service = UserService()
     result = service.merge_users(db, source_user_id=source.id, target_user_id=target.id)
 
-    membership = next(m for m in result.memberships if m.tenant_id == tenant.id)
+    membership = next(m for m in result.memberships if m.tenant_id == tenant.public_id)
     assert membership.is_active is True
 
 
@@ -160,7 +173,7 @@ def test_update_user_blocks_demoting_the_last_admin_of_a_tenant(db):
 
     actor = _admin_actor(tenant.id, user_id=admin_user.id + 1)
     service = UserService()
-    payload = UserUpdate(memberships=[TenantMembershipWrite(tenant_id=tenant.id, role_code="reader", is_active=True)])
+    payload = UserUpdate(memberships=[TenantMembershipWrite(tenant_id=tenant.public_id, role_code="reader", is_active=True)])
 
     with pytest.raises(HTTPException) as exc_info:
         service.update_user(db, admin_user.id, payload, actor)
@@ -176,10 +189,10 @@ def test_update_user_allows_demoting_admin_when_another_admin_remains(db):
 
     actor = _admin_actor(tenant.id, user_id=admin_two.id)
     service = UserService()
-    payload = UserUpdate(memberships=[TenantMembershipWrite(tenant_id=tenant.id, role_code="reader", is_active=True)])
+    payload = UserUpdate(memberships=[TenantMembershipWrite(tenant_id=tenant.public_id, role_code="reader", is_active=True)])
 
     result = service.update_user(db, admin_one.id, payload, actor)
-    membership = next(m for m in result.memberships if m.tenant_id == tenant.id)
+    membership = next(m for m in result.memberships if m.tenant_id == tenant.public_id)
     assert membership.role_code == "reader"
 
 
@@ -220,7 +233,7 @@ def test_get_user_hides_memberships_in_tenants_actor_does_not_administer(db):
 
     result = service.get_user(db, shared_user.id, actor)
     visible_tenant_ids = {m.tenant_id for m in result.memberships}
-    assert visible_tenant_ids == {tenant_a.id}
+    assert visible_tenant_ids == {tenant_a.public_id}
 
 
 def test_list_users_hides_memberships_in_tenants_actor_does_not_administer(db):
@@ -236,9 +249,9 @@ def test_list_users_hides_memberships_in_tenants_actor_does_not_administer(db):
     service = UserService()
 
     results = service.list_users(db, actor)
-    listed = next(u for u in results if u.id == shared_user.id)
+    listed = next(u for u in results if u.id == shared_user.public_id)
     visible_tenant_ids = {m.tenant_id for m in listed.memberships}
-    assert visible_tenant_ids == {tenant_a.id}
+    assert visible_tenant_ids == {tenant_a.public_id}
 
 
 def test_delete_user_cannot_delete_own_account(db):
@@ -275,5 +288,5 @@ def test_create_user_defaults_membership_to_actors_current_tenant_as_reader(db):
     result = service.create_user(db, payload, actor)
 
     assert len(result.memberships) == 1
-    assert result.memberships[0].tenant_id == tenant.id
+    assert result.memberships[0].tenant_id == tenant.public_id
     assert result.memberships[0].role_code == "reader"

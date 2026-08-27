@@ -56,7 +56,7 @@ def test_fines_pagination_has_no_overlap(db):
     template = make_template(db, tenant.id)
     protocol = make_protocol(db, tenant.id, template.id)
     account = make_finance_account(db, tenant.id)
-    created_ids = [make_fine(db, protocol.id, account.id, amount=i).id for i in range(1, 6)]
+    created_ids = [make_fine(db, protocol.id, account.id, amount=i).public_id for i in range(1, 6)]
 
     page1 = repo.list_fines_for_tenant(db, tenant_id=tenant.id, skip=0, limit=2)
     page2 = repo.list_fines_for_tenant(db, tenant_id=tenant.id, skip=2, limit=2)

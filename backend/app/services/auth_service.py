@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.rate_limit import check_account_lockout, record_failed_attempt
 from app.core.security import CurrentUser, DUMMY_PASSWORD_HASH, build_current_user, issue_session_cookie, verify_password
-from app.models import AppUser
+from app.models import AppUser, Tenant
 from app.schemas.mfa import (
     LoginResponse,
     MfaTicketRequest,
@@ -21,7 +21,7 @@ from app.schemas.mfa import (
     TotpLoginVerifyRequest,
 )
 from app.schemas.user import LoginRequest, SessionRead, SessionUserRead, TenantMembershipRead, TenantRead
-from app.services import domain_bridge_service
+from app.services import domain_bridge_service, public_id_service
 from app.services.audit_service import AuditService
 from app.services.mfa_service import MfaService
 from app.services.tenant_service import build_tenant_profile_image_url
@@ -53,7 +53,10 @@ class AuthService:
         if (user.external_identity_json or {}).get("login_enabled") is False:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Login is disabled for this account")
 
-        current_user = build_current_user(db, user, payload.tenant_id)
+        requested_tenant_id: int | None = None
+        if payload.tenant_id is not None:
+            requested_tenant_id = public_id_service.resolve_internal_id(db, Tenant, payload.tenant_id)
+        current_user = build_current_user(db, user, requested_tenant_id)
         if current_user.current_tenant_id is None:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenant membership assigned")
 
@@ -246,33 +249,33 @@ class AuthService:
         current_tenant = None
         if user.current_tenant_id is not None and user.current_tenant_name is not None:
             current_tenant = TenantRead(
-                id=user.current_tenant_id,
+                id=user.current_tenant_public_id,
                 name=user.current_tenant_name,
                 profile_image_path=user.current_tenant_profile_image_path,
-                profile_image_url=build_tenant_profile_image_url(user.current_tenant_id, user.current_tenant_profile_image_path),
+                profile_image_url=build_tenant_profile_image_url(user.current_tenant_public_id, user.current_tenant_profile_image_path),
             )
 
         return SessionRead(
             authenticated=True,
             bridge_redirect_url=bridge_redirect_url,
             user=SessionUserRead(
-                id=user.user_id,
+                id=user.user_public_id,
                 first_name=user.first_name,
                 last_name=user.last_name,
                 display_name=user.display_name,
                 email=user.email,
                 preferred_language=user.preferred_language,
                 protocol_accordion_enabled=user.protocol_accordion_enabled,
-                default_tenant_id=user.default_tenant_id,
+                default_tenant_id=user.default_tenant_public_id,
             ),
             current_tenant=current_tenant,
             current_role=user.current_role,
             available_tenants=[
                 TenantMembershipRead(
-                    tenant_id=membership.tenant_id,
+                    tenant_id=membership.tenant_public_id,
                     tenant_name=membership.tenant_name,
                     tenant_profile_image_path=membership.tenant_profile_image_path,
-                    tenant_profile_image_url=build_tenant_profile_image_url(membership.tenant_id, membership.tenant_profile_image_path),
+                    tenant_profile_image_url=build_tenant_profile_image_url(membership.tenant_public_id, membership.tenant_profile_image_path),
                     role_code=membership.role_code,
                     is_active=membership.is_active,
                 )

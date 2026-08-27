@@ -1,12 +1,14 @@
 from sqlalchemy.orm import Session
 
-from app.models import ElementDefinition, Event, ListDefinition, Participant
+from app.models import ElementDefinition, Event, ListDefinition, Participant, Tenant
 from app.repositories.element_definition_repository import ElementDefinitionRepository
 from app.schemas.template import (
     ElementDefinitionCreate,
     ElementDefinitionRead,
     ElementDefinitionUpdate,
 )
+from app.services import public_id_service
+from app.services.block_config_ids import decode_block_config, encode_block_config
 
 
 class ElementDefinitionService:
@@ -116,7 +118,7 @@ class ElementDefinitionService:
             if event is None or event.tenant_id != tenant_id:
                 raise ValueError(f"Event {event_id} not found")
 
-    def _normalize_blocks(self, blocks: list[dict]) -> list[dict]:
+    def _normalize_blocks(self, db: Session, blocks: list[dict], *, tenant_id: int) -> list[dict]:
         normalized: list[dict] = []
         for block in blocks:
             next_block = dict(block)
@@ -126,32 +128,43 @@ class ElementDefinitionService:
             next_block["allows_multiple_values"] = element_type_id in {2, 3}
             config = dict(next_block.get("configuration_json") or {})
             config.setdefault("title_as_subtitle", True)
+            # The client sends this JSON with public ids embedded (linked_list_id,
+            # template_participant_id(s), template_event_id, ...) - decode back to
+            # internal ints before _validate_linked_lists/storage, see block_config_ids.py.
+            config = decode_block_config(db, config, tenant_id=tenant_id)
             next_block["configuration_json"] = config
             normalized.append(next_block)
         return normalized
 
-    def _read_model(self, entity: ElementDefinition) -> ElementDefinitionRead:
+    def _read_model(self, db: Session, entity: ElementDefinition) -> ElementDefinitionRead:
         config = entity.configuration_json or {}
+        # Each block's own configuration_json is stored with internal ints embedded
+        # (linked_list_id, ...) - encode to public ids for this API response, see
+        # block_config_ids.py.
+        blocks = [
+            {**block, "configuration_json": encode_block_config(db, block.get("configuration_json"))}
+            for block in config.get("blocks", [])
+        ]
         return ElementDefinitionRead(
-            id=entity.id,
-            tenant_id=entity.tenant_id,
+            id=entity.public_id,
+            tenant_id=public_id_service.resolve_public_id(db, Tenant, entity.tenant_id),
             title=entity.title,
             description=entity.description,
             is_active=entity.is_active,
-            blocks=config.get("blocks", []),
+            blocks=blocks,
             created_at=entity.created_at,
             updated_at=entity.updated_at,
         )
 
     def list_element_definitions(self, db: Session, *, tenant_id: int):
-        return [self._read_model(entity) for entity in self.repository.list(db, tenant_id=tenant_id)]
+        return [self._read_model(db, entity) for entity in self.repository.list(db, tenant_id=tenant_id)]
 
     def get_element_definition(self, db: Session, element_definition_id: int):
         entity = self.repository.get(db, element_definition_id)
-        return self._read_model(entity) if entity else None
+        return self._read_model(db, entity) if entity else None
 
     def create_element_definition(self, db: Session, payload: ElementDefinitionCreate, *, tenant_id: int):
-        normalized_blocks = self._normalize_blocks([block.model_dump() for block in payload.blocks])
+        normalized_blocks = self._normalize_blocks(db, [block.model_dump() for block in payload.blocks], tenant_id=tenant_id)
         self._validate_linked_lists(db, normalized_blocks, tenant_id=tenant_id)
         entity = ElementDefinition(
             tenant_id=tenant_id,
@@ -168,7 +181,7 @@ class ElementDefinitionService:
             is_active=payload.is_active,
         )
         created = self.repository.create(db, entity)
-        return self._read_model(created)
+        return self._read_model(db, created)
 
     def update_element_definition(self, db: Session, element_definition_id: int, payload: ElementDefinitionUpdate):
         entity = self.repository.get(db, element_definition_id)
@@ -177,15 +190,15 @@ class ElementDefinitionService:
 
         values = payload.model_dump(exclude_unset=True)
         if "blocks" in values:
-            normalized_blocks = self._normalize_blocks(values.pop("blocks"))
+            normalized_blocks = self._normalize_blocks(db, values.pop("blocks"), tenant_id=entity.tenant_id)
             self._validate_linked_lists(db, normalized_blocks, tenant_id=entity.tenant_id)
             values["configuration_json"] = {"blocks": normalized_blocks}
         if "title" in values:
             values["display_title"] = values["title"]
         if not values:
-            return self._read_model(entity)
+            return self._read_model(db, entity)
         updated = self.repository.update(db, entity, values)
-        return self._read_model(updated)
+        return self._read_model(db, updated)
 
     def delete_element_definition(self, db: Session, element_definition_id: int) -> bool:
         entity = self.repository.get(db, element_definition_id)

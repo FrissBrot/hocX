@@ -35,6 +35,7 @@ rejected with 401 before it would ever reach the route body.
 """
 from __future__ import annotations
 
+import uuid
 from datetime import date
 
 import pytest
@@ -357,9 +358,9 @@ def test_delete_tenant_route_audits_without_fk_violation(db):
     failed). Fixed by not passing tenant_id at all for this event - which tenant was
     deleted is already recorded via entity_type="tenant"/entity_id."""
     tenant = make_tenant(db, "Route Delete Tenant")
-    admin = CurrentAdmin(admin_id=1, email="ops@example.com", display_name="Ops")
+    admin = CurrentAdmin(admin_id=1, admin_public_id=uuid.uuid4(), email="ops@example.com", display_name="Ops")
 
-    admin_routes.delete_tenant(tenant.id, db=db, current_admin=admin)
+    admin_routes.delete_tenant(tenant.public_id, db=db, current_admin=admin)
 
     assert db.get(Tenant, tenant.id) is None
     audit_rows = db.execute(
@@ -372,9 +373,9 @@ def test_delete_tenant_route_audits_without_fk_violation(db):
 
 
 def test_delete_tenant_route_404_for_unknown_tenant(db):
-    admin = CurrentAdmin(admin_id=1, email="ops@example.com", display_name="Ops")
+    admin = CurrentAdmin(admin_id=1, admin_public_id=uuid.uuid4(), email="ops@example.com", display_name="Ops")
     with pytest.raises(HTTPException) as exc_info:
-        admin_routes.delete_tenant(999_999_999, db=db, current_admin=admin)
+        admin_routes.delete_tenant(uuid.uuid4(), db=db, current_admin=admin)
     assert exc_info.value.status_code == 404
 
 
@@ -400,9 +401,9 @@ def test_delete_domain_service_returns_none_for_unknown_id(db):
 def test_delete_domain_route_deletes_and_audits_as_platform_admin(db):
     tenant = make_tenant(db, "Route Tenant")
     domain = make_tenant_domain(db, tenant.id, domain="route-delete.example.com")
-    admin = CurrentAdmin(admin_id=1, email="ops@example.com", display_name="Ops")
+    admin = CurrentAdmin(admin_id=1, admin_public_id=uuid.uuid4(), email="ops@example.com", display_name="Ops")
 
-    admin_routes.delete_domain(domain.id, db=db, current_admin=admin)
+    admin_routes.delete_domain(domain.public_id, db=db, current_admin=admin)
 
     assert db.get(TenantDomain, domain.id) is None
     audit_rows = db.execute(
@@ -415,9 +416,9 @@ def test_delete_domain_route_deletes_and_audits_as_platform_admin(db):
 
 
 def test_delete_domain_route_404_for_unknown_domain(db):
-    admin = CurrentAdmin(admin_id=1, email="ops@example.com", display_name="Ops")
+    admin = CurrentAdmin(admin_id=1, admin_public_id=uuid.uuid4(), email="ops@example.com", display_name="Ops")
     with pytest.raises(HTTPException) as exc_info:
-        admin_routes.delete_domain(999_999_999, db=db, current_admin=admin)
+        admin_routes.delete_domain(uuid.uuid4(), db=db, current_admin=admin)
     assert exc_info.value.status_code == 404
 
 

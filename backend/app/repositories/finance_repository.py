@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -7,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.entities import AttendanceFine, FinanceAccount, FinanceTransaction, Protocol
+from app.services import public_id_service
 from app.schemas.finance import (
     FinanceAccountCreate,
     FinanceAccountRead,
@@ -53,7 +55,7 @@ class FinanceRepository:
         ).all()
         return [
             FinanceAccountRead(
-                id=row.FinanceAccount.id,
+                id=row.FinanceAccount.public_id,
                 name=row.FinanceAccount.name,
                 currency_label=row.FinanceAccount.currency_label,
                 description=row.FinanceAccount.description,
@@ -72,6 +74,12 @@ class FinanceRepository:
                 FinanceAccount.tenant_id == tenant_id,
             )
         )
+        if account is None:
+            return None
+        return self._account_with_balance(db, account)
+
+    def get_account_by_public_id(self, db: Session, public_id: uuid.UUID, *, tenant_id: int) -> FinanceAccountRead | None:
+        account = public_id_service.get_by_public_id(db, FinanceAccount, public_id, tenant_id=tenant_id)
         if account is None:
             return None
         return self._account_with_balance(db, account)
@@ -132,7 +140,7 @@ class FinanceRepository:
             .where(AttendanceFine.account_id == account.id, AttendanceFine.status == "pending")
         ).one()
         return FinanceAccountRead(
-            id=account.id,
+            id=account.public_id,
             name=account.name,
             currency_label=account.currency_label,
             description=account.description,
@@ -160,7 +168,7 @@ class FinanceRepository:
             .offset(skip)
             .limit(limit)
         ).all()
-        return [self._tx_read(row.FinanceTransaction, running_balance=row.running_balance) for row in rows]
+        return [self._tx_read(db, row.FinanceTransaction, running_balance=row.running_balance) for row in rows]
 
     def _get_transaction_scoped(self, db: Session, tx_id: int, tenant_id: int) -> FinanceTransaction | None:
         return db.scalar(
@@ -169,29 +177,40 @@ class FinanceRepository:
             .where(FinanceTransaction.id == tx_id, FinanceAccount.tenant_id == tenant_id)
         )
 
+    def _get_transaction_scoped_by_public_id(self, db: Session, public_id: uuid.UUID, tenant_id: int) -> FinanceTransaction | None:
+        # FinanceTransaction has no tenant_id column of its own - joined through
+        # FinanceAccount, same as _get_transaction_scoped above.
+        return db.scalar(
+            select(FinanceTransaction)
+            .join(FinanceAccount, FinanceAccount.id == FinanceTransaction.account_id)
+            .where(FinanceTransaction.public_id == public_id, FinanceAccount.tenant_id == tenant_id)
+        )
+
     def create_transaction(self, db: Session, account_id: int, tenant_id: int, payload: FinanceTransactionCreate) -> FinanceTransactionRead | None:
         """Returns None if protocol_id is set but doesn't belong to tenant_id - the caller
         (route) turns that into a 404, matching FinesRepository.create_fine's convention."""
+        protocol_id: int | None = None
         if payload.protocol_id is not None:
-            protocol = db.get(Protocol, payload.protocol_id)
-            if protocol is None or protocol.tenant_id != tenant_id:
+            protocol = public_id_service.get_by_public_id(db, Protocol, payload.protocol_id, tenant_id=tenant_id)
+            if protocol is None:
                 return None
             # Freeze-Schutz (audit S8, 2026-08-16) - see FinesRepository.create_fine's
             # identical check: finalized protocols are immutable snapshots elsewhere in this
             # codebase, a new transaction retroactively linked to one would change that.
             if protocol.status == "abgeschlossen":
                 return None
+            protocol_id = protocol.id
         tx = FinanceTransaction(
             account_id=account_id,
             amount=payload.amount,
             description=payload.description,
             transaction_date=payload.transaction_date,
-            protocol_id=payload.protocol_id,
+            protocol_id=protocol_id,
         )
         db.add(tx)
         db.commit()
         db.refresh(tx)
-        return self._tx_read(tx)
+        return self._tx_read(db, tx)
 
     def update_transaction(self, db: Session, tx_id: int, tenant_id: int, payload: FinanceTransactionUpdate) -> FinanceTransactionRead | None:
         tx = self._get_transaction_scoped(db, tx_id, tenant_id)
@@ -210,7 +229,7 @@ class FinanceRepository:
             tx.transaction_date = payload.transaction_date
         db.commit()
         db.refresh(tx)
-        return self._tx_read(tx)
+        return self._tx_read(db, tx)
 
     def delete_transaction(self, db: Session, tx_id: int, tenant_id: int) -> bool:
         tx = self._get_transaction_scoped(db, tx_id, tenant_id)
@@ -225,14 +244,14 @@ class FinanceRepository:
         db.commit()
         return True
 
-    def _tx_read(self, tx: FinanceTransaction, running_balance: Decimal | None = None) -> FinanceTransactionRead:
+    def _tx_read(self, db: Session, tx: FinanceTransaction, running_balance: Decimal | None = None) -> FinanceTransactionRead:
         return FinanceTransactionRead(
-            id=tx.id,
-            account_id=tx.account_id,
+            id=tx.public_id,
+            account_id=public_id_service.resolve_public_id(db, FinanceAccount, tx.account_id),
             amount=tx.amount,
             description=tx.description,
             transaction_date=tx.transaction_date,
-            protocol_id=tx.protocol_id,
+            protocol_id=public_id_service.resolve_public_id(db, Protocol, tx.protocol_id) if tx.protocol_id is not None else None,
             created_at=tx.created_at,
             running_balance=running_balance,
         )

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+import uuid
 from pathlib import Path
 
 from fastapi import UploadFile
@@ -27,10 +28,10 @@ from app.services.file_service import _safe_storage_path
 from app.services.tenant_service import apply_tenant_profile_image
 
 
-def build_admin_tenant_profile_image_url(tenant_id: int, profile_image_path: str | None) -> str | None:
+def build_admin_tenant_profile_image_url(tenant_public_id: uuid.UUID, profile_image_path: str | None) -> str | None:
     if not profile_image_path:
         return None
-    return f"/api/admin/tenants/{tenant_id}/profile-image"
+    return f"/api/admin/tenants/{tenant_public_id}/profile-image"
 
 
 class AdminTenantService:
@@ -52,10 +53,10 @@ class AdminTenantService:
             or 0
         )
         return AdminTenantRead(
-            id=tenant.id,
+            id=tenant.public_id,
             name=tenant.name,
             profile_image_path=tenant.profile_image_path,
-            profile_image_url=build_admin_tenant_profile_image_url(tenant.id, tenant.profile_image_path),
+            profile_image_url=build_admin_tenant_profile_image_url(tenant.public_id, tenant.profile_image_path),
             public_slug=tenant.public_slug,
             participant_count=participant_count,
             user_count=user_count,

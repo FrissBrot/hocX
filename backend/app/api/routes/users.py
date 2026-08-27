@@ -1,3 +1,5 @@
+import uuid
+
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -5,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, issue_session_cookie
+from app.models.entities import AppUser, UserMfaFactor
 from app.schemas.mfa import (
     PasskeyRegistrationComplete,
     PasskeyRegistrationStartRead,
@@ -14,6 +17,7 @@ from app.schemas.mfa import (
     UserMfaRead,
 )
 from app.schemas.user import UserCreate, UserPasswordChange, UserRead, UserSelfUpdate, UserUpdate
+from app.services import public_id_service
 from app.services.audit_service import AuditService
 from app.services.mfa_service import MfaService
 from app.services.user_service import UserService
@@ -162,12 +166,15 @@ def complete_my_passkey_registration(
 
 @router.delete("/me/mfa/factors/{factor_id}", response_model=UserMfaRead)
 def delete_my_mfa_factor(
-    factor_id: int,
+    factor_id: uuid.UUID,
     request: Request,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    result = mfa_service.delete_self_factor(db, user, factor_id)
+    internal_factor_id = public_id_service.resolve_internal_id(db, UserMfaFactor, factor_id)
+    if internal_factor_id is None:
+        raise HTTPException(status_code=404, detail="MFA factor not found")
+    result = mfa_service.delete_self_factor(db, user, internal_factor_id)
     return result.model_copy(update={"can_add_passkey_here": mfa_service.can_add_passkey_here(request.url.hostname)})
 
 
@@ -186,41 +193,54 @@ def change_my_password(
     return current
 
 
+def _resolve_user_id(db: Session, user_id: uuid.UUID) -> int:
+    internal_id = public_id_service.resolve_internal_id(db, AppUser, user_id)
+    if internal_id is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return internal_id
+
+
 @router.get("/{user_id}/mfa", response_model=UserMfaRead)
 def get_user_mfa(
-    user_id: int,
+    user_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    return mfa_service.get_managed_user_overview(db, user, user_id)
+    internal_user_id = _resolve_user_id(db, user_id)
+    return mfa_service.get_managed_user_overview(db, user, internal_user_id)
 
 
 @router.delete("/{user_id}/mfa/factors/{factor_id}", response_model=UserMfaRead)
 def delete_user_mfa_factor(
-    user_id: int,
-    factor_id: int,
+    user_id: uuid.UUID,
+    factor_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    result = mfa_service.delete_managed_user_factor(db, user, user_id, factor_id)
+    internal_user_id = _resolve_user_id(db, user_id)
+    internal_factor_id = public_id_service.resolve_internal_id(db, UserMfaFactor, factor_id)
+    if internal_factor_id is None:
+        raise HTTPException(status_code=404, detail="MFA factor not found")
+    result = mfa_service.delete_managed_user_factor(db, user, internal_user_id, internal_factor_id)
     audit.log(
         db,
         action="user.mfa_factor_deleted",
         actor=user,
         entity_type="user_mfa_factor",
-        entity_id=factor_id,
-        details={"target_user_id": user_id},
+        entity_id=internal_factor_id,
+        details={"target_user_id": internal_user_id},
     )
     return result
 
 
 @router.get("/{user_id}", response_model=UserRead)
 def get_user(
-    user_id: int,
+    user_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    current = service.get_user(db, user_id, user)
+    internal_user_id = _resolve_user_id(db, user_id)
+    current = service.get_user(db, internal_user_id, user)
     if current is None:
         raise HTTPException(status_code=404, detail="User not found")
     return current
@@ -228,13 +248,14 @@ def get_user(
 
 @router.patch("/{user_id}", response_model=UserRead)
 def patch_user(
-    user_id: int,
+    user_id: uuid.UUID,
     payload: UserUpdate,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
+    internal_user_id = _resolve_user_id(db, user_id)
     try:
-        current = service.update_user(db, user_id, payload, user)
+        current = service.update_user(db, internal_user_id, payload, user)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="User could not be updated") from exc
@@ -242,18 +263,19 @@ def patch_user(
         raise HTTPException(status_code=404, detail="User not found")
     if payload.is_active is not None:
         action = "user.activated" if payload.is_active else "user.deactivated"
-        audit.log(db, action=action, actor=user, entity_type="user", entity_id=user_id)
+        audit.log(db, action=action, actor=user, entity_type="user", entity_id=internal_user_id)
     return current
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_user(
-    user_id: int,
+    user_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
+    internal_user_id = _resolve_user_id(db, user_id)
     try:
-        deleted = service.delete_user(db, user_id, user)
+        deleted = service.delete_user(db, internal_user_id, user)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="User could not be deleted") from exc

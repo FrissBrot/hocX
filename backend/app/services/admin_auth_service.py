@@ -32,7 +32,12 @@ class AdminAuthService:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
 
         issue_admin_session_cookie(response, admin.id)
-        return self.session(CurrentAdmin(admin_id=admin.id, email=admin.email, display_name=admin.display_name, role=admin.role))
+        return self.session(
+            CurrentAdmin(
+                admin_id=admin.id, admin_public_id=admin.public_id, email=admin.email,
+                display_name=admin.display_name, role=admin.role,
+            )
+        )
 
     def logout(self, db: Session, response: Response, admin: CurrentAdmin | None) -> dict[str, str]:
         response.delete_cookie(settings.admin_session_cookie, path="/")
@@ -53,5 +58,5 @@ class AdminAuthService:
             return AdminSessionRead(authenticated=False)
         return AdminSessionRead(
             authenticated=True,
-            admin=AdminSelfRead(id=admin.admin_id, email=admin.email, display_name=admin.display_name, role=admin.role),
+            admin=AdminSelfRead(id=admin.admin_public_id, email=admin.email, display_name=admin.display_name, role=admin.role),
         )

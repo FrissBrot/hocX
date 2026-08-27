@@ -1,4 +1,5 @@
 import copy
+import uuid
 from datetime import date
 
 from sqlalchemy.orm import Session
@@ -7,6 +8,7 @@ from app.models import CycleConfig, DocumentTemplate, Event, Participant, Templa
 from app.repositories.template_element_repository import TemplateElementRepository
 from app.repositories.template_repository import TemplateRepository
 from app.schemas.participant import TemplateParticipantAssignmentRead
+from app.services import public_id_service
 from app.services.access_service import AccessService
 from app.services.document_template_service import DocumentTemplateService
 from app.schemas.template import TemplateCreate, TemplateUpdate
@@ -41,20 +43,23 @@ class TemplateService:
     def get_template(self, db: Session, template_id: int):
         return self.repository.get(db, template_id)
 
-    def _validate_tenant_refs(
+    def _resolve_tenant_refs(
         self,
         db: Session,
         *,
         tenant_id: int,
-        next_event_id: int | None = None,
-        last_event_id: int | None = None,
-        cycle_config_id: int | None = None,
-        document_template_id: int | None = None,
-    ) -> None:
-        """next_event_id/last_event_id/cycle_config_id/document_template_id are all
-        client-supplied on template create/update - without this, a writer could point a
-        template at another tenant's Event/CycleConfig/DocumentTemplate, which then leaks
-        into every protocol created from it (title/date snapshots, LaTeX layout, ...)."""
+        next_event_id: uuid.UUID | None = None,
+        last_event_id: uuid.UUID | None = None,
+        cycle_config_id: uuid.UUID | None = None,
+        document_template_id: uuid.UUID | None = None,
+    ) -> dict[str, int | None]:
+        """Resolves next_event_id/last_event_id/cycle_config_id/document_template_id from
+        public UUIDs to internal ids, scoped to tenant_id - all four are client-supplied on
+        template create/update, so this also serves as their ownership validation: without
+        it, a writer could point a template at another tenant's Event/CycleConfig/
+        DocumentTemplate, which then leaks into every protocol created from it (title/date
+        snapshots, LaTeX layout, ...)."""
+        resolved: dict[str, int | None] = {}
         for label, model, value in (
             ("next_event_id", Event, next_event_id),
             ("last_event_id", Event, last_event_id),
@@ -62,40 +67,43 @@ class TemplateService:
             ("document_template_id", DocumentTemplate, document_template_id),
         ):
             if value is None:
+                resolved[label] = None
                 continue
-            row = db.get(model, value)
-            if row is None or row.tenant_id != tenant_id:
+            internal_id = public_id_service.resolve_internal_id(db, model, value, tenant_id=tenant_id)
+            if internal_id is None:
                 raise ValueError(f"{label} does not belong to current tenant")
+            resolved[label] = internal_id
+        return resolved
 
     def create_template(self, db: Session, payload: TemplateCreate, *, tenant_id: int, created_by: int | None):
+        refs = self._resolve_tenant_refs(
+            db,
+            tenant_id=tenant_id,
+            next_event_id=payload.next_event_id,
+            last_event_id=payload.last_event_id,
+            cycle_config_id=payload.cycle_config_id,
+            document_template_id=payload.document_template_id,
+        )
         # An explicitly-supplied document_template_id that doesn't belong to this tenant
         # used to be silently swapped for the tenant's default instead of rejected -
         # unlike every other reference here (next_event_id/last_event_id/cycle_config_id)
         # and unlike update_template's identical check just below, which both raise
         # (audit finding, 2026-08-25). Only an *omitted* document_template_id (None) is a
         # legitimate default-fill case.
-        document_template_id = payload.document_template_id
-        if document_template_id is None:
+        document_template_id = refs["document_template_id"]
+        if payload.document_template_id is None:
             document_template_id = self.document_template_service.default_document_template_id(db, tenant_id)
-        self._validate_tenant_refs(
-            db,
-            tenant_id=tenant_id,
-            next_event_id=payload.next_event_id,
-            last_event_id=payload.last_event_id,
-            cycle_config_id=payload.cycle_config_id,
-            document_template_id=document_template_id,
-        )
         template = Template(
             tenant_id=tenant_id,
             document_template_id=document_template_id,
-            next_event_id=payload.next_event_id,
-            last_event_id=payload.last_event_id,
+            next_event_id=refs["next_event_id"],
+            last_event_id=refs["last_event_id"],
             name=payload.name,
             description=payload.description,
             protocol_number_pattern=payload.protocol_number_pattern,
             title_pattern=payload.title_pattern,
             auto_create_next_protocol=payload.auto_create_next_protocol,
-            cycle_config_id=payload.cycle_config_id,
+            cycle_config_id=refs["cycle_config_id"],
             version=payload.version,
             status=payload.status,
             created_by=created_by,
@@ -109,7 +117,7 @@ class TemplateService:
         values = payload.model_dump(exclude_unset=True)
         if not values:
             return template
-        self._validate_tenant_refs(
+        refs = self._resolve_tenant_refs(
             db,
             tenant_id=template.tenant_id,
             next_event_id=values.get("next_event_id"),
@@ -117,6 +125,9 @@ class TemplateService:
             cycle_config_id=values.get("cycle_config_id"),
             document_template_id=values.get("document_template_id"),
         )
+        for field in ("next_event_id", "last_event_id", "cycle_config_id", "document_template_id"):
+            if field in values:
+                values[field] = refs[field]
         return self.repository.update(db, template, values)
 
     def delete_template(self, db: Session, template_id: int) -> bool:

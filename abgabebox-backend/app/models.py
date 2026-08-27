@@ -14,7 +14,7 @@ DB-Grants ab, sondern nur die Spalten, die dieser Service kennt/braucht.
 """
 
 from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, Integer, MetaData, Table, Text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 metadata = MetaData()
 
@@ -51,6 +51,7 @@ event_table = Table(
     "event",
     metadata,
     Column("id", BigInteger, primary_key=True),
+    Column("public_id", UUID(as_uuid=True)),
     Column("tenant_id", BigInteger),
     Column("event_date", Date),
     Column("event_end_date", Date),
@@ -75,6 +76,7 @@ list_entry_table = Table(
     "list_entry",
     metadata,
     Column("id", BigInteger, primary_key=True),
+    Column("public_id", UUID(as_uuid=True)),
     Column("list_definition_id", BigInteger),
     Column("sort_index", Integer),
     Column("column_one_value_json", JSONB),
@@ -85,6 +87,7 @@ participant_table = Table(
     "participant",
     metadata,
     Column("id", BigInteger, primary_key=True),
+    Column("public_id", UUID(as_uuid=True)),
     Column("first_name", Text),
     Column("last_name", Text),
     Column("display_name", Text),

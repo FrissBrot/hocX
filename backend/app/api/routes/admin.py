@@ -1,5 +1,6 @@
 import os
 import tempfile
+import uuid
 from pathlib import Path
 from typing import Literal
 
@@ -12,6 +13,8 @@ from starlette.background import BackgroundTask
 from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_write
 from app.core.config import settings
 from app.core.db import get_db
+from app.models.entities import AppUser, PlatformAdmin, Tenant, TenantDomain, UserMfaFactor
+from app.services import public_id_service
 from app.schemas.admin import (
     AdminDomainPage,
     AdminDomainRead,
@@ -66,6 +69,27 @@ mfa_service = MfaService()
 audit = AuditService()
 
 
+def _resolve_tenant_id(db: Session, tenant_id: uuid.UUID) -> int:
+    internal_id = public_id_service.resolve_internal_id(db, Tenant, tenant_id)
+    if internal_id is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    return internal_id
+
+
+def _resolve_user_id(db: Session, user_id: uuid.UUID) -> int:
+    internal_id = public_id_service.resolve_internal_id(db, AppUser, user_id)
+    if internal_id is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return internal_id
+
+
+def _resolve_factor_id(db: Session, factor_id: uuid.UUID) -> int:
+    internal_id = public_id_service.resolve_internal_id(db, UserMfaFactor, factor_id)
+    if internal_id is None:
+        raise HTTPException(status_code=404, detail="MFA factor not found")
+    return internal_id
+
+
 @router.get("/tenants", response_model=AdminTenantPage)
 def list_tenants(
     limit: int | None = Query(None, gt=0, le=500),
@@ -88,30 +112,34 @@ def list_domains(
 
 @router.delete("/domains/{domain_id}", status_code=204)
 def delete_domain(
-    domain_id: int,
+    domain_id: uuid.UUID,
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
-    domain = domain_service.delete_domain(db, domain_id)
+    internal_domain_id = public_id_service.resolve_internal_id(db, TenantDomain, domain_id)
+    if internal_domain_id is None:
+        raise HTTPException(status_code=404, detail="Domain not found")
+    domain = domain_service.delete_domain(db, internal_domain_id)
     if domain is None:
         raise HTTPException(status_code=404, detail="Domain not found")
     audit.log(
         db, action="admin.domain_deleted", actor_email=current_admin.email, tenant_id=domain.tenant_id,
-        entity_type="tenant_domain", entity_id=domain_id, details={"domain": domain.domain, "purpose": domain.purpose},
+        entity_type="tenant_domain", entity_id=internal_domain_id, details={"domain": domain.domain, "purpose": domain.purpose},
     )
 
 
 @router.get("/error-logs", response_model=SystemErrorLogPage)
 def list_error_logs(
-    tenant_id: int | None = None,
+    tenant_id: uuid.UUID | None = None,
     error_type: str | None = None,
     source: str | None = None,
     limit: int = Query(50, gt=0),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
 ):
+    internal_tenant_id = _resolve_tenant_id(db, tenant_id) if tenant_id is not None else None
     return error_log_service.list_errors(
-        db, tenant_id=tenant_id, error_type=error_type, source=source, limit=min(limit, 200), offset=offset
+        db, tenant_id=internal_tenant_id, error_type=error_type, source=source, limit=min(limit, 200), offset=offset
     )
 
 
@@ -131,16 +159,18 @@ def create_tenant(
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Tenant could not be created") from exc
+    internal_tenant_id = public_id_service.resolve_internal_id(db, Tenant, tenant.id)
     audit.log(
-        db, action="admin.tenant_created", actor_email=current_admin.email, tenant_id=tenant.id,
-        entity_type="tenant", entity_id=tenant.id, details={"name": payload.name},
+        db, action="admin.tenant_created", actor_email=current_admin.email, tenant_id=internal_tenant_id,
+        entity_type="tenant", entity_id=internal_tenant_id, details={"name": payload.name},
     )
     return tenant
 
 
 @router.get("/tenants/{tenant_id}", response_model=AdminTenantRead)
-def get_tenant(tenant_id: int, db: Session = Depends(get_db)):
-    tenant = tenant_service.get_tenant(db, tenant_id)
+def get_tenant(tenant_id: uuid.UUID, db: Session = Depends(get_db)):
+    internal_tenant_id = _resolve_tenant_id(db, tenant_id)
+    tenant = tenant_service.get_tenant(db, internal_tenant_id)
     if tenant is None:
         raise HTTPException(status_code=404, detail="Tenant not found")
     return tenant
@@ -148,32 +178,36 @@ def get_tenant(tenant_id: int, db: Session = Depends(get_db)):
 
 @router.patch("/tenants/{tenant_id}", response_model=AdminTenantRead)
 async def update_tenant(
-    tenant_id: int,
+    tenant_id: uuid.UUID,
     name: str | None = Form(default=None),
     public_slug: str | None = Form(default=None),
     profile_image: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
+    internal_tenant_id = _resolve_tenant_id(db, tenant_id)
     try:
-        tenant = await tenant_service.update_tenant(db, tenant_id, TenantUpdate(name=name, public_slug=public_slug), profile_image)
+        tenant = await tenant_service.update_tenant(
+            db, internal_tenant_id, TenantUpdate(name=name, public_slug=public_slug), profile_image
+        )
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Tenant could not be updated") from exc
     if tenant is None:
         raise HTTPException(status_code=404, detail="Tenant not found")
     audit.log(
-        db, action="admin.tenant_updated", actor_email=current_admin.email, tenant_id=tenant_id,
-        entity_type="tenant", entity_id=tenant_id,
+        db, action="admin.tenant_updated", actor_email=current_admin.email, tenant_id=internal_tenant_id,
+        entity_type="tenant", entity_id=internal_tenant_id,
         details={"name": name, "public_slug": public_slug, "profile_image_changed": profile_image is not None},
     )
     return tenant
 
 
 @router.delete("/tenants/{tenant_id}", status_code=204)
-def delete_tenant(tenant_id: int, db: Session = Depends(get_db), current_admin: CurrentAdmin = Depends(require_admin_write)):
+def delete_tenant(tenant_id: uuid.UUID, db: Session = Depends(get_db), current_admin: CurrentAdmin = Depends(require_admin_write)):
+    internal_tenant_id = _resolve_tenant_id(db, tenant_id)
     try:
-        deleted = tenant_service.delete_tenant(db, tenant_id)
+        deleted = tenant_service.delete_tenant(db, internal_tenant_id)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Tenant could not be deleted") from exc
@@ -181,25 +215,27 @@ def delete_tenant(tenant_id: int, db: Session = Depends(get_db), current_admin: 
         raise HTTPException(status_code=404, detail="Tenant not found")
     # tenant_id darf hier NICHT gesetzt werden: der Tenant wurde oben bereits geloescht+committed,
     # audit_log.tenant_id hat eine FK auf tenant(id) - welcher Tenant betroffen war steht in entity_id.
-    audit.log(db, action="admin.tenant_deleted", actor_email=current_admin.email, entity_type="tenant", entity_id=tenant_id)
+    audit.log(db, action="admin.tenant_deleted", actor_email=current_admin.email, entity_type="tenant", entity_id=internal_tenant_id)
 
 
 @router.get("/tenants/{tenant_id}/cleanup/preview", response_model=TenantCleanupCounts)
-def preview_tenant_cleanup(tenant_id: int, db: Session = Depends(get_db)):
-    tenant = tenant_service.get_tenant(db, tenant_id)
+def preview_tenant_cleanup(tenant_id: uuid.UUID, db: Session = Depends(get_db)):
+    internal_tenant_id = _resolve_tenant_id(db, tenant_id)
+    tenant = tenant_service.get_tenant(db, internal_tenant_id)
     if tenant is None:
         raise HTTPException(status_code=404, detail="Tenant not found")
-    return cleanup_service.preview(db, tenant_id)
+    return cleanup_service.preview(db, internal_tenant_id)
 
 
 @router.post("/tenants/{tenant_id}/cleanup", response_model=TenantCleanupCounts)
 def cleanup_tenant(
-    tenant_id: int,
+    tenant_id: uuid.UUID,
     payload: TenantCleanupRequest,
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
-    tenant = tenant_service.get_tenant(db, tenant_id)
+    internal_tenant_id = _resolve_tenant_id(db, tenant_id)
+    tenant = tenant_service.get_tenant(db, internal_tenant_id)
     if tenant is None:
         raise HTTPException(status_code=404, detail="Tenant not found")
     if payload.confirm_name.strip() != tenant.name:
@@ -207,15 +243,15 @@ def cleanup_tenant(
     if not payload.categories:
         raise HTTPException(status_code=400, detail="Keine Kategorien ausgewählt")
     try:
-        counts = cleanup_service.cleanup(db, tenant_id, payload.categories)
+        counts = cleanup_service.cleanup(db, internal_tenant_id, payload.categories)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Aufräumen fehlgeschlagen") from exc
     if counts is None:
         raise HTTPException(status_code=404, detail="Tenant not found")
     audit.log(
-        db, action="admin.tenant_cleanup", actor_email=current_admin.email, tenant_id=tenant_id,
-        entity_type="tenant", entity_id=tenant_id,
+        db, action="admin.tenant_cleanup", actor_email=current_admin.email, tenant_id=internal_tenant_id,
+        entity_type="tenant", entity_id=internal_tenant_id,
         details={"categories": payload.categories, "counts": counts.model_dump()},
     )
     return counts
@@ -223,16 +259,17 @@ def cleanup_tenant(
 
 @router.post("/tenants/{tenant_id}/clone", response_model=AdminTenantRead, status_code=201)
 def clone_tenant(
-    tenant_id: int,
+    tenant_id: uuid.UUID,
     payload: TenantCloneRequest,
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
+    internal_tenant_id = _resolve_tenant_id(db, tenant_id)
     try:
         if payload.mode == "full":
-            new_tenant = clone_service.clone_full(db, tenant_id, payload.new_name)
+            new_tenant = clone_service.clone_full(db, internal_tenant_id, payload.new_name)
         else:
-            new_tenant = clone_service.clone_structure(db, tenant_id, payload.new_name)
+            new_tenant = clone_service.clone_structure(db, internal_tenant_id, payload.new_name)
     except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -245,14 +282,14 @@ def clone_tenant(
     audit.log(
         db, action="admin.tenant_cloned", actor_email=current_admin.email, tenant_id=new_tenant.id,
         entity_type="tenant", entity_id=new_tenant.id,
-        details={"source_tenant_id": tenant_id, "new_name": payload.new_name, "mode": payload.mode},
+        details={"source_tenant_id": internal_tenant_id, "new_name": payload.new_name, "mode": payload.mode},
     )
     return result
 
 
 @router.get("/tenants/{tenant_id}/export")
 def export_tenant(
-    tenant_id: int,
+    tenant_id: uuid.UUID,
     scope: Literal["structure", "structure_lists", "full", "full_abgabebox"] = "structure",
     db: Session = Depends(get_db),
     # Was get_current_admin (audit finding, 2026-08-25) - a "full"/"full_abgabebox" scope
@@ -263,13 +300,14 @@ def export_tenant(
     # any tenant.
     current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
+    internal_tenant_id = _resolve_tenant_id(db, tenant_id)
     try:
-        zip_path, filename = export_service.export(db, tenant_id, scope)
+        zip_path, filename = export_service.export(db, internal_tenant_id, scope)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     audit.log(
-        db, action="admin.tenant_exported", actor_email=current_admin.email, tenant_id=tenant_id,
-        entity_type="tenant", entity_id=tenant_id, details={"scope": scope},
+        db, action="admin.tenant_exported", actor_email=current_admin.email, tenant_id=internal_tenant_id,
+        entity_type="tenant", entity_id=internal_tenant_id, details={"scope": scope},
     )
     return FileResponse(
         zip_path,
@@ -325,47 +363,52 @@ async def import_tenant(
 
 
 @router.get("/tenants/{tenant_id}/users", response_model=list[AdminTenantUserRead])
-def list_tenant_users(tenant_id: int, db: Session = Depends(get_db)):
-    return tenant_user_service.list_users(db, tenant_id)
+def list_tenant_users(tenant_id: uuid.UUID, db: Session = Depends(get_db)):
+    internal_tenant_id = _resolve_tenant_id(db, tenant_id)
+    return tenant_user_service.list_users(db, internal_tenant_id)
 
 
 @router.put("/tenants/{tenant_id}/users/{user_id}", response_model=AdminTenantUserRead)
 def grant_tenant_user_role(
-    tenant_id: int,
-    user_id: int,
+    tenant_id: uuid.UUID,
+    user_id: uuid.UUID,
     payload: AdminTenantUserGrant,
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
+    internal_tenant_id = _resolve_tenant_id(db, tenant_id)
+    internal_user_id = _resolve_user_id(db, user_id)
     try:
-        result = tenant_user_service.grant_or_update_role(db, tenant_id, user_id, payload.role_code)
+        result = tenant_user_service.grant_or_update_role(db, internal_tenant_id, internal_user_id, payload.role_code)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Role could not be granted") from exc
     audit.log(
-        db, action="admin.tenant_user_role_granted", actor_email=current_admin.email, tenant_id=tenant_id,
-        entity_type="user", entity_id=user_id, details={"role_code": payload.role_code},
+        db, action="admin.tenant_user_role_granted", actor_email=current_admin.email, tenant_id=internal_tenant_id,
+        entity_type="user", entity_id=internal_user_id, details={"role_code": payload.role_code},
     )
     return result
 
 
 @router.delete("/tenants/{tenant_id}/users/{user_id}", status_code=204)
 def remove_tenant_user(
-    tenant_id: int,
-    user_id: int,
+    tenant_id: uuid.UUID,
+    user_id: uuid.UUID,
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
+    internal_tenant_id = _resolve_tenant_id(db, tenant_id)
+    internal_user_id = _resolve_user_id(db, user_id)
     try:
-        removed = tenant_user_service.remove_user(db, tenant_id, user_id)
+        removed = tenant_user_service.remove_user(db, internal_tenant_id, internal_user_id)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Membership could not be removed") from exc
     if not removed:
         raise HTTPException(status_code=404, detail="Membership not found")
     audit.log(
-        db, action="admin.tenant_user_removed", actor_email=current_admin.email, tenant_id=tenant_id,
-        entity_type="user", entity_id=user_id,
+        db, action="admin.tenant_user_removed", actor_email=current_admin.email, tenant_id=internal_tenant_id,
+        entity_type="user", entity_id=internal_user_id,
     )
 
 
@@ -389,8 +432,9 @@ def update_platform_oidc_config(
 
 
 @router.get("/tenants/{tenant_id}/profile-image")
-def tenant_profile_image(tenant_id: int, db: Session = Depends(get_db)):
-    tenant = tenant_service.get_tenant(db, tenant_id)
+def tenant_profile_image(tenant_id: uuid.UUID, db: Session = Depends(get_db)):
+    internal_tenant_id = _resolve_tenant_id(db, tenant_id)
+    tenant = tenant_service.get_tenant(db, internal_tenant_id)
     if tenant is None or tenant.profile_image_path is None:
         raise HTTPException(status_code=404, detail="Tenant profile image not found")
     file_path = _safe_storage_path(settings.storage_root, tenant.profile_image_path)
@@ -422,14 +466,16 @@ def create_user(
         raise HTTPException(status_code=400, detail="User could not be created") from exc
     audit.log(
         db, action="admin.user_created", actor_email=current_admin.email,
-        entity_type="user", entity_id=result.id, details={"email": payload.email},
+        entity_type="user", entity_id=public_id_service.resolve_internal_id(db, AppUser, result.id),
+        details={"email": payload.email},
     )
     return result
 
 
 @router.get("/users/{user_id}", response_model=UserRead)
-def get_user(user_id: int, db: Session = Depends(get_db)):
-    user = user_service.get_user(db, user_id)
+def get_user(user_id: uuid.UUID, db: Session = Depends(get_db)):
+    internal_user_id = _resolve_user_id(db, user_id)
+    user = user_service.get_user(db, internal_user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
     return user
@@ -437,13 +483,14 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
 
 @router.patch("/users/{user_id}", response_model=UserRead)
 def update_user(
-    user_id: int,
+    user_id: uuid.UUID,
     payload: UserUpdate,
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
+    internal_user_id = _resolve_user_id(db, user_id)
     try:
-        user = user_service.update_user(db, user_id, payload)
+        user = user_service.update_user(db, internal_user_id, payload)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="User could not be updated") from exc
@@ -451,7 +498,7 @@ def update_user(
         raise HTTPException(status_code=404, detail="User not found")
     audit.log(
         db, action="admin.user_updated", actor_email=current_admin.email,
-        entity_type="user", entity_id=user_id,
+        entity_type="user", entity_id=internal_user_id,
         details={"password_changed": bool(payload.password), "is_active": payload.is_active},
     )
     return user
@@ -459,38 +506,43 @@ def update_user(
 
 @router.post("/users/merge", response_model=UserRead)
 def merge_users(payload: AdminUserMergeRequest, db: Session = Depends(get_db), current_admin: CurrentAdmin = Depends(require_admin_write)):
+    internal_source_user_id = _resolve_user_id(db, payload.source_user_id)
+    internal_target_user_id = _resolve_user_id(db, payload.target_user_id)
     try:
-        result = user_service.merge_users(db, source_user_id=payload.source_user_id, target_user_id=payload.target_user_id)
+        result = user_service.merge_users(db, source_user_id=internal_source_user_id, target_user_id=internal_target_user_id)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Users could not be merged") from exc
     audit.log(
-        db, action="admin.users_merged", actor_email=current_admin.email, entity_type="user", entity_id=payload.target_user_id,
-        details={"source_user_id": payload.source_user_id, "target_user_id": payload.target_user_id},
+        db, action="admin.users_merged", actor_email=current_admin.email, entity_type="user", entity_id=internal_target_user_id,
+        details={"source_user_id": internal_source_user_id, "target_user_id": internal_target_user_id},
     )
     return result
 
 
 @router.get("/users/{user_id}/mfa", response_model=UserMfaRead)
-def get_user_mfa(user_id: int, db: Session = Depends(get_db)):
-    return mfa_service.get_platform_admin_user_overview(db, user_id)
+def get_user_mfa(user_id: uuid.UUID, db: Session = Depends(get_db)):
+    internal_user_id = _resolve_user_id(db, user_id)
+    return mfa_service.get_platform_admin_user_overview(db, internal_user_id)
 
 
 @router.delete("/users/{user_id}/mfa/factors/{factor_id}", response_model=UserMfaRead)
 def delete_user_mfa_factor(
-    user_id: int,
-    factor_id: int,
+    user_id: uuid.UUID,
+    factor_id: uuid.UUID,
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
-    result = mfa_service.delete_platform_admin_user_factor(db, user_id, factor_id)
+    internal_user_id = _resolve_user_id(db, user_id)
+    internal_factor_id = _resolve_factor_id(db, factor_id)
+    result = mfa_service.delete_platform_admin_user_factor(db, internal_user_id, internal_factor_id)
     audit.log(
         db,
         action="admin.user_mfa_factor_deleted",
         actor_email=current_admin.email,
         entity_type="user_mfa_factor",
-        entity_id=factor_id,
-        details={"target_user_id": user_id},
+        entity_id=internal_factor_id,
+        details={"target_user_id": internal_user_id},
     )
     return result
 
@@ -513,24 +565,28 @@ def create_admin(
         raise HTTPException(status_code=400, detail="Admin account could not be created (email already in use?)") from exc
     audit.log(
         db, action="admin.admin_created", actor_email=current_admin.email,
-        entity_type="platform_admin", entity_id=result.id, details={"email": payload.email},
+        entity_type="platform_admin", entity_id=public_id_service.resolve_internal_id(db, PlatformAdmin, result.id),
+        details={"email": payload.email},
     )
     return result
 
 
 @router.patch("/admins/{admin_id}", response_model=PlatformAdminRead)
 def update_admin(
-    admin_id: int,
+    admin_id: uuid.UUID,
     payload: PlatformAdminUpdate,
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
-    admin = admin_account_service.update_admin(db, admin_id, payload, current_admin_id=current_admin.admin_id)
+    internal_admin_id = public_id_service.resolve_internal_id(db, PlatformAdmin, admin_id)
+    if internal_admin_id is None:
+        raise HTTPException(status_code=404, detail="Admin account not found")
+    admin = admin_account_service.update_admin(db, internal_admin_id, payload, current_admin_id=current_admin.admin_id)
     if admin is None:
         raise HTTPException(status_code=404, detail="Admin account not found")
     audit.log(
         db, action="admin.admin_updated", actor_email=current_admin.email,
-        entity_type="platform_admin", entity_id=admin_id,
+        entity_type="platform_admin", entity_id=internal_admin_id,
         details={"password_changed": bool(payload.password), "is_active": payload.is_active},
     )
     return admin

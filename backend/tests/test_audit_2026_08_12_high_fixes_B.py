@@ -58,7 +58,7 @@ def test_h5_due_events_rejects_foreign_tenant_todo(db):
     # regression test is that the cross-tenant data is no longer returned at all.
     user_b = make_current_user(tenant_b.id, role="reader", user_id=2)
     with pytest.raises(HTTPException) as exc_info:
-        todos_route.get_todo_due_events(todo_a.id, db=db, user=user_b)
+        todos_route.get_todo_due_events(todo_a.public_id, db=db, user=user_b)
     assert exc_info.value.status_code == 403
 
 
@@ -71,7 +71,7 @@ def test_h5_due_events_still_works_for_same_tenant_user(db):
     todo_a = make_protocol_todo(db, block_a.id, task="Normal Task")
 
     user_a = make_current_user(tenant_a.id, role="reader", user_id=1)
-    result = todos_route.get_todo_due_events(todo_a.id, db=db, user=user_a)
+    result = todos_route.get_todo_due_events(todo_a.public_id, db=db, user=user_a)
     assert "events" in result
     assert "next_event_id" in result
 
@@ -102,7 +102,7 @@ def test_h6_reader_can_now_reach_endpoint_for_own_participant(db):
 
     # Previously this raised HTTPException(403, "Writer role required") because the route
     # was gated by require_writer. It must now succeed for a reader account.
-    result_own = participants_route.list_participant_templates(participant_reader.id, db=db, user=reader_cu)
+    result_own = participants_route.list_participant_templates(participant_reader.public_id, db=db, user=reader_cu)
     assert {t.id for t in result_own} == {template1.id}
 
 
@@ -127,7 +127,7 @@ def test_h6_restricted_reader_scoped_when_querying_other_participant(db):
     # The reader's own account is only assigned template1. Querying a *different*
     # participant's templates (who is assigned template1 AND template2) must still be
     # scoped down to what this reader themself can read - template2 must not leak.
-    result_other = participants_route.list_participant_templates(participant_other.id, db=db, user=reader_cu)
+    result_other = participants_route.list_participant_templates(participant_other.public_id, db=db, user=reader_cu)
     assert {t.id for t in result_other} == {template1.id}
 
 
@@ -145,7 +145,7 @@ def test_h6_unrestricted_reader_sees_full_list(db):
     make_user_tenant_role(db, plain_reader_user.id, tenant.id, role_code="reader")
     plain_reader_cu = make_current_user(tenant.id, role="reader", user_id=plain_reader_user.id)
 
-    result = participants_route.list_participant_templates(participant_other.id, db=db, user=plain_reader_cu)
+    result = participants_route.list_participant_templates(participant_other.public_id, db=db, user=plain_reader_cu)
     assert {t.id for t in result} == {template1.id, template2.id}
 
 
@@ -157,5 +157,5 @@ def test_h6_writer_still_works_unfiltered(db):
     participant_service.replace_templates_for_participant(db, participant_other.id, [template1.id, template2.id])
 
     writer_cu = make_current_user(tenant.id, role="writer", user_id=999)
-    result = participants_route.list_participant_templates(participant_other.id, db=db, user=writer_cu)
+    result = participants_route.list_participant_templates(participant_other.public_id, db=db, user=writer_cu)
     assert {t.id for t in result} == {template1.id, template2.id}

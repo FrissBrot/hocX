@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import re
+import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, ClassVar
 
 from pydantic import BaseModel, Field, field_validator
+
+from app.models.entities import Tenant
+from app.schemas.base import PublicIdModel
 
 # code becomes a path segment (document_templates/tenant-{id}/{code}-v{version}, resp.
 # document_template_parts/tenant-{id}/{part_type}/{code}) - restrict it to the same
@@ -48,15 +52,20 @@ class DocumentTemplatePartUpdate(BaseModel):
     _validate_code = field_validator("code")(_validate_code)
 
 
-class DocumentTemplatePartRead(DocumentTemplatePartBase):
-    id: int
-    tenant_id: int
+class DocumentTemplatePartRead(PublicIdModel):
+    _fk_models: ClassVar[dict[str, type]] = {"tenant_id": Tenant}
+
+    id: uuid.UUID
+    tenant_id: uuid.UUID
     code: str
+    name: str
+    part_type: str
+    description: str | None = None
+    version: int
+    is_active: bool
     storage_path: str
     created_at: datetime
     updated_at: datetime
-
-    model_config = {"from_attributes": True}
 
 
 class DocumentTemplateBase(BaseModel):
@@ -87,12 +96,18 @@ class DocumentTemplateUpdate(BaseModel):
     _validate_code = field_validator("code")(_validate_code)
 
 
-class DocumentTemplateRead(DocumentTemplateBase):
-    id: int
-    tenant_id: int
+class DocumentTemplateRead(PublicIdModel):
+    _fk_models: ClassVar[dict[str, type]] = {"tenant_id": Tenant}
+
+    id: uuid.UUID
+    tenant_id: uuid.UUID
     code: str
+    name: str
+    description: str | None = None
+    version: int
+    is_active: bool
+    is_default: bool
+    configuration_json: dict[str, Any] = Field(default_factory=dict)
     filesystem_path: str
     created_at: datetime
     updated_at: datetime
-
-    model_config = {"from_attributes": True}

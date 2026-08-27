@@ -21,6 +21,7 @@ from sqlalchemy import select
 
 from app.core.config import settings
 from app.models.entities import StoredFile, TodoStatus
+from app.services import public_id_service
 from app.services.export_service import ExportService
 from tests.factories import (
     make_participant,
@@ -61,8 +62,9 @@ def _protocol_with_template_dir(db, *, template_dir: str | None = None) -> tuple
     return tenant, template, protocol
 
 
-def _read_generated_file_bytes(db, generated_file_id: int) -> bytes:
-    stored_file = db.get(StoredFile, generated_file_id)
+def _read_generated_file_bytes(db, generated_file_id) -> bytes:
+    # generated_file_id is the public uuid from ProtocolExportRead now.
+    stored_file = public_id_service.get_by_public_id(db, StoredFile, generated_file_id)
     assert stored_file is not None
     path = Path(settings.storage_root) / stored_file.storage_path
     return path.read_bytes()

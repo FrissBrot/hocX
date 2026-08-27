@@ -52,11 +52,11 @@ def test_refresh_is_scoped_to_owning_tenant(db):
     # for every other route that reuses it, not something new to this feature.
     other_tenant_user = make_current_user(tenant_b.id)
     with pytest.raises(HTTPException) as exc_info:
-        protocol_elements.refresh_block_list_snapshot(block.id, db=db, user=other_tenant_user)
+        protocol_elements.refresh_block_list_snapshot(block.public_id, db=db, user=other_tenant_user)
     assert exc_info.value.status_code == 403
 
     same_tenant_user = make_current_user(tenant_a.id)
-    result = protocol_elements.refresh_block_list_snapshot(block.id, db=db, user=same_tenant_user)
+    result = protocol_elements.refresh_block_list_snapshot(block.public_id, db=db, user=same_tenant_user)
     assert result.configuration_snapshot_json["rows"][0]["list_snapshot"]["column_one_value"]["text_value"] == "v1"
 
 
@@ -72,7 +72,7 @@ def test_refresh_returns_409_when_protocol_is_abgeschlossen(db):
 
     user = make_current_user(tenant.id)
     with pytest.raises(HTTPException) as exc_info:
-        protocol_elements.refresh_block_list_snapshot(block.id, db=db, user=user)
+        protocol_elements.refresh_block_list_snapshot(block.public_id, db=db, user=user)
     assert exc_info.value.status_code == 409
 
 
@@ -83,18 +83,18 @@ def test_sync_then_undo_round_trip(db):
     _protocol, block = _row_block(db, tenant, definition, entry)
     user = make_current_user(tenant.id)
 
-    protocol_elements.refresh_block_list_snapshot(block.id, db=db, user=user)
+    protocol_elements.refresh_block_list_snapshot(block.public_id, db=db, user=user)
     entry.column_one_value_json = {"text_value": "v2"}
     db.add(entry)
     db.commit()
-    refreshed = protocol_elements.refresh_block_list_snapshot(block.id, db=db, user=user)
+    refreshed = protocol_elements.refresh_block_list_snapshot(block.public_id, db=db, user=user)
     assert refreshed.configuration_snapshot_json["rows"][0]["list_snapshot"]["column_one_value"]["text_value"] == "v2"
 
-    undone = protocol_elements.undo_block_list_snapshot(block.id, db=db, user=user)
+    undone = protocol_elements.undo_block_list_snapshot(block.public_id, db=db, user=user)
     assert undone.configuration_snapshot_json["rows"][0]["list_snapshot"]["column_one_value"]["text_value"] == "v1"
 
     with pytest.raises(HTTPException) as exc_info:
-        protocol_elements.undo_block_list_snapshot(block.id, db=db, user=user)
+        protocol_elements.undo_block_list_snapshot(block.public_id, db=db, user=user)
     assert exc_info.value.status_code == 409
 
 
@@ -106,5 +106,5 @@ def test_sync_does_not_require_writer_role_change_but_rejects_reader(db):
 
     reader = make_current_user(tenant.id, role="reader")
     with pytest.raises(HTTPException) as exc_info:
-        protocol_elements.sync_block_list_snapshot(block.id, db=db, user=reader)
+        protocol_elements.sync_block_list_snapshot(block.public_id, db=db, user=reader)
     assert exc_info.value.status_code == 403

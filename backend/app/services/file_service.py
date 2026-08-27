@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import uuid
 import zipfile
 import zlib
 from contextlib import contextmanager
@@ -18,6 +19,7 @@ from app.core.config import settings
 from app.models import Protocol, ProtocolElement, ProtocolElementBlock, ProtocolImage, StoredFile
 from app.repositories.file_repository import ProtocolImageRepository, StoredFileRepository
 from app.schemas.protocol import ProtocolImageRead
+from app.services import public_id_service
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
 # Distinct namespace (paired with tenant_id as the advisory lock's two int32 keys) from
@@ -160,23 +162,24 @@ class FileService:
         for path in [settings.storage_root, settings.export_root, settings.upload_root, settings.latex_template_root]:
             Path(path).mkdir(parents=True, exist_ok=True)
 
-    def build_content_url(self, stored_file_id: int) -> str:
-        return f"/api/stored-files/{stored_file_id}/content"
+    def build_content_url(self, stored_file_public_id: uuid.UUID) -> str:
+        return f"/api/stored-files/{stored_file_public_id}/content"
 
     def list_protocol_images(self, db: Session, protocol_element_block_id: int) -> list[ProtocolImageRead]:
         rows = self.protocol_image_repository.list_for_protocol_block(db, protocol_element_block_id)
+        block_public_id = public_id_service.resolve_public_id(db, ProtocolElementBlock, protocol_element_block_id)
         return [
             ProtocolImageRead(
-                id=row.ProtocolImage.id,
-                protocol_element_block_id=row.ProtocolImage.protocol_element_block_id,
-                stored_file_id=row.ProtocolImage.stored_file_id,
+                id=row.ProtocolImage.public_id,
+                protocol_element_block_id=block_public_id,
+                stored_file_id=row.StoredFile.public_id,
                 sort_index=row.ProtocolImage.sort_index,
                 title=row.ProtocolImage.title,
                 caption=row.ProtocolImage.caption,
                 original_name=row.StoredFile.original_name,
                 mime_type=row.StoredFile.mime_type,
                 file_size_bytes=row.StoredFile.file_size_bytes,
-                content_url=self.build_content_url(row.StoredFile.id),
+                content_url=self.build_content_url(row.StoredFile.public_id),
             )
             for row in rows
         ]
@@ -272,16 +275,16 @@ class FileService:
             db.commit()
 
         return ProtocolImageRead(
-            id=protocol_image.id,
-            protocol_element_block_id=protocol_image.protocol_element_block_id,
-            stored_file_id=protocol_image.stored_file_id,
+            id=protocol_image.public_id,
+            protocol_element_block_id=protocol_element_block.public_id,
+            stored_file_id=stored_file.public_id,
             sort_index=protocol_image.sort_index,
             title=protocol_image.title,
             caption=protocol_image.caption,
             original_name=stored_file.original_name,
             mime_type=stored_file.mime_type,
             file_size_bytes=stored_file.file_size_bytes,
-            content_url=self.build_content_url(stored_file.id),
+            content_url=self.build_content_url(stored_file.public_id),
         )
 
     def save_word_import_document(

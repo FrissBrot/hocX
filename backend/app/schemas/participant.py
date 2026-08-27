@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import uuid
 from datetime import date, datetime
+from typing import ClassVar
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.models.entities import AppUser, Tenant
+from app.schemas.base import PublicIdModel
+
 
 class ParticipantBase(BaseModel):
-    app_user_id: int | None = None
+    app_user_id: uuid.UUID | None = None
     first_name: str | None = None
     last_name: str | None = None
     display_name: str
@@ -42,24 +47,22 @@ class ParticipantUpdate(BaseModel):
         return self
 
 
-class ParticipantRead(ParticipantBase):
-    id: int
-    tenant_id: int
+class ParticipantRead(PublicIdModel, ParticipantBase):
+    _fk_models: ClassVar[dict[str, type]] = {"tenant_id": Tenant, "app_user_id": AppUser}
+
+    id: uuid.UUID
+    tenant_id: uuid.UUID
     created_at: datetime
     updated_at: datetime
 
-    model_config = {"from_attributes": True}
-
 
 class TemplateParticipantAssignment(BaseModel):
-    participant_id: int
+    participant_id: uuid.UUID
     exclude_from_attendance: bool = False
 
 
 class TemplateParticipantAssignmentRead(ParticipantRead):
     exclude_from_attendance: bool = False
-
-    model_config = {"from_attributes": True}
 
 
 class ParticipantImportRow(BaseModel):
@@ -76,13 +79,13 @@ class ParticipantImportResult(BaseModel):
 
 
 class TemplateParticipantAssignmentUpdate(BaseModel):
-    participant_ids: list[int] = Field(default_factory=list)
+    participant_ids: list[uuid.UUID] = Field(default_factory=list)
     participants: list[TemplateParticipantAssignment] | None = None
 
 
 class ParticipantTemplateAssignmentUpdate(BaseModel):
-    template_ids: list[int]
+    template_ids: list[uuid.UUID]
 
 
 class ParticipantBulkDelete(BaseModel):
-    participant_ids: list[int]
+    participant_ids: list[uuid.UUID]
