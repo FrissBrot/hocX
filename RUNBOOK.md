@@ -151,13 +151,6 @@ gunzip -c backups/<timestamp>-pre-vX.Y.Z.sql.gz | docker compose -p hocx exec -T
 befüllen in Release A, alte Spalte erst in Release B entfernen. Das hält jeden
 einzelnen Schritt rückwärtskompatibel und Rollback ohne Backup-Restore möglich.
 
-**Bekannte Ausnahme (Audit I6, 2026-08-16):** `backend/alembic/versions/0018_cycle_config.py`
-migriert Daten und entfernt die alten Spalten im selben Schritt (plus ein
-downgrade-unfähiges `DELETE` verwaister Zeilen) - verstößt gegen diese Regel, ist aber
-bereits produktiv angewendet und wird nicht nachträglich umgeschrieben. Nur als Beleg
-stehen gelassen, dass die Regel oben nicht rückwirkend gilt, aber für alle künftigen
-Migrationen bindend bleibt.
-
 ## 6. Testumgebung neu aufsetzen (falls die Test-DB mal komplett zurückgesetzt werden soll)
 
 ```bash
