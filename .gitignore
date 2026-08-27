@@ -16,6 +16,9 @@ node_modules/
 dist/
 build/
 coverage/
+playwright-report/
+test-results/
+frontend/e2e/.auth/
 *.log
 frontend/tsconfig.tsbuildinfo
 
@@ -50,3 +53,4 @@ infra/traefik/dynamic/tenant-domains.yml
 # DB backups and abgabebox uploads — real user data, never committed
 backups/
 storage/abgabebox-uploads/*
+storage-e2e/

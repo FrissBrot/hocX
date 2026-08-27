@@ -1,0 +1,64 @@
+services:
+  test-db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: hocx_test
+      POSTGRES_USER: hocx_test
+      POSTGRES_PASSWORD: hocx_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hocx_test -d hocx_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+    profiles: [tests]
+
+  test-migrations:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.test
+    environment:
+      DATABASE_URL: postgresql+psycopg://hocx_test:hocx_test@test-db:5432/hocx_test
+      POSTGRES_DB: hocx_test
+      POSTGRES_USER: hocx_test
+      APP_DB_PASSWORD: hocx_app_test
+      ABGABEBOX_DB_PASSWORD: hocx_abgabebox_test
+      AUTH_SECRET: test-auth-secret-0123456789
+      ADMIN_AUTH_SECRET: test-admin-auth-secret-0123456789
+    depends_on:
+      test-db:
+        condition: service_healthy
+    command: alembic upgrade head
+    profiles: [tests]
+
+  backend-test:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.test
+    environment:
+      DATABASE_URL: postgresql+psycopg://hocx_test:hocx_test@test-db:5432/hocx_test
+      AUTH_SECRET: test-auth-secret-0123456789
+      ADMIN_AUTH_SECRET: test-admin-auth-secret-0123456789
+      STORAGE_ROOT: /tmp/hocx-test-storage
+    depends_on:
+      test-migrations:
+        condition: service_completed_successfully
+    volumes:
+      - ./backend:/app
+    profiles: [tests]
+
+  abgabebox-backend-test:
+    build:
+      context: ./abgabebox-backend
+      dockerfile: Dockerfile.test
+    environment:
+      ABGABEBOX_DATABASE_URL: postgresql+psycopg://hocx_abgabebox:hocx_abgabebox_test@test-db:5432/hocx_test
+      ABGABEBOX_STORAGE_ROOT: /tmp/hocx-abgabebox-test-storage
+      ABGABEBOX_CAPTCHA_SESSION_SECRET: test-captcha-secret-0123456789
+    depends_on:
+      test-migrations:
+        condition: service_completed_successfully
+    volumes:
+      - ./abgabebox-backend:/app
+    profiles: [tests]
