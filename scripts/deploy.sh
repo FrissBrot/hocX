@@ -21,6 +21,10 @@ ENVIRONMENT="${1:-}"
 
 # shellcheck source=scripts/lib/env.sh
 source "$REPO_DIR/scripts/lib/env.sh"
+# shellcheck source=scripts/lib/cosign.sh
+source "$REPO_DIR/scripts/lib/cosign.sh"
+# shellcheck source=scripts/lib/github.sh
+source "$REPO_DIR/scripts/lib/github.sh"
 
 case "$ENVIRONMENT" in
   test)
@@ -244,63 +248,11 @@ fi
 
 DC=(docker compose -p "$PROJECT_NAME" --env-file "$ENV_FILE" "${COMPOSE_ARGS[@]}")
 
-COSIGN_VERSION="v3.0.2"
-COSIGN_BIN=""
-
-ensure_cosign() {
-  local architecture asset checksum tools_dir temp_file
-
-  case "$(uname -m)" in
-    x86_64|amd64)
-      architecture=amd64
-      checksum=46dbdcb5467a3dfec2526923d0b3365e40c8d9dc00ec23d5aca3437449e8cbfd
-      ;;
-    aarch64|arm64)
-      architecture=arm64
-      checksum=17fd784737ca54d7d8a343c82da6c5d6dbdee971e66644d923d1b057fb97d7ed
-      ;;
-    *)
-      echo "Keine gepinnte Cosign-Version fuer Architektur $(uname -m) hinterlegt." >&2
-      return 1
-      ;;
-  esac
-
-  tools_dir="$PROJECT_DIR/.tools"
-  COSIGN_BIN="$tools_dir/cosign-${COSIGN_VERSION}-linux-${architecture}"
-  if [ -x "$COSIGN_BIN" ] && printf '%s  %s\n' "$checksum" "$COSIGN_BIN" | sha256sum --check --status; then
-    return
-  fi
-
-  for command in curl sha256sum install; do
-    command -v "$command" > /dev/null 2>&1 || {
-      echo "$command wird fuer die verifizierte Cosign-Installation benoetigt." >&2
-      return 1
-    }
-  done
-  mkdir -p "$tools_dir"
-  chmod 700 "$tools_dir"
-  asset="cosign-linux-${architecture}"
-  temp_file="$(mktemp "$tools_dir/.cosign.tmp.XXXXXX")"
-  trap 'rm -f "$temp_file"' RETURN
-  echo "==> [$ENVIRONMENT] Installiere Cosign $COSIGN_VERSION lokal"
-  curl --fail --silent --show-error --location \
-    --proto '=https' --tlsv1.2 --retry 3 --connect-timeout 15 --max-time 300 \
-    "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/${asset}" \
-    --output "$temp_file"
-  printf '%s  %s\n' "$checksum" "$temp_file" | sha256sum --check --status || {
-    echo "Pruefsumme des heruntergeladenen Cosign-Binaries stimmt nicht." >&2
-    return 1
-  }
-  install -m 755 "$temp_file" "$COSIGN_BIN"
-  rm -f "$temp_file"
-  trap - RETURN
-}
-
 run_preflight() {
   local command available_kb minimum_kb
 
   echo "==> [$ENVIRONMENT] Preflight"
-  for command in docker openssl gzip stat mktemp df find readlink; do
+  for command in docker openssl gzip stat mktemp df find readlink gh; do
     command -v "$command" > /dev/null 2>&1 || {
       echo "Erforderliches Kommando fehlt: $command" >&2
       return 1
@@ -311,6 +263,7 @@ run_preflight() {
     return 1
   }
   docker compose version > /dev/null
+  ensure_github_auth
   "${DC[@]}" config --quiet
 
   minimum_kb="${HOCX_MIN_FREE_KB:-2097152}"

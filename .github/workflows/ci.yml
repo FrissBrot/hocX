@@ -3,6 +3,8 @@ name: CI
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
 
 jobs:
   deploy-script-tests:
@@ -13,7 +15,7 @@ jobs:
 
       - name: Test secure env loader and shell syntax
         run: |
-          bash -n scripts/lib/env.sh scripts/deploy.sh scripts/dev.sh scripts/provision_deploy_user.sh scripts/update_deploy_code.sh scripts/verify_release.sh scripts/backup_db.sh scripts/tests/*.sh
+          bash -n scripts/lib/env.sh scripts/lib/cosign.sh scripts/lib/github.sh scripts/deploy.sh scripts/dev.sh scripts/e2e.sh scripts/test.sh scripts/provision_deploy_user.sh scripts/update_deploy_code.sh scripts/verify_release.sh scripts/record_tested_candidate.sh scripts/backup_db.sh scripts/tests/*.sh
           bash scripts/tests/test_env.sh
           bash scripts/tests/test_release_config.sh
 
@@ -107,6 +109,53 @@ jobs:
           ADMIN_AUTH_SECRET: ci-backend-tests-dummy-admin-secret-0123456789
         run: python3 -m pytest tests/ -v
 
+  abgabebox-backend-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: hocx_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install backend and Abgabebox test dependencies
+        run: |
+          pip install -r backend/requirements.txt
+          pip install -r abgabebox-backend/requirements-dev.txt
+
+      - name: Prepare database schema and restricted Abgabebox role
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+psycopg://ci:ci@localhost:5432/hocx_ci
+          POSTGRES_DB: hocx_ci
+          ABGABEBOX_DB_PASSWORD: ci-abgabebox-tests-password
+          AUTH_SECRET: ci-abgabebox-tests-dummy-secret-0123456789
+          ADMIN_AUTH_SECRET: ci-abgabebox-tests-dummy-admin-secret-0123456789
+        run: alembic upgrade head
+
+      - name: Run Abgabebox backend tests
+        working-directory: abgabebox-backend
+        env:
+          ABGABEBOX_DATABASE_URL: postgresql+psycopg://hocx_abgabebox:ci-abgabebox-tests-password@localhost:5432/hocx_ci
+          ABGABEBOX_CAPTCHA_SESSION_SECRET: ci-abgabebox-captcha-secret-0123456789
+        run: python3 -m pytest tests/ -v
+
   frontend-build:
     runs-on: ubuntu-latest
     strategy:
@@ -137,6 +186,44 @@ jobs:
       - name: Build
         working-directory: ${{ matrix.app }}
         run: npm run build
+
+  e2e-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Playwright
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run isolated Playwright stack and browser tests
+        env:
+          CI: "true"
+          E2E_USE_HOST_PLAYWRIGHT: "1"
+        run: ./scripts/e2e.sh all
+
+      - name: Upload Playwright diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/playwright/
+          if-no-files-found: ignore
+          retention-days: 14
+
 
   # Non-blocking vulnerability check for Python and Node dependencies.
   # The repo currently carries known, not-yet-fixed high-severity findings

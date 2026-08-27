@@ -128,3 +128,8 @@ if [ -n "${TRAEFIK_WEB_DOMAIN:-}" ]; then
 fi
 
 note "Alle Verify-Checks erfolgreich fuer $HOCX_VERSION"
+
+if [ "$ENVIRONMENT" = test ]; then
+  run_check "Testnachweis fuer die Prod-Promotion speichern" \
+    "$REPO_DIR/scripts/record_tested_candidate.sh"
+fi

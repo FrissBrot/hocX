@@ -12,6 +12,8 @@ COMPOSE_FILES=(
 
 docker compose --env-file .env.prod.example "${COMPOSE_FILES[@]}" config --quiet
 docker compose --env-file .env.test.example "${COMPOSE_FILES[@]}" -f docker-compose.test.yml config --quiet
+docker compose -p hocx-tests -f docker-compose.tests.yml --profile tests config --quiet
+docker compose -p hocx-e2e --env-file .env.e2e.example -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.e2e.yml config --quiet
 
 if grep -q 'env_file:' docker-compose.release.yml; then
   echo "Release-Services duerfen nicht die komplette .env erhalten." >&2

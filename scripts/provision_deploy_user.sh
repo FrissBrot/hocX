@@ -39,6 +39,20 @@ docker compose version > /dev/null || {
   exit 1
 }
 
+missing_packages=()
+command -v gh > /dev/null 2>&1 || missing_packages+=(gh)
+command -v jq > /dev/null 2>&1 || missing_packages+=(jq)
+command -v curl > /dev/null 2>&1 || missing_packages+=(curl)
+if [ "${#missing_packages[@]}" -gt 0 ]; then
+  if ! command -v apt-get > /dev/null 2>&1; then
+    echo "Bitte vor dem Provisioning installieren: ${missing_packages[*]}" >&2
+    exit 1
+  fi
+  echo "==> Installiere Werkzeuge fuer Signatur- und Testnachweise: ${missing_packages[*]}"
+  apt-get update
+  apt-get install -y --no-install-recommends "${missing_packages[@]}"
+fi
+
 if [ -e "$ENVIRONMENT_FILE" ]; then
   if [ ! -f "$ENVIRONMENT_FILE" ] || [ -L "$ENVIRONMENT_FILE" ]; then
     echo "$ENVIRONMENT_FILE muss eine regulaere Datei sein." >&2
@@ -120,5 +134,7 @@ echo
 echo "Danach den ersten Deploy ausfuehren:"
 echo "  cd $REPO_DIR"
 echo "  ./scripts/deploy.sh $ENVIRONMENT"
+echo
+echo "Beim ersten Deploy wird der GitHub-Token verdeckt abgefragt und geprueft."
 echo
 echo "Hinweis: Die docker-Gruppe besitzt bei klassischem Docker Root-Level-Rechte."
