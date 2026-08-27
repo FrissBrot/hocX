@@ -243,6 +243,14 @@ def get_optional_current_user(
         if int(user.session_revoke_at.timestamp()) > token_iat:
             return None
     current_user = build_current_user(db, user, session_data.get("tenant_id"), mfa_verified=bool(session_data.get("mfa")))
+    # A signed cookie can outlive the user's last active tenant membership.  Such a user has
+    # no usable application session: every protected route rejects the missing role, while
+    # /auth/session previously still reported authenticated=True.  In the frontend that made
+    # /login redirect to the dashboard, whose initial data requests then all failed with 403.
+    # Treat the stale cookie as unauthenticated so the user can log in again (or see the normal
+    # "no tenant membership" login error) instead of being trapped in that phantom session.
+    if current_user.current_tenant_id is None or current_user.current_role is None:
+        return None
     has_mfa_factor = _has_active_mfa_factor(db, user.id)
     if has_mfa_factor and not current_user.mfa_verified:
         return None

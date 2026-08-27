@@ -158,6 +158,21 @@ def test_get_optional_current_user_rejects_tampered_token(db):
     assert result is None
 
 
+def test_session_is_rejected_after_last_tenant_membership_is_deactivated(db):
+    tenant = make_tenant(db)
+    user = make_app_user(db, email="former-member@example.com", password="correct-password")
+    membership = make_user_tenant_role(db, user.id, tenant.id, role_code="reader")
+    token = create_session_token(user.id, tenant.id)
+
+    membership.is_active = False
+    db.add(membership)
+    db.flush()
+
+    # The cookie is still correctly signed, but without an active tenant/role it must not
+    # produce an authenticated session that sends the frontend into 403-only pages.
+    assert get_optional_current_user(request=None, db=db, session_cookie=token) is None
+
+
 # --- AccessService: cross-tenant isolation (the core IDOR-class check) -------------
 
 

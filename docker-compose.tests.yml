@@ -44,7 +44,7 @@ services:
     depends_on:
       test-db:
         condition: service_healthy
-    command: alembic upgrade head
+    command: alembic -x seed_demo=true upgrade head
     profiles: [tests]
 
   backend-test:
@@ -91,4 +91,35 @@ services:
         condition: service_completed_successfully
     volumes:
       - ./abgabebox-backend:/app
+      # Repository-wide contract/config tests in abgabebox-backend need these
+      # sibling files at the absolute paths derived from /app/tests/*.py.
+      - ./backend/tests/fixtures:/backend/tests/fixtures:ro
+      - ./docker-compose.yml:/docker-compose.yml:ro
+      - ./docker-compose.release.yml:/docker-compose.release.yml:ro
     profiles: [tests]
+
+  frontend-test:
+    image: node:22-bookworm-slim
+    working_dir: /app
+    environment:
+      CI: "true"
+    volumes:
+      - ./frontend:/app
+      - frontend-test-node-modules:/app/node_modules
+    command: sh -c "npm ci --no-audit --no-fund && npm test"
+    profiles: [tests]
+
+  abgabebox-frontend-test:
+    image: node:22-bookworm-slim
+    working_dir: /app
+    environment:
+      CI: "true"
+    volumes:
+      - ./abgabebox-frontend:/app
+      - abgabebox-frontend-test-node-modules:/app/node_modules
+    command: sh -c "npm ci --no-audit --no-fund && npm test"
+    profiles: [tests]
+
+volumes:
+  frontend-test-node-modules:
+  abgabebox-frontend-test-node-modules:
