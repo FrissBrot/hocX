@@ -107,7 +107,14 @@ jobs:
           DATABASE_URL: postgresql+psycopg://ci:ci@localhost:5432/hocx_ci
           AUTH_SECRET: ci-backend-tests-dummy-secret-0123456789
           ADMIN_AUTH_SECRET: ci-backend-tests-dummy-admin-secret-0123456789
-        run: python3 -m pytest tests/ -v
+        # No coverage threshold gate: per hocX.wiki/Bekannte-offene-Punkte, meaningful
+        # domain/security test cases matter more than a bare percentage. This is purely
+        # for visibility into which areas have no test coverage at all.
+        run: python3 -m pytest tests/ -v --cov=app --cov-report=term-missing
+
+      - name: Audit-log coverage report (informational)
+        working-directory: backend
+        run: python3 scripts/check_audit_coverage.py
 
   abgabebox-backend-tests:
     runs-on: ubuntu-latest
@@ -154,7 +161,7 @@ jobs:
         env:
           ABGABEBOX_DATABASE_URL: postgresql+psycopg://hocx_abgabebox:ci-abgabebox-tests-password@localhost:5432/hocx_ci
           ABGABEBOX_CAPTCHA_SESSION_SECRET: ci-abgabebox-captcha-secret-0123456789
-        run: python3 -m pytest tests/ -v
+        run: python3 -m pytest tests/ -v --cov=app --cov-report=term-missing
 
   frontend-build:
     runs-on: ubuntu-latest
@@ -181,7 +188,7 @@ jobs:
         # with 3 test files, abgabebox-frontend's is new) but neither was ever actually run
         # in CI before this - tests only guard against regressions if something runs them.
         working-directory: ${{ matrix.app }}
-        run: npm test
+        run: npm test -- --coverage
 
       - name: Build
         working-directory: ${{ matrix.app }}
