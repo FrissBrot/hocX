@@ -17,8 +17,8 @@ import { computePopoverPosition, usePopoverDismiss } from "@/components/ui/popov
 import { useProtocolCollaboration } from "@/lib/hooks/use-protocol-collaboration";
 import { useTagConfig } from "@/lib/hooks/use-tag-config";
 import { usePdfExport } from "@/lib/hooks/use-pdf-export";
-import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
-import { clearDraft, queueMutation, readDraft, removeMutation, saveDraft } from "@/lib/offline-store";
+import { ApiError, browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
+import { clearDraft, discardMutation, queueMutation, readDraft, removeMutation, saveDraft } from "@/lib/offline-store";
 import { getCycleYear } from "@/lib/utils/cycle";
 import { protocolStatusVariant } from "@/components/protocol/protocol-status";
 import {
@@ -426,6 +426,24 @@ export function ProtocolEditor({
     };
     window.addEventListener("hocx:mutation-flushed", flushed);
     return () => window.removeEventListener("hocx:mutation-flushed", flushed);
+  }, []);
+
+  useEffect(() => {
+    // Covers the bulk "verwerfen" action in ConnectivityStatus discarding a text-save that
+    // was blocked on the outbox (e.g. a conflict that happened while this tab was offline,
+    // only surfacing once it reconnected and flushOutbox tried it) - the immediate-conflict
+    // path in handleTextChange already refreshes state itself, so this only matters for
+    // that separate route into the same "blocked" outcome. Deliberately does not clearDraft:
+    // the local draft stays as the documented fallback until the user's next edit overwrites
+    // it or they reload and accept the server content.
+    const discarded = (event: Event) => {
+      const key = (event as CustomEvent<{ key?: string }>).detail?.key;
+      if (!key?.startsWith("protocol-text:")) return;
+      const blockId = key.slice("protocol-text:".length);
+      if (blockId) setStatus(blockId, "error");
+    };
+    window.addEventListener("hocx:mutation-discarded", discarded);
+    return () => window.removeEventListener("hocx:mutation-discarded", discarded);
   }, []);
 
   useEffect(() => {
@@ -877,6 +895,29 @@ export function ProtocolEditor({
     }
   }
 
+  // Pulls the current server-side text_content for a single block after a 409 conflict on
+  // its text save (see handleTextChange) - reuses the same "/elements" list endpoint as
+  // refreshElementTitles/refreshAfterTrackingCleared rather than a dedicated per-block GET,
+  // since one doesn't exist and this only needs to run once, on-demand, per conflict.
+  async function refreshBlockTextFromServer(blockId: string) {
+    try {
+      const fresh = await browserApiFetch<ProtocolElement[]>(`/api/protocols/${protocol.id}/elements`);
+      const freshBlock = fresh.flatMap((element) => element.blocks).find((block) => block.id === blockId);
+      if (!freshBlock) return;
+      updateBlockInState(blockId, (block) => ({
+        ...block,
+        text_content: freshBlock.text_content,
+        tracked_dirty: freshBlock.tracked_dirty,
+        tracked_baseline_content: freshBlock.tracked_baseline_content,
+      }));
+      setTextDrafts((current) => ({ ...current, [blockId]: freshBlock.text_content ?? "" }));
+      setStatus(blockId, "saved");
+    } catch {
+      // best-effort - the conflict toast already told the user to reload manually if this
+      // silent refresh also fails.
+    }
+  }
+
   async function saveBlockConfiguration(blockId: string, configurationSnapshotJson: Record<string, unknown>) {
     setStatus(blockId, "saving");
     updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: configurationSnapshotJson }));
@@ -938,6 +979,27 @@ export function ProtocolEditor({
         });
       } catch (err: unknown) {
         setStatus(protocolElementBlockId, "error");
+        if (err instanceof ApiError && err.kind === "conflict") {
+          // A real edit conflict, not a connectivity problem: someone else already saved a
+          // newer version of this exact text since we last loaded it. `content` here is
+          // already-rejected - re-queueing it (the generic path below) would just keep
+          // losing to the same 409 on every future flush with the misleading "will save
+          // automatically once back online" toast. Instead: drop it from the outbox so it
+          // stops being retried (fix for the outbox-stall issue above applies to this item
+          // too - it must end up explicitly discarded, not silently stuck), pull in the
+          // current server content, and tell the user plainly what happened. Their locally
+          // typed text isn't lost - saveDraft() above already wrote it to
+          // `protocol-text:${id}` in localStorage as a fallback; it's just not queued for
+          // silent resend anymore.
+          discardMutation(mutationKey);
+          void refreshBlockTextFromServer(protocolElementBlockId);
+          showToast(
+            "Konflikt: Diese Stelle wurde inzwischen von jemand anderem gespeichert. Die aktuelle Version wurde geladen – Ihre letzte Änderung wurde nicht übernommen, ist aber als lokaler Entwurf gesichert.",
+            "error",
+            { onMessageClick: () => void refreshBlockTextFromServer(protocolElementBlockId) }
+          );
+          return;
+        }
         queueMutation({
           key: mutationKey,
           path: `/api/protocol-element-blocks/${protocolElementBlockId}/text`,

@@ -209,6 +209,10 @@ export type AdminSessionInfo = {
   admin: { id: string; email: string; display_name: string; role: "owner" | "support" } | null;
 };
 
+export type AdminLoginResponse = AdminSessionInfo & {
+  mfa: PendingMfaLogin | null;
+};
+
 export type AdminTenantSummary = {
   id: string;
   name: string;

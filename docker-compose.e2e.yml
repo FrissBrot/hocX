@@ -20,6 +20,11 @@ services:
       - "127.0.0.1:18001:8000"
     environment:
       ABGABEBOX_CORS_ORIGIN: http://127.0.0.1:13001
+      # Coordination note, 2026-08-27: new setting from abgabebox-backend/app/config.py -
+      # controls CAPTCHA fail-open (dev/test) vs fail-closed (default/production) behavior.
+      # .env.e2e.example leaves FRIENDLY_CAPTCHA_SITEKEY/API_KEY empty, so this must be an
+      # accepted dev/test value or every e2e upload gets rejected fail-closed.
+      ABGABEBOX_ENVIRONMENT: test
   abgabebox-frontend:
     ports: !override
       - "127.0.0.1:13001:3000"

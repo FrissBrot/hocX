@@ -94,7 +94,9 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
       const formData = new FormData();
       formData.append("captcha_solution", solution);
       const response = await fetch(
-        publicApiUrl(`/api/public/${tenantSlug}/assignments/${assignmentSlug}/elements/${elementRef}/captcha-verify`),
+        publicApiUrl(
+          `/api/public/${encodeURIComponent(tenantSlug)}/assignments/${encodeURIComponent(assignmentSlug)}/elements/${encodeURIComponent(elementRef)}/captcha-verify`
+        ),
         { method: "POST", body: formData }
       );
       if (!response.ok) {
@@ -152,7 +154,9 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
       formData.append("captcha_session_token", captchaSessionToken);
       files.forEach((file) => formData.append("files", file));
       const response = await fetch(
-        publicApiUrl(`/api/public/${tenantSlug}/assignments/${assignmentSlug}/elements/${elementRef}/upload`),
+        publicApiUrl(
+          `/api/public/${encodeURIComponent(tenantSlug)}/assignments/${encodeURIComponent(assignmentSlug)}/elements/${encodeURIComponent(elementRef)}/upload`
+        ),
         { method: "POST", body: formData }
       );
       if (!response.ok) {

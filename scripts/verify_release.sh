@@ -113,7 +113,6 @@ check_alembic_head() {
 run_check "Backend-Health lokal" check_backend_health
 run_check "Abgabebox-Backend-Health lokal" check_abgabebox_backend_health
 run_check "Frontend antwortet lokal" check_frontend_local
-run_check "Website antwortet lokal" check_website_local
 run_check "Docs antworten lokal" check_docs_local
 run_check "Alembic steht auf head" check_alembic_head
 run_check "Hauptdomain antwortet via Traefik" probe_from_backend "https://${TRAEFIK_DOMAIN}/login"
@@ -123,7 +122,13 @@ if [ -n "${TRAEFIK_DOCS_DOMAIN:-}" ]; then
   run_check "Docs-Domain antwortet via Traefik" probe_from_backend "https://${TRAEFIK_DOCS_DOMAIN}/"
 fi
 
+# Es gibt keinen "website"-Service in irgendeiner Compose-Datei (nur eine Domain-Variable) -
+# dieser Check ist daher ausschliesslich an TRAEFIK_WEB_DOMAIN gebunden, genau wie der
+# Traefik-Check direkt darunter. Ohne dieses Gate schlug check_website_local unter
+# set -euo pipefail immer fehl (DNS-Lookup fuer "website" im Backend-Container konnte nie
+# gelingen) und brach das gesamte Skript vor record_tested_candidate.sh ab.
 if [ -n "${TRAEFIK_WEB_DOMAIN:-}" ]; then
+  run_check "Website antwortet lokal" check_website_local
   run_check "Website-Domain antwortet via Traefik" probe_from_backend "https://${TRAEFIK_WEB_DOMAIN}/"
 fi
 

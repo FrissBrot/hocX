@@ -59,9 +59,34 @@ class UserRepository:
         statement = statement.order_by(UserTenantRole.tenant_id.asc(), UserTenantRole.user_id.asc())
         return list(db.scalars(statement))
 
-    def replace_memberships(self, db: Session, *, user_id: int, memberships: list[UserTenantRole]) -> None:
+    def replace_memberships(
+        self,
+        db: Session,
+        *,
+        user_id: int,
+        memberships: list[UserTenantRole],
+        scope_tenant_ids: set[int] | None = None,
+    ) -> None:
+        """Replaces user_id's memberships with `memberships`. When scope_tenant_ids is given,
+        only existing rows whose tenant_id is in that set are deleted before re-inserting -
+        rows for tenants outside the scope are left completely untouched, both by the delete
+        and by the re-insert (`memberships` must itself already be pre-filtered to the same
+        scope by the caller). scope_tenant_ids=None (platform-admin/merge callers) keeps the
+        original full-replace behaviour: every existing row for the user is deleted first.
+
+        Audit finding, 2026-08-27: the previous unconditional "delete everything, then
+        re-insert" here is what the tenant-admin-scoped caller (_apply_memberships) actually
+        needs to *avoid* for out-of-scope memberships - passing those already-fetched ORM
+        rows back in to be "kept" doesn't work anyway, since this method had already deleted
+        them (same identity-mapped objects) before the re-insert loop tried to db.add() them,
+        raising InvalidRequestError. Scoping the delete itself is what makes leaving
+        out-of-scope memberships untouched actually work, instead of relying on a caller
+        round-tripping rows through delete+re-add.
+        """
         existing = self.list_memberships(db, user_id=user_id)
         for membership in existing:
+            if scope_tenant_ids is not None and membership.tenant_id not in scope_tenant_ids:
+                continue
             db.delete(membership)
         db.flush()
         for membership in memberships:

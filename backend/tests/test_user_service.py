@@ -1,7 +1,5 @@
-"""Regression tests for UserService - previously zero coverage despite owning two
-security-sensitive pieces of logic: (1) the role_priority merge in merge_users(), fixed in the
-critical-severity audit round (kassier sits strictly between reader and writer on a single
-linear scale, not as an orthogonal permission), and (2) the "last tenant admin" guard shared
+"""Regression tests for UserService - including two security-sensitive pieces of logic:
+(1) capability-aware role handling in merge_users() and (2) the "last tenant admin" guard shared
 between update_user/create_user's membership-apply path and AdminTenantUserService's - a
 tenant must never end up with zero active admins. Also covers the basic tenant-isolation
 boundary on get_user/update_user/delete_user (an admin in tenant A must not manage users who
@@ -14,8 +12,8 @@ import pytest
 from fastapi import HTTPException
 
 from app.core.security import CurrentUser, TenantMembership
-from app.schemas.user import TenantMembershipWrite, UserCreate, UserUpdate
-from app.services.user_service import UserService
+from app.schemas.user import TenantMembershipWrite, UserCreate, UserPasswordChange, UserUpdate
+from app.services.user_service import _PASSWORD_CHANGE_ATTEMPT_LIMIT, UserService
 from tests.factories import make_app_user, make_current_user, make_participant, make_tenant, make_user_tenant_role
 
 
@@ -53,7 +51,7 @@ def _admin_actor(tenant_id: int, *, user_id: int = 999999, extra_tenants: list[T
     )
 
 
-# --- merge_users: role_priority merge logic (critical-round fix) -------------------------
+# --- merge_users: capability-aware role merge logic --------------------------------------
 
 
 def test_merge_users_prefers_higher_role_writer_over_reader(db):
@@ -70,9 +68,7 @@ def test_merge_users_prefers_higher_role_writer_over_reader(db):
     assert membership.role_code == "writer"
 
 
-def test_merge_users_kassier_sits_between_reader_and_writer(db):
-    """kassier(2) must beat reader(1) but lose to writer(3) - the exact ordering fixed in the
-    critical-severity audit round (role_priority = {reader:1, kassier:2, writer:3, admin:4})."""
+def test_merge_users_kassier_supersedes_reader_but_conflicts_with_writer(db):
     tenant = make_tenant(db, "Kassier Merge Tenant")
 
     target_a = make_app_user(db, email="target-a@example.com")
@@ -91,9 +87,9 @@ def test_merge_users_kassier_sits_between_reader_and_writer(db):
     make_user_tenant_role(db, target_b.id, tenant_b.id, role_code="kassier")
     make_user_tenant_role(db, source_b.id, tenant_b.id, role_code="writer")
 
-    result_b = service.merge_users(db, source_user_id=source_b.id, target_user_id=target_b.id)
-    membership_b = next(m for m in result_b.memberships if m.tenant_id == tenant_b.public_id)
-    assert membership_b.role_code == "writer"
+    with pytest.raises(HTTPException) as exc_info:
+        service.merge_users(db, source_user_id=source_b.id, target_user_id=target_b.id)
+    assert exc_info.value.status_code == 409
 
 
 def test_merge_users_prefers_active_membership_when_role_priority_equal(db):
@@ -252,6 +248,65 @@ def test_list_users_hides_memberships_in_tenants_actor_does_not_administer(db):
     listed = next(u for u in results if u.id == shared_user.public_id)
     visible_tenant_ids = {m.tenant_id for m in listed.memberships}
     assert visible_tenant_ids == {tenant_a.public_id}
+
+
+def test_update_user_does_not_touch_membership_in_unmanaged_tenant(db):
+    """Audit finding, 2026-08-27: PATCH /api/users/{id} (update_user) must never add, change,
+    or remove a membership in a tenant the calling admin doesn't manage, even though the
+    frontend can only see/send memberships for tenants it does manage and so never includes
+    the other tenant in the payload at all. Previously this crashed instead of silently
+    dropping the foreign-tenant membership (replace_memberships deleted every membership row
+    for the user, including the ones _apply_memberships meant to "retain", before trying to
+    re-insert those now-deleted ORM instances) - either way, the membership must survive
+    untouched."""
+    tenant_a = make_tenant(db, "Scope Tenant A")
+    tenant_b = make_tenant(db, "Scope Tenant B")
+    actor_user = make_app_user(db, email="scope-actor@example.com")
+    make_user_tenant_role(db, actor_user.id, tenant_a.id, role_code="admin")
+
+    shared_user = make_app_user(db, email="scope-shared-user@example.com")
+    make_user_tenant_role(db, shared_user.id, tenant_a.id, role_code="reader")
+    make_user_tenant_role(db, shared_user.id, tenant_b.id, role_code="writer")
+
+    actor = _admin_actor(tenant_a.id, user_id=actor_user.id)
+    service = UserService()
+
+    # Mirrors what the frontend actually sends: only the membership(s) in tenants the acting
+    # admin manages. Tenant B is omitted entirely, not sent as inactive/absent-on-purpose.
+    payload = UserUpdate(
+        memberships=[TenantMembershipWrite(tenant_id=tenant_a.public_id, role_code="writer", is_active=True)]
+    )
+    service.update_user(db, shared_user.id, payload, actor)
+
+    from app.models import UserTenantRole
+
+    raw = db.query(UserTenantRole).filter(UserTenantRole.user_id == shared_user.id).all()
+    by_tenant = {m.tenant_id: m for m in raw}
+    assert tenant_b.id in by_tenant, "membership in the unmanaged tenant must not be dropped"
+    assert by_tenant[tenant_b.id].is_active is True
+
+
+def test_change_own_password_locks_out_after_repeated_wrong_current_password(db):
+    """Audit finding, 2026-08-27: /me/password had no cap on wrong current_password guesses,
+    so a hijacked/idle session could brute-force the account's real password purely through
+    this endpoint. Verifies the account-scoped lockout added to change_own_password."""
+    tenant = make_tenant(db, "Password Lockout Tenant")
+    user = make_app_user(db, email="pw-lockout@example.com", password="correct horse battery staple")
+    make_user_tenant_role(db, user.id, tenant.id, role_code="writer")
+    actor = make_current_user(tenant.id, role="writer", user_id=user.id)
+    service = UserService()
+
+    for _ in range(_PASSWORD_CHANGE_ATTEMPT_LIMIT):
+        payload = UserPasswordChange(current_password="wrong-password", new_password="a brand new password")
+        with pytest.raises(HTTPException) as exc_info:
+            service.change_own_password(db, actor, payload)
+        assert exc_info.value.status_code == 400
+
+    # Even the *correct* current password should now be rejected by the lockout.
+    payload = UserPasswordChange(current_password="correct horse battery staple", new_password="a brand new password")
+    with pytest.raises(HTTPException) as exc_info:
+        service.change_own_password(db, actor, payload)
+    assert exc_info.value.status_code == 429
 
 
 def test_delete_user_cannot_delete_own_account(db):

@@ -10,7 +10,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.rate_limit import enforce_rate_limit
+from app.core.rate_limit import check_account_lockout, enforce_rate_limit, record_failed_attempt
 from app.core.secret_crypto import decrypt_secret, encrypt_secret
 from app.core.security import CurrentUser, build_current_user, require_admin
 from app.core.totp import build_totp_uri, generate_totp_secret, verify_totp_code
@@ -40,6 +40,15 @@ from app.schemas.mfa import (
 _FLOW_PREFIX = "mfa:flow:"
 _FLOW_TTL_SECONDS = 10 * 60
 _ISSUER = "hocX"
+
+# Account-scoped lockout for TOTP login verification, independent of which login ticket the
+# guess came in on (audit finding, 2026-08-27). A fresh ticket is minted on every successful
+# password login, so the pre-existing per-ticket limit (mfa-login-totp:{ticket}, 10/10min)
+# only capped guesses within a single ticket - an attacker who already has valid credentials
+# could mint unlimited tickets and get 10 more TOTP guesses each, with no ceiling on the
+# account as a whole. Mirrors the password lockout in auth_service.py (_ACCOUNT_LOGIN_ATTEMPT_LIMIT).
+_ACCOUNT_TOTP_ATTEMPT_LIMIT = 10
+_ACCOUNT_TOTP_WINDOW_SECONDS = 15 * 60
 
 
 @dataclass
@@ -663,6 +672,11 @@ class MfaService:
 
     def verify_login_totp(self, db: Session, *, ticket: str, code: str) -> PendingLoginContext:
         context = self._load_login_ticket(db, ticket)
+        # Account-level ceiling first (audit finding, 2026-08-27, see _ACCOUNT_TOTP_ATTEMPT_LIMIT
+        # above) - this is the one that actually stops multi-ticket abuse; the per-ticket limit
+        # below is kept as defense in depth for a single ticket being hammered.
+        account_lockout_key = f"mfa-account:{context.user.id}"
+        check_account_lockout(account_lockout_key, limit=_ACCOUNT_TOTP_ATTEMPT_LIMIT)
         enforce_rate_limit(f"mfa-login-totp:{ticket}", limit=10, period_seconds=_FLOW_TTL_SECONDS)
         factors = self._list_factors(db, context.user.id, factor_type="totp")
         if not factors:
@@ -682,6 +696,7 @@ class MfaService:
             db.add(factor)
             db.commit()
             return self._consume_login_ticket(db, ticket)
+        record_failed_attempt(account_lockout_key, period_seconds=_ACCOUNT_TOTP_WINDOW_SECONDS)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Der TOTP-Code ist nicht gültig")
 
     def start_login_passkey_assertion(

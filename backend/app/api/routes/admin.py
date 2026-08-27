@@ -10,7 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.background import BackgroundTask
 
-from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_write
+from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_owner, require_admin_write
 from app.core.config import settings
 from app.core.db import get_db
 from app.models.entities import AppUser, PlatformAdmin, Tenant, TenantDomain, UserMfaFactor
@@ -35,13 +35,14 @@ from app.schemas.admin import (
     TenantCloneRequest,
     TenantImportResult,
 )
-from app.schemas.mfa import UserMfaRead
+from app.schemas.mfa import TotpEnrollmentComplete, TotpEnrollmentStartRead, UserMfaRead
 from app.schemas.oidc import PlatformOidcConfigRead, PlatformOidcConfigWrite
 from app.schemas.user import TenantUpdate, UserCreate, UserRead, UserUpdate
 from app.services.admin_domain_service import AdminDomainService
 from app.services.admin_error_log_service import AdminErrorLogService
 from app.services.admin_tenant_service import AdminTenantService
 from app.services.admin_tenant_user_service import AdminTenantUserService
+from app.services.admin_mfa_service import AdminMfaService
 from app.services.admin_user_service import AdminUserService, PlatformAdminService
 from app.services.file_service import _safe_storage_path
 from app.services.mfa_service import MfaService
@@ -66,6 +67,7 @@ error_log_service = AdminErrorLogService()
 export_service = TenantExportService()
 import_service = TenantImportService()
 mfa_service = MfaService()
+admin_mfa_service = AdminMfaService()
 audit = AuditService()
 
 
@@ -136,6 +138,7 @@ def list_error_logs(
     limit: int = Query(50, gt=0),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_owner),
 ):
     internal_tenant_id = _resolve_tenant_id(db, tenant_id) if tenant_id is not None else None
     return error_log_service.list_errors(
@@ -144,7 +147,10 @@ def list_error_logs(
 
 
 @router.get("/error-logs/filter-options", response_model=SystemErrorLogFilterOptions)
-def error_log_filter_options(db: Session = Depends(get_db)):
+def error_log_filter_options(
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_owner),
+):
     return error_log_service.filter_options(db)
 
 
@@ -363,7 +369,11 @@ async def import_tenant(
 
 
 @router.get("/tenants/{tenant_id}/users", response_model=list[AdminTenantUserRead])
-def list_tenant_users(tenant_id: uuid.UUID, db: Session = Depends(get_db)):
+def list_tenant_users(
+    tenant_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_owner),
+):
     internal_tenant_id = _resolve_tenant_id(db, tenant_id)
     return tenant_user_service.list_users(db, internal_tenant_id)
 
@@ -449,6 +459,7 @@ def list_users(
     offset: int = Query(0, ge=0),
     q: str | None = Query(None),
     db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_owner),
 ):
     return user_service.list_users(db, limit=limit, offset=offset, q=q)
 
@@ -473,7 +484,11 @@ def create_user(
 
 
 @router.get("/users/{user_id}", response_model=UserRead)
-def get_user(user_id: uuid.UUID, db: Session = Depends(get_db)):
+def get_user(
+    user_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_owner),
+):
     internal_user_id = _resolve_user_id(db, user_id)
     user = user_service.get_user(db, internal_user_id)
     if user is None:
@@ -521,7 +536,11 @@ def merge_users(payload: AdminUserMergeRequest, db: Session = Depends(get_db), c
 
 
 @router.get("/users/{user_id}/mfa", response_model=UserMfaRead)
-def get_user_mfa(user_id: uuid.UUID, db: Session = Depends(get_db)):
+def get_user_mfa(
+    user_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_owner),
+):
     internal_user_id = _resolve_user_id(db, user_id)
     return mfa_service.get_platform_admin_user_overview(db, internal_user_id)
 
@@ -547,8 +566,59 @@ def delete_user_mfa_factor(
     return result
 
 
+# ── MFA (self-service, for the currently-authenticated admin) ──────────────────────────────
+# Audit finding, 2026-08-27: platform admins previously had no MFA option at all. These mirror
+# the shape of /api/users/me/mfa/* for tenant users (app/api/routes/users.py) as closely as
+# possible - same request/response schemas, same start/complete split - reachable only once an
+# admin already has a full session (this router requires get_current_admin, which itself now
+# requires a completed MFA claim - see admin_security.get_optional_current_admin), so this
+# covers adding an *additional*/replacement factor. The first factor for an admin with none
+# yet is enrolled via the ticket-based /api/admin/auth/mfa/totp/setup/* endpoints instead,
+# during login, since there is no full session to gate this router on at that point.
+
+@router.get("/mfa", response_model=UserMfaRead)
+def get_my_admin_mfa(
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(get_current_admin),
+):
+    return admin_mfa_service.get_self_overview(db, current_admin)
+
+
+@router.post("/mfa/totp/start", response_model=TotpEnrollmentStartRead)
+def start_my_admin_totp_enrollment(
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(get_current_admin),
+):
+    return admin_mfa_service.start_self_totp_enrollment(db, current_admin)
+
+
+@router.post("/mfa/totp/complete", response_model=UserMfaRead)
+def complete_my_admin_totp_enrollment(
+    payload: TotpEnrollmentComplete,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(get_current_admin),
+):
+    admin_mfa_service.complete_self_totp_enrollment(
+        db, current_admin, flow_token=payload.flow_token, code=payload.code, label=payload.label
+    )
+    return admin_mfa_service.get_self_overview(db, current_admin)
+
+
+@router.delete("/mfa/factors/{factor_id}", response_model=UserMfaRead)
+def delete_my_admin_mfa_factor(
+    factor_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(get_current_admin),
+):
+    internal_factor_id = _resolve_factor_id(db, factor_id)
+    return admin_mfa_service.delete_self_factor(db, current_admin, internal_factor_id)
+
+
 @router.get("/admins", response_model=list[PlatformAdminRead])
-def list_admins(db: Session = Depends(get_db)):
+def list_admins(
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_owner),
+):
     return admin_account_service.list_admins(db)
 
 

@@ -17,6 +17,12 @@ test "$POSTGRES_DB" = "hocx test"
 test "$AUTH_SECRET" = "\$(touch $MARKER)"
 test ! -e "$MARKER"
 
+printf "APP_DB_PASSWORD='s3cret'\nAPP_DATABASE_URL='postgresql+psycopg://hocx_app:s3cret@db:5432/hocx'\n" > "$ENV_FILE"
+chmod 600 "$ENV_FILE"
+load_env_file "$ENV_FILE"
+test "$APP_DB_PASSWORD" = "s3cret"
+test "$APP_DATABASE_URL" = "postgresql+psycopg://hocx_app:s3cret@db:5432/hocx"
+
 printf 'PATH=/attacker-controlled\n' > "$ENV_FILE"
 chmod 600 "$ENV_FILE"
 if load_env_file "$ENV_FILE" 2> /dev/null; then

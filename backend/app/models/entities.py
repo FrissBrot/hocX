@@ -143,15 +143,30 @@ class UserMfaFactor(Base, TimestampMixin, UpdatedAtMixin):
     __tablename__ = "user_mfa_factor"
     __table_args__ = (
         Index("idx_user_mfa_factor_user", "user_id", "factor_type"),
+        # Platform-admin MFA factors (audit finding, 2026-08-27 - platform admins, the
+        # highest-privilege tier, had no MFA option at all): this table is reused rather than
+        # adding a parallel one, since the TOTP-storage shape (secret_encrypted,
+        # totp_last_counter, label, ...) is identical regardless of which principal owns the
+        # factor. user_id is now nullable and platform_admin_id was added alongside it; the
+        # check constraint enforces exactly one owner per row.
+        Index("idx_user_mfa_factor_platform_admin", "platform_admin_id", "factor_type"),
         UniqueConstraint("webauthn_credential_id", name="uq_user_mfa_factor_webauthn_credential_id"),
         CheckConstraint("factor_type IN ('totp', 'webauthn')", name="ck_user_mfa_factor_type"),
+        CheckConstraint(
+            "(user_id IS NOT NULL AND platform_admin_id IS NULL) OR "
+            "(user_id IS NULL AND platform_admin_id IS NOT NULL)",
+            name="ck_user_mfa_factor_single_owner",
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     public_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
     )
-    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"))
+    platform_admin_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("platform_admin.id", ondelete="CASCADE")
+    )
     factor_type: Mapped[str] = mapped_column(Text, nullable=False)
     label: Mapped[str] = mapped_column(Text, nullable=False)
     secret_encrypted: Mapped[str | None] = mapped_column(Text)

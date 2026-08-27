@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.schemas.base import PublicIdModel
+from app.schemas.mfa import MfaPendingLoginRead
 from app.schemas.user import UserRead
 
 
@@ -25,6 +26,11 @@ class AdminSelfRead(BaseModel):
 class AdminSessionRead(BaseModel):
     authenticated: bool
     admin: AdminSelfRead | None = None
+    # Mirrors LoginResponse.mfa (schemas/mfa.py) for the tenant-user login flow - set instead
+    # of `admin` whenever password auth succeeded but MFA verification/enrollment is still
+    # pending (audit finding, 2026-08-27). Same shape on purpose so the frontend's existing
+    # tenant-login MFA-challenge UI can be reused for the admin panel with minimal changes.
+    mfa: MfaPendingLoginRead | None = None
 
 
 class PlatformAdminCreate(BaseModel):

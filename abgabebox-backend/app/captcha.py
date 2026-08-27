@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 
-from app.config import settings
+from app.config import is_dev_or_test_environment, settings
 
 _logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ def captcha_enabled() -> bool:
     """FriendlyCaptcha is only skippable when NEITHER key is set at all (genuine local-dev/
     test stacks with no FriendlyCaptcha account) - the frontend shows a placeholder instead
     of the real widget in that case, and verify_captcha/verify_captcha_session_token below
-    let everything through accordingly.
+    used to let everything through unconditionally in that case.
 
     Exactly ONE key set (a typo, or an incomplete secret rotation touching only one of the
     two env vars) used to be treated identically to "neither set" - silently disabling every
@@ -44,7 +44,13 @@ def captcha_enabled() -> bool:
     counts as "enabled", which sends the partial config on to the real FriendlyCaptcha API
     call below and lets that fail (closed - uploads rejected) instead of skipping the check
     entirely. A clear warning is logged either way so this doesn't stay silent even while the
-    uploads that would otherwise sail through here are legitimately being blocked."""
+    uploads that would otherwise sail through here are legitimately being blocked.
+
+    "Neither key set" itself is no longer an unconditional skip either (audit finding,
+    2026-08-27): see _skip_captcha_when_unconfigured() below, which verify_captcha/
+    verify_captcha_session_token now call instead of returning True outright whenever this
+    function returns False - production must fail CLOSED (reject uploads) when captcha is
+    entirely unconfigured, not just when it's half-configured."""
     if captcha_partially_configured():
         _logger.warning(
             "FriendlyCaptcha ist nur teilweise konfiguriert (Sitekey oder API-Key fehlt) - "
@@ -52,6 +58,27 @@ def captcha_enabled() -> bool:
         )
         return True
     return bool(settings.friendly_captcha_api_key and settings.friendly_captcha_sitekey)
+
+
+def _skip_captcha_when_unconfigured() -> bool:
+    """Called only when captcha_enabled() is False, i.e. NEITHER FriendlyCaptcha key is set at
+    all (audit finding, 2026-08-27). That state is fine and intentional on a genuine local
+    dev/test stack (no FriendlyCaptcha account needed there) - but the exact same state on a
+    production deploy would previously mean uploads sail through with NO bot-check whatsoever,
+    silently, for as long as the config stays missing. This is what tells the two situations
+    apart, via ABGABEBOX_ENVIRONMENT (see config.py's is_dev_or_test_environment - unset
+    defaults to production-like, i.e. fail closed, not fail open) - only a stack explicitly
+    marked dev/test still gets the old skip-entirely behavior; everything else now rejects the
+    upload instead of silently allowing it."""
+    if is_dev_or_test_environment():
+        return True
+    _logger.warning(
+        "FriendlyCaptcha ist nicht konfiguriert (FRIENDLY_CAPTCHA_SITEKEY und "
+        "FRIENDLY_CAPTCHA_API_KEY fehlen beide) und ABGABEBOX_ENVIRONMENT ist nicht als "
+        "dev/test markiert - Uploads werden abgelehnt (fail closed), statt die "
+        "Bot-Verifikation stillschweigend zu ueberspringen."
+    )
+    return False
 
 
 def _ip_fingerprint(client_ip: str | None) -> str | None:
@@ -95,9 +122,10 @@ def verify_captcha_session_token(
     token: str, tenant_slug: str, assignment_slug: str, element_ref: str, client_ip: str | None = None
 ) -> bool:
     if not captcha_enabled():
-        # Kein FriendlyCaptcha konfiguriert -> Sitzungs-Check entfaellt komplett, siehe
-        # captcha_enabled() oben.
-        return True
+        # Kein FriendlyCaptcha konfiguriert -> nur in dev/test entfaellt der Sitzungs-Check
+        # komplett; in Produktion fail closed (audit finding, 2026-08-27). Siehe
+        # _skip_captcha_when_unconfigured() oben.
+        return _skip_captcha_when_unconfigured()
     if not settings.captcha_session_secret:
         # Captcha-Keys gesetzt, Sitzungs-Secret aber nicht - fail closed, das ist ein echter
         # Konfigurationsfehler und keine bewusste "kein Captcha noetig"-Situation.
@@ -126,11 +154,20 @@ def verify_captcha_session_token(
 
 async def verify_captcha(solution: str) -> bool:
     if not captcha_enabled():
-        # Nicht konfiguriert (z.B. lokale Entwicklung/Test-Stack) - kein Captcha noetig, siehe
-        # captcha_enabled() oben.
-        return True
+        # Nicht konfiguriert -> nur in dev/test kein Captcha noetig; in Produktion fail closed
+        # (audit finding, 2026-08-27). Siehe _skip_captcha_when_unconfigured() oben.
+        return _skip_captcha_when_unconfigured()
     if not solution:
         return False
+    # Fail CLOSED on any failure to actually complete a verification against FriendlyCaptcha's
+    # own API - a network error/timeout, a non-200 response, or a 200 with a body that isn't
+    # the JSON shape expected (ValueError from response.json() on bad JSON) - not just the
+    # already-handled httpx.HTTPError case (audit finding, 2026-08-27). This applies
+    # unconditionally, in every environment including dev/test: captcha_enabled() being True
+    # here means real keys ARE configured, so an API failure is never the deliberate "no
+    # captcha needed" case _skip_captcha_when_unconfigured() covers above - it's FriendlyCaptcha
+    # itself being unreachable/broken, and the safe assumption is that the solution was never
+    # actually verified, not that it was valid.
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(
@@ -141,9 +178,10 @@ async def verify_captcha(solution: str) -> bool:
                     "sitekey": settings.friendly_captcha_sitekey,
                 },
             )
-    except httpx.HTTPError:
+        if response.status_code != 200:
+            return False
+        data = response.json()
+        return bool(data.get("success"))
+    except (httpx.HTTPError, ValueError) as exc:
+        _logger.warning("FriendlyCaptcha-Verifikation fehlgeschlagen (%s) - Upload wird abgelehnt (fail closed).", exc)
         return False
-    if response.status_code != 200:
-        return False
-    data = response.json()
-    return bool(data.get("success"))

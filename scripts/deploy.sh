@@ -178,9 +178,11 @@ create_env_file() {
   AUTH_SECRET="$(generate_secret)"
   ADMIN_AUTH_SECRET="$(generate_secret)"
   INITIAL_ADMIN_PASSWORD="$(generate_secret)"
+  APP_DB_PASSWORD="$(generate_secret)"
   ABGABEBOX_DB_PASSWORD="$(generate_secret)"
   ABGABEBOX_CAPTCHA_SESSION_SECRET="$(generate_secret)"
   DATABASE_URL="postgresql+psycopg://hocx:${POSTGRES_PASSWORD}@db:5432/hocx"
+  APP_DATABASE_URL="postgresql+psycopg://hocx_app:${APP_DB_PASSWORD}@db:5432/hocx"
   ABGABEBOX_DATABASE_URL="postgresql+psycopg://hocx_abgabebox:${ABGABEBOX_DB_PASSWORD}@db:5432/hocx"
 
   umask 077
@@ -195,6 +197,8 @@ create_env_file() {
   write_env_value POSTGRES_USER "hocx"
   write_env_value POSTGRES_PASSWORD "$POSTGRES_PASSWORD"
   write_env_value DATABASE_URL "$DATABASE_URL"
+  write_env_value APP_DB_PASSWORD "$APP_DB_PASSWORD"
+  write_env_value APP_DATABASE_URL "$APP_DATABASE_URL"
   write_env_value TRAEFIK_DOMAIN "$TRAEFIK_DOMAIN"
   write_env_value TRAEFIK_ADMIN_DOMAIN "$TRAEFIK_ADMIN_DOMAIN"
   write_env_value TRAEFIK_ADMIN_PORT "8443"

@@ -22,6 +22,18 @@ fi
 
 test "$(grep -c 'read_only: true' docker-compose.release.yml)" -eq 5
 test "$(grep -c 'no-new-privileges:true' docker-compose.release.yml)" -eq 5
+
+# Audit finding, 2026-08-27: docker-compose.traefik.yml/docker-compose.clamav.yml (the
+# actual prod Traefik/ClamAV - deploy.sh/verify_release.sh never include the base
+# docker-compose.yml, so its dev-only hardening for these two never applied to prod) had no
+# resource limits or container-hardening at all. Assert both are present here so this class
+# of gap gets caught going forward.
+for f in docker-compose.traefik.yml docker-compose.clamav.yml; do
+  test "$(grep -c 'read_only: true' "$f")" -eq 1
+  test "$(grep -c 'no-new-privileges:true' "$f")" -eq 1
+  test "$(grep -c 'mem_limit:' "$f")" -eq 1
+  test "$(grep -c 'cap_drop:' "$f")" -eq 1
+done
 grep -q '^USER hocx$' backend/Dockerfile
 grep -q '^USER node$' frontend/Dockerfile
 grep -q '^USER node$' abgabebox-frontend/Dockerfile

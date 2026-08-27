@@ -5,6 +5,7 @@ relies on. Covers: login success/failure, password hashing (salted, both directi
 session_revoke_at invalidation, and - the most important case given the IDOR history in
 this codebase - that a user's role/session in one tenant grants zero access to another
 tenant's resources via AccessService."""
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -238,11 +239,102 @@ def test_unrestricted_reader_can_read_protocol_of_own_tenant(db):
     assert service.can_read_protocol(db, reader_in_tenant_a, protocol_a.id) is True
 
 
+def test_get_optional_current_admin_rejects_token_without_mfa_claim(db):
+    """Audit finding, 2026-08-27: every admin session token must now carry an explicit,
+    truthy "mfa" claim - a token minted before this fix (or hand-crafted without it) must be
+    rejected outright rather than silently treated as valid, even though its signature and
+    admin_id/iat/exp are otherwise perfectly well-formed."""
+    import json
+
+    from app.core.admin_security import _sign_payload, get_optional_current_admin
+    from app.models.entities import PlatformAdmin
+
+    admin = PlatformAdmin(
+        email="ops-legacy-token@example.com",
+        password_hash=hash_password("admin-password"),
+        display_name="Ops",
+    )
+    db.add(admin)
+    db.flush()
+
+    now = int(datetime.now(UTC).timestamp())
+    legacy_payload = json.dumps(
+        {"admin_id": admin.id, "iat": now, "exp": now + 3600}, separators=(",", ":")
+    ).encode()
+    legacy_token = _sign_payload(legacy_payload)
+    assert get_optional_current_admin(request=None, db=db, session_cookie=legacy_token) is None
+
+    explicit_false_payload = json.dumps(
+        {"admin_id": admin.id, "mfa": False, "iat": now, "exp": now + 3600}, separators=(",", ":")
+    ).encode()
+    explicit_false_token = _sign_payload(explicit_false_payload)
+    assert get_optional_current_admin(request=None, db=db, session_cookie=explicit_false_token) is None
+
+
+# --- GET /api/auth/tenant-by-domain: public, but rate-limited -----------------------
+
+
+class _FakeClient:
+    def __init__(self, host: str) -> None:
+        self.host = host
+
+
+class _FakeRequest:
+    """Duck-typed stand-in for fastapi.Request - the route only ever touches .headers.get(...)
+    and .client.host (see auth.py's _client_ip), so a real Starlette Request/ASGI scope isn't
+    needed here, matching this repo's existing "call the route as a plain callable" convention
+    (see test_audit_2026_08_12_high_fixes_H.py)."""
+
+    def __init__(self, *, host: str, forwarded_for: str | None = None) -> None:
+        self.client = _FakeClient(host)
+        self.headers = {"x-forwarded-for": forwarded_for} if forwarded_for else {}
+
+
+def test_tenant_by_domain_rate_limited_per_source_ip(db):
+    """Audit finding, 2026-08-27: GET /api/auth/tenant-by-domain is deliberately unauthenticated
+    (used pre-login) but had no rate limit at all, making it a free domain-enumeration oracle.
+    A fresh, distinctive fake IP is used per test run to avoid colliding with any other test's
+    rate-limit bucket in the shared Redis instance the `db` fixture doesn't reset."""
+    from app.api.routes.auth import tenant_by_domain
+
+    fake_ip = f"198.51.100.{uuid.uuid4().hex[:6]}"
+    request = _FakeRequest(host=fake_ip)
+
+    for _ in range(20):
+        with pytest.raises(HTTPException) as exc_info:
+            tenant_by_domain("no-such-domain.example.com", request, db)
+        assert exc_info.value.status_code == 404
+
+    # The 21st request from the same source within the window must be rejected outright,
+    # before ever reaching the (still-nonexistent) domain lookup.
+    with pytest.raises(HTTPException) as exc_info:
+        tenant_by_domain("no-such-domain.example.com", request, db)
+    assert exc_info.value.status_code == 429
+
+
+def test_tenant_by_domain_client_ip_prefers_x_forwarded_for(db):
+    """_client_ip must read the real client IP from X-Forwarded-For (set by Traefik) rather
+    than request.client.host, which would just be Traefik's own container IP - otherwise every
+    request through the proxy shares a single rate-limit bucket."""
+    from app.api.routes.auth import _client_ip
+
+    real_client_ip = f"198.51.100.{uuid.uuid4().hex[:6]}"
+    request = _FakeRequest(host="10.0.0.5", forwarded_for=f"{real_client_ip}, 10.0.0.5")
+    assert _client_ip(request) == real_client_ip
+
+
 # --- AdminAuthService ----------------------------------------------------------------
 
 
-def test_admin_login_succeeds_with_correct_password(db):
+def test_admin_login_succeeds_with_correct_password_but_requires_mfa_setup(db):
+    """Audit finding, 2026-08-27: platform admins previously got a full session straight off
+    a correct password. Now login() always returns a pending MFA ticket - here, "setup_required"
+    since this admin has no TOTP factor yet - and only completing enrollment through the
+    ticket-based flow (mirroring the tenant-admin flow in mfa_service.py) actually grants a
+    session."""
+    from app.core.totp import current_totp_code
     from app.models.entities import PlatformAdmin
+    from app.schemas.mfa import MfaTicketRequest, TotpEnrollmentComplete
 
     admin = PlatformAdmin(
         email="ops@example.com",
@@ -253,9 +345,59 @@ def test_admin_login_succeeds_with_correct_password(db):
     db.flush()
 
     service = AdminAuthService()
-    session = service.login(db, Response(), AdminLoginRequest(email="ops@example.com", password="admin-password"))
+    pending = service.login(db, Response(), AdminLoginRequest(email="ops@example.com", password="admin-password"))
+    assert pending.authenticated is False
+    assert pending.admin is None
+    assert pending.mfa is not None
+    assert pending.mfa.status == "setup_required"
+    assert pending.mfa.required is True
+
+    enrollment = service.start_login_totp_setup(db, MfaTicketRequest(ticket=pending.mfa.ticket))
+    code = current_totp_code(enrollment.secret)
+    session = service.complete_login_totp_setup(
+        db, Response(), TotpEnrollmentComplete(flow_token=enrollment.flow_token, code=code)
+    )
     assert session.authenticated is True
     assert session.admin.email == "ops@example.com"
+    assert session.mfa is None
+
+
+def test_admin_login_with_existing_totp_factor_requires_verification(db):
+    """Once a factor exists, login() returns "verification_required" instead of
+    "setup_required" - the account-level TOTP lockout (see admin_mfa_service.py, mirroring
+    mfa_service.py's identical fix) is exercised in test_admin_mfa_service.py."""
+    from app.core.secret_crypto import encrypt_secret
+    from app.core.totp import current_totp_code, generate_totp_secret
+    from app.models.entities import PlatformAdmin, UserMfaFactor
+    from app.schemas.mfa import TotpLoginVerifyRequest
+
+    secret = generate_totp_secret()
+    admin = PlatformAdmin(
+        email="ops-with-totp@example.com",
+        password_hash=hash_password("admin-password"),
+        display_name="Ops",
+    )
+    db.add(admin)
+    db.flush()
+    db.add(
+        UserMfaFactor(
+            platform_admin_id=admin.id,
+            factor_type="totp",
+            label="Auth App",
+            secret_encrypted=encrypt_secret(secret),
+        )
+    )
+    db.flush()
+
+    service = AdminAuthService()
+    pending = service.login(db, Response(), AdminLoginRequest(email="ops-with-totp@example.com", password="admin-password"))
+    assert pending.mfa.status == "verification_required"
+
+    session = service.verify_login_totp(
+        db, Response(), TotpLoginVerifyRequest(ticket=pending.mfa.ticket, code=current_totp_code(secret))
+    )
+    assert session.authenticated is True
+    assert session.admin.email == "ops-with-totp@example.com"
 
 
 def test_admin_login_fails_with_wrong_password(db):
@@ -295,7 +437,9 @@ def test_admin_logout_revokes_existing_session_tokens(db):
     # get_optional_current_admin's revocation check compares int() timestamps, so a same-second
     # iat/revoke_at pair would flakily look "not yet revoked" regardless of the fix.
     past_iat = int((datetime.now(UTC) - timedelta(seconds=30)).timestamp())
-    payload = json.dumps({"admin_id": admin.id, "iat": past_iat, "exp": past_iat + 3600}, separators=(",", ":")).encode()
+    payload = json.dumps(
+        {"admin_id": admin.id, "mfa": True, "iat": past_iat, "exp": past_iat + 3600}, separators=(",", ":")
+    ).encode()
     token = _sign_payload(payload)
     assert get_optional_current_admin(request=None, db=db, session_cookie=token) is not None
 

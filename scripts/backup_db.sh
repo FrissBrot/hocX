@@ -57,6 +57,12 @@ if ! "${DC[@]}" ps db --status running -q > /dev/null 2>&1 || [ -z "$("${DC[@]}"
 fi
 
 mkdir -p "$BACKUP_DIR"
+# Haerten unabhaengig vom Umask des aufrufenden Kontexts (Cron etc.) - anders als deploy.sh
+# (chmod 700 in dessen Preflight) laeuft dieses Skript laut Header-Kommentar eigenstaendig
+# und darf sich nicht darauf verlassen, dass deploy.sh das Verzeichnis vorher gehaertet hat.
+# Die pg_dump-Inhalte (Passwort-Hashes, alle Mandantendaten) duerfen nicht world-/group-lesbar
+# im Dateisystem liegen.
+chmod 700 "$BACKUP_DIR"
 BACKUP_FILE="$BACKUP_DIR/$(date +%Y%m%d-%H%M%S)-cron.sql.gz"
 TMP_FILE="$BACKUP_FILE.tmp"
 

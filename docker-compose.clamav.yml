@@ -2,6 +2,43 @@ services:
   clamav:
     image: clamav/clamav:latest
     restart: unless-stopped
+    # Audit finding, 2026-08-27: this file had NONE of the hardening docker-compose.yml
+    # (dev) already applies to its own (profile-gated) clamav service - the actual prod
+    # ClamAV ran with no memory/cpu ceiling and no container-hardening flags at all, because
+    # deploy.sh/verify_release.sh never include the base docker-compose.yml in their stack.
+    # mem_limit/cpus mirror docker-compose.yml's equivalent - the signature database alone
+    # needs several hundred MB resident; too tight a limit causes crash-loops, not safety.
+    mem_limit: 1536m
+    cpus: 1.0
+    init: true
+    read_only: true
+    # Runs the image's unprivileged entrypoint/user (see clamav/clamav-docker's README,
+    # "Running ClamD using non-root user using --user and --entrypoint") instead of the
+    # default root entrypoint. The default entrypoint chowns /var/lib/clamav and lets
+    # clamd/freshclam setuid from root down to the "clamav" user at startup, both of which
+    # need capabilities this config intentionally drops; running as "clamav" from the start
+    # needs neither, so dropping all capabilities below is safe. The healthcheck (clamdcheck.sh) talks to
+    # clamd over TCP (localhost:3310, same as CLAMAV_PORT below), not the unix socket, so it
+    # is unaffected by this switch.
+    user: "clamav"
+    entrypoint: ["/init-unprivileged"]
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    # /tmp: clamd's local socket (/tmp/clamd.sock, unused here but still opened) and the
+    # one-time initial-database freshclam.conf the entrypoint writes there on first boot.
+    # /var/log/clamav: clamd.log/freshclam.log (image creates this dir owned by "clamav").
+    # /var/lib/clamav (the signature database) is already a named volume below, which stays
+    # writable regardless of read_only.
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,mode=1777
+      - /var/log/clamav:rw,noexec,nosuid,nodev,uid=100,gid=100,mode=0750
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
       - clamav_db:/var/lib/clamav
     healthcheck:

@@ -2,6 +2,7 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 import {
+  discardBlockedMutations,
   flushOutbox,
   getOfflineServerSnapshot,
   getOfflineSnapshot,
@@ -61,6 +62,17 @@ export function ConnectivityStatus() {
       <span>{message}</span>
       {state.online && state.pending > 0 && !state.flushing && (
         <button type="button" onClick={() => void flushOutbox()}>Jetzt erneut versuchen</button>
+      )}
+      {state.blocked > 0 && (
+        // Mutations rejected with a non-retryable error (validation/auth/conflict) stay
+        // queued forever otherwise - they no longer block unrelated pending changes from
+        // being sent (see flushOutbox), but they also never resolve on their own, so give
+        // the user an explicit way to give up on them.
+        <button type="button" onClick={() => discardBlockedMutations()}>
+          {state.blocked === 1
+            ? "Fehlgeschlagene Änderung verwerfen"
+            : `${state.blocked} fehlgeschlagene Änderungen verwerfen`}
+        </button>
       )}
     </div>
   );

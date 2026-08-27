@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.db import get_db
+from app.core.rate_limit import enforce_rate_limit
 from app.core.security import CurrentUser, get_current_user, get_optional_current_user
 from app.models import Tenant
 from app.services import public_id_service
@@ -103,11 +104,27 @@ def verify_login_passkey(
     return service.verify_login_passkey(db, response, payload)
 
 
+def _client_ip(request: Request) -> str:
+    """Best-effort source IP for per-IP rate limiting on unauthenticated public endpoints.
+    Traefik is the only reverse proxy in front of this service and sets X-Forwarded-For to
+    the real client IP on every request; uvicorn isn't run with --proxy-headers here, so
+    request.client.host alone would just be Traefik's own container IP (audit finding,
+    2026-08-27, see tenant_by_domain below). Takes the first (leftmost / original client)
+    hop, not the last, which would be Traefik itself."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
 @router.get("/tenant-by-domain", response_model=TenantByDomainRead)
-def tenant_by_domain(domain: str, db: Session = Depends(get_db)):
+def tenant_by_domain(domain: str, request: Request, db: Session = Depends(get_db)):
     """Public lookup used by the login page: resolves a tenant's own custom app domain back to
     a tenant id/name so a visitor bounced here from that domain can be auto-selected instead of
-    picking their organisation from a dropdown."""
+    picking their organisation from a dropdown. Deliberately unauthenticated (used pre-login),
+    but rate-limited per source IP (audit finding, 2026-08-27) - without a cap this doubled as
+    a free domain-enumeration oracle."""
+    enforce_rate_limit(f"tenant-by-domain:{_client_ip(request)}", limit=20, period_seconds=60)
     tenant = domain_bridge_service.resolve_tenant_by_app_domain(db, domain)
     if tenant is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown domain")

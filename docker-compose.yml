@@ -204,6 +204,34 @@ services:
       - "traefik.http.routers.hocx-admin-auth.service=hocx-admin-auth"
       - "traefik.http.routers.hocx-admin-auth.middlewares=auth-ratelimit"
       - "traefik.http.services.hocx-admin-auth.loadbalancer.server.port=8000"
+      # Audit finding, 2026-08-27: /api/auth/mfa/totp/verify and /api/auth/tenant-by-domain
+      # previously fell through to the generic hocx-backend router with no Traefik-level rate
+      # limit at all, unlike /api/auth/login - defense in depth on top of the backend's own
+      # (in-progress, per-account) rate limiting for these two endpoints.
+      # TOTP verify: slightly more permissive than login's 10/min, since a legitimate user
+      # may retry a mistyped code a couple of times.
+      - "traefik.http.routers.hocx-mfa-totp-verify.rule=Host(`${TRAEFIK_DOMAIN}`) && Path(`/api/auth/mfa/totp/verify`) && Method(`POST`)"
+      - "traefik.http.routers.hocx-mfa-totp-verify.entrypoints=websecure"
+      - "traefik.http.routers.hocx-mfa-totp-verify.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.hocx-mfa-totp-verify.priority=200"
+      - "traefik.http.routers.hocx-mfa-totp-verify.service=hocx-mfa-totp-verify"
+      - "traefik.http.routers.hocx-mfa-totp-verify.middlewares=mfa-totp-verify-ratelimit"
+      - "traefik.http.services.hocx-mfa-totp-verify.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.mfa-totp-verify-ratelimit.ratelimit.average=20"
+      - "traefik.http.middlewares.mfa-totp-verify-ratelimit.ratelimit.burst=10"
+      - "traefik.http.middlewares.mfa-totp-verify-ratelimit.ratelimit.period=1m"
+      # tenant-by-domain: public, unauthenticated lookup polled on every page load
+      # pre-login - looser than login so normal login-page usage never trips it.
+      - "traefik.http.routers.hocx-tenant-by-domain.rule=Host(`${TRAEFIK_DOMAIN}`) && Path(`/api/auth/tenant-by-domain`) && Method(`GET`)"
+      - "traefik.http.routers.hocx-tenant-by-domain.entrypoints=websecure"
+      - "traefik.http.routers.hocx-tenant-by-domain.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.hocx-tenant-by-domain.priority=200"
+      - "traefik.http.routers.hocx-tenant-by-domain.service=hocx-tenant-by-domain"
+      - "traefik.http.routers.hocx-tenant-by-domain.middlewares=tenant-by-domain-ratelimit"
+      - "traefik.http.services.hocx-tenant-by-domain.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.tenant-by-domain-ratelimit.ratelimit.average=30"
+      - "traefik.http.middlewares.tenant-by-domain-ratelimit.ratelimit.burst=15"
+      - "traefik.http.middlewares.tenant-by-domain-ratelimit.ratelimit.period=1m"
       # Mandantenimporte koennen bis zu 2 GiB gross sein (siehe
       # MAX_TENANT_IMPORT_UPLOAD_BYTES in backend/app/api/routes/admin.py). Ein eigener
       # Router begrenzt nur diesen privilegierten Upload; 2050 MiB enthalten etwas Reserve

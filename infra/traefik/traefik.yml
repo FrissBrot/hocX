@@ -17,11 +17,22 @@ entryPoints:
           scheme: https
   websecure:
     address: ":443"
+    http:
+      # Audit finding (Low), 2026-08-27: baseline security headers (HSTS etc., defined in
+      # infra/traefik/dynamic/security.yml) for every router on this entrypoint, so origins
+      # that don't set their own headers still get a consistent policy. The TLS minimum
+      # version/cipher suite policy lives in that same file as the `default` tls.options
+      # profile, which Traefik applies automatically without listing it here.
+      middlewares:
+        - security-headers@file
   # Private Admin-Einstieg. Der Host-Port wird in Compose ausschliesslich an
   # 127.0.0.1 gebunden und ist damit als Ziel fuer den OpenZiti-Host-Tunnel
   # erreichbar, aber nicht direkt aus dem Internet.
   adminsecure:
     address: ":8443"
+    http:
+      middlewares:
+        - security-headers@file
 
 providers:
   docker:

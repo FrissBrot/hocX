@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import io
 import re
@@ -161,6 +162,20 @@ async def _read_upload_within_limit(file: UploadFile, max_bytes: int) -> bytes |
     return content
 
 
+def _exceeds_max_files_per_request(file_count: int) -> bool:
+    """(Critical, audit finding 2026-08-27): a hard, tenant-config-independent ceiling on how
+    many files a single request may contain. assignment.max_files_per_element (checked further
+    below in upload(), against the DB) may legitimately be None ("unbegrenzt Dateien"), which
+    used to mean there was NO application-level cap on this request at all - only Starlette's
+    own default (1000 files/request) stood between one request and a sequential, per-file
+    ClamAV scan (each up to a 30s clamd socket timeout) of up to 1000 files, tying up a worker
+    for a very long time. This check is independent of max_files_per_element and always applies,
+    even when that setting is unbounded. Extracted as its own function (same reasoning as
+    _read_upload_within_limit above) so it's directly unit-testable without a full tenant/
+    assignment/DB fixture."""
+    return file_count > settings.max_files_per_upload_request
+
+
 def _get_tenant_or_404(db: Session, tenant_slug: str) -> dict:
     tenant = repository.get_tenant_by_slug(db, public_slug=tenant_slug)
     if tenant is None:
@@ -299,6 +314,18 @@ async def upload(
         _log("validation_failed", "Keine Datei ausgewählt")
         raise HTTPException(status_code=400, detail="Keine Datei ausgewaehlt")
 
+    # Checked before anything about any of `files` is read or scanned - see
+    # _exceeds_max_files_per_request's docstring above.
+    if _exceeds_max_files_per_request(len(files)):
+        _log(
+            "validation_failed",
+            f"Zu viele Dateien in einer Anfrage ({len(files)}, max. {settings.max_files_per_upload_request})",
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=f"Maximal {settings.max_files_per_upload_request} Dateien pro Anfrage erlaubt",
+        )
+
     # Kumulatives Modell (seit 2026-08-17): max_files_per_element gilt fuer die Gesamtzahl ueber
     # alle bisherigen Upload-Vorgaenge dieses Elements hinweg, nicht nur fuer diese eine Anfrage.
     # None = unbegrenzt viele Dateien.
@@ -404,7 +431,19 @@ async def upload(
     # including why this is a cross-process Postgres lock and not an in-process asyncio.Lock.
     quarantine_files: list[dict] = []
     with tenant_upload_lock(tenant["id"]):
-        if tenant_storage_bytes(tenant["id"]) + incoming_bytes > quota_bytes:
+        # (Medium, audit finding 2026-08-27): tenant_storage_bytes() does a synchronous
+        # Path.rglob()+stat() walk over every file ever stored for this tenant - cost grows with
+        # total accumulated files, and it's called here while holding the cross-process
+        # tenant_upload_lock above. Run off the event loop via asyncio.to_thread so a tenant with
+        # a lot of accumulated files doesn't freeze this worker (and everyone else on it) for the
+        # duration of the walk. A running per-tenant byte counter would avoid the walk
+        # altogether, but this storage_root is also written to directly by the separate main
+        # backend (see storage.py's move_from_quarantine docstring - the quarantine-path
+        # transform, and therefore the files landing under the same tenant-N/ directories, is
+        # shared with backend/app/services/submission_service.py's rescan/move flow), so an
+        # in-process counter maintained only here could not stay accurate; asyncio.to_thread is
+        # the safe, contained fix for this pass.
+        if await asyncio.to_thread(tenant_storage_bytes, tenant["id"]) + incoming_bytes > quota_bytes:
             _log("validation_failed", f"Speicherlimit des Mandanten erreicht (max. {settings.tenant_storage_quota_mb} MB)")
             raise HTTPException(status_code=400, detail="Speicherlimit erreicht - bitte den Verein kontaktieren")
 
@@ -461,10 +500,14 @@ async def upload(
     _log("quarantined", "In Quarantäne gespeichert, Scan wird gestartet")
 
     # Step 2: Scan every file via ClamAV stream.
-    scan_results = [
-        scanner.scan_bytes(f["_content"], host=settings.clamav_host, port=settings.clamav_port)
-        for f in quarantine_files
-    ]
+    # (Critical, audit finding 2026-08-27): scanner.scan_bytes() is a blocking call (raw
+    # synchronous clamd socket, up to a 30s timeout) - calling it directly here would block this
+    # entire async worker (every tenant, every other in-flight request) for the duration of each
+    # scan. scan_many() runs each scan in a worker thread (asyncio.to_thread) with a small bounded
+    # concurrency instead of a fully sequential loop - see scanner.py for the full rationale.
+    scan_results = await scanner.scan_many(
+        [f["_content"] for f in quarantine_files], host=settings.clamav_host, port=settings.clamav_port
+    )
 
     # Step 3: Infected → delete quarantine files, reject upload.
     if "infected" in scan_results:

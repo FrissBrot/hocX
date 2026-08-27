@@ -41,15 +41,19 @@ async function fetchJson<T>(url: string): Promise<T | null> {
 const internalBase = process.env.INTERNAL_ABGABEBOX_API_URL ?? "http://abgabebox-backend:8000";
 
 export function listAssignments(tenantSlug: string) {
-  return fetchJson<AssignmentPublic[]>(`${internalBase}/api/public/${tenantSlug}/assignments`);
+  return fetchJson<AssignmentPublic[]>(`${internalBase}/api/public/${encodeURIComponent(tenantSlug)}/assignments`);
 }
 
 export function getAssignmentDetail(tenantSlug: string, assignmentSlug: string) {
-  return fetchJson<AssignmentDetailPublic>(`${internalBase}/api/public/${tenantSlug}/assignments/${assignmentSlug}`);
+  return fetchJson<AssignmentDetailPublic>(
+    `${internalBase}/api/public/${encodeURIComponent(tenantSlug)}/assignments/${encodeURIComponent(assignmentSlug)}`
+  );
 }
 
 export function listElements(tenantSlug: string, assignmentSlug: string) {
-  return fetchJson<ElementPublic[]>(`${internalBase}/api/public/${tenantSlug}/assignments/${assignmentSlug}/elements`);
+  return fetchJson<ElementPublic[]>(
+    `${internalBase}/api/public/${encodeURIComponent(tenantSlug)}/assignments/${encodeURIComponent(assignmentSlug)}/elements`
+  );
 }
 
 export function getElement(tenantSlug: string, assignmentSlug: string, elementRef: string) {

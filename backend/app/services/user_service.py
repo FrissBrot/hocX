@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from fastapi import HTTPException, status
 
+from app.core.rate_limit import check_account_lockout, record_failed_attempt
 from app.core.security import CurrentUser, hash_password, require_admin, verify_password
 from app.models import AppUser, Participant, Tenant, UserTenantRole
 from app.services import public_id_service
@@ -25,6 +26,16 @@ from app.schemas.user import (
     UserSelfUpdate,
     UserUpdate,
 )
+
+
+# Account-scoped lockout on self-service current_password guesses (audit finding, 2026-08-27):
+# /me/password lets an authenticated user try arbitrary current_password values with no cap,
+# so a hijacked/idle session (or a shared device) could brute-force the account's real
+# password via this endpoint even without the login form. Mirrors the login lockout pattern
+# in auth_service.py, keyed by the authenticated user's id rather than email since the caller
+# is already authenticated here.
+_PASSWORD_CHANGE_ATTEMPT_LIMIT = 10
+_PASSWORD_CHANGE_WINDOW_SECONDS = 15 * 60
 
 
 @dataclass
@@ -353,6 +364,7 @@ class UserService:
                 for membership in memberships
             ]
 
+        admin_tenant_ids: set[int] | None = None
         if actor is not None:
             admin_tenant_ids = self._admin_tenant_ids_for_actor(actor)
             retained = [
@@ -360,12 +372,28 @@ class UserService:
                 for membership in self.repository.list_memberships(db, user_id=user_id)
                 if membership.tenant_id not in admin_tenant_ids
             ]
+            # `retained` (already-persisted rows for tenants outside the actor's scope) is
+            # only merged in here so _guard_last_tenant_admin below sees the true final
+            # state of the user's memberships, not just the submitted/in-scope slice - it
+            # must NOT be handed to replace_memberships for persistence (audit finding,
+            # 2026-08-27: memberships in a tenant the calling admin doesn't manage must be
+            # left completely untouched by this endpoint, regardless of what the payload
+            # contains; the actual deletion scoping happens via scope_tenant_ids below).
             next_memberships = retained + [
                 membership for membership in next_memberships if membership.tenant_id in admin_tenant_ids
             ]
 
         self._guard_last_tenant_admin(db, user_id, next_memberships, role_ids)
-        self.repository.replace_memberships(db, user_id=user_id, memberships=next_memberships)
+
+        if admin_tenant_ids is not None:
+            self.repository.replace_memberships(
+                db,
+                user_id=user_id,
+                memberships=[m for m in next_memberships if m.tenant_id in admin_tenant_ids],
+                scope_tenant_ids=admin_tenant_ids,
+            )
+        else:
+            self.repository.replace_memberships(db, user_id=user_id, memberships=next_memberships)
 
     def _guard_last_tenant_admin(
         self,
@@ -561,7 +589,10 @@ class UserService:
         user = self.repository.get(db, actor.user_id)
         if user is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        lockout_key = f"password-change:{actor.user_id}"
+        check_account_lockout(lockout_key, limit=_PASSWORD_CHANGE_ATTEMPT_LIMIT)
         if not user.password_hash or not verify_password(payload.current_password, user.password_hash):
+            record_failed_attempt(lockout_key, period_seconds=_PASSWORD_CHANGE_WINDOW_SECONDS)
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Aktuelles Passwort ist nicht korrekt")
 
         self.repository.update(
@@ -600,11 +631,15 @@ class UserService:
                 detail="Users cannot be merged because both are already linked to participants in the same tenant",
             )
 
-        # kassier = reader + full finance/fines access (see main.py role descriptions); writer
-        # and admin already include finance access too (require_finance_access, access_service),
-        # so every permission kassier grants is a strict subset of writer's - the roles form a
-        # single linear scale reader < kassier < writer < admin, not an orthogonal add-on.
-        role_priority = {"reader": 1, "kassier": 2, "writer": 3, "admin": 4}
+        # Roles are capability bundles, not a linear rank: writer and kassier are deliberately
+        # incomparable. Silently choosing either during a merge would discard the other
+        # account's authority. Admin is the only role containing both bundles.
+        role_capabilities = {
+            "reader": frozenset({"read"}),
+            "writer": frozenset({"read", "workspace_write"}),
+            "kassier": frozenset({"read", "finance_write"}),
+            "admin": frozenset({"read", "workspace_write", "finance_write", "tenant_admin"}),
+        }
 
         merged_memberships: dict[int, _ResolvedMembership] = {}
         for membership in self._internal_memberships_for_user(db, target_user_id) + self._internal_memberships_for_user(db, source_user_id):
@@ -617,9 +652,21 @@ class UserService:
             if existing is None:
                 merged_memberships[membership.tenant_id] = candidate
                 continue
-            if role_priority.get(candidate.role_code, 0) > role_priority.get(existing.role_code, 0):
+            existing_capabilities = role_capabilities.get(existing.role_code, frozenset())
+            candidate_capabilities = role_capabilities.get(candidate.role_code, frozenset())
+            if existing_capabilities and candidate_capabilities and not (
+                existing_capabilities <= candidate_capabilities or candidate_capabilities <= existing_capabilities
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        f"Users cannot be merged automatically: roles '{existing.role_code}' and "
+                        f"'{candidate.role_code}' are incompatible in the same tenant"
+                    ),
+                )
+            if candidate_capabilities > existing_capabilities:
                 merged_memberships[membership.tenant_id] = candidate
-            elif candidate.is_active and not existing.is_active:
+            elif candidate_capabilities == existing_capabilities and candidate.is_active and not existing.is_active:
                 merged_memberships[membership.tenant_id] = candidate
 
         self._apply_memberships(

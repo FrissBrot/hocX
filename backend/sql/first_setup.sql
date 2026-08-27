@@ -27,7 +27,8 @@ CREATE TABLE role (
 INSERT INTO role (code, description) VALUES
 ('admin', 'Tenant administrator'),
 ('writer', 'Workspace write access'),
-('reader', 'Read-only workspace access with PDF export');
+('reader', 'Read-only workspace access with PDF export'),
+('kassier', 'Reader access plus full finance and fines management');
 
 CREATE TABLE app_user (
     id BIGSERIAL PRIMARY KEY,

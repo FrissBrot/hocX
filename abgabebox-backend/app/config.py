@@ -63,8 +63,38 @@ class Settings(BaseSettings):
     quarantine_cleanup_interval_minutes: int = Field(
         default=30, validation_alias="ABGABEBOX_QUARANTINE_CLEANUP_INTERVAL_MINUTES"
     )
+    # Absolute, tenant-config-independent ceiling on how many files a single multipart upload
+    # request may contain (audit finding, 2026-08-27). assignment.max_files_per_element is a
+    # per-tenant/per-assignment setting that may legitimately be None ("unbegrenzt") - without a
+    # separate hard cap, "unbegrenzt" also meant "no application-level limit on this request",
+    # leaving only Starlette's own default (1000 files/request) standing between one request and
+    # a sequential, per-file ClamAV scan (each up to a 30s socket timeout, see scanner.py) of up
+    # to 1000 files. Enforced in routes/public.py's upload() before any file is read or scanned,
+    # regardless of what max_files_per_element says.
+    max_files_per_upload_request: int = Field(default=50, validation_alias="ABGABEBOX_MAX_FILES_PER_UPLOAD_REQUEST")
+    # Distinguishes genuine local dev/test stacks (where running without a FriendlyCaptcha
+    # account is a deliberate, accepted choice - see captcha.py's captcha_enabled()) from a real
+    # deployment (audit finding, 2026-08-27: production must fail CLOSED - reject uploads -
+    # when captcha can't be verified, never fail open). No such flag existed anywhere in this
+    # service before this fix (checked main.py's existing startup checks and this file - neither
+    # had one), so this is new. Deliberately fails safe: unset/unrecognized values are treated as
+    # production-like, not dev-like - an operator must opt IN to the permissive behavior by
+    # explicitly setting one of the values in _DEV_LIKE_ENVIRONMENTS below, rather than an
+    # operator who simply forgot to set this ending up with silently-disabled captcha in prod.
+    environment: str = Field(default="production", validation_alias="ABGABEBOX_ENVIRONMENT")
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
 settings = Settings()
+
+# See Settings.environment's docstring above for the fail-safe-by-default rationale. Local dev
+# (docker-compose.dev.yml) and the test stack (docker-compose.tests.yml) need to set
+# ABGABEBOX_ENVIRONMENT to one of these to keep today's "no FriendlyCaptcha account needed
+# locally" behavior - otherwise they now fail closed like production, since unset defaults to
+# production-like.
+_DEV_LIKE_ENVIRONMENTS = {"development", "dev", "test", "testing", "local"}
+
+
+def is_dev_or_test_environment() -> bool:
+    return settings.environment.strip().lower() in _DEV_LIKE_ENVIRONMENTS

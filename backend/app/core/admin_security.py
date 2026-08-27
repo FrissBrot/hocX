@@ -35,11 +35,12 @@ def _sign_payload(payload: bytes) -> str:
     return base64.urlsafe_b64encode(payload).decode("utf-8") + "." + base64.urlsafe_b64encode(signature).decode("utf-8")
 
 
-def create_admin_session_token(admin_id: int) -> str:
+def create_admin_session_token(admin_id: int, *, mfa_verified: bool = False) -> str:
     now = datetime.now(UTC)
     payload = json.dumps(
         {
             "admin_id": admin_id,
+            "mfa": bool(mfa_verified),
             "iat": int(now.timestamp()),
             "exp": int((now + timedelta(hours=settings.admin_session_ttl_hours)).timestamp()),
         },
@@ -48,10 +49,13 @@ def create_admin_session_token(admin_id: int) -> str:
     return _sign_payload(payload)
 
 
-def issue_admin_session_cookie(response: Response, admin_id: int) -> None:
+def issue_admin_session_cookie(response: Response, admin_id: int, *, mfa_verified: bool = False) -> None:
     """Mints a fresh admin session token and sets it as a host-only cookie - shared by password
-    login and the SSO callback so both stay consistent."""
-    token = create_admin_session_token(admin_id)
+    login and the SSO callback so both stay consistent. mfa_verified=False is only ever a
+    valid final state for a call site that isn't actually granting a full session (there
+    currently is none - see AdminAuthService.login, which now always routes a non-MFA'd
+    password check through the MFA-pending ticket flow instead of calling this directly)."""
+    token = create_admin_session_token(admin_id, mfa_verified=mfa_verified)
     response.set_cookie(
         key=settings.admin_session_cookie,
         value=token,
@@ -101,6 +105,18 @@ def get_optional_current_admin(
         token_iat = int(session_data.get("iat", 0))
         if int(admin.session_revoke_at.timestamp()) > token_iat:
             return None
+    # Audit finding, 2026-08-27: platform admins are the highest-privilege tier (full
+    # cross-tenant access, backup export, admin management) but previously had no MFA
+    # option at all - password-only login granted a full, unprotected session. Every
+    # session token minted since this fix carries an explicit "mfa" claim, set True only
+    # after a completed TOTP verification/enrollment (AdminAuthService/AdminMfaService) or
+    # for an OIDC-authenticated admin (platform SSO is treated as already providing
+    # equivalent assurance - see admin_auth.py's oidc_callback). A token with no such claim
+    # (including every token minted before this fix) is rejected outright, forcing
+    # re-authentication through the new MFA-aware login flow rather than silently granting
+    # the old, weaker session shape.
+    if not bool(session_data.get("mfa")):
+        return None
     return CurrentAdmin(
         admin_id=admin.id, admin_public_id=admin.public_id, email=admin.email, display_name=admin.display_name, role=admin.role
     )
@@ -119,4 +135,11 @@ def require_admin_write(admin: CurrentAdmin = Depends(get_current_admin)) -> Cur
     every tenant."""
     if admin.role != "owner":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Read-only admin account")
+    return admin
+
+
+def require_admin_owner(admin: CurrentAdmin = Depends(get_current_admin)) -> CurrentAdmin:
+    """Gate sensitive read operations that expose cross-tenant PII or security data."""
+    if admin.role != "owner":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Owner admin account required")
     return admin

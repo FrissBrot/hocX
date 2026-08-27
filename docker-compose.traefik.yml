@@ -2,6 +2,46 @@ services:
   traefik:
     image: traefik:v3.1
     restart: unless-stopped
+    # Audit finding, 2026-08-27: this file had NONE of the hardening docker-compose.yml
+    # (dev) already applies to its own (profile-gated, non-internet-facing) traefik service -
+    # the actual prod Traefik, exposed directly to the internet on 80/443, ran with no
+    # memory/cpu ceiling and no container-hardening flags at all, because deploy.sh/
+    # verify_release.sh never include the base docker-compose.yml in their stack. mem_limit/
+    # cpus mirror docker-compose.yml's equivalent (M28, Audit 2026-08-12) - Traefik itself is
+    # lightweight, this is a ceiling against a runaway container, not a normal-operation target.
+    mem_limit: 128m
+    cpus: 0.5
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    # Needed to bind entrypoints 80/443/8443 (<1024) - the image runs as root by default
+    # (no USER in its Dockerfile) but with all capabilities dropped even root cannot bind
+    # privileged ports without this. Reading /var/run/docker.sock still works: the socket
+    # is root-owned and this container's effective UID is 0, so the owner permission bits
+    # apply without needing CAP_DAC_OVERRIDE.
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    # The official image declares `/tmp` as a VOLUME (see traefik/traefik's Dockerfile) - the
+    # buffering middleware (maxRequestBodyBytes, used for tenant-import/word-import/abgabebox-
+    # upload elsewhere in this repo) spools any request body over 1 MiB to a temp file there
+    # by default, and those routes allow bodies up to ~2 GiB. A tmpfs (RAM-backed) mount here
+    # would count against mem_limit above and get OOM-killed on a large legitimate upload, so
+    # this uses a real (disk-backed) named volume instead - the ACME storage files under
+    # /letsencrypt are already writable via the existing bind mount below and need no change.
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./infra/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./infra/traefik/letsencrypt:/letsencrypt
+      - ./infra/traefik/dynamic:/etc/traefik/dynamic:ro
+      - traefik_tmp:/tmp
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       - frontend
       - backend
@@ -16,13 +56,11 @@ services:
       - "443:443"
       # OpenZiti terminiert den privaten Admin-Service auf diesem Loopback-Port.
       - "127.0.0.1:${TRAEFIK_ADMIN_PORT:-8443}:8443"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./infra/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
-      - ./infra/traefik/letsencrypt:/letsencrypt
-      - ./infra/traefik/dynamic:/etc/traefik/dynamic:ro
     command:
       - --configFile=/etc/traefik/traefik.yml
+
+volumes:
+  traefik_tmp:
 
 secrets:
   cf_dns_api_token:

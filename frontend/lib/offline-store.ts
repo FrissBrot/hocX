@@ -9,6 +9,13 @@ export type PendingMutation = {
   createdAt: number;
   attempts: number;
   lastError?: string;
+  // Set when the backend rejected this mutation with a non-retryable (4xx, non-408/429)
+  // response - most notably a 409 conflict. Retrying it unchanged would just keep losing
+  // in the exact same way, so it is skipped on every future flush (see flushOutbox) until
+  // either a fresh edit re-queues the same key (queueMutation always starts a new item
+  // without this flag) or the user explicitly discards it (discardMutation/
+  // discardBlockedMutations) via the "verwerfen" action surfaced in ConnectivityStatus.
+  blocked?: boolean;
 };
 
 export type OfflineSnapshot = {
@@ -16,12 +23,13 @@ export type OfflineSnapshot = {
   pending: number;
   flushing: boolean;
   lastError: string | null;
+  blocked: number;
 };
 
 const OUTBOX_KEY = "hocx-offline-outbox-v1";
 const DRAFT_PREFIX = "hocx-draft-v1:";
-let snapshot: OfflineSnapshot = { online: true, pending: 0, flushing: false, lastError: null };
-const serverSnapshot: OfflineSnapshot = { online: true, pending: 0, flushing: false, lastError: null };
+let snapshot: OfflineSnapshot = { online: true, pending: 0, flushing: false, lastError: null, blocked: 0 };
+const serverSnapshot: OfflineSnapshot = { online: true, pending: 0, flushing: false, lastError: null, blocked: 0 };
 const listeners = new Set<() => void>();
 let flushTimer: number | null = null;
 let retryDelayMs = 1_000;
@@ -43,11 +51,16 @@ function readOutbox(): PendingMutation[] {
 
 function writeOutbox(items: PendingMutation[]) {
   window.localStorage.setItem(OUTBOX_KEY, JSON.stringify(items));
-  emit({ pending: items.length });
+  emit({ pending: items.length, blocked: items.filter((item) => item.blocked).length });
 }
 
 export function initializeOfflineStore() {
-  emit({ online: typeof navigator === "undefined" ? true : navigator.onLine, pending: readOutbox().length });
+  const items = readOutbox();
+  emit({
+    online: typeof navigator === "undefined" ? true : navigator.onLine,
+    pending: items.length,
+    blocked: items.filter((item) => item.blocked).length,
+  });
 }
 
 export function setNetworkOnline(online: boolean) {
@@ -90,6 +103,32 @@ export function removeMutation(key: string) {
   writeOutbox(readOutbox().filter((item) => item.key !== key));
 }
 
+// Explicit user-facing "verwerfen" action for a mutation that keeps failing with a
+// non-retryable error (see the `blocked` flag on PendingMutation / flushOutbox below).
+// Unlike removeMutation (used after a successful send), this fires a
+// "hocx:mutation-discarded" event so callers that keyed local UI state to a mutation
+// (e.g. the protocol editor's per-block save indicator) can react instead of the item
+// just silently vanishing from the outbox.
+export function discardMutation(key: string) {
+  const items = readOutbox();
+  if (!items.some((item) => item.key === key)) return;
+  writeOutbox(items.filter((item) => item.key !== key));
+  window.dispatchEvent(new CustomEvent("hocx:mutation-discarded", { detail: { key } }));
+}
+
+// Bulk variant surfaced from ConnectivityStatus: discards every mutation currently
+// blocked on a non-retryable error, leaving unrelated still-retryable mutations queued.
+export function discardBlockedMutations() {
+  const items = readOutbox();
+  const blocked = items.filter((item) => item.blocked);
+  if (blocked.length === 0) return;
+  writeOutbox(items.filter((item) => !item.blocked));
+  for (const item of blocked) {
+    window.dispatchEvent(new CustomEvent("hocx:mutation-discarded", { detail: { key: item.key } }));
+  }
+  emit({ lastError: null });
+}
+
 export async function flushOutbox(): Promise<void> {
   if (typeof window === "undefined" || !navigator.onLine || snapshot.flushing) return;
   emit({ flushing: true, lastError: null });
@@ -112,10 +151,25 @@ export async function flushOutbox(): Promise<void> {
           } catch {
             // Keep plain-text response.
           }
-          // Validation/auth/conflict errors need user intervention and must not loop forever.
+          // Validation/auth/conflict errors need user intervention and must not loop forever -
+          // but they also must not stop every *other*, unrelated queued mutation behind this
+          // one from ever being attempted (a plain `break` here used to exit the whole loop,
+          // and since this item is never removed from the outbox except on success, every
+          // future flush hit the exact same item first and stalled identically forever). Mark
+          // just this item as blocked and move on to the rest of the outbox; it stays queued
+          // (visible via ConnectivityStatus's "verwerfen" action) until the user discards it or
+          // a fresh edit re-queues the same key.
           if (response.status < 500 && response.status !== 408 && response.status !== 429) {
-            emit({ lastError: detail || `Speichern fehlgeschlagen (${response.status})` });
-            break;
+            const message = detail || `Speichern fehlgeschlagen (${response.status})`;
+            const current = readOutbox();
+            writeOutbox(current.map((entry) => entry.key === item.key ? {
+              ...entry,
+              attempts: entry.attempts + 1,
+              lastError: message,
+              blocked: true,
+            } : entry));
+            emit({ lastError: message });
+            continue;
           }
           throw new Error(detail || `Backend nicht erreichbar (${response.status})`);
         }
