@@ -195,7 +195,8 @@ pre {
   min-height: 0;
   padding: 0;
   border: 0;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   border-radius: var(--radius-sm);
   text-align: left;
@@ -203,7 +204,8 @@ pre {
 }
 
 .brand-lockup-trigger:hover {
-  background: var(--accent-soft);
+  --button-bg: var(--accent-soft);
+  background: var(--button-bg);
   transform: none;
 }
 
@@ -297,7 +299,8 @@ pre {
   padding: 0 12px;
   border: 0;
   border-radius: var(--radius-sm);
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   font-size: 0.73rem;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -308,7 +311,8 @@ pre {
 }
 
 .nav-group-label:hover {
-  background: var(--accent-soft);
+  --button-bg: var(--accent-soft);
+  background: var(--button-bg);
   color: var(--text);
   transform: none;
   box-shadow: none;
@@ -415,7 +419,8 @@ pre {
   padding: 0;
   min-height: 0;
   border-radius: 0;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   border: 0;
   text-align: left;
 }
@@ -965,7 +970,8 @@ button:disabled {
   width: auto;
   min-width: 0;
   --button-hover-bg: var(--danger);
-  background: var(--danger);
+  --button-bg: var(--danger);
+  background: var(--button-bg);
 }
 
 /* Plain-text row action links (e.g. table Aktionen column) - no button chrome,
@@ -985,7 +991,8 @@ button:disabled {
 }
 
 .row-text-action:hover:not(:disabled) {
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   text-decoration: underline;
 }
@@ -1003,13 +1010,15 @@ button:disabled {
   --button-hover-bg: var(--primary-strong);
   width: auto;
   min-width: 0;
-  background: var(--primary);
+  --button-bg: var(--primary);
+  background: var(--button-bg);
   color: var(--primary-contrast);
   font-weight: 600;
 }
 
 .button-primary:hover {
-  background: var(--primary-strong);
+  --button-bg: var(--primary-strong);
+  background: var(--button-bg);
 }
 
 .button-toggle {
@@ -1018,12 +1027,14 @@ button:disabled {
   min-height: 0;
   padding: 6px 14px;
   line-height: 1.5;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   border: 1.5px solid var(--border-strong, var(--border));
 }
 
 .button-toggle-active {
-  background: var(--accent-soft);
+  --button-bg: var(--accent-soft);
+  background: var(--button-bg);
   border-color: var(--accent);
   color: var(--text);
   font-weight: 600;
@@ -1033,7 +1044,8 @@ button:disabled {
   --button-hover-bg: var(--accent-soft);
   width: auto;
   min-width: 0;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   border-color: var(--border);
   box-shadow: none;
@@ -1084,7 +1096,8 @@ button:disabled {
   padding: 8px 10px;
   border-radius: var(--radius-sm);
   border: none;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   font-weight: 500;
   text-align: left;
@@ -1092,7 +1105,8 @@ button:disabled {
 }
 
 .menu-item:hover {
-  background: var(--accent-soft);
+  --button-bg: var(--accent-soft);
+  background: var(--button-bg);
   transform: none;
   box-shadow: none;
 }
@@ -1107,7 +1121,8 @@ button:disabled {
 }
 
 .menu-item-danger:hover {
-  background: var(--danger-bg);
+  --button-bg: var(--danger-bg);
+  background: var(--button-bg);
 }
 
 .menu-item-icon {
@@ -1133,7 +1148,8 @@ button:disabled {
 }
 
 .button-ghost:hover {
-  background: var(--accent-soft);
+  --button-bg: var(--accent-soft);
+  background: var(--button-bg);
   color: var(--text);
 }
 
@@ -1154,7 +1170,8 @@ button:disabled {
 }
 
 .button-icon-danger:hover {
-  background: color-mix(in srgb, var(--danger) 10%, transparent 90%);
+  --button-bg: color-mix(in srgb, var(--danger) 10%, transparent 90%);
+  background: var(--button-bg);
   color: var(--danger);
 }
 
@@ -1186,7 +1203,8 @@ button:disabled {
   padding: 8px 10px;
   border-radius: 8px;
   border: none;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   font-size: 0.86rem;
   cursor: pointer;
@@ -1195,7 +1213,8 @@ button:disabled {
 }
 
 .action-menu-item:hover {
-  background: color-mix(in srgb, var(--accent) 10%, transparent 90%);
+  --button-bg: color-mix(in srgb, var(--accent) 10%, transparent 90%);
+  background: var(--button-bg);
   color: var(--accent);
 }
 
@@ -1205,7 +1224,8 @@ button:disabled {
 }
 
 .action-menu-item-danger:hover {
-  background: color-mix(in srgb, var(--danger) 10%, transparent 90%);
+  --button-bg: color-mix(in srgb, var(--danger) 10%, transparent 90%);
+  background: var(--button-bg);
   color: var(--danger);
 }
 
@@ -1499,7 +1519,8 @@ input[type="radio"] {
   gap: 10px;
   padding: 0;
   border: none;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: inherit;
   font: inherit;
   letter-spacing: inherit;
@@ -1714,18 +1735,21 @@ input[type="radio"] {
   padding: 0;
   border-radius: 12px;
   border: 1px solid var(--border);
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   box-shadow: none;
 }
 
 .responsibility-lock-button:hover {
-  background: color-mix(in srgb, var(--accent) 8%, transparent 92%);
+  --button-bg: color-mix(in srgb, var(--accent) 8%, transparent 92%);
+  background: var(--button-bg);
 }
 
 .responsibility-lock-button-active {
   border-color: color-mix(in srgb, var(--accent) 34%, transparent 66%);
-  background: color-mix(in srgb, var(--accent) 12%, transparent 88%);
+  --button-bg: color-mix(in srgb, var(--accent) 12%, transparent 88%);
+  background: var(--button-bg);
 }
 
 .responsibility-empty {
@@ -1856,7 +1880,8 @@ input[type="radio"] {
   border-radius: 999px;
   padding: 10px 16px;
   border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel-solid) 90%, transparent 10%);
+  --button-bg: color-mix(in srgb, var(--panel-solid) 90%, transparent 10%);
+  background: var(--button-bg);
   color: var(--muted);
   font-weight: 700;
 }
@@ -1864,7 +1889,8 @@ input[type="radio"] {
 .button-pill-active {
   color: var(--text);
   border-color: color-mix(in srgb, var(--accent) 36%, transparent 64%);
-  background: color-mix(in srgb, var(--accent) 16%, transparent 84%);
+  --button-bg: color-mix(in srgb, var(--accent) 16%, transparent 84%);
+  background: var(--button-bg);
 }
 
 .table-subtitle {
@@ -1884,19 +1910,22 @@ input[type="radio"] {
   padding: 18px;
   border-radius: 20px;
   border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel-solid) 92%, transparent 8%);
+  --button-bg: color-mix(in srgb, var(--panel-solid) 92%, transparent 8%);
+  background: var(--button-bg);
   text-align: left;
   color: var(--text);
 }
 
 .rule-option-card:hover {
   border-color: color-mix(in srgb, var(--accent) 34%, transparent 66%);
-  background: color-mix(in srgb, var(--accent) 8%, transparent 92%);
+  --button-bg: color-mix(in srgb, var(--accent) 8%, transparent 92%);
+  background: var(--button-bg);
 }
 
 .rule-option-card-active {
   border-color: color-mix(in srgb, var(--accent) 46%, transparent 54%);
-  background: color-mix(in srgb, var(--accent) 14%, transparent 86%);
+  --button-bg: color-mix(in srgb, var(--accent) 14%, transparent 86%);
+  background: var(--button-bg);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent 78%) inset;
 }
 
@@ -2048,7 +2077,8 @@ input[type="radio"] {
   height: 42px;
   border-radius: 14px;
   border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent 76%);
-  background: var(--accent-soft);
+  --button-bg: var(--accent-soft);
+  background: var(--button-bg);
   color: var(--accent);
   font-size: 0.8rem;
   font-weight: 800;
@@ -2057,20 +2087,23 @@ input[type="radio"] {
 }
 
 .pdf-icon-link:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 22%, transparent 78%);
+  --button-bg: color-mix(in srgb, var(--accent) 22%, transparent 78%);
+  background: var(--button-bg);
   color: var(--accent);
 }
 
 .pdf-icon-link-success {
   --button-hover-bg: color-mix(in srgb, var(--success, #22c55e) 24%, transparent 76%);
   border-color: color-mix(in srgb, var(--success, #22c55e) 32%, transparent 68%);
-  background: color-mix(in srgb, var(--success, #22c55e) 14%, transparent 86%);
+  --button-bg: color-mix(in srgb, var(--success, #22c55e) 14%, transparent 86%);
+  background: var(--button-bg);
   color: var(--success, #22c55e);
 }
 
 .pdf-icon-link-success:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--success, #22c55e) 46%, transparent 54%);
-  background: color-mix(in srgb, var(--success, #22c55e) 24%, transparent 76%);
+  --button-bg: color-mix(in srgb, var(--success, #22c55e) 24%, transparent 76%);
+  background: var(--button-bg);
   color: var(--success, #22c55e);
 }
 
@@ -2146,7 +2179,8 @@ input[type="radio"] {
 .list-snapshot-undo-button {
   --button-hover-bg: color-mix(in srgb, var(--warning) 14%, transparent 86%);
   border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent 70%);
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--warning);
   border-radius: 5px;
   padding: 1px 7px;
@@ -2159,7 +2193,8 @@ input[type="radio"] {
 
 .list-snapshot-refresh-button:hover,
 .list-snapshot-undo-button:hover {
-  background: color-mix(in srgb, var(--warning) 14%, transparent 86%);
+  --button-bg: color-mix(in srgb, var(--warning) 14%, transparent 86%);
+  background: var(--button-bg);
 }
 
 .list-snapshot-undo-button {
@@ -2169,7 +2204,8 @@ input[type="radio"] {
 }
 
 .list-snapshot-undo-button:hover {
-  background: color-mix(in srgb, var(--muted) 14%, transparent 86%);
+  --button-bg: color-mix(in srgb, var(--muted) 14%, transparent 86%);
+  background: var(--button-bg);
 }
 
 .list-block-config-label {
@@ -2324,7 +2360,8 @@ input[type="radio"] {
   padding: 0;
   border-radius: 12px;
   border: 1px dashed color-mix(in srgb, var(--accent) 28%, var(--border) 72%);
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--muted);
   font-size: 16px;
   line-height: 1;
@@ -2337,7 +2374,8 @@ input[type="radio"] {
 .template-element-drag-handle:hover {
   color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 40%, transparent 60%);
-  background: color-mix(in srgb, var(--accent) 9%, transparent 91%);
+  --button-bg: color-mix(in srgb, var(--accent) 9%, transparent 91%);
+  background: var(--button-bg);
 }
 
 .template-element-drag-handle:active {
@@ -2415,7 +2453,8 @@ input[type="radio"] {
   padding: 0;
   border-radius: 999px;
   border: 1px solid transparent;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   --button-hover-bg: transparent;
   flex-shrink: 0;
 }
@@ -2427,13 +2466,15 @@ input[type="radio"] {
 
 .template-element-inline-lock-locked {
   color: var(--success);
-  background: color-mix(in srgb, var(--success) 14%, transparent 86%);
+  --button-bg: color-mix(in srgb, var(--success) 14%, transparent 86%);
+  background: var(--button-bg);
   border-color: color-mix(in srgb, var(--success) 26%, transparent 74%);
 }
 
 .template-element-inline-lock-unlocked {
   color: var(--warning);
-  background: color-mix(in srgb, var(--warning) 14%, transparent 86%);
+  --button-bg: color-mix(in srgb, var(--warning) 14%, transparent 86%);
+  background: var(--button-bg);
   border-color: color-mix(in srgb, var(--warning) 28%, transparent 72%);
 }
 
@@ -2492,7 +2533,8 @@ input[type="radio"] {
   padding: 0;
   border-radius: 8px;
   border: 1px solid transparent;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: color-mix(in srgb, var(--muted) 55%, transparent 45%);
   flex-shrink: 0;
 }
@@ -2503,13 +2545,15 @@ input[type="radio"] {
 }
 
 .behavior-icon-button:hover {
-  background: color-mix(in srgb, var(--accent) 9%, transparent 91%);
+  --button-bg: color-mix(in srgb, var(--accent) 9%, transparent 91%);
+  background: var(--button-bg);
   color: var(--text);
 }
 
 .behavior-icon-button-active {
   color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 14%, transparent 86%);
+  --button-bg: color-mix(in srgb, var(--accent) 14%, transparent 86%);
+  background: var(--button-bg);
   border-color: color-mix(in srgb, var(--accent) 24%, transparent 76%);
 }
 
@@ -2723,7 +2767,8 @@ input[type="radio"] {
   padding: 10px 16px;
   border: none;
   border-radius: 0;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   box-shadow: none;
   color: var(--muted);
   font-weight: 600;
@@ -2733,7 +2778,8 @@ input[type="radio"] {
 
 .tabs-trigger:hover {
   color: var(--text);
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
 }
 
 .tabs-trigger-active {
@@ -2865,7 +2911,8 @@ input[type="radio"] {
   padding: 18px;
   border-radius: 24px;
   border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel-solid) 92%, transparent 8%);
+  --button-bg: color-mix(in srgb, var(--panel-solid) 92%, transparent 8%);
+  background: var(--button-bg);
   text-align: left;
   color: var(--text);
   box-shadow: none;
@@ -2877,7 +2924,8 @@ input[type="radio"] {
 
 .block-type-card-active {
   border-color: color-mix(in srgb, var(--accent) 34%, transparent 66%);
-  background: color-mix(in srgb, var(--accent) 10%, transparent 90%);
+  --button-bg: color-mix(in srgb, var(--accent) 10%, transparent 90%);
+  background: var(--button-bg);
 }
 
 /* ── Preset card preview ───────────────────────── */
@@ -3193,13 +3241,15 @@ input[type="radio"] {
   width: 100%;
   min-width: 0;
   min-height: 0;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   box-shadow: none;
 }
 
 .identity-button:hover {
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   transform: translateY(0);
   box-shadow: none;
@@ -3431,7 +3481,8 @@ input[type="radio"] {
   padding: 8px 6px;
   border: none;
   border-radius: 0;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   text-align: left;
   color: var(--text);
   transition: background 0.12s ease;
@@ -3581,7 +3632,8 @@ input[type="radio"] {
   padding: 0;
   border-radius: 50%;
   border: none;
-  background: color-mix(in srgb, var(--accent) 18%, transparent 82%);
+  --button-bg: color-mix(in srgb, var(--accent) 18%, transparent 82%);
+  background: var(--button-bg);
   color: var(--muted);
   font-size: 0.8rem;
   line-height: 1;
@@ -3626,7 +3678,8 @@ input[type="radio"] {
   padding: 3px 10px;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--muted);
   font-size: 0.75rem;
   font-weight: 500;
@@ -3636,12 +3689,14 @@ input[type="radio"] {
 }
 
 .tag-filter-chip:hover {
-  background: var(--surface-2);
+  --button-bg: var(--surface-2);
+  background: var(--button-bg);
   color: var(--foreground);
 }
 
 .tag-filter-chip-active { --button-hover-bg: color-mix(in srgb, var(--accent) 16%, transparent 84%);
-  background: color-mix(in srgb, var(--accent) 16%, transparent 84%);
+  --button-bg: color-mix(in srgb, var(--accent) 16%, transparent 84%);
+  background: var(--button-bg);
   border-color: color-mix(in srgb, var(--accent) 36%, transparent 64%);
   color: var(--accent);
 }
@@ -3700,7 +3755,8 @@ input[type="radio"] {
 }
 
 .tag-chip-remove:hover {
-  background: color-mix(in srgb, var(--accent) 35%, transparent 65%);
+  --button-bg: color-mix(in srgb, var(--accent) 35%, transparent 65%);
+  background: var(--button-bg);
   color: var(--text);
 }
 
@@ -3750,7 +3806,8 @@ input[type="radio"] {
   padding: 6px 8px;
   border-radius: 8px;
   border: none;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   font-size: 0.86rem;
   cursor: pointer;
@@ -3759,7 +3816,8 @@ input[type="radio"] {
 }
 
 .tag-input-option:hover {
-  background: color-mix(in srgb, var(--accent) 10%, transparent 90%);
+  --button-bg: color-mix(in srgb, var(--accent) 10%, transparent 90%);
+  background: var(--button-bg);
   color: var(--accent);
 }
 
@@ -3772,7 +3830,8 @@ input[type="radio"] {
   padding: 0;
   border: none;
   border-radius: 6px;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--muted);
   font-size: 0.82rem;
   cursor: pointer;
@@ -3783,7 +3842,8 @@ input[type="radio"] {
 }
 
 .tag-input-edit-btn:hover {
-  background: color-mix(in srgb, var(--accent) 14%, transparent 86%);
+  --button-bg: color-mix(in srgb, var(--accent) 14%, transparent 86%);
+  background: var(--button-bg);
   color: var(--accent);
 }
 
@@ -3818,7 +3878,8 @@ input[type="radio"] {
   padding: 0;
   border: none;
   border-radius: 50%;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--muted);
   font-size: 0.8rem;
   cursor: pointer;
@@ -3861,7 +3922,8 @@ input[type="radio"] {
 }
 
 .tag-color-swatch-none { --button-hover-bg: color-mix(in srgb, var(--muted) 20%, transparent 80%);
-  background: color-mix(in srgb, var(--muted) 20%, transparent 80%) !important;
+  --button-bg: color-mix(in srgb, var(--muted) 20%, transparent 80%);
+  background: var(--button-bg) !important;
   color: var(--muted);
   font-size: 0.7rem;
   display: flex;
@@ -3874,7 +3936,8 @@ input[type="radio"] {
   padding: 4px 12px;
   min-height: 0;
   border-radius: 8px;
-  background: var(--accent);
+  --button-bg: var(--accent);
+  background: var(--button-bg);
   color: white;
   border: none;
   cursor: pointer;
@@ -3937,7 +4000,8 @@ input[type="radio"] {
 }
 
 .editor-fixed-actions-close { --button-hover-bg: var(--panel);
-  background: var(--panel);
+  --button-bg: var(--panel);
+  background: var(--button-bg);
   box-shadow: var(--shadow);
 }
 
@@ -3964,7 +4028,8 @@ input[type="radio"] {
   border-radius: 10px;
   border: none;
   border-left: 3px solid transparent;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   text-align: left;
   color: var(--text);
   width: 100%;
@@ -3972,7 +4037,8 @@ input[type="radio"] {
 }
 
 .editor-nav-item:hover {
-  background: color-mix(in srgb, var(--accent) 6%, transparent 94%);
+  --button-bg: color-mix(in srgb, var(--accent) 6%, transparent 94%);
+  background: var(--button-bg);
 }
 
 .editor-nav-index {
@@ -4017,7 +4083,8 @@ input[type="radio"] {
 
 .editor-nav-item-active {
   border-left-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 10%, transparent 90%);
+  --button-bg: color-mix(in srgb, var(--accent) 10%, transparent 90%);
+  background: var(--button-bg);
 }
 
 .editor-nav-item-active .editor-nav-index {
@@ -4232,7 +4299,8 @@ input[type="radio"] {
 .tracked-accept-btn:hover,
 .tracked-accept-btn:focus-visible {
   opacity: 1;
-  background: color-mix(in srgb, var(--danger) 22%, transparent);
+  --button-bg: color-mix(in srgb, var(--danger) 22%, transparent);
+  background: var(--button-bg);
 }
 
 .tracked-run {
@@ -4279,7 +4347,8 @@ input[type="radio"] {
   padding: 0;
   border-radius: 50%;
   border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
-  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  --button-bg: color-mix(in srgb, var(--accent) 7%, transparent);
+  background: var(--button-bg);
   color: color-mix(in srgb, var(--accent) 85%, white 15%);
   font-size: 0.78rem;
   box-shadow: none;
@@ -4287,12 +4356,14 @@ input[type="radio"] {
   transition: background 0.12s, border-color 0.12s;
 }
 .todo-toggle:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  --button-bg: color-mix(in srgb, var(--accent) 14%, transparent);
+  background: var(--button-bg);
 }
 
 .todo-toggle-done {
   border-color: color-mix(in srgb, var(--success) 40%, var(--border));
-  background: color-mix(in srgb, var(--success) 12%, transparent);
+  --button-bg: color-mix(in srgb, var(--success) 12%, transparent);
+  background: var(--button-bg);
   color: var(--success);
 }
 
@@ -4328,7 +4399,8 @@ input[type="radio"] {
   padding: 0 10px;
   border-radius: 6px;
   border: 1px solid color-mix(in srgb, var(--danger, #ef4444) 30%, transparent);
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--danger, #ef4444);
   font-size: 0.78rem;
   font-weight: 500;
@@ -4337,7 +4409,8 @@ input[type="radio"] {
   transition: background 0.12s;
 }
 .todo-delete:hover {
-  background: color-mix(in srgb, var(--danger, #ef4444) 10%, transparent);
+  --button-bg: color-mix(in srgb, var(--danger, #ef4444) 10%, transparent);
+  background: var(--button-bg);
 }
 
 .todo-inline-meta {
@@ -4375,7 +4448,8 @@ input[type="radio"] {
   padding: 8px 12px;
   border-radius: 14px;
   border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel-solid) 92%, transparent 8%);
+  --button-bg: color-mix(in srgb, var(--panel-solid) 92%, transparent 8%);
+  background: var(--button-bg);
   color: var(--text);
   box-shadow: none;
 }
@@ -4385,7 +4459,8 @@ input[type="radio"] {
   transform: none;
   box-shadow: none;
   border-color: color-mix(in srgb, var(--accent) 34%, transparent 66%);
-  background: color-mix(in srgb, var(--accent) 8%, var(--panel-solid) 92%);
+  --button-bg: color-mix(in srgb, var(--accent) 8%, var(--panel-solid) 92%);
+  background: var(--button-bg);
 }
 
 .mini-menu-trigger-label {
@@ -4453,7 +4528,8 @@ input[type="radio"] {
   padding: 10px 12px;
   border-radius: 14px;
   border: 1px solid transparent;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   text-align: left;
   box-shadow: none;
@@ -4463,7 +4539,8 @@ input[type="radio"] {
 .mini-menu-option-active {
   transform: none;
   box-shadow: none;
-  background: color-mix(in srgb, var(--accent) 10%, transparent 90%);
+  --button-bg: color-mix(in srgb, var(--accent) 10%, transparent 90%);
+  background: var(--button-bg);
   border-color: color-mix(in srgb, var(--accent) 24%, transparent 76%);
 }
 
@@ -4612,7 +4689,8 @@ input[type="radio"] {
   padding: 3px 10px;
   border-radius: 999px;
   border: 1px solid var(--border-strong);
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--muted);
   font-size: 0.72rem;
   font-weight: 600;
@@ -4620,7 +4698,8 @@ input[type="radio"] {
 }
 
 .entry-exit-toggle:hover {
-  background: color-mix(in srgb, var(--accent) 9%, transparent 91%);
+  --button-bg: color-mix(in srgb, var(--accent) 9%, transparent 91%);
+  background: var(--button-bg);
   color: var(--text);
 }
 
@@ -4875,7 +4954,8 @@ input[type="radio"] {
   height: 28px;
   border-radius: 6px;
   border: 1px solid transparent;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   font-size: 0.9rem;
   cursor: pointer;
@@ -4883,7 +4963,8 @@ input[type="radio"] {
 }
 
 .rich-text-btn:hover {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  --button-bg: color-mix(in srgb, var(--accent) 12%, transparent);
+  background: var(--button-bg);
   border-color: color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
@@ -5027,7 +5108,8 @@ input[type="radio"] {
   padding: 16px;
   border-radius: 18px;
   border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel-solid) 92%, transparent 8%);
+  --button-bg: color-mix(in srgb, var(--panel-solid) 92%, transparent 8%);
+  background: var(--button-bg);
   color: var(--text);
   text-align: left;
 }
@@ -5045,14 +5127,16 @@ input[type="radio"] {
 .matrix-designer-row-button:hover,
 .matrix-designer-cell:hover {
   border-color: color-mix(in srgb, var(--accent) 34%, transparent 66%);
-  background: color-mix(in srgb, var(--accent) 8%, transparent 92%);
+  --button-bg: color-mix(in srgb, var(--accent) 8%, transparent 92%);
+  background: var(--button-bg);
 }
 
 .matrix-designer-column-button-active,
 .matrix-designer-row-button-active,
 .matrix-designer-cell-active {
   border-color: color-mix(in srgb, var(--accent) 46%, transparent 54%);
-  background: color-mix(in srgb, var(--accent) 14%, transparent 86%);
+  --button-bg: color-mix(in srgb, var(--accent) 14%, transparent 86%);
+  background: var(--button-bg);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent 76%) inset;
 }
 
@@ -5519,7 +5603,8 @@ input[type="radio"] {
 .matrix-col-remove {
   --button-hover-bg: color-mix(in srgb, var(--danger) 10%, transparent 90%);
   flex-shrink: 0;
-  background: none;
+  --button-bg: none;
+  background: var(--button-bg);
   border: none;
   cursor: pointer;
   color: var(--muted);
@@ -5531,7 +5616,8 @@ input[type="radio"] {
 
 .matrix-col-remove:hover {
   color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 10%, transparent 90%);
+  --button-bg: color-mix(in srgb, var(--danger) 10%, transparent 90%);
+  background: var(--button-bg);
 }
 
 .matrix-table-row-label {
@@ -5763,7 +5849,8 @@ input[type="radio"] {
   padding: 14px 16px;
   border-radius: 18px;
   border: 1.5px solid var(--border);
-  background: color-mix(in srgb, var(--panel-solid) 90%, transparent 10%);
+  --button-bg: color-mix(in srgb, var(--panel-solid) 90%, transparent 10%);
+  background: var(--button-bg);
   cursor: pointer;
   transition: border-color 0.2s ease, background 0.2s ease, transform 0.12s ease;
 }
@@ -5924,7 +6011,8 @@ input[type="radio"] {
   height: 40px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.3);
-  background: rgba(0, 0, 0, 0.4);
+  --button-bg: rgba(0, 0, 0, 0.4);
+  background: var(--button-bg);
   color: #fff;
   cursor: pointer;
 }
@@ -5953,7 +6041,8 @@ input[type="radio"] {
   border-radius: 10px;
   font-size: 0.875rem;
   font-weight: 500;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--muted);
   border-color: transparent;
   box-shadow: none;
@@ -5962,7 +6051,8 @@ input[type="radio"] {
   transform: none !important;
 }
 .segment-button:hover {
-  background: color-mix(in srgb, var(--accent) 8%, transparent 92%);
+  --button-bg: color-mix(in srgb, var(--accent) 8%, transparent 92%);
+  background: var(--button-bg);
   color: var(--text);
   box-shadow: none;
   transform: none !important;
@@ -5970,12 +6060,14 @@ input[type="radio"] {
 
 .segment-button-active {
   --button-hover-bg: linear-gradient(135deg, var(--accent), var(--accent-strong));
-  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  --button-bg: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  background: var(--button-bg);
   color: white;
   box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 30%, transparent 70%);
 }
 .segment-button-active:hover {
-  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  --button-bg: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  background: var(--button-bg);
   color: white;
 }
 
@@ -6002,7 +6094,8 @@ input[type="radio"] {
   padding: 6px 12px;
   border-radius: var(--radius-sm);
   border: none;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--muted);
   font-size: 0.85rem;
   font-weight: 500;
@@ -6012,7 +6105,8 @@ input[type="radio"] {
 }
 
 .filter-tabs-option:hover {
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   transform: none !important;
   box-shadow: none;
@@ -6020,14 +6114,16 @@ input[type="radio"] {
 
 .filter-tabs-option-active {
   --button-hover-bg: var(--panel-solid);
-  background: var(--panel-solid);
+  --button-bg: var(--panel-solid);
+  background: var(--button-bg);
   color: var(--text);
   font-weight: 600;
   box-shadow: var(--shadow-soft);
 }
 
 .filter-tabs-option-active:hover {
-  background: var(--panel-solid);
+  --button-bg: var(--panel-solid);
+  background: var(--button-bg);
   color: var(--text);
 }
 
@@ -6135,14 +6231,16 @@ input[type="radio"] {
 .oidc-button {
   --button-hover-bg: var(--accent-soft);
   width: 100%;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   border: 1.5px solid var(--border-strong);
   box-shadow: none;
 }
 
 .oidc-button:hover {
-  background: var(--accent-soft);
+  --button-bg: var(--accent-soft);
+  background: var(--button-bg);
   border-color: var(--accent);
   transform: none;
   box-shadow: none;
@@ -6239,7 +6337,8 @@ input[type="radio"] {
   padding: 18px;
   border-radius: 22px;
   border: 1.5px solid var(--border-strong);
-  background: var(--panel);
+  --button-bg: var(--panel);
+  background: var(--button-bg);
   color: var(--text);
   text-align: left;
   transition:
@@ -6252,7 +6351,8 @@ input[type="radio"] {
 .mfa-choice-card:hover:not(:disabled),
 .mfa-choice-card:focus-visible {
   border-color: color-mix(in srgb, var(--primary) 28%, var(--border-strong) 72%);
-  background: color-mix(in srgb, var(--accent-soft) 24%, var(--panel) 76%);
+  --button-bg: color-mix(in srgb, var(--accent-soft) 24%, var(--panel) 76%);
+  background: var(--button-bg);
   box-shadow: 0 10px 28px rgba(22, 34, 61, 0.08);
   transform: translateY(-1px);
 }
@@ -6358,7 +6458,8 @@ input[type="radio"] {
   min-height: 60px;
   padding: 16px 18px;
   border-radius: 18px;
-  background: var(--primary);
+  --button-bg: var(--primary);
+  background: var(--button-bg);
   color: var(--primary-contrast);
   font-size: 1.02rem;
   font-weight: 700;
@@ -6366,7 +6467,8 @@ input[type="radio"] {
 }
 
 .mfa-primary-button:hover:not(:disabled) {
-  background: var(--primary-strong);
+  --button-bg: var(--primary-strong);
+  background: var(--button-bg);
   box-shadow: none;
   transform: none;
 }
@@ -6491,7 +6593,8 @@ input[type="radio"] {
   --button-hover-bg: transparent;
   padding: 0;
   border: none;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--muted);
   font-size: 1.02rem;
   font-weight: 600;
@@ -6499,7 +6602,8 @@ input[type="radio"] {
 }
 
 .login-secondary-button:hover:not(:disabled) {
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   text-decoration: underline;
 }
@@ -7466,7 +7570,8 @@ input[type="radio"] {
   padding: 7px 10px;
   font-size: 0.83rem;
   border: none;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   cursor: pointer;
   border-radius: 7px;
@@ -7509,7 +7614,8 @@ input[type="radio"] {
 }
 .session-panel-assignee-option-highlighted,
 .session-panel-assignee-option:hover {
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  --button-bg: color-mix(in srgb, var(--accent) 10%, transparent);
+  background: var(--button-bg);
 }
 .session-panel-assignee-option-highlighted .session-panel-option-avatar,
 .session-panel-assignee-option:hover .session-panel-option-avatar {
@@ -7520,7 +7626,8 @@ input[type="radio"] {
   font-size: 0.82rem;
   padding: 7px 12px;
   border-radius: 8px;
-  background: var(--accent);
+  --button-bg: var(--accent);
+  background: var(--button-bg);
   color: #fff;
   border: none;
   cursor: pointer;
@@ -7528,7 +7635,7 @@ input[type="radio"] {
   transition: background 0.12s, opacity 0.12s;
   text-align: center;
 }
-.session-panel-btn:hover:not(:disabled) { background: var(--accent-strong); }
+.session-panel-btn:hover:not(:disabled) { --button-bg: var(--accent-strong); background: var(--button-bg); }
 .session-panel-btn:disabled { opacity: 0.55; cursor: default; }
 
 .session-panel-status {
@@ -7676,7 +7783,8 @@ input[type="radio"] {
   width: 26px;
   height: 26px;
   padding: 0;
-  background: none;
+  --button-bg: none;
+  background: var(--button-bg);
   --button-hover-bg: transparent;
   border: none;
   cursor: pointer;
@@ -7715,7 +7823,8 @@ input[type="radio"] {
   gap: 5px;
   width: auto;
   min-height: 0;
-  background: none;
+  --button-bg: none;
+  background: var(--button-bg);
   --button-hover-bg: transparent;
   border: none;
   border-radius: 6px;
@@ -8192,7 +8301,7 @@ input[type="radio"] {
   box-shadow: none;
   transform: none !important;
 }
-.btn-icon:hover { background: color-mix(in srgb, var(--accent) 25%, transparent 75%); }
+.btn-icon:hover { --button-bg: color-mix(in srgb, var(--accent) 25%, transparent 75%); background: var(--button-bg); }
 
 .btn-icon-sm {
   --button-hover-bg: color-mix(in srgb, var(--muted) 22%, transparent 78%);
@@ -8205,16 +8314,17 @@ input[type="radio"] {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: color-mix(in srgb, var(--muted) 12%, transparent 88%);
+  --button-bg: color-mix(in srgb, var(--muted) 12%, transparent 88%);
+  background: var(--button-bg);
   color: var(--muted);
   border: none;
   cursor: pointer;
   box-shadow: none;
   transform: none !important;
 }
-.btn-icon-sm:hover { background: color-mix(in srgb, var(--muted) 22%, transparent 78%); color: var(--text); }
-.btn-icon-danger { --button-hover-bg: color-mix(in srgb, var(--danger) 20%, transparent 80%); color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent 90%); }
-.btn-icon-danger:hover { background: color-mix(in srgb, var(--danger) 20%, transparent 80%); }
+.btn-icon-sm:hover { --button-bg: color-mix(in srgb, var(--muted) 22%, transparent 78%); background: var(--button-bg); color: var(--text); }
+.btn-icon-danger { --button-hover-bg: color-mix(in srgb, var(--danger) 20%, transparent 80%); color: var(--danger); --button-bg: color-mix(in srgb, var(--danger) 10%, transparent 90%); background: var(--button-bg); }
+.btn-icon-danger:hover { --button-bg: color-mix(in srgb, var(--danger) 20%, transparent 80%); background: var(--button-bg); }
 
 /* ── Portal-based mini-menu popover (due date, etc.) ────────────── */
 
@@ -8260,7 +8370,8 @@ input[type="radio"] {
 }
 
 .menu-item-highlighted {
-  background: var(--accent-soft);
+  --button-bg: var(--accent-soft);
+  background: var(--button-bg);
 }
 
 /* ── Finance tabs ────────────────────────────────────────────── */
@@ -8419,16 +8530,17 @@ input[type="radio"] {
   padding: 0 10px;
   border-radius: 6px;
   border: 1px solid var(--border);
-  background: var(--panel);
+  --button-bg: var(--panel);
+  background: var(--button-bg);
   font-size: 0.95rem;
   cursor: pointer;
   transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
-.fine-action-btn:hover { background: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
+.fine-action-btn:hover { --button-bg: color-mix(in srgb, var(--accent) 10%, var(--panel)); background: var(--button-bg); }
 .fine-collect-btn { --button-hover-bg: color-mix(in srgb, var(--success, #22c55e) 12%, var(--panel)); color: var(--success, #22c55e); border-color: color-mix(in srgb, var(--success, #22c55e) 30%, transparent); }
-.fine-collect-btn:hover { background: color-mix(in srgb, var(--success, #22c55e) 12%, var(--panel)); }
+.fine-collect-btn:hover { --button-bg: color-mix(in srgb, var(--success, #22c55e) 12%, var(--panel)); background: var(--button-bg); }
 .fine-delete-btn { --button-hover-bg: color-mix(in srgb, var(--danger, #ef4444) 12%, var(--panel)); color: var(--danger, #ef4444); border-color: color-mix(in srgb, var(--danger, #ef4444) 30%, transparent); }
-.fine-delete-btn:hover { background: color-mix(in srgb, var(--danger, #ef4444) 12%, var(--panel)); }
+.fine-delete-btn:hover { --button-bg: color-mix(in srgb, var(--danger, #ef4444) 12%, var(--panel)); background: var(--button-bg); }
 .fine-comment-btn { color: var(--muted); }
 .fine-comment-missing { color: var(--warning, #f59e0b); border-color: color-mix(in srgb, var(--warning, #f59e0b) 40%, transparent); animation: fine-comment-pulse 1.8s infinite; }
 @keyframes fine-comment-pulse {
@@ -8597,13 +8709,14 @@ input[type="radio"] {
   padding: 7px 12px;
   border: none;
   border-radius: var(--radius-sm);
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   font-size: 0.85rem;
   cursor: pointer;
   text-align: left;
 }
-.due-menu-option:hover { background: var(--accent-soft); }
+.due-menu-option:hover { --button-bg: var(--accent-soft); background: var(--button-bg); }
 .due-menu-option-sub {
   font-size: 0.75rem;
   color: var(--muted);
@@ -8675,14 +8788,16 @@ input[type="radio"] {
   margin: 0 12px 0 0;
   border-radius: 8px;
   border: none;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--muted);
   font-size: 0.7rem;
   box-shadow: none;
   transition: background 0.15s, color 0.15s;
 }
 .app-toast-close:hover {
-  background: color-mix(in srgb, var(--muted) 14%, transparent);
+  --button-bg: color-mix(in srgb, var(--muted) 14%, transparent);
+  background: var(--button-bg);
   color: var(--text);
   transform: none;
   box-shadow: none;
@@ -8797,7 +8912,8 @@ input[type="radio"] {
   padding: 3px 10px;
   border-radius: 20px;
   border: 1.5px solid var(--border, #d1d5db);
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--fg, #111);
   font-size: 0.8rem;
   cursor: pointer;
@@ -8807,20 +8923,23 @@ input[type="radio"] {
 }
 
 .cycle-chip:hover {
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--fg, #111);
   border-color: var(--accent, #6366f1);
 }
 
 .cycle-chip-active {
   --button-hover-bg: var(--accent, #6366f1);
-  background: var(--accent, #6366f1);
+  --button-bg: var(--accent, #6366f1);
+  background: var(--button-bg);
   border-color: var(--accent, #6366f1);
   color: #fff;
 }
 
 .cycle-chip-active:hover {
-  background: var(--accent, #6366f1);
+  --button-bg: var(--accent, #6366f1);
+  background: var(--button-bg);
   color: #fff;
 }
 
@@ -8908,20 +9027,22 @@ input[type="radio"] {
   font-size: 0.8rem;
   font-weight: 500;
   color: var(--muted);
-  background: none;
+  --button-bg: none;
+  background: var(--button-bg);
   border: none;
   cursor: pointer;
   transition: background 0.12s, color 0.12s;
 }
 
-.stats-period-btn:hover { color: var(--text); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.stats-period-btn:hover { color: var(--text); --button-bg: color-mix(in srgb, var(--accent) 8%, transparent); background: var(--button-bg); }
 
 .stats-period-btn-active {
-  background: var(--accent);
+  --button-bg: var(--accent);
+  background: var(--button-bg);
   color: #fff;
 }
 
-.stats-period-btn-active:hover { background: var(--accent); color: #fff; }
+.stats-period-btn-active:hover { --button-bg: var(--accent); background: var(--button-bg); color: #fff; }
 
 .stats-grid {
   display: grid;
@@ -8968,7 +9089,8 @@ input[type="radio"] {
   height: 24px;
   border-radius: 6px;
   border: none;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--muted);
   cursor: pointer;
   opacity: 0;
@@ -8981,7 +9103,8 @@ input[type="radio"] {
 }
 
 .stats-expand-btn:hover {
-  background: color-mix(in srgb, var(--muted) 15%, transparent);
+  --button-bg: color-mix(in srgb, var(--muted) 15%, transparent);
+  background: var(--button-bg);
   color: var(--text);
 }
 
@@ -9040,14 +9163,16 @@ input[type="radio"] {
   height: 32px;
   border-radius: 8px;
   border: none;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--muted);
   cursor: pointer;
   transition: background 0.12s, color 0.12s;
 }
 
 .stats-fs-close:hover {
-  background: color-mix(in srgb, var(--muted) 15%, transparent);
+  --button-bg: color-mix(in srgb, var(--muted) 15%, transparent);
+  background: var(--button-bg);
   color: var(--text);
 }
 
@@ -9081,7 +9206,8 @@ input[type="radio"] {
   font-size: 0.8rem;
   font-weight: 500;
   color: var(--muted);
-  background: none;
+  --button-bg: none;
+  background: var(--button-bg);
   --button-hover-bg: transparent;
   border: none;
   cursor: pointer;
@@ -9091,7 +9217,8 @@ input[type="radio"] {
 .stats-seg-btn:hover { color: var(--text); }
 
 .stats-seg-btn-active {
-  background: var(--panel-solid);
+  --button-bg: var(--panel-solid);
+  background: var(--button-bg);
   color: var(--text);
   box-shadow: 0 1px 3px rgba(0,0,0,0.15);
 }
@@ -9249,7 +9376,8 @@ input[type="radio"] {
   padding: 5px 10px;
   border-radius: 8px;
   border: 1px solid var(--border);
-  background: var(--panel-solid);
+  --button-bg: var(--panel-solid);
+  background: var(--button-bg);
   color: var(--text);
   font-size: 0.75rem;
   font-weight: 500;
@@ -9260,7 +9388,8 @@ input[type="radio"] {
 }
 .stats-cycle-btn:hover {
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-  background: color-mix(in srgb, var(--accent) 4%, var(--panel-solid));
+  --button-bg: color-mix(in srgb, var(--accent) 4%, var(--panel-solid));
+  background: var(--button-bg);
 }
 .stats-cycle-btn-open {
   border-color: color-mix(in srgb, var(--accent) 60%, transparent);
@@ -9300,7 +9429,8 @@ input[type="radio"] {
   padding: 7px 10px;
   border-radius: 7px;
   border: none;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   font-size: 0.78rem;
   text-align: left;
@@ -9308,7 +9438,8 @@ input[type="radio"] {
   transition: background 0.1s;
 }
 .stats-cycle-item:hover {
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  --button-bg: color-mix(in srgb, var(--accent) 8%, transparent);
+  background: var(--button-bg);
 }
 .stats-cycle-item.active {
   color: var(--accent);
@@ -9396,12 +9527,14 @@ input[type="radio"] {
   padding: 8px 16px;
   font-size: 0.85rem;
   justify-self: start;
-  background: var(--primary-contrast);
+  --button-bg: var(--primary-contrast);
+  background: var(--button-bg);
   color: var(--primary);
 }
 
 .dashboard-hero-action:hover {
-  background: color-mix(in srgb, var(--primary-contrast) 90%, transparent);
+  --button-bg: color-mix(in srgb, var(--primary-contrast) 90%, transparent);
+  background: var(--button-bg);
 }
 
 .dashboard-tile {
@@ -9439,7 +9572,8 @@ input[type="radio"] {
   padding: 6px 12px 6px 8px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: var(--panel-solid);
+  --button-bg: var(--panel-solid);
+  background: var(--button-bg);
   color: var(--text);
   cursor: pointer;
   text-align: left;
@@ -9450,7 +9584,8 @@ input[type="radio"] {
 }
 
 .excuse-chip:hover:not(:disabled) {
-  background: var(--panel-solid);
+  --button-bg: var(--panel-solid);
+  background: var(--button-bg);
   color: var(--text);
   border-color: var(--accent);
 }
@@ -9474,12 +9609,14 @@ input[type="radio"] {
 .excuse-chip-excused {
   --button-hover-bg: var(--success-bg);
   border-color: var(--success-fg);
-  background: var(--success-bg);
+  --button-bg: var(--success-bg);
+  background: var(--button-bg);
   color: var(--success-fg);
 }
 
 .excuse-chip-excused:hover:not(:disabled) {
-  background: var(--success-bg);
+  --button-bg: var(--success-bg);
+  background: var(--button-bg);
   color: var(--success-fg);
   border-color: var(--success-fg);
 }
@@ -9513,7 +9650,8 @@ input[type="radio"] {
   border: none;
   border-top: 1px solid var(--border);
   border-radius: 0;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   text-align: left;
   cursor: pointer;
@@ -9524,7 +9662,8 @@ input[type="radio"] {
 }
 
 .dashboard-list-row:hover {
-  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  --button-bg: color-mix(in srgb, var(--accent) 6%, transparent);
+  background: var(--button-bg);
   transform: none;
   box-shadow: none;
 }
@@ -9690,7 +9829,8 @@ input[type="radio"] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--panel-solid);
+  --button-bg: var(--panel-solid);
+  background: var(--button-bg);
   border: 1px solid var(--border);
   border-radius: 7px;
   cursor: pointer;
@@ -9936,7 +10076,8 @@ input[type="radio"] {
   flex-shrink: 0;
   border-radius: 7px;
   border: 1px solid var(--border);
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   --button-hover-bg: transparent;
   color: var(--muted);
   cursor: pointer;
@@ -9957,7 +10098,8 @@ input[type="radio"] {
 }
 
 .subm-reopen-button:hover {
-  background: color-mix(in srgb, var(--warning) 12%, transparent 88%);
+  --button-bg: color-mix(in srgb, var(--warning) 12%, transparent 88%);
+  background: var(--button-bg);
   color: var(--warning);
 }
 
@@ -9969,7 +10111,8 @@ input[type="radio"] {
 }
 
 .subm-close-button:hover {
-  background: color-mix(in srgb, var(--danger) 12%, transparent 88%);
+  --button-bg: color-mix(in srgb, var(--danger) 12%, transparent 88%);
+  background: var(--button-bg);
   color: var(--danger);
 }
 
@@ -10149,7 +10292,8 @@ input[type="radio"] {
   padding: 16px;
   border-radius: 18px;
   border: 1.5px solid var(--border);
-  background: var(--panel-solid);
+  --button-bg: var(--panel-solid);
+  background: var(--button-bg);
   display: grid;
   gap: 4px;
   color: var(--text);
@@ -10229,7 +10373,8 @@ input[type="radio"] {
 
 .wizard-copy-button {
   --button-hover-bg: var(--accent-soft);
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--muted);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -10242,7 +10387,8 @@ input[type="radio"] {
 
 .wizard-copy-button:hover {
   color: var(--text);
-  background: var(--accent-soft);
+  --button-bg: var(--accent-soft);
+  background: var(--button-bg);
   border-color: var(--border-strong);
   transform: none;
   box-shadow: none;
@@ -10301,7 +10447,8 @@ input[type="radio"] {
 }
 
 .wizard-remove-link:hover {
-  background: color-mix(in srgb, var(--danger) 10%, transparent 90%);
+  --button-bg: color-mix(in srgb, var(--danger) 10%, transparent 90%);
+  background: var(--button-bg);
   color: var(--danger);
 }
 
@@ -10571,7 +10718,8 @@ input[type="radio"] {
   padding: 9px 10px;
   border-radius: 12px;
   border: 1px solid transparent;
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   box-shadow: none;
   text-align: left;
   color: var(--text);
@@ -10580,7 +10728,8 @@ input[type="radio"] {
 
 .word-import-nav-item-active,
 .word-import-nav-item-active:hover {
-  background: var(--accent-soft) !important;
+  --button-bg: var(--accent-soft);
+  background: var(--button-bg) !important;
   border-color: transparent !important;
 }
 
@@ -10617,7 +10766,8 @@ input[type="radio"] {
   padding: 10px;
   border-radius: 12px;
   border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent 60%);
-  background: var(--accent-soft);
+  --button-bg: var(--accent-soft);
+  background: var(--button-bg);
   color: var(--accent);
   font-weight: 700;
   font-size: 0.88rem;
@@ -10968,7 +11118,8 @@ input[type="radio"] {
   padding: 14px;
   border-radius: 16px;
   border: 1.5px dashed var(--border-strong);
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--muted);
   font-weight: 600;
   width: 100%;
@@ -10977,7 +11128,8 @@ input[type="radio"] {
 .domain-add-trigger:hover {
   border-color: var(--accent);
   color: var(--text);
-  background: var(--accent-soft);
+  --button-bg: var(--accent-soft);
+  background: var(--button-bg);
   transform: none;
   box-shadow: none;
 }
