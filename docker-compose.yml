@@ -132,6 +132,18 @@ services:
       ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
       ABGABEBOX_DB_PASSWORD: ${ABGABEBOX_DB_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+      # `env_file: .env` below always loads the *literal* .env file, regardless of which
+      # --env-file was passed to `docker compose` (e2e/tests pass a different one) - only
+      # keys interpolated here via ${...} correctly reflect that override. These four are
+      # the ones app/core/config.py reads directly (AUTH_SECRET/ADMIN_AUTH_SECRET session
+      # signing, INITIAL_ADMIN_EMAIL/PASSWORD platform-admin bootstrap, POSTGRES_USER for
+      # this migration's admin-role grants) - without them e2e/tests silently ran with this
+      # host's real dev secrets instead of their own isolated ones.
+      POSTGRES_USER: ${POSTGRES_USER}
+      AUTH_SECRET: ${AUTH_SECRET}
+      ADMIN_AUTH_SECRET: ${ADMIN_AUTH_SECRET}
+      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD}
       CLAMAV_HOST: clamav
       REDIS_URL: redis://redis:6379/0
       TRAEFIK_DYNAMIC_CONFIG_DIR: /app/traefik_dynamic
@@ -285,6 +297,11 @@ services:
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
       INTERNAL_API_URL: ${INTERNAL_API_URL}
+      # See the backend service's comment above on why this needs to be explicit: without
+      # it, frontend/lib/api/server.ts's cross-domain auth bridge check would silently use
+      # this host's real dev .env value (TRAEFIK_DOMAIN=localhost) instead of whatever
+      # --env-file actually intended (e2e sets it to "" to disable the bridge entirely).
+      TRAEFIK_DOMAIN: ${TRAEFIK_DOMAIN}
     depends_on:
       - backend
     volumes:

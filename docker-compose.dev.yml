@@ -6,6 +6,14 @@ services:
       # placeholder `localhost` redirects sessions to https://localhost/api/...
       # instead of keeping them on the frontend proxy at localhost:3000.
       TRAEFIK_DOMAIN: ""
+      # app/core/security.py sets the session cookie with `secure=settings.
+      # auth_secure_cookies`, which defaults to true and is otherwise only ever
+      # overridden in docker-compose.release.yml. A real browser exempts localhost/
+      # 127.0.0.1 from the "Secure requires HTTPS" rule, so this was invisible in
+      # everyday manual testing - but Playwright's APIRequestContext (used by
+      # e2e/auth.setup.ts, no browser involved) enforces it strictly and silently
+      # drops the cookie, leaving every e2e-authenticated request looking logged out.
+      AUTH_SECURE_COOKIES: "false"
     command: sh -c "alembic -x seed_demo=true upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     ports:
       - "127.0.0.1:8000:8000"
@@ -16,6 +24,9 @@ services:
       INTERNAL_API_URL: http://backend:8000
       FRONTEND_API_PROXY_TARGET: http://backend:8000
       HOCX_VERSION: dev-local
+      # Same reasoning as the backend service above - frontend/lib/api/server.ts reads
+      # this too for the same cross-domain auth bridge check.
+      TRAEFIK_DOMAIN: ""
     command: npm run dev
     ports:
       - "127.0.0.1:3000:3000"
