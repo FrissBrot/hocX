@@ -21,7 +21,7 @@ test("creates, reads, edits and deletes core entities", async ({ request, page }
     expect((await (await request.get(`/api/lists/${list.id}/entries`)).json()).some((item: { id: string }) => item.id === entry.id)).toBeTruthy();
 
     const session = await (await request.get("/api/auth/session")).json();
-    const tenantId = session.current_tenant_id;
+    const tenantId = session.current_tenant.id;
     const user = await json(request, "post", "/api/users", { first_name: "E2E", last_name: "User", display_name: `E2E User ${suffix}`, email: `user-${suffix}@example.invalid`, password: "E2E-Secure-Password-123!", default_tenant_id: tenantId, memberships: [{ tenant_id: tenantId, role_code: "reader" }] });
     cleanup.push(["user", user.id]);
 
