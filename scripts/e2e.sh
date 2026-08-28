@@ -38,7 +38,12 @@ run_tests() {
 
 stop_stack() {
   "${DC[@]}" down --volumes --remove-orphans
-  rm -rf "$REPO_DIR/storage-e2e"
+  # backend/Dockerfile(.test) writes into this bind mount as its own container UID, which
+  # generally isn't the host/CI user's - plain rm then fails with EACCES on every such file.
+  # sudo works passwordlessly on GitHub-hosted runners; falls back to plain rm for local dev
+  # (usually the same UID already, or rootless Docker) - either way this is cleanup, not a
+  # correctness signal, so it must never fail the run under `set -e`.
+  { sudo rm -rf "$REPO_DIR/storage-e2e" 2>/dev/null || rm -rf "$REPO_DIR/storage-e2e"; } || true
 }
 
 case "$ACTION" in

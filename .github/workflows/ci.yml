@@ -135,6 +135,18 @@ jobs:
           REDIS_URL: redis://localhost:6379/0
           AUTH_SECRET: ci-backend-tests-dummy-secret-0123456789
           ADMIN_AUTH_SECRET: ci-backend-tests-dummy-admin-secret-0123456789
+          # These all default to /app/... (docker-compose.yml's WORKDIR), which doesn't
+          # exist on a bare runner and can't be created by the unprivileged runner user
+          # either - PDF export tests need the real committed tenant-1 templates, not just
+          # a writable empty dir, so these point at the actual checked-out storage/ tree.
+          # Must be absolute: pdflatex runs with -cnf-line=openin_any=p (export_service.py) -
+          # its "paranoid" file-access mode rejects any path containing a '..' component,
+          # which a relative override (e.g. "../storage") would be once combined with the
+          # export's own subdirectory.
+          STORAGE_ROOT: ${{ github.workspace }}/storage
+          LATEX_TEMPLATE_ROOT: ${{ github.workspace }}/storage/latex_templates
+          EXPORT_ROOT: ${{ github.workspace }}/storage/exports
+          UPLOAD_ROOT: ${{ github.workspace }}/storage/uploads
         # No coverage threshold gate: per hocX.wiki/Bekannte-offene-Punkte, meaningful
         # domain/security test cases matter more than a bare percentage. This is purely
         # for visibility into which areas have no test coverage at all.
@@ -190,6 +202,12 @@ jobs:
         env:
           ABGABEBOX_DATABASE_URL: postgresql+psycopg://hocx_abgabebox:ci-abgabebox-tests-password@localhost:5432/hocx_ci
           ABGABEBOX_CAPTCHA_SESSION_SECRET: ci-abgabebox-captcha-secret-0123456789
+          # Defaults to /app/storage (docker-compose.yml overrides it for the real
+          # container) - doesn't exist on a bare runner and the unprivileged runner user
+          # can't create it either. Only needs to be writable, unlike the main backend's
+          # LATEX_TEMPLATE_ROOT, so any real path works - absolute to match that job's
+          # reasoning for the same class of variable rather than for a concrete need here.
+          ABGABEBOX_STORAGE_ROOT: ${{ github.workspace }}/storage/abgabebox-uploads
         run: python3 -m pytest tests/ -v --cov=app --cov-report=term-missing
 
   frontend-build:
