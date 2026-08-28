@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 
 test("publishes an assignment and uploads a PDF through the public UI", async ({ request, browser }) => {
   const suffix = Date.now();
-  const session = await (await request.get("/api/session")).json();
+  const session = await (await request.get("/api/auth/session")).json();
   const tenantId = session.current_tenant_id;
   const tenants = await (await request.get("/api/tenants")).json();
   const tenant = tenants.find((item: { id: string }) => item.id === tenantId);

@@ -26,6 +26,7 @@ Create Date: 2026-08-27
 import os
 from pathlib import Path
 
+import sqlalchemy as sa
 from alembic import context, op
 
 revision = "0001_initial_schema"
@@ -87,11 +88,20 @@ def _create_role(role_name: str, password: str) -> None:
 
 
 def upgrade() -> None:
-    db_name = os.environ.get("POSTGRES_DB", "hocx")
-    # admin_role is whichever role actually runs this migration (POSTGRES_USER, 'hocx' by
-    # default) - baseline_schema.sql's ALTER DEFAULT PRIVILEGES is scoped to objects *it*
-    # creates, i.e. every table/sequence any future migration adds under this role.
-    admin_role = os.environ.get("POSTGRES_USER", "hocx")
+    # Read both live from the connection instead of POSTGRES_DB/POSTGRES_USER: those env
+    # vars aren't reliably in sync with which database/role this migration is actually
+    # running as - e.g. docker-compose.yml's backend service has `env_file: .env`, which
+    # always loads the *literal* .env file regardless of which --env-file was passed to
+    # `docker compose` (e2e/tests use a different one), so POSTGRES_USER there silently
+    # leaked the unrelated dev-stack value and broke `ALTER DEFAULT PRIVILEGES FOR ROLE`
+    # below with "role ... does not exist". current_database()/current_user can't drift
+    # from reality since they *are* the connection's reality.
+    bind = op.get_bind()
+    db_name = bind.execute(sa.text("SELECT current_database()")).scalar()
+    # admin_role is whichever role actually runs this migration - baseline_schema.sql's
+    # ALTER DEFAULT PRIVILEGES is scoped to objects *it* creates, i.e. every table/sequence
+    # any future migration adds under this role.
+    admin_role = bind.execute(sa.text("SELECT current_user")).scalar()
 
     # Roles must exist before baseline_schema.sql runs - it GRANTs to both of them.
     _create_role(APP_ROLE, _read_password("APP_DB_PASSWORD", APP_ROLE))
