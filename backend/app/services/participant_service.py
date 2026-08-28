@@ -94,8 +94,13 @@ class ParticipantService:
             {
                 "first_name": participant.first_name or participant.display_name,
                 "last_name": participant.last_name or "Participant",
+                # app_user.name is `GENERATED ALWAYS AS (display_name) STORED` (see the
+                # baseline schema) - Postgres rejects any explicit value for it outright,
+                # which made every participant update with a linked user fail with a
+                # generic "could not be updated" 400 (masked SQLAlchemyError, found via
+                # e2e once auth was fixed enough for the suite to reach this code at all;
+                # no existing backend test covered update_participant with a linked user).
                 "display_name": participant.display_name,
-                "name": participant.display_name,
                 "is_active": participant.is_active,
                 "external_identity_json": {
                     **(user.external_identity_json or {}),
