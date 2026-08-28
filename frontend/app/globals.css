@@ -10302,13 +10302,16 @@ input[type="radio"] {
 
 .wizard-purpose-card:hover {
   border-color: var(--border-strong);
+  --button-bg: color-mix(in srgb, var(--accent) 8%, transparent 92%);
+  background: var(--button-bg);
   transform: none;
   box-shadow: none;
 }
 
 .wizard-purpose-card.is-selected {
   border-color: var(--accent);
-  background: var(--accent-soft);
+  --button-bg: var(--accent-soft);
+  background: var(--button-bg);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent 84%);
 }
 
