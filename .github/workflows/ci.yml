@@ -51,17 +51,18 @@ jobs:
         working-directory: backend
         env:
           DATABASE_URL: postgresql+psycopg://ci:ci@localhost:5432/hocx_ci
-          # Migration 0020_abgabebox reads these directly via os.environ - without them
-          # it either fails outright (ABGABEBOX_DB_PASSWORD has no default) or silently
-          # GRANTs on the wrong database name (POSTGRES_DB defaults to "hocx", but the
-          # CI database here is "hocx_ci"). The postgres service container's own
-          # POSTGRES_DB/POSTGRES_PASSWORD env (above) only configures that container,
-          # it is not inherited by this step.
+          # The baseline migration (0001_initial_schema) reads these directly via
+          # os.environ - without them it either fails outright (ABGABEBOX_DB_PASSWORD has
+          # no default) or silently GRANTs on the wrong database name (POSTGRES_DB
+          # defaults to "hocx", but the CI database here is "hocx_ci"). The postgres
+          # service container's own POSTGRES_DB/POSTGRES_PASSWORD env (above) only
+          # configures that container, it is not inherited by this step.
           POSTGRES_DB: hocx_ci
+          APP_DB_PASSWORD: ci-migration-check-dummy-app-password
           ABGABEBOX_DB_PASSWORD: ci-migration-check-dummy-abgabebox-password
           AUTH_SECRET: ci-migration-check-dummy-secret-0123456789
           ADMIN_AUTH_SECRET: ci-migration-check-dummy-admin-secret-0123456789
-        run: alembic upgrade head
+        run: python3 -m alembic upgrade head
 
   backend-tests:
     runs-on: ubuntu-latest
@@ -79,6 +80,18 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      # app/core/rate_limit.py's check_account_lockout (login, MFA, tenant-by-domain
+      # lookups etc.) needs a real Redis - without it every test that logs in fails with
+      # a connection error, not a rate-limit-logic error.
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -91,20 +104,35 @@ jobs:
       - name: Install backend dependencies
         run: pip install -r backend/requirements-dev.txt
 
+      # PDF export tests exercise the real LaTeX toolchain, same packages as
+      # backend/Dockerfile(.test) - ubuntu-latest doesn't have these preinstalled.
+      - name: Install LaTeX toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            texlive-latex-base \
+            texlive-latex-recommended \
+            texlive-fonts-recommended \
+            texlive-xetex \
+            texlive-pictures \
+            fonts-lmodern
+
       - name: Run alembic upgrade head against a fresh database
         working-directory: backend
         env:
           DATABASE_URL: postgresql+psycopg://ci:ci@localhost:5432/hocx_ci
           POSTGRES_DB: hocx_ci
+          APP_DB_PASSWORD: ci-backend-tests-dummy-app-password
           ABGABEBOX_DB_PASSWORD: ci-backend-tests-dummy-abgabebox-password
           AUTH_SECRET: ci-backend-tests-dummy-secret-0123456789
           ADMIN_AUTH_SECRET: ci-backend-tests-dummy-admin-secret-0123456789
-        run: alembic upgrade head
+        run: python3 -m alembic -x seed_demo=true upgrade head
 
       - name: Run pytest
         working-directory: backend
         env:
           DATABASE_URL: postgresql+psycopg://ci:ci@localhost:5432/hocx_ci
+          REDIS_URL: redis://localhost:6379/0
           AUTH_SECRET: ci-backend-tests-dummy-secret-0123456789
           ADMIN_AUTH_SECRET: ci-backend-tests-dummy-admin-secret-0123456789
         # No coverage threshold gate: per hocX.wiki/Bekannte-offene-Punkte, meaningful
@@ -151,10 +179,11 @@ jobs:
         env:
           DATABASE_URL: postgresql+psycopg://ci:ci@localhost:5432/hocx_ci
           POSTGRES_DB: hocx_ci
+          APP_DB_PASSWORD: ci-abgabebox-tests-app-password
           ABGABEBOX_DB_PASSWORD: ci-abgabebox-tests-password
           AUTH_SECRET: ci-abgabebox-tests-dummy-secret-0123456789
           ADMIN_AUTH_SECRET: ci-abgabebox-tests-dummy-admin-secret-0123456789
-        run: alembic upgrade head
+        run: python3 -m alembic -x seed_demo=true upgrade head
 
       - name: Run Abgabebox backend tests
         working-directory: abgabebox-backend

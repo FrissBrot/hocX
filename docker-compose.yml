@@ -69,7 +69,8 @@ services:
         max-size: "10m"
         max-file: "3"
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -118,7 +119,8 @@ services:
         max-size: "10m"
         max-file: "3"
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       HOCX_ENVIRONMENT: development
       DATABASE_URL: ${DATABASE_URL}
@@ -293,7 +295,8 @@ services:
         max-size: "10m"
         max-file: "3"
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
       INTERNAL_API_URL: ${INTERNAL_API_URL}
@@ -349,7 +352,8 @@ services:
         max-size: "10m"
         max-file: "3"
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       ABGABEBOX_DATABASE_URL: ${ABGABEBOX_DATABASE_URL}
       ABGABEBOX_STORAGE_ROOT: /app/storage
@@ -466,7 +470,8 @@ services:
         max-size: "10m"
         max-file: "3"
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       NEXT_PUBLIC_ABGABEBOX_API_URL: https://${TRAEFIK_ABGABEBOX_DOMAIN}
       # Nicht direkt auf den Container (siehe INTERNAL_API_URL im Haupt-hocX-Frontend fuer die
