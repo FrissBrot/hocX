@@ -354,9 +354,18 @@ run_preflight() {
 write_secret_file() {
   local secrets_dir="$1" name="$2" value="$3" temp_file
 
+  # 0644 statt 0600: Compose kopiert bei file:-Secrets die Rechte der Host-Datei
+  # 1:1 in den Container und ignoriert dabei jegliche uid/gid/mode-Overrides in
+  # der secrets:-Liste eines Service ("not supported, they will be ignored") -
+  # bestaetigt per Test gegen die tatsaechlich installierte Compose-Version.
+  # Verschiedene Container in diesem Stack lesen ihr Secret als unterschiedliche,
+  # nicht-root UIDs (z.B. backend als hocx/5000); 0600 waere fuer alle bis auf
+  # root unlesbar gewesen (PermissionError beim Alembic-Start). Kein Sicherheits-
+  # verlust: $secrets_dir selbst ist 0700, andere Host-User erreichen die Dateien
+  # ueber die Verzeichnisrechte ohnehin nicht, egal welchen Modus die Datei hat.
   temp_file="$(mktemp "$secrets_dir/.tmp.XXXXXX")"
   printf '%s' "$value" > "$temp_file"
-  chmod 600 "$temp_file"
+  chmod 644 "$temp_file"
   mv "$temp_file" "$secrets_dir/$name"
 }
 
