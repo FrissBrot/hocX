@@ -433,7 +433,12 @@ services:
         max-size: "10m"
         max-file: "3"
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost/"]
+      # 127.0.0.1 statt localhost: nginx' Config listet nur "listen 80;" (IPv4).
+      # Der offizielle Entrypoint wuerde das um "listen [::]:80;" ergaenzen, kann die
+      # Config aber wegen read_only:true nicht patchen ("read-only file system?" im
+      # Log) - wget wuerde "localhost" sonst zuerst als ::1 aufloesen und mit
+      # Connection refused scheitern, obwohl nginx auf IPv4 laeuft.
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
       interval: 30s
       timeout: 10s
       retries: 3

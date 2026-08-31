@@ -565,7 +565,10 @@ run_smoke_checks() {
   fi
 
   if service_exists docs; then
-    wait_for_exec docs "Docs" "wget -q --spider http://localhost/" || return 1
+    # 127.0.0.1 statt localhost - siehe Kommentar beim docs-Healthcheck in
+    # docker-compose.release.yml (IPv6-Verbindung schlaegt sonst fehl, obwohl nginx
+    # laeuft).
+    wait_for_exec docs "Docs" "wget -q --spider http://127.0.0.1/" || return 1
   fi
 
   if service_exists clamav; then
