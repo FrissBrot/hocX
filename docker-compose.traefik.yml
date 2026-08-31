@@ -52,8 +52,14 @@ services:
     secrets:
       - cf_dns_api_token
     ports:
-      - "80:80"
-      - "443:443"
+      # Default 0.0.0.0 = oeffentlich erreichbar (Prod-Verhalten, unveraendert). Auf
+      # Hosts, die wie der Admin-Zugang rein privat ueber OpenZiti laufen sollen,
+      # TRAEFIK_WEB_BIND/TRAEFIK_WEBSECURE_BIND=127.0.0.1 in .env setzen - dann muss
+      # TRAEFIK_CERTRESOLVER (siehe docker-compose.release.yml) ebenfalls auf
+      # letsencryptdns stehen, da die HTTP-01-Challenge auf einem privaten Port nicht
+      # funktioniert.
+      - "${TRAEFIK_WEB_BIND:-0.0.0.0}:80:80"
+      - "${TRAEFIK_WEBSECURE_BIND:-0.0.0.0}:443:443"
       # OpenZiti terminiert den privaten Admin-Service auf diesem Loopback-Port.
       - "127.0.0.1:${TRAEFIK_ADMIN_PORT:-8443}:8443"
     command:

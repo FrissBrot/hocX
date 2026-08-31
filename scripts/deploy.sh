@@ -131,6 +131,7 @@ create_env_file() {
   local default_abgabebox_domain
   local default_docs_domain
   local default_web_domain
+  local default_traefik_bind
 
   if ! exec 3<> /dev/tty; then
     echo "Env-Datei $ENV_FILE fehlt und es ist kein interaktives Terminal verfuegbar." >&2
@@ -170,6 +171,21 @@ create_env_file() {
   prompt_value TRAEFIK_WEB_DOMAIN "Web-Domain" "$default_web_domain"
   prompt_value ACME_EMAIL "E-Mail fuer Let's Encrypt"
   prompt_value CF_DNS_API_TOKEN "Cloudflare DNS API Token" "" true
+
+  if [ "$ENVIRONMENT" = test ]; then
+    default_traefik_bind="127.0.0.1"
+  else
+    default_traefik_bind="0.0.0.0"
+  fi
+  prompt_value TRAEFIK_BIND \
+    "Traefik Bind-Adresse fuer Port 80/443 (127.0.0.1 = rein privat ueber OpenZiti wie der Admin-Zugang, 0.0.0.0 = oeffentlich)" \
+    "$default_traefik_bind"
+  if [ "$TRAEFIK_BIND" = "0.0.0.0" ]; then
+    TRAEFIK_CERTRESOLVER="letsencrypt"
+  else
+    TRAEFIK_CERTRESOLVER="letsencryptdns"
+  fi
+
   prompt_value INITIAL_ADMIN_EMAIL "E-Mail des ersten Plattform-Admins" "admin@$TRAEFIK_DOMAIN"
   prompt_value FRIENDLY_CAPTCHA_SITEKEY "Friendly Captcha Sitekey"
   prompt_value FRIENDLY_CAPTCHA_API_KEY "Friendly Captcha API Key" "" true
@@ -205,6 +221,9 @@ create_env_file() {
   write_env_value TRAEFIK_ADMIN_PORT "8443"
   write_env_value ACME_EMAIL "$ACME_EMAIL"
   write_env_value CF_DNS_API_TOKEN "$CF_DNS_API_TOKEN"
+  write_env_value TRAEFIK_WEB_BIND "$TRAEFIK_BIND"
+  write_env_value TRAEFIK_WEBSECURE_BIND "$TRAEFIK_BIND"
+  write_env_value TRAEFIK_CERTRESOLVER "$TRAEFIK_CERTRESOLVER"
   write_env_value HOCX_STORAGE_PATH "./storage"
   write_env_value NEXT_PUBLIC_API_URL "https://$TRAEFIK_DOMAIN"
   write_env_value INTERNAL_API_URL "http://backend:8000"
