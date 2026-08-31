@@ -91,6 +91,7 @@ prompt_value() {
   local label="$2"
   local default_value="${3:-}"
   local secret="${4:-false}"
+  local optional="${5:-false}"
   local value
 
   while true; do
@@ -108,7 +109,7 @@ prompt_value() {
     fi
     value="${value:-$default_value}"
 
-    if [ -z "$value" ]; then
+    if [ -z "$value" ] && [ "$optional" != true ]; then
       echo "    Der Wert darf nicht leer sein." >&3
     elif [[ "$value" == *$'\n'* || "$value" == *"'"* ]]; then
       echo "    Zeilenumbrueche und einfache Anfuehrungszeichen sind nicht erlaubt." >&3
@@ -187,8 +188,13 @@ create_env_file() {
   fi
 
   prompt_value INITIAL_ADMIN_EMAIL "E-Mail des ersten Plattform-Admins" "admin@$TRAEFIK_DOMAIN"
-  prompt_value FRIENDLY_CAPTCHA_SITEKEY "Friendly Captcha Sitekey"
-  prompt_value FRIENDLY_CAPTCHA_API_KEY "Friendly Captcha API Key" "" true
+
+  echo "    Friendly Captcha ist optional: leer lassen deaktiviert es fuer die Abgabebox." >&3
+  echo "    Auf test/dev laeuft die Abgabebox dann ohne Bot-Check; in Produktion werden" >&3
+  echo "    Uploads ohne konfiguriertes Captcha sicher abgelehnt (fail-closed), nicht" >&3
+  echo "    stillschweigend durchgelassen." >&3
+  prompt_value FRIENDLY_CAPTCHA_SITEKEY "Friendly Captcha Sitekey (leer = deaktiviert)" "" false true
+  prompt_value FRIENDLY_CAPTCHA_API_KEY "Friendly Captcha API Key (leer = deaktiviert)" "" true true
 
   POSTGRES_PASSWORD="$(generate_secret)"
   AUTH_SECRET="$(generate_secret)"

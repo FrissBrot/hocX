@@ -302,6 +302,11 @@ services:
       ABGABEBOX_DATABASE_URL_FILE: /run/secrets/abgabebox_database_url
       ABGABEBOX_STORAGE_ROOT: /app/storage
       ABGABEBOX_CORS_ORIGIN: https://${TRAEFIK_ABGABEBOX_DOMAIN}
+      # Steuert, ob captcha.py bei fehlenden FriendlyCaptcha-Keys sicher ablehnt
+      # (production) oder Uploads ohne Bot-Check zulaesst (dev/test) - siehe
+      # abgabebox-backend/app/config.py:_DEV_LIKE_ENVIRONMENTS. HOCX_ENVIRONMENT ist
+      # bereits die einzige Stelle, an der Test von Prod unterschieden wird.
+      ABGABEBOX_ENVIRONMENT: ${HOCX_ENVIRONMENT:-production}
       FRIENDLY_CAPTCHA_SITEKEY: ${FRIENDLY_CAPTCHA_SITEKEY}
       FRIENDLY_CAPTCHA_API_KEY_FILE: /run/secrets/friendly_captcha_api_key
       ABGABEBOX_CAPTCHA_SESSION_SECRET_FILE: /run/secrets/abgabebox_captcha_session_secret
