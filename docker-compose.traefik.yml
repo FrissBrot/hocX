@@ -69,5 +69,7 @@ volumes:
   traefik_tmp:
 
 secrets:
+  # file: statt environment: - siehe docker-compose.release.yml fuer die Begruendung
+  # (Compose v5.5.0 lehnt environment-Secrets auf read_only-Services ab).
   cf_dns_api_token:
-    environment: CF_DNS_API_TOKEN
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/cf_dns_api_token

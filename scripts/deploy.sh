@@ -341,14 +341,47 @@ run_preflight() {
     echo "Zu wenig freier Speicher: ${available_kb} KiB; benoetigt: ${minimum_kb} KiB." >&2
     return 1
   fi
-  mkdir -p "$PROJECT_DIR/backups" "$PROJECT_DIR/.releases"
-  chmod 700 "$PROJECT_DIR/backups" "$PROJECT_DIR/.releases"
-  test -w "$PROJECT_DIR/backups" && test -w "$PROJECT_DIR/.releases" || {
-    echo "Backup- oder Release-Verzeichnis ist nicht beschreibbar." >&2
+  mkdir -p "$PROJECT_DIR/backups" "$PROJECT_DIR/.releases" "$PROJECT_DIR/.secrets"
+  chmod 700 "$PROJECT_DIR/backups" "$PROJECT_DIR/.releases" "$PROJECT_DIR/.secrets"
+  test -w "$PROJECT_DIR/backups" && test -w "$PROJECT_DIR/.releases" && test -w "$PROJECT_DIR/.secrets" || {
+    echo "Backup-, Release- oder Secrets-Verzeichnis ist nicht beschreibbar." >&2
     return 1
   }
   ensure_cosign
   echo "    Preflight: ok"
+}
+
+write_secret_file() {
+  local secrets_dir="$1" name="$2" value="$3" temp_file
+
+  temp_file="$(mktemp "$secrets_dir/.tmp.XXXXXX")"
+  printf '%s' "$value" > "$temp_file"
+  chmod 600 "$temp_file"
+  mv "$temp_file" "$secrets_dir/$name"
+}
+
+write_secret_files() {
+  # Compose-Secrets sind file:-basiert (siehe docker-compose.release.yml), da Docker
+  # Compose >= v5.5.0 environment:-Secrets auf read_only-Services ablehnt. Diese
+  # Dateien werden bei jedem Deploy frisch aus der geladenen .env geschrieben statt
+  # committed - reiner Zwischenstand, gleiches Sicherheitsniveau wie .env selbst
+  # (Modus 600, gleicher Host, gleicher Benutzer).
+  local secrets_dir="$PROJECT_DIR/.secrets"
+
+  echo "==> [$ENVIRONMENT] Secret-Dateien fuer Compose schreiben"
+  write_secret_file "$secrets_dir" postgres_password "$POSTGRES_PASSWORD"
+  write_secret_file "$secrets_dir" database_url "$DATABASE_URL"
+  write_secret_file "$secrets_dir" app_database_url "$APP_DATABASE_URL"
+  write_secret_file "$secrets_dir" app_db_password "$APP_DB_PASSWORD"
+  write_secret_file "$secrets_dir" auth_secret "$AUTH_SECRET"
+  write_secret_file "$secrets_dir" admin_auth_secret "$ADMIN_AUTH_SECRET"
+  write_secret_file "$secrets_dir" initial_admin_password "$INITIAL_ADMIN_PASSWORD"
+  write_secret_file "$secrets_dir" abgabebox_db_password "$ABGABEBOX_DB_PASSWORD"
+  write_secret_file "$secrets_dir" abgabebox_database_url "$ABGABEBOX_DATABASE_URL"
+  write_secret_file "$secrets_dir" friendly_captcha_api_key "$FRIENDLY_CAPTCHA_API_KEY"
+  write_secret_file "$secrets_dir" abgabebox_captcha_session_secret "$ABGABEBOX_CAPTCHA_SESSION_SECRET"
+  write_secret_file "$secrets_dir" cf_dns_api_token "$CF_DNS_API_TOKEN"
+  echo "    Secret-Dateien aktuell: $secrets_dir"
 }
 
 prepare_runtime_permissions() {
@@ -532,6 +565,7 @@ run_smoke_checks() {
 }
 
 run_preflight
+write_secret_files
 prepare_runtime_permissions
 capture_current_release
 

@@ -11,6 +11,7 @@ __pycache__/
 .ruff_cache/
 .tools/
 .releases/
+.secrets/
 .deploy.lock
 node_modules/
 .next/

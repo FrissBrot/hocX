@@ -450,25 +450,30 @@ volumes:
   postgres_data:
 
 secrets:
+  # file: statt environment: - Compose kann environment-Secrets seit Docker Compose
+  # v5.5.0 nicht mehr in einen read_only-Service einhaengen ("cannot create secret ...
+  # in read-only service: `file` is the sole supported option"), betrifft sowohl
+  # `up` als auch `run`. deploy.sh schreibt diese Dateien vor jedem Start frisch aus
+  # der aktuell geladenen .env nach .secrets/ (chmod 700/600, nicht committed).
   postgres_password:
-    environment: POSTGRES_PASSWORD
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/postgres_password
   database_url:
-    environment: DATABASE_URL
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/database_url
   app_database_url:
-    environment: APP_DATABASE_URL
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/app_database_url
   app_db_password:
-    environment: APP_DB_PASSWORD
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/app_db_password
   auth_secret:
-    environment: AUTH_SECRET
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/auth_secret
   admin_auth_secret:
-    environment: ADMIN_AUTH_SECRET
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/admin_auth_secret
   initial_admin_password:
-    environment: INITIAL_ADMIN_PASSWORD
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/initial_admin_password
   abgabebox_db_password:
-    environment: ABGABEBOX_DB_PASSWORD
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/abgabebox_db_password
   abgabebox_database_url:
-    environment: ABGABEBOX_DATABASE_URL
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/abgabebox_database_url
   friendly_captcha_api_key:
-    environment: FRIENDLY_CAPTCHA_API_KEY
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/friendly_captcha_api_key
   abgabebox_captcha_session_secret:
-    environment: ABGABEBOX_CAPTCHA_SESSION_SECRET
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/abgabebox_captcha_session_secret
