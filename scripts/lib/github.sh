@@ -36,8 +36,15 @@ ensure_github_auth() {
       return 1
     fi
     echo "==> GitHub-Zugriff einrichten" >&8
-    echo "    Empfohlen: Fine-grained PAT nur fuer FrissBrot/hocX mit" >&8
-    echo "    Contents/Actions read und Deployments read/write." >&8
+    echo "    Kein Browser-Login (gh auth login) - dieser Server hat typischerweise keinen" >&8
+    echo "    Browser, und das Token soll eng begrenzte Scopes haben statt der breiten" >&8
+    echo "    Standard-Scopes eines gh-OAuth-Logins. Stattdessen ein Fine-grained PAT" >&8
+    echo "    erstellen (auf einem Rechner mit Browser) und hier einfuegen:" >&8
+    echo "      1. https://github.com/settings/personal-access-tokens/new" >&8
+    echo "      2. Repository access: Only select repositories -> FrissBrot/hocX" >&8
+    echo "      3. Permissions: Contents=Read-only, Actions=Read-only," >&8
+    echo "         Deployments=Read and write" >&8
+    echo "      4. Generate token, Wert kopieren" >&8
     printf "    GitHub API Token: " >&8
     IFS= read -r -s api_token <&8 || return 1
     printf '\n' >&8
@@ -79,7 +86,11 @@ ensure_github_auth() {
       return 1
     fi
     echo "==> GHCR-Zugriff einrichten" >&8
-    echo "    Classic PAT mit ausschliesslich read:packages verwenden." >&8
+    echo "    Klassischer PAT, ausschliesslich Scope read:packages - bewusst getrennt vom" >&8
+    echo "    obigen Token, damit dieser keine Repository-Rechte erhaelt:" >&8
+    echo "      1. https://github.com/settings/tokens/new?scopes=read:packages&description=hocX+GHCR+read" >&8
+    echo "      2. Scope read:packages ist vorausgewaehlt - keine weiteren Scopes ankreuzen" >&8
+    echo "      3. Generate token, Wert kopieren" >&8
     printf "    GHCR Read Token: " >&8
     IFS= read -r -s registry_token <&8 || return 1
     printf '\n' >&8
