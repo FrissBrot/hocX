@@ -61,6 +61,22 @@ def test_regenerate_writes_valid_config_for_active_app_domain(db, monkeypatch, t
     assert routers[frontend_key]["service"] == "hocx-frontend@docker"
 
 
+def test_regenerate_writes_file_group_readable_not_world_readable(db, monkeypatch, tmp_path):
+    """deploy.sh hardens infra/traefik/dynamic to mode 0660/group-5001-only before every
+    deploy and refuses to proceed otherwise ("... muss fuer die Container-Gruppe 5001
+    vorbereitet werden"). open()'s default mode is umask-dependent (typically 0644,
+    world-readable) - without an explicit chmod, every regenerate() call would silently
+    re-break that hardening and fail the next deploy's permission check."""
+    tenant = make_tenant(db, "Permissions Test Verein")
+    _make_domain(db, tenant.id, "perms.example.com", purpose="app", status="active")
+
+    monkeypatch.setattr(traefik_config_service.settings, "traefik_dynamic_config_dir", str(tmp_path))
+    traefik_config_service.regenerate(db)
+
+    mode = os.stat(tmp_path / "tenant-domains.yml").st_mode & 0o777
+    assert mode == 0o660
+
+
 def test_regenerate_ignores_pending_domains(db, monkeypatch, tmp_path):
     tenant = make_tenant(db, "Pending Domain Verein")
     _make_domain(db, tenant.id, "pending.example.com", purpose="app", status="pending")

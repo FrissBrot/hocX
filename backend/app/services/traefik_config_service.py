@@ -123,4 +123,10 @@ def regenerate(db: Session) -> None:
     tmp_path = f"{final_path}.{os.getpid()}.{secrets.token_hex(4)}.tmp"
     with open(tmp_path, "w") as fh:
         yaml.safe_dump(config, fh, sort_keys=False)
+    # deploy.sh hardens this directory to 0660/group-5001-only (traefik reads it via
+    # group_add, no one else may) - open()'s default mode is umask-dependent (typically
+    # 0644, world-readable) and would silently re-break that on every regenerate() call,
+    # failing the next deploy's permission check ("... muss fuer die Container-Gruppe 5001
+    # vorbereitet werden").
+    os.chmod(tmp_path, 0o660)
     os.replace(tmp_path, final_path)
