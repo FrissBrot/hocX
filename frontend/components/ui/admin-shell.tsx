@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { Route } from "next";
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { browserApiFetch } from "@/lib/api/client";
@@ -25,6 +25,7 @@ const navLinks = [
 export function AdminShell({ children, session }: { children: ReactNode; session: AdminSessionInfo }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   // The backend's require_admin_write already rejects every create/update/delete for a
   // "support"-role admin with a 403 (see core/admin_security.py) - but until this fix,
   // nothing in the frontend ever read session.admin.role at all (audit finding,
@@ -43,7 +44,10 @@ export function AdminShell({ children, session }: { children: ReactNode; session
     <ConfirmProvider>
     <main className="app-frame">
       <div className="shell">
-        <aside className="sidebar">
+        {mobileNavOpen && (
+          <div className="sidebar-overlay" aria-hidden="true" onClick={() => setMobileNavOpen(false)} />
+        )}
+        <aside className={mobileNavOpen ? "sidebar sidebar-open" : "sidebar"}>
           <div className="brand-lockup">
             <div className="brand-mark">hX</div>
             <div>
@@ -57,7 +61,12 @@ export function AdminShell({ children, session }: { children: ReactNode; session
               {navLinks.map((link) => {
                 const isActive = pathname === link.href || (link.href !== "/admin" && pathname.startsWith(`${link.href}/`));
                 return (
-                  <Link href={link.href as Route} key={link.href} className={isActive ? "nav-link nav-link-active" : "nav-link"}>
+                  <Link
+                    href={link.href as Route}
+                    key={link.href}
+                    className={isActive ? "nav-link nav-link-active" : "nav-link"}
+                    onClick={() => setMobileNavOpen(false)}
+                  >
                     {link.label}
                   </Link>
                 );
@@ -89,6 +98,13 @@ export function AdminShell({ children, session }: { children: ReactNode; session
         </aside>
         <div className="shell-main">
           <header className="topbar">
+            <button
+              type="button"
+              className="button-ghost mobile-nav-toggle"
+              onClick={() => setMobileNavOpen((current) => !current)}
+            >
+              {mobileNavOpen ? "Schliessen" : "☰"}
+            </button>
             <h1 className="topbar-title">Platform-Admin</h1>
           </header>
           {isReadOnlyAdmin && (
