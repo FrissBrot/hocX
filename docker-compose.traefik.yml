@@ -29,6 +29,15 @@ services:
       - NET_BIND_SERVICE
     security_opt:
       - no-new-privileges:true
+    # infra/traefik/dynamic gehoert hocx-deploy:5001 (deploy.sh's
+    # prepare_runtime_permissions haertet es auf g+rwX,o-rwx, damit backend als
+    # UID 5000/GID 5001 dort hineinschreiben kann - siehe TRAEFIK_DYNAMIC_CONFIG_DIR
+    # in docker-compose.release.yml). Traefik selbst laeuft als root, aber ohne
+    # CAP_DAC_OVERRIDE (cap_drop:ALL) greifen fuer root dieselben Rechte wie fuer
+    # jeden anderen - ohne diese Zusatzgruppe waere das Verzeichnis fuer den
+    # file.Provider unlesbar ("permission denied").
+    group_add:
+      - "5001"
     # The official image declares `/tmp` as a VOLUME (see traefik/traefik's Dockerfile) - the
     # buffering middleware (maxRequestBodyBytes, used for tenant-import/word-import/abgabebox-
     # upload elsewhere in this repo) spools any request body over 1 MiB to a temp file there
