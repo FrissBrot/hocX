@@ -4,7 +4,7 @@ import uuid
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -35,7 +35,13 @@ from app.schemas.admin import (
     TenantCloneRequest,
     TenantImportResult,
 )
-from app.schemas.mfa import TotpEnrollmentComplete, TotpEnrollmentStartRead, UserMfaRead
+from app.schemas.mfa import (
+    PasskeyRegistrationComplete,
+    PasskeyRegistrationStartRead,
+    TotpEnrollmentComplete,
+    TotpEnrollmentStartRead,
+    UserMfaRead,
+)
 from app.schemas.oidc import PlatformOidcConfigRead, PlatformOidcConfigWrite
 from app.schemas.user import TenantUpdate, UserCreate, UserRead, UserUpdate
 from app.services.admin_domain_service import AdminDomainService
@@ -90,6 +96,16 @@ def _resolve_factor_id(db: Session, factor_id: uuid.UUID) -> int:
     if internal_id is None:
         raise HTTPException(status_code=404, detail="MFA factor not found")
     return internal_id
+
+
+def _expected_origin(request: Request) -> str:
+    origin = request.headers.get("origin")
+    if origin:
+        return origin
+    host = request.headers.get("host") or request.url.netloc
+    if host.startswith("localhost") or host.startswith("127.0.0.1"):
+        return f"http://{host}"
+    return f"https://{host}"
 
 
 @router.get("/tenants", response_model=AdminTenantPage)
@@ -600,6 +616,36 @@ def complete_my_admin_totp_enrollment(
 ):
     admin_mfa_service.complete_self_totp_enrollment(
         db, current_admin, flow_token=payload.flow_token, code=payload.code, label=payload.label
+    )
+    return admin_mfa_service.get_self_overview(db, current_admin)
+
+
+@router.post("/mfa/passkeys/start", response_model=PasskeyRegistrationStartRead)
+def start_my_admin_passkey_registration(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(get_current_admin),
+):
+    return admin_mfa_service.start_self_passkey_registration(
+        db,
+        current_admin,
+        request_host=request.url.hostname,
+        request_origin=_expected_origin(request),
+    )
+
+
+@router.post("/mfa/passkeys/complete", response_model=UserMfaRead)
+def complete_my_admin_passkey_registration(
+    payload: PasskeyRegistrationComplete,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(get_current_admin),
+):
+    admin_mfa_service.complete_self_passkey_registration(
+        db,
+        current_admin,
+        flow_token=payload.flow_token,
+        label=payload.label,
+        credential=payload.credential,
     )
     return admin_mfa_service.get_self_overview(db, current_admin)
 

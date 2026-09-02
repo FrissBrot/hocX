@@ -899,6 +899,7 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   width: auto;
   min-width: 0;
   min-height: 0;
@@ -6582,6 +6583,93 @@ input[type="radio"] {
   gap: 10px;
 }
 
+/* Redesigned admin/tenant MFA settings screens (2026-09-02): icon badges for the hero
+   status card, the TOTP/passkey method cards, and each row in the active-factors list,
+   plus the required/optional indicator pill. Layered on top of the existing
+   .security-summary-card / .security-method-card / .security-factor-card shapes above
+   rather than replacing them, so both admin and tenant panels stay visually consistent. */
+.security-hero {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.security-hero-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  color: var(--accent-strong);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 22%, transparent 78%), color-mix(in srgb, var(--accent) 8%, transparent 92%));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent 78%);
+}
+
+.security-hero-icon.is-active {
+  color: var(--success);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--success) 22%, transparent 78%), color-mix(in srgb, var(--success) 8%, transparent 92%));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--success) 26%, transparent 74%);
+}
+
+.security-hero-body {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.security-hero-title {
+  font-size: 1.08rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.security-method-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+
+.security-factor-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+
+.security-factor-icon.is-webauthn {
+  color: var(--success-fg);
+  background: var(--success-bg);
+}
+
+.security-factor-row-main {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.pill-required {
+  background: var(--danger-bg);
+  border-color: color-mix(in srgb, var(--danger) 26%, transparent 74%);
+  color: var(--danger-fg);
+}
+
+.pill-muted {
+  background: var(--neutral-bg);
+  border-color: var(--border);
+  color: var(--neutral-fg);
+}
+
 .login-submit {
   width: 100%;
   padding: 12px 16px;
@@ -6648,6 +6736,12 @@ input[type="radio"] {
     flex-direction: column;
   }
 
+  .security-hero,
+  .security-factor-row-main {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
   .mfa-screen-header h1 {
     font-size: clamp(1.8rem, 10vw, 2.3rem);
   }
@@ -6695,6 +6789,15 @@ input[type="radio"] {
 
   .mobile-nav-toggle {
     display: inline-flex;
+  }
+
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 110;
+    background: color-mix(in srgb, var(--text) 10%, transparent);
+    animation: sidebar-overlay-in 160ms ease-out both;
   }
 }
 

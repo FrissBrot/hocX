@@ -15,11 +15,19 @@ from app.core.rate_limit import check_account_lockout, enforce_rate_limit, recor
 from app.core.redis_client import get_redis_sync
 from app.core.secret_crypto import decrypt_secret, encrypt_secret
 from app.core.totp import build_totp_uri, generate_totp_secret, verify_totp_code
+from app.core.webauthn import (
+    RegisteredCredential,
+    WebauthnError,
+    build_registration_options,
+    generate_challenge,
+    register_credential,
+)
 from app.models import PlatformAdmin, UserMfaFactor
 from app.schemas.mfa import (
     MfaFactorRead,
     MfaPendingLoginMethodRead,
     MfaPendingLoginRead,
+    PasskeyRegistrationStartRead,
     TotpEnrollmentStartRead,
     UserMfaRead,
 )
@@ -30,14 +38,22 @@ finding, 2026-08-27), unlike tenant admins (see mfa_service.py's user_requires_m
 core.security's get_optional_current_user enforcement), who are forced to enroll TOTP/passkey
 MFA before getting a full session.
 
-Deliberately narrower than MfaService: TOTP only, no WebAuthn/passkeys - not what the audit
-finding asked for, and passkey RP-ID scoping (see MfaService.rp_id_for_request_host, which is
-keyed to the tenant-facing traefik_domain) doesn't map cleanly onto the separate admin-panel
-origin. Reuses the same TOTP/crypto primitives (core/totp.py, core/secret_crypto.py) and
-rate-limit primitives (core/rate_limit.py) as MfaService/AuthService rather than
-re-implementing any of that - only the redis-backed "flow" bookkeeping and the
-PlatformAdmin-vs-AppUser wiring are duplicated, mirroring MfaService's own shape closely so a
-future merge is easy if WebAuthn support for admins is ever added."""
+Also supports WebAuthn/passkeys (added 2026-09-02), self-service only (mirrors
+start_self_passkey_registration/complete_self_passkey_registration on MfaService). Unlike
+MfaService.rp_id_for_request_host / can_add_passkey_here, which gate on the tenant-facing
+traefik_domain because a tenant can be reached through several custom domains (TenantDomain),
+the admin panel has no equivalent multi-domain routing - it is only ever served from whatever
+host the request actually came in on - so passkeys are always allowed here and the RP ID is
+just that request host directly, no traefik_domain comparison needed. Login-time passkey
+enrollment (the ticket-based flow, for an admin with zero factors) is intentionally not
+included: unlike login-time TOTP setup, a first factor being a passkey would leave the account
+with no fallback if the authenticator is unavailable, so the first factor is always TOTP and
+passkeys can only be added afterwards as an additional factor via this self-service surface.
+
+Reuses the same TOTP/crypto/WebAuthn primitives (core/totp.py, core/secret_crypto.py,
+core/webauthn.py) and rate-limit primitives (core/rate_limit.py) as MfaService/AuthService
+rather than re-implementing any of that - only the redis-backed "flow" bookkeeping and the
+PlatformAdmin-vs-AppUser wiring are duplicated, mirroring MfaService's own shape closely."""
 
 
 _FLOW_PREFIX = "admin-mfa:flow:"
@@ -82,12 +98,14 @@ class AdminMfaService:
     def _delete_flow(self, token: str) -> None:
         self._redis().delete(f"{_FLOW_PREFIX}{token}")
 
-    def _list_factors(self, db: Session, admin_id: int) -> list[UserMfaFactor]:
+    def _list_factors(self, db: Session, admin_id: int, *, factor_type: str | None = None) -> list[UserMfaFactor]:
         statement = (
             select(UserMfaFactor)
             .where(UserMfaFactor.platform_admin_id == admin_id)
             .order_by(UserMfaFactor.created_at.asc(), UserMfaFactor.id.asc())
         )
+        if factor_type is not None:
+            statement = statement.where(UserMfaFactor.factor_type == factor_type)
         return list(db.scalars(statement))
 
     def _get_factor(self, db: Session, *, factor_id: int, admin_id: int) -> UserMfaFactor | None:
@@ -107,14 +125,28 @@ class AdminMfaService:
     def _default_totp_label(self, admin: PlatformAdmin) -> str:
         return f"Authenticator App für {admin.email}"
 
+    def _default_passkey_label(self, admin: PlatformAdmin) -> str:
+        return f"Passkey für {admin.email}"
+
+    def _preferred_factor_type(self, factors: list[UserMfaFactor]) -> str | None:
+        if not factors:
+            return None
+        return "webauthn" if any(factor.factor_type == "webauthn" for factor in factors) else "totp"
+
+    def _preferred_factor_label(self, factors: list[UserMfaFactor]) -> str | None:
+        preferred = self._preferred_factor_type(factors)
+        if preferred is None:
+            return None
+        return "Passkey" if preferred == "webauthn" else "Authenticator-App"
+
     def get_self_overview(self, db: Session, actor: CurrentAdmin) -> UserMfaRead:
         factors = self._list_factors(db, actor.admin_id)
         return UserMfaRead(
             required=True,
             has_factors=bool(factors),
-            can_add_passkey_here=False,
-            preferred_factor_type="totp" if factors else None,
-            preferred_factor_label="Authenticator-App" if factors else None,
+            can_add_passkey_here=True,
+            preferred_factor_type=self._preferred_factor_type(factors),  # type: ignore[arg-type]
+            preferred_factor_label=self._preferred_factor_label(factors),
             factors=[self._factor_read(factor) for factor in factors],
         )
 
@@ -146,6 +178,102 @@ class AdminMfaService:
             expected_kind="admin_self_totp_enrollment",
             expected_admin_id=actor.admin_id,
         )
+
+    def _rp_id_for_request_host(self, request_host: str | None) -> str:
+        if not request_host:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Passkeys benötigen einen gültigen Hostnamen")
+        return request_host
+
+    def start_self_passkey_registration(
+        self,
+        db: Session,
+        actor: CurrentAdmin,
+        *,
+        request_host: str | None,
+        request_origin: str,
+    ) -> PasskeyRegistrationStartRead:
+        admin = db.get(PlatformAdmin, actor.admin_id)
+        if admin is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admin not found")
+        rp_id = self._rp_id_for_request_host(request_host)
+        challenge = generate_challenge()
+        exclude_credentials = [
+            {
+                "id": factor.webauthn_credential_id,
+                "type": "public-key",
+                "transports": factor.webauthn_transports_json or [],
+            }
+            for factor in self._list_factors(db, admin.id, factor_type="webauthn")
+            if factor.webauthn_rp_id == rp_id and factor.webauthn_credential_id
+        ]
+        flow_token = self._create_flow(
+            "admin_self_passkey_registration",
+            {
+                "admin_id": admin.id,
+                "challenge": challenge,
+                "rp_id": rp_id,
+                "origin": request_origin,
+            },
+        )
+        return PasskeyRegistrationStartRead(
+            flow_token=flow_token,
+            public_key=build_registration_options(
+                rp_id=rp_id,
+                rp_name=_ISSUER,
+                user_id=admin.id,
+                user_name=admin.email,
+                display_name=admin.display_name,
+                challenge=challenge,
+                exclude_credentials=exclude_credentials,
+            ),
+        )
+
+    def complete_self_passkey_registration(
+        self, db: Session, actor: CurrentAdmin, *, flow_token: str, label: str | None, credential: dict[str, Any]
+    ) -> UserMfaFactor:
+        flow = self._load_flow(flow_token, expected_kind="admin_self_passkey_registration")
+        if int(flow["admin_id"]) != actor.admin_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Dieser MFA-Vorgang gehört zu einem anderen Konto")
+        admin = db.get(PlatformAdmin, actor.admin_id)
+        if admin is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admin not found")
+        try:
+            registered = register_credential(
+                credential,
+                expected_challenge=str(flow["challenge"]),
+                expected_origin=str(flow["origin"]),
+                expected_rp_id=str(flow["rp_id"]),
+            )
+        except WebauthnError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        existing = db.scalar(
+            select(UserMfaFactor).where(UserMfaFactor.webauthn_credential_id == registered.credential_id)
+        )
+        if existing is not None:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Diese Passkey-Anmeldung ist bereits hinterlegt")
+        factor = self._create_passkey_factor(db, admin, registered, rp_id=str(flow["rp_id"]), label=label)
+        self._delete_flow(flow_token)
+        return factor
+
+    def _create_passkey_factor(
+        self, db: Session, admin: PlatformAdmin, registered: RegisteredCredential, *, rp_id: str, label: str | None
+    ) -> UserMfaFactor:
+        factor = UserMfaFactor(
+            platform_admin_id=admin.id,
+            factor_type="webauthn",
+            label=(label or self._default_passkey_label(admin)).strip() or self._default_passkey_label(admin),
+            webauthn_credential_id=registered.credential_id,
+            webauthn_public_key_pem=registered.public_key_pem,
+            webauthn_sign_count=registered.sign_count,
+            webauthn_aaguid=registered.aaguid,
+            webauthn_rp_id=rp_id,
+            webauthn_transports_json=registered.transports,
+            last_used_at=datetime.now(UTC),
+        )
+        db.add(factor)
+        db.commit()
+        db.refresh(factor)
+        return factor
 
     def delete_self_factor(self, db: Session, actor: CurrentAdmin, factor_id: int) -> UserMfaRead:
         factor = self._get_factor(db, factor_id=factor_id, admin_id=actor.admin_id)
