@@ -1,6 +1,11 @@
 services:
   traefik:
-    image: traefik:v3.1
+    # v3.1 hardcoded Docker API version 1.24 when talking to the docker socket - broke
+    # entirely against Docker Engine >= 29 (minimum supported API raised to 1.40+):
+    # "client version 1.24 is too old", provider never loads any router config, Traefik
+    # falls back to its self-signed default cert for every host. v3.6.1 replaced the
+    # hardcoded version with real negotiation against the daemon (traefik/traefik#12256).
+    image: traefik:v3.6.1
     restart: unless-stopped
     # Audit finding, 2026-08-27: this file had NONE of the hardening docker-compose.yml
     # (dev) already applies to its own (profile-gated, non-internet-facing) traefik service -
