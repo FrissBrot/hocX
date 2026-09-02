@@ -14,8 +14,10 @@ services:
     # verify_release.sh never include the base docker-compose.yml in their stack. mem_limit/
     # cpus mirror docker-compose.yml's equivalent (M28, Audit 2026-08-12) - Traefik itself is
     # lightweight, this is a ceiling against a runaway container, not a normal-operation target.
-    mem_limit: 128m
-    cpus: 0.5
+    # Raised 2026-09-02 for margin (all public traffic passes through this one container)
+    # alongside the other services now that the host has 16GB/8 cores.
+    mem_limit: 256m
+    cpus: 1.0
     init: true
     read_only: true
     cap_drop:

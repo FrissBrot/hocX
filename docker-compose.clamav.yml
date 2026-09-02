@@ -8,8 +8,10 @@ services:
     # deploy.sh/verify_release.sh never include the base docker-compose.yml in their stack.
     # mem_limit/cpus mirror docker-compose.yml's equivalent - the signature database alone
     # needs several hundred MB resident; too tight a limit causes crash-loops, not safety.
-    mem_limit: 1536m
-    cpus: 1.0
+    # Raised 2026-09-02 for extra margin alongside the other services now that the host has
+    # 16GB/8 cores - not a response to an observed crash here specifically.
+    mem_limit: 2048m
+    cpus: 1.5
     init: true
     read_only: true
     # Runs the image's unprivileged entrypoint/user (see clamav/clamav-docker's README,

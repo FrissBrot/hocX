@@ -5,11 +5,16 @@ services:
     # Audit I1, 2026-08-16: this file had NO resource limits at all, unlike
     # docker-compose.yml (dev) after M28 - a runaway container here could take down the
     # whole host with nothing to stop it. Values mirror docker-compose.yml's equivalents.
-    mem_limit: 768m
-    cpus: 1.0
+    # Raised 2026-09-02 after the prod host was resized to 16GB/8 cores (was tuned for a
+    # much smaller box) - see backend's mem_limit comment below for the OOM this was
+    # discovered alongside.
+    mem_limit: 1536m
+    cpus: 2.0
     # Audit finding, 2026-08-16/2026-08-26: mirrors docker-compose.yml's (dev) equivalent -
-    # see the comment there for the reasoning (tuned to this container's 768m mem_limit
-    # above, plus pg_stat_statements so slow/frequent queries are diagnosable in prod).
+    # see the comment there for the reasoning. Retuned 2026-09-02 to the new 1536m
+    # mem_limit above (shared_buffers ~25%, effective_cache_size ~75%, standard Postgres
+    # sizing heuristics) - plus pg_stat_statements so slow/frequent queries are
+    # diagnosable in prod.
     command:
       - postgres
       - -c
@@ -19,13 +24,13 @@ services:
       - -c
       - pg_stat_statements.track=all
       - -c
-      - shared_buffers=192MB
+      - shared_buffers=384MB
       - -c
-      - effective_cache_size=460MB
+      - effective_cache_size=1152MB
       - -c
-      - work_mem=8MB
+      - work_mem=16MB
       - -c
-      - maintenance_work_mem=64MB
+      - maintenance_work_mem=128MB
     logging:
       driver: json-file
       options:
@@ -48,7 +53,7 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    mem_limit: 128m
+    mem_limit: 256m
     cpus: 0.5
     logging:
       driver: json-file
@@ -64,8 +69,14 @@ services:
   backend:
     image: ${HOCX_BACKEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-backend:${HOCX_VERSION}}
     restart: unless-stopped
-    mem_limit: 768m
-    cpus: 1.5
+    # Raised 2026-09-02: the container (2 uvicorn workers, see backend/Dockerfile's CMD) sat
+    # pinned at 766.9MiB/768MiB on the real prod host with nothing but our own smoke-check
+    # traffic - dmesg confirmed the kernel OOM-killer repeatedly killing python3.13 worker
+    # processes every few seconds, which uvicorn kept respawning in a tight crash loop.
+    # 768m/2 workers left far too little headroom per worker. Host was resized to 16GB/8
+    # cores specifically to give this room.
+    mem_limit: 2048m
+    cpus: 3.0
     init: true
     read_only: true
     cap_drop:
@@ -231,9 +242,10 @@ services:
     restart: unless-stopped
     # Runs a pre-built image's `next start` here (no runtime build, unlike the dev
     # compose's frontend - see its mem_limit comment there), so this is lighter
-    # than the dev value, but still bounded per audit I1.
-    mem_limit: 512m
-    cpus: 1.0
+    # than the dev value, but still bounded per audit I1. Raised 2026-09-02 alongside
+    # backend's OOM fix now that the host has 16GB/8 cores.
+    mem_limit: 1024m
+    cpus: 1.5
     init: true
     read_only: true
     cap_drop:
@@ -283,8 +295,13 @@ services:
   abgabebox-backend:
     image: ${HOCX_ABGABEBOX_BACKEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-backend:${HOCX_VERSION}}
     restart: unless-stopped
-    mem_limit: 384m
-    cpus: 1.0
+    # Raised 2026-09-02 alongside backend's OOM fix (same 2-worker pattern, see backend's
+    # mem_limit comment) - the upload-body-limit comment below already documents 384m/2
+    # workers reliably OOM-killing this container on a large upload; this is that same
+    # underlying constraint, not a separate issue. The 157286400-byte body limit below is
+    # left as-is (a deliberate, separately-tuned cap, not just a memory workaround).
+    mem_limit: 1024m
+    cpus: 1.5
     init: true
     read_only: true
     cap_drop:
@@ -367,8 +384,9 @@ services:
   abgabebox-frontend:
     image: ${HOCX_ABGABEBOX_FRONTEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-frontend:${HOCX_VERSION}}
     restart: unless-stopped
-    mem_limit: 512m
-    cpus: 0.5
+    # Raised 2026-09-02 alongside the other services now that the host has 16GB/8 cores.
+    mem_limit: 1024m
+    cpus: 1.0
     init: true
     read_only: true
     cap_drop:
@@ -413,7 +431,9 @@ services:
   docs:
     image: ${HOCX_DOCS_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-docs:${HOCX_VERSION}}
     restart: unless-stopped
-    mem_limit: 128m
+    # Static nginx, genuinely lightweight - small bump 2026-09-02 for margin, not because
+    # of any observed problem here.
+    mem_limit: 256m
     cpus: 0.25
     init: true
     read_only: true
