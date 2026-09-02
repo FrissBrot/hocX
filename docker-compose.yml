@@ -305,6 +305,7 @@ services:
       # this host's real dev .env value (TRAEFIK_DOMAIN=localhost) instead of whatever
       # --env-file actually intended (e2e sets it to "" to disable the bridge entirely).
       TRAEFIK_DOMAIN: ${TRAEFIK_DOMAIN}
+      TRAEFIK_ADMIN_DOMAIN: ${TRAEFIK_ADMIN_DOMAIN}
     depends_on:
       - backend
     volumes:

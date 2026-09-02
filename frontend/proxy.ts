@@ -28,6 +28,17 @@ import { NextRequest, NextResponse } from "next/server";
 // Problematik oben bestehen.
 const internalApiUrl = process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+// Lets admin.hocx.ch serve the whole admin panel at its own root instead of requiring
+// operators to know about the /admin path prefix (audit finding, 2026-09-02). Traefik
+// routes the admin domain to this same frontend service for every path (see
+// docker-compose.release.yml's hocx-admin-frontend router), but only the URL path - not
+// the hostname - previously decided admin vs. customer routing here. admin.hocx.ch/ fell
+// through to the customer app's own "/" (unauthenticated -> redirect to the customer
+// "/login"), whose domain-canonicalization redirect (app/login/page.tsx) then bounced the
+// browser straight to the main app domain - a client-side-only effect invisible to curl,
+// which made it look like a routing bug in Traefik or the browser instead.
+const adminDomain = process.env.TRAEFIK_ADMIN_DOMAIN;
+
 async function isAuthenticated(cookie: string, sessionPath: string): Promise<boolean | null> {
   try {
     const res = await fetch(`${internalApiUrl}${sessionPath}`, {
@@ -45,23 +56,42 @@ async function isAuthenticated(cookie: string, sessionPath: string): Promise<boo
 }
 
 export async function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const { pathname, hostname } = request.nextUrl;
 
-  const isAdmin = pathname.startsWith("/admin");
+  const rewrittenPathname =
+    adminDomain && hostname === adminDomain && !pathname.startsWith("/admin")
+      ? `/admin${pathname === "/" ? "" : pathname}`
+      : pathname;
+
+  const isAdmin = rewrittenPathname.startsWith("/admin");
   const sessionPath = isAdmin ? "/api/admin/auth/session" : "/api/auth/session";
   const loginPath = isAdmin ? "/admin/login" : "/login";
 
-  const cookie = request.headers.get("cookie") ?? "";
-  const authenticated = await isAuthenticated(cookie, sessionPath);
-
-  if (authenticated === false) {
-    return NextResponse.redirect(new URL(loginPath, request.url));
+  // Login pages used to be excluded from the middleware matcher entirely (see git history)
+  // to avoid a redirect loop: unauthenticated on /login -> middleware redirects to /login
+  // -> middleware runs again -> ... Now that the matcher below also needs to catch
+  // admin.hocx.ch/login (so the rewrite above can map it to /admin/login), that exclusion
+  // moved in here instead - skip only the auth-redirect check for the login path itself,
+  // not the whole middleware, so the hostname rewrite still applies to it.
+  if (rewrittenPathname !== loginPath) {
+    const cookie = request.headers.get("cookie") ?? "";
+    const authenticated = await isAuthenticated(cookie, sessionPath);
+    if (authenticated === false) {
+      return NextResponse.redirect(new URL(loginPath, request.url));
+    }
   }
   // true oder null (Backend nicht sicher erreichbar) -> Seite normal rendern lassen; die
   // Server-Components validieren ohnehin nochmal und behandeln den Fehlerfall sauber.
+  if (rewrittenPathname !== pathname) {
+    // .clone() + set .pathname (rather than `new URL(rewrittenPathname, request.url)`)
+    // so any query string on the original request survives the rewrite.
+    const rewriteUrl = request.nextUrl.clone();
+    rewriteUrl.pathname = rewrittenPathname;
+    return NextResponse.rewrite(rewriteUrl);
+  }
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/((?!api/|api$|_next/static|_next/image|favicon\\.ico|robots\\.txt|sitemap\\.xml|login$|login/|admin/login$|admin/login/).*)"]
+  matcher: ["/((?!api/|api$|_next/static|_next/image|favicon\\.ico|robots\\.txt|sitemap\\.xml).*)"]
 };
