@@ -18,6 +18,9 @@ fi
 
 REPO_DIR="${HOCX_UPDATE_REPO_DIR:?Interner Repository-Pfad fehlt}"
 HELPER_PATH="${HOCX_UPDATE_HELPER_PATH:?Interner Helper-Pfad fehlt}"
+# ensure_github_auth (lib/github.sh) erwartet PROJECT_DIR vom Aufrufer, um Tokens
+# unter .tools/ abzulegen - siehe gleicher Fix in record_tested_candidate.sh.
+PROJECT_DIR="$REPO_DIR"
 trap 'rm -f "$HELPER_PATH"' EXIT
 
 # shellcheck source=scripts/lib/env.sh

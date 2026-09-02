@@ -5,6 +5,10 @@ set -euo pipefail
 # GitHub's deployment API becomes the promotion workflow's machine-readable gate.
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# ensure_github_auth (lib/github.sh) erwartet PROJECT_DIR vom Aufrufer, um Tokens
+# unter .tools/ abzulegen - deploy.sh setzt das selbst, hier fehlte es bisher
+# komplett ("PROJECT_DIR: unbound variable" unter set -u).
+PROJECT_DIR="$REPO_DIR"
 # shellcheck source=scripts/lib/env.sh
 source "$REPO_DIR/scripts/lib/env.sh"
 # shellcheck source=scripts/lib/github.sh
