@@ -217,7 +217,10 @@ export function AdminTenantManagement({ initialPage }: Props) {
       formData.append("file", importFile);
       const result = await browserApiFetch<{ tenant: AdminTenantSummary; warnings: string[] }>(
         "/api/admin/tenants/import",
-        { method: "POST", body: formData }
+        // Uploads/entpackt/importiert bis zu MAX_TENANT_IMPORT_UPLOAD_BYTES (2 GB, siehe
+        // backend/app/api/routes/admin.py) - browserApiFetch's Default-Timeout von 15s reicht
+        // dafuer bei weitem nicht, was zuvor als "Zeitueberschreitung beim Server" fehlschlug.
+        { method: "POST", body: formData, signal: AbortSignal.timeout(600_000) }
       );
       await fetchPage(offset, search);
       setImportModalOpen(false);
