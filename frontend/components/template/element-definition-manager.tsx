@@ -1996,7 +1996,12 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
               <span className="field-label">Beschreibung</span>
               <input value={createBlockForm.description} onChange={(event) => setCreateBlockForm((current) => ({ ...current, description: event.target.value }))} placeholder="Optionale Notiz für Redakteure" />
             </label>
-            <label className="field-stack">
+            {/* Plain div, not <label>: the field-stack label pattern relies on there being exactly
+                one labelable descendant so a click focuses it. RichTextEditor renders its own
+                toolbar buttons before the contenteditable area, and a <label> forwards clicks to
+                the *first* labelable descendant - so wrapping it in <label> sent every click into
+                the Bold button instead of the editor, making the field look rendered but dead. */}
+            <div className="field-stack">
               <span className="field-label">Standard- oder Fixinhalt</span>
               <RichTextEditor
                 value={createBlockForm.default_content}
@@ -2007,7 +2012,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
               <span className="field-help">
                 Verfuegbare Zyklus-Platzhalter: {"{cycle_name}"}, {"{cycle_year_start}"}, {"{cycle_year_end}"} — werden beim Erstellen des Protokolls anhand des Zyklus der Vorlage ersetzt.
               </span>
-            </label>
+            </div>
           </SettingsSection>
           <SettingsSection
             title="Wiederholung"
@@ -2584,7 +2589,8 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 <span className="field-label">Beschreibung</span>
                 <input value={blockForm.description} onChange={(event) => setBlockForm((current) => ({ ...current, description: event.target.value }))} />
               </label>
-              <label className="field-stack">
+              {/* Plain div, not <label> - see the create-form field above for why. */}
+              <div className="field-stack">
                 <span className="field-label">Standard- oder Fixinhalt</span>
                 <RichTextEditor
                   value={blockForm.default_content}
@@ -2593,7 +2599,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 <span className="field-help">
                   Verfuegbare Zyklus-Platzhalter: {"{cycle_name}"}, {"{cycle_year_start}"}, {"{cycle_year_end}"} — werden beim Erstellen des Protokolls anhand des Zyklus der Vorlage ersetzt.
                 </span>
-              </label>
+              </div>
             </SettingsSection>
             <SettingsSection
               title="Wiederholung"

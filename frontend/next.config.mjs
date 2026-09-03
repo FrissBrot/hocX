@@ -42,6 +42,15 @@ const apiProxyTarget = process.env.FRONTEND_API_PROXY_TARGET?.replace(/\/$/, "")
 const nextConfig = {
   output: "standalone",
   typedRoutes: true,
+  // next dev's cross-origin protection auto-allows "localhost" and the --hostname
+  // value (0.0.0.0 here) but not "127.0.0.1" - dev/test tooling (this repo's e2e
+  // stack included, see scripts/e2e.sh / playwright.config.ts) hits the dev server
+  // via 127.0.0.1, which without this got its HMR websocket silently rejected
+  // (403/handshake failure), breaking client-side hydration for the whole page:
+  // markup rendered, but nothing was interactive - inputs still worked natively,
+  // but anything needing JS (onClick, contenteditable) looked dead. Has no effect
+  // outside dev (only read when `next dev` is running).
+  allowedDevOrigins: ["127.0.0.1"],
   experimental: {
     // Lokale/Test-Requests laufen ueber den Next-Proxy. Mandantenexporte duerfen laut
     // Backend bis zu 2 GiB gross sein; der Next-Standard von 10 MB schneidet solche
