@@ -687,6 +687,7 @@ export function TemplateEditor({
     ...initialTemplateItemForm
   });
   const [showCreateItem, setShowCreateItem] = useState(false);
+  const [elementPickerSearch, setElementPickerSearch] = useState("");
   const [showParticipantModal, setShowParticipantModal] = useState(false);
   const [participantPickerSearch, setParticipantPickerSearch] = useState("");
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -763,6 +764,23 @@ export function TemplateEditor({
     () => [...elements].sort((left, right) => left.sort_index - right.sort_index),
     [elements]
   );
+  const filteredElementDefinitions = useMemo(() => {
+    const query = elementPickerSearch.trim().toLowerCase();
+    if (!query) {
+      return initialDefinitions;
+    }
+    return initialDefinitions.filter((definition) => {
+      const haystack = [
+        definition.title,
+        definition.description ?? "",
+        definitionTypeSummary(definition),
+        ...definition.blocks.map((block) => String(block.title ?? block.configuration_json?.block_type_code ?? "")),
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [elementPickerSearch, initialDefinitions]);
   const responsibilityModalElement = useMemo(
     () => orderedElements.find((item) => item.id === showResponsibilityModalFor) ?? null,
     [orderedElements, showResponsibilityModalFor]
@@ -1281,6 +1299,7 @@ export function TemplateEditor({
       );
       setElements((current) => [...current, ...createdItems].sort((left, right) => left.sort_index - right.sort_index));
       setNewItemForm(initialTemplateItemForm);
+      setElementPickerSearch("");
       setShowCreateItem(false);
       showToast(`${createdItems.length} Element${createdItems.length === 1 ? "" : "e"} hinzugefuegt`, "success");
       router.refresh();
@@ -1720,7 +1739,14 @@ export function TemplateEditor({
               <button type="button" className="button-ghost button-inline" onClick={() => setShowAutoAssignModal(true)}>
                 Verantwortliche-Zuordnung
               </button>
-              <button type="button" className="button-inline" onClick={() => setShowCreateItem((current) => !current)}>
+              <button
+                type="button"
+                className="button-inline"
+                onClick={() => {
+                  setElementPickerSearch("");
+                  setShowCreateItem((current) => !current);
+                }}
+              >
                 {showCreateItem ? "Formular schliessen" : "Element hinzufügen"}
               </button>
             </div>
@@ -1798,13 +1824,26 @@ export function TemplateEditor({
 
         <Modal
           open={showCreateItem}
-          onClose={() => setShowCreateItem(false)}
+          onClose={() => {
+            setElementPickerSearch("");
+            setShowCreateItem(false);
+          }}
           title="Element zum Template hinzufügen"
           description="Waehle ein oder mehrere fertige Elemente aus und fuege sie gesammelt zum Template hinzu."
         >
           <form className="grid" onSubmit={addElementToTemplate}>
-            <DataTable columns={["", "Element", "Typen", "Beschreibung", "Bloecke"]}>
-              {initialDefinitions.map((definition) => {
+            <SearchInput
+              value={elementPickerSearch}
+              onChange={setElementPickerSearch}
+              placeholder="Elemente durchsuchen"
+              aria-label="Elemente durchsuchen"
+              autoFocus
+            />
+            <DataTable
+              columns={["", "Element", "Typen", "Beschreibung", "Bloecke"]}
+              emptyMessage="Keine passenden Elemente gefunden."
+            >
+              {filteredElementDefinitions.map((definition) => {
                 const checked = newItemForm.element_definition_ids.includes(String(definition.id));
                 return (
                   <tr

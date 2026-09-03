@@ -25,3 +25,15 @@ test("main navigation pages can be opened", async ({ page }) => {
     await expect(page.locator("body")).not.toBeEmpty();
   }
 });
+
+test("mobile navigation closes when clicking outside the sidebar", async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 800 });
+  await page.goto("/todos");
+
+  const sidebar = page.locator(".sidebar");
+  await page.locator(".mobile-nav-toggle").click();
+  await expect(sidebar).toHaveClass(/sidebar-open/);
+
+  await page.locator(".sidebar-overlay").click({ position: { x: 500, y: 400 } });
+  await expect(sidebar).not.toHaveClass(/sidebar-open/);
+});

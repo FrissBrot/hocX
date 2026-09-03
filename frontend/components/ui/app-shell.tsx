@@ -282,7 +282,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
             onMouseEnter={() => setMobileNavOpen(true)}
           />
         )}
-        {isProtocolWriting && mobileNavOpen && (
+        {mobileNavOpen && (
           <div className="sidebar-overlay" aria-hidden="true" onClick={() => setMobileNavOpen(false)} />
         )}
         <aside
