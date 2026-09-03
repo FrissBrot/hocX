@@ -1294,6 +1294,7 @@ export function ElementDefinitionManager({
       });
       replaceDefinition(updated);
       showToast(`Element "${updated.title}" wurde gespeichert`, "success");
+      setShowDetailModal(false);
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Element konnte nicht gespeichert werden", "error");
     }
@@ -1816,10 +1817,21 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
         title={selectedDefinition ? `Element bearbeiten: ${selectedDefinition.title}` : "Element bearbeiten"}
         description="Bearbeite Metadaten und interne Blöcke in einer gemeinsamen, aufgeräumten Ansicht."
         size="wide"
+        hideCloseButton
+        headerActions={
+          <>
+            <button type="button" className="button-ghost modal-close" onClick={() => setShowDetailModal(false)}>
+              Abbrechen
+            </button>
+            <button type="submit" form="element-definition-form" className="button-inline">
+              Speichern
+            </button>
+          </>
+        }
       >
         {selectedDefinition ? (
           <div className="section-stack">
-            <form className="grid section-stack" onSubmit={saveDefinition}>
+            <form id="element-definition-form" className="grid section-stack" onSubmit={saveDefinition}>
               <ElementEditorSummary
                 title={definitionForm.title}
                 description={definitionForm.description}
@@ -1843,9 +1855,6 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                   </label>
                 </div>
               </SettingsSection>
-              <div className="block-editor-footer">
-                <button type="submit" className="button-inline">Element speichern</button>
-              </div>
             </form>
 
             <SettingsSection
