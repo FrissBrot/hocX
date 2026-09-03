@@ -1274,7 +1274,7 @@ export function ElementDefinitionManager({
       setShowCreateBlockModal(false);
       setCreatingNewDefinition(false);
       selectDefinition(created);
-      showToast(`Element #${created.id} wurde angelegt`, "success");
+      showToast(`Element "${created.title}" wurde angelegt`, "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Element konnte nicht angelegt werden", "error");
     }
@@ -1293,7 +1293,7 @@ export function ElementDefinitionManager({
         })
       });
       replaceDefinition(updated);
-      showToast(`Element #${updated.id} wurde gespeichert`, "success");
+      showToast(`Element "${updated.title}" wurde gespeichert`, "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Element konnte nicht gespeichert werden", "error");
     }
@@ -1307,6 +1307,7 @@ export function ElementDefinitionManager({
     });
     if (!ok) return;
     try {
+      const deletedTitle = definitions.find((definition) => definition.id === definitionId)?.title ?? definitionId;
       await browserApiFetch(`/api/element-definitions/${definitionId}`, { method: "DELETE" });
       const nextDefinitions = definitions.filter((definition) => definition.id !== definitionId);
       setDefinitions(nextDefinitions);
@@ -1318,7 +1319,7 @@ export function ElementDefinitionManager({
         setDefinitionForm(initialDefinitionForm);
         setBlockForm(initialBlockForm);
       }
-      showToast(`Element #${definitionId} wurde gelöscht`, "success");
+      showToast(`Element "${deletedTitle}" wurde gelöscht`, "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Element konnte nicht gelöscht werden", "error");
     }

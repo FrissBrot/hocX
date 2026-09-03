@@ -452,7 +452,7 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
       setTemplates((current) => [created, ...current]);
       setForm(initialTemplateCreate);
       setShowCreateForm(false);
-      showToast(`Vorlage #${created.id} erstellt`, "success");
+      showToast(`Vorlage "${created.name}" erstellt`, "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Vorlage konnte nicht erstellt werden", "error");
     }
@@ -466,9 +466,10 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
     });
     if (!ok) return;
     try {
+      const deletedName = templates.find((template) => template.id === templateId)?.name ?? templateId;
       await browserApiFetch(`/api/templates/${templateId}`, { method: "DELETE" });
       setTemplates((current) => current.filter((template) => template.id !== templateId));
-      showToast(`Vorlage #${templateId} gelöscht`, "success");
+      showToast(`Vorlage "${deletedName}" gelöscht`, "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Vorlage konnte nicht gelöscht werden", "error");
     }

@@ -135,7 +135,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
 
       const full = await browserApiFetch<ProtocolSummary>(`/api/protocols/${created.id}`);
       setProtocols((current) => [full, ...current]);
-      showToast(`Protokoll #${created.id} erstellt`, "success");
+      showToast(`Protokoll "${full.title ?? full.protocol_number}" erstellt`, "success");
       setForm((current) => ({
         ...current,
         protocol_number: "",
@@ -156,9 +156,11 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
     });
     if (!ok) return;
     try {
+      const deletedProtocol = protocols.find((protocol) => protocol.id === protocolId);
+      const deletedLabel = deletedProtocol?.title ?? deletedProtocol?.protocol_number ?? protocolId;
       await browserApiFetch<{ message: string }>(`/api/protocols/${protocolId}`, { method: "DELETE" });
       setProtocols((current) => current.filter((protocol) => protocol.id !== protocolId));
-      showToast(`Protokoll #${protocolId} gelöscht`, "success");
+      showToast(`Protokoll "${deletedLabel}" gelöscht`, "success");
       router.refresh();
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Protokoll konnte nicht gelöscht werden", "error");

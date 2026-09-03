@@ -245,10 +245,11 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
     });
     if (!ok) return;
     try {
+      const deletedName = participants.find((participant) => participant.id === participantId)?.display_name ?? participantId;
       await browserApiFetch(`/api/participants/${participantId}`, { method: "DELETE" });
       setParticipants((current) => current.filter((participant) => participant.id !== participantId));
       setSelectedParticipantIds((current) => current.filter((id) => id !== participantId));
-      showToast(`Teilnehmer #${participantId} gelöscht`, "success");
+      showToast(`Teilnehmer "${deletedName}" gelöscht`, "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Teilnehmer konnte nicht gelöscht werden", "error");
     }
