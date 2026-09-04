@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { TotpEnrollCard } from "@/components/security/totp-enroll-card";
 import { browserApiFetch } from "@/lib/api/client";
 import { browserSupportsPasskeys, createPasskeyCredential } from "@/lib/webauthn";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -224,40 +225,16 @@ export function MfaProfilePanel({ open }: Props) {
               TOTP einrichten
             </button>
           ) : (
-            <div className="grid">
-              <div className="security-secret-card">
-                <div className="field-label">Setup-Key</div>
-                <code className="security-secret-value">{totpSetup.manual_entry_key}</code>
-                <a href={totpSetup.provisioning_uri} className="button-inline button-ghost">
-                  In Authenticator-App öffnen
-                </a>
-              </div>
-              <label className="field-stack">
-                <span className="field-label">Bezeichnung</span>
-                <input
-                  value={totpLabel}
-                  onChange={(event) => setTotpLabel(event.target.value)}
-                  placeholder="z.B. Diensthandy"
-                />
-              </label>
-              <label className="field-stack">
-                <span className="field-label">6-stelligen Code eingeben</span>
-                <input
-                  value={totpCode}
-                  onChange={(event) => setTotpCode(event.target.value)}
-                  inputMode="numeric"
-                  placeholder="123 456"
-                />
-              </label>
-              <div className="table-actions table-actions-start">
-                <button type="button" className="button-inline" disabled={!totpCode || busy} onClick={() => void completeTotp()}>
-                  {busy ? "Wird bestätigt…" : "TOTP aktivieren"}
-                </button>
-                <button type="button" className="button-inline button-ghost" onClick={() => setTotpSetup(null)}>
-                  Abbrechen
-                </button>
-              </div>
-            </div>
+            <TotpEnrollCard
+              setup={totpSetup}
+              label={totpLabel}
+              onLabelChange={setTotpLabel}
+              code={totpCode}
+              onCodeChange={setTotpCode}
+              onSubmit={() => void completeTotp()}
+              onCancel={() => setTotpSetup(null)}
+              busy={busy}
+            />
           )}
         </article>
 

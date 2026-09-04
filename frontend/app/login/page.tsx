@@ -9,6 +9,7 @@ import { getRuntimeConfig } from "@/lib/runtime-config";
 import { browserSupportsPasskeys, createPasskeyCredential, getPasskeyAssertion } from "@/lib/webauthn";
 import { LoginResponse, PasskeyAssertionStart, PasskeyRegistrationStart, PendingMfaLogin, SessionInfo, TotpEnrollmentStart } from "@/types/api";
 import { CopyrightNotice } from "@/components/ui/copyright-notice";
+import { TotpEnrollCard } from "@/components/security/totp-enroll-card";
 
 type ResolvedTenant = { tenant_id: number; tenant_name: string; profile_image_url: string | null };
 const MFA_CODE_LENGTH = 6;
@@ -538,26 +539,18 @@ export default function LoginPage() {
                 TOTP-Setup starten
               </button>
             ) : (
-              <div className="grid">
-                <div className="security-secret-card">
-                  <div className="field-label">Setup-Key</div>
-                  <code className="security-secret-value">{totpSetup.manual_entry_key}</code>
-                  <a href={totpSetup.provisioning_uri} className="button-inline button-ghost">
-                    In Authenticator-App öffnen
-                  </a>
-                </div>
-                <label className="field-stack">
-                  <span className="field-label">Bezeichnung</span>
-                  <input value={totpLabel} onChange={(event) => setTotpLabel(event.target.value)} placeholder="z.B. Firmenhandy" />
-                </label>
-                <label className="field-stack">
-                  <span className="field-label">6-stelligen Code eingeben</span>
-                  <input value={totpCode} onChange={(event) => setTotpCode(sanitizeTotpCode(event.target.value))} inputMode="numeric" placeholder="123456" />
-                </label>
-                <button type="button" className="button-inline" disabled={!totpCode || loading} onClick={() => void completeTotpSetup()}>
-                  {loading ? "Wird aktiviert…" : "TOTP aktivieren und anmelden"}
-                </button>
-              </div>
+              <TotpEnrollCard
+                setup={totpSetup}
+                label={totpLabel}
+                onLabelChange={setTotpLabel}
+                labelPlaceholder="z.B. Firmenhandy"
+                code={totpCode}
+                onCodeChange={setTotpCode}
+                onSubmit={() => void completeTotpSetup()}
+                busy={loading}
+                submitLabel="TOTP aktivieren und anmelden"
+                submitBusyLabel="Wird aktiviert…"
+              />
             )}
           </article>
         ) : (

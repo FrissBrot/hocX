@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { browserApiFetch, browserApiBaseUrl } from "@/lib/api/client";
 import { AdminLoginResponse, AdminSessionInfo, PendingMfaLogin, PlatformOidcConfigPublic, TotpEnrollmentStart } from "@/types/api";
 import { CopyrightNotice } from "@/components/ui/copyright-notice";
+import { TotpEnrollCard } from "@/components/security/totp-enroll-card";
 
 function sanitizeTotpCode(value: string) {
   return value.replace(/\D/g, "").slice(0, 6);
@@ -137,8 +138,7 @@ export default function AdminLoginPage() {
     }
   }
 
-  async function completeTotpSetup(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function completeTotpSetup() {
     if (!totpSetup) return;
     setLoading(true);
     setStatusMsg("TOTP wird aktiviert…");
@@ -209,32 +209,18 @@ export default function AdminLoginPage() {
             TOTP-Setup starten
           </button>
         ) : (
-          <form className="grid" onSubmit={completeTotpSetup}>
-            <div className="security-secret-card">
-              <div className="field-label">Setup-Key</div>
-              <code className="security-secret-value">{totpSetup.manual_entry_key}</code>
-              <a href={totpSetup.provisioning_uri} className="button-inline button-ghost">
-                In Authenticator-App öffnen
-              </a>
-            </div>
-            <label className="field-stack">
-              <span className="field-label">Bezeichnung</span>
-              <input value={totpLabel} onChange={(event) => setTotpLabel(event.target.value)} placeholder="z.B. Firmenhandy" />
-            </label>
-            <label className="field-stack">
-              <span className="field-label">6-stelligen Code eingeben</span>
-              <input
-                value={totpCode}
-                onChange={(event) => setTotpCode(sanitizeTotpCode(event.target.value))}
-                inputMode="numeric"
-                placeholder="123456"
-                autoComplete="one-time-code"
-              />
-            </label>
-            <button type="submit" className="button-inline" disabled={totpCode.length !== 6 || loading}>
-              {loading ? "Wird aktiviert…" : "TOTP aktivieren und anmelden"}
-            </button>
-          </form>
+          <TotpEnrollCard
+            setup={totpSetup}
+            label={totpLabel}
+            onLabelChange={setTotpLabel}
+            labelPlaceholder="z.B. Firmenhandy"
+            code={totpCode}
+            onCodeChange={setTotpCode}
+            onSubmit={() => void completeTotpSetup()}
+            busy={loading}
+            submitLabel="TOTP aktivieren und anmelden"
+            submitBusyLabel="Wird aktiviert…"
+          />
         )}
 
         <div className="table-actions table-actions-start">
