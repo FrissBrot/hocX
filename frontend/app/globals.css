@@ -10477,6 +10477,21 @@ input[type="radio"] {
   color: var(--text);
 }
 
+.wizard-dns-value-button {
+  --button-bg: var(--panel);
+  --button-hover-bg: var(--accent-soft);
+  text-align: left;
+  font-weight: 400;
+  letter-spacing: normal;
+  cursor: pointer;
+  transform: none;
+}
+
+.wizard-dns-value-button:hover {
+  border-color: var(--border-strong);
+  box-shadow: none;
+}
+
 .wizard-copy-button {
   --button-hover-bg: var(--accent-soft);
   --button-bg: transparent;

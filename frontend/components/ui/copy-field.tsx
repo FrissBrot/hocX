@@ -35,7 +35,9 @@ export function CopyField({ label, value }: { label: string; value: string }) {
 
   return (
     <div className="wizard-dns-row">
-      <div className="wizard-dns-value">{value}</div>
+      <button type="button" className="wizard-dns-value wizard-dns-value-button" onClick={copy} aria-label={`${label} kopieren`} title="Kopieren">
+        {value}
+      </button>
       <button type="button" className={`wizard-copy-button${copied ? " is-copied" : ""}`} onClick={copy} aria-label={`${label} kopieren`} title="Kopieren">
         {copied ? <CheckIcon /> : <CopyIcon />}
       </button>
