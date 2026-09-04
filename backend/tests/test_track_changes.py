@@ -186,12 +186,12 @@ def _row_link_block(db, protocol, list_definition_id, list_entry_id):
             }],
         },
     )
-    return list_snapshot_service.refresh_block_list_snapshot(db, block, protocol.tenant_id, keep_undo=False, track_changes_active=False)
+    return list_snapshot_service.refresh_block_list_snapshot(db, block, protocol.tenant_id, keep_undo=False, protocol=protocol, track_changes_active=False)
 
 
 def _whole_list_block(db, protocol, list_definition_id):
     block = _block(db, protocol, configuration={"linked_list_id": list_definition_id})
-    return list_snapshot_service.refresh_block_list_snapshot(db, block, protocol.tenant_id, keep_undo=False, track_changes_active=False)
+    return list_snapshot_service.refresh_block_list_snapshot(db, block, protocol.tenant_id, keep_undo=False, protocol=protocol, track_changes_active=False)
 
 
 def test_whole_list_sync_marks_added_changed_removed_and_is_stable_across_repeat_syncs(db):

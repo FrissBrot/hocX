@@ -14,7 +14,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import ListDefinition, ListEntry, ProtocolElement, ProtocolElementBlock
+from app.models import ListDefinition, ListEntry, Protocol, ProtocolElement, ProtocolElementBlock, TableSnapshot
+from app.services.event_cycle_service import resolve_protocol_cycle
 
 
 @dataclass
@@ -131,6 +132,97 @@ def compute_row_list_snapshot(
         "column_two_value": dict(entry.column_two_value_json or {}),
         "previous": None,
     }
+
+
+def _compute_row_list_snapshot_from_table_snapshot(
+    db: Session, *, tenant_id: int, cycle_config_id: int, cycle_year: int, list_definition_id: int, list_entry_id: int
+) -> dict[str, Any] | None:
+    """Same return shape as compute_row_list_snapshot, resolved from a frozen
+    table_snapshot (see app/services/table_snapshot_service.py) for
+    (cycle_config_id, cycle_year) instead of the live ListEntry table. Matches rows by
+    their internal id, which table_snapshot rows keep verbatim (no remapping - see
+    TableSnapshot's model docstring). Returns None (not a dict) if that cycle has no
+    list_definition snapshot at all yet, so the caller can fall back to live data -
+    entry_exists=False is reserved for "the list has a snapshot but this entry wasn't in
+    it", a real, distinct answer from "no historical data exists for this cycle at all"."""
+    definition_snapshot = db.scalar(
+        select(TableSnapshot).where(
+            TableSnapshot.tenant_id == tenant_id,
+            TableSnapshot.cycle_config_id == cycle_config_id,
+            TableSnapshot.cycle_year == cycle_year,
+            TableSnapshot.table_name == "list_definition",
+        )
+    )
+    if definition_snapshot is None:
+        return None
+    def_row = next((r for r in definition_snapshot.snapshot_json if r.get("id") == list_definition_id), None)
+    if def_row is None:
+        return None
+    base = {
+        "synced_version": def_row.get("content_version", 0),
+        "column_one_title": def_row.get("column_one_title"),
+        "column_one_value_type": def_row.get("column_one_value_type"),
+        "column_two_title": def_row.get("column_two_title"),
+        "column_two_value_type": def_row.get("column_two_value_type"),
+    }
+    entry_snapshot = db.scalar(
+        select(TableSnapshot).where(
+            TableSnapshot.tenant_id == tenant_id,
+            TableSnapshot.cycle_config_id == cycle_config_id,
+            TableSnapshot.cycle_year == cycle_year,
+            TableSnapshot.table_name == "list_entry",
+        )
+    )
+    entry_row = next(
+        (r for r in (entry_snapshot.snapshot_json if entry_snapshot else []) if r.get("id") == list_entry_id),
+        None,
+    )
+    if entry_row is None:
+        return {**base, "entry_exists": False}
+    return {
+        **base,
+        "entry_exists": True,
+        "column_one_value": dict(entry_row.get("column_one_value_json") or {}),
+        "column_two_value": dict(entry_row.get("column_two_value_json") or {}),
+        "previous": None,
+    }
+
+
+def compute_row_list_snapshot_for_protocol(
+    db: Session,
+    *,
+    list_definition_id: int,
+    list_entry_id: int,
+    tenant_id: int,
+    value_source: str | None,
+    protocol: Protocol,
+    cache: ListSnapshotCache | None = None,
+) -> dict[str, Any]:
+    """compute_row_list_snapshot, plus the "historische Daten verwenden" row option (see
+    the template row editor's row_config.value_source): when value_source == "historical",
+    first tries to resolve the row from the table_snapshot of the cycle *this protocol
+    itself* falls into (resolve_protocol_cycle) - "the value as of the cycle this
+    protocol happened in", not always today's live value. Falls back to the live
+    compute_row_list_snapshot result whenever historical resolution isn't possible (no
+    row_config.value_source set, the protocol's template has no cycle_config, or that
+    cycle has no snapshot yet - e.g. it's still the active cycle, or a gap that hasn't
+    been reconstructed) - historical accuracy degrades gracefully to "best available
+    live data", never a hard error or blank value."""
+    if value_source == "historical":
+        resolved = resolve_protocol_cycle(db, protocol)
+        if resolved is not None:
+            cycle_config, cycle_year = resolved
+            historical = _compute_row_list_snapshot_from_table_snapshot(
+                db,
+                tenant_id=tenant_id,
+                cycle_config_id=cycle_config.id,
+                cycle_year=cycle_year,
+                list_definition_id=list_definition_id,
+                list_entry_id=list_entry_id,
+            )
+            if historical is not None:
+                return historical
+    return compute_row_list_snapshot(db, list_definition_id, list_entry_id, tenant_id, cache=cache)
 
 
 def _protocol_blocks(db: Session, protocol_id: int) -> list[ProtocolElementBlock]:
@@ -305,16 +397,19 @@ def refresh_block_list_snapshot(
     tenant_id: int,
     *,
     keep_undo: bool,
+    protocol: Protocol,
     track_changes_active: bool = False,
     commit: bool = True,
     cache: ListSnapshotCache | None = None,
 ) -> ProtocolElementBlock:
     """Recomputes list_snapshot (whole-list) and/or every row's list_snapshot (row-link)
-    from current live data and writes it back onto the block. When track_changes_active,
-    also diff-merges against the entries this same call is about to overwrite so
-    added/changed/removed rows get a sticky '_tracked' marker for the track-changes
-    feature (see _merge_tracked_list_entries/_merge_tracked_row_snapshot) - this is
-    completely independent of the 'previous'/undo mechanism above."""
+    from current live data (or, for a row with row_config.value_source == "historical",
+    from this protocol's own cycle's table_snapshot - see
+    compute_row_list_snapshot_for_protocol) and writes it back onto the block. When
+    track_changes_active, also diff-merges against the entries this same call is about
+    to overwrite so added/changed/removed rows get a sticky '_tracked' marker for the
+    track-changes feature (see _merge_tracked_list_entries/_merge_tracked_row_snapshot)
+    - this is completely independent of the 'previous'/undo mechanism above."""
     config = dict(block.configuration_snapshot_json or {})
     changed = False
 
@@ -348,8 +443,14 @@ def refresh_block_list_snapshot(
                 new_rows.append(row)
                 continue
             row = dict(row)
-            new_snapshot = compute_row_list_snapshot(
-                db, int(row["linked_list_id"]), int(row.get("linked_list_entry_id") or 0), tenant_id, cache=cache
+            new_snapshot = compute_row_list_snapshot_for_protocol(
+                db,
+                list_definition_id=int(row["linked_list_id"]),
+                list_entry_id=int(row.get("linked_list_entry_id") or 0),
+                tenant_id=tenant_id,
+                value_source=row.get("value_source"),
+                protocol=protocol,
+                cache=cache
             )
             new_snapshot = _merge_tracked_row_snapshot(
                 new_snapshot, row.get("list_snapshot"), track_changes_active=track_changes_active
@@ -537,8 +638,9 @@ def freeze_list_snapshots_for_protocol(db: Session, protocol_id: int, tenant_id:
     abgeschlossen protocols are permanently read-only and never show the refresh/undo UI
     again."""
     cache = ListSnapshotCache()
+    protocol = db.get(Protocol, protocol_id)
     for block in list_linked_blocks_for_protocol(db, protocol_id):
-        refresh_block_list_snapshot(db, block, tenant_id, keep_undo=False, commit=commit, cache=cache)
+        refresh_block_list_snapshot(db, block, tenant_id, keep_undo=False, protocol=protocol, commit=commit, cache=cache)
         config = dict(block.configuration_snapshot_json or {})
         changed = False
         list_snapshot = config.get("list_snapshot")
