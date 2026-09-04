@@ -353,7 +353,15 @@ export type TableSnapshotCycleSummary = {
   cycle_config_id: string;
   cycle_config_name: string;
   cycle_year: number;
+  has_snapshot: boolean;
   tables: TableSnapshotTableSummary[];
+};
+
+export type TableSnapshotListReconstructDraft = {
+  source: "live" | "snapshot";
+  source_cycle_year: number | null;
+  definition_values: Record<string, unknown>;
+  entries: Record<string, unknown>[];
 };
 
 export type TableSnapshotRowsRead = {

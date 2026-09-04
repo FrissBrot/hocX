@@ -2,10 +2,12 @@
 due-check logic backing the historical-table-view feature for user-created lists."""
 from datetime import date
 
+import pytest
+
 from app.core.cycle_utils import get_cycle_year
 from app.models.entities import TableSnapshot
 from app.services.table_snapshot_config import SNAPSHOT_TABLES
-from app.services.table_snapshot_service import TableSnapshotService, run_due_cycle_snapshots
+from app.services.table_snapshot_service import ReconstructionIdentityError, TableSnapshotService, run_due_cycle_snapshots
 
 from tests.factories import make_cycle_config, make_list_definition, make_list_entry, make_tenant
 
@@ -85,6 +87,114 @@ def test_create_snapshot_skips_existing_by_default(db):
 
     assert second.id == first.id
     assert second.row_count == 1  # unchanged - "Bob" was added after the snapshot, not included
+
+
+def test_reconstruct_list_period_creates_gap_snapshot_from_live_data(db):
+    tenant = make_tenant(db)
+    cycle_config = make_cycle_config(db, tenant.id)
+    definition = make_list_definition(db, tenant.id, name="Alice's List")
+    entry = make_list_entry(db, definition.id, sort_index=0, column_one_value={"text_value": "a"})
+
+    TableSnapshotService().reconstruct_list_period(
+        db,
+        tenant_id=tenant.id,
+        cycle_config=cycle_config,
+        cycle_year=2020,
+        list_public_id=str(definition.public_id),
+        definition_values={
+            "name": "Alice's List (reconstructed)",
+            "description": None,
+            "column_one_title": definition.column_one_title,
+            "column_one_value_type": definition.column_one_value_type,
+            "column_two_title": definition.column_two_title,
+            "column_two_value_type": definition.column_two_value_type,
+            "is_active": True,
+        },
+        entry_payloads=[
+            {"public_id": str(entry.public_id), "sort_index": 0, "column_one_value_json": {"text_value": "reconstructed"}, "column_two_value_json": {}},
+        ],
+        edited_by=1,
+    )
+
+    definition_snapshot = db.query(TableSnapshot).filter_by(
+        tenant_id=tenant.id, cycle_config_id=cycle_config.id, cycle_year=2020, table_name="list_definition"
+    ).one()
+    assert definition_snapshot.row_count == 1
+    assert definition_snapshot.snapshot_json[0]["id"] == definition.id
+    assert definition_snapshot.snapshot_json[0]["name"] == "Alice's List (reconstructed)"
+    assert definition_snapshot.is_edited is True
+
+    entry_snapshot = db.query(TableSnapshot).filter_by(
+        tenant_id=tenant.id, cycle_config_id=cycle_config.id, cycle_year=2020, table_name="list_entry"
+    ).one()
+    assert entry_snapshot.row_count == 1
+    assert entry_snapshot.snapshot_json[0]["id"] == entry.id
+    assert entry_snapshot.snapshot_json[0]["column_one_value_json"] == {"text_value": "reconstructed"}
+
+
+def test_reconstruct_list_period_does_not_disturb_other_lists_in_same_period(db):
+    tenant = make_tenant(db)
+    cycle_config = make_cycle_config(db, tenant.id)
+    definition_a = make_list_definition(db, tenant.id, name="List A")
+    definition_b = make_list_definition(db, tenant.id, name="List B")
+    entry_b = make_list_entry(db, definition_b.id, column_one_value={"text_value": "b1"})
+
+    # List B already has a snapshot for 2020 (e.g. reconstructed earlier or auto-captured).
+    TableSnapshotService().reconstruct_list_period(
+        db, tenant_id=tenant.id, cycle_config=cycle_config, cycle_year=2020,
+        list_public_id=str(definition_b.public_id),
+        definition_values={"name": definition_b.name, "column_one_title": "x", "column_one_value_type": "text", "column_two_title": "y", "column_two_value_type": "text", "is_active": True},
+        entry_payloads=[{"public_id": str(entry_b.public_id), "sort_index": 0, "column_one_value_json": {"text_value": "b1"}, "column_two_value_json": {}}],
+        edited_by=1,
+    )
+
+    # Now reconstruct List A for the same period - must not remove List B's rows.
+    TableSnapshotService().reconstruct_list_period(
+        db, tenant_id=tenant.id, cycle_config=cycle_config, cycle_year=2020,
+        list_public_id=str(definition_a.public_id),
+        definition_values={"name": definition_a.name, "column_one_title": "x", "column_one_value_type": "text", "column_two_title": "y", "column_two_value_type": "text", "is_active": True},
+        entry_payloads=[],
+        edited_by=1,
+    )
+
+    definition_snapshot = db.query(TableSnapshot).filter_by(
+        tenant_id=tenant.id, cycle_config_id=cycle_config.id, cycle_year=2020, table_name="list_definition"
+    ).one()
+    assert {row["id"] for row in definition_snapshot.snapshot_json} == {definition_a.id, definition_b.id}
+
+    entry_snapshot = db.query(TableSnapshot).filter_by(
+        tenant_id=tenant.id, cycle_config_id=cycle_config.id, cycle_year=2020, table_name="list_entry"
+    ).one()
+    assert {row["id"] for row in entry_snapshot.snapshot_json} == {entry_b.id}
+
+
+def test_reconstruct_list_period_rejects_unknown_entry(db):
+    tenant = make_tenant(db)
+    cycle_config = make_cycle_config(db, tenant.id)
+    definition = make_list_definition(db, tenant.id)
+
+    with pytest.raises(ReconstructionIdentityError):
+        TableSnapshotService().reconstruct_list_period(
+            db, tenant_id=tenant.id, cycle_config=cycle_config, cycle_year=2020,
+            list_public_id=str(definition.public_id),
+            definition_values={"name": definition.name, "column_one_title": "x", "column_one_value_type": "text", "column_two_title": "y", "column_two_value_type": "text", "is_active": True},
+            entry_payloads=[{"public_id": "00000000-0000-0000-0000-000000000000", "sort_index": 0, "column_one_value_json": {}, "column_two_value_json": {}}],
+            edited_by=1,
+        )
+
+
+def test_reconstruct_list_period_rejects_unknown_list(db):
+    tenant = make_tenant(db)
+    cycle_config = make_cycle_config(db, tenant.id)
+
+    with pytest.raises(ReconstructionIdentityError):
+        TableSnapshotService().reconstruct_list_period(
+            db, tenant_id=tenant.id, cycle_config=cycle_config, cycle_year=2020,
+            list_public_id="00000000-0000-0000-0000-000000000000",
+            definition_values={"name": "Ghost"},
+            entry_payloads=[],
+            edited_by=1,
+        )
 
 
 def test_run_due_cycle_snapshots_creates_snapshot_for_just_ended_cycle(db):

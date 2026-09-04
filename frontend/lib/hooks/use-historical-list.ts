@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { browserApiFetch } from "@/lib/api/client";
 import {
@@ -6,6 +6,7 @@ import {
   StructuredListEntry,
   StructuredListValueType,
   TableSnapshotCycleSummary,
+  TableSnapshotListReconstructDraft,
   TableSnapshotRowsRead,
 } from "@/types/api";
 
@@ -42,8 +43,24 @@ function mapEntryRow(row: Record<string, unknown>, listDefinitionPublicId: strin
   };
 }
 
+/** Draft entries (from the reconstruct-draft endpoint) already use the un-suffixed
+ * frontend field names except column_one_value_json/column_two_value_json, which the
+ * backend keeps as-is since that's the shape it round-trips back into the reconstruct
+ * POST. */
+function mapDraftEntry(row: Record<string, unknown>, listDefinitionPublicId: string): StructuredListEntry {
+  return {
+    id: String(row.public_id ?? ""),
+    list_definition_id: listDefinitionPublicId,
+    sort_index: Number(row.sort_index ?? 0),
+    column_one_value: (row.column_one_value_json as Record<string, unknown>) ?? {},
+    column_two_value: (row.column_two_value_json as Record<string, unknown>) ?? {},
+    created_at: "",
+    updated_at: "",
+  };
+}
+
 export type HistoricalListState = {
-  mode: "live" | "historical";
+  mode: "live" | "historical" | "reconstructing";
   availableCycles: TableSnapshotCycleSummary[];
   cycleConfigId: string | null;
   cycleYear: number | null;
@@ -54,7 +71,9 @@ export type HistoricalListState = {
   entries: StructuredListEntry[];
   isEdited: boolean;
   editUnlocked: boolean;
-  switchToHistorical: (cycleConfigId: string, cycleYear: number) => void;
+  /** Only set while mode === "reconstructing": where the draft was pre-filled from. */
+  reconstructSource: { kind: "live" | "snapshot"; cycleYear: number | null } | null;
+  switchToHistorical: (cycleConfigId: string, cycleYear: number, hasSnapshot: boolean) => void;
   switchToLive: () => void;
   unlockEditing: () => void;
   saveHistoricalEntry: (
@@ -62,46 +81,45 @@ export type HistoricalListState = {
     values: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>
   ) => Promise<void>;
   deleteHistoricalEntry: (entryPublicId: string) => Promise<void>;
+  /** Reconstruction-mode-only: edits stay purely local until confirmReconstruction(). */
+  updateDraftEntry: (
+    entryPublicId: string,
+    values: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>
+  ) => void;
+  deleteDraftEntry: (entryPublicId: string) => void;
+  confirmReconstruction: () => Promise<void>;
+  cancelReconstruction: () => void;
 };
 
-/** Owns "which cycle the Listen overview is currently viewing" for one selected list.
- * Unlike a single-table historical view, a list's history spans two snapshotted tables
- * (list_definition for name/column titles, list_entry for the rows) that have to be
- * cross-referenced: list_entry rows keep the definition's *internal* id from snapshot
- * time, not its public_id, so the definition snapshot is fetched first to resolve which
- * internal id belongs to the currently selected list's public_id. */
+/** Owns "which cycle the Listen overview is currently viewing" for one selected list -
+ * live, a real historical snapshot, or an in-progress reconstruction of a period that
+ * has no snapshot yet (see list_snapshot_cycles' has_snapshot flag). A list's history
+ * spans two snapshotted tables (list_definition for name/column titles, list_entry for
+ * the rows) that have to be cross-referenced: list_entry rows keep the definition's
+ * *internal* id from snapshot time, not its public_id, so the definition snapshot is
+ * fetched first to resolve which internal id belongs to the currently selected list's
+ * public_id. */
 export function useHistoricalList(selectedListId: string | null): HistoricalListState {
   const [cycles, setCycles] = useState<TableSnapshotCycleSummary[]>([]);
   const [selected, setSelected] = useState<{ cycleConfigId: string; cycleYear: number; cycleConfigName: string } | null>(null);
+  const [mode, setMode] = useState<"live" | "historical" | "reconstructing">("live");
   const [definition, setDefinition] = useState<StructuredListDefinition | null>(null);
   const [entries, setEntries] = useState<StructuredListEntry[]>([]);
   const [isEdited, setIsEdited] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [editUnlocked, setEditUnlocked] = useState(false);
+  const [reconstructSource, setReconstructSource] = useState<{ kind: "live" | "snapshot"; cycleYear: number | null } | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    browserApiFetch<TableSnapshotCycleSummary[]>("/api/table-snapshots/cycles")
-      .then((data) => {
-        if (!cancelled) setCycles(data);
-      })
-      .catch(() => {
-        if (!cancelled) setCycles([]);
-      });
-    return () => {
-      cancelled = true;
-    };
+  const refetchCycles = useCallback(() => {
+    return browserApiFetch<TableSnapshotCycleSummary[]>("/api/table-snapshots/cycles")
+      .then((data) => setCycles(data))
+      .catch(() => setCycles([]));
   }, []);
 
-  const availableCycles = useMemo(
-    () =>
-      cycles.filter(
-        (cycle) =>
-          cycle.tables.some((t) => t.table_name === "list_definition") &&
-          cycle.tables.some((t) => t.table_name === "list_entry")
-      ),
-    [cycles]
-  );
+  useEffect(() => {
+    void refetchCycles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadForList = useCallback(
     (cycleConfigId: string, cycleYear: number, listId: string | null) => {
@@ -138,30 +156,64 @@ export function useHistoricalList(selectedListId: string | null): HistoricalList
     []
   );
 
+  const loadDraftForList = useCallback((cycleConfigId: string, cycleYear: number, listId: string) => {
+    setIsLoading(true);
+    browserApiFetch<TableSnapshotListReconstructDraft>(
+      `/api/table-snapshots/${cycleConfigId}/${cycleYear}/lists/${listId}/reconstruct-draft`
+    )
+      .then((draft) => {
+        setDefinition(mapDefinitionRow({ public_id: listId, ...draft.definition_values }));
+        setEntries(draft.entries.map((row) => mapDraftEntry(row, listId)).sort((a, b) => a.sort_index - b.sort_index));
+        setReconstructSource({ kind: draft.source, cycleYear: draft.source_cycle_year });
+      })
+      .catch(() => {
+        setDefinition(null);
+        setEntries([]);
+        setReconstructSource(null);
+      })
+      .finally(() => setIsLoading(false));
+  }, []);
+
   const switchToHistorical = useCallback(
-    (cycleConfigId: string, cycleYear: number) => {
-      const cycleConfigName = availableCycles.find((c) => c.cycle_config_id === cycleConfigId)?.cycle_config_name ?? "";
+    (cycleConfigId: string, cycleYear: number, hasSnapshot: boolean) => {
+      const cycleConfigName = cycles.find((c) => c.cycle_config_id === cycleConfigId)?.cycle_config_name ?? "";
       setSelected({ cycleConfigId, cycleYear, cycleConfigName });
       setEditUnlocked(false);
+      if (!hasSnapshot) {
+        setMode("reconstructing");
+        if (selectedListId) loadDraftForList(cycleConfigId, cycleYear, selectedListId);
+        return;
+      }
+      setMode("historical");
+      setReconstructSource(null);
       loadForList(cycleConfigId, cycleYear, selectedListId);
     },
-    [availableCycles, loadForList, selectedListId]
+    [cycles, loadForList, loadDraftForList, selectedListId]
   );
 
   const switchToLive = useCallback(() => {
     setSelected(null);
+    setMode("live");
     setDefinition(null);
     setEntries([]);
     setIsEdited(false);
     setEditUnlocked(false);
+    setReconstructSource(null);
   }, []);
 
-  // Switching which list is selected in the sidebar while a historical cycle is active
-  // re-fetches for the new list under the *same* cycle, instead of forcing back to live.
+  const cancelReconstruction = switchToLive;
+
+  // Switching which list is selected in the sidebar while a historical/reconstructing
+  // cycle is active re-fetches for the new list under the *same* cycle, instead of
+  // forcing back to live.
   useEffect(() => {
     if (!selected) return;
     setEditUnlocked(false);
-    loadForList(selected.cycleConfigId, selected.cycleYear, selectedListId);
+    if (mode === "reconstructing") {
+      if (selectedListId) loadDraftForList(selected.cycleConfigId, selected.cycleYear, selectedListId);
+    } else {
+      loadForList(selected.cycleConfigId, selected.cycleYear, selectedListId);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedListId]);
 
@@ -202,9 +254,54 @@ export function useHistoricalList(selectedListId: string | null): HistoricalList
     [selected]
   );
 
+  const updateDraftEntry = useCallback(
+    (
+      entryPublicId: string,
+      values: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>
+    ) => {
+      setEntries((current) => current.map((entry) => (entry.id === entryPublicId ? { ...entry, ...values } : entry)));
+    },
+    []
+  );
+
+  const deleteDraftEntry = useCallback((entryPublicId: string) => {
+    setEntries((current) => current.filter((entry) => entry.id !== entryPublicId));
+  }, []);
+
+  const confirmReconstruction = useCallback(async () => {
+    if (!selected || !selectedListId || !definition) throw new Error("Kein Entwurf zum Bestätigen");
+    await browserApiFetch(
+      `/api/table-snapshots/${selected.cycleConfigId}/${selected.cycleYear}/lists/${selectedListId}/reconstruct`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          definition_values: {
+            name: definition.name,
+            description: definition.description,
+            column_one_title: definition.column_one_title,
+            column_one_value_type: definition.column_one_value_type,
+            column_two_title: definition.column_two_title,
+            column_two_value_type: definition.column_two_value_type,
+            is_active: definition.is_active,
+          },
+          entries: entries.map((entry) => ({
+            public_id: entry.id,
+            sort_index: entry.sort_index,
+            column_one_value_json: entry.column_one_value,
+            column_two_value_json: entry.column_two_value,
+          })),
+        }),
+      }
+    );
+    setMode("historical");
+    setReconstructSource(null);
+    await refetchCycles();
+    loadForList(selected.cycleConfigId, selected.cycleYear, selectedListId);
+  }, [selected, selectedListId, definition, entries, refetchCycles, loadForList]);
+
   return {
-    mode: selected ? "historical" : "live",
-    availableCycles,
+    mode,
+    availableCycles: cycles,
     cycleConfigId: selected?.cycleConfigId ?? null,
     cycleYear: selected?.cycleYear ?? null,
     cycleConfigName: selected?.cycleConfigName ?? null,
@@ -213,10 +310,15 @@ export function useHistoricalList(selectedListId: string | null): HistoricalList
     entries,
     isEdited,
     editUnlocked,
+    reconstructSource,
     switchToHistorical,
     switchToLive,
     unlockEditing,
     saveHistoricalEntry,
     deleteHistoricalEntry,
+    updateDraftEntry,
+    deleteDraftEntry,
+    confirmReconstruction,
+    cancelReconstruction,
   };
 }

@@ -33,6 +33,42 @@ export function HistoricalViewBanner({ cycleConfigName, cycleYear, isEdited, edi
   );
 }
 
+type ReconstructionBannerProps = {
+  cycleConfigName: string;
+  cycleYear: number;
+  source: { kind: "live" | "snapshot"; cycleYear: number | null } | null;
+  isConfirming: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+};
+
+/** Shown while reconstructing a genuine snapshot gap (a real, ended period with no
+ * snapshot yet - see TableSnapshotCycleSummary.has_snapshot) for the selected list. The
+ * table is directly editable here (not gated behind an unlock step like
+ * HistoricalViewBanner) since nothing has been frozen yet - it's a fresh draft,
+ * pre-filled from the nearest available source, until "Bestätigen" writes it. */
+export function ReconstructionBanner({ cycleConfigName, cycleYear, source, isConfirming, onConfirm, onCancel }: ReconstructionBannerProps) {
+  const sourceLabel = source ? (source.kind === "live" ? "der aktuellen Liste" : `Zyklus ${source.cycleYear}`) : "…";
+  return (
+    <div className="historical-view-banner">
+      <div>
+        <strong>Fehlender Snapshot — {cycleConfigName} {cycleYear}</strong>
+        <p className="muted">
+          Für diese Periode gibt es noch keinen Snapshot. Die Daten wurden aus {sourceLabel} vorausgefüllt - bitte prüfen, anpassen und bestätigen.
+        </p>
+      </div>
+      <div className="table-toolbar-actions">
+        <button type="button" className="button-ghost button-inline" onClick={onCancel}>
+          Abbrechen
+        </button>
+        <button type="button" className="button-inline" onClick={onConfirm} disabled={isConfirming}>
+          {isConfirming ? "…" : "Bestätigen"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 type HistoricalEditConfirmModalProps = {
   open: boolean;
   onCancel: () => void;

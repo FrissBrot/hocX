@@ -3,7 +3,7 @@
 import { FormEvent, useMemo, useRef, useState } from "react";
 
 import { StructuredListTable } from "@/components/lists/structured-list-table";
-import { HistoricalEditConfirmModal, HistoricalViewBanner } from "@/components/ui/historical-view-banner";
+import { HistoricalEditConfirmModal, HistoricalViewBanner, ReconstructionBanner } from "@/components/ui/historical-view-banner";
 import { Modal } from "@/components/ui/modal";
 import { usePopoverDismiss } from "@/components/ui/popover";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -219,9 +219,12 @@ export function ListManager({
 
   const historical = useHistoricalList(selectedListId);
   const isHistorical = historical.mode === "historical";
+  const isReconstructing = historical.mode === "reconstructing";
+  const isLive = historical.mode === "live";
   const [showUnlockConfirm, setShowUnlockConfirm] = useState(false);
-  const displayedDefinition = isHistorical ? historical.definition : selectedList;
-  const displayedEntries = isHistorical ? historical.entries : entriesByList[selectedList?.id ?? ""] ?? [];
+  const [isConfirmingReconstruction, setIsConfirmingReconstruction] = useState(false);
+  const displayedDefinition = isLive ? selectedList : historical.definition;
+  const displayedEntries = isLive ? entriesByList[selectedList?.id ?? ""] ?? [] : historical.entries;
 
   function openCreate() {
     setEditingListId(null);
@@ -389,6 +392,38 @@ export function ListManager({
     }
   }
 
+  // Reconstruction-mode edits stay purely local (no network call) until "Bestätigen" -
+  // see useHistoricalList.confirmReconstruction.
+  async function updateDraftEntry(
+    entryId: string,
+    payload: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>
+  ) {
+    historical.updateDraftEntry(entryId, payload);
+    return true;
+  }
+
+  async function deleteDraftEntry(entryId: string) {
+    const ok = await confirm({
+      message: "Diesen Eintrag aus dem Entwurf entfernen? Er wird beim Bestätigen nicht mit übernommen.",
+      tone: "danger",
+      confirmLabel: "Entfernen"
+    });
+    if (!ok) return;
+    historical.deleteDraftEntry(entryId);
+  }
+
+  async function confirmReconstruction() {
+    setIsConfirmingReconstruction(true);
+    try {
+      await historical.confirmReconstruction();
+      showToast("Snapshot für diese Periode erstellt", "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Snapshot konnte nicht erstellt werden", "error");
+    } finally {
+      setIsConfirmingReconstruction(false);
+    }
+  }
+
   return (
     <div className="grid">
       <div className="list-manager-layout">
@@ -474,12 +509,12 @@ export function ListManager({
                     onSwitchToLive={historical.switchToLive}
                     onSwitchToHistorical={historical.switchToHistorical}
                   />
-                  {!isHistorical && landscapeTemplates.length > 0 && (
+                  {isLive && landscapeTemplates.length > 0 && (
                     <button type="button" className="button-inline button-ghost" onClick={() => { setExportListId(selectedListId ?? ""); setExportUrl(null); setExportModalOpen(true); }}>
                       Export
                     </button>
                   )}
-                  {!isHistorical && (
+                  {isLive && (
                     <button type="button" className="button-inline button-ghost" onClick={() => openEdit(selectedList)}>
                       Bearbeiten
                     </button>
@@ -497,8 +532,23 @@ export function ListManager({
                 />
               )}
 
-              {isHistorical && !historical.isLoading && !historical.definition ? (
-                <p className="muted">Diese Liste existierte in diesem Zyklus noch nicht.</p>
+              {isReconstructing && historical.cycleYear !== null && (
+                <ReconstructionBanner
+                  cycleConfigName={historical.cycleConfigName ?? ""}
+                  cycleYear={historical.cycleYear}
+                  source={historical.reconstructSource}
+                  isConfirming={isConfirmingReconstruction}
+                  onConfirm={() => void confirmReconstruction()}
+                  onCancel={historical.cancelReconstruction}
+                />
+              )}
+
+              {!isLive && !historical.isLoading && !historical.definition ? (
+                <p className="muted">
+                  {isReconstructing
+                    ? "Für diese Liste konnten keine Daten gefunden werden - weder aktuell noch in einem anderen Zyklus."
+                    : "Diese Liste existierte in diesem Zyklus noch nicht."}
+                </p>
               ) : (
                 displayedDefinition && (
                   <StructuredListTable
@@ -507,18 +557,30 @@ export function ListManager({
                     availableParticipants={availableParticipants}
                     availableEvents={availableEvents}
                     fullWidth
-                    editable={!isHistorical || historical.editUnlocked}
-                    allowCreate={!isHistorical}
+                    editable={isLive || isReconstructing || historical.editUnlocked}
+                    allowCreate={isLive}
                     onCreateEntry={
-                      isHistorical
-                        ? async () => {
-                            showToast("In der historischen Ansicht können keine neuen Einträge angelegt werden", "error");
+                      isLive
+                        ? (payload) => createEntry(selectedList.id, payload)
+                        : async () => {
+                            showToast("Es können keine neuen Einträge angelegt werden - nur bestehende bearbeiten oder entfernen", "error");
                             return false;
                           }
-                        : (payload) => createEntry(selectedList.id, payload)
                     }
-                    onUpdateEntry={isHistorical ? updateHistoricalEntry : (entryId, payload) => updateEntry(selectedList.id, entryId, payload)}
-                    onDeleteEntry={isHistorical ? deleteHistoricalEntry : (entryId) => deleteEntry(selectedList.id, entryId)}
+                    onUpdateEntry={
+                      isLive
+                        ? (entryId, payload) => updateEntry(selectedList.id, entryId, payload)
+                        : isReconstructing
+                          ? updateDraftEntry
+                          : updateHistoricalEntry
+                    }
+                    onDeleteEntry={
+                      isLive
+                        ? (entryId) => deleteEntry(selectedList.id, entryId)
+                        : isReconstructing
+                          ? deleteDraftEntry
+                          : deleteHistoricalEntry
+                    }
                   />
                 )
               )}
