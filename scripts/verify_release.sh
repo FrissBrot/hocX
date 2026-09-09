@@ -91,10 +91,6 @@ check_frontend_local() {
   probe_from_backend "http://frontend:3000/login"
 }
 
-check_website_local() {
-  probe_from_backend "http://website:3000/"
-}
-
 check_docs_local() {
   probe_from_backend "http://docs/"
 }
@@ -116,7 +112,6 @@ check_alembic_head() {
 run_check "Backend-Health lokal" check_backend_health
 run_check "Abgabebox-Backend-Health lokal" check_abgabebox_backend_health
 run_check "Frontend antwortet lokal" check_frontend_local
-run_check "Website antwortet lokal" check_website_local
 run_check "Docs antworten lokal" check_docs_local
 run_check "Alembic steht auf head" check_alembic_head
 
@@ -133,17 +128,11 @@ if [ "${TRAEFIK_WEBSECURE_BIND:-0.0.0.0}" != "0.0.0.0" ]; then
   if [ -n "${TRAEFIK_DOCS_DOMAIN:-}" ]; then
     note "  Manuell ueber den privaten Tunnel pruefen: https://${TRAEFIK_DOCS_DOMAIN}/"
   fi
-  if [ -n "${TRAEFIK_WEB_DOMAIN:-}" ]; then
-    note "  Manuell ueber den privaten Tunnel pruefen: https://${TRAEFIK_WEB_DOMAIN}/"
-  fi
 else
   run_check "Hauptdomain antwortet via Traefik" probe_from_backend "https://${TRAEFIK_DOMAIN}/login"
   run_check "Abgabebox antwortet via Traefik" probe_from_backend "https://${TRAEFIK_ABGABEBOX_DOMAIN}/"
   if [ -n "${TRAEFIK_DOCS_DOMAIN:-}" ]; then
     run_check "Docs-Domain antwortet via Traefik" probe_from_backend "https://${TRAEFIK_DOCS_DOMAIN}/"
-  fi
-  if [ -n "${TRAEFIK_WEB_DOMAIN:-}" ]; then
-    run_check "Website-Domain antwortet via Traefik" probe_from_backend "https://${TRAEFIK_WEB_DOMAIN}/"
   fi
 fi
 

@@ -131,7 +131,6 @@ create_env_file() {
   local default_admin_domain
   local default_abgabebox_domain
   local default_docs_domain
-  local default_web_domain
   local default_traefik_bind
 
   if ! exec 3<> /dev/tty; then
@@ -148,13 +147,11 @@ create_env_file() {
     default_admin_domain="admin.test.hocx.ch"
     default_abgabebox_domain="abgabe-test.hocx.ch"
     default_docs_domain="docs-test.hocx.ch"
-    default_web_domain="web-test.hocx.ch"
   else
     default_domain="hocx.ch"
     default_admin_domain="admin.hocx.ch"
     default_abgabebox_domain="abgabe.hocx.ch"
     default_docs_domain="docs.hocx.ch"
-    default_web_domain="web.hocx.ch"
   fi
 
   prompt_value HOCX_VERSION "Image-Version (HOCX_VERSION)"
@@ -164,12 +161,10 @@ create_env_file() {
     default_admin_domain="admin.$TRAEFIK_DOMAIN"
     default_abgabebox_domain="abgabe.$TRAEFIK_DOMAIN"
     default_docs_domain="docs.$TRAEFIK_DOMAIN"
-    default_web_domain="web.$TRAEFIK_DOMAIN"
   fi
   prompt_value TRAEFIK_ADMIN_DOMAIN "Admin-Domain" "$default_admin_domain"
   prompt_value TRAEFIK_ABGABEBOX_DOMAIN "Abgabebox-Domain" "$default_abgabebox_domain"
   prompt_value TRAEFIK_DOCS_DOMAIN "Dokumentations-Domain" "$default_docs_domain"
-  prompt_value TRAEFIK_WEB_DOMAIN "Web-Domain" "$default_web_domain"
   prompt_value ACME_EMAIL "E-Mail fuer Let's Encrypt"
   prompt_value CF_DNS_API_TOKEN "Cloudflare DNS API Token" "" true
 
@@ -234,7 +229,6 @@ create_env_file() {
   write_env_value NEXT_PUBLIC_API_URL "https://$TRAEFIK_DOMAIN"
   write_env_value INTERNAL_API_URL "http://backend:8000"
   write_env_value TRAEFIK_DOCS_DOMAIN "$TRAEFIK_DOCS_DOMAIN"
-  write_env_value TRAEFIK_WEB_DOMAIN "$TRAEFIK_WEB_DOMAIN"
   write_env_value AUTH_SECRET "$AUTH_SECRET"
   write_env_value ADMIN_AUTH_SECRET "$ADMIN_AUTH_SECRET"
   write_env_value INITIAL_ADMIN_EMAIL "$INITIAL_ADMIN_EMAIL"

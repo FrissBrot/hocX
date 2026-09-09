@@ -75,7 +75,7 @@ Alembic explizit ausfuehren → Container neu starten → Smoke-Checks
 (Backend, Frontend, Abgabebox, Docs, ClamAV).
 `verify_release.sh test` prueft danach zusaetzlich:
 - Backend / Abgabebox-Backend lokal erreichbar
-- Frontend / Website / Docs lokal erreichbar
+- Frontend / Docs lokal erreichbar
 - Alembic `current == heads`
 - `https://test...`-Domains antworten ueber Traefik
 
@@ -167,8 +167,8 @@ durchläuft beim nächsten Start die komplette Alembic-Historie von Anfang an.
 ## 7. Test-Host das erste Mal aufsetzen
 
 1. Test-Server provisionieren, Docker + Docker Compose installieren.
-2. DNS: `test.hocx.ch`, `abgabe-test.hocx.ch`, optional `docs-test.hocx.ch` und
-   `web-test.hocx.ch` auf die Test-Server-IP zeigen lassen.
+2. DNS: `test.hocx.ch`, `abgabe-test.hocx.ch`, optional `docs-test.hocx.ch`
+   auf die Test-Server-IP zeigen lassen.
 3. Repo als root klonen: `git clone git@github.com:FrissBrot/hocX.git`.
 4. Im Repo als root `./scripts/provision_deploy_user.sh test` ausfuehren. Das Skript erstellt
    `hocx-deploy`, installiert bei Debian/Ubuntu fehlende Werkzeuge (`gh`, `jq`, `curl`),
