@@ -610,6 +610,11 @@ if ! run_smoke_checks; then
   exit 1
 fi
 
+if [ "$ENVIRONMENT" = test ]; then
+  echo "==> [$ENVIRONMENT] Demo-Mandant neu befuellen"
+  "${DC[@]}" exec -T backend python scripts/seed_test_tenant.py
+fi
+
 install -m 600 "$PROJECT_DIR/.releases/${HOCX_VERSION}.env" "$PROJECT_DIR/.releases/current.env"
 
 echo "==> [$ENVIRONMENT] Fertig: laeuft jetzt auf $HOCX_VERSION"

@@ -72,7 +72,10 @@ vim .env
 `deploy.sh test` macht automatisch: Preflight + exklusiver Deploy-Lock → DB-Backup
 (`backups/`) → Images pullen → Cosign-Signaturen pruefen → Digest-Manifest schreiben →
 Alembic explizit ausfuehren → Container neu starten → Smoke-Checks
-(Backend, Frontend, Abgabebox, Docs, ClamAV).
+(Backend, Frontend, Abgabebox, Docs, ClamAV) → Demo-Mandant neu befuellen
+(`scripts/seed_test_tenant.py` loescht und baut den Mandanten "Demo Pfadi Rueeblihausen"
+bei jedem Test-Deploy komplett neu auf - Login siehe Skript-Output/-Docstring. Laeuft nur
+auf `test`, nie auf `prod`).
 `verify_release.sh test` prueft danach zusaetzlich:
 - Backend / Abgabebox-Backend lokal erreichbar
 - Frontend / Docs lokal erreichbar
