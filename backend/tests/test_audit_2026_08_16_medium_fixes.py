@@ -44,7 +44,7 @@ def test_create_fine_rejects_frozen_protocol(db):
     repo = FinesRepository()
     result = repo.create_fine(
         db, AttendanceFineCreate(
-            protocol_id=protocol.id, account_id=account.id, amount=Decimal("5.00"),
+            protocol_id=protocol.public_id, account_id=account.public_id, amount=Decimal("5.00"),
             fine_type="late", participant_name_snapshot="X",
         ), tenant.id,
     )
@@ -89,7 +89,7 @@ def test_create_transaction_rejects_frozen_protocol(db):
     repo = FinanceRepository()
     result = repo.create_transaction(
         db, account.id, tenant.id,
-        FinanceTransactionCreate(amount=Decimal("10.00"), description="x", transaction_date=date(2026, 1, 1), protocol_id=protocol.id),
+        FinanceTransactionCreate(amount=Decimal("10.00"), description="x", transaction_date=date(2026, 1, 1), protocol_id=protocol.public_id),
     )
     assert result is None
 

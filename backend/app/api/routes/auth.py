@@ -1,10 +1,15 @@
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.db import get_db
+from app.core.rate_limit import enforce_rate_limit
 from app.core.security import CurrentUser, get_current_user, get_optional_current_user
+from app.models import Tenant
+from app.services import public_id_service
 from app.schemas.mfa import (
     LoginResponse,
     MfaTicketRequest,
@@ -26,9 +31,15 @@ service = AuthService()
 
 
 def _expected_origin(request: Request) -> str:
-    origin = request.headers.get("origin")
-    if origin:
-        return origin
+    # Pinned to the same fixed domain WebAuthn's RP ID uses (see
+    # MfaService.rp_id_for_request_host) instead of trusting the client-supplied Origin
+    # header back at itself - comparing client_data.origin against a value copied from
+    # that same request's own Origin header offered no independent security guarantee
+    # (audit finding, 2026-08-25). The RP-ID-hash check remains the primary anchor either
+    # way; this closes the origin check's own gap to match it. No settings.traefik_domain
+    # (local dev only) still falls back to the request's own host, same as before.
+    if settings.traefik_domain:
+        return f"https://{settings.traefik_domain}"
     host = request.headers.get("host") or request.url.netloc
     if host.startswith("localhost") or host.startswith("127.0.0.1"):
         return f"http://{host}"
@@ -93,18 +104,34 @@ def verify_login_passkey(
     return service.verify_login_passkey(db, response, payload)
 
 
+def _client_ip(request: Request) -> str:
+    """Best-effort source IP for per-IP rate limiting on unauthenticated public endpoints.
+    Traefik is the only reverse proxy in front of this service and sets X-Forwarded-For to
+    the real client IP on every request; uvicorn isn't run with --proxy-headers here, so
+    request.client.host alone would just be Traefik's own container IP (audit finding,
+    2026-08-27, see tenant_by_domain below). Takes the first (leftmost / original client)
+    hop, not the last, which would be Traefik itself."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
 @router.get("/tenant-by-domain", response_model=TenantByDomainRead)
-def tenant_by_domain(domain: str, db: Session = Depends(get_db)):
+def tenant_by_domain(domain: str, request: Request, db: Session = Depends(get_db)):
     """Public lookup used by the login page: resolves a tenant's own custom app domain back to
     a tenant id/name so a visitor bounced here from that domain can be auto-selected instead of
-    picking their organisation from a dropdown."""
+    picking their organisation from a dropdown. Deliberately unauthenticated (used pre-login),
+    but rate-limited per source IP (audit finding, 2026-08-27) - without a cap this doubled as
+    a free domain-enumeration oracle."""
+    enforce_rate_limit(f"tenant-by-domain:{_client_ip(request)}", limit=20, period_seconds=60)
     tenant = domain_bridge_service.resolve_tenant_by_app_domain(db, domain)
     if tenant is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown domain")
     return TenantByDomainRead(
-        tenant_id=tenant.id,
+        tenant_id=tenant.public_id,
         tenant_name=tenant.name,
-        profile_image_url=build_tenant_profile_image_url(tenant.id, tenant.profile_image_path),
+        profile_image_url=build_tenant_profile_image_url(tenant.public_id, tenant.profile_image_path),
     )
 
 
@@ -138,13 +165,16 @@ def session(request: Request, db: Session = Depends(get_db), user: CurrentUser |
 
 @router.post("/select-tenant/{tenant_id}", response_model=SessionRead)
 def select_tenant(
-    tenant_id: int,
+    tenant_id: uuid.UUID,
     response: Response,
     request: Request,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    return service.select_tenant(db, response, user, tenant_id, request_host=request.url.hostname)
+    internal_id = public_id_service.resolve_internal_id(db, Tenant, tenant_id)
+    if internal_id is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    return service.select_tenant(db, response, user, internal_id, request_host=request.url.hostname)
 
 
 @router.get("/bridge")

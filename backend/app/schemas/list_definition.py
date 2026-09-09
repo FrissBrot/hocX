@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, Field
 
+from app.models.entities import Tenant
+from app.schemas.base import PublicIdModel
 
 ListValueType = Literal["text", "participant", "participants", "event"]
 
@@ -33,14 +36,14 @@ class ListDefinitionUpdate(BaseModel):
     is_active: bool | None = None
 
 
-class ListDefinitionRead(ListDefinitionBase):
-    id: int
-    tenant_id: int
+class ListDefinitionRead(PublicIdModel, ListDefinitionBase):
+    _fk_models: ClassVar[dict[str, type]] = {"tenant_id": Tenant}
+
+    id: uuid.UUID
+    tenant_id: uuid.UUID
     content_version: int
     created_at: datetime
     updated_at: datetime
-
-    model_config = {"from_attributes": True}
 
 
 class ListEntryBase(BaseModel):
@@ -60,9 +63,9 @@ class ListEntryUpdate(BaseModel):
 
 
 class ListEntryRead(ListEntryBase):
-    id: int
-    list_definition_id: int
+    # Built via explicit keyword construction in ListService._entry_read (column_one/two_value
+    # need type-aware id translation - see _denormalize_value), not from_attributes.
+    id: uuid.UUID
+    list_definition_id: uuid.UUID
     created_at: datetime
     updated_at: datetime
-
-    model_config = {"from_attributes": True}

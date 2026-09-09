@@ -28,9 +28,14 @@ class ListSnapshotCache:
     definitions: dict[int, ListDefinition | None] = field(default_factory=dict)
     entries: dict[int, list[ListEntry]] = field(default_factory=dict)
 
-    def get_definition(self, db: Session, list_definition_id: int) -> ListDefinition | None:
+    def get_definition(self, db: Session, list_definition_id: int, tenant_id: int) -> ListDefinition | None:
         if list_definition_id not in self.definitions:
-            self.definitions[list_definition_id] = db.get(ListDefinition, list_definition_id)
+            definition = db.get(ListDefinition, list_definition_id)
+            # linked_list_id/rows[].linked_list_id are client-supplied (configuration_snapshot_json)
+            # and only ever validated as "exists", never as "belongs to this tenant" - without this
+            # check a writer could point a block at another tenant's list_definition_id and exfiltrate
+            # its entries via refresh/sync. Treat cross-tenant the same as "list was deleted".
+            self.definitions[list_definition_id] = definition if definition is not None and definition.tenant_id == tenant_id else None
         return self.definitions[list_definition_id]
 
     def get_entries(self, db: Session, list_definition_id: int) -> list[ListEntry]:
@@ -46,11 +51,17 @@ class ListSnapshotCache:
 
 
 def compute_whole_list_snapshot(
-    db: Session, list_definition_id: int, *, cache: ListSnapshotCache | None = None
+    db: Session, list_definition_id: int, tenant_id: int, *, cache: ListSnapshotCache | None = None
 ) -> dict[str, Any] | None:
     """Full frozen view of a list for the "Gekoppelte Liste" whole-list mode, or None if
-    the list itself was deleted."""
-    definition = cache.get_definition(db, list_definition_id) if cache else db.get(ListDefinition, list_definition_id)
+    the list itself was deleted (or belongs to a different tenant - see
+    ListSnapshotCache.get_definition)."""
+    if cache:
+        definition = cache.get_definition(db, list_definition_id, tenant_id)
+    else:
+        definition = db.get(ListDefinition, list_definition_id)
+        if definition is not None and definition.tenant_id != tenant_id:
+            definition = None
     if definition is None:
         return None
     entries = (
@@ -84,14 +95,20 @@ def compute_whole_list_snapshot(
 
 
 def compute_row_list_snapshot(
-    db: Session, list_definition_id: int, list_entry_id: int, *, cache: ListSnapshotCache | None = None
+    db: Session, list_definition_id: int, list_entry_id: int, tenant_id: int, *, cache: ListSnapshotCache | None = None
 ) -> dict[str, Any]:
     """Frozen view of one list entry for a "Zeile aus Liste" row. Stores both raw column
     values (not just the row's own fixed/variable split) so which column is "fixed" can
     still change without needing to recompute. entry_exists=False means the entry (or the
-    whole list) was deleted since the last sync - callers show the existing "Verknuepfter
+    whole list) was deleted since the last sync, or belongs to a different tenant (see
+    ListSnapshotCache.get_definition) - callers show the existing "Verknuepfter
     Listeneintrag wurde geloescht" message in that case."""
-    definition = cache.get_definition(db, list_definition_id) if cache else db.get(ListDefinition, list_definition_id)
+    if cache:
+        definition = cache.get_definition(db, list_definition_id, tenant_id)
+    else:
+        definition = db.get(ListDefinition, list_definition_id)
+        if definition is not None and definition.tenant_id != tenant_id:
+            definition = None
     if definition is None:
         return {"synced_version": 0, "entry_exists": False}
     if cache and list_definition_id in cache.entries:
@@ -285,6 +302,7 @@ def _carry_or_stash_previous(new_snapshot: dict, old_snapshot: Any, *, keep_undo
 def refresh_block_list_snapshot(
     db: Session,
     block: ProtocolElementBlock,
+    tenant_id: int,
     *,
     keep_undo: bool,
     track_changes_active: bool = False,
@@ -302,7 +320,7 @@ def refresh_block_list_snapshot(
 
     linked_list_id = config.get("linked_list_id")
     if linked_list_id:
-        new_snapshot = compute_whole_list_snapshot(db, int(linked_list_id), cache=cache)
+        new_snapshot = compute_whole_list_snapshot(db, int(linked_list_id), tenant_id, cache=cache)
         if new_snapshot is not None:
             old_list_snapshot = config.get("list_snapshot")
             new_snapshot["entries"] = _merge_tracked_list_entries(
@@ -331,7 +349,7 @@ def refresh_block_list_snapshot(
                 continue
             row = dict(row)
             new_snapshot = compute_row_list_snapshot(
-                db, int(row["linked_list_id"]), int(row.get("linked_list_entry_id") or 0), cache=cache
+                db, int(row["linked_list_id"]), int(row.get("linked_list_entry_id") or 0), tenant_id, cache=cache
             )
             new_snapshot = _merge_tracked_row_snapshot(
                 new_snapshot, row.get("list_snapshot"), track_changes_active=track_changes_active
@@ -513,14 +531,14 @@ def clear_tracked_changes_for_protocol(db: Session, protocol_id: int, *, commit:
         db.flush()
 
 
-def freeze_list_snapshots_for_protocol(db: Session, protocol_id: int, *, commit: bool = True) -> None:
+def freeze_list_snapshots_for_protocol(db: Session, protocol_id: int, tenant_id: int, *, commit: bool = True) -> None:
     """Called once at durchgefuehrt -> abgeschlossen (mirrors _freeze_responsible_titles):
     resolve every list-linked block one last time and drop any leftover undo point, since
     abgeschlossen protocols are permanently read-only and never show the refresh/undo UI
     again."""
     cache = ListSnapshotCache()
     for block in list_linked_blocks_for_protocol(db, protocol_id):
-        refresh_block_list_snapshot(db, block, keep_undo=False, commit=commit, cache=cache)
+        refresh_block_list_snapshot(db, block, tenant_id, keep_undo=False, commit=commit, cache=cache)
         config = dict(block.configuration_snapshot_json or {})
         changed = False
         list_snapshot = config.get("list_snapshot")

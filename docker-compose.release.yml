@@ -5,19 +5,43 @@ services:
     # Audit I1, 2026-08-16: this file had NO resource limits at all, unlike
     # docker-compose.yml (dev) after M28 - a runaway container here could take down the
     # whole host with nothing to stop it. Values mirror docker-compose.yml's equivalents.
-    mem_limit: 768m
-    cpus: 1.0
+    # Raised 2026-09-02 after the prod host was resized to 16GB/8 cores (was tuned for a
+    # much smaller box) - see backend's mem_limit comment below for the OOM this was
+    # discovered alongside.
+    mem_limit: 1536m
+    cpus: 2.0
+    # Audit finding, 2026-08-16/2026-08-26: mirrors docker-compose.yml's (dev) equivalent -
+    # see the comment there for the reasoning. Retuned 2026-09-02 to the new 1536m
+    # mem_limit above (shared_buffers ~25%, effective_cache_size ~75%, standard Postgres
+    # sizing heuristics) - plus pg_stat_statements so slow/frequent queries are
+    # diagnosable in prod.
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.max=5000
+      - -c
+      - pg_stat_statements.track=all
+      - -c
+      - shared_buffers=384MB
+      - -c
+      - effective_cache_size=1152MB
+      - -c
+      - work_mem=16MB
+      - -c
+      - maintenance_work_mem=128MB
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
-    env_file:
-      - .env
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -29,7 +53,7 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    mem_limit: 128m
+    mem_limit: 256m
     cpus: 0.5
     logging:
       driver: json-file
@@ -43,19 +67,38 @@ services:
       retries: 10
 
   backend:
-    image: ghcr.io/${GHCR_NAMESPACE}/hocx-backend:${HOCX_VERSION}
+    image: ${HOCX_BACKEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-backend:${HOCX_VERSION}}
     restart: unless-stopped
-    mem_limit: 768m
-    cpus: 1.5
+    # Raised 2026-09-02: the container (2 uvicorn workers, see backend/Dockerfile's CMD) sat
+    # pinned at 766.9MiB/768MiB on the real prod host with nothing but our own smoke-check
+    # traffic - dmesg confirmed the kernel OOM-killer repeatedly killing python3.13 worker
+    # processes every few seconds, which uvicorn kept respawning in a tight crash loop.
+    # 768m/2 workers left far too little headroom per worker. Host was resized to 16GB/8
+    # cores specifically to give this room.
+    mem_limit: 2048m
+    cpus: 3.0
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,mode=1777
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
-    env_file:
-      - .env
     environment:
-      DATABASE_URL: ${DATABASE_URL}
+      HOCX_ENVIRONMENT: ${HOCX_ENVIRONMENT:-production}
+      DATABASE_URL_FILE: /run/secrets/database_url
+      APP_DATABASE_URL_FILE: /run/secrets/app_database_url
+      APP_DB_PASSWORD_FILE: /run/secrets/app_db_password
+      AUTH_SECRET_FILE: /run/secrets/auth_secret
+      ADMIN_AUTH_SECRET_FILE: /run/secrets/admin_auth_secret
+      INITIAL_ADMIN_PASSWORD_FILE: /run/secrets/initial_admin_password
+      ABGABEBOX_DB_PASSWORD_FILE: /run/secrets/abgabebox_db_password
       PYTHONPATH: /app
       STORAGE_ROOT: /app/storage
       LATEX_TEMPLATE_ROOT: /app/storage/latex_templates
@@ -63,11 +106,37 @@ services:
       UPLOAD_ROOT: /app/storage/uploads
       THUMBNAIL_ROOT: /app/storage-local/thumbnails
       ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
-      ABGABEBOX_DB_PASSWORD: ${ABGABEBOX_DB_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL}
+      TRAEFIK_DOMAIN: ${TRAEFIK_DOMAIN}
+      TRAEFIK_ABGABEBOX_DOMAIN: ${TRAEFIK_ABGABEBOX_DOMAIN}
+      ABGABEBOX_BASE_URL: https://${TRAEFIK_ABGABEBOX_DOMAIN}
       CLAMAV_HOST: clamav
       REDIS_URL: redis://redis:6379/0
       TRAEFIK_DYNAMIC_CONFIG_DIR: /app/traefik_dynamic
+      DOMAIN_HEALTH_CHECK_INTERVAL_MINUTES: ${DOMAIN_HEALTH_CHECK_INTERVAL_MINUTES:-30}
+      ABGABEBOX_RESCAN_INTERVAL_MINUTES: ${ABGABEBOX_RESCAN_INTERVAL_MINUTES:-15}
+      WORD_IMPORT_RESCAN_INTERVAL_MINUTES: ${WORD_IMPORT_RESCAN_INTERVAL_MINUTES:-15}
+      EXPORT_CLEANUP_INTERVAL_MINUTES: ${EXPORT_CLEANUP_INTERVAL_MINUTES:-1440}
+      EXPORT_RETENTION_DAYS: ${EXPORT_RETENTION_DAYS:-30}
+      LOG_CLEANUP_INTERVAL_MINUTES: ${LOG_CLEANUP_INTERVAL_MINUTES:-1440}
+      AUDIT_LOG_RETENTION_DAYS: ${AUDIT_LOG_RETENTION_DAYS:-730}
+      ERROR_LOG_RETENTION_DAYS: ${ERROR_LOG_RETENTION_DAYS:-90}
+      PROTOCOL_IMAGE_STORAGE_QUOTA_MB: ${PROTOCOL_IMAGE_STORAGE_QUOTA_MB:-2048}
+      AUTH_SESSION_TTL_HOURS: ${AUTH_SESSION_TTL_HOURS:-72}
+      AUTH_SESSION_COOKIE: ${AUTH_SESSION_COOKIE:-hocx_session}
+      AUTH_SECURE_COOKIES: ${AUTH_SECURE_COOKIES:-true}
+      ADMIN_SESSION_TTL_HOURS: ${ADMIN_SESSION_TTL_HOURS:-12}
+      ADMIN_SESSION_COOKIE: ${ADMIN_SESSION_COOKIE:-hocx_admin_session}
+      CLAMAV_PORT: ${CLAMAV_PORT:-3310}
+    secrets:
+      - database_url
+      - app_database_url
+      - app_db_password
+      - auth_secret
+      - admin_auth_secret
+      - initial_admin_password
+      - abgabebox_db_password
     depends_on:
       db:
         condition: service_healthy
@@ -93,15 +162,21 @@ services:
       start_period: 40s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.rule=Host(`${TRAEFIK_DOMAIN}`) && (PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`))"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.rule=Host(`${TRAEFIK_DOMAIN}`) && ((PathPrefix(`/api`) && !PathPrefix(`/api/admin`)) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`))"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.entrypoints=websecure"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.priority=100"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.service=${ROUTER_PREFIX:-hocx}-backend"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-backend.loadbalancer.server.port=8000"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-api.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`) && PathPrefix(`/api/admin`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-api.entrypoints=adminsecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-api.tls.certresolver=letsencryptdns"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-api.priority=100"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-api.service=${ROUTER_PREFIX:-hocx}-admin-api"
+      - "traefik.http.services.${ROUTER_PREFIX:-hocx}-admin-api.loadbalancer.server.port=8000"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-auth.rule=Host(`${TRAEFIK_DOMAIN}`) && Path(`/api/auth/login`) && Method(`POST`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-auth.entrypoints=websecure"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-auth.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-auth.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-auth.priority=200"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-auth.service=${ROUTER_PREFIX:-hocx}-auth"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-auth.middlewares=${ROUTER_PREFIX:-hocx}-auth-ratelimit"
@@ -109,16 +184,55 @@ services:
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-auth-ratelimit.ratelimit.average=10"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-auth-ratelimit.ratelimit.burst=5"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-auth-ratelimit.ratelimit.period=1m"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.rule=Host(`${TRAEFIK_DOMAIN}`) && Path(`/api/admin/auth/login`) && Method(`POST`)"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.entrypoints=websecure"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`) && Path(`/api/admin/auth/login`) && Method(`POST`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.entrypoints=adminsecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.tls.certresolver=letsencryptdns"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.priority=200"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.service=${ROUTER_PREFIX:-hocx}-admin-auth"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-auth.middlewares=${ROUTER_PREFIX:-hocx}-auth-ratelimit"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-admin-auth.loadbalancer.server.port=8000"
+      # Audit finding, 2026-08-27: /api/auth/mfa/totp/verify and /api/auth/tenant-by-domain
+      # previously fell through to the generic backend router with no Traefik-level rate
+      # limit at all, unlike /api/auth/login - defense in depth on top of the backend's own
+      # (in-progress, per-account) rate limiting for these two endpoints.
+      # TOTP verify: slightly more permissive than login's 10/min, since a legitimate user
+      # may retry a mistyped code a couple of times.
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-mfa-totp-verify.rule=Host(`${TRAEFIK_DOMAIN}`) && Path(`/api/auth/mfa/totp/verify`) && Method(`POST`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-mfa-totp-verify.entrypoints=websecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-mfa-totp-verify.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-mfa-totp-verify.priority=200"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-mfa-totp-verify.service=${ROUTER_PREFIX:-hocx}-mfa-totp-verify"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-mfa-totp-verify.middlewares=${ROUTER_PREFIX:-hocx}-mfa-totp-verify-ratelimit"
+      - "traefik.http.services.${ROUTER_PREFIX:-hocx}-mfa-totp-verify.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-mfa-totp-verify-ratelimit.ratelimit.average=20"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-mfa-totp-verify-ratelimit.ratelimit.burst=10"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-mfa-totp-verify-ratelimit.ratelimit.period=1m"
+      # tenant-by-domain: public, unauthenticated lookup polled on every page load
+      # pre-login - looser than login so normal login-page usage never trips it.
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-by-domain.rule=Host(`${TRAEFIK_DOMAIN}`) && Path(`/api/auth/tenant-by-domain`) && Method(`GET`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-by-domain.entrypoints=websecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-by-domain.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-by-domain.priority=200"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-by-domain.service=${ROUTER_PREFIX:-hocx}-tenant-by-domain"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-by-domain.middlewares=${ROUTER_PREFIX:-hocx}-tenant-by-domain-ratelimit"
+      - "traefik.http.services.${ROUTER_PREFIX:-hocx}-tenant-by-domain.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-tenant-by-domain-ratelimit.ratelimit.average=30"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-tenant-by-domain-ratelimit.ratelimit.burst=15"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-tenant-by-domain-ratelimit.ratelimit.period=1m"
+      # Dedicated live router for tenant ZIP imports. The 2050 MiB request limit covers the
+      # backend's 2 GiB ZIP limit plus multipart/form-data overhead without raising the limit
+      # for any other admin/API endpoint.
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`) && Path(`/api/admin/tenants/import`) && Method(`POST`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.entrypoints=adminsecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.tls.certresolver=letsencryptdns"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.priority=200"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.service=${ROUTER_PREFIX:-hocx}-tenant-import"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-tenant-import.middlewares=${ROUTER_PREFIX:-hocx}-tenant-import-body-limit"
+      - "traefik.http.services.${ROUTER_PREFIX:-hocx}-tenant-import.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-tenant-import-body-limit.buffering.maxRequestBodyBytes=2149580800"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-word-import.rule=Host(`${TRAEFIK_DOMAIN}`) && PathPrefix(`/api/tools/word-import`) && Method(`POST`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-word-import.entrypoints=websecure"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-word-import.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-word-import.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-word-import.priority=200"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-word-import.service=${ROUTER_PREFIX:-hocx}-word-import"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-word-import.middlewares=${ROUTER_PREFIX:-hocx}-word-import-ratelimit,${ROUTER_PREFIX:-hocx}-word-import-body-limit"
@@ -129,23 +243,35 @@ services:
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-word-import-body-limit.buffering.maxRequestBodyBytes=157286400"
 
   frontend:
-    image: ghcr.io/${GHCR_NAMESPACE}/hocx-frontend:${HOCX_VERSION}
+    image: ${HOCX_FRONTEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-frontend:${HOCX_VERSION}}
     restart: unless-stopped
     # Runs a pre-built image's `next start` here (no runtime build, unlike the dev
-    # compose's frontend/website - see their mem_limit comments there), so this is lighter
-    # than the dev value, but still bounded per audit I1.
-    mem_limit: 512m
-    cpus: 1.0
+    # compose's frontend - see its mem_limit comment there), so this is lighter
+    # than the dev value, but still bounded per audit I1. Raised 2026-09-02 alongside
+    # backend's OOM fix now that the host has 16GB/8 cores.
+    mem_limit: 1024m
+    cpus: 1.5
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,mode=1777
+      - /app/.next/cache:rw,noexec,nosuid,nodev,uid=1000,gid=1000,mode=0750
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
-    env_file:
-      - .env
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
       INTERNAL_API_URL: ${INTERNAL_API_URL}
+      TRAEFIK_DOMAIN: ${TRAEFIK_DOMAIN}
+      TRAEFIK_ADMIN_DOMAIN: ${TRAEFIK_ADMIN_DOMAIN}
+      HOCX_VERSION: ${HOCX_VERSION}
+      HOCX_APP_URL: ${HOCX_APP_URL:-}
     depends_on:
       - backend
     healthcheck:
@@ -161,63 +287,63 @@ services:
       start_period: 20s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.rule=Host(`${TRAEFIK_DOMAIN}`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.rule=Host(`${TRAEFIK_DOMAIN}`) && !PathPrefix(`/admin`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.entrypoints=websecure"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.priority=10"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-frontend.loadbalancer.server.port=3000"
-
-  website:
-    image: ghcr.io/${GHCR_NAMESPACE}/hocx-frontend:${HOCX_VERSION}
-    restart: unless-stopped
-    mem_limit: 512m
-    cpus: 0.5
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-    env_file:
-      - .env
-    environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
-      INTERNAL_API_URL: ${INTERNAL_API_URL}
-      HOCX_SITE_VARIANT: marketing
-    healthcheck:
-      # Kein curl/wget im Release-Image, siehe frontend oben.
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/', res => process.exit(res.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website.rule=Host(`${TRAEFIK_WEB_DOMAIN}`)"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website.entrypoints=websecure"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website.priority=10"
-      - "traefik.http.services.${ROUTER_PREFIX:-hocx}-website.loadbalancer.server.port=3000"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.entrypoints=adminsecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.tls.certresolver=letsencryptdns"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.priority=10"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.service=${ROUTER_PREFIX:-hocx}-frontend"
 
   abgabebox-backend:
-    image: ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-backend:${HOCX_VERSION}
+    image: ${HOCX_ABGABEBOX_BACKEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-backend:${HOCX_VERSION}}
     restart: unless-stopped
-    mem_limit: 384m
-    cpus: 1.0
+    # Raised 2026-09-02 alongside backend's OOM fix (same 2-worker pattern, see backend's
+    # mem_limit comment) - the upload-body-limit comment below already documents 384m/2
+    # workers reliably OOM-killing this container on a large upload; this is that same
+    # underlying constraint, not a separate issue. The 157286400-byte body limit below is
+    # left as-is (a deliberate, separately-tuned cap, not just a memory workaround).
+    mem_limit: 1024m
+    cpus: 1.5
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,mode=1777
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
-    env_file:
-      - .env
     environment:
-      ABGABEBOX_DATABASE_URL: ${ABGABEBOX_DATABASE_URL}
+      ABGABEBOX_DATABASE_URL_FILE: /run/secrets/abgabebox_database_url
       ABGABEBOX_STORAGE_ROOT: /app/storage
       ABGABEBOX_CORS_ORIGIN: https://${TRAEFIK_ABGABEBOX_DOMAIN}
+      # Steuert, ob captcha.py bei fehlenden FriendlyCaptcha-Keys sicher ablehnt
+      # (production) oder Uploads ohne Bot-Check zulaesst (dev/test) - siehe
+      # abgabebox-backend/app/config.py:_DEV_LIKE_ENVIRONMENTS. HOCX_ENVIRONMENT ist
+      # bereits die einzige Stelle, an der Test von Prod unterschieden wird.
+      ABGABEBOX_ENVIRONMENT: ${HOCX_ENVIRONMENT:-production}
       FRIENDLY_CAPTCHA_SITEKEY: ${FRIENDLY_CAPTCHA_SITEKEY}
-      FRIENDLY_CAPTCHA_API_KEY: ${FRIENDLY_CAPTCHA_API_KEY}
-      ABGABEBOX_CAPTCHA_SESSION_SECRET: ${ABGABEBOX_CAPTCHA_SESSION_SECRET}
+      FRIENDLY_CAPTCHA_API_KEY_FILE: /run/secrets/friendly_captcha_api_key
+      ABGABEBOX_CAPTCHA_SESSION_SECRET_FILE: /run/secrets/abgabebox_captcha_session_secret
       CLAMAV_HOST: clamav
+      CLAMAV_PORT: ${CLAMAV_PORT:-3310}
+      FRIENDLY_CAPTCHA_VERIFY_URL: ${FRIENDLY_CAPTCHA_VERIFY_URL:-https://api.friendlycaptcha.com/api/v2/captcha/siteverify}
+      ABGABEBOX_CAPTCHA_SESSION_TTL_MINUTES: ${ABGABEBOX_CAPTCHA_SESSION_TTL_MINUTES:-120}
+      ABGABEBOX_TENANT_STORAGE_QUOTA_MB: ${ABGABEBOX_TENANT_STORAGE_QUOTA_MB:-2048}
+      ABGABEBOX_QUARANTINE_MAX_AGE_MINUTES: ${ABGABEBOX_QUARANTINE_MAX_AGE_MINUTES:-60}
+      ABGABEBOX_QUARANTINE_CLEANUP_INTERVAL_MINUTES: ${ABGABEBOX_QUARANTINE_CLEANUP_INTERVAL_MINUTES:-30}
+    secrets:
+      - abgabebox_database_url
+      - friendly_captcha_api_key
+      - abgabebox_captcha_session_secret
     depends_on:
       db:
         condition: service_healthy
@@ -237,13 +363,13 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && PathPrefix(`/api`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.entrypoints=websecure"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.priority=100"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.service=${ROUTER_PREFIX:-hocx}-abgabebox-backend"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-abgabebox-backend.loadbalancer.server.port=8000"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-upload.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && PathPrefix(`/api/public`) && Method(`POST`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-upload.entrypoints=websecure"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-upload.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-upload.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-upload.priority=200"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-upload.service=${ROUTER_PREFIX:-hocx}-abgabebox-backend"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-upload.middlewares=${ROUTER_PREFIX:-hocx}-abgabebox-upload-ratelimit,${ROUTER_PREFIX:-hocx}-abgabebox-upload-body-limit"
@@ -254,28 +380,38 @@ services:
       # what the regression test in abgabebox-backend/tests/test_upload_size_limits.py
       # actually checked, not this file - the file `deploy.sh` really uses). Without it,
       # Starlette buffers the whole request body for this unauthenticated public POST
-      # endpoint before the app-level size check ever runs. 2000 MB = 20 files x 100 MB
-      # (max_files_per_element/max_file_size_mb ceilings, see
-      # backend/app/schemas/submission.py) - keep in sync with MAX_UPLOAD_REQUEST_BYTES in
-      # abgabebox-backend/app/routes/public.py if that changes.
-      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-body-limit.buffering.maxRequestBodyBytes=2097152000"
+      # endpoint before the app-level size check ever runs. Lowered from 2000 MB (audit
+      # finding, 2026-08-25) - routes/public.py's upload() holds every file's full content
+      # in memory at once, and 2000 MB reliably OOM-kills the abgabebox-backend container
+      # (384m mem_limit, 2 workers) for every tenant at once. Keep in sync with
+      # MAX_UPLOAD_REQUEST_BYTES in abgabebox-backend/app/routes/public.py.
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-body-limit.buffering.maxRequestBodyBytes=157286400"
 
   abgabebox-frontend:
-    image: ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-frontend:${HOCX_VERSION}
+    image: ${HOCX_ABGABEBOX_FRONTEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-frontend:${HOCX_VERSION}}
     restart: unless-stopped
-    mem_limit: 512m
-    cpus: 0.5
+    # Raised 2026-09-02 alongside the other services now that the host has 16GB/8 cores.
+    mem_limit: 1024m
+    cpus: 1.0
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,mode=1777
+      - /app/.next/cache:rw,noexec,nosuid,nodev,uid=1000,gid=1000,mode=0750
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
-    env_file:
-      - .env
     environment:
       NEXT_PUBLIC_ABGABEBOX_API_URL: https://${TRAEFIK_ABGABEBOX_DOMAIN}
       INTERNAL_ABGABEBOX_API_URL: https://${TRAEFIK_ABGABEBOX_DOMAIN}
       NEXT_PUBLIC_FRIENDLY_CAPTCHA_SITEKEY: ${FRIENDLY_CAPTCHA_SITEKEY}
+      DEFAULT_TENANT_SLUG: ${DEFAULT_TENANT_SLUG:-}
     depends_on:
       - abgabebox-backend
     healthcheck:
@@ -289,7 +425,7 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.entrypoints=websecure"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.priority=10"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.loadbalancer.server.port=3000"
 
@@ -299,17 +435,36 @@ services:
   # intentional. Image is built by the same release workflow as the other services now
   # (.github/workflows/release.yml).
   docs:
-    image: ghcr.io/${GHCR_NAMESPACE}/hocx-docs:${HOCX_VERSION}
+    image: ${HOCX_DOCS_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-docs:${HOCX_VERSION}}
     restart: unless-stopped
-    mem_limit: 128m
+    # Static nginx, genuinely lightweight - small bump 2026-09-02 for margin, not because
+    # of any observed problem here.
+    mem_limit: 256m
     cpus: 0.25
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,mode=1777
+      - /var/cache/nginx:rw,noexec,nosuid,nodev,mode=1777
+      - /var/run:rw,noexec,nosuid,nodev,mode=1777
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost/"]
+      # 127.0.0.1 statt localhost: nginx' Config listet nur "listen 80;" (IPv4).
+      # Der offizielle Entrypoint wuerde das um "listen [::]:80;" ergaenzen, kann die
+      # Config aber wegen read_only:true nicht patchen ("read-only file system?" im
+      # Log) - wget wuerde "localhost" sonst zuerst als ::1 aufloesen und mit
+      # Connection refused scheitern, obwohl nginx auf IPv4 laeuft.
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -318,9 +473,38 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-docs.rule=Host(`${TRAEFIK_DOCS_DOMAIN}`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-docs.entrypoints=websecure"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-docs.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-docs.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-docs.priority=10"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-docs.loadbalancer.server.port=80"
 
 volumes:
   postgres_data:
+
+secrets:
+  # file: statt environment: - Compose kann environment-Secrets seit Docker Compose
+  # v5.5.0 nicht mehr in einen read_only-Service einhaengen ("cannot create secret ...
+  # in read-only service: `file` is the sole supported option"), betrifft sowohl
+  # `up` als auch `run`. deploy.sh schreibt diese Dateien vor jedem Start frisch aus
+  # der aktuell geladenen .env nach .secrets/ (chmod 700/600, nicht committed).
+  postgres_password:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/postgres_password
+  database_url:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/database_url
+  app_database_url:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/app_database_url
+  app_db_password:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/app_db_password
+  auth_secret:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/auth_secret
+  admin_auth_secret:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/admin_auth_secret
+  initial_admin_password:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/initial_admin_password
+  abgabebox_db_password:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/abgabebox_db_password
+  abgabebox_database_url:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/abgabebox_database_url
+  friendly_captcha_api_key:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/friendly_captcha_api_key
+  abgabebox_captcha_session_secret:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/abgabebox_captcha_session_secret

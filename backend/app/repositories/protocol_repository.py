@@ -1,7 +1,10 @@
+import uuid
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Protocol
+from app.services import public_id_service
 
 
 class ProtocolRepository:
@@ -32,6 +35,9 @@ class ProtocolRepository:
 
     def get(self, db: Session, protocol_id: int) -> Protocol | None:
         return db.get(Protocol, protocol_id)
+
+    def get_by_public_id(self, db: Session, public_id: uuid.UUID, *, tenant_id: int) -> Protocol | None:
+        return public_id_service.get_by_public_id(db, Protocol, public_id, tenant_id=tenant_id)
 
     def next_open(self, db: Session, *, tenant_id: int) -> Protocol | None:
         """The soonest-dated protocol that isn't finalized yet - the tenant's 'next session'."""

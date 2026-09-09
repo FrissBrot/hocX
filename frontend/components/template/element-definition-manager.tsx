@@ -25,8 +25,8 @@ type ElementDefinitionManagerProps = {
   availableParticipants?: ParticipantSummary[];
   availableEvents?: EventSummary[];
   availableLists?: StructuredListDefinition[];
-  availableAccounts?: { id: number; name: string; currency_label: string }[];
-  tenantId: number | null;
+  availableAccounts?: { id: string; name: string; currency_label: string }[];
+  tenantId: string | null;
 };
 
 type DefinitionFormState = {
@@ -82,6 +82,8 @@ type BlockFormState = {
   fine_amount_absent: string;
   chart_type: string;
   chart_cycle_key: string;
+  entry_exit_first_use_mode: "all" | "since_date";
+  entry_exit_first_use_date: string;
   left_column_heading: string;
   value_column_heading: string;
   linked_list_id: string;
@@ -199,6 +201,8 @@ const initialBlockForm: BlockFormState = {
   fine_amount_absent: "",
   chart_type: "",
   chart_cycle_key: "all",
+  entry_exit_first_use_mode: "all" as "all" | "since_date",
+  entry_exit_first_use_date: "",
   left_column_heading: "",
   value_column_heading: "",
   linked_list_id: "",
@@ -253,7 +257,7 @@ const elementTypeCategories: Array<{ title: string; description: string; types: 
   {
     title: "Organisation",
     description: "Automatisch befüllte Inhalte rund um Termine und Anwesenheit.",
-    types: ["9", "10", "7", "15"],
+    types: ["9", "10", "7", "15", "16"],
   },
 ];
 
@@ -297,6 +301,7 @@ function renderTypeForElementType(elementTypeId: string | number) {
     "9": "5",
     "10": "6",
     "11": "5",
+    "16": "5",
   };
   return mapping[String(elementTypeId)] ?? "2";
 }
@@ -316,6 +321,7 @@ function blockKindForElementType(elementTypeId: string | number) {
     "12": "finance_balance",
     "13": "finance_transactions",
     "15": "chart",
+    "16": "entry_exit",
   };
   return mapping[String(elementTypeId)] ?? "text";
 }
@@ -486,6 +492,8 @@ function blockFormFromBlock(block: ElementDefinitionBlock): BlockFormState {
     fine_amount_absent: block.configuration_json?.fine_amount_absent != null ? String(block.configuration_json.fine_amount_absent) : "",
     chart_type: String(block.configuration_json?.chart_type ?? ""),
     chart_cycle_key: String(block.configuration_json?.cycle_key ?? "all"),
+    entry_exit_first_use_mode: (String(block.configuration_json?.entry_exit_first_use_mode ?? "all") as "all" | "since_date"),
+    entry_exit_first_use_date: String(block.configuration_json?.entry_exit_first_use_date ?? ""),
     left_column_heading: String(block.configuration_json?.left_column_heading ?? ""),
     value_column_heading: String(block.configuration_json?.value_column_heading ?? ""),
     linked_list_id: block.configuration_json?.linked_list_id != null ? String(block.configuration_json?.linked_list_id) : "",
@@ -613,26 +621,28 @@ function blockPayload(form: BlockFormState): ElementDefinitionBlock {
       allow_column_management: form.allow_column_management,
       auto_source: form.auto_source_type ? {
         type: form.auto_source_type,
-        list_id: form.auto_source_type === "list" && form.auto_source_list_id ? Number(form.auto_source_list_id) : null,
+        list_id: form.auto_source_type === "list" && form.auto_source_list_id ? form.auto_source_list_id : null,
         event_tag_filter: form.auto_source_type === "events" ? (form.auto_source_event_tag || null) : null,
       } : null,
       todo_block_title_filter: form.todo_block_title_filter || null,
       todo_task_filter: form.todo_task_filter || null,
       todo_open_only: form.todo_open_only,
       todo_due_tag_filter: form.todo_due_tag_filter || null,
-      finance_account_id: form.finance_account_id ? Number(form.finance_account_id) : null,
+      finance_account_id: form.finance_account_id || null,
       finance_filter_type: form.finance_filter_type,
       finance_last_n: form.finance_filter_type === "last_n" ? Number(form.finance_last_n) : null,
       finance_since_date: form.finance_filter_type === "since_last_session" ? (form.finance_since_date || null) : null,
-      fine_account_id: form.fine_account_id ? Number(form.fine_account_id) : null,
+      fine_account_id: form.fine_account_id || null,
       fine_amount_late: form.fine_amount_late ? parseFloat(form.fine_amount_late) : null,
       fine_amount_absent: form.fine_amount_absent ? parseFloat(form.fine_amount_absent) : null,
       chart_type: form.chart_type || null,
       cycle_key: form.chart_cycle_key || "all",
+      entry_exit_first_use_mode: form.entry_exit_first_use_mode,
+      entry_exit_first_use_date: form.entry_exit_first_use_mode === "since_date" ? (form.entry_exit_first_use_date || null) : null,
       left_column_heading: form.left_column_heading || null,
       value_column_heading: form.value_column_heading || null,
       linked_list_id:
-        form.element_type_id === "6" && form.linked_list_id ? Number(form.linked_list_id) : null,
+        form.element_type_id === "6" && form.linked_list_id ? form.linked_list_id : null,
       linked_list_group_by:
         form.element_type_id === "6" && form.linked_list_id && form.linked_list_group_by ? form.linked_list_group_by : null,
       linked_list_sort_by:
@@ -828,7 +838,7 @@ export function ElementDefinitionManager({
   const showToast = useToast();
   const confirm = useConfirm();
   const [definitions, setDefinitions] = useState(initialDefinitions);
-  const [selectedDefinitionId, setSelectedDefinitionId] = useState<number | null>(initialDefinitions[0]?.id ?? null);
+  const [selectedDefinitionId, setSelectedDefinitionId] = useState<string | null>(initialDefinitions[0]?.id ?? null);
   const [definitionForm, setDefinitionForm] = useState<DefinitionFormState>(
     initialDefinitions[0] ? definitionFormFromDefinition(initialDefinitions[0]) : initialDefinitionForm
   );
@@ -859,7 +869,7 @@ export function ElementDefinitionManager({
   const [draggedBlockId, setDraggedBlockId] = useState<number | null>(null);
   const [matrixPreviewColumns, setMatrixPreviewColumns] = useState<Array<{ id: string; title: string }> | null>(null);
   const [matrixPreviewLoading, setMatrixPreviewLoading] = useState(false);
-  const [listEntryOptionsByListId, setListEntryOptionsByListId] = useState<Record<number, StructuredListEntry[]>>({});
+  const [listEntryOptionsByListId, setListEntryOptionsByListId] = useState<Record<string, StructuredListEntry[]>>({});
   const participantOptions = Array.isArray(availableParticipants) ? availableParticipants : [];
   const eventOptions = Array.isArray(availableEvents) ? availableEvents : [];
   const listOptions = Array.isArray(availableLists) ? availableLists : [];
@@ -901,11 +911,11 @@ export function ElementDefinitionManager({
   // entry-picker shows the currently selected entry when re-opening a saved block.
   const referencedListEntryListIds = [...createBlockForm.table_fields, ...blockForm.table_fields]
     .filter((field) => field.row_type === "list_entry")
-    .map((field) => Number((field.row_config as Record<string, unknown> | undefined)?.linked_list_id ?? 0))
-    .filter((id) => id > 0);
-  const referencedListEntryListIdsKey = [...new Set(referencedListEntryListIds)].sort((a, b) => a - b).join(",");
+    .map((field) => (field.row_config as Record<string, unknown> | undefined)?.linked_list_id)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+  const referencedListEntryListIdsKey = [...new Set(referencedListEntryListIds)].sort().join(",");
   useEffect(() => {
-    for (const listId of referencedListEntryListIdsKey.split(",").filter(Boolean).map(Number)) {
+    for (const listId of referencedListEntryListIdsKey.split(",").filter(Boolean)) {
       void ensureListEntriesLoaded(listId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -927,7 +937,7 @@ export function ElementDefinitionManager({
           : sortedAvailableEvents;
         setMatrixPreviewColumns(filtered.map((e) => ({ id: `prev-e-${e.id}`, title: e.title })));
       } else if (source === "list") {
-        const listDefId = Number(matrixDesignerForm.auto_source_list_id || 0);
+        const listDefId = matrixDesignerForm.auto_source_list_id || null;
         if (!listDefId) {
           setMatrixPreviewColumns([]);
         } else {
@@ -967,11 +977,11 @@ export function ElementDefinitionManager({
   const selectedTableRow =
     tableDesignerRows.find((row) => row.id === selectedTableRowId) ?? tableDesignerRows[0] ?? null;
   const createLinkedList = useMemo(
-    () => listOptions.find((entry) => entry.id === Number(createBlockForm.linked_list_id || 0)) ?? null,
+    () => listOptions.find((entry) => entry.id === createBlockForm.linked_list_id) ?? null,
     [createBlockForm.linked_list_id, listOptions]
   );
   const editLinkedList = useMemo(
-    () => listOptions.find((entry) => entry.id === Number(blockForm.linked_list_id || 0)) ?? null,
+    () => listOptions.find((entry) => entry.id === blockForm.linked_list_id) ?? null,
     [blockForm.linked_list_id, listOptions]
   );
 
@@ -985,7 +995,7 @@ export function ElementDefinitionManager({
     }
   }
 
-  async function ensureListEntriesLoaded(listId: number) {
+  async function ensureListEntriesLoaded(listId: string) {
     if (!listId || listEntryOptionsByListId[listId]) {
       return;
     }
@@ -1002,18 +1012,18 @@ export function ElementDefinitionManager({
       return "";
     }
     if (valueType === "participant") {
-      const id = Number(value.participant_id ?? 0);
+      const id = typeof value.participant_id === "string" ? value.participant_id : null;
       return participantOptions.find((participant) => participant.id === id)?.display_name ?? "";
     }
     if (valueType === "participants") {
-      const ids = Array.isArray(value.participant_ids) ? (value.participant_ids as unknown[]).map(Number) : [];
+      const ids = Array.isArray(value.participant_ids) ? (value.participant_ids as unknown[]).filter((id): id is string => typeof id === "string") : [];
       return participantOptions
         .filter((participant) => ids.includes(participant.id))
         .map((participant) => participant.display_name)
         .join(", ");
     }
     if (valueType === "event") {
-      const id = Number(value.event_id ?? 0);
+      const id = typeof value.event_id === "string" ? value.event_id : null;
       const eventRow = sortedAvailableEvents.find((entry) => entry.id === id);
       return eventRow ? `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}` : "";
     }
@@ -1028,22 +1038,22 @@ export function ElementDefinitionManager({
 
   function tableRowPreviewValue(field: BlockFormState["table_fields"][number]): string {
     if (field.row_type === "participant") {
-      const participant = participantOptions.find((entry) => entry.id === Number(field.template_participant_id || 0));
+      const participant = participantOptions.find((entry) => entry.id === field.template_participant_id);
       return participant?.display_name ?? "—";
     }
     if (field.row_type === "participants") {
-      const ids = (field.template_participant_ids ?? []).map(Number);
+      const ids = field.template_participant_ids ?? [];
       const names = participantOptions.filter((entry) => ids.includes(entry.id)).map((entry) => entry.display_name);
       return names.length ? names.join(", ") : "—";
     }
     if (field.row_type === "event") {
-      const eventRow = sortedAvailableEvents.find((entry) => entry.id === Number(field.template_event_id || 0));
+      const eventRow = sortedAvailableEvents.find((entry) => entry.id === field.template_event_id);
       return eventRow ? `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}` : "—";
     }
     if (field.row_type === "list_entry") {
       const rowConfig = (field.row_config && typeof field.row_config === "object" ? field.row_config : {}) as Record<string, unknown>;
-      const listId = Number(rowConfig.linked_list_id ?? 0);
-      const entryId = Number(rowConfig.linked_list_entry_id ?? 0);
+      const listId = typeof rowConfig.linked_list_id === "string" ? rowConfig.linked_list_id : null;
+      const entryId = typeof rowConfig.linked_list_entry_id === "string" ? rowConfig.linked_list_entry_id : null;
       const listDefinition = listOptions.find((entry) => entry.id === listId);
       const listEntry = listId ? (listEntryOptionsByListId[listId] ?? []).find((entry) => entry.id === entryId) : undefined;
       if (!listDefinition || !listEntry) {
@@ -1087,8 +1097,8 @@ export function ElementDefinitionManager({
             options={participantOptions}
             getId={(participant) => participant.id}
             getLabel={(participant) => participant.display_name}
-            value={field.template_participant_id ? Number(field.template_participant_id) : null}
-            onChange={(participant) => applyPatch({ template_participant_id: participant ? String(participant.id) : "" })}
+            value={field.template_participant_id || null}
+            onChange={(participant) => applyPatch({ template_participant_id: participant ? participant.id : "" })}
             nullLabel="Kein Standardwert"
           />
         </label>
@@ -1103,8 +1113,8 @@ export function ElementDefinitionManager({
             options={participantOptions}
             getId={(participant) => participant.id}
             getLabel={(participant) => participant.display_name}
-            values={(field.template_participant_ids ?? []).map(Number)}
-            onChange={(ids) => applyPatch({ template_participant_ids: ids.map((id) => String(id)) })}
+            values={field.template_participant_ids ?? []}
+            onChange={(ids) => applyPatch({ template_participant_ids: ids })}
             emptySelectionLabel="Kein Standardwert"
           />
         </label>
@@ -1119,8 +1129,8 @@ export function ElementDefinitionManager({
             options={sortedAvailableEvents}
             getId={(eventRow) => eventRow.id}
             getLabel={(eventRow) => `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}`}
-            value={field.template_event_id ? Number(field.template_event_id) : null}
-            onChange={(eventRow) => applyPatch({ template_event_id: eventRow ? String(eventRow.id) : "" })}
+            value={field.template_event_id || null}
+            onChange={(eventRow) => applyPatch({ template_event_id: eventRow ? eventRow.id : "" })}
             nullLabel="Kein Standardwert"
           />
         </label>
@@ -1133,7 +1143,7 @@ export function ElementDefinitionManager({
 
     if (field.row_type === "list_entry") {
       const rowConfig = (field.row_config && typeof field.row_config === "object" ? field.row_config : {}) as Record<string, unknown>;
-      const selectedListId = Number(rowConfig.linked_list_id ?? 0) || 0;
+      const selectedListId = typeof rowConfig.linked_list_id === "string" ? rowConfig.linked_list_id : null;
       const selectedListDefinition = listOptions.find((entry) => entry.id === selectedListId) ?? null;
       const entryOptions = selectedListId ? listEntryOptionsByListId[selectedListId] ?? [] : [];
       const fixedColumn = rowConfig.list_fixed_column === "column_two" ? "column_two" : "column_one";
@@ -1145,13 +1155,13 @@ export function ElementDefinitionManager({
               options={listOptions}
               getId={(listDefinition) => listDefinition.id}
               getLabel={(listDefinition) => listDefinition.name}
-              value={selectedListId || null}
+              value={selectedListId}
               onChange={(listDefinition) => {
-                const nextListId = listDefinition ? listDefinition.id : 0;
+                const nextListId = listDefinition ? listDefinition.id : null;
                 if (nextListId) {
                   void ensureListEntriesLoaded(nextListId);
                 }
-                applyPatch({ row_config: { ...rowConfig, linked_list_id: nextListId || null, linked_list_entry_id: null } });
+                applyPatch({ row_config: { ...rowConfig, linked_list_id: nextListId, linked_list_entry_id: null } });
               }}
               nullLabel="Liste wählen"
             />
@@ -1164,7 +1174,7 @@ export function ElementDefinitionManager({
                   options={entryOptions}
                   getId={(entry) => entry.id}
                   getLabel={(entry) => (selectedListDefinition ? describeListEntry(entry, selectedListDefinition) : `Eintrag ${entry.id}`)}
-                  value={Number(rowConfig.linked_list_entry_id ?? 0) || null}
+                  value={typeof rowConfig.linked_list_entry_id === "string" ? rowConfig.linked_list_entry_id : null}
                   onChange={(entry) =>
                     applyPatch({
                       row_config: { ...rowConfig, linked_list_entry_id: entry ? entry.id : null },
@@ -1264,7 +1274,7 @@ export function ElementDefinitionManager({
       setShowCreateBlockModal(false);
       setCreatingNewDefinition(false);
       selectDefinition(created);
-      showToast(`Element #${created.id} wurde angelegt`, "success");
+      showToast(`Element "${created.title}" wurde angelegt`, "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Element konnte nicht angelegt werden", "error");
     }
@@ -1283,13 +1293,14 @@ export function ElementDefinitionManager({
         })
       });
       replaceDefinition(updated);
-      showToast(`Element #${updated.id} wurde gespeichert`, "success");
+      showToast(`Element "${updated.title}" wurde gespeichert`, "success");
+      setShowDetailModal(false);
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Element konnte nicht gespeichert werden", "error");
     }
   }
 
-  async function deleteDefinition(definitionId: number) {
+  async function deleteDefinition(definitionId: string) {
     const ok = await confirm({
       message: "Element endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
       tone: "danger",
@@ -1297,6 +1308,7 @@ export function ElementDefinitionManager({
     });
     if (!ok) return;
     try {
+      const deletedTitle = definitions.find((definition) => definition.id === definitionId)?.title ?? definitionId;
       await browserApiFetch(`/api/element-definitions/${definitionId}`, { method: "DELETE" });
       const nextDefinitions = definitions.filter((definition) => definition.id !== definitionId);
       setDefinitions(nextDefinitions);
@@ -1308,7 +1320,7 @@ export function ElementDefinitionManager({
         setDefinitionForm(initialDefinitionForm);
         setBlockForm(initialBlockForm);
       }
-      showToast(`Element #${definitionId} wurde gelöscht`, "success");
+      showToast(`Element "${deletedTitle}" wurde gelöscht`, "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Element konnte nicht gelöscht werden", "error");
     }
@@ -1500,7 +1512,7 @@ export function ElementDefinitionManager({
   }
 
 function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
-  const nextEditable = !["5", "7", "9"].includes(elementTypeId);
+  const nextEditable = !["5", "7", "9", "16"].includes(elementTypeId);
   if (mode === "create") {
     setCreateBlockForm((current) => ({
       ...current,
@@ -1614,6 +1626,21 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
           </div>
           <div className="block-type-preview-row">
             <div className="block-type-preview-dot" />
+            <div className="block-type-preview-line" />
+          </div>
+        </div>
+      );
+    }
+    // Ein-/Austritte: Namenszeilen mit Pfeil-Icon (rein/raus)
+    if (elementTypeId === "16") {
+      return (
+        <div className="block-type-preview">
+          <div className="block-type-preview-row">
+            <div className="block-type-preview-dot" />
+            <div className="block-type-preview-line block-type-preview-line-short" />
+          </div>
+          <div className="block-type-preview-row">
+            <div className="block-type-preview-dot block-type-preview-dot-muted" />
             <div className="block-type-preview-line" />
           </div>
         </div>
@@ -1790,10 +1817,21 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
         title={selectedDefinition ? `Element bearbeiten: ${selectedDefinition.title}` : "Element bearbeiten"}
         description="Bearbeite Metadaten und interne Blöcke in einer gemeinsamen, aufgeräumten Ansicht."
         size="wide"
+        hideCloseButton
+        headerActions={
+          <>
+            <button type="button" className="button-ghost modal-close" onClick={() => setShowDetailModal(false)}>
+              Abbrechen
+            </button>
+            <button type="submit" form="element-definition-form" className="button-inline">
+              Speichern
+            </button>
+          </>
+        }
       >
         {selectedDefinition ? (
           <div className="section-stack">
-            <form className="grid section-stack" onSubmit={saveDefinition}>
+            <form id="element-definition-form" className="grid section-stack" onSubmit={saveDefinition}>
               <ElementEditorSummary
                 title={definitionForm.title}
                 description={definitionForm.description}
@@ -1817,9 +1855,6 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                   </label>
                 </div>
               </SettingsSection>
-              <div className="block-editor-footer">
-                <button type="submit" className="button-inline">Element speichern</button>
-              </div>
             </form>
 
             <SettingsSection
@@ -1971,7 +2006,12 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
               <span className="field-label">Beschreibung</span>
               <input value={createBlockForm.description} onChange={(event) => setCreateBlockForm((current) => ({ ...current, description: event.target.value }))} placeholder="Optionale Notiz für Redakteure" />
             </label>
-            <label className="field-stack">
+            {/* Plain div, not <label>: the field-stack label pattern relies on there being exactly
+                one labelable descendant so a click focuses it. RichTextEditor renders its own
+                toolbar buttons before the contenteditable area, and a <label> forwards clicks to
+                the *first* labelable descendant - so wrapping it in <label> sent every click into
+                the Bold button instead of the editor, making the field look rendered but dead. */}
+            <div className="field-stack">
               <span className="field-label">Standard- oder Fixinhalt</span>
               <RichTextEditor
                 value={createBlockForm.default_content}
@@ -1982,7 +2022,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
               <span className="field-help">
                 Verfuegbare Zyklus-Platzhalter: {"{cycle_name}"}, {"{cycle_year_start}"}, {"{cycle_year_end}"} — werden beim Erstellen des Protokolls anhand des Zyklus der Vorlage ersetzt.
               </span>
-            </label>
+            </div>
           </SettingsSection>
           <SettingsSection
             title="Wiederholung"
@@ -2128,7 +2168,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                     options={availableAccounts}
                     getId={(a) => a.id}
                     getLabel={(a) => `${a.name} (${a.currency_label})`}
-                    value={createBlockForm.fine_account_id ? Number(createBlockForm.fine_account_id) : null}
+                    value={createBlockForm.fine_account_id || null}
                     onChange={(a) => setCreateBlockForm((c) => ({ ...c, fine_account_id: a ? String(a.id) : "" }))}
                     nullLabel="— Kein Bussen-Konto —"
                   />
@@ -2160,7 +2200,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                     options={availableAccounts}
                     getId={(a) => a.id}
                     getLabel={(a) => `${a.name} (${a.currency_label})`}
-                    value={createBlockForm.finance_account_id ? Number(createBlockForm.finance_account_id) : null}
+                    value={createBlockForm.finance_account_id || null}
                     onChange={(a) => setCreateBlockForm((c) => ({ ...c, finance_account_id: a ? String(a.id) : "" }))}
                     nullLabel="— Konto wählen —"
                   />
@@ -2253,7 +2293,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                   options={listOptions}
                   getId={(listDefinition) => listDefinition.id}
                   getLabel={(listDefinition) => listDefinition.name}
-                  value={createBlockForm.linked_list_id ? Number(createBlockForm.linked_list_id) : null}
+                  value={createBlockForm.linked_list_id || null}
                   onChange={(listDefinition) =>
                     setCreateBlockForm((current) => ({
                       ...current,
@@ -2481,6 +2521,31 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
               </div>
             </SettingsSection>
           ) : null}
+          {createBlockForm.element_type_id === "16" ? (
+            <SettingsSection
+              title="Ein-/Austritte"
+              description="Listet Teilnehmer-Ein- und Austritte auf, die seit der letzten Verwendung dieses Blocks in einem früheren Protokoll dieser Vorlage passiert sind."
+            >
+              <div className="three-col">
+                <label className="field-stack">
+                  <span className="field-label">Beim ersten Einsatz dieses Blocks</span>
+                  <select
+                    value={createBlockForm.entry_exit_first_use_mode}
+                    onChange={(e) => setCreateBlockForm((c) => ({ ...c, entry_exit_first_use_mode: e.target.value as BlockFormState["entry_exit_first_use_mode"] }))}
+                  >
+                    <option value="all">Alle bisherigen Ein-/Austritte anzeigen</option>
+                    <option value="since_date">Nur ab einem bestimmten Datum</option>
+                  </select>
+                </label>
+                {createBlockForm.entry_exit_first_use_mode === "since_date" && (
+                  <label className="field-stack">
+                    <span className="field-label">Start-Datum</span>
+                    <DateInput value={createBlockForm.entry_exit_first_use_date} onChange={(value) => setCreateBlockForm((c) => ({ ...c, entry_exit_first_use_date: value }))} />
+                  </label>
+                )}
+              </div>
+            </SettingsSection>
+          ) : null}
           <div className="block-editor-footer">
             <button type="submit" className="button-inline">{creatingNewDefinition ? "Element anlegen" : "Block anlegen"}</button>
           </div>
@@ -2534,7 +2599,8 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 <span className="field-label">Beschreibung</span>
                 <input value={blockForm.description} onChange={(event) => setBlockForm((current) => ({ ...current, description: event.target.value }))} />
               </label>
-              <label className="field-stack">
+              {/* Plain div, not <label> - see the create-form field above for why. */}
+              <div className="field-stack">
                 <span className="field-label">Standard- oder Fixinhalt</span>
                 <RichTextEditor
                   value={blockForm.default_content}
@@ -2543,7 +2609,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 <span className="field-help">
                   Verfuegbare Zyklus-Platzhalter: {"{cycle_name}"}, {"{cycle_year_start}"}, {"{cycle_year_end}"} — werden beim Erstellen des Protokolls anhand des Zyklus der Vorlage ersetzt.
                 </span>
-              </label>
+              </div>
             </SettingsSection>
             <SettingsSection
               title="Wiederholung"
@@ -2689,7 +2755,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                       options={availableAccounts}
                       getId={(a) => a.id}
                       getLabel={(a) => `${a.name} (${a.currency_label})`}
-                      value={blockForm.fine_account_id ? Number(blockForm.fine_account_id) : null}
+                      value={blockForm.fine_account_id || null}
                       onChange={(a) => setBlockForm((c) => ({ ...c, fine_account_id: a ? String(a.id) : "" }))}
                       nullLabel="— Kein Bussen-Konto —"
                     />
@@ -2721,7 +2787,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                       options={availableAccounts}
                       getId={(a) => a.id}
                       getLabel={(a) => `${a.name} (${a.currency_label})`}
-                      value={blockForm.finance_account_id ? Number(blockForm.finance_account_id) : null}
+                      value={blockForm.finance_account_id || null}
                       onChange={(a) => setBlockForm((c) => ({ ...c, finance_account_id: a ? String(a.id) : "" }))}
                       nullLabel="— Konto wählen —"
                     />
@@ -2814,7 +2880,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                   options={listOptions}
                   getId={(listDefinition) => listDefinition.id}
                   getLabel={(listDefinition) => listDefinition.name}
-                  value={blockForm.linked_list_id ? Number(blockForm.linked_list_id) : null}
+                  value={blockForm.linked_list_id || null}
                   onChange={(listDefinition) =>
                     setBlockForm((current) => ({
                       ...current,
@@ -3050,6 +3116,31 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 </div>
               </SettingsSection>
             ) : null}
+            {blockForm.element_type_id === "16" ? (
+              <SettingsSection
+                title="Ein-/Austritte"
+                description="Listet Teilnehmer-Ein- und Austritte auf, die seit der letzten Verwendung dieses Blocks in einem früheren Protokoll dieser Vorlage passiert sind."
+              >
+                <div className="three-col">
+                  <label className="field-stack">
+                    <span className="field-label">Beim ersten Einsatz dieses Blocks</span>
+                    <select
+                      value={blockForm.entry_exit_first_use_mode}
+                      onChange={(e) => setBlockForm((c) => ({ ...c, entry_exit_first_use_mode: e.target.value as BlockFormState["entry_exit_first_use_mode"] }))}
+                    >
+                      <option value="all">Alle bisherigen Ein-/Austritte anzeigen</option>
+                      <option value="since_date">Nur ab einem bestimmten Datum</option>
+                    </select>
+                  </label>
+                  {blockForm.entry_exit_first_use_mode === "since_date" && (
+                    <label className="field-stack">
+                      <span className="field-label">Start-Datum</span>
+                      <DateInput value={blockForm.entry_exit_first_use_date} onChange={(value) => setBlockForm((c) => ({ ...c, entry_exit_first_use_date: value }))} />
+                    </label>
+                  )}
+                </div>
+              </SettingsSection>
+            ) : null}
             <div className="block-editor-footer">
               <button type="submit" className="button-inline">Block speichern</button>
             </div>
@@ -3166,7 +3257,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                             options={listOptions}
                             getId={(list) => list.id}
                             getLabel={(list) => list.name}
-                            value={matrixDesignerForm.auto_source_list_id ? Number(matrixDesignerForm.auto_source_list_id) : null}
+                            value={matrixDesignerForm.auto_source_list_id || null}
                             onChange={(list) => updateMatrixDesignerForm((c) => ({ ...c, auto_source_list_id: list ? String(list.id) : "" }))}
                             nullLabel="Liste wählen..."
                           />

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -7,9 +9,12 @@ from sqlalchemy.orm import Session
 
 from fastapi import HTTPException, status
 
+from app.core.rate_limit import check_account_lockout, record_failed_attempt
 from app.core.security import CurrentUser, hash_password, require_admin, verify_password
-from app.models import AppUser, Participant, UserTenantRole
+from app.models import AppUser, Participant, Tenant, UserTenantRole
+from app.services import public_id_service
 from app.services.access_service import AccessService
+from app.services.audit_service import AuditService
 from app.services.tenant_service import build_tenant_profile_image_url
 from app.repositories.user_repository import UserRepository
 from app.schemas.user import (
@@ -23,10 +28,45 @@ from app.schemas.user import (
 )
 
 
+# Account-scoped lockout on self-service current_password guesses (audit finding, 2026-08-27):
+# /me/password lets an authenticated user try arbitrary current_password values with no cap,
+# so a hijacked/idle session (or a shared device) could brute-force the account's real
+# password via this endpoint even without the login form. Mirrors the login lockout pattern
+# in auth_service.py, keyed by the authenticated user's id rather than email since the caller
+# is already authenticated here.
+_PASSWORD_CHANGE_ATTEMPT_LIMIT = 10
+_PASSWORD_CHANGE_WINDOW_SECONDS = 15 * 60
+
+
+@dataclass
+class _ResolvedMembership:
+    """Internal-id counterpart of TenantMembershipWrite - every function below this point
+    in the file works with internal tenant ids exclusively; only the public entry points
+    (create_user/admin_create_user/_update_user_core/merge_users) ever see the client-
+    facing UUID-typed TenantMembershipWrite and resolve it to this shape first."""
+
+    tenant_id: int
+    role_code: str
+    is_active: bool
+
+
+def _resolve_memberships(db: Session, memberships: list[TenantMembershipWrite]) -> list[_ResolvedMembership]:
+    tenant_ids = [m.tenant_id for m in memberships]
+    id_map = public_id_service.resolve_internal_ids(db, Tenant, tenant_ids)
+    resolved = []
+    for m in memberships:
+        internal_id = id_map.get(m.tenant_id)
+        if internal_id is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Tenant {m.tenant_id} not found")
+        resolved.append(_ResolvedMembership(tenant_id=internal_id, role_code=m.role_code, is_active=m.is_active))
+    return resolved
+
+
 class UserService:
     def __init__(self, repository: UserRepository | None = None) -> None:
         self.repository = repository or UserRepository()
         self.access_service = AccessService()
+        self.audit_service = AuditService()
 
     def _role_id_by_code(self, db: Session) -> dict[str, int]:
         return {role.code: role.id for role in self.repository.list_roles(db)}
@@ -42,15 +82,30 @@ class UserService:
                 continue
             result.append(
                 TenantMembershipRead(
-                    tenant_id=tenant.id,
+                    tenant_id=tenant.public_id,
                     tenant_name=tenant.name,
                     tenant_profile_image_path=tenant.profile_image_path,
-                    tenant_profile_image_url=build_tenant_profile_image_url(tenant.id, tenant.profile_image_path),
+                    tenant_profile_image_url=build_tenant_profile_image_url(tenant.public_id, tenant.profile_image_path),
                     role_code=role_map.get(membership.role_id, "reader"),
                     is_active=membership.is_active,
                 )
             )
         return result
+
+    def _internal_memberships_for_user(self, db: Session, user_id: int) -> list[_ResolvedMembership]:
+        """Internal-id counterpart of _memberships_for_user, for callers (merge_users) that
+        need to recompute/pass memberships through _apply_memberships rather than serialize
+        them to the API."""
+        memberships = self.repository.list_memberships(db, user_id=user_id)
+        role_map = {role.id: role.code for role in self.repository.list_roles(db)}
+        return [
+            _ResolvedMembership(
+                tenant_id=membership.tenant_id,
+                role_code=role_map.get(membership.role_id, "reader"),
+                is_active=membership.is_active,
+            )
+            for membership in memberships
+        ]
 
     def _admin_tenant_ids_for_actor(self, actor: CurrentUser) -> set[int]:
         return {
@@ -59,12 +114,29 @@ class UserService:
             if membership.role_code == "admin" and membership.is_active
         }
 
-    def _scope_memberships(self, user: UserRead, visible_tenant_ids: set[int]) -> UserRead:
+    def _admin_tenant_public_ids_for_actor(self, db: Session, actor: CurrentUser) -> set[uuid.UUID]:
+        """Public-id counterpart of _admin_tenant_ids_for_actor, for scoping against
+        UserRead.memberships[].tenant_id - which (like every other response-schema FK) is
+        the tenant's public_id, not its internal int, since the public_id migration.
+        Resolves via the DB from the actor's *internal* admin tenant ids rather than
+        trusting CurrentUser.available_tenants[].tenant_public_id directly, since that field
+        is only informational (populated once at session build time) and isn't guaranteed
+        to be the authorization-relevant value here."""
+        return set(
+            public_id_service.resolve_public_ids(db, Tenant, list(self._admin_tenant_ids_for_actor(actor))).values()
+        )
+
+    def _scope_memberships(self, user: UserRead, visible_tenant_ids: set[uuid.UUID]) -> UserRead:
         """Restricts a UserRead's tenant memberships to the tenants the viewing actor is
         themselves admin of. Without this, a tenant admin who is merely allowed to *manage*
         a shared user (because that user also has a membership in the admin's own tenant)
         would otherwise see that user's role in every other tenant they belong to, including
-        tenants the admin has no authority over."""
+        tenants the admin has no authority over.
+
+        visible_tenant_ids is a set of tenant *public* ids - matching
+        TenantMembershipRead.tenant_id, which is public since the public_id migration. Pass
+        _admin_tenant_public_ids_for_actor(db, actor) here, not _admin_tenant_ids_for_actor's
+        internal ints."""
         return user.model_copy(update={
             "memberships": [m for m in user.memberships if m.tenant_id in visible_tenant_ids]
         })
@@ -72,7 +144,7 @@ class UserService:
     def _read_model(self, db: Session, user: AppUser) -> UserRead:
         external_identity = user.external_identity_json or {}
         return UserRead(
-            id=user.id,
+            id=user.public_id,
             first_name=user.first_name,
             last_name=user.last_name,
             display_name=user.display_name,
@@ -80,7 +152,9 @@ class UserService:
             preferred_language=user.preferred_language,
             is_active=user.is_active,
             external_identity_json=external_identity,
-            default_tenant_id=user.default_tenant_id,
+            default_tenant_id=public_id_service.resolve_public_id(db, Tenant, user.default_tenant_id)
+            if user.default_tenant_id is not None
+            else None,
             memberships=self._memberships_for_user(db, user.id),
             login_enabled=external_identity.get("login_enabled") is not False,
             is_participant_account=external_identity.get("source") == "participant_auto",
@@ -92,10 +166,12 @@ class UserService:
         self,
         user: AppUser,
         memberships: list[TenantMembershipRead],
+        tenant_map: dict[int, Tenant],
     ) -> UserRead:
         external_identity = user.external_identity_json or {}
+        default_tenant = tenant_map.get(user.default_tenant_id) if user.default_tenant_id is not None else None
         return UserRead(
-            id=user.id,
+            id=user.public_id,
             first_name=user.first_name,
             last_name=user.last_name,
             display_name=user.display_name,
@@ -103,7 +179,7 @@ class UserService:
             preferred_language=user.preferred_language,
             is_active=user.is_active,
             external_identity_json=external_identity,
-            default_tenant_id=user.default_tenant_id,
+            default_tenant_id=default_tenant.public_id if default_tenant is not None else None,
             memberships=memberships,
             login_enabled=external_identity.get("login_enabled") is not False,
             is_participant_account=external_identity.get("source") == "participant_auto",
@@ -131,17 +207,17 @@ class UserService:
                 continue
             memberships_by_user[m.user_id].append(
                 TenantMembershipRead(
-                    tenant_id=tenant.id,
+                    tenant_id=tenant.public_id,
                     tenant_name=tenant.name,
                     tenant_profile_image_path=tenant.profile_image_path,
-                    tenant_profile_image_url=build_tenant_profile_image_url(tenant.id, tenant.profile_image_path),
+                    tenant_profile_image_url=build_tenant_profile_image_url(tenant.public_id, tenant.profile_image_path),
                     role_code=role_map.get(m.role_id, "reader"),
                     is_active=m.is_active,
                 )
             )
 
         return [
-            self._read_model_from_preloaded(user, memberships_by_user.get(user.id, []))
+            self._read_model_from_preloaded(user, memberships_by_user.get(user.id, []), tenant_map)
             for user in users
         ]
 
@@ -152,11 +228,16 @@ class UserService:
             for m in self.repository.list_memberships(db, tenant_id=actor.current_tenant_id)
             if m.is_active
         }
-        admin_tenant_ids = self._admin_tenant_ids_for_actor(actor)
+        # user.id below is UserRead.id, i.e. the user's public_id (see
+        # _read_model_from_preloaded) - allowed_ids from the repository query is internal
+        # ints, so it has to be translated before the membership check below, or every user
+        # would be filtered out.
+        allowed_public_ids = set(public_id_service.resolve_public_ids(db, AppUser, list(allowed_ids)).values())
+        admin_tenant_ids = self._admin_tenant_public_ids_for_actor(db, actor)
         return [
             self._scope_memberships(user, admin_tenant_ids)
             for user in self.list_all_users(db)
-            if user.id in allowed_ids
+            if user.id in allowed_public_ids
         ]
 
     def get_user(self, db: Session, user_id: int, actor: CurrentUser):
@@ -174,7 +255,7 @@ class UserService:
             # exists in some *other* tenant, just not theirs - a user-enumeration channel across
             # tenant boundaries. Reporting "not found" either way closes that.
             return None
-        return self._scope_memberships(self._read_model(db, user), self._admin_tenant_ids_for_actor(actor))
+        return self._scope_memberships(self._read_model(db, user), self._admin_tenant_public_ids_for_actor(db, actor))
 
     def admin_get_user(self, db: Session, user_id: int) -> UserRead | None:
         """Unscoped single-user lookup for the platform-admin panel."""
@@ -192,16 +273,21 @@ class UserService:
     def _normalize_memberships(
         self,
         actor: CurrentUser,
-        memberships: list[TenantMembershipWrite] | None,
-    ) -> list[TenantMembershipWrite]:
+        memberships: list[_ResolvedMembership] | None,
+    ) -> list[_ResolvedMembership]:
         if memberships is None:
             return []
         admin_tenant_ids = self._admin_tenant_ids_for_actor(actor)
         return [membership for membership in memberships if membership.tenant_id in admin_tenant_ids]
 
-    def _new_app_user_from_payload(self, payload: UserCreate) -> AppUser:
+    def _new_app_user_from_payload(self, db: Session, payload: UserCreate) -> AppUser:
+        default_tenant_id = (
+            public_id_service.resolve_internal_id(db, Tenant, payload.default_tenant_id)
+            if payload.default_tenant_id is not None
+            else None
+        )
         return AppUser(
-            default_tenant_id=payload.default_tenant_id,
+            default_tenant_id=default_tenant_id,
             first_name=payload.first_name,
             last_name=payload.last_name,
             display_name=payload.display_name,
@@ -217,11 +303,11 @@ class UserService:
 
     def create_user(self, db: Session, payload: UserCreate, actor: CurrentUser):
         require_admin(actor)
-        memberships = self._normalize_memberships(actor, payload.memberships)
+        memberships = self._normalize_memberships(actor, _resolve_memberships(db, payload.memberships))
         if not memberships and actor.current_tenant_id is not None:
-            memberships = [TenantMembershipWrite(tenant_id=actor.current_tenant_id, role_code="reader", is_active=True)]
+            memberships = [_ResolvedMembership(tenant_id=actor.current_tenant_id, role_code="reader", is_active=True)]
 
-        user = self._new_app_user_from_payload(payload)
+        user = self._new_app_user_from_payload(db, payload)
         if user.default_tenant_id is None:
             user.default_tenant_id = memberships[0].tenant_id if memberships else actor.current_tenant_id
         self.repository.create(db, user)
@@ -231,11 +317,12 @@ class UserService:
 
     def admin_create_user(self, db: Session, payload: UserCreate) -> UserRead:
         """Unscoped user creation for the platform-admin panel - memberships can target any tenant."""
-        user = self._new_app_user_from_payload(payload)
-        if user.default_tenant_id is None and payload.memberships:
-            user.default_tenant_id = payload.memberships[0].tenant_id
+        user = self._new_app_user_from_payload(db, payload)
+        resolved_memberships = _resolve_memberships(db, payload.memberships)
+        if user.default_tenant_id is None and resolved_memberships:
+            user.default_tenant_id = resolved_memberships[0].tenant_id
         self.repository.create(db, user)
-        self._apply_memberships(db, user.id, payload.memberships, None)
+        self._apply_memberships(db, user.id, resolved_memberships, None)
         db.commit()
         return self._read_model(db, user)
 
@@ -243,7 +330,7 @@ class UserService:
         self,
         db: Session,
         user_id: int,
-        memberships: list[TenantMembershipWrite],
+        memberships: list[_ResolvedMembership],
         actor: CurrentUser | None,
         *,
         merge_with_existing: bool = False,
@@ -277,6 +364,7 @@ class UserService:
                 for membership in memberships
             ]
 
+        admin_tenant_ids: set[int] | None = None
         if actor is not None:
             admin_tenant_ids = self._admin_tenant_ids_for_actor(actor)
             retained = [
@@ -284,12 +372,28 @@ class UserService:
                 for membership in self.repository.list_memberships(db, user_id=user_id)
                 if membership.tenant_id not in admin_tenant_ids
             ]
+            # `retained` (already-persisted rows for tenants outside the actor's scope) is
+            # only merged in here so _guard_last_tenant_admin below sees the true final
+            # state of the user's memberships, not just the submitted/in-scope slice - it
+            # must NOT be handed to replace_memberships for persistence (audit finding,
+            # 2026-08-27: memberships in a tenant the calling admin doesn't manage must be
+            # left completely untouched by this endpoint, regardless of what the payload
+            # contains; the actual deletion scoping happens via scope_tenant_ids below).
             next_memberships = retained + [
                 membership for membership in next_memberships if membership.tenant_id in admin_tenant_ids
             ]
 
         self._guard_last_tenant_admin(db, user_id, next_memberships, role_ids)
-        self.repository.replace_memberships(db, user_id=user_id, memberships=next_memberships)
+
+        if admin_tenant_ids is not None:
+            self.repository.replace_memberships(
+                db,
+                user_id=user_id,
+                memberships=[m for m in next_memberships if m.tenant_id in admin_tenant_ids],
+                scope_tenant_ids=admin_tenant_ids,
+            )
+        else:
+            self.repository.replace_memberships(db, user_id=user_id, memberships=next_memberships)
 
     def _guard_last_tenant_admin(
         self,
@@ -379,15 +483,18 @@ class UserService:
             self.repository.update(db, user, values)
 
         if is_promoting_participant_login:
-            user = self._link_or_promote_participant_login(db, user, previous_external)
+            user = self._link_or_promote_participant_login(db, user, previous_external, actor)
 
         if payload.memberships is not None:
-            memberships = payload.memberships if actor is None else self._normalize_memberships(actor, payload.memberships)
+            resolved = _resolve_memberships(db, payload.memberships)
+            memberships = resolved if actor is None else self._normalize_memberships(actor, resolved)
             self._apply_memberships(db, user.id, memberships, actor, merge_with_existing=False)
         db.commit()
         return self._read_model(db, user)
 
-    def _link_or_promote_participant_login(self, db: Session, user: AppUser, previous_external: dict) -> AppUser:
+    def _link_or_promote_participant_login(
+        self, db: Session, user: AppUser, previous_external: dict, actor: CurrentUser | None
+    ) -> AppUser:
         """When a participant shadow account's login gets enabled, adopt its real email.
 
         If another AppUser already owns that email, merge the shadow account into it
@@ -402,6 +509,23 @@ class UserService:
         existing = self.repository.get_by_email(db, real_email)
         if existing is None or existing.id == user.id:
             return self.repository.update(db, user, {"email": real_email})
+
+        # SECURITY: real_email is admin-typed and unverified (see the password_hash note
+        # below), so this silently grants the target account membership in whichever
+        # tenant the acting admin controls - without the target's consent or, before this
+        # fix, any notification at all (audit finding, 2026-08-25). A full consent/
+        # notification flow is out of scope for this pass (no email-sending
+        # infrastructure exists yet); logging it here at least makes the action
+        # discoverable/reviewable after the fact instead of leaving zero trace.
+        self.audit_service.log(
+            db,
+            action="user.merged_via_participant_login_promotion",
+            actor=actor,
+            tenant_id=actor.current_tenant_id if actor else None,
+            entity_type="app_user",
+            entity_id=existing.id,
+            details={"merged_from_user_id": user.id, "email": real_email},
+        )
 
         # SECURITY: `real_email` is whatever email the tenant admin typed in when creating the
         # participant record - it is never verified to belong to the person setting it. Do NOT
@@ -445,6 +569,12 @@ class UserService:
         if user is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         values = payload.model_dump(exclude_unset=True)
+        accordion_enabled = values.pop("protocol_accordion_enabled", None)
+        if accordion_enabled is not None:
+            values["external_identity_json"] = {
+                **(user.external_identity_json or {}),
+                "protocol_accordion_enabled": accordion_enabled,
+            }
         if values:
             self.repository.update(db, user, values)
             db.commit()
@@ -459,7 +589,10 @@ class UserService:
         user = self.repository.get(db, actor.user_id)
         if user is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        lockout_key = f"password-change:{actor.user_id}"
+        check_account_lockout(lockout_key, limit=_PASSWORD_CHANGE_ATTEMPT_LIMIT)
         if not user.password_hash or not verify_password(payload.current_password, user.password_hash):
+            record_failed_attempt(lockout_key, period_seconds=_PASSWORD_CHANGE_WINDOW_SECONDS)
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Aktuelles Passwort ist nicht korrekt")
 
         self.repository.update(
@@ -498,16 +631,20 @@ class UserService:
                 detail="Users cannot be merged because both are already linked to participants in the same tenant",
             )
 
-        # kassier = reader + full finance/fines access (see main.py role descriptions); writer
-        # and admin already include finance access too (require_finance_access, access_service),
-        # so every permission kassier grants is a strict subset of writer's - the roles form a
-        # single linear scale reader < kassier < writer < admin, not an orthogonal add-on.
-        role_priority = {"reader": 1, "kassier": 2, "writer": 3, "admin": 4}
+        # Roles are capability bundles, not a linear rank: writer and kassier are deliberately
+        # incomparable. Silently choosing either during a merge would discard the other
+        # account's authority. Admin is the only role containing both bundles.
+        role_capabilities = {
+            "reader": frozenset({"read"}),
+            "writer": frozenset({"read", "workspace_write"}),
+            "kassier": frozenset({"read", "finance_write"}),
+            "admin": frozenset({"read", "workspace_write", "finance_write", "tenant_admin"}),
+        }
 
-        merged_memberships: dict[int, TenantMembershipWrite] = {}
-        for membership in self._memberships_for_user(db, target_user_id) + self._memberships_for_user(db, source_user_id):
+        merged_memberships: dict[int, _ResolvedMembership] = {}
+        for membership in self._internal_memberships_for_user(db, target_user_id) + self._internal_memberships_for_user(db, source_user_id):
             existing = merged_memberships.get(membership.tenant_id)
-            candidate = TenantMembershipWrite(
+            candidate = _ResolvedMembership(
                 tenant_id=membership.tenant_id,
                 role_code=membership.role_code,
                 is_active=membership.is_active,
@@ -515,9 +652,21 @@ class UserService:
             if existing is None:
                 merged_memberships[membership.tenant_id] = candidate
                 continue
-            if role_priority.get(candidate.role_code, 0) > role_priority.get(existing.role_code, 0):
+            existing_capabilities = role_capabilities.get(existing.role_code, frozenset())
+            candidate_capabilities = role_capabilities.get(candidate.role_code, frozenset())
+            if existing_capabilities and candidate_capabilities and not (
+                existing_capabilities <= candidate_capabilities or candidate_capabilities <= existing_capabilities
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        f"Users cannot be merged automatically: roles '{existing.role_code}' and "
+                        f"'{candidate.role_code}' are incompatible in the same tenant"
+                    ),
+                )
+            if candidate_capabilities > existing_capabilities:
                 merged_memberships[membership.tenant_id] = candidate
-            elif candidate.is_active and not existing.is_active:
+            elif candidate_capabilities == existing_capabilities and candidate.is_active and not existing.is_active:
                 merged_memberships[membership.tenant_id] = candidate
 
         self._apply_memberships(

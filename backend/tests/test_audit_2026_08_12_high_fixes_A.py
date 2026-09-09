@@ -49,6 +49,7 @@ from app.models import AttendanceFine, PlatformOidcConfig, Protocol, ProtocolEle
 from app.schemas.protocol import AttendanceExcusePayload, ProtocolCreateFromTemplate, QuickTodoCreate
 import app.services.platform_oidc_service as platform_oidc_service_module
 from app.services.platform_oidc_service import PlatformOidcService
+from app.services import public_id_service
 from app.services.protocol_service import ProtocolService
 
 from tests.factories import (
@@ -182,7 +183,7 @@ def test_h2_excuse_participant_blocked_when_frozen(db):
 
     with pytest.raises(HTTPException) as exc_info:
         protocols_route.excuse_participant(
-            protocol.id, participant.id, payload=AttendanceExcusePayload(excused=True), db=db, user=user,
+            protocol.public_id, participant.public_id, payload=AttendanceExcusePayload(excused=True), db=db, user=user,
         )
     assert exc_info.value.status_code == 409
 
@@ -206,7 +207,7 @@ def test_h2_excuse_participant_still_works_when_not_frozen(db):
     user = make_current_user(tenant.id)
 
     result = protocols_route.excuse_participant(
-        protocol.id, participant.id, payload=AttendanceExcusePayload(excused=True), db=db, user=user,
+        protocol.public_id, participant.public_id, payload=AttendanceExcusePayload(excused=True), db=db, user=user,
     )
     assert result["message"] == "Participant excused"
     db.refresh(block)
@@ -227,7 +228,7 @@ def test_h3_create_quick_todo_blocked_when_frozen(db):
     user = make_current_user(tenant.id)
 
     with pytest.raises(HTTPException) as exc_info:
-        protocols_route.create_quick_todo(protocol.id, QuickTodoCreate(task="Sollte nicht entstehen"), db=db, user=user)
+        protocols_route.create_quick_todo(protocol.public_id, QuickTodoCreate(task="Sollte nicht entstehen"), db=db, user=user)
     assert exc_info.value.status_code == 409
 
     assert db.scalars(select(ProtocolElement).where(ProtocolElement.protocol_id == protocol.id)).all() == []
@@ -240,9 +241,9 @@ def test_h3_create_quick_todo_still_works_when_not_frozen(db):
     protocol = make_protocol(db, tenant.id, template.id, status="geplant")
     user = make_current_user(tenant.id)
 
-    result = protocols_route.create_quick_todo(protocol.id, QuickTodoCreate(task="Darf entstehen"), db=db, user=user)
+    result = protocols_route.create_quick_todo(protocol.public_id, QuickTodoCreate(task="Darf entstehen"), db=db, user=user)
     assert result["todo_id"] is not None
-    todo = db.get(ProtocolTodo, result["todo_id"])
+    todo = public_id_service.get_by_public_id(db, ProtocolTodo, result["todo_id"])
     assert todo is not None
     assert todo.task == "Darf entstehen"
 
@@ -276,7 +277,7 @@ def test_h4_create_from_template_retries_after_simulated_unique_constraint_colli
     try:
         protocol_id = ProtocolService().create_from_template(
             db,
-            ProtocolCreateFromTemplate(template_id=template.id, protocol_date=date(2026, 1, 1)),
+            ProtocolCreateFromTemplate(template_id=template.public_id, protocol_date=date(2026, 1, 1)),
             tenant_id=tenant.id,
             created_by=None,
         )
@@ -322,7 +323,7 @@ def test_h4_create_from_template_gives_up_after_exhausting_retry_attempts(db):
         with pytest.raises(IntegrityError):
             ProtocolService().create_from_template(
                 db,
-                ProtocolCreateFromTemplate(template_id=template.id, protocol_date=date(2026, 1, 1)),
+                ProtocolCreateFromTemplate(template_id=template.public_id, protocol_date=date(2026, 1, 1)),
                 tenant_id=tenant.id,
                 created_by=None,
             )
@@ -346,7 +347,7 @@ def test_h4_create_from_template_does_not_retry_an_explicit_protocol_number_coll
     with pytest.raises(IntegrityError):
         ProtocolService().create_from_template(
             db,
-            ProtocolCreateFromTemplate(template_id=template.id, protocol_date=date(2026, 1, 2), protocol_number="MANUAL-1"),
+            ProtocolCreateFromTemplate(template_id=template.public_id, protocol_date=date(2026, 1, 2), protocol_number="MANUAL-1"),
             tenant_id=tenant.id,
             created_by=None,
         )

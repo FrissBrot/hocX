@@ -168,6 +168,21 @@ pre {
   overflow: hidden;
 }
 
+.sidebar-edge-trigger,
+.sidebar-overlay {
+  display: none;
+}
+
+.app-frame-writing .shell-main {
+  transform-origin: 50% 18%;
+  animation: protocol-editor-zoom-out 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.app-frame-protocol-exit .shell-main {
+  transform-origin: 50% 18%;
+  animation: protocol-editor-zoom-in 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 .brand-lockup {
   display: flex;
   align-items: center;
@@ -189,7 +204,8 @@ pre {
 }
 
 .brand-lockup-trigger:hover {
-  background: var(--accent-soft);
+  --button-bg: var(--accent-soft);
+  background: var(--button-bg);
   transform: none;
 }
 
@@ -241,7 +257,8 @@ pre {
 
 .sidebar-nav {
   display: grid;
-  gap: 20px;
+  align-content: start;
+  gap: 8px;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
@@ -273,12 +290,41 @@ pre {
 }
 
 .nav-group-label {
+  --button-hover-bg: var(--accent-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 32px;
   padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  --button-bg: transparent;
+  background: var(--button-bg);
   font-size: 0.73rem;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--muted);
+  box-shadow: none;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.nav-group-label:hover {
+  --button-bg: var(--accent-soft);
+  background: var(--button-bg);
+  color: var(--text);
+  transform: none;
+  box-shadow: none;
+}
+
+.nav-group-label svg {
+  flex-shrink: 0;
+  transition: transform 140ms ease;
+}
+
+.nav-group-expanded > .nav-group-label svg {
+  transform: rotate(90deg);
 }
 
 .nav-links {
@@ -333,6 +379,15 @@ pre {
   border-top: 1px solid var(--border);
 }
 
+.copyright-notice {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1.4;
+  text-align: center;
+  opacity: 0.65;
+}
+
 .identity-panel {
   display: grid;
   gap: 12px;
@@ -341,8 +396,8 @@ pre {
 .identity-card {
   --button-hover-bg: color-mix(in srgb, var(--accent) 8%, var(--panel-solid) 92%);
   display: grid;
-  padding: 12px;
-  border-radius: 22px;
+  padding: 8px;
+  border-radius: 16px;
   background: color-mix(in srgb, var(--panel-solid) 88%, transparent 12%);
   border: 1px solid var(--border);
   transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
@@ -356,8 +411,8 @@ pre {
 .identity-button {
   --button-hover-bg: transparent;
   display: grid;
-  grid-template-columns: 46px minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 10px;
   align-items: center;
   width: 100%;
   height: 100%;
@@ -372,8 +427,7 @@ pre {
 
 .identity-button strong {
   display: block;
-  margin-top: 3px;
-  font-size: 1rem;
+  font-size: 0.92rem;
   line-height: 1.15;
   letter-spacing: -0.02em;
 }
@@ -386,9 +440,9 @@ pre {
 }
 
 .identity-subtle {
-  margin-top: 5px;
+  margin-top: 2px;
   color: var(--muted);
-  font-size: 0.92rem;
+  font-size: 0.82rem;
   line-height: 1.25;
   min-height: 1.25em;
 }
@@ -396,9 +450,9 @@ pre {
 .identity-avatar {
   display: grid;
   place-items: center;
-  width: 46px;
-  height: 46px;
-  border-radius: 16px;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
   overflow: hidden;
   background: color-mix(in srgb, var(--accent) 18%, transparent 82%);
   color: var(--text);
@@ -515,6 +569,7 @@ pre {
 
 .panel {
   display: grid;
+  align-content: start;
   gap: 16px;
   padding: 20px;
   border-radius: var(--radius-lg);
@@ -572,6 +627,7 @@ pre {
 
 .grid {
   display: grid;
+  align-content: start;
   gap: 18px;
 }
 
@@ -843,6 +899,7 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   width: auto;
   min-width: 0;
   min-height: 0;
@@ -910,7 +967,10 @@ button:disabled {
   color: var(--muted);
 }
 
-.button-danger { --button-hover-bg: var(--danger);
+.button-danger {
+  width: auto;
+  min-width: 0;
+  --button-hover-bg: var(--danger);
   --button-bg: var(--danger);
   background: var(--button-bg);
 }
@@ -933,7 +993,8 @@ button:disabled {
 }
 
 .row-text-action:hover:not(:disabled) {
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   text-decoration: underline;
 }
@@ -958,7 +1019,8 @@ button:disabled {
 }
 
 .button-primary:hover {
-  background: var(--primary-strong);
+  --button-bg: var(--primary-strong);
+  background: var(--button-bg);
 }
 
 .button-toggle {
@@ -973,7 +1035,8 @@ button:disabled {
 }
 
 .button-toggle-active {
-  background: var(--accent-soft);
+  --button-bg: var(--accent-soft);
+  background: var(--button-bg);
   border-color: var(--accent);
   color: var(--text);
   font-weight: 600;
@@ -1044,7 +1107,8 @@ button:disabled {
 }
 
 .menu-item:hover {
-  background: var(--accent-soft);
+  --button-bg: var(--accent-soft);
+  background: var(--button-bg);
   transform: none;
   box-shadow: none;
 }
@@ -1059,7 +1123,8 @@ button:disabled {
 }
 
 .menu-item-danger:hover {
-  background: var(--danger-bg);
+  --button-bg: var(--danger-bg);
+  background: var(--button-bg);
 }
 
 .menu-item-icon {
@@ -1085,7 +1150,8 @@ button:disabled {
 }
 
 .button-ghost:hover {
-  background: var(--accent-soft);
+  --button-bg: var(--accent-soft);
+  background: var(--button-bg);
   color: var(--text);
 }
 
@@ -1106,7 +1172,8 @@ button:disabled {
 }
 
 .button-icon-danger:hover {
-  background: color-mix(in srgb, var(--danger) 10%, transparent 90%);
+  --button-bg: color-mix(in srgb, var(--danger) 10%, transparent 90%);
+  background: var(--button-bg);
   color: var(--danger);
 }
 
@@ -1148,7 +1215,8 @@ button:disabled {
 }
 
 .action-menu-item:hover {
-  background: color-mix(in srgb, var(--accent) 10%, transparent 90%);
+  --button-bg: color-mix(in srgb, var(--accent) 10%, transparent 90%);
+  background: var(--button-bg);
   color: var(--accent);
 }
 
@@ -1158,8 +1226,92 @@ button:disabled {
 }
 
 .action-menu-item-danger:hover {
-  background: color-mix(in srgb, var(--danger) 10%, transparent 90%);
+  --button-bg: color-mix(in srgb, var(--danger) 10%, transparent 90%);
+  background: var(--button-bg);
   color: var(--danger);
+}
+
+/* Indeterminate progress for tenant ZIP imports. The import endpoint uploads and
+   processes in one request, so no trustworthy byte percentage is available. */
+.tenant-import-status {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border) 76%);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--accent) 7%, var(--panel-solid) 93%);
+}
+
+.tenant-import-status-copy {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tenant-import-status-copy > span:last-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tenant-import-upload-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: white;
+  font-size: 1.15rem;
+  font-weight: 800;
+  animation: tenant-import-upload-bounce 1s ease-in-out infinite;
+}
+
+.tenant-import-filename,
+.tenant-import-status-hint {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.tenant-import-filename {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tenant-import-progress-track {
+  position: relative;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--border) 86%);
+}
+
+.tenant-import-progress-bar {
+  position: absolute;
+  inset-block: 0;
+  left: -42%;
+  width: 42%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, var(--accent) 35%, var(--accent) 65%, transparent);
+  animation: tenant-import-progress-sweep 1.25s ease-in-out infinite;
+}
+
+@keyframes tenant-import-progress-sweep {
+  to { left: 100%; }
+}
+
+@keyframes tenant-import-upload-bounce {
+  0%, 100% { transform: translateY(2px); }
+  50% { transform: translateY(-2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tenant-import-upload-icon,
+  .tenant-import-progress-bar {
+    animation-duration: 2.5s;
+  }
 }
 
 input[type="checkbox"],
@@ -1325,6 +1477,8 @@ input[type="radio"] {
 }
 
 .table-shell {
+  align-self: start;
+  height: fit-content;
   overflow-x: auto;
   overflow-y: hidden;
   border: 1px solid var(--border);
@@ -1590,12 +1744,14 @@ input[type="radio"] {
 }
 
 .responsibility-lock-button:hover {
-  background: color-mix(in srgb, var(--accent) 8%, transparent 92%);
+  --button-bg: color-mix(in srgb, var(--accent) 8%, transparent 92%);
+  background: var(--button-bg);
 }
 
 .responsibility-lock-button-active {
   border-color: color-mix(in srgb, var(--accent) 34%, transparent 66%);
-  background: color-mix(in srgb, var(--accent) 12%, transparent 88%);
+  --button-bg: color-mix(in srgb, var(--accent) 12%, transparent 88%);
+  background: var(--button-bg);
 }
 
 .responsibility-empty {
@@ -1615,6 +1771,14 @@ input[type="radio"] {
 .record-list {
   display: flex;
   flex-direction: column;
+}
+
+/* List-shaped cards must stay content-sized. Without this, a parent grid with spare
+   viewport height can make a single-entry list look taller than the same row in a
+   multi-entry list. */
+.card:has(> .record-list) {
+  align-self: start;
+  height: fit-content;
 }
 
 .record-list-row {
@@ -1727,7 +1891,8 @@ input[type="radio"] {
 .button-pill-active {
   color: var(--text);
   border-color: color-mix(in srgb, var(--accent) 36%, transparent 64%);
-  background: color-mix(in srgb, var(--accent) 16%, transparent 84%);
+  --button-bg: color-mix(in srgb, var(--accent) 16%, transparent 84%);
+  background: var(--button-bg);
 }
 
 .table-subtitle {
@@ -1755,12 +1920,14 @@ input[type="radio"] {
 
 .rule-option-card:hover {
   border-color: color-mix(in srgb, var(--accent) 34%, transparent 66%);
-  background: color-mix(in srgb, var(--accent) 8%, transparent 92%);
+  --button-bg: color-mix(in srgb, var(--accent) 8%, transparent 92%);
+  background: var(--button-bg);
 }
 
 .rule-option-card-active {
   border-color: color-mix(in srgb, var(--accent) 46%, transparent 54%);
-  background: color-mix(in srgb, var(--accent) 14%, transparent 86%);
+  --button-bg: color-mix(in srgb, var(--accent) 14%, transparent 86%);
+  background: var(--button-bg);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent 78%) inset;
 }
 
@@ -1922,7 +2089,8 @@ input[type="radio"] {
 }
 
 .pdf-icon-link:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 22%, transparent 78%);
+  --button-bg: color-mix(in srgb, var(--accent) 22%, transparent 78%);
+  background: var(--button-bg);
   color: var(--accent);
 }
 
@@ -1936,7 +2104,8 @@ input[type="radio"] {
 
 .pdf-icon-link-success:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--success, #22c55e) 46%, transparent 54%);
-  background: color-mix(in srgb, var(--success, #22c55e) 24%, transparent 76%);
+  --button-bg: color-mix(in srgb, var(--success, #22c55e) 24%, transparent 76%);
+  background: var(--button-bg);
   color: var(--success, #22c55e);
 }
 
@@ -2026,7 +2195,8 @@ input[type="radio"] {
 
 .list-snapshot-refresh-button:hover,
 .list-snapshot-undo-button:hover {
-  background: color-mix(in srgb, var(--warning) 14%, transparent 86%);
+  --button-bg: color-mix(in srgb, var(--warning) 14%, transparent 86%);
+  background: var(--button-bg);
 }
 
 .list-snapshot-undo-button {
@@ -2036,7 +2206,8 @@ input[type="radio"] {
 }
 
 .list-snapshot-undo-button:hover {
-  background: color-mix(in srgb, var(--muted) 14%, transparent 86%);
+  --button-bg: color-mix(in srgb, var(--muted) 14%, transparent 86%);
+  background: var(--button-bg);
 }
 
 .list-block-config-label {
@@ -2205,7 +2376,8 @@ input[type="radio"] {
 .template-element-drag-handle:hover {
   color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 40%, transparent 60%);
-  background: color-mix(in srgb, var(--accent) 9%, transparent 91%);
+  --button-bg: color-mix(in srgb, var(--accent) 9%, transparent 91%);
+  background: var(--button-bg);
 }
 
 .template-element-drag-handle:active {
@@ -2296,13 +2468,15 @@ input[type="radio"] {
 
 .template-element-inline-lock-locked {
   color: var(--success);
-  background: color-mix(in srgb, var(--success) 14%, transparent 86%);
+  --button-bg: color-mix(in srgb, var(--success) 14%, transparent 86%);
+  background: var(--button-bg);
   border-color: color-mix(in srgb, var(--success) 26%, transparent 74%);
 }
 
 .template-element-inline-lock-unlocked {
   color: var(--warning);
-  background: color-mix(in srgb, var(--warning) 14%, transparent 86%);
+  --button-bg: color-mix(in srgb, var(--warning) 14%, transparent 86%);
+  background: var(--button-bg);
   border-color: color-mix(in srgb, var(--warning) 28%, transparent 72%);
 }
 
@@ -2373,13 +2547,15 @@ input[type="radio"] {
 }
 
 .behavior-icon-button:hover {
-  background: color-mix(in srgb, var(--accent) 9%, transparent 91%);
+  --button-bg: color-mix(in srgb, var(--accent) 9%, transparent 91%);
+  background: var(--button-bg);
   color: var(--text);
 }
 
 .behavior-icon-button-active {
   color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 14%, transparent 86%);
+  --button-bg: color-mix(in srgb, var(--accent) 14%, transparent 86%);
+  background: var(--button-bg);
   border-color: color-mix(in srgb, var(--accent) 24%, transparent 76%);
 }
 
@@ -2604,7 +2780,8 @@ input[type="radio"] {
 
 .tabs-trigger:hover {
   color: var(--text);
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
 }
 
 .tabs-trigger-active {
@@ -2749,7 +2926,8 @@ input[type="radio"] {
 
 .block-type-card-active {
   border-color: color-mix(in srgb, var(--accent) 34%, transparent 66%);
-  background: color-mix(in srgb, var(--accent) 10%, transparent 90%);
+  --button-bg: color-mix(in srgb, var(--accent) 10%, transparent 90%);
+  background: var(--button-bg);
 }
 
 /* ── Preset card preview ───────────────────────── */
@@ -3072,7 +3250,8 @@ input[type="radio"] {
 }
 
 .identity-button:hover {
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   transform: translateY(0);
   box-shadow: none;
@@ -3168,7 +3347,7 @@ input[type="radio"] {
      not a standard CSS property but well supported in the Chromium/Linux target this project
      already commits to (see the backdrop-filter removal note above). Recomputes layout at the
      scaled size (unlike transform: scale), so position: sticky in the sidebar keeps working. */
-  zoom: 0.9;
+  zoom: 0.84;
 }
 
 .protocol-document {
@@ -3177,8 +3356,7 @@ input[type="radio"] {
   gap: 18px;
   min-width: 0;
   /* Self-scrolling, pinned near the top of the viewport (mirrors .protocol-quicknav's own
-     sticky/max-height pattern below) - this is what lets scroll-snap center the active
-     section within it regardless of how tall the page around it is. */
+     sticky/max-height pattern below), independent of the page around it. */
   position: sticky;
   top: 12px;
   max-height: calc(100dvh - 24px);
@@ -3188,10 +3366,6 @@ input[type="radio"] {
      that's even slightly too wide (e.g. a wide table). Force it off explicitly - inner
      content that needs horizontal scroll (.table-shell) handles that itself instead. */
   overflow-x: hidden;
-  /* "Magnetic" scrolling: one wheel/trackpad gesture settles on the next section, centered.
-     A section taller than the viewport still scrolls normally inside itself - per spec, once
-     a snap area is already as centered as it can get, the browser doesn't yank it away. */
-  scroll-snap-type: y mandatory;
   /* Without this, scrolling past this pane's own end chains the leftover wheel delta to
      the next scrollable ancestor up the tree - which, despite the outer .app-frame-writing
      shell being pinned via overflow:hidden for this exact layout, still receives it and
@@ -3199,6 +3373,16 @@ input[type="radio"] {
      Confirmed live: without `contain`, scrolling past the end here moved the outer page by
      thousands of pixels. */
   overscroll-behavior: contain;
+}
+
+/* The accordion scroll-spy activates the heading nearest the pane's centre. Reserve half
+   a pane of scroll space at both ends so the first and final headings can reach that
+   activation line when approaching them in either direction. */
+.protocol-document-accordion::before,
+.protocol-document-accordion::after {
+  content: "";
+  flex: 0 0 50%;
+  pointer-events: none;
 }
 
 .protocol-doc-section {
@@ -3211,22 +3395,6 @@ input[type="radio"] {
   box-shadow: var(--shadow-soft);
   padding: 20px;
   transition: box-shadow 150ms ease, border-color 150ms ease;
-  /* start, not center: centering a short section (e.g. one with just 1-2 small blocks)
-     leaves tall, empty-looking gutters above AND below it, worse the taller .protocol-
-     document gets - reads as "the page scrolled into blank space". Snapping its top edge
-     to the pane's top instead means only ever the space after the very last section can
-     end up blank, same as any normal page falling short of the viewport. */
-  scroll-snap-align: start;
-  scroll-margin-top: 16px;
-  scroll-snap-stop: always;
-}
-
-/* While the document is actively scrolling, apply the active/inactive state change instantly
-   instead of animating it - see the JS comment next to the scroll listener that toggles this
-   class. Animating the highlight at the same time as the native scroll-snap motion is what
-   made the whole thing feel janky. */
-.protocol-document.is-scrolling .protocol-doc-section {
-  transition: none;
 }
 
 /* The active section is marked with an accent ring instead of blurring everything else -
@@ -3235,6 +3403,45 @@ input[type="radio"] {
 .protocol-doc-section-active {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent 65%), var(--shadow-soft);
+}
+
+/* Accordion document: inactive protocol points remain as compact, scannable headings.
+   The scroll-spy promotes the point nearest the viewport centre to active, which reveals
+   its existing block stack without mounting/unmounting editors or losing draft state. */
+.protocol-document-accordion .protocol-doc-section-inactive {
+  padding-block: 14px;
+  margin-inline: 10px;
+  opacity: 0.68;
+  filter: grayscale(0.3) blur(0.3px);
+  background: color-mix(in srgb, var(--panel-solid) 84%, var(--bg) 16%);
+  transition:
+    opacity 140ms ease,
+    filter 140ms ease,
+    background 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.protocol-document-accordion .protocol-doc-section-inactive .editor-panel-header h2 {
+  margin-top: 6px;
+  font-size: 1.05rem;
+}
+
+.protocol-document-accordion .protocol-doc-section-inactive .eyebrow {
+  font-size: 0.68rem;
+}
+
+.protocol-document-accordion .protocol-doc-section-wrap:hover .protocol-doc-section-inactive {
+  opacity: 0.82;
+  filter: grayscale(0.15) blur(0.15px);
+}
+
+.protocol-document-accordion .protocol-doc-section-inactive > .editor-panel-header {
+  margin-bottom: 0;
+}
+
+.protocol-document-accordion .protocol-doc-section-inactive > .element-block-stack {
+  display: none;
 }
 
 /* The section itself is inert while inactive (see focused-element-editor.tsx), so clicks pass
@@ -3485,7 +3692,8 @@ input[type="radio"] {
 }
 
 .tag-filter-chip:hover {
-  background: var(--surface-2);
+  --button-bg: var(--surface-2);
+  background: var(--button-bg);
   color: var(--foreground);
 }
 
@@ -3550,7 +3758,8 @@ input[type="radio"] {
 }
 
 .tag-chip-remove:hover {
-  background: color-mix(in srgb, var(--accent) 35%, transparent 65%);
+  --button-bg: color-mix(in srgb, var(--accent) 35%, transparent 65%);
+  background: var(--button-bg);
   color: var(--text);
 }
 
@@ -3610,7 +3819,8 @@ input[type="radio"] {
 }
 
 .tag-input-option:hover {
-  background: color-mix(in srgb, var(--accent) 10%, transparent 90%);
+  --button-bg: color-mix(in srgb, var(--accent) 10%, transparent 90%);
+  background: var(--button-bg);
   color: var(--accent);
 }
 
@@ -3635,7 +3845,8 @@ input[type="radio"] {
 }
 
 .tag-input-edit-btn:hover {
-  background: color-mix(in srgb, var(--accent) 14%, transparent 86%);
+  --button-bg: color-mix(in srgb, var(--accent) 14%, transparent 86%);
+  background: var(--button-bg);
   color: var(--accent);
 }
 
@@ -3829,7 +4040,8 @@ input[type="radio"] {
 }
 
 .editor-nav-item:hover {
-  background: color-mix(in srgb, var(--accent) 6%, transparent 94%);
+  --button-bg: color-mix(in srgb, var(--accent) 6%, transparent 94%);
+  background: var(--button-bg);
 }
 
 .editor-nav-index {
@@ -3874,7 +4086,8 @@ input[type="radio"] {
 
 .editor-nav-item-active {
   border-left-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 10%, transparent 90%);
+  --button-bg: color-mix(in srgb, var(--accent) 10%, transparent 90%);
+  background: var(--button-bg);
 }
 
 .editor-nav-item-active .editor-nav-index {
@@ -4071,6 +4284,7 @@ input[type="radio"] {
   width: 18px;
   height: 18px;
   min-width: 18px;
+  min-height: 18px;
   margin-left: 4px;
   padding: 0;
   border: none;
@@ -4089,7 +4303,8 @@ input[type="radio"] {
 .tracked-accept-btn:hover,
 .tracked-accept-btn:focus-visible {
   opacity: 1;
-  background: color-mix(in srgb, var(--danger) 22%, transparent);
+  --button-bg: color-mix(in srgb, var(--danger) 22%, transparent);
+  background: var(--button-bg);
 }
 
 .tracked-run {
@@ -4145,12 +4360,14 @@ input[type="radio"] {
   transition: background 0.12s, border-color 0.12s;
 }
 .todo-toggle:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  --button-bg: color-mix(in srgb, var(--accent) 14%, transparent);
+  background: var(--button-bg);
 }
 
 .todo-toggle-done {
   border-color: color-mix(in srgb, var(--success) 40%, var(--border));
-  background: color-mix(in srgb, var(--success) 12%, transparent);
+  --button-bg: color-mix(in srgb, var(--success) 12%, transparent);
+  background: var(--button-bg);
   color: var(--success);
 }
 
@@ -4196,7 +4413,8 @@ input[type="radio"] {
   transition: background 0.12s;
 }
 .todo-delete:hover {
-  background: color-mix(in srgb, var(--danger, #ef4444) 10%, transparent);
+  --button-bg: color-mix(in srgb, var(--danger, #ef4444) 10%, transparent);
+  background: var(--button-bg);
 }
 
 .todo-inline-meta {
@@ -4245,7 +4463,8 @@ input[type="radio"] {
   transform: none;
   box-shadow: none;
   border-color: color-mix(in srgb, var(--accent) 34%, transparent 66%);
-  background: color-mix(in srgb, var(--accent) 8%, var(--panel-solid) 92%);
+  --button-bg: color-mix(in srgb, var(--accent) 8%, var(--panel-solid) 92%);
+  background: var(--button-bg);
 }
 
 .mini-menu-trigger-label {
@@ -4324,7 +4543,8 @@ input[type="radio"] {
 .mini-menu-option-active {
   transform: none;
   box-shadow: none;
-  background: color-mix(in srgb, var(--accent) 10%, transparent 90%);
+  --button-bg: color-mix(in srgb, var(--accent) 10%, transparent 90%);
+  background: var(--button-bg);
   border-color: color-mix(in srgb, var(--accent) 24%, transparent 76%);
 }
 
@@ -4441,6 +4661,50 @@ input[type="radio"] {
   font-size: 0.8rem;
   color: var(--muted);
   flex-wrap: wrap;
+}
+
+.entry-exit-block {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.entry-exit-group-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin-bottom: 4px;
+}
+
+.entry-exit-date {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.entry-exit-row-hidden .attendance-name {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.entry-exit-toggle {
+  min-height: 0;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  --button-bg: transparent;
+  background: var(--button-bg);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.entry-exit-toggle:hover {
+  --button-bg: color-mix(in srgb, var(--accent) 9%, transparent 91%);
+  background: var(--button-bg);
+  color: var(--text);
 }
 
 .event-table-wrap {
@@ -4704,7 +4968,8 @@ input[type="radio"] {
 }
 
 .rich-text-btn:hover {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  --button-bg: color-mix(in srgb, var(--accent) 12%, transparent);
+  background: var(--button-bg);
   border-color: color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
@@ -4728,6 +4993,13 @@ input[type="radio"] {
   outline: none;
   line-height: 1.65;
   color: var(--text);
+}
+
+/* The protocol workspace is intentionally denser than the rest of the application:
+   its document is zoomed out above, while writing surfaces retain a generous working
+   height. At 84% zoom this renders at roughly 160px instead of the previous 108px. */
+.protocol-panel-document .rich-text-editor-content {
+  min-height: 190px;
 }
 
 .rich-text-editor-content:focus {
@@ -4868,7 +5140,8 @@ input[type="radio"] {
 .matrix-designer-row-button-active,
 .matrix-designer-cell-active {
   border-color: color-mix(in srgb, var(--accent) 46%, transparent 54%);
-  background: color-mix(in srgb, var(--accent) 14%, transparent 86%);
+  --button-bg: color-mix(in srgb, var(--accent) 14%, transparent 86%);
+  background: var(--button-bg);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent 76%) inset;
 }
 
@@ -5348,7 +5621,8 @@ input[type="radio"] {
 
 .matrix-col-remove:hover {
   color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 10%, transparent 90%);
+  --button-bg: color-mix(in srgb, var(--danger) 10%, transparent 90%);
+  background: var(--button-bg);
 }
 
 .matrix-table-row-label {
@@ -6087,7 +6361,8 @@ input[type="radio"] {
   transform: none !important;
 }
 .segment-button:hover {
-  background: color-mix(in srgb, var(--accent) 8%, transparent 92%);
+  --button-bg: color-mix(in srgb, var(--accent) 8%, transparent 92%);
+  background: var(--button-bg);
   color: var(--text);
   box-shadow: none;
   transform: none !important;
@@ -6095,12 +6370,14 @@ input[type="radio"] {
 
 .segment-button-active {
   --button-hover-bg: linear-gradient(135deg, var(--accent), var(--accent-strong));
-  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  --button-bg: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  background: var(--button-bg);
   color: white;
   box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 30%, transparent 70%);
 }
 .segment-button-active:hover {
-  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  --button-bg: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  background: var(--button-bg);
   color: white;
 }
 
@@ -6138,7 +6415,8 @@ input[type="radio"] {
 }
 
 .filter-tabs-option:hover {
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   transform: none !important;
   box-shadow: none;
@@ -6146,14 +6424,16 @@ input[type="radio"] {
 
 .filter-tabs-option-active {
   --button-hover-bg: var(--panel-solid);
-  background: var(--panel-solid);
+  --button-bg: var(--panel-solid);
+  background: var(--button-bg);
   color: var(--text);
   font-weight: 600;
   box-shadow: var(--shadow-soft);
 }
 
 .filter-tabs-option-active:hover {
-  background: var(--panel-solid);
+  --button-bg: var(--panel-solid);
+  background: var(--button-bg);
   color: var(--text);
 }
 
@@ -6269,7 +6549,8 @@ input[type="radio"] {
 }
 
 .oidc-button:hover {
-  background: var(--accent-soft);
+  --button-bg: var(--accent-soft);
+  background: var(--button-bg);
   border-color: var(--accent);
   transform: none;
   box-shadow: none;
@@ -6380,7 +6661,8 @@ input[type="radio"] {
 .mfa-choice-card:hover:not(:disabled),
 .mfa-choice-card:focus-visible {
   border-color: color-mix(in srgb, var(--primary) 28%, var(--border-strong) 72%);
-  background: color-mix(in srgb, var(--accent-soft) 24%, var(--panel) 76%);
+  --button-bg: color-mix(in srgb, var(--accent-soft) 24%, var(--panel) 76%);
+  background: var(--button-bg);
   box-shadow: 0 10px 28px rgba(22, 34, 61, 0.08);
   transform: translateY(-1px);
 }
@@ -6495,7 +6777,8 @@ input[type="radio"] {
 }
 
 .mfa-primary-button:hover:not(:disabled) {
-  background: var(--primary-strong);
+  --button-bg: var(--primary-strong);
+  background: var(--button-bg);
   box-shadow: none;
   transform: none;
 }
@@ -6609,6 +6892,93 @@ input[type="radio"] {
   gap: 10px;
 }
 
+/* Redesigned admin/tenant MFA settings screens (2026-09-02): icon badges for the hero
+   status card, the TOTP/passkey method cards, and each row in the active-factors list,
+   plus the required/optional indicator pill. Layered on top of the existing
+   .security-summary-card / .security-method-card / .security-factor-card shapes above
+   rather than replacing them, so both admin and tenant panels stay visually consistent. */
+.security-hero {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.security-hero-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  color: var(--accent-strong);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 22%, transparent 78%), color-mix(in srgb, var(--accent) 8%, transparent 92%));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent 78%);
+}
+
+.security-hero-icon.is-active {
+  color: var(--success);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--success) 22%, transparent 78%), color-mix(in srgb, var(--success) 8%, transparent 92%));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--success) 26%, transparent 74%);
+}
+
+.security-hero-body {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.security-hero-title {
+  font-size: 1.08rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.security-method-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+
+.security-factor-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+
+.security-factor-icon.is-webauthn {
+  color: var(--success-fg);
+  background: var(--success-bg);
+}
+
+.security-factor-row-main {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.pill-required {
+  background: var(--danger-bg);
+  border-color: color-mix(in srgb, var(--danger) 26%, transparent 74%);
+  color: var(--danger-fg);
+}
+
+.pill-muted {
+  background: var(--neutral-bg);
+  border-color: var(--border);
+  color: var(--neutral-fg);
+}
+
 .login-submit {
   width: 100%;
   padding: 12px 16px;
@@ -6629,7 +6999,8 @@ input[type="radio"] {
 }
 
 .login-secondary-button:hover:not(:disabled) {
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--text);
   text-decoration: underline;
 }
@@ -6659,6 +7030,10 @@ input[type="radio"] {
   opacity: 0.8;
 }
 
+.login-copyright {
+  max-width: min(90vw, 28rem);
+}
+
 @media (max-width: 760px) {
   .login-panel-wide {
     padding: 28px 22px;
@@ -6668,6 +7043,12 @@ input[type="radio"] {
   .security-factor-card,
   .security-method-header {
     flex-direction: column;
+  }
+
+  .security-hero,
+  .security-factor-row-main {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .mfa-screen-header h1 {
@@ -6718,6 +7099,15 @@ input[type="radio"] {
   .mobile-nav-toggle {
     display: inline-flex;
   }
+
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 110;
+    background: color-mix(in srgb, var(--text) 10%, transparent);
+    animation: sidebar-overlay-in 160ms ease-out both;
+  }
 }
 
 @media (min-width: 901px) and (max-width: 1720px) {
@@ -6742,6 +7132,23 @@ input[type="radio"] {
 
   .app-frame-writing .sidebar-writing.sidebar-open {
     transform: translateX(0);
+  }
+
+  .app-frame-writing .sidebar-edge-trigger {
+    display: block;
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: 24px;
+    z-index: 119;
+  }
+
+  .app-frame-writing .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 110;
+    background: color-mix(in srgb, var(--text) 10%, transparent);
+    animation: sidebar-overlay-in 160ms ease-out both;
   }
 
   .app-frame-writing .shell-main {
@@ -6839,7 +7246,6 @@ input[type="radio"] {
   .app-frame-writing .editor-panel {
     height: calc(100dvh - 130px);
     overflow-y: auto;
-    scroll-snap-type: y proximity;
     display: flex;
     flex-direction: column;
   }
@@ -6900,6 +7306,51 @@ input[type="radio"] {
    magic-number match rather than a hard constraint, so it's deliberately left untouched
    here to avoid clipping it if that number is ever slightly off). */
 @media (min-width: 901px) {
+  /* Give protocol writing the feel of a slightly zoomed-out workspace without changing
+     browser zoom or making form controls across the rest of the app smaller. */
+  .app-frame-writing {
+    padding: 12px;
+  }
+
+  .app-frame-writing .shell {
+    gap: 12px;
+    min-height: calc(100vh - 24px);
+  }
+
+  .app-frame-writing .sidebar-writing {
+    height: calc(100vh - 24px);
+    top: 12px;
+    padding: 16px;
+    gap: 16px;
+    border-radius: 22px;
+  }
+
+  .app-frame-writing .sidebar-writing .sidebar-nav {
+    gap: 14px;
+  }
+
+  .app-frame-writing .sidebar-writing .nav-link {
+    min-height: 34px;
+    font-size: 0.9rem;
+  }
+
+  .app-frame-writing .sidebar-writing .brand-mark {
+    width: 38px;
+    height: 38px;
+  }
+
+  .app-frame-writing .shell-main {
+    gap: 12px;
+  }
+
+  .app-frame-writing .topbar {
+    padding: 11px 16px;
+  }
+
+  .app-frame-writing .topbar-breadcrumb {
+    font-size: 1rem;
+  }
+
   /* Belt-and-suspenders alongside .app-frame-writing's own overflow:hidden below: `body`
      only sets overflow-x:hidden (see the base html/body rules near the top of this file),
      never overflow-y - per the CSS Overflow spec, when one axis is non-visible the other's
@@ -6922,7 +7373,7 @@ input[type="radio"] {
   }
 
   .app-frame-writing:has(.protocol-panel-document) .shell {
-    height: calc(100vh - 40px);
+    height: calc(100vh - 24px);
     min-height: 0;
   }
 
@@ -6946,8 +7397,7 @@ input[type="radio"] {
     /* Less top/bottom padding than a regular .panel - the document-mode header is now a
        single compact row, so the panel shell shouldn't add its own large margin on top of
        that; every pixel saved here goes straight to the scrollable document below. */
-    padding-top: 12px;
-    padding-bottom: 12px;
+    padding: 10px 16px;
   }
 
   /* ProtocolEditor's own root element - turn it into the flex column that lays out
@@ -6963,7 +7413,7 @@ input[type="radio"] {
     /* Tighter than the default 18px .grid gap - header/status-row/document-shell are chrome
        stacked above the document, not content rows, so they don't need as much air between
        them. */
-    gap: 10px;
+    gap: 8px;
     overflow: hidden;
   }
 
@@ -6988,6 +7438,25 @@ input[type="radio"] {
     align-items: stretch;
   }
 
+  .protocol-document-actions,
+  .protocol-document-header {
+    gap: 8px;
+  }
+
+  .protocol-document-actions button {
+    min-height: 40px;
+    padding-block: 8px;
+  }
+
+  .protocol-panel-document .status-row {
+    gap: 7px;
+  }
+
+  .protocol-panel-document .pill {
+    min-height: 30px;
+    font-size: 0.82rem;
+  }
+
   .protocol-document,
   .protocol-quicknav {
     position: static;
@@ -7005,9 +7474,64 @@ input[type="radio"] {
   }
 }
 
-.editor-block-card {
-  scroll-snap-align: start;
-  scroll-margin-top: 16px;
+@keyframes protocol-editor-zoom-out {
+  from {
+    opacity: 0.35;
+    transform: scale(1.025);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes protocol-editor-zoom-in {
+  from {
+    opacity: 0.35;
+    transform: scale(0.975);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes sidebar-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-frame-writing .shell-main,
+  .app-frame-protocol-exit .shell-main,
+  .app-frame-writing .sidebar-overlay {
+    animation: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .app-frame-writing .sidebar-edge-trigger {
+    display: block;
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: 28px;
+    z-index: 119;
+  }
+
+  .app-frame-writing .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 110;
+    background: color-mix(in srgb, var(--text) 10%, transparent);
+    animation: sidebar-overlay-in 160ms ease-out both;
+  }
+}
+
+@media (min-width: 1721px) {
+  .app-frame-writing .shell {
+    grid-template-columns: 244px minmax(0, 1fr);
+  }
 }
 
 .editor-block-card-hidden {
@@ -7280,11 +7804,13 @@ input[type="radio"] {
 }
 
 .collab-status-tile span {
+  width: 100%;
   font-size: 0.68rem;
   font-weight: 600;
+  line-height: 1.15;
   letter-spacing: 0.02em;
   text-transform: uppercase;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
 }
 
 .collab-status-tile-success {
@@ -7501,7 +8027,8 @@ input[type="radio"] {
 }
 .session-panel-assignee-option-highlighted,
 .session-panel-assignee-option:hover {
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  --button-bg: color-mix(in srgb, var(--accent) 10%, transparent);
+  background: var(--button-bg);
 }
 .session-panel-assignee-option-highlighted .session-panel-option-avatar,
 .session-panel-assignee-option:hover .session-panel-option-avatar {
@@ -7521,7 +8048,7 @@ input[type="radio"] {
   transition: background 0.12s, opacity 0.12s;
   text-align: center;
 }
-.session-panel-btn:hover:not(:disabled) { background: var(--accent-strong); }
+.session-panel-btn:hover:not(:disabled) { --button-bg: var(--accent-strong); background: var(--button-bg); }
 .session-panel-btn:disabled { opacity: 0.55; cursor: default; }
 
 .session-panel-status {
@@ -8188,7 +8715,7 @@ input[type="radio"] {
   box-shadow: none;
   transform: none !important;
 }
-.btn-icon:hover { background: color-mix(in srgb, var(--accent) 25%, transparent 75%); }
+.btn-icon:hover { --button-bg: color-mix(in srgb, var(--accent) 25%, transparent 75%); background: var(--button-bg); }
 
 .btn-icon-sm {
   --button-hover-bg: color-mix(in srgb, var(--muted) 22%, transparent 78%);
@@ -8209,9 +8736,9 @@ input[type="radio"] {
   box-shadow: none;
   transform: none !important;
 }
-.btn-icon-sm:hover { background: color-mix(in srgb, var(--muted) 22%, transparent 78%); color: var(--text); }
-.btn-icon-danger { --button-hover-bg: color-mix(in srgb, var(--danger) 20%, transparent 80%); color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent 90%); }
-.btn-icon-danger:hover { background: color-mix(in srgb, var(--danger) 20%, transparent 80%); }
+.btn-icon-sm:hover { --button-bg: color-mix(in srgb, var(--muted) 22%, transparent 78%); background: var(--button-bg); color: var(--text); }
+.btn-icon-danger { --button-hover-bg: color-mix(in srgb, var(--danger) 20%, transparent 80%); color: var(--danger); --button-bg: color-mix(in srgb, var(--danger) 10%, transparent 90%); background: var(--button-bg); }
+.btn-icon-danger:hover { --button-bg: color-mix(in srgb, var(--danger) 20%, transparent 80%); background: var(--button-bg); }
 
 /* ── Portal-based mini-menu popover (due date, etc.) ────────────── */
 
@@ -8257,7 +8784,8 @@ input[type="radio"] {
 }
 
 .menu-item-highlighted {
-  background: var(--accent-soft);
+  --button-bg: var(--accent-soft);
+  background: var(--button-bg);
 }
 
 /* ── Finance tabs ────────────────────────────────────────────── */
@@ -8422,11 +8950,11 @@ input[type="radio"] {
   cursor: pointer;
   transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
-.fine-action-btn:hover { background: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
+.fine-action-btn:hover { --button-bg: color-mix(in srgb, var(--accent) 10%, var(--panel)); background: var(--button-bg); }
 .fine-collect-btn { --button-hover-bg: color-mix(in srgb, var(--success, #22c55e) 12%, var(--panel)); color: var(--success, #22c55e); border-color: color-mix(in srgb, var(--success, #22c55e) 30%, transparent); }
-.fine-collect-btn:hover { background: color-mix(in srgb, var(--success, #22c55e) 12%, var(--panel)); }
+.fine-collect-btn:hover { --button-bg: color-mix(in srgb, var(--success, #22c55e) 12%, var(--panel)); background: var(--button-bg); }
 .fine-delete-btn { --button-hover-bg: color-mix(in srgb, var(--danger, #ef4444) 12%, var(--panel)); color: var(--danger, #ef4444); border-color: color-mix(in srgb, var(--danger, #ef4444) 30%, transparent); }
-.fine-delete-btn:hover { background: color-mix(in srgb, var(--danger, #ef4444) 12%, var(--panel)); }
+.fine-delete-btn:hover { --button-bg: color-mix(in srgb, var(--danger, #ef4444) 12%, var(--panel)); background: var(--button-bg); }
 .fine-comment-btn { color: var(--muted); }
 .fine-comment-missing { color: var(--warning, #f59e0b); border-color: color-mix(in srgb, var(--warning, #f59e0b) 40%, transparent); animation: fine-comment-pulse 1.8s infinite; }
 @keyframes fine-comment-pulse {
@@ -8602,7 +9130,7 @@ input[type="radio"] {
   cursor: pointer;
   text-align: left;
 }
-.due-menu-option:hover { background: var(--accent-soft); }
+.due-menu-option:hover { --button-bg: var(--accent-soft); background: var(--button-bg); }
 .due-menu-option-sub {
   font-size: 0.75rem;
   color: var(--muted);
@@ -8682,7 +9210,8 @@ input[type="radio"] {
   transition: background 0.15s, color 0.15s;
 }
 .app-toast-close:hover {
-  background: color-mix(in srgb, var(--muted) 14%, transparent);
+  --button-bg: color-mix(in srgb, var(--muted) 14%, transparent);
+  background: var(--button-bg);
   color: var(--text);
   transform: none;
   box-shadow: none;
@@ -8808,20 +9337,23 @@ input[type="radio"] {
 }
 
 .cycle-chip:hover {
-  background: transparent;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: var(--fg, #111);
   border-color: var(--accent, #6366f1);
 }
 
 .cycle-chip-active {
   --button-hover-bg: var(--accent, #6366f1);
-  background: var(--accent, #6366f1);
+  --button-bg: var(--accent, #6366f1);
+  background: var(--button-bg);
   border-color: var(--accent, #6366f1);
   color: #fff;
 }
 
 .cycle-chip-active:hover {
-  background: var(--accent, #6366f1);
+  --button-bg: var(--accent, #6366f1);
+  background: var(--button-bg);
   color: #fff;
 }
 
@@ -9031,7 +9563,8 @@ input[type="radio"] {
 }
 
 .stats-expand-btn:hover {
-  background: color-mix(in srgb, var(--muted) 15%, transparent);
+  --button-bg: color-mix(in srgb, var(--muted) 15%, transparent);
+  background: var(--button-bg);
   color: var(--text);
 }
 
@@ -9098,7 +9631,8 @@ input[type="radio"] {
 }
 
 .stats-fs-close:hover {
-  background: color-mix(in srgb, var(--muted) 15%, transparent);
+  --button-bg: color-mix(in srgb, var(--muted) 15%, transparent);
+  background: var(--button-bg);
   color: var(--text);
 }
 
@@ -9143,7 +9677,8 @@ input[type="radio"] {
 .stats-seg-btn:hover { color: var(--text); }
 
 .stats-seg-btn-active {
-  background: var(--panel-solid);
+  --button-bg: var(--panel-solid);
+  background: var(--button-bg);
   color: var(--text);
   box-shadow: 0 1px 3px rgba(0,0,0,0.15);
 }
@@ -9313,7 +9848,8 @@ input[type="radio"] {
 }
 .stats-cycle-btn:hover {
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-  background: color-mix(in srgb, var(--accent) 4%, var(--panel-solid));
+  --button-bg: color-mix(in srgb, var(--accent) 4%, var(--panel-solid));
+  background: var(--button-bg);
 }
 .stats-cycle-btn-open {
   border-color: color-mix(in srgb, var(--accent) 60%, transparent);
@@ -9362,7 +9898,8 @@ input[type="radio"] {
   transition: background 0.1s;
 }
 .stats-cycle-item:hover {
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  --button-bg: color-mix(in srgb, var(--accent) 8%, transparent);
+  background: var(--button-bg);
 }
 .stats-cycle-item.active {
   color: var(--accent);
@@ -9456,7 +9993,8 @@ input[type="radio"] {
 }
 
 .dashboard-hero-action:hover {
-  background: color-mix(in srgb, var(--primary-contrast) 90%, transparent);
+  --button-bg: color-mix(in srgb, var(--primary-contrast) 90%, transparent);
+  background: var(--button-bg);
 }
 
 .dashboard-tile {
@@ -9506,7 +10044,8 @@ input[type="radio"] {
 }
 
 .excuse-chip:hover:not(:disabled) {
-  background: var(--panel-solid);
+  --button-bg: var(--panel-solid);
+  background: var(--button-bg);
   color: var(--text);
   border-color: var(--accent);
 }
@@ -9530,12 +10069,14 @@ input[type="radio"] {
 .excuse-chip-excused {
   --button-hover-bg: var(--success-bg);
   border-color: var(--success-fg);
-  background: var(--success-bg);
+  --button-bg: var(--success-bg);
+  background: var(--button-bg);
   color: var(--success-fg);
 }
 
 .excuse-chip-excused:hover:not(:disabled) {
-  background: var(--success-bg);
+  --button-bg: var(--success-bg);
+  background: var(--button-bg);
   color: var(--success-fg);
   border-color: var(--success-fg);
 }
@@ -9581,7 +10122,8 @@ input[type="radio"] {
 }
 
 .dashboard-list-row:hover {
-  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  --button-bg: color-mix(in srgb, var(--accent) 6%, transparent);
+  background: var(--button-bg);
   transform: none;
   box-shadow: none;
 }
@@ -10016,7 +10558,8 @@ input[type="radio"] {
 }
 
 .subm-reopen-button:hover {
-  background: color-mix(in srgb, var(--warning) 12%, transparent 88%);
+  --button-bg: color-mix(in srgb, var(--warning) 12%, transparent 88%);
+  background: var(--button-bg);
   color: var(--warning);
 }
 
@@ -10028,7 +10571,8 @@ input[type="radio"] {
 }
 
 .subm-close-button:hover {
-  background: color-mix(in srgb, var(--danger) 12%, transparent 88%);
+  --button-bg: color-mix(in srgb, var(--danger) 12%, transparent 88%);
+  background: var(--button-bg);
   color: var(--danger);
 }
 
@@ -10218,6 +10762,8 @@ input[type="radio"] {
 
 .wizard-purpose-card:hover {
   border-color: var(--border-strong);
+  --button-bg: color-mix(in srgb, var(--accent) 8%, transparent 92%);
+  background: var(--button-bg);
   transform: none;
   box-shadow: none;
 }
@@ -10288,6 +10834,21 @@ input[type="radio"] {
   color: var(--text);
 }
 
+.wizard-dns-value-button {
+  --button-bg: var(--panel);
+  --button-hover-bg: var(--accent-soft);
+  text-align: left;
+  font-weight: 400;
+  letter-spacing: normal;
+  cursor: pointer;
+  transform: none;
+}
+
+.wizard-dns-value-button:hover {
+  border-color: var(--border-strong);
+  box-shadow: none;
+}
+
 .wizard-copy-button {
   --button-hover-bg: var(--accent-soft);
   --button-bg: transparent;
@@ -10304,7 +10865,8 @@ input[type="radio"] {
 
 .wizard-copy-button:hover {
   color: var(--text);
-  background: var(--accent-soft);
+  --button-bg: var(--accent-soft);
+  background: var(--button-bg);
   border-color: var(--border-strong);
   transform: none;
   box-shadow: none;
@@ -10318,6 +10880,75 @@ input[type="radio"] {
 .wizard-copy-button.is-copied {
   color: var(--success);
   border-color: color-mix(in srgb, var(--success) 40%, var(--border) 60%);
+}
+
+.totp-qr-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.totp-qr-frame {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  border-radius: 14px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+}
+
+.totp-qr-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+}
+
+.totp-qr-placeholder {
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #eee 25%, #f6f6f6 37%, #eee 63%);
+  background-size: 400% 100%;
+  animation: totp-qr-shimmer 1.4s ease infinite;
+}
+
+@keyframes totp-qr-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+.totp-qr-hint {
+  flex: 1;
+  min-width: 200px;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.totp-manual-entry {
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 10px 12px;
+}
+
+.totp-manual-entry summary {
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.totp-manual-entry[open] summary {
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.totp-manual-entry-body {
+  display: grid;
+  gap: 6px;
 }
 
 .wizard-success {
@@ -10363,7 +10994,8 @@ input[type="radio"] {
 }
 
 .wizard-remove-link:hover {
-  background: color-mix(in srgb, var(--danger) 10%, transparent 90%);
+  --button-bg: color-mix(in srgb, var(--danger) 10%, transparent 90%);
+  background: var(--button-bg);
   color: var(--danger);
 }
 
@@ -10467,43 +11099,23 @@ input[type="radio"] {
   white-space: nowrap;
 }
 
-/* Wrapper for InlineDateField - a formatted dd.mm.yyyy label with a fully
-   transparent native <input type="date"> stacked on top so clicks/focus still
-   hit the real input (and its calendar picker), but the browser never gets to
-   render its own locale-formatted text (e.g. "10/14/2025" on en-US Chrome). */
-.word-import-inline-date {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  vertical-align: baseline;
-}
-
-.word-import-inline-date input[type="date"] {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  width: 100%;
-  min-height: 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-}
-
+/* DateFieldButton - opens the styled DateEditorModal popup, formatted dd.mm.yyyy. */
 .word-import-filebar-date {
   display: inline-block;
   border: 1px solid transparent;
   padding: 1px 4px;
   margin: -1px -4px;
   border-radius: 6px;
+  background: none;
   color: var(--muted);
   font: inherit;
   font-size: 0.92rem;
   white-space: nowrap;
+  cursor: pointer;
 }
 
-.word-import-inline-date:hover .word-import-filebar-date,
-.word-import-inline-date:focus-within .word-import-filebar-date {
+.word-import-filebar-date:hover,
+.word-import-filebar-date:focus-visible {
   border-color: var(--border-strong);
   background: var(--panel);
   color: var(--text);
@@ -10554,6 +11166,14 @@ input[type="radio"] {
   background: var(--panel-solid);
   border-color: color-mix(in srgb, var(--warning) 40%, transparent 60%);
   cursor: pointer;
+}
+
+/* Wraps a DateInput (text entry + native-picker button) inline inside a
+   .word-import-alert-block row - fixed width so it doesn't stretch full-width
+   like DateInput normally does in a form field. */
+.word-import-alert-date-picker {
+  width: 176px;
+  min-width: 176px;
 }
 
 /* Inline conflict-resolution box (event date/title, list column-two) inside a
@@ -10655,7 +11275,8 @@ input[type="radio"] {
 
 .word-import-nav-item-active,
 .word-import-nav-item-active:hover {
-  background: var(--accent-soft) !important;
+  --button-bg: var(--accent-soft);
+  background: var(--button-bg) !important;
   border-color: transparent !important;
 }
 
@@ -11058,7 +11679,8 @@ input[type="radio"] {
 .domain-add-trigger:hover {
   border-color: var(--accent);
   color: var(--text);
-  background: var(--accent-soft);
+  --button-bg: var(--accent-soft);
+  background: var(--button-bg);
   transform: none;
   box-shadow: none;
 }
@@ -11166,3 +11788,22 @@ input[type="radio"] {
   font-size: 1.05rem;
   font-weight: 700;
 }
+.connectivity-status {
+  position: fixed;
+  z-index: 10000;
+  left: 50%;
+  top: 12px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100vw - 24px);
+  padding: 9px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent, #3d8bfd) 35%, transparent);
+  border-radius: 999px;
+  background: var(--surface, #fff);
+  box-shadow: 0 6px 24px rgba(0,0,0,.16);
+  font-size: 13px;
+}
+.connectivity-status-error { border-color: #d1495b; }
+.connectivity-status button { border: 0; background: transparent; color: inherit; text-decoration: underline; cursor: pointer; }

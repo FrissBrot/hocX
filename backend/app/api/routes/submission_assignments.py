@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import re
+import uuid
 import zipfile
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -14,6 +15,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
+from app.models.entities import SubmissionAssignment, SubmissionUpload, StoredFile
 from app.schemas.files import StoredFileMetadata, StoredFileTagsUpdate
 from app.schemas.submission import (
     SubmissionAssignmentCreate,
@@ -22,12 +24,20 @@ from app.schemas.submission import (
     SubmissionElementRead,
     SubmissionUploadLogEntry,
 )
+from app.services import public_id_service
 from app.services.file_service import FileService, _safe_storage_path
 from app.services.submission_service import SubmissionService
 
 router = APIRouter()
 service = SubmissionService()
 file_service = FileService()
+
+
+def _get_assignment_or_404(db: Session, assignment_id: uuid.UUID, user: CurrentUser) -> SubmissionAssignment:
+    assignment = public_id_service.get_by_public_id(db, SubmissionAssignment, assignment_id, tenant_id=user.current_tenant_id)
+    if assignment is None:
+        raise HTTPException(status_code=404, detail="Abgabe nicht gefunden")
+    return assignment
 
 
 @router.get("/submission-assignments", response_model=list[SubmissionAssignmentRead])
@@ -56,17 +66,15 @@ def create_assignment(
 
 @router.patch("/submission-assignments/{assignment_id}", response_model=SubmissionAssignmentRead)
 def patch_assignment(
-    assignment_id: int,
+    assignment_id: uuid.UUID,
     payload: SubmissionAssignmentUpdate,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
-    current = service.get_assignment(db, assignment_id)
-    if current is None or current.tenant_id != user.current_tenant_id:
-        raise HTTPException(status_code=404, detail="Abgabe nicht gefunden")
+    current = _get_assignment_or_404(db, assignment_id, user)
     try:
-        updated = service.update_assignment(db, assignment_id, payload)
+        updated = service.update_assignment(db, current.id, payload)
     except (SQLAlchemyError, ValueError) as exc:
         db.rollback()
         detail = str(exc) if isinstance(exc, ValueError) else "Abgabe konnte nicht aktualisiert werden"
@@ -78,16 +86,14 @@ def patch_assignment(
 
 @router.delete("/submission-assignments/{assignment_id}", response_model=dict[str, str])
 def delete_assignment(
-    assignment_id: int,
+    assignment_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
-    current = service.get_assignment(db, assignment_id)
-    if current is None or current.tenant_id != user.current_tenant_id:
-        raise HTTPException(status_code=404, detail="Abgabe nicht gefunden")
+    current = _get_assignment_or_404(db, assignment_id, user)
     try:
-        deleted = service.delete_assignment(db, assignment_id)
+        deleted = service.delete_assignment(db, current.id)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Abgabe konnte nicht geloescht werden") from exc
@@ -98,28 +104,24 @@ def delete_assignment(
 
 @router.get("/submission-assignments/{assignment_id}/elements", response_model=list[SubmissionElementRead])
 def list_elements(
-    assignment_id: int,
+    assignment_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_reader(user)
-    assignment = service.get_assignment(db, assignment_id)
-    if assignment is None or assignment.tenant_id != user.current_tenant_id:
-        raise HTTPException(status_code=404, detail="Abgabe nicht gefunden")
+    assignment = _get_assignment_or_404(db, assignment_id, user)
     return service.get_assignment_elements(db, assignment)
 
 
 @router.post("/submission-assignments/{assignment_id}/elements/{element_ref}/reopen", response_model=SubmissionElementRead)
 def reopen_element(
-    assignment_id: int,
+    assignment_id: uuid.UUID,
     element_ref: str,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
-    assignment = service.get_assignment(db, assignment_id)
-    if assignment is None or assignment.tenant_id != user.current_tenant_id:
-        raise HTTPException(status_code=404, detail="Abgabe nicht gefunden")
+    assignment = _get_assignment_or_404(db, assignment_id, user)
     try:
         return service.reopen_element(db, assignment, element_ref)
     except (SQLAlchemyError, ValueError) as exc:
@@ -130,15 +132,13 @@ def reopen_element(
 
 @router.post("/submission-assignments/{assignment_id}/elements/{element_ref}/close", response_model=SubmissionElementRead)
 def close_element(
-    assignment_id: int,
+    assignment_id: uuid.UUID,
     element_ref: str,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
-    assignment = service.get_assignment(db, assignment_id)
-    if assignment is None or assignment.tenant_id != user.current_tenant_id:
-        raise HTTPException(status_code=404, detail="Abgabe nicht gefunden")
+    assignment = _get_assignment_or_404(db, assignment_id, user)
     try:
         return service.close_element(db, assignment, element_ref)
     except (SQLAlchemyError, ValueError) as exc:
@@ -149,13 +149,17 @@ def close_element(
 
 @router.get("/submission-uploads/{upload_id}/files/{file_id}/content")
 def get_submission_file_content(
-    upload_id: int,
-    file_id: int,
+    upload_id: uuid.UUID,
+    file_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_reader(user)
-    upload, stored_file = service.get_stored_file_for_upload(db, upload_id=upload_id, stored_file_id=file_id)
+    upload = public_id_service.get_by_public_id(db, SubmissionUpload, upload_id)
+    stored_file = public_id_service.get_by_public_id(db, StoredFile, file_id)
+    if upload is None or stored_file is None:
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden")
+    upload, stored_file = service.get_stored_file_for_upload(db, upload_id=upload.id, stored_file_id=stored_file.id)
     if upload is None or stored_file is None:
         raise HTTPException(status_code=404, detail="Datei nicht gefunden")
     assignment = service.get_assignment(db, upload.assignment_id)
@@ -275,23 +279,20 @@ def get_clamav_status(
 
 @router.get("/submission-assignments/{assignment_id}/summary")
 def get_assignment_summary(
-    assignment_id: int,
+    assignment_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_reader(user)
-    assignment = service.get_assignment(db, assignment_id)
-    if assignment is None or assignment.tenant_id != user.current_tenant_id:
-        raise HTTPException(status_code=404, detail="Nicht gefunden")
-    counts = service.repository.count_submissions_summary(db, assignment_id=assignment_id)
+    assignment = _get_assignment_or_404(db, assignment_id, user)
+    counts = service.repository.count_submissions_summary(db, assignment_id=assignment.id)
     total = None
     if assignment.source_type == "list" and assignment.list_definition_id:
         total = service.repository.count_list_entries(db, list_definition_id=assignment.list_definition_id)
     elif assignment.source_type == "events":
         total = len(service.repository.list_events_by_tag(db, tenant_id=assignment.tenant_id, tag=assignment.tag_filter or ""))
-    clean = max(0, counts["submitted"] - counts["quarantine"] - counts["infected"])
     return {
-        "submitted": clean,
+        "submitted": counts["clean"],
         "quarantine": counts["quarantine"],
         "infected": counts["infected"],
         "total": total,
@@ -300,41 +301,35 @@ def get_assignment_summary(
 
 @router.post("/submission-assignments/{assignment_id}/rescan-pending")
 def rescan_pending(
-    assignment_id: int,
+    assignment_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
-    assignment = service.get_assignment(db, assignment_id)
-    if assignment is None or assignment.tenant_id != user.current_tenant_id:
-        raise HTTPException(status_code=404, detail="Abgabe nicht gefunden")
-    return service.rescan_pending(db, assignment_id)
+    assignment = _get_assignment_or_404(db, assignment_id, user)
+    return service.rescan_pending(db, assignment.id)
 
 
 @router.get("/submission-assignments/{assignment_id}/upload-log", response_model=list[SubmissionUploadLogEntry])
 def get_upload_log(
-    assignment_id: int,
+    assignment_id: uuid.UUID,
     element_ref: str,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_reader(user)
-    assignment = service.get_assignment(db, assignment_id)
-    if assignment is None or assignment.tenant_id != user.current_tenant_id:
-        raise HTTPException(status_code=404, detail="Abgabe nicht gefunden")
-    return service.get_upload_log(db, assignment_id=assignment_id, element_ref=element_ref)
+    assignment = _get_assignment_or_404(db, assignment_id, user)
+    return service.get_upload_log(db, assignment_id=assignment.id, element_ref=element_ref)
 
 
 @router.post("/submission-assignments/{assignment_id}/sync-todos")
 def sync_todos(
-    assignment_id: int,
+    assignment_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
-    assignment = service.get_assignment(db, assignment_id)
-    if assignment is None or assignment.tenant_id != user.current_tenant_id:
-        raise HTTPException(status_code=404, detail="Abgabe nicht gefunden")
+    assignment = _get_assignment_or_404(db, assignment_id, user)
     try:
         result = service.sync_submission_todos(db, assignment)
     except ValueError as exc:
@@ -344,14 +339,12 @@ def sync_todos(
 
 @router.get("/submission-assignments/{assignment_id}/download-zip")
 def download_all_files_zip(
-    assignment_id: int,
+    assignment_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_reader(user)
-    assignment = service.get_assignment(db, assignment_id)
-    if assignment is None or assignment.tenant_id != user.current_tenant_id:
-        raise HTTPException(status_code=404, detail="Abgabe nicht gefunden")
+    assignment = _get_assignment_or_404(db, assignment_id, user)
 
     elements = service.get_assignment_elements(db, assignment)
 
@@ -361,9 +354,15 @@ def download_all_files_zip(
         for element in elements:
             if not element.files or element.upload_id is None:
                 continue
+            upload = public_id_service.get_by_public_id(db, SubmissionUpload, element.upload_id)
+            if upload is None:
+                continue
             for file in element.files:
+                stored_file_row = public_id_service.get_by_public_id(db, StoredFile, file.id)
+                if stored_file_row is None:
+                    continue
                 _, stored_file = service.get_stored_file_for_upload(
-                    db, upload_id=element.upload_id, stored_file_id=file.id
+                    db, upload_id=upload.id, stored_file_id=stored_file_row.id
                 )
                 if stored_file is None or stored_file.scan_status != "clean":
                     continue

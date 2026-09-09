@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
@@ -16,6 +18,7 @@ from app.models import (
     SubmissionUploadLog,
     Tenant,
 )
+from app.services import public_id_service
 
 
 class SubmissionRepository:
@@ -29,6 +32,9 @@ class SubmissionRepository:
 
     def get_assignment(self, db: Session, assignment_id: int) -> SubmissionAssignment | None:
         return db.get(SubmissionAssignment, assignment_id)
+
+    def get_assignment_by_public_id(self, db: Session, public_id: uuid.UUID, *, tenant_id: int) -> SubmissionAssignment | None:
+        return public_id_service.get_by_public_id(db, SubmissionAssignment, public_id, tenant_id=tenant_id)
 
     def create_assignment(self, db: Session, assignment: SubmissionAssignment) -> SubmissionAssignment:
         db.add(assignment)
@@ -90,6 +96,11 @@ class SubmissionRepository:
     def get_upload(self, db: Session, upload_id: int) -> SubmissionUpload | None:
         return db.get(SubmissionUpload, upload_id)
 
+    def get_upload_by_public_id(self, db: Session, public_id: uuid.UUID) -> SubmissionUpload | None:
+        # No tenant_id column of its own (scoped via assignment_id) - callers must verify
+        # tenant/access on the resolved row's assignment.
+        return public_id_service.get_by_public_id(db, SubmissionUpload, public_id)
+
     def create_upload(self, db: Session, upload: SubmissionUpload) -> SubmissionUpload:
         db.add(upload)
         db.commit()
@@ -107,6 +118,11 @@ class SubmissionRepository:
 
     def get_upload_file(self, db: Session, upload_file_id: int) -> SubmissionUploadFile | None:
         return db.get(SubmissionUploadFile, upload_file_id)
+
+    def get_upload_file_by_public_id(self, db: Session, public_id: uuid.UUID) -> SubmissionUploadFile | None:
+        # No tenant_id column of its own (scoped via upload_id -> assignment) - callers
+        # must verify tenant/access on the resolved row.
+        return public_id_service.get_by_public_id(db, SubmissionUploadFile, public_id)
 
     def get_stored_file(self, db: Session, stored_file_id: int) -> StoredFile | None:
         return db.get(StoredFile, stored_file_id)
@@ -205,7 +221,22 @@ class SubmissionRepository:
         )
         infected = db.scalar(infected_stmt) or 0
 
-        return {"submitted": submitted, "quarantine": quarantine, "infected": infected}
+        # Computed directly, not derived as submitted - quarantine - infected (audit
+        # finding, 2026-08-25): each of the three counts above is independently
+        # COUNT(DISTINCT element), so an element with both a clean AND an infected/pending
+        # file (or a mix of any two statuses) was counted in more than one bucket at once -
+        # the subtraction then double-deducted it, undercounting (occasionally negative,
+        # masked by the route's max(0, ...) clamp) how many elements actually have a clean
+        # submission.
+        clean_stmt = (
+            select(func.count(func.distinct(*element_key)))
+            .join(SubmissionUploadFile, SubmissionUploadFile.upload_id == SubmissionUpload.id)
+            .join(StoredFile, StoredFile.id == SubmissionUploadFile.stored_file_id)
+            .where(SubmissionUpload.assignment_id == assignment_id, StoredFile.scan_status == "clean")
+        )
+        clean = db.scalar(clean_stmt) or 0
+
+        return {"submitted": submitted, "quarantine": quarantine, "infected": infected, "clean": clean}
 
     def count_list_entries(self, db: Session, *, list_definition_id: int) -> int:
         stmt = select(func.count()).where(ListEntry.list_definition_id == list_definition_id)

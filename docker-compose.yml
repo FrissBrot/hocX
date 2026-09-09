@@ -14,13 +14,15 @@ services:
     depends_on:
       - frontend
       - backend
-    env_file:
-      - .env
     environment:
       TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL: ${ACME_EMAIL}
+      TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPTDNS_ACME_EMAIL: ${ACME_EMAIL}
+      CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN}
     ports:
       - "80:80"
       - "443:443"
+      # Nur lokal gebunden: vorgesehen als Ziel fuer den OpenZiti-Host-Tunnel.
+      - "127.0.0.1:${TRAEFIK_ADMIN_PORT:-8443}:8443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./infra/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
@@ -35,13 +37,40 @@ services:
     restart: unless-stopped
     mem_limit: 768m
     cpus: 1.0
+    # Audit finding, 2026-08-26: Postgres ran with pure factory defaults (shared_buffers
+    # 128MB, effective_cache_size 4GB(!) despite this container's 768m mem_limit above -
+    # a wrong effective_cache_size misleads the query planner's cost estimates) and no
+    # pg_stat_statements, so there was no way to see which queries are actually
+    # expensive/frequent in production. shared_buffers/effective_cache_size/work_mem sized
+    # off the 768m limit above (25%/~60%/conservative per-connection); adjust together if
+    # mem_limit changes. pg_stat_statements needs shared_preload_libraries at server start
+    # (can't be added later via ALTER SYSTEM) - the extension itself still needs
+    # `CREATE EXTENSION IF NOT EXISTS pg_stat_statements;` run once (superuser) before
+    # pg_stat_statements/pg_stat_statements_* views become queryable.
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.max=5000
+      - -c
+      - pg_stat_statements.track=all
+      - -c
+      - shared_buffers=192MB
+      - -c
+      - effective_cache_size=460MB
+      - -c
+      - work_mem=8MB
+      - -c
+      - maintenance_work_mem=64MB
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -77,6 +106,10 @@ services:
   backend:
     build:
       context: ./backend
+    # Der lokale/source-basierte Stack bind-mountet den Quellcode und fuehrt Dev-Builds
+    # aus. Release-Deployments nutzen stattdessen den gehaerteten Non-Root-Service aus
+    # docker-compose.release.yml.
+    user: "0:0"
     restart: unless-stopped
     mem_limit: 768m
     cpus: 1.5
@@ -86,9 +119,13 @@ services:
         max-size: "10m"
         max-file: "3"
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
+      HOCX_ENVIRONMENT: development
       DATABASE_URL: ${DATABASE_URL}
+      APP_DATABASE_URL: ${APP_DATABASE_URL}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
       PYTHONPATH: /app
       STORAGE_ROOT: /app/storage
       LATEX_TEMPLATE_ROOT: /app/storage/latex_templates
@@ -98,6 +135,18 @@ services:
       ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
       ABGABEBOX_DB_PASSWORD: ${ABGABEBOX_DB_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+      # `env_file: .env` below always loads the *literal* .env file, regardless of which
+      # --env-file was passed to `docker compose` (e2e/tests pass a different one) - only
+      # keys interpolated here via ${...} correctly reflect that override. These four are
+      # the ones app/core/config.py reads directly (AUTH_SECRET/ADMIN_AUTH_SECRET session
+      # signing, INITIAL_ADMIN_EMAIL/PASSWORD platform-admin bootstrap, POSTGRES_USER for
+      # this migration's admin-role grants) - without them e2e/tests silently ran with this
+      # host's real dev secrets instead of their own isolated ones.
+      POSTGRES_USER: ${POSTGRES_USER}
+      AUTH_SECRET: ${AUTH_SECRET}
+      ADMIN_AUTH_SECRET: ${ADMIN_AUTH_SECRET}
+      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD}
       CLAMAV_HOST: clamav
       REDIS_URL: redis://redis:6379/0
       TRAEFIK_DYNAMIC_CONFIG_DIR: /app/traefik_dynamic
@@ -135,12 +184,19 @@ services:
     labels:
       - "traefik.enable=true"
       # Main API router (all non-auth paths)
-      - "traefik.http.routers.hocx-backend.rule=Host(`${TRAEFIK_DOMAIN}`) && (PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`))"
+      - "traefik.http.routers.hocx-backend.rule=Host(`${TRAEFIK_DOMAIN}`) && ((PathPrefix(`/api`) && !PathPrefix(`/api/admin`)) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`))"
       - "traefik.http.routers.hocx-backend.entrypoints=websecure"
       - "traefik.http.routers.hocx-backend.tls.certresolver=letsencrypt"
       - "traefik.http.routers.hocx-backend.priority=100"
       - "traefik.http.routers.hocx-backend.service=hocx-backend"
       - "traefik.http.services.hocx-backend.loadbalancer.server.port=8000"
+      # Platform-Admin-API: nur auf dem lokal gebundenen OpenZiti-EntryPoint.
+      - "traefik.http.routers.hocx-admin-api.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`) && PathPrefix(`/api/admin`)"
+      - "traefik.http.routers.hocx-admin-api.entrypoints=adminsecure"
+      - "traefik.http.routers.hocx-admin-api.tls.certresolver=letsencryptdns"
+      - "traefik.http.routers.hocx-admin-api.priority=100"
+      - "traefik.http.routers.hocx-admin-api.service=hocx-admin-api"
+      - "traefik.http.services.hocx-admin-api.loadbalancer.server.port=8000"
       # Dedicated router for the login endpoint specifically, with rate limiting - narrowly
       # scoped to just POST /api/auth/login (not all of /api/auth/*), since /api/auth/session
       # and /api/auth/tenant-by-domain are read-only, non-brute-forceable, and get polled on
@@ -161,13 +217,53 @@ services:
       # Dedicated router for the platform-admin login, same rationale/pattern as hocx-auth
       # above - was previously falling through to the generic hocx-backend router with no
       # rate limiting at all, leaving the highest-privilege account unprotected from bruteforce.
-      - "traefik.http.routers.hocx-admin-auth.rule=Host(`${TRAEFIK_DOMAIN}`) && Path(`/api/admin/auth/login`) && Method(`POST`)"
-      - "traefik.http.routers.hocx-admin-auth.entrypoints=websecure"
-      - "traefik.http.routers.hocx-admin-auth.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.hocx-admin-auth.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`) && Path(`/api/admin/auth/login`) && Method(`POST`)"
+      - "traefik.http.routers.hocx-admin-auth.entrypoints=adminsecure"
+      - "traefik.http.routers.hocx-admin-auth.tls.certresolver=letsencryptdns"
       - "traefik.http.routers.hocx-admin-auth.priority=200"
       - "traefik.http.routers.hocx-admin-auth.service=hocx-admin-auth"
       - "traefik.http.routers.hocx-admin-auth.middlewares=auth-ratelimit"
       - "traefik.http.services.hocx-admin-auth.loadbalancer.server.port=8000"
+      # Audit finding, 2026-08-27: /api/auth/mfa/totp/verify and /api/auth/tenant-by-domain
+      # previously fell through to the generic hocx-backend router with no Traefik-level rate
+      # limit at all, unlike /api/auth/login - defense in depth on top of the backend's own
+      # (in-progress, per-account) rate limiting for these two endpoints.
+      # TOTP verify: slightly more permissive than login's 10/min, since a legitimate user
+      # may retry a mistyped code a couple of times.
+      - "traefik.http.routers.hocx-mfa-totp-verify.rule=Host(`${TRAEFIK_DOMAIN}`) && Path(`/api/auth/mfa/totp/verify`) && Method(`POST`)"
+      - "traefik.http.routers.hocx-mfa-totp-verify.entrypoints=websecure"
+      - "traefik.http.routers.hocx-mfa-totp-verify.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.hocx-mfa-totp-verify.priority=200"
+      - "traefik.http.routers.hocx-mfa-totp-verify.service=hocx-mfa-totp-verify"
+      - "traefik.http.routers.hocx-mfa-totp-verify.middlewares=mfa-totp-verify-ratelimit"
+      - "traefik.http.services.hocx-mfa-totp-verify.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.mfa-totp-verify-ratelimit.ratelimit.average=20"
+      - "traefik.http.middlewares.mfa-totp-verify-ratelimit.ratelimit.burst=10"
+      - "traefik.http.middlewares.mfa-totp-verify-ratelimit.ratelimit.period=1m"
+      # tenant-by-domain: public, unauthenticated lookup polled on every page load
+      # pre-login - looser than login so normal login-page usage never trips it.
+      - "traefik.http.routers.hocx-tenant-by-domain.rule=Host(`${TRAEFIK_DOMAIN}`) && Path(`/api/auth/tenant-by-domain`) && Method(`GET`)"
+      - "traefik.http.routers.hocx-tenant-by-domain.entrypoints=websecure"
+      - "traefik.http.routers.hocx-tenant-by-domain.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.hocx-tenant-by-domain.priority=200"
+      - "traefik.http.routers.hocx-tenant-by-domain.service=hocx-tenant-by-domain"
+      - "traefik.http.routers.hocx-tenant-by-domain.middlewares=tenant-by-domain-ratelimit"
+      - "traefik.http.services.hocx-tenant-by-domain.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.tenant-by-domain-ratelimit.ratelimit.average=30"
+      - "traefik.http.middlewares.tenant-by-domain-ratelimit.ratelimit.burst=15"
+      - "traefik.http.middlewares.tenant-by-domain-ratelimit.ratelimit.period=1m"
+      # Mandantenimporte koennen bis zu 2 GiB gross sein (siehe
+      # MAX_TENANT_IMPORT_UPLOAD_BYTES in backend/app/api/routes/admin.py). Ein eigener
+      # Router begrenzt nur diesen privilegierten Upload; 2050 MiB enthalten etwas Reserve
+      # fuer den multipart/form-data-Overhead um die maximal grosse ZIP-Datei.
+      - "traefik.http.routers.hocx-tenant-import.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`) && Path(`/api/admin/tenants/import`) && Method(`POST`)"
+      - "traefik.http.routers.hocx-tenant-import.entrypoints=adminsecure"
+      - "traefik.http.routers.hocx-tenant-import.tls.certresolver=letsencryptdns"
+      - "traefik.http.routers.hocx-tenant-import.priority=200"
+      - "traefik.http.routers.hocx-tenant-import.service=hocx-tenant-import"
+      - "traefik.http.routers.hocx-tenant-import.middlewares=tenant-import-body-limit"
+      - "traefik.http.services.hocx-tenant-import.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.tenant-import-body-limit.buffering.maxRequestBodyBytes=2149580800"
       # Dedicated router for the Word/PDF/ZIP import upload endpoints - defense in depth
       # in front of the application-level checks in routes/word_import.py (MAX_UPLOAD_BYTES/
       # MAX_WORD_IMPORT_BATCH_BYTES etc.): rejects an oversized request body at the proxy
@@ -204,10 +300,17 @@ services:
         max-size: "10m"
         max-file: "3"
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
       INTERNAL_API_URL: ${INTERNAL_API_URL}
+      # See the backend service's comment above on why this needs to be explicit: without
+      # it, frontend/lib/api/server.ts's cross-domain auth bridge check would silently use
+      # this host's real dev .env value (TRAEFIK_DOMAIN=localhost) instead of whatever
+      # --env-file actually intended (e2e sets it to "" to disable the bridge entirely).
+      TRAEFIK_DOMAIN: ${TRAEFIK_DOMAIN}
+      TRAEFIK_ADMIN_DOMAIN: ${TRAEFIK_ADMIN_DOMAIN}
     depends_on:
       - backend
     volumes:
@@ -228,53 +331,18 @@ services:
       start_period: 120s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.hocx-frontend.rule=Host(`${TRAEFIK_DOMAIN}`)"
+      - "traefik.http.routers.hocx-frontend.rule=Host(`${TRAEFIK_DOMAIN}`) && !PathPrefix(`/admin`)"
       - "traefik.http.routers.hocx-frontend.entrypoints=websecure"
       - "traefik.http.routers.hocx-frontend.tls.certresolver=letsencrypt"
       - "traefik.http.routers.hocx-frontend.priority=10"
       - "traefik.http.services.hocx-frontend.loadbalancer.server.port=3000"
-
-  website:
-    build:
-      context: ./frontend
-      target: deps
-    restart: unless-stopped
-    # Gleiche Codebasis/gleicher Build wie frontend, daher gleiches OOM-Risiko bei
-    # "next build" - 256m reichte nicht, siehe Kommentar bei frontend.
-    mem_limit: 1536m
-    cpus: 0.5
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-    env_file:
-      - .env
-    environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
-      INTERNAL_API_URL: ${INTERNAL_API_URL}
-      HOCX_SITE_VARIANT: marketing
-    volumes:
-      - ./frontend:/app
-      - ./frontend/node_modules:/app/node_modules
-      - ./frontend/.next:/app/.next
-      - ./.git:/app/.git:ro
-    command: sh -c "export HOCX_VERSION=dev-$(git -C /app rev-parse --short HEAD 2>/dev/null || echo unknown) && npm run build && rm -rf .next/standalone/public .next/standalone/.next/static && cp -r public .next/standalone/public && cp -r .next/static .next/standalone/.next/static && HOSTNAME=0.0.0.0 PORT=3000 node .next/standalone/server.js"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      # Grosszuegig, da der dev-Start hier "npm run build" im Vordergrund vor dem
-      # eigentlichen Server-Start ausfuehrt (siehe command oben).
-      start_period: 120s
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.hocx-website.rule=Host(`${TRAEFIK_WEB_DOMAIN}`)"
-      - "traefik.http.routers.hocx-website.entrypoints=websecure"
-      - "traefik.http.routers.hocx-website.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.hocx-website.priority=10"
-      - "traefik.http.services.hocx-website.loadbalancer.server.port=3000"
+      # Admin-UI inklusive /_next-Assets auf der privaten Admin-Domain. Der
+      # EntryPoint selbst ist auf dem Host nur via 127.0.0.1 erreichbar.
+      - "traefik.http.routers.hocx-admin-frontend.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`)"
+      - "traefik.http.routers.hocx-admin-frontend.entrypoints=adminsecure"
+      - "traefik.http.routers.hocx-admin-frontend.tls.certresolver=letsencryptdns"
+      - "traefik.http.routers.hocx-admin-frontend.priority=10"
+      - "traefik.http.routers.hocx-admin-frontend.service=hocx-frontend"
 
   # Oeffentliche Abgabebox (kein Login) auf eigener Subdomain, eigener Codebase,
   # eigene restricted DB-Rolle (siehe backend/alembic/versions/0020_abgabebox.py).
@@ -290,7 +358,8 @@ services:
         max-size: "10m"
         max-file: "3"
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       ABGABEBOX_DATABASE_URL: ${ABGABEBOX_DATABASE_URL}
       ABGABEBOX_STORAGE_ROOT: /app/storage
@@ -344,8 +413,14 @@ services:
       - "traefik.http.middlewares.abgabebox-upload-ratelimit.ratelimit.average=5"
       - "traefik.http.middlewares.abgabebox-upload-ratelimit.ratelimit.burst=3"
       - "traefik.http.middlewares.abgabebox-upload-ratelimit.ratelimit.period=1m"
-      # 2000 MB = 20 Dateien x 100 MB (max_files_per_element/max_file_size_mb Obergrenzen)
-      - "traefik.http.middlewares.abgabebox-upload-body-limit.buffering.maxRequestBodyBytes=2097152000"
+      # Lowered from 2000 MB (audit finding, 2026-08-25) - that figure was the worst-case
+      # legitimate total per the assignment's own max_file_size_mb/max_files_per_element
+      # settings, but routes/public.py's upload() holds every file's full content in memory
+      # at once (dedup/perceptual-hash/quarantine steps), and this container only has 384m
+      # (mem_limit above) across 2 workers - a request anywhere near 2000 MB reliably OOM-
+      # kills the whole service for every tenant. Keep in sync with
+      # abgabebox-backend/app/routes/public.py's MAX_UPLOAD_REQUEST_BYTES.
+      - "traefik.http.middlewares.abgabebox-upload-body-limit.buffering.maxRequestBodyBytes=157286400"
       # Dedizierter Router fuer die oeffentlichen, unauthentifizierten GET-Endpunkte
       # (assignments/elements listing+detail) - ohne dieses Limit liessen sich Mandanten-
       # Slugs, Auftraege und Elemente unbegrenzt durchprobieren/enumerieren. Grosszuegiger
@@ -387,11 +462,11 @@ services:
       context: ./abgabebox-frontend
       target: deps
     restart: unless-stopped
-    # 384m had the exact same OOM-restart-loop risk as frontend/website before their fix
+    # 384m had the exact same OOM-restart-loop risk as frontend before its fix
     # (verified 2026-08-13 deploy) - this service builds Next.js at container startup too
     # (target: deps, `npm run build` in command: below), so it hits the same TypeScript-
     # check memory peak. Raised to the same 1536m ceiling (audit I2, 2026-08-16) - never
-    # actually verified against a real rebuild here yet, see the frontend/website comment's
+    # actually verified against a real rebuild here yet, see the frontend comment's
     # warning about that.
     mem_limit: 1536m
     cpus: 0.5
@@ -401,7 +476,8 @@ services:
         max-size: "10m"
         max-file: "3"
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       NEXT_PUBLIC_ABGABEBOX_API_URL: https://${TRAEFIK_ABGABEBOX_DOMAIN}
       # Nicht direkt auf den Container (siehe INTERNAL_API_URL im Haupt-hocX-Frontend fuer die
@@ -440,6 +516,8 @@ services:
     build:
       context: ./docs-site
     restart: unless-stopped
+    cap_add:
+      - NET_BIND_SERVICE
     mem_limit: 128m
     cpus: 0.25
     logging:

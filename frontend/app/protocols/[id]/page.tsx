@@ -130,6 +130,7 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
           documentTemplates={documentTemplates}
           forceReadOnly={isRestricted}
           canViewFines={canViewFines}
+          accordionEnabled={session.user?.protocol_accordion_enabled ?? true}
         />
       </section>
     </AppShell>

@@ -1,0 +1,66 @@
+services:
+  backend:
+    environment:
+      # Local development does not run through the HTTPS/Traefik domain. An empty
+      # main domain disables the cross-domain auth bridge; otherwise `.env`'s
+      # placeholder `localhost` redirects sessions to https://localhost/api/...
+      # instead of keeping them on the frontend proxy at localhost:3000.
+      TRAEFIK_DOMAIN: ""
+      # app/core/security.py sets the session cookie with `secure=settings.
+      # auth_secure_cookies`, which defaults to true and is otherwise only ever
+      # overridden in docker-compose.release.yml. A real browser exempts localhost/
+      # 127.0.0.1 from the "Secure requires HTTPS" rule, so this was invisible in
+      # everyday manual testing - but Playwright's APIRequestContext (used by
+      # e2e/auth.setup.ts, no browser involved) enforces it strictly and silently
+      # drops the cookie, leaving every e2e-authenticated request looking logged out.
+      AUTH_SECURE_COOKIES: "false"
+    command: sh -c "alembic -x seed_demo=true upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  frontend:
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+      INTERNAL_API_URL: http://backend:8000
+      FRONTEND_API_PROXY_TARGET: http://backend:8000
+      HOCX_VERSION: dev-local
+      # Same reasoning as the backend service above - frontend/lib/api/server.ts reads
+      # this too for the same cross-domain auth bridge check.
+      TRAEFIK_DOMAIN: ""
+    command: npm run dev
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  abgabebox-backend:
+    environment:
+      # Coordination note, 2026-08-27: new setting from abgabebox-backend/app/config.py -
+      # controls CAPTCHA fail-open (dev/test) vs fail-closed (default/production) behavior.
+      # Dev has no real FriendlyCaptcha keys configured (see .env.example), so this must be
+      # an accepted dev/test value or every upload gets rejected fail-closed.
+      ABGABEBOX_ENVIRONMENT: development
+    command: sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    ports:
+      - "127.0.0.1:8001:8000"
+
+  abgabebox-frontend:
+    environment:
+      NEXT_PUBLIC_ABGABEBOX_API_URL: http://localhost:3001
+      INTERNAL_ABGABEBOX_API_URL: http://abgabebox-backend:8000
+      ABGABEBOX_API_PROXY_TARGET: http://abgabebox-backend:8000
+    command: npm run dev
+    ports:
+      - "127.0.0.1:3001:3000"
+
+  traefik:
+    profiles:
+      - edge
+
+  clamav:
+    profiles:
+      - scan
+
+  docs:
+    ports:
+      - "127.0.0.1:3002:80"
+    profiles:
+      - docs

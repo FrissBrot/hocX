@@ -32,8 +32,8 @@ type StructuredListEditModalProps = {
   onChangeSortBy: (value: SortColumn) => void;
   onChangeSortDirection: (value: "asc" | "desc") => void;
   onCreateEntry: (payload: EntryPayload) => Promise<boolean>;
-  onUpdateEntry: (entryId: number, payload: Partial<EntryPayload>) => Promise<boolean>;
-  onDeleteEntry: (entryId: number) => Promise<void>;
+  onUpdateEntry: (entryId: string, payload: Partial<EntryPayload>) => Promise<boolean>;
+  onDeleteEntry: (entryId: string) => Promise<void>;
 };
 
 /**

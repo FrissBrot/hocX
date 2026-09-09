@@ -1,8 +1,8 @@
 from sqlalchemy.orm import Session
 
-from app.models import ProtocolText
+from app.models import ProtocolElementBlock, ProtocolText
 from app.repositories.protocol_element_repository import ProtocolTextRepository
-from app.services import block_field_sync
+from app.services import block_field_sync, public_id_service
 
 
 class AutosaveService:
@@ -47,7 +47,7 @@ class AutosaveService:
                 sync_target_field=block_config.get("sync_target_field"),
                 content=content,
             )
-        return self._result(saved, protocol_element_block_id)
+        return self._result(db, saved, protocol_element_block_id)
 
     def accept_tracked_changes(self, db: Session, protocol_element_block_id: int) -> dict[str, str | int | bool | None] | None:
         """'Ausblenden' for a text block's red tracked-change highlighting: resets the
@@ -60,12 +60,12 @@ class AutosaveService:
             return None
         protocol_text.tracked_baseline_content = protocol_text.content
         saved = self.text_repository.save(db, protocol_text)
-        return self._result(saved, protocol_element_block_id)
+        return self._result(db, saved, protocol_element_block_id)
 
-    def _result(self, saved: ProtocolText, protocol_element_block_id: int) -> dict[str, str | int | bool | None]:
+    def _result(self, db: Session, saved: ProtocolText, protocol_element_block_id: int) -> dict[str, str | int | bool | None]:
         return {
             "status": "saved",
-            "protocol_element_block_id": protocol_element_block_id,
+            "protocol_element_block_id": public_id_service.resolve_public_id(db, ProtocolElementBlock, protocol_element_block_id),
             "content": saved.content,
             "tracked_dirty": saved.tracked_dirty,
             "tracked_baseline_content": saved.tracked_baseline_content,

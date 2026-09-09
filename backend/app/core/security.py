@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import os
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -15,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db import get_db
 from app.models import AppUser, Role, Tenant, UserMfaFactor, UserTenantRole
+from app.services import public_id_service
 
 
 PASSWORD_SCHEME = "pbkdf2_sha256"
@@ -24,6 +26,7 @@ PASSWORD_ITERATIONS = 600000
 @dataclass
 class TenantMembership:
     tenant_id: int
+    tenant_public_id: uuid.UUID
     tenant_name: str
     tenant_profile_image_path: str | None
     role_code: str
@@ -33,6 +36,7 @@ class TenantMembership:
 @dataclass
 class CurrentUser:
     user_id: int
+    user_public_id: uuid.UUID
     first_name: str
     last_name: str
     display_name: str
@@ -40,11 +44,14 @@ class CurrentUser:
     preferred_language: str
     is_participant_account: bool
     default_tenant_id: int | None
+    default_tenant_public_id: uuid.UUID | None
     current_tenant_id: int | None
+    current_tenant_public_id: uuid.UUID | None
     current_tenant_name: str | None
     current_tenant_profile_image_path: str | None
     current_role: str | None
     available_tenants: list[TenantMembership]
+    protocol_accordion_enabled: bool = True
     mfa_verified: bool = False
 
     def has_tenant_role(self, *allowed_roles: str) -> bool:
@@ -55,6 +62,14 @@ def hash_password(password: str) -> str:
     salt = os.urandom(16)
     key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, PASSWORD_ITERATIONS)
     return f"{PASSWORD_SCHEME}${PASSWORD_ITERATIONS}${base64.b64encode(salt).decode()}${base64.b64encode(key).decode()}"
+
+
+# A fixed, valid-shaped hash with no corresponding real password - used to run
+# verify_password's full PBKDF2 work even when no account exists, so a login attempt
+# against an unknown email takes the same time as one against a real email with a wrong
+# password (audit finding, 2026-08-25: short-circuiting straight past verify_password for
+# a missing account was a measurable, account-enumerating timing side channel).
+DUMMY_PASSWORD_HASH = hash_password("hocx-dummy-password-for-timing-only")
 
 
 def verify_password(password: str, password_hash: str) -> bool:
@@ -141,6 +156,7 @@ def _load_memberships(db: Session, user_id: int) -> list[TenantMembership]:
     return [
         TenantMembership(
             tenant_id=tenant.id,
+            tenant_public_id=tenant.public_id,
             tenant_name=tenant.name,
             tenant_profile_image_path=tenant.profile_image_path,
             role_code=role.code,
@@ -161,16 +177,33 @@ def build_current_user(db: Session, user: AppUser, selected_tenant_id: int | Non
     if current_membership is None and memberships:
         current_membership = memberships[0]
 
+    default_tenant_public_id = None
+    if user.default_tenant_id is not None:
+        default_tenant_public_id = next(
+            (m.tenant_public_id for m in memberships if m.tenant_id == user.default_tenant_id),
+            None,
+        ) or public_id_service.resolve_public_id(db, Tenant, user.default_tenant_id)
+
     return CurrentUser(
         user_id=user.id,
+        user_public_id=user.public_id,
         first_name=user.first_name,
         last_name=user.last_name,
         display_name=user.display_name,
         email=user.email,
         preferred_language=user.preferred_language,
+        protocol_accordion_enabled=(user.external_identity_json or {}).get("protocol_accordion_enabled", True) is not False,
         is_participant_account=(user.external_identity_json or {}).get("source") == "participant_auto",
         default_tenant_id=user.default_tenant_id,
-        current_tenant_id=current_membership.tenant_id if current_membership else user.default_tenant_id,
+        default_tenant_public_id=default_tenant_public_id,
+        # current_membership is only ever None here if the user has zero active tenant
+        # roles at all (a matching default_tenant_id membership, if active, was already
+        # picked up above) - falling back to the possibly-stale default_tenant_id in that
+        # case let login() succeed with a non-None current_tenant_id and an empty
+        # current_role, a "phantom tenant" state that only every endpoint's separate
+        # current_role check happens to make harmless today (audit finding, 2026-08-25).
+        current_tenant_id=current_membership.tenant_id if current_membership else None,
+        current_tenant_public_id=current_membership.tenant_public_id if current_membership else None,
         current_tenant_name=current_membership.tenant_name if current_membership else None,
         current_tenant_profile_image_path=current_membership.tenant_profile_image_path if current_membership else None,
         current_role=current_membership.role_code if current_membership else None,
@@ -210,6 +243,14 @@ def get_optional_current_user(
         if int(user.session_revoke_at.timestamp()) > token_iat:
             return None
     current_user = build_current_user(db, user, session_data.get("tenant_id"), mfa_verified=bool(session_data.get("mfa")))
+    # A signed cookie can outlive the user's last active tenant membership.  Such a user has
+    # no usable application session: every protected route rejects the missing role, while
+    # /auth/session previously still reported authenticated=True.  In the frontend that made
+    # /login redirect to the dashboard, whose initial data requests then all failed with 403.
+    # Treat the stale cookie as unauthenticated so the user can log in again (or see the normal
+    # "no tenant membership" login error) instead of being trapped in that phantom session.
+    if current_user.current_tenant_id is None or current_user.current_role is None:
+        return None
     has_mfa_factor = _has_active_mfa_factor(db, user.id)
     if has_mfa_factor and not current_user.mfa_verified:
         return None
@@ -236,11 +277,25 @@ def require_writer(user: CurrentUser) -> CurrentUser:
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Writer role required")
 
 
-def require_finance_access(user: CurrentUser) -> CurrentUser:
-    """Kassier, Writer and Admin may access finance and fines."""
-    if user.current_role in {"kassier", "writer", "admin"}:
+def require_finance_read(user: CurrentUser) -> CurrentUser:
+    """Every tenant role may inspect finance data."""
+    if user.current_role in {"reader", "kassier", "writer", "admin"}:
         return user
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Finance access required")
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Finance read access required")
+
+
+def require_finance_write(user: CurrentUser) -> CurrentUser:
+    """Only the dedicated cashier role and tenant admins may mutate finance data."""
+    if user.current_role in {"kassier", "admin"}:
+        return user
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Finance write access required")
+
+
+def require_all_fines_read(user: CurrentUser) -> CurrentUser:
+    """Reader accounts may only use the self-scoped fines listing."""
+    if user.current_role in {"writer", "kassier", "admin"}:
+        return user
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="All-fines read access required")
 
 
 def require_admin(user: CurrentUser) -> CurrentUser:

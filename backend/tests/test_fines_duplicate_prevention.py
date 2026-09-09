@@ -28,12 +28,12 @@ def test_create_fine_rejects_exact_duplicate_for_same_participant(db):
     participant = make_participant(db, tenant.id, display_name="Anna Muster")
 
     payload = AttendanceFineCreate(
-        protocol_id=protocol.id,
-        participant_id=participant.id,
+        protocol_id=protocol.public_id,
+        participant_id=participant.public_id,
         participant_name_snapshot=participant.display_name,
         fine_type="late",
         amount=5,
-        account_id=account.id,
+        account_id=account.public_id,
     )
 
     first = repo.create_fine(db, payload, tenant.id)
@@ -49,12 +49,12 @@ def test_create_fine_allows_different_fine_type_for_same_participant(db):
     participant = make_participant(db, tenant.id, display_name="Anna Muster")
 
     late_payload = AttendanceFineCreate(
-        protocol_id=protocol.id,
-        participant_id=participant.id,
+        protocol_id=protocol.public_id,
+        participant_id=participant.public_id,
         participant_name_snapshot=participant.display_name,
         fine_type="late",
         amount=5,
-        account_id=account.id,
+        account_id=account.public_id,
     )
     absent_payload = late_payload.model_copy(update={"fine_type": "absent", "amount": 10})
 
@@ -70,14 +70,14 @@ def test_create_fine_allows_same_fine_type_for_different_participants(db):
     bruno = make_participant(db, tenant.id, display_name="Bruno Beispiel")
 
     anna_payload = AttendanceFineCreate(
-        protocol_id=protocol.id,
-        participant_id=anna.id,
+        protocol_id=protocol.public_id,
+        participant_id=anna.public_id,
         participant_name_snapshot=anna.display_name,
         fine_type="late",
         amount=5,
-        account_id=account.id,
+        account_id=account.public_id,
     )
-    bruno_payload = anna_payload.model_copy(update={"participant_id": bruno.id, "participant_name_snapshot": bruno.display_name})
+    bruno_payload = anna_payload.model_copy(update={"participant_id": bruno.public_id, "participant_name_snapshot": bruno.display_name})
 
     assert repo.create_fine(db, anna_payload, tenant.id) is not None
     # Same fine_type but a different participant is not a duplicate.
@@ -92,12 +92,12 @@ def test_create_fine_scopes_nameless_participant_duplicates_by_name_snapshot(db)
     tenant, protocol, account = _setup(db)
 
     anna_payload = AttendanceFineCreate(
-        protocol_id=protocol.id,
+        protocol_id=protocol.public_id,
         participant_id=None,
         participant_name_snapshot="Anna Muster",
         fine_type="late",
         amount=5,
-        account_id=account.id,
+        account_id=account.public_id,
     )
     bruno_payload = anna_payload.model_copy(update={"participant_name_snapshot": "Bruno Beispiel"})
 

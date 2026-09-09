@@ -90,10 +90,10 @@ const PARTICIPANT_ROLE_FIELDS: { field: ParticipantPickerField; label: string }[
   { field: "spezial3_ids", label: "Spezial 3" },
 ];
 
-type FlatCycle = CycleInfo & { cycle_config_id: number; config_name: string };
+type FlatCycle = CycleInfo & { cycle_config_id: string; config_name: string };
 
 type EventFormState = {
-  id?: number;
+  id?: string;
   event_date: string;
   event_end_date: string;
   tag: string;
@@ -102,12 +102,12 @@ type EventFormState = {
   participant_count: string;
   is_cancelled: boolean;
   cycle_assignments: CycleAssignment[];
-  organizer_ids: number[];
-  leadership_ids: number[];
-  participant_ids: number[];
-  spezial1_ids: number[];
-  spezial2_ids: number[];
-  spezial3_ids: number[];
+  organizer_ids: string[];
+  leadership_ids: string[];
+  participant_ids: string[];
+  spezial1_ids: string[];
+  spezial2_ids: string[];
+  spezial3_ids: string[];
   location: string;
   spezial_text1: string;
   spezial_text2: string;
@@ -160,7 +160,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
   const cyclesLoadedRef = useRef(false);
 
   const [pickerField, setPickerField] = useState<ParticipantPickerField | null>(null);
-  const [pickerSelected, setPickerSelected] = useState<number[]>([]);
+  const [pickerSelected, setPickerSelected] = useState<string[]>([]);
   const [pickerSearch, setPickerSearch] = useState("");
 
   const [eventContextMenu, setEventContextMenu] = useState<{ x: number; y: number; event: EventSummary } | null>(null);
@@ -182,7 +182,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
 
   // Export modal state
   const [exportModalOpen, setExportModalOpen] = useState(false);
-  const [exportTemplateId, setExportTemplateId] = useState<number | "">(landscapeTemplates[0]?.id ?? "");
+  const [exportTemplateId, setExportTemplateId] = useState<string | "">(landscapeTemplates[0]?.id ?? "");
   const [exportBusy, setExportBusy] = useState(false);
   const [exportUrl, setExportUrl] = useState<string | null>(null);
   const [templateDropdownOpen, setTemplateDropdownOpen] = useState(false);
@@ -192,7 +192,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
   const [exportTagFilters, setExportTagFilters] = useState<string[]>([]);
   const [exportTagSearch, setExportTagSearch] = useState("");
   const [exportDateMode, setExportDateMode] = useState<"all" | "next-session" | "until-event">("all");
-  const [exportUntilEventId, setExportUntilEventId] = useState<number | "">("");
+  const [exportUntilEventId, setExportUntilEventId] = useState<string | "">("");
 
   const knownExportTags = useMemo(() => {
     const set = new Set<string>();
@@ -378,7 +378,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     setModalOpen(true);
   }
 
-  async function updateEventDetail(eventId: number, patch: Partial<EventSummary>) {
+  async function updateEventDetail(eventId: string, patch: Partial<EventSummary>) {
     const previous = events.find((event) => event.id === eventId) ?? null;
     setEvents((current) => current.map((event) => (event.id === eventId ? { ...event, ...patch } : event)));
     try {
@@ -397,7 +397,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
 
   function openParticipantPicker(field: ParticipantPickerField) {
     setPickerField(field);
-    setPickerSelected([...(form[field] as number[])]);
+    setPickerSelected([...(form[field] as string[])]);
     setPickerSearch("");
   }
 
@@ -407,7 +407,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     setPickerField(null);
   }
 
-  function participantLabel(ids: number[]): string {
+  function participantLabel(ids: string[]): string {
     if (!ids.length) return "Auswählen…";
     const names = ids
       .map((id) => availableParticipants.find((p) => p.id === id)?.display_name)
@@ -415,7 +415,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     return names.length ? names.join(", ") : `${ids.length} ausgewählt`;
   }
 
-  function formatParticipantNames(ids: number[] | null | undefined): ReactNode {
+  function formatParticipantNames(ids: string[] | null | undefined): ReactNode {
     if (!ids || ids.length === 0) return <span className="muted">–</span>;
     const names = ids
       .map((id) => availableParticipants.find((p) => p.id === id)?.display_name)
@@ -441,7 +441,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
 
   const activeOptionalColumns = OPTIONAL_COLUMNS.filter((column) => visibleColumns.has(column.key));
 
-  function toggleCycle(cycleConfigId: number, cycleYear: number) {
+  function toggleCycle(cycleConfigId: string, cycleYear: number) {
     setForm((current) => {
       const exists = current.cycle_assignments.some(
         (a) => a.cycle_config_id === cycleConfigId && a.cycle_year === cycleYear
@@ -496,7 +496,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     }
   }
 
-  async function deleteEvent(eventId: number) {
+  async function deleteEvent(eventId: string) {
     const ok = await confirm({
       message: "Termin endgültig löschen? Das entfernt ihn aus allen Protokollen.",
       tone: "danger",
@@ -993,7 +993,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                       onClick={() => openParticipantPicker(field)}
                       style={{ textAlign: "left", minHeight: 36, padding: "6px 10px", fontSize: "0.85rem" }}
                     >
-                      {participantLabel(form[field] as number[])}
+                      {participantLabel(form[field] as string[])}
                     </button>
                   </div>
                 ))}

@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Badge, BadgeVariant } from "@/components/ui/badge";
+import { DateInput } from "@/components/ui/date-input";
+import { Modal } from "@/components/ui/modal";
 import { PillMenu } from "@/components/ui/pill-menu";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { ATTENDANCE_OPTIONS } from "@/components/protocol/protocol-editor-shared";
@@ -168,31 +171,73 @@ function SpinnerIcon({ size = 14 }: { size?: number }) {
   );
 }
 
-// Native <input type="date"> always renders its OWN text in the browser/OS locale
-// (e.g. "10/14/2025" on an en-US Chrome) - CSS can't override that. To always show
-// dd.mm.yyyy we overlay a formatted label on top of a fully transparent native input;
-// the input still handles the click and the calendar picker, it's just invisible.
-function InlineDateField({
+// Opens the styled DateEditorModal instead of relying on a native <input type="date">
+// directly in the page flow - clicking anywhere in the browser/OS chrome around a bare
+// native date input is unreliable (some browsers only open the picker when the tiny
+// calendar-icon affordance itself is hit), which is exactly why editing the date used
+// to silently do nothing for some users.
+function DateFieldButton({
   value,
-  onChange,
+  onClick,
   className,
   placeholder = "– Datum wählen –",
 }: {
   value: string;
-  onChange: (value: string) => void;
+  onClick: () => void;
   className?: string;
   placeholder?: string;
 }) {
   return (
-    <span className="word-import-inline-date">
-      <span className={className}>{value ? formatDate(value) : placeholder}</span>
-      <input
-        type="date"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        aria-label="Datum"
-      />
-    </span>
+    <button type="button" className={className} onClick={onClick}>
+      {value ? formatDate(value) : placeholder}
+    </button>
+  );
+}
+
+// Styled popup for correcting the auto-detected protocol date by hand - either by typing
+// dd.mm.yyyy directly or via the native calendar picker (opened through DateInput's own
+// button, which uses showPicker() rather than depending on a raw click hitting an
+// invisible input). Confirming re-runs the analysis with the new date as an override hint,
+// which is also what recomputes the document's display name server-side.
+function DateEditorModal({
+  open,
+  initialValue,
+  onCancel,
+  onConfirm,
+  busy,
+}: {
+  open: boolean;
+  initialValue: string;
+  onCancel: () => void;
+  onConfirm: (value: string) => void;
+  busy: boolean;
+}) {
+  const [draft, setDraft] = useState(initialValue);
+
+  useEffect(() => {
+    if (open) {
+      setDraft(initialValue);
+    }
+  }, [open, initialValue]);
+
+  return (
+    <Modal open={open} title="Protokolldatum anpassen" onClose={onCancel}>
+      <div className="grid" style={{ gap: "0.75rem" }}>
+        <p className="muted" style={{ margin: 0 }}>
+          Das im Dokument erkannte Datum kann falsch sein - hier von Hand korrigieren. Das Dokument wird danach mit dem neuen
+          Datum neu gescannt, der Name aktualisiert sich entsprechend.
+        </p>
+        <DateInput value={draft} onChange={setDraft} autoFocus />
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+          <button type="button" className="button-ghost" onClick={onCancel} disabled={busy}>
+            Abbrechen
+          </button>
+          <button type="button" className="button-primary" onClick={() => onConfirm(draft)} disabled={!draft || busy}>
+            {busy ? "Wird neu gescannt…" : "Übernehmen & neu scannen"}
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -333,7 +378,7 @@ function normalizeHeaderSignature(headerCells: string[]): string {
   return folded.replace(/\s+/g, " ");
 }
 
-function targetKey(templateElementId: number | null, blockSortIndex: number | null): string {
+function targetKey(templateElementId: string | null, blockSortIndex: number | null): string {
   if (templateElementId === null || blockSortIndex === null) return "";
   return `${templateElementId}:${blockSortIndex}`;
 }
@@ -341,11 +386,11 @@ function targetKey(templateElementId: number | null, blockSortIndex: number | nu
 type TextDraft = {
   extracted_heading: string;
   content: string;
-  template_element_id: number | null;
+  template_element_id: string | null;
   block_sort_index: number | null;
   isEventRepeat: boolean;
   eventCandidates: WordImportEventCandidate[];
-  linkedEventId: number | null;
+  linkedEventId: string | null;
   // Records that the user explicitly chose "nicht verknüpfen" - without it, that choice
   // is indistinguishable from "not yet decided" (both leave linkedEventId null), so the
   // row would stay flagged as needing review forever. Mirrors AttendanceDraft.linkedNone.
@@ -355,6 +400,8 @@ type TextDraft = {
   // confirm "yes, this one really has nowhere to go" and the row stayed flagged forever.
   // See ListDraft.dismissed for the same idea elsewhere in this wizard.
   dismissed: boolean;
+  // Creates a protocol-local text block; it is intentionally not added to the template.
+  createNew: boolean;
   isFormBlock: boolean;
   formFields: WordImportFormFieldValue[];
   formFieldsByTarget: Record<string, WordImportFormFieldValue[]>;
@@ -373,21 +420,25 @@ type TextDraft = {
 type AttendanceDraft = {
   raw_name: string;
   status: string;
-  participant_id: number | null;
+  participant_id: string | null;
   createNew: boolean;
   linkedNone: boolean;
   // What analyze() originally suggested for this row - set once when a fresh analysis
   // is applied, never touched by edit handlers afterward. Lets the backend learn from
   // rows where the human picked someone other than the top auto-suggestion.
-  originallySuggestedParticipantId: number | null;
+  originallySuggestedParticipantId: string | null;
   originallySuggestedScore: number | null;
   // Ranked near-miss alternatives from analyze(), carried along purely for the
   // recurring-name clarifier (see RecurringNameGroup) - never sent back to the server.
   candidates: WordImportAttendanceCandidate[];
 };
 // Sentinel id for the "create as new participant" option in the attendance assignee menu -
-// distinct from `null` (which means "don't link this row to anyone").
-const CREATE_NEW_PARTICIPANT_ID = -1;
+// distinct from `null` (which means "don't link this row to anyone"). A string sentinel
+// (participant ids are UUIDs now) that can never collide with a real public_id.
+const CREATE_NEW_PARTICIPANT_ID = "__create_new_participant__";
+// Unrelated to entity ids - this is a sentinel for an index into analysis.text_targets
+// (see the TodoAssigneeMenu usage below), so it stays numeric.
+const CREATE_NEW_TEXT_BLOCK_ID = -2;
 type FieldSource = "doc" | "existing";
 type EventDraft = {
   row_index: number;
@@ -400,7 +451,7 @@ type EventDraft = {
   raw_end_date: string | null;
   status: EventMatchStatus;
   candidates: WordImportEventCandidate[];
-  linked_event_id: number | null;
+  linked_event_id: string | null;
   title_source: FieldSource;
   date_source: FieldSource;
   approved: boolean;
@@ -418,7 +469,7 @@ type EventDraft = {
   column_label: string | null;
   // See AttendanceDraft.originallySuggestedParticipantId - same purpose, for the
   // top-ranked event candidate this row started with.
-  originallySuggestedEventId: number | null;
+  originallySuggestedEventId: string | null;
   originallySuggestedScore: number | null;
 };
 type ListDraft = {
@@ -432,7 +483,7 @@ type ListDraft = {
   column_two_names: WordImportNameResolution[];
   status: ListRowStatus;
   candidates: WordImportListEntryCandidate[];
-  linked_entry_id: number | null;
+  linked_entry_id: string | null;
   column_two_source: FieldSource;
   has_snapshot_target: boolean;
   approved: boolean;
@@ -446,7 +497,7 @@ type ListDraft = {
   group_filled: boolean;
   // See AttendanceDraft.originallySuggestedParticipantId - same purpose, for the
   // matched_entry_id this row started with.
-  originallySuggestedEntryId: number | null;
+  originallySuggestedEntryId: string | null;
   originallySuggestedScore: number | null;
 };
 
@@ -724,7 +775,7 @@ function formFieldsStillOpen(text: TextDraft): boolean {
 function textNeedsReview(text: TextDraft): boolean {
   if (text.dismissed) return false;
   return (
-    text.template_element_id === null ||
+    (text.template_element_id === null && !text.createNew) ||
     (text.isEventRepeat && text.linkedEventId === null && !text.linkedEventNone) ||
     formFieldsStillOpen(text)
   );
@@ -776,7 +827,7 @@ function buildRecurringNameGroups(
 ): RecurringNameGroup[] {
   const groups = new Map<
     string,
-    { label: string; counts: RecurringNameCounts; candidateScores: Map<number, WordImportAttendanceCandidate> }
+    { label: string; counts: RecurringNameCounts; candidateScores: Map<string, WordImportAttendanceCandidate> }
   >();
 
   function touch(rawName: string, kind: keyof RecurringNameCounts, candidates: WordImportAttendanceCandidate[]) {
@@ -844,19 +895,23 @@ export function WordImportWizard({
   templates,
   participants,
   documentId,
-  onExitQueueMode,
 }: {
   templates: TemplateSummary[];
   participants: ParticipantSummary[];
-  // When set, the wizard resumes an already-uploaded queue document (/tools/import)
+  // When set, the wizard resumes an already-uploaded queue document (/tools/import/[id])
   // instead of starting from the "upload a file" step - loaded once on mount, review
   // reruns via the document-scoped reanalyze/commit endpoints (the original bytes are
   // already stored server-side, no File object needed).
-  documentId?: number;
-  onExitQueueMode?: () => void;
+  documentId?: string;
 }) {
+  const router = useRouter();
+  // Queue documents live at their own URL (/tools/import/[id], mirroring /protocols/[id])
+  // so opening one is a real navigation - browser back lands back on the queue overview.
+  function exitToQueue() {
+    router.push("/tools/import");
+  }
   const [step, setStep] = useState<Step>(documentId ? "structure" : "upload");
-  const [templateId, setTemplateId] = useState<number | null>(templates[0]?.id ?? null);
+  const [templateId, setTemplateId] = useState<string | null>(templates[0]?.id ?? null);
   const [file, setFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -865,13 +920,14 @@ export function WordImportWizard({
 
   const [analysis, setAnalysis] = useState<WordImportAnalysis | null>(null);
   const [protocolDate, setProtocolDate] = useState("");
+  const [dateEditorOpen, setDateEditorOpen] = useState(false);
   const [tableRoles, setTableRoles] = useState<Record<number, TableRoleOverride>>({});
   const [texts, setTexts] = useState<TextDraft[]>([]);
   const [attendance, setAttendance] = useState<AttendanceDraft[]>([]);
   const [events, setEvents] = useState<EventDraft[]>([]);
   const [lists, setLists] = useState<ListDraft[]>([]);
   const [matrices, setMatrices] = useState<MatrixDraft[]>([]);
-  const [createdProtocolId, setCreatedProtocolId] = useState<number | null>(null);
+  const [createdProtocolId, setCreatedProtocolId] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<Category>("tables");
   const [pendingTableIndex, setPendingTableIndex] = useState<number | null>(null);
   const [expandedTexts, setExpandedTexts] = useState<Set<number>>(new Set());
@@ -1164,8 +1220,8 @@ export function WordImportWizard({
                 <WarningIcon />
                 <span className="word-import-alert-date">
                   Kein Datum im Dokument erkannt - ohne Datum kann kein neuer Termin angelegt werden.
-                  <InlineDateField
-                    className="input word-import-alert-date-input"
+                  <DateInput
+                    className="word-import-alert-date-picker"
                     value={entry.raw_date ?? ""}
                     onChange={(value) => updateEventField(index, { raw_date: value || null })}
                   />
@@ -1177,7 +1233,7 @@ export function WordImportWizard({
               nullLabel="🆕 Neu anlegen"
               activeId={entry.linked_event_id}
               participants={entry.candidates.map(
-                (candidate): AssigneeOption => ({
+                (candidate): AssigneeOption<string> => ({
                   id: candidate.event_id,
                   display_name: `${candidate.title} (${formatDateRange(candidate.event_date, candidate.event_end_date)})`,
                 })
@@ -1275,12 +1331,12 @@ export function WordImportWizard({
       attendance
         .filter((row, rowIndex) => rowIndex !== index && row.raw_name)
         .map((row) => row.participant_id)
-        .filter((id): id is number => id !== null)
+        .filter((id): id is string => id !== null)
     );
-    const assigneeOptions: AssigneeOption[] = (entry.raw_name
+    const assigneeOptions: AssigneeOption<string>[] = (entry.raw_name
       ? [{ id: CREATE_NEW_PARTICIPANT_ID, display_name: `🆕 Als neuen Teilnehmer anlegen: "${entry.raw_name}"` }, ...attendanceParticipants]
       : attendanceParticipants
-    ).filter((option) => option.id === CREATE_NEW_PARTICIPANT_ID || !takenElsewhere.has(option.id as number));
+    ).filter((option) => option.id === CREATE_NEW_PARTICIPANT_ID || !takenElsewhere.has(option.id as string));
     const label = entry.createNew
       ? `🆕 Neuer Teilnehmer: "${entry.raw_name}"`
       : attendanceParticipants.find((participant) => participant.id === entry.participant_id)?.display_name ??
@@ -1448,7 +1504,7 @@ export function WordImportWizard({
               nullLabel="🆕 Neu (nur in diesem Protokoll)"
               activeId={entry.linked_entry_id}
               participants={entry.candidates.map(
-                (candidate): AssigneeOption => ({
+                (candidate): AssigneeOption<string> => ({
                   id: candidate.entry_id,
                   display_name: `${candidate.column_one_display} → ${candidate.column_two_display}`,
                 })
@@ -1638,7 +1694,8 @@ export function WordImportWizard({
       eventCandidates: mapping.event_candidates,
       linkedEventId: mapping.matched_event_id,
       linkedEventNone: false,
-      dismissed: false,
+      dismissed: mapping.remembered_dismissed,
+      createNew: mapping.remembered_create_new,
       isFormBlock: mapping.is_form_block,
       formFields: mapping.form_fields,
       formFieldsByTarget: mapping.form_fields_by_target,
@@ -1799,7 +1856,7 @@ export function WordImportWizard({
     }
   }
 
-  async function reanalyzeWithRoles(nextTableRoles: Record<number, TableRoleOverride>) {
+  async function reanalyzeWithRoles(nextTableRoles: Record<number, TableRoleOverride>, dateOverride?: string) {
     // Real bug fixed here: reanalyzeBusyRef is set to true by the caller (updateTableRole/
     // reanalyze) BEFORE calling this - either early return below used to leave it stuck at
     // true forever (both callers guard on it and bail out immediately), permanently
@@ -1836,12 +1893,16 @@ export function WordImportWizard({
       }
     }
     setTableRoles(nextTableRoles);
+    const effectiveDate = dateOverride ?? protocolDate;
+    if (dateOverride !== undefined) {
+      setProtocolDate(dateOverride);
+    }
     setBusy(true);
     setError(null);
     try {
       const result = documentId
-        ? await reanalyzeWordImportDocument(documentId, protocolDate || null, nextTableRoles)
-        : await analyzeWordImport(file!, templateId, protocolDate || null, nextTableRoles);
+        ? await reanalyzeWordImportDocument(documentId, effectiveDate || null, nextTableRoles)
+        : await analyzeWordImport(file!, templateId, effectiveDate || null, nextTableRoles);
       applyAnalysis(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Datei konnte nicht erneut analysiert werden");
@@ -1874,6 +1935,13 @@ export function WordImportWizard({
     if (reanalyzeBusyRef.current) return;
     reanalyzeBusyRef.current = true;
     await reanalyzeWithRoles(tableRoles);
+  }
+
+  async function confirmDateEdit(newDate: string) {
+    if (reanalyzeBusyRef.current) return;
+    reanalyzeBusyRef.current = true;
+    await reanalyzeWithRoles(tableRoles, newDate);
+    setDateEditorOpen(false);
   }
 
   function resetWizard() {
@@ -1910,7 +1978,7 @@ export function WordImportWizard({
   // optionId here follows the same convention as the attendance table's assignee menu:
   // null = "keinen verknüpfen", CREATE_NEW_PARTICIPANT_ID = "als neuen Teilnehmer
   // anlegen", any other id = link to that existing Participant.
-  function updateFormFieldSingleName(textIndex: number, fieldIndex: number, optionId: number | null, rawName: string) {
+  function updateFormFieldSingleName(textIndex: number, fieldIndex: number, optionId: string | null, rawName: string) {
     setTexts((current) =>
       current.map((row, rowIndex) => {
         if (rowIndex !== textIndex) return row;
@@ -1952,7 +2020,7 @@ export function WordImportWizard({
     );
   }
 
-  function updateFormFieldNameAt(textIndex: number, fieldIndex: number, nameIndex: number, optionId: number | null) {
+  function updateFormFieldNameAt(textIndex: number, fieldIndex: number, nameIndex: number, optionId: string | null) {
     setTexts((current) =>
       current.map((row, rowIndex) => {
         if (rowIndex !== textIndex) return row;
@@ -1990,7 +2058,7 @@ export function WordImportWizard({
   // every remaining issue on it (all names matched, no lingering column-2 conflict) is
   // actually resolved, not just because *a* name was touched (a multi-name row with one
   // name still unmatched must stay open, see listStillOpen).
-  function updateListName(rowIndex: number, column: "one" | "two", nameIndex: number, participantId: number | null) {
+  function updateListName(rowIndex: number, column: "one" | "two", nameIndex: number, participantId: string | null) {
     setLists((current) =>
       current.map((row, index) => {
         if (index !== rowIndex) return row;
@@ -2004,7 +2072,7 @@ export function WordImportWizard({
     );
   }
 
-  function updateMatrixName(rowIndex: number, nameIndex: number, participantId: number | null) {
+  function updateMatrixName(rowIndex: number, nameIndex: number, participantId: string | null) {
     setMatrices((current) =>
       current.map((row, index) => {
         if (index !== rowIndex) return row;
@@ -2029,7 +2097,7 @@ export function WordImportWizard({
   // per-row picker (no such option is offered there), so the createNew case simply
   // leaves those entries at participant_id=null - already their unresolved state, i.e.
   // a no-op for them, same as the plain "Keinen verknüpfen" case.
-  function applyRecurringNameEverywhere(key: string, optionId: number | null) {
+  function applyRecurringNameEverywhere(key: string, optionId: string | null) {
     const participantId = optionId === CREATE_NEW_PARTICIPANT_ID ? null : optionId;
     const createNew = optionId === CREATE_NEW_PARTICIPANT_ID;
 
@@ -2168,7 +2236,7 @@ export function WordImportWizard({
       const approvedEvents = events.filter((entry) => entry.approved);
       const approvedLists = lists
         .filter((entry) => entry.approved && entry.has_snapshot_target)
-        .filter((entry) => (tableRoles[entry.table_index]?.list_definition_id ?? 0) > 0);
+        .filter((entry) => tableRoles[entry.table_index]?.list_definition_id != null);
       const approvedMatrices = matrices.filter((entry) => entry.approved && entry.column_key !== null);
       const payload = {
         template_id: templateId,
@@ -2183,6 +2251,7 @@ export function WordImportWizard({
           is_form_block: text.isFormBlock,
           form_fields: text.isFormBlock ? text.formFields : [],
           dismissed: text.dismissed,
+          create_new: text.createNew,
           sync_field_source: text.syncFieldStatus === "conflict" ? text.syncFieldSource : null,
         })),
         attendance: approvedAttendance.map((entry) => ({
@@ -2227,7 +2296,8 @@ export function WordImportWizard({
           })),
         lists: approvedLists.map((entry) => ({
           table_index: entry.table_index,
-          list_definition_id: tableRoles[entry.table_index]?.list_definition_id ?? 0,
+          // Non-null: approvedLists is already filtered to rows with a resolved list_definition_id above.
+          list_definition_id: tableRoles[entry.table_index]?.list_definition_id as string,
           column_one_raw: entry.column_one_raw,
           column_two_raw: resolveListColumnTwoRaw(entry),
           column_one_names: entry.column_one_names,
@@ -2278,7 +2348,7 @@ export function WordImportWizard({
           approvedAttendance.length +
           (events.length - approvedEvents.length) +
           (lists.filter(
-            (entry) => entry.has_snapshot_target && (tableRoles[entry.table_index]?.list_definition_id ?? 0) > 0
+            (entry) => entry.has_snapshot_target && tableRoles[entry.table_index]?.list_definition_id != null
           ).length -
             approvedLists.length) +
           (matrices.length - approvedMatrices.length) +
@@ -2444,10 +2514,10 @@ export function WordImportWizard({
               <strong>{fileName ?? file?.name ?? "Dokument"}</strong>
               <span className="muted"> · {templateName}</span>
               <span className="muted"> · </span>
-              <InlineDateField
+              <DateFieldButton
                 className="word-import-filebar-date"
                 value={protocolDate}
-                onChange={setProtocolDate}
+                onClick={() => setDateEditorOpen(true)}
               />
             </span>
             <button type="button" className="button-ghost" disabled={busy} onClick={() => void reanalyze()}>
@@ -2466,14 +2536,23 @@ export function WordImportWizard({
               <WarningIcon />
               <span className="word-import-alert-date">
                 Protokolldatum konnte nicht automatisch erkannt werden.
-                <InlineDateField
+                <DateFieldButton
                   className="input word-import-alert-date-input"
                   value={protocolDate}
-                  onChange={setProtocolDate}
+                  onClick={() => setDateEditorOpen(true)}
+                  placeholder="Datum festlegen"
                 />
               </span>
             </div>
           )}
+
+          <DateEditorModal
+            open={dateEditorOpen}
+            initialValue={protocolDate}
+            onCancel={() => setDateEditorOpen(false)}
+            onConfirm={(value) => void confirmDateEdit(value)}
+            busy={busy}
+          />
 
           {analysis.warnings.length > 0 && (
             // Real bug fixed here: analyze() has always produced these (e.g. a Matrix-
@@ -2647,7 +2726,7 @@ export function WordImportWizard({
                                       nullLabel="– auswählen –"
                                       activeId={current.list_definition_id}
                                       participants={analysis.list_definitions.map(
-                                        (definition): AssigneeOption => ({ id: definition.id, display_name: definition.name })
+                                        (definition): AssigneeOption<string> => ({ id: definition.id, display_name: definition.name })
                                       )}
                                       onChange={(option) => updateTableRole(table.index, { list_definition_id: option.id })}
                                     />
@@ -2720,7 +2799,7 @@ export function WordImportWizard({
                         if (group.counts.list) whereParts.push(`${group.counts.list}× Liste`);
                         if (group.counts.matrix) whereParts.push(`${group.counts.matrix}× Matrix`);
                         if (group.counts.text) whereParts.push(`${group.counts.text}× Text`);
-                        const menuOptions: AssigneeOption[] = [
+                        const menuOptions: AssigneeOption<string>[] = [
                           { id: CREATE_NEW_PARTICIPANT_ID, display_name: `🆕 Als neuen Teilnehmer anlegen: "${group.label}"` },
                           ...participants,
                         ];
@@ -2960,7 +3039,7 @@ export function WordImportWizard({
                       // doesn't stay flagged forever with no way out. Dismissing skips the
                       // WHOLE section, same row-level granularity Liste/Matrix rows already
                       // use for an unresolved name.
-                      const isIgnorableNoTarget = text.template_element_id === null;
+                      const isIgnorableNoTarget = text.template_element_id === null && !text.createNew;
                       const canDismiss = isIgnorableNoTarget || formFieldsStillOpen(text);
                       const isDismissedNoTarget = canDismiss && text.dismissed;
                       const summaryLabel = textSummaryLabel(text, target, linkedEvent);
@@ -2969,7 +3048,12 @@ export function WordImportWizard({
                           className={`word-import-text-row${flagged ? " word-import-flag" : ""}${
                             isIgnoredEvent || isDismissedNoTarget ? " word-import-text-row-muted" : ""
                           }`}
-                          key={index}
+                          // A composite of stable identifying fields, not the array index
+                          // (audit finding, 2026-08-25) - harmless today since this list's
+                          // order is fixed server-side, but a plain index silently becomes
+                          // wrong (stale component state bleeding across rows on re-render)
+                          // the moment any future filtering/sorting is added here.
+                          key={`${text.template_element_id ?? "none"}-${text.block_sort_index ?? "none"}-${text.extracted_heading}`}
                         >
                           <div
                             className={`word-import-text-row-head${flagged ? "" : " word-import-text-row-head-clickable"}`}
@@ -2981,7 +3065,11 @@ export function WordImportWizard({
                             <span className="word-import-text-row-title">{text.extracted_heading}</span>
                             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                               {!isOpen &&
-                                (isIgnoredEvent ? (
+                                (text.createNew ? (
+                                  <span className="word-import-text-row-summary">
+                                    <CheckIcon /> Neuer Textblock in diesem Protokoll
+                                  </span>
+                                ) : isIgnoredEvent ? (
                                   <span className="word-import-text-row-summary is-ignored">Nicht verknüpft – wird übersprungen</span>
                                 ) : isDismissedNoTarget ? (
                                   <span className="word-import-text-row-summary is-ignored">Ignoriert – wird übersprungen</span>
@@ -3012,22 +3100,31 @@ export function WordImportWizard({
                             <div className="grid" style={{ gap: "10px" }}>
                               <TodoAssigneeMenu
                                 label={
-                                  target
+                                  text.createNew
+                                    ? `🆕 Neuer Textblock: "${text.extracted_heading}"`
+                                    : target
                                     ? `${target.label}${target.is_event_repeat ? " · pro Termin" : ""}${target.is_form_block ? " · Formular" : ""}`
                                     : "– nicht zugewiesen –"
                                 }
                                 nullLabel="– nicht zugewiesen –"
-                                activeId={target ? analysis.text_targets.indexOf(target) : null}
-                                participants={analysis.text_targets.map(
-                                  (candidate, candidateIndex): AssigneeOption => ({
-                                    id: candidateIndex,
-                                    display_name: `${candidate.label}${candidate.is_event_repeat ? " · pro Termin" : ""}${
-                                      candidate.is_form_block ? " · Formular" : ""
-                                    }`,
-                                  })
-                                )}
+                                activeId={text.createNew ? CREATE_NEW_TEXT_BLOCK_ID : target ? analysis.text_targets.indexOf(target) : null}
+                                participants={[
+                                  {
+                                    id: CREATE_NEW_TEXT_BLOCK_ID,
+                                    display_name: `🆕 Als neuen Textblock anlegen: "${text.extracted_heading}"`,
+                                  },
+                                  ...analysis.text_targets.map(
+                                    (candidate, candidateIndex): AssigneeOption => ({
+                                      id: candidateIndex,
+                                      display_name: `${candidate.label}${candidate.is_event_repeat ? " · pro Termin" : ""}${
+                                        candidate.is_form_block ? " · Formular" : ""
+                                      }`,
+                                    })
+                                  ),
+                                ]}
                                 onChange={(option) => {
-                                  const nextTarget = option.id === null ? undefined : analysis.text_targets[option.id];
+                                  const createNew = option.id === CREATE_NEW_TEXT_BLOCK_ID;
+                                  const nextTarget = option.id === null || createNew ? undefined : analysis.text_targets[option.id];
                                   const templateElementId = nextTarget?.template_element_id ?? null;
                                   const blockSortIndex = nextTarget?.block_sort_index ?? null;
                                   setTexts((current) =>
@@ -3041,6 +3138,7 @@ export function WordImportWizard({
                                             linkedEventId: nextTarget?.is_event_repeat ? row.linkedEventId : null,
                                             linkedEventNone: nextTarget?.is_event_repeat ? row.linkedEventNone : false,
                                             dismissed: false,
+                                            createNew,
                                             // Switching to a different target's own row structure - use
                                             // the values already parsed for this target during analyze()
                                             // (see WordImportTextMapping.form_fields_by_target, computed
@@ -3072,7 +3170,7 @@ export function WordImportWizard({
                                     nullLabel="– nicht verknüpfen (Text wird nicht übernommen) –"
                                     activeId={text.linkedEventId}
                                     participants={text.eventCandidates.map(
-                                      (candidate): AssigneeOption => ({
+                                      (candidate): AssigneeOption<string> => ({
                                         id: candidate.event_id,
                                         display_name: `${candidate.title} (${formatDate(candidate.event_date)})`,
                                       })
@@ -3256,7 +3354,7 @@ export function WordImportWizard({
               <button
                 type="button"
                 className="button-ghost"
-                onClick={() => (documentId ? onExitQueueMode?.() : setStep("upload"))}
+                onClick={() => (documentId ? exitToQueue() : setStep("upload"))}
               >
                 {documentId ? "Zurück zur Warteschlange" : "Abbrechen"}
               </button>
@@ -3306,7 +3404,7 @@ export function WordImportWizard({
             <button
               type="button"
               className="button-ghost"
-              onClick={() => (documentId ? onExitQueueMode?.() : resetWizard())}
+              onClick={() => (documentId ? exitToQueue() : resetWizard())}
             >
               {documentId ? "Zurück zur Warteschlange" : "Neuer Import"}
             </button>

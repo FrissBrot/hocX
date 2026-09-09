@@ -25,8 +25,18 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
   // Read via ref inside the tracked-changes plugin's decorations() callback so
   // it always sees the latest baseline without needing to recreate the editor.
   const baselineRef = useRef(trackedBaseline);
+  // The markdown this editor last emitted via onChange. Lets the value-sync effect
+  // below tell "value changed because we typed" apart from "value changed because
+  // the parent reset it externally" - without this, a keystroke whose onChange
+  // hasn't been reflected in `value` yet (React hasn't re-rendered) would look
+  // identical to an external reset and get clobbered mid-edit.
+  const lastEmittedRef = useRef(value);
 
   const editor = useEditor({
+    // Tiptap can't render server-side; without this it silently falls back to a
+    // client-only "legacy" init path that risks a hydration mismatch and can leave
+    // the editor's contenteditable DOM unattached (looks rendered, but not editable).
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         heading: false,
@@ -46,7 +56,9 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
     content: value,
     editable: !readOnly,
     onUpdate({ editor }) {
-      onChange(editor.storage.markdown.getMarkdown());
+      const markdown = editor.storage.markdown.getMarkdown();
+      lastEmittedRef.current = markdown;
+      onChange(markdown);
     },
     editorProps: {
       attributes: {
@@ -94,13 +106,16 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
     return () => el.removeEventListener("keydown", onKeyDown, true);
   }, [editor]);
 
-  // Sync external value changes (e.g. initial load from server)
+  // Sync external value changes (e.g. initial load from server, switching to a
+  // different block). Skip when `value` just caught up to our own last onChange -
+  // comparing against the live editor doc instead would race a fast typist: if a
+  // render lags behind a keystroke, the editor is already ahead of `value`, and
+  // resetting content to the stale `value` would wipe what was just typed.
   useEffect(() => {
     if (!editor) return;
-    const current = editor.storage.markdown.getMarkdown();
-    if (current !== value) {
-      editor.commands.setContent(value, false);
-    }
+    if (value === lastEmittedRef.current) return;
+    lastEmittedRef.current = value;
+    editor.commands.setContent(value, false);
   }, [value, editor]);
 
   // Sync readOnly changes

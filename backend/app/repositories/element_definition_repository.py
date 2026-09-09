@@ -1,7 +1,10 @@
+import uuid
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import ElementDefinition
+from app.services import public_id_service
 
 
 class ElementDefinitionRepository:
@@ -11,6 +14,9 @@ class ElementDefinitionRepository:
 
     def get(self, db: Session, element_definition_id: int) -> ElementDefinition | None:
         return db.get(ElementDefinition, element_definition_id)
+
+    def get_by_public_id(self, db: Session, public_id: uuid.UUID, *, tenant_id: int) -> ElementDefinition | None:
+        return public_id_service.get_by_public_id(db, ElementDefinition, public_id, tenant_id=tenant_id)
 
     def create(self, db: Session, entity: ElementDefinition) -> ElementDefinition:
         db.add(entity)

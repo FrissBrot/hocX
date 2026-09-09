@@ -1,5 +1,6 @@
 """Minimal ORM row builders for tests - not a full fixture framework, just enough to
 satisfy FK constraints for the tables these tests actually touch."""
+import uuid
 from datetime import date
 
 from sqlalchemy import select
@@ -214,9 +215,18 @@ def make_user_tenant_role(db, user_id: int, tenant_id: int, role_code: str = "wr
 
 def make_current_user(tenant_id: int, role: str = "writer", user_id: int = 1) -> CurrentUser:
     """A plain CurrentUser for calling route functions directly (bypassing Depends/auth
-    entirely - route functions are still ordinary callables, no ASGI/TestClient needed)."""
+    entirely - route functions are still ordinary callables, no ASGI/TestClient needed).
+
+    user_id/tenant_id are frequently synthetic ints with no backing row (see e.g.
+    user_id=999 in test_audit_2026_08_12_high_fixes_B.py), so there's no real row to
+    resolve a public_id from here - the *_public_id fields below are just fresh random
+    UUIDs, consistent with this factory's existing "plain, not DB-backed" contract. Route
+    logic under test cares about the internal ids (tenant isolation, role checks); tests
+    that need a public_id to line up with a real row already fetch it themselves from the
+    ORM object made via make_tenant/make_app_user."""
     return CurrentUser(
         user_id=user_id,
+        user_public_id=uuid.uuid4(),
         first_name="Test",
         last_name="User",
         display_name="Test User",
@@ -224,7 +234,9 @@ def make_current_user(tenant_id: int, role: str = "writer", user_id: int = 1) ->
         preferred_language="de",
         is_participant_account=False,
         default_tenant_id=tenant_id,
+        default_tenant_public_id=uuid.uuid4(),
         current_tenant_id=tenant_id,
+        current_tenant_public_id=uuid.uuid4(),
         current_tenant_name="Test Tenant",
         current_tenant_profile_image_path=None,
         current_role=role,

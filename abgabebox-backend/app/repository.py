@@ -82,6 +82,13 @@ def get_participants(db: Session, *, participant_ids: list[int]) -> dict[int, di
     return {row["id"]: dict(row) for row in rows}
 
 
+def get_events(db: Session, *, event_ids: list[int]) -> dict[int, dict]:
+    if not event_ids:
+        return {}
+    rows = db.execute(select(event_table).where(event_table.c.id.in_(event_ids))).mappings()
+    return {row["id"]: dict(row) for row in rows}
+
+
 def latest_status_by_element(db: Session, *, assignment_id: int) -> dict[tuple[int | None, int | None], str]:
     """Letzter Status je (event_id, list_entry_id), berechnet aus der append-only Log-Tabelle.
 
@@ -171,65 +178,6 @@ def count_files_by_element(db: Session, *, assignment_id: int) -> dict[tuple[int
     return {(row.event_id, row.list_entry_id): row.file_count for row in rows}
 
 
-def insert_stored_file(
-    db: Session,
-    *,
-    tenant_id: int,
-    original_name: str,
-    mime_type: str | None,
-    storage_path: str,
-    file_size_bytes: int,
-    checksum_sha256: str,
-) -> int:
-    result = db.execute(
-        insert(stored_file_table)
-        .values(
-            tenant_id=tenant_id,
-            original_name=original_name,
-            mime_type=mime_type,
-            storage_path=storage_path,
-            file_size_bytes=file_size_bytes,
-            checksum_sha256=checksum_sha256,
-        )
-        .returning(stored_file_table.c.id)
-    )
-    file_id = result.scalar_one()
-    db.commit()
-    return file_id
-
-
-def insert_submission_upload(
-    db: Session,
-    *,
-    assignment_id: int,
-    event_id: int | None,
-    list_entry_id: int | None,
-) -> int:
-    result = db.execute(
-        insert(submission_upload_table)
-        .values(
-            assignment_id=assignment_id,
-            event_id=event_id,
-            list_entry_id=list_entry_id,
-            status="submitted",
-            submitted_at=datetime.now(UTC),
-        )
-        .returning(submission_upload_table.c.id)
-    )
-    upload_id = result.scalar_one()
-    db.commit()
-    return upload_id
-
-
-def insert_submission_upload_file(db: Session, *, upload_id: int, stored_file_id: int, sort_index: int) -> None:
-    db.execute(
-        insert(submission_upload_file_table).values(
-            upload_id=upload_id, stored_file_id=stored_file_id, sort_index=sort_index
-        )
-    )
-    db.commit()
-
-
 def insert_upload_log(
     db: Session,
     *,
@@ -256,7 +204,6 @@ def insert_full_upload(
     event_id: int | None,
     list_entry_id: int | None,
     files: list[dict],
-    scan_status: str = "clean",
 ) -> int:
     """Insert submission_upload + all stored_files + upload_files in one transaction."""
     upload_result = db.execute(
@@ -283,7 +230,9 @@ def insert_full_upload(
                 file_size_bytes=f["file_size_bytes"],
                 checksum_sha256=f["checksum_sha256"],
                 perceptual_hash=f.get("perceptual_hash"),
-                scan_status=scan_status,
+                # Per-file, no longer a single status applied to the whole batch (audit
+                # finding, 2026-08-25) - see routes/public.py's upload().
+                scan_status=f["scan_status"],
             )
             .returning(stored_file_table.c.id)
         )

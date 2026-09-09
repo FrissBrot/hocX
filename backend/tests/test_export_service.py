@@ -21,6 +21,7 @@ from sqlalchemy import select
 
 from app.core.config import settings
 from app.models.entities import StoredFile, TodoStatus
+from app.services import public_id_service
 from app.services.export_service import ExportService
 from tests.factories import (
     make_participant,
@@ -61,8 +62,9 @@ def _protocol_with_template_dir(db, *, template_dir: str | None = None) -> tuple
     return tenant, template, protocol
 
 
-def _read_generated_file_bytes(db, generated_file_id: int) -> bytes:
-    stored_file = db.get(StoredFile, generated_file_id)
+def _read_generated_file_bytes(db, generated_file_id) -> bytes:
+    # generated_file_id is the public uuid from ProtocolExportRead now.
+    stored_file = public_id_service.get_by_public_id(db, StoredFile, generated_file_id)
     assert stored_file is not None
     path = Path(settings.storage_root) / stored_file.storage_path
     return path.read_bytes()
@@ -107,6 +109,27 @@ def test_export_pdf_typical_protocol_produces_a_real_pdf(db):
     assert pdf_bytes.startswith(b"%PDF")
     # A one-page protocol with real content compiles to well over a trivial/empty size.
     assert len(pdf_bytes) > 2000
+
+
+def test_export_pdf_rejects_template_that_tries_to_read_an_absolute_path(db):
+    """Security regression (audit finding, 2026-08-26): document-template parts (theme/
+    preamble/macros .tex files) are tenant-admin-uploaded raw LaTeX, \\input'd directly into
+    the compiled document. -no-shell-escape alone only blocks command execution, not file
+    reads - without also confining kpathsea via openin_any=p, a template could do
+    \\input{/etc/passwd} (or any other absolute path the container can read, e.g. an env
+    file) and have its content embedded straight into the exported PDF. Compilation must
+    fail closed here rather than silently succeeding with the file's content inlined."""
+    template_dir = _make_empty_template_dir()
+    (Path(template_dir) / "preamble.tex").write_text("\\input{/etc/passwd}\n", encoding="utf-8")
+    tenant, template, protocol = _protocol_with_template_dir(db, template_dir=template_dir)
+    make_protocol_element(db, protocol.id, sort_index=0, section_name="Traktandum 1")
+
+    service = ExportService()
+    try:
+        asyncio.run(service.export_pdf(db, protocol.id))
+        assert False, "expected compilation to fail closed on an absolute-path \\input"
+    except RuntimeError as exc:
+        assert "pdflatex failed" in str(exc)
 
 
 def test_export_latex_attendance_counts_all_four_buckets_correctly(db):

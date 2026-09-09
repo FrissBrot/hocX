@@ -30,7 +30,7 @@ export function AdminErrorLog({ initialPage, initialFilterOptions, tenants }: Pr
   const [source, setSource] = useState<string>("");
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;

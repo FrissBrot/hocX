@@ -1,3 +1,4 @@
+import uuid
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -10,13 +11,14 @@ from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, require_admin, require_reader
 from app.models.entities import CycleConfig, Protocol, Template
 from app.schemas.cycle_config import CycleConfigCreate, CycleConfigRead, CycleConfigUpdate, CycleInfo
+from app.services import public_id_service
 
 router = APIRouter()
 
 
-def _get_owned(db: Session, cycle_config_id: int, tenant_id: int) -> CycleConfig:
-    obj = db.get(CycleConfig, cycle_config_id)
-    if obj is None or obj.tenant_id != tenant_id:
+def _get_owned(db: Session, cycle_config_id: uuid.UUID, tenant_id: int) -> CycleConfig:
+    obj = public_id_service.get_by_public_id(db, CycleConfig, cycle_config_id, tenant_id=tenant_id)
+    if obj is None:
         raise HTTPException(status_code=404, detail="Cycle config not found")
     return obj
 
@@ -60,7 +62,7 @@ def create_cycle_config(
 
 @router.get("/cycle-configs/{cycle_config_id}", response_model=CycleConfigRead)
 def get_cycle_config(
-    cycle_config_id: int,
+    cycle_config_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -70,7 +72,7 @@ def get_cycle_config(
 
 @router.put("/cycle-configs/{cycle_config_id}", response_model=CycleConfigRead)
 def update_cycle_config(
-    cycle_config_id: int,
+    cycle_config_id: uuid.UUID,
     payload: CycleConfigUpdate,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
@@ -91,14 +93,14 @@ def update_cycle_config(
 
 @router.delete("/cycle-configs/{cycle_config_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_cycle_config(
-    cycle_config_id: int,
+    cycle_config_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_admin(user)
     obj = _get_owned(db, cycle_config_id, user.current_tenant_id)
     # Check if any template is still using this config
-    in_use = db.scalar(select(Template.id).where(Template.cycle_config_id == cycle_config_id).limit(1))
+    in_use = db.scalar(select(Template.id).where(Template.cycle_config_id == obj.id).limit(1))
     if in_use:
         raise HTTPException(status_code=409, detail="Cycle config is still assigned to one or more templates")
     try:
@@ -111,7 +113,7 @@ def delete_cycle_config(
 
 @router.get("/cycle-configs/{cycle_config_id}/cycles", response_model=list[CycleInfo])
 def list_cycles(
-    cycle_config_id: int,
+    cycle_config_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -124,7 +126,7 @@ def list_cycles(
         .join(Template, Template.id == Protocol.template_id)
         .where(
             Template.tenant_id == user.current_tenant_id,
-            Template.cycle_config_id == cycle_config_id,
+            Template.cycle_config_id == cfg.id,
         )
         .order_by(Protocol.protocol_date)
     ).all()

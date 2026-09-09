@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import date, datetime
 from typing import Any
 
@@ -22,6 +23,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -37,8 +39,12 @@ class UpdatedAtMixin:
 
 class Tenant(Base, TimestampMixin):
     __tablename__ = "tenant"
+    __table_args__ = (Index("idx_tenant_last_word_import_template", "last_word_import_template_id"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     name: Mapped[str] = mapped_column(Text, nullable=False)
     profile_image_path: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
@@ -66,6 +72,9 @@ class PlatformOidcConfig(Base, TimestampMixin, UpdatedAtMixin):
     __tablename__ = "platform_oidc_config"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
     issuer_url: Mapped[str] = mapped_column(Text, nullable=False)
     client_id: Mapped[str] = mapped_column(Text, nullable=False)
@@ -83,6 +92,9 @@ class TenantDomain(Base, TimestampMixin):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     purpose: Mapped[str] = mapped_column(Text, nullable=False)
     domain: Mapped[str] = mapped_column(Text, nullable=False)
@@ -114,6 +126,9 @@ class AppUser(Base, TimestampMixin, UpdatedAtMixin):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     default_tenant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="SET NULL"))
     first_name: Mapped[str] = mapped_column(Text, nullable=False)
     last_name: Mapped[str] = mapped_column(Text, nullable=False)
@@ -132,12 +147,30 @@ class UserMfaFactor(Base, TimestampMixin, UpdatedAtMixin):
     __tablename__ = "user_mfa_factor"
     __table_args__ = (
         Index("idx_user_mfa_factor_user", "user_id", "factor_type"),
+        # Platform-admin MFA factors (audit finding, 2026-08-27 - platform admins, the
+        # highest-privilege tier, had no MFA option at all): this table is reused rather than
+        # adding a parallel one, since the TOTP-storage shape (secret_encrypted,
+        # totp_last_counter, label, ...) is identical regardless of which principal owns the
+        # factor. user_id is now nullable and platform_admin_id was added alongside it; the
+        # check constraint enforces exactly one owner per row.
+        Index("idx_user_mfa_factor_platform_admin", "platform_admin_id", "factor_type"),
         UniqueConstraint("webauthn_credential_id", name="uq_user_mfa_factor_webauthn_credential_id"),
         CheckConstraint("factor_type IN ('totp', 'webauthn')", name="ck_user_mfa_factor_type"),
+        CheckConstraint(
+            "(user_id IS NOT NULL AND platform_admin_id IS NULL) OR "
+            "(user_id IS NULL AND platform_admin_id IS NOT NULL)",
+            name="ck_user_mfa_factor_single_owner",
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"))
+    platform_admin_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("platform_admin.id", ondelete="CASCADE")
+    )
     factor_type: Mapped[str] = mapped_column(Text, nullable=False)
     label: Mapped[str] = mapped_column(Text, nullable=False)
     secret_encrypted: Mapped[str | None] = mapped_column(Text)
@@ -163,6 +196,9 @@ class PlatformAdmin(Base, TimestampMixin, UpdatedAtMixin):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     email: Mapped[str] = mapped_column(Text, nullable=False)
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
     display_name: Mapped[str] = mapped_column(Text, nullable=False)
@@ -177,7 +213,10 @@ class PlatformAdmin(Base, TimestampMixin, UpdatedAtMixin):
 
 class UserRole(Base):
     __tablename__ = "user_role"
-    __table_args__ = (PrimaryKeyConstraint("user_id", "role_id", name="pk_user_role"),)
+    __table_args__ = (
+        PrimaryKeyConstraint("user_id", "role_id", name="pk_user_role"),
+        Index("idx_user_role_role", "role_id"),
+    )
 
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False)
     role_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("role.id", ondelete="RESTRICT"), nullable=False)
@@ -202,6 +241,9 @@ class GroupEntity(Base, TimestampMixin, UpdatedAtMixin):
     __table_args__ = (Index("idx_group_entity_tenant_active", "tenant_id", "is_active"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
@@ -214,6 +256,9 @@ class Leader(Base, TimestampMixin, UpdatedAtMixin):
     __table_args__ = (Index("idx_leader_tenant_active", "tenant_id", "is_active"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
@@ -225,11 +270,15 @@ class Participant(Base, TimestampMixin, UpdatedAtMixin):
     __tablename__ = "participant"
     __table_args__ = (
         Index("idx_participant_tenant_active", "tenant_id", "is_active"),
+        Index("idx_participant_app_user_id", "app_user_id"),
         UniqueConstraint("tenant_id", "display_name", name="uq_participant_tenant_display_name"),
         UniqueConstraint("tenant_id", "app_user_id", name="uq_participant_tenant_app_user"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     app_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
     first_name: Mapped[str | None] = mapped_column(Text)
@@ -254,9 +303,14 @@ class Event(Base, TimestampMixin, UpdatedAtMixin):
     __table_args__ = (
         Index("idx_event_tenant_date", "tenant_id", "event_date"),
         Index("idx_event_tenant_category", "tenant_id", "event_category_id"),
+        Index("idx_event_category_id", "event_category_id"),
+        Index("idx_event_group_id", "group_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     event_date: Mapped[date] = mapped_column(Date, nullable=False)
     event_end_date: Mapped[date | None] = mapped_column(Date)
@@ -291,6 +345,9 @@ class CycleConfig(Base, TimestampMixin, UpdatedAtMixin):
     __tablename__ = "cycle_config"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     reset_month: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("12"))
@@ -303,9 +360,13 @@ class WordImportProfile(Base, TimestampMixin, UpdatedAtMixin):
     __table_args__ = (
         UniqueConstraint("tenant_id", "template_id", name="uq_word_import_profile_tenant_template"),
         Index("idx_word_import_profile_tenant", "tenant_id"),
+        Index("idx_word_import_profile_template", "template_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     template_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("template.id", ondelete="SET NULL"))
     mapping_config_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
@@ -321,9 +382,13 @@ class WordImportSuggestionOutcome(Base, TimestampMixin):
     __tablename__ = "word_import_suggestion_outcome"
     __table_args__ = (
         Index("idx_word_import_suggestion_outcome_lookup", "tenant_id", "template_id", "signal_type"),
+        Index("idx_word_import_suggestion_outcome_template", "template_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     template_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("template.id", ondelete="SET NULL"))
     signal_type: Mapped[str] = mapped_column(Text, nullable=False)
@@ -337,9 +402,16 @@ class WordImportDocument(Base, TimestampMixin, UpdatedAtMixin):
         CheckConstraint("status IN ('eingelesen', 'importiert')", name="ck_word_import_document_status"),
         Index("idx_word_import_document_tenant_template_status", "tenant_id", "template_id", "status"),
         Index("idx_word_import_document_protocol", "protocol_id"),
+        Index("idx_word_import_document_created_by", "created_by"),
+        Index("idx_word_import_document_imported_by", "imported_by"),
+        Index("idx_word_import_document_stored_file", "stored_file_id"),
+        Index("idx_word_import_document_template", "template_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     template_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("template.id", ondelete="RESTRICT"), nullable=False)
     stored_file_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("stored_file.id", ondelete="RESTRICT"), nullable=False)
@@ -393,6 +465,9 @@ class ListDefinition(Base, TimestampMixin, UpdatedAtMixin):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
@@ -415,6 +490,9 @@ class ListEntry(Base, TimestampMixin, UpdatedAtMixin):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     list_definition_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("list_definition.id", ondelete="CASCADE"), nullable=False
     )
@@ -436,6 +514,9 @@ class DocumentTemplate(Base, TimestampMixin, UpdatedAtMixin):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     tenant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"))
     code: Mapped[str] = mapped_column(Text, nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
@@ -457,6 +538,9 @@ class DocumentTemplatePart(Base, TimestampMixin, UpdatedAtMixin):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     code: Mapped[str] = mapped_column(Text, nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
@@ -491,9 +575,14 @@ class Template(Base, TimestampMixin, UpdatedAtMixin):
         Index("idx_template_tenant", "tenant_id"),
         Index("idx_template_status", "status"),
         Index("idx_template_document_template", "document_template_id"),
+        Index("idx_template_created_by", "created_by"),
+        Index("idx_template_cycle_config", "cycle_config_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     document_template_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_template.id", ondelete="RESTRICT"))
     next_event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("event.id", ondelete="SET NULL"))
@@ -560,6 +649,9 @@ class ElementDefinition(Base, TimestampMixin, UpdatedAtMixin):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     element_type_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("element_type.id", ondelete="RESTRICT"), nullable=False)
     render_type_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("render_type.id", ondelete="RESTRICT"), nullable=False)
@@ -580,9 +672,13 @@ class TemplateElement(Base, TimestampMixin):
         UniqueConstraint("template_id", "sort_index", name="uq_template_element_template_sort"),
         Index("idx_template_element_template_sort", "template_id", "sort_index"),
         Index("idx_template_element_configuration_gin", "configuration_json", postgresql_using="gin"),
+        Index("idx_template_element_element_definition", "element_definition_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     template_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("template.id", ondelete="CASCADE"), nullable=False)
     element_definition_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("element_definition.id", ondelete="RESTRICT"), nullable=False)
     sort_index: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -600,9 +696,13 @@ class TemplateElementBlock(Base, TimestampMixin):
         UniqueConstraint("template_element_id", "sort_index", name="uq_template_element_block_sort"),
         Index("idx_template_element_block_sort", "template_element_id", "sort_index"),
         Index("idx_template_element_block_configuration_gin", "configuration_override_json", postgresql_using="gin"),
+        Index("idx_template_element_block_element_definition", "element_definition_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     template_element_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("template_element.id", ondelete="CASCADE"), nullable=False)
     element_definition_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("element_definition.id", ondelete="RESTRICT"), nullable=False)
     sort_index: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -627,9 +727,13 @@ class Protocol(Base, TimestampMixin, UpdatedAtMixin):
         Index("idx_protocol_event", "event_id"),
         Index("idx_protocol_status", "status"),
         Index("idx_protocol_document_template", "document_template_id", "document_template_version"),
+        Index("idx_protocol_created_by", "created_by"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     template_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("template.id", ondelete="RESTRICT"), nullable=False)
     template_version: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -654,9 +758,13 @@ class ProtocolElement(Base, TimestampMixin):
     __table_args__ = (
         UniqueConstraint("protocol_id", "sort_index", name="uq_protocol_element_protocol_sort"),
         Index("idx_protocol_element_protocol_sort", "protocol_id", "sort_index"),
+        Index("idx_protocol_element_template_element", "template_element_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     protocol_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="CASCADE"), nullable=False)
     template_element_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("template_element.id", ondelete="SET NULL"))
     sort_index: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -677,9 +785,15 @@ class ProtocolElementBlock(Base, TimestampMixin):
         Index("idx_protocol_element_block_sort", "protocol_element_id", "sort_index"),
         Index("idx_protocol_element_block_type", "element_type_id"),
         Index("idx_protocol_element_block_configuration_gin", "configuration_snapshot_json", postgresql_using="gin"),
+        Index("idx_protocol_element_block_element_definition", "element_definition_id"),
+        Index("idx_protocol_element_block_render_type", "render_type_id"),
+        Index("idx_protocol_element_block_template_element_block", "template_element_block_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     protocol_element_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("protocol_element.id", ondelete="CASCADE"), nullable=False)
     template_element_block_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("template_element_block.id", ondelete="SET NULL"))
     element_definition_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("element_definition.id", ondelete="SET NULL"))
@@ -708,9 +822,13 @@ class StoredFile(Base, TimestampMixin):
     __table_args__ = (
         Index("idx_stored_file_tenant", "tenant_id"),
         Index("idx_stored_file_tags_gin", "tags", postgresql_using="gin"),
+        Index("idx_stored_file_created_by", "created_by"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     original_name: Mapped[str] = mapped_column(Text, nullable=False)
     mime_type: Mapped[str | None] = mapped_column(Text)
@@ -734,6 +852,9 @@ class ProtocolText(Base, TimestampMixin, UpdatedAtMixin):
     __table_args__ = (Index("idx_protocol_text_protocol_element_block", "protocol_element_block_id"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     protocol_element_block_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("protocol_element_block.id", ondelete="CASCADE"), nullable=False, unique=True)
     content: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("''"))
     tracked_baseline_content: Mapped[str | None] = mapped_column(Text)
@@ -748,6 +869,9 @@ class ProtocolDisplaySnapshot(Base, TimestampMixin):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     protocol_element_block_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("protocol_element_block.id", ondelete="CASCADE"), nullable=False, unique=True)
     source_type: Mapped[str | None] = mapped_column(Text)
     source_id: Mapped[str | None] = mapped_column(Text)
@@ -771,9 +895,14 @@ class ProtocolTodo(Base, TimestampMixin, UpdatedAtMixin):
         Index("idx_protocol_todo_status_due_date", "todo_status_id", "due_date"),
         Index("idx_protocol_todo_assigned_user", "assigned_user_id"),
         Index("idx_protocol_todo_assigned_participant", "assigned_participant_id"),
+        Index("idx_protocol_todo_closed_in_protocol", "closed_in_protocol_id"),
+        Index("idx_protocol_todo_created_by", "created_by"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     tenant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"))
     protocol_element_block_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("protocol_element_block.id", ondelete="CASCADE"))
     sort_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
@@ -801,9 +930,13 @@ class ProtocolImage(Base, TimestampMixin):
     __table_args__ = (
         UniqueConstraint("protocol_element_block_id", "sort_index", name="uq_protocol_image_block_sort"),
         Index("idx_protocol_image_protocol_element_block", "protocol_element_block_id"),
+        Index("idx_protocol_image_stored_file", "stored_file_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     protocol_element_block_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("protocol_element_block.id", ondelete="CASCADE"), nullable=False)
     stored_file_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("stored_file.id", ondelete="RESTRICT"), nullable=False)
     sort_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
@@ -831,9 +964,13 @@ class ProtocolExportCache(Base, TimestampMixin):
     __table_args__ = (
         CheckConstraint("export_format IN ('latex', 'pdf')", name="ck_protocol_export_cache_format"),
         Index("idx_protocol_export_cache_protocol", "protocol_id", "export_format"),
+        Index("idx_protocol_export_cache_generated_file", "generated_file_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     protocol_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="CASCADE"), nullable=False)
     export_format: Mapped[str] = mapped_column(Text, nullable=False)
     latex_source: Mapped[str | None] = mapped_column(Text)
@@ -850,6 +987,9 @@ class FinanceAccount(Base, TimestampMixin, UpdatedAtMixin):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     currency_label: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'CHF'"))
@@ -863,6 +1003,9 @@ class FinanceTransaction(Base, TimestampMixin):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     account_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("finance_account.id", ondelete="CASCADE"), nullable=False)
     amount: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
@@ -872,7 +1015,10 @@ class FinanceTransaction(Base, TimestampMixin):
 
 class UserProtocolScroll(Base):
     __tablename__ = "user_protocol_scroll"
-    __table_args__ = (PrimaryKeyConstraint("user_id", "protocol_id"),)
+    __table_args__ = (
+        PrimaryKeyConstraint("user_id", "protocol_id"),
+        Index("idx_user_protocol_scroll_protocol", "protocol_id"),
+    )
 
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False)
     protocol_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="CASCADE"), nullable=False)
@@ -887,9 +1033,13 @@ class AttendanceFine(Base, TimestampMixin):
         Index("idx_attendance_fine_participant", "participant_id"),
         Index("idx_attendance_fine_account", "account_id"),
         Index("idx_attendance_fine_collected_by", "collected_by_user_id"),
+        Index("idx_attendance_fine_collected_transaction", "collected_transaction_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     protocol_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="CASCADE"), nullable=False)
     participant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("participant.id", ondelete="SET NULL"))
     participant_name_snapshot: Mapped[str] = mapped_column(Text, nullable=False)
@@ -926,9 +1076,13 @@ class SubmissionAssignment(Base, TimestampMixin, UpdatedAtMixin):
         CheckConstraint("max_file_size_mb >= 1", name="ck_submission_assignment_max_size"),
         CheckConstraint("sort_order IN ('alphabetical', 'date', 'proximity')", name="ck_submission_assignment_sort_order"),
         Index("idx_submission_assignment_tenant_active", "tenant_id", "is_active"),
+        Index("idx_submission_assignment_list_definition", "list_definition_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     title: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
@@ -969,9 +1123,14 @@ class SubmissionUpload(Base, TimestampMixin):
         CheckConstraint("status IN ('submitted', 'reopened', 'closed')", name="ck_submission_upload_status"),
         Index("idx_submission_upload_assignment_event", "assignment_id", "event_id"),
         Index("idx_submission_upload_assignment_list_entry", "assignment_id", "list_entry_id"),
+        Index("idx_submission_upload_event", "event_id"),
+        Index("idx_submission_upload_list_entry", "list_entry_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     assignment_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("submission_assignment.id", ondelete="CASCADE"), nullable=False)
     event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("event.id", ondelete="CASCADE"))
     list_entry_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("list_entry.id", ondelete="CASCADE"))
@@ -984,9 +1143,13 @@ class SubmissionUploadFile(Base, TimestampMixin):
     __table_args__ = (
         UniqueConstraint("upload_id", "sort_index", name="uq_submission_upload_file_sort"),
         Index("idx_submission_upload_file_upload", "upload_id"),
+        Index("idx_submission_upload_file_stored_file", "stored_file_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     upload_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("submission_upload.id", ondelete="CASCADE"), nullable=False)
     stored_file_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("stored_file.id", ondelete="RESTRICT"), nullable=False)
     sort_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
@@ -1000,6 +1163,9 @@ class SubmissionUploadLog(Base):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     assignment_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("submission_assignment.id", ondelete="CASCADE"), nullable=False)
     element_ref: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False)
@@ -1021,6 +1187,9 @@ class SystemErrorLog(Base):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
     source: Mapped[str] = mapped_column(Text, nullable=False)
     tenant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="SET NULL"))
     actor_email: Mapped[str | None] = mapped_column(Text)

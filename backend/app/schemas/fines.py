@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated, Literal
@@ -26,29 +27,29 @@ PositiveFineAmount = Annotated[Decimal, PlainSerializer(_decimal_to_json_float, 
 
 
 class AttendanceFineCreate(BaseModel):
-    protocol_id: int
-    participant_id: int | None = None
+    protocol_id: uuid.UUID
+    participant_id: uuid.UUID | None = None
     participant_name_snapshot: str
     fine_type: Literal["late", "absent"]
     amount: PositiveFineAmount
-    account_id: int
+    account_id: uuid.UUID
 
 
 class AttendanceFineRead(BaseModel):
-    model_config = {"from_attributes": True}
-
-    id: int
-    protocol_id: int
-    participant_id: int | None
+    # Built via explicit keyword construction (FinesRepository._to_read, a joined query
+    # row) - every FK field is resolved to a public_id there directly.
+    id: uuid.UUID
+    protocol_id: uuid.UUID
+    participant_id: uuid.UUID | None
     participant_name_snapshot: str
     fine_type: str
     amount: FinanceDecimal
-    account_id: int
+    account_id: uuid.UUID
     status: str
     collected_at: datetime | None
-    collected_transaction_id: int | None
-    closed_in_protocol_id: int | None = None
-    collected_by_user_id: int | None = None
+    collected_transaction_id: uuid.UUID | None
+    closed_in_protocol_id: uuid.UUID | None = None
+    collected_by_user_id: uuid.UUID | None = None
     collected_by_display_name: str | None = None
     can_reopen: bool = False
     created_at: datetime
@@ -61,4 +62,4 @@ class AttendanceFineListItem(AttendanceFineRead):
 
 
 class CollectFinePayload(BaseModel):
-    collecting_protocol_id: int | None = None
+    collecting_protocol_id: uuid.UUID | None = None

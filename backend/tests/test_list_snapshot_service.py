@@ -1,7 +1,8 @@
 """Tests for list_snapshot_service.py - the snapshot compute/refresh/undo/freeze logic
 backing the "Daten aktualisieren" hint on list-linked protocol blocks."""
+from app.models import ListEntry
 from app.schemas.list_definition import ListDefinitionUpdate, ListEntryCreate, ListEntryUpdate
-from app.services import list_snapshot_service
+from app.services import list_snapshot_service, public_id_service
 from app.services.list_service import ListService
 
 from tests.factories import (
@@ -21,7 +22,7 @@ def test_compute_whole_list_snapshot_shape(db):
     make_list_entry(db, definition.id, sort_index=0, column_one_value={"text_value": "a"})
     make_list_entry(db, definition.id, sort_index=1, column_one_value={"text_value": "b"})
 
-    snapshot = list_snapshot_service.compute_whole_list_snapshot(db, definition.id)
+    snapshot = list_snapshot_service.compute_whole_list_snapshot(db, definition.id, tenant.id)
 
     assert snapshot["synced_version"] == definition.content_version
     assert snapshot["column_one_title"] == definition.column_one_title
@@ -30,7 +31,8 @@ def test_compute_whole_list_snapshot_shape(db):
 
 
 def test_compute_whole_list_snapshot_returns_none_for_deleted_list(db):
-    assert list_snapshot_service.compute_whole_list_snapshot(db, 999_999_999) is None
+    tenant = make_tenant(db)
+    assert list_snapshot_service.compute_whole_list_snapshot(db, 999_999_999, tenant.id) is None
 
 
 def test_compute_row_list_snapshot_entry_exists(db):
@@ -38,7 +40,7 @@ def test_compute_row_list_snapshot_entry_exists(db):
     definition = make_list_definition(db, tenant.id)
     entry = make_list_entry(db, definition.id, column_one_value={"text_value": "hello"})
 
-    snapshot = list_snapshot_service.compute_row_list_snapshot(db, definition.id, entry.id)
+    snapshot = list_snapshot_service.compute_row_list_snapshot(db, definition.id, entry.id, tenant.id)
 
     assert snapshot["entry_exists"] is True
     assert snapshot["column_one_value"]["text_value"] == "hello"
@@ -49,7 +51,7 @@ def test_compute_row_list_snapshot_deleted_entry(db):
     tenant = make_tenant(db)
     definition = make_list_definition(db, tenant.id)
 
-    snapshot = list_snapshot_service.compute_row_list_snapshot(db, definition.id, 999_999_999)
+    snapshot = list_snapshot_service.compute_row_list_snapshot(db, definition.id, 999_999_999, tenant.id)
 
     assert snapshot["entry_exists"] is False
     assert snapshot["synced_version"] == definition.content_version
@@ -62,14 +64,15 @@ def test_content_version_bumps_on_entry_create_update_delete(db):
     v0 = definition.content_version
 
     created = service.create_entry(db, definition.id, ListEntryCreate(column_one_value={"text_value": "x"}))
+    created_internal_id = public_id_service.resolve_internal_id(db, ListEntry, created.id)
     v1 = db.get(type(definition), definition.id).content_version
     assert v1 == v0 + 1
 
-    service.update_entry(db, created.id, ListEntryUpdate(column_one_value={"text_value": "y"}))
+    service.update_entry(db, created_internal_id, ListEntryUpdate(column_one_value={"text_value": "y"}))
     v2 = db.get(type(definition), definition.id).content_version
     assert v2 == v1 + 1
 
-    service.delete_entry(db, created.id)
+    service.delete_entry(db, created_internal_id)
     v3 = db.get(type(definition), definition.id).content_version
     assert v3 == v2 + 1
 
@@ -119,7 +122,7 @@ def test_refresh_row_block_sets_snapshot_and_keeps_undo_one_level_deep(db):
     entry = make_list_entry(db, definition.id, column_one_value={"text_value": "v1"})
     _protocol, block = _protocol_with_list_row_block(db, tenant, definition, entry)
 
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, keep_undo=True)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=True)
     row = block.configuration_snapshot_json["rows"][0]
     assert row["list_snapshot"]["column_one_value"]["text_value"] == "v1"
     assert row["list_snapshot"]["previous"] is None  # nothing to stash the first time
@@ -128,7 +131,7 @@ def test_refresh_row_block_sets_snapshot_and_keeps_undo_one_level_deep(db):
     db.add(entry)
     db.commit()
 
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, keep_undo=True)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=True)
     row = block.configuration_snapshot_json["rows"][0]
     assert row["list_snapshot"]["column_one_value"]["text_value"] == "v2"
     assert row["list_snapshot"]["previous"]["column_one_value"]["text_value"] == "v1"
@@ -143,11 +146,11 @@ def test_silent_sync_never_overwrites_existing_previous(db):
 
     # First manual refresh with nothing to undo yet, then a real change + a second manual
     # refresh to establish a genuine undo point.
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, keep_undo=True)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=True)
     entry.column_one_value_json = {"text_value": "v2"}
     db.add(entry)
     db.commit()
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, keep_undo=True)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=True)
     assert block.configuration_snapshot_json["rows"][0]["list_snapshot"]["previous"]["column_one_value"]["text_value"] == "v1"
 
     # Now simulate a silent self-write sync (keep_undo=False) after further edits - the
@@ -155,7 +158,7 @@ def test_silent_sync_never_overwrites_existing_previous(db):
     entry.column_one_value_json = {"text_value": "v3"}
     db.add(entry)
     db.commit()
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, keep_undo=False)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=False)
     row = block.configuration_snapshot_json["rows"][0]
     assert row["list_snapshot"]["column_one_value"]["text_value"] == "v3"
     assert row["list_snapshot"]["previous"]["column_one_value"]["text_value"] == "v1"
@@ -167,11 +170,11 @@ def test_undo_restores_and_clears_previous(db):
     entry = make_list_entry(db, definition.id, column_one_value={"text_value": "v1"})
     _protocol, block = _protocol_with_list_row_block(db, tenant, definition, entry)
 
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, keep_undo=True)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=True)
     entry.column_one_value_json = {"text_value": "v2"}
     db.add(entry)
     db.commit()
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, keep_undo=True)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=True)
     assert block.configuration_snapshot_json["rows"][0]["list_snapshot"]["column_one_value"]["text_value"] == "v2"
 
     restored = list_snapshot_service.undo_block_list_snapshot(db, block)
@@ -185,7 +188,7 @@ def test_undo_returns_none_when_nothing_to_undo(db):
     definition = make_list_definition(db, tenant.id)
     entry = make_list_entry(db, definition.id, column_one_value={"text_value": "v1"})
     _protocol, block = _protocol_with_list_row_block(db, tenant, definition, entry)
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, keep_undo=True)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=True)
 
     assert list_snapshot_service.undo_block_list_snapshot(db, block) is None
 
@@ -196,14 +199,14 @@ def test_freeze_updates_version_and_clears_previous(db):
     entry = make_list_entry(db, definition.id, column_one_value={"text_value": "v1"})
     protocol, block = _protocol_with_list_row_block(db, tenant, definition, entry)
 
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, keep_undo=True)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=True)
     entry.column_one_value_json = {"text_value": "v2"}
     db.add(entry)
     db.commit()
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, keep_undo=True)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=True)
     assert block.configuration_snapshot_json["rows"][0]["list_snapshot"]["previous"] is not None
 
-    list_snapshot_service.freeze_list_snapshots_for_protocol(db, protocol.id)
+    list_snapshot_service.freeze_list_snapshots_for_protocol(db, protocol.id, tenant.id)
     frozen = db.get(type(block), block.id)
     row = frozen.configuration_snapshot_json["rows"][0]
     assert row["list_snapshot"]["column_one_value"]["text_value"] == "v2"

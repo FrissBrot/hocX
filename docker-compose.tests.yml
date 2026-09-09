@@ -1,0 +1,125 @@
+services:
+  test-db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: hocx_test
+      POSTGRES_USER: hocx_test
+      POSTGRES_PASSWORD: hocx_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hocx_test -d hocx_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+    profiles: [tests]
+
+  test-redis:
+    image: redis:7-alpine
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+    profiles: [tests]
+
+  test-migrations:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.test
+    environment:
+      DATABASE_URL: postgresql+psycopg://hocx_test:hocx_test@test-db:5432/hocx_test
+      POSTGRES_DB: hocx_test
+      POSTGRES_USER: hocx_test
+      APP_DB_PASSWORD: hocx_app_test
+      ABGABEBOX_DB_PASSWORD: hocx_abgabebox_test
+      # 32+ chars required by app/core/config.py's startup check - the old value here was
+      # only 27 chars and made the whole `tests` profile fail closed on boot (found while
+      # fixing the MFA/rate-limit findings, which made this path exercise AUTH_SECRET-gated
+      # code more than before).
+      AUTH_SECRET: test-auth-secret-0123456789-not-a-real-secret
+      ADMIN_AUTH_SECRET: test-admin-auth-secret-0123456789
+    depends_on:
+      test-db:
+        condition: service_healthy
+    command: alembic -x seed_demo=true upgrade head
+    profiles: [tests]
+
+  backend-test:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.test
+    environment:
+      DATABASE_URL: postgresql+psycopg://hocx_test:hocx_test@test-db:5432/hocx_test
+      AUTH_SECRET: test-auth-secret-0123456789-not-a-real-secret
+      ADMIN_AUTH_SECRET: test-admin-auth-secret-0123456789
+      STORAGE_ROOT: /tmp/hocx-test-storage
+      EXPORT_ROOT: /tmp/hocx-test-storage/exports
+      UPLOAD_ROOT: /tmp/hocx-test-storage/uploads
+      LATEX_TEMPLATE_ROOT: /tmp/hocx-test-storage/latex_templates
+      # Account-lockout/rate-limit primitives (login, MFA verify, password-change,
+      # tenant-by-domain lookup) are Redis-backed - without this service the whole
+      # `tests` profile could only ever pass by pointing at an ad-hoc container
+      # started by hand outside the compose file.
+      REDIS_URL: redis://test-redis:6379/0
+    depends_on:
+      test-migrations:
+        condition: service_completed_successfully
+      test-redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    profiles: [tests]
+
+  abgabebox-backend-test:
+    build:
+      context: ./abgabebox-backend
+      dockerfile: Dockerfile.test
+    environment:
+      ABGABEBOX_DATABASE_URL: postgresql+psycopg://hocx_abgabebox:hocx_abgabebox_test@test-db:5432/hocx_test
+      ABGABEBOX_STORAGE_ROOT: /tmp/hocx-abgabebox-test-storage
+      ABGABEBOX_CAPTCHA_SESSION_SECRET: test-captcha-secret-0123456789
+      # Coordination note, 2026-08-27: new setting from abgabebox-backend/app/config.py -
+      # controls CAPTCHA fail-open (dev/test) vs fail-closed (default/production) behavior.
+      # No real FriendlyCaptcha keys are configured for this profile, so this must be an
+      # accepted dev/test value or every upload test gets rejected fail-closed.
+      ABGABEBOX_ENVIRONMENT: test
+    depends_on:
+      test-migrations:
+        condition: service_completed_successfully
+    volumes:
+      - ./abgabebox-backend:/app
+      # Repository-wide contract/config tests in abgabebox-backend need these
+      # sibling files at the absolute paths derived from /app/tests/*.py.
+      - ./backend/tests/fixtures:/backend/tests/fixtures:ro
+      - ./docker-compose.yml:/docker-compose.yml:ro
+      - ./docker-compose.release.yml:/docker-compose.release.yml:ro
+    profiles: [tests]
+
+  frontend-test:
+    image: node:22-bookworm-slim
+    working_dir: /app
+    environment:
+      CI: "true"
+    volumes:
+      - ./frontend:/app
+      - frontend-test-node-modules:/app/node_modules
+    command: sh -c "npm ci --no-audit --no-fund && npm test"
+    profiles: [tests]
+
+  abgabebox-frontend-test:
+    image: node:22-bookworm-slim
+    working_dir: /app
+    environment:
+      CI: "true"
+    volumes:
+      - ./abgabebox-frontend:/app
+      - abgabebox-frontend-test-node-modules:/app/node_modules
+    command: sh -c "npm ci --no-audit --no-fund && npm test"
+    profiles: [tests]
+
+volumes:
+  frontend-test-node-modules:
+  abgabebox-frontend-test-node-modules:

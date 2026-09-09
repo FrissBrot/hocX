@@ -1,24 +1,24 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.base import PublicIdModel
 from app.schemas.user import SessionRead
 
 
 MfaFactorType = Literal["totp", "webauthn"]
 
 
-class MfaFactorRead(BaseModel):
-    id: int
+class MfaFactorRead(PublicIdModel):
+    id: uuid.UUID
     factor_type: MfaFactorType
     label: str
     created_at: datetime
     last_used_at: datetime | None = None
-
-    model_config = {"from_attributes": True}
 
 
 class UserMfaRead(BaseModel):

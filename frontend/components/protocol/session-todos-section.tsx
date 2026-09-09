@@ -12,7 +12,7 @@ type DueDraft =
   | { type: "none" }
   | { type: "date"; date: string }
   | { type: "next_session" }
-  | { type: "event"; eventId: number; eventTitle: string };
+  | { type: "event"; eventId: string; eventTitle: string };
 
 export function SessionTodosSection({
   sectionTag,
@@ -37,11 +37,11 @@ export function SessionTodosSection({
   participants: ParticipantSummary[];
   dueEvents: EventSummary[];
   protocol: ProtocolSummary;
-  onUpdate: (blockId: number, todoId: number, patch: Partial<ProtocolTodo>) => Promise<void>;
-  onDelete: (blockId: number, todoId: number) => Promise<void>;
-  onPendingUpdate: (updated: Partial<TodoListItem> & { id: number }) => void;
-  onPendingDone: (todoId: number) => void;
-  onAcceptTrackedChange?: (blockId: number, todoId: number) => void;
+  onUpdate: (blockId: string, todoId: string, patch: Partial<ProtocolTodo>) => Promise<void>;
+  onDelete: (blockId: string, todoId: string) => Promise<void>;
+  onPendingUpdate: (updated: Partial<TodoListItem> & { id: string }) => void;
+  onPendingDone: (todoId: string) => void;
+  onAcceptTrackedChange?: (blockId: string, todoId: string) => void;
 }) {
   const showToast = useToast();
   if (todos.length === 0 && pendingTodos.length === 0) return null;

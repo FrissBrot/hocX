@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, aliased
 from app.models.entities import AppUser, AttendanceFine, FinanceAccount, FinanceTransaction, Participant, Protocol
 from app.repositories.protocol_repository import ProtocolRepository
 from app.schemas.fines import AttendanceFineCreate, AttendanceFineListItem, AttendanceFineRead
+from app.services import public_id_service
 
 ClosedProtocol = aliased(Protocol)
 
@@ -50,7 +51,7 @@ class FinesRepository:
             .offset(skip)
             .limit(limit)
         ).all()
-        return [self._to_list_item(row) for row in rows]
+        return [self._to_list_item(db, row) for row in rows]
 
     def list_fines_for_protocols(
         self, db: Session, tenant_id: int, protocol_ids: list[int], skip: int = 0, limit: int = 50
@@ -64,7 +65,25 @@ class FinesRepository:
             .offset(skip)
             .limit(limit)
         ).all()
-        return [self._to_list_item(row) for row in rows]
+        return [self._to_list_item(db, row) for row in rows]
+
+    def list_fines_for_user(
+        self, db: Session, tenant_id: int, user_id: int, skip: int = 0, limit: int = 50
+    ) -> list[AttendanceFineListItem]:
+        """Return only fines belonging to participant records linked to this account."""
+        rows = db.execute(
+            self._base_query()
+            .join(Participant, Participant.id == AttendanceFine.participant_id)
+            .where(
+                Protocol.tenant_id == tenant_id,
+                Participant.tenant_id == tenant_id,
+                Participant.app_user_id == user_id,
+            )
+            .order_by(AttendanceFine.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        ).all()
+        return [self._to_list_item(db, row) for row in rows]
 
     def list_pending_fines_for_protocol(self, db: Session, protocol_id: int, tenant_id: int) -> list[AttendanceFineListItem]:
         """Fines from other protocols relevant to this protocol:
@@ -90,7 +109,7 @@ class FinesRepository:
             )
             .order_by(Protocol.protocol_date.asc(), AttendanceFine.created_at.asc())
         ).all()
-        return [self._to_list_item(row) for row in rows]
+        return [self._to_list_item(db, row) for row in rows]
 
     def list_fines_for_protocol(self, db: Session, protocol_id: int, tenant_id: int) -> list[AttendanceFineRead]:
         rows = db.execute(
@@ -98,10 +117,7 @@ class FinesRepository:
             .where(AttendanceFine.protocol_id == protocol_id, Protocol.tenant_id == tenant_id)
             .order_by(AttendanceFine.created_at.asc())
         ).all()
-        return [self._to_read(row) for row in rows]
-
-    def get_fine(self, db: Session, fine_id: int) -> AttendanceFine | None:
-        return db.get(AttendanceFine, fine_id)
+        return [self._to_read(db, row) for row in rows]
 
     def find_existing_fine(
         self,
@@ -134,25 +150,38 @@ class FinesRepository:
         Raises DuplicateFineError if an identical fine (same protocol/participant/fine_type)
         already exists (M18, 2026-08-12 audit: find_existing_fine used to be dead code, so a
         user could create the same Busse for the same participant/protocol any number of times)."""
-        protocol = db.get(Protocol, payload.protocol_id)
-        if protocol is None or protocol.tenant_id != tenant_id:
+        # Row-locks the protocol for the rest of this transaction (audit finding,
+        # 2026-08-25): create_fine has no existing AttendanceFine row of its own to lock
+        # (unlike collect_fine/delete_fine/reopen_fine, this is an INSERT, not an UPDATE of
+        # a known row), so two near-simultaneous requests for the same
+        # protocol/participant/fine_type could otherwise both pass find_existing_fine's
+        # empty duplicate check before either has committed its INSERT. Locking the parent
+        # protocol row serializes concurrent create_fine calls for the same protocol instead.
+        protocol_internal_id = public_id_service.resolve_internal_id(db, Protocol, payload.protocol_id, tenant_id=tenant_id)
+        if protocol_internal_id is None:
+            return None
+        protocol = db.execute(
+            select(Protocol).where(Protocol.id == protocol_internal_id).with_for_update()
+        ).scalar_one_or_none()
+        if protocol is None:
             return None
         # Freeze-Schutz (audit S6, 2026-08-16): finalized protocols are immutable snapshots
         # everywhere else in this codebase (see reopen_fine's identical check below) - a new
         # Busse retroactively added to one would silently change that historical record.
         if protocol.status == "abgeschlossen":
             return None
-        account = db.get(FinanceAccount, payload.account_id)
-        if account is None or account.tenant_id != tenant_id:
+        account_internal_id = public_id_service.resolve_internal_id(db, FinanceAccount, payload.account_id, tenant_id=tenant_id)
+        if account_internal_id is None:
             return None
+        participant_internal_id: int | None = None
         if payload.participant_id is not None:
-            participant = db.get(Participant, payload.participant_id)
-            if participant is None or participant.tenant_id != tenant_id:
+            participant_internal_id = public_id_service.resolve_internal_id(db, Participant, payload.participant_id, tenant_id=tenant_id)
+            if participant_internal_id is None:
                 return None
         if self.find_existing_fine(
             db,
-            payload.protocol_id,
-            payload.participant_id,
+            protocol_internal_id,
+            participant_internal_id,
             payload.fine_type,
             participant_name_snapshot=payload.participant_name_snapshot,
         ) is not None:
@@ -160,12 +189,12 @@ class FinesRepository:
                 f"Fuer {payload.participant_name_snapshot} existiert in diesem Protokoll bereits eine Busse vom Typ '{payload.fine_type}'"
             )
         fine = AttendanceFine(
-            protocol_id=payload.protocol_id,
-            participant_id=payload.participant_id,
+            protocol_id=protocol_internal_id,
+            participant_id=participant_internal_id,
             participant_name_snapshot=payload.participant_name_snapshot,
             fine_type=payload.fine_type,
             amount=payload.amount,
-            account_id=payload.account_id,
+            account_id=account_internal_id,
             status="pending",
         )
         db.add(fine)
@@ -233,6 +262,14 @@ class FinesRepository:
         effective_protocol_id = collecting_protocol_id
         if effective_protocol_id is None:
             effective_protocol_id = self._next_open_protocol_id(db, tenant_id)
+        elif effective_protocol_id != fine.protocol_id:
+            # collecting_protocol_id is client-supplied - without this check a writer could
+            # point closed_in_protocol_id at an arbitrary (possibly cross-tenant, possibly
+            # permanently-open) protocol, which reopen_fine's freeze check below would then
+            # trust instead of the fine's actual origin protocol (audit finding, 2026-08-25).
+            collecting_protocol = db.get(Protocol, effective_protocol_id)
+            if collecting_protocol is None or collecting_protocol.tenant_id != tenant_id:
+                return None
 
         now = datetime.now(timezone.utc)
         tx = FinanceTransaction(
@@ -258,11 +295,24 @@ class FinesRepository:
         """Reverts a collected fine back to pending and removes the finance transaction it
         created - blocked once the protocol tracking the collection is finalized (abgeschlossen),
         since finalized protocols are immutable snapshots."""
-        fine = db.get(AttendanceFine, fine_id)
+        # Row-locked for the rest of this transaction, same as collect_fine/delete_fine -
+        # without this, two near-simultaneous reopen requests for the same fine could both
+        # read status == "collected" and both proceed, each deleting a finance transaction
+        # and resetting the fine (audit finding, 2026-08-25).
+        fine = db.execute(
+            select(AttendanceFine).where(AttendanceFine.id == fine_id).with_for_update()
+        ).scalar_one_or_none()
         if fine is None or fine.status != "collected":
             return None
         origin_protocol = db.get(Protocol, fine.protocol_id)
         if origin_protocol is None or origin_protocol.tenant_id != tenant_id:
+            return None
+        # Freeze-Schutz must hold for the fine's actual origin protocol regardless of which
+        # protocol it was collected/closed in - collect_fine's collecting_protocol_id is a
+        # separate, independently-abgeschlossen-able protocol, and checking only that one
+        # let a still-open collecting_protocol_id reopen a fine whose own origin protocol had
+        # since been abgeschlossen (audit finding, 2026-08-25).
+        if origin_protocol.status == "abgeschlossen":
             return None
 
         tracking_protocol_id = fine.closed_in_protocol_id or fine.protocol_id
@@ -285,30 +335,38 @@ class FinesRepository:
 
     def _get_read(self, db: Session, fine_id: int) -> AttendanceFineRead:
         row = db.execute(self._base_query().where(AttendanceFine.id == fine_id)).one()
-        return self._to_read(row)
+        return self._to_read(db, row)
 
-    def _to_read(self, row) -> AttendanceFineRead:
+    def _to_read(self, db: Session, row) -> AttendanceFineRead:
         fine, _protocol_number, _protocol_date, _currency_label, collected_by_display_name, tracking_protocol_status = row
         return AttendanceFineRead(
-            id=fine.id,
-            protocol_id=fine.protocol_id,
-            participant_id=fine.participant_id,
+            id=fine.public_id,
+            protocol_id=public_id_service.resolve_public_id(db, Protocol, fine.protocol_id),
+            participant_id=public_id_service.resolve_public_id(db, Participant, fine.participant_id)
+            if fine.participant_id is not None
+            else None,
             participant_name_snapshot=fine.participant_name_snapshot,
             fine_type=fine.fine_type,
             amount=fine.amount,
-            account_id=fine.account_id,
+            account_id=public_id_service.resolve_public_id(db, FinanceAccount, fine.account_id),
             status=fine.status,
             collected_at=fine.collected_at,
-            collected_transaction_id=fine.collected_transaction_id,
-            closed_in_protocol_id=fine.closed_in_protocol_id,
-            collected_by_user_id=fine.collected_by_user_id,
+            collected_transaction_id=public_id_service.resolve_public_id(db, FinanceTransaction, fine.collected_transaction_id)
+            if fine.collected_transaction_id is not None
+            else None,
+            closed_in_protocol_id=public_id_service.resolve_public_id(db, Protocol, fine.closed_in_protocol_id)
+            if fine.closed_in_protocol_id is not None
+            else None,
+            collected_by_user_id=public_id_service.resolve_public_id(db, AppUser, fine.collected_by_user_id)
+            if fine.collected_by_user_id is not None
+            else None,
             collected_by_display_name=collected_by_display_name,
             can_reopen=fine.status == "collected" and tracking_protocol_status != "abgeschlossen",
             created_at=fine.created_at,
         )
 
-    def _to_list_item(self, row) -> AttendanceFineListItem:
-        base = self._to_read(row)
+    def _to_list_item(self, db: Session, row) -> AttendanceFineListItem:
+        base = self._to_read(db, row)
         _fine, protocol_number, protocol_date, currency_label, *_ = row
         return AttendanceFineListItem(
             **base.model_dump(),

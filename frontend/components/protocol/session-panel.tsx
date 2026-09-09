@@ -2,6 +2,7 @@
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { browserApiFetch } from "@/lib/api/client";
+import { clearDraft, queueMutation, readDraft, removeMutation, saveDraft } from "@/lib/offline-store";
 import { useToast } from "@/contexts/toast-context";
 import { formatDateRange } from "@/lib/utils/format";
 import { NavIcon } from "@/components/ui/nav-icons";
@@ -10,7 +11,7 @@ import { EventSummary, ParticipantSummary, ProtocolSummary } from "@/types/api";
 type DueDraft =
   | { type: "none" }
   | { type: "next_session" }
-  | { type: "event"; eventId: number; eventTitle: string };
+  | { type: "event"; eventId: string; eventTitle: string };
 
 type SessionPanelProps = {
   protocol: ProtocolSummary;
@@ -18,12 +19,13 @@ type SessionPanelProps = {
   dueEvents?: EventSummary[];
   currentSectionName?: string | null;
   onSessionNotesChange?: (notes: string) => void;
-  onQuickTodoCreated?: (blockId: number, todoId: number, elementId: number) => void;
+  onQuickTodoCreated?: (blockId: string, todoId: string, elementId: string) => void;
 };
 
 export type SessionPanelHandle = {
-  openAndFocusTodo: () => void;
-  openAndFocusNotes: () => void;
+  openTodo: (focus?: boolean) => void;
+  openNotes: (focus?: boolean) => void;
+  scheduleClose: () => void;
   close: () => void;
 };
 
@@ -39,10 +41,33 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
     const [todoTag, setTodoTag] = useState(currentSectionName ?? "Sitzungsnotizen");
     const [creatingTodo, setCreatingTodo] = useState(false);
     const [todoSaved, setTodoSaved] = useState(false);
+    const [openedByHover, setOpenedByHover] = useState(false);
+    const notesMutationKey = `protocol-notes:${protocol.id}`;
+    const notesServerValueRef = useRef(protocol.session_notes ?? "");
+    const latestNotesRef = useRef(notes);
+    latestNotesRef.current = notes;
+
+    useEffect(() => {
+      const draft = readDraft(notesMutationKey);
+      if (draft !== null && draft !== (protocol.session_notes ?? "")) {
+        setNotes(draft);
+        setNotesSaveState("error");
+        showToast("Lokaler Entwurf der Sitzungsnotizen wurde wiederhergestellt.", "info");
+      }
+      const flushed = (event: Event) => {
+        if ((event as CustomEvent<{ key?: string }>).detail?.key !== notesMutationKey) return;
+        clearDraft(notesMutationKey);
+        notesServerValueRef.current = latestNotesRef.current;
+        setNotesSaveState("saved");
+      };
+      window.addEventListener("hocx:mutation-flushed", flushed);
+      return () => window.removeEventListener("hocx:mutation-flushed", flushed);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [protocol.id]);
 
     // Assignee selection state
     const [assigneeSearch, setAssigneeSearch] = useState("");
-    const [assigneeId, setAssigneeId] = useState<number | null>(null);
+    const [assigneeId, setAssigneeId] = useState<string | null>(null);
     const [assigneeConfirmed, setAssigneeConfirmed] = useState(false);
     const [assigneeHighlighted, setAssigneeHighlighted] = useState(0);
 
@@ -58,23 +83,61 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
     const dueInputRef = useRef<HTMLInputElement | null>(null);
     const assigneeInputRef = useRef<HTMLInputElement | null>(null);
     const notesRef = useRef<HTMLTextAreaElement | null>(null);
+    const openedByHoverRef = useRef(false);
+
+    const setHoverMode = useCallback((value: boolean) => {
+      openedByHoverRef.current = value;
+      setOpenedByHover(value);
+    }, []);
+
+    const scheduleClose = useCallback(() => {
+      if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current);
+      leaveTimerRef.current = window.setTimeout(() => {
+        if (openedByHoverRef.current) setActive(null);
+      }, 300);
+    }, []);
 
     useImperativeHandle(ref, () => ({
-      openAndFocusTodo() {
+      openTodo(focus = true) {
         if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current);
+        setHoverMode(!focus);
         setActive("todo");
-        window.setTimeout(() => todoInputRef.current?.focus(), 60);
+        if (focus) window.setTimeout(() => todoInputRef.current?.focus(), 60);
       },
-      openAndFocusNotes() {
+      openNotes(focus = true) {
         if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current);
+        setHoverMode(!focus);
         setActive("notes");
-        window.setTimeout(() => notesRef.current?.focus(), 60);
+        if (focus) window.setTimeout(() => notesRef.current?.focus(), 60);
+      },
+      scheduleClose() {
+        scheduleClose();
       },
       close() {
         if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current);
+        setHoverMode(false);
         setActive(null);
       },
-    }));
+    }), [scheduleClose, setHoverMode]);
+
+    // A flyout can appear between two pointer events, which means browsers do not always
+    // emit the mouse-leave sequence we would expect. While it was opened by hovering,
+    // observe the actual pointer target and close once neither toolbar nor flyout is under it.
+    useEffect(() => {
+      if (!openedByHover || !active) return;
+      const handlePointerMove = (event: PointerEvent) => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+        const insideQuickMenu = target.closest(".protocol-quick-actions, .quick-flyout-open");
+        if (insideQuickMenu) {
+          if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current);
+        } else {
+          scheduleClose();
+        }
+      };
+      document.addEventListener("pointermove", handlePointerMove);
+      return () => document.removeEventListener("pointermove", handlePointerMove);
+    }, [active, openedByHover, scheduleClose]);
 
     useEffect(() => {
       setNotes(protocol.session_notes ?? "");
@@ -120,25 +183,55 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
       return "";
     }
 
+    // Unlike every other debounce timer in this codebase, this one was never cleared on
+    // unmount (audit finding, 2026-08-25) - typing into the notes field and navigating
+    // away within the 700ms debounce window let the pending callback fire afterwards
+    // anyway, calling setState on an already-unmounted component and firing an unwanted
+    // PATCH request.
+    useEffect(() => {
+      return () => {
+        if (notesTimerRef.current) window.clearTimeout(notesTimerRef.current);
+        if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current);
+      };
+    }, []);
+
     const saveNotes = useCallback(
       (value: string) => {
+        const expectedSessionNotes = notesServerValueRef.current;
+        saveDraft(notesMutationKey, value);
+        queueMutation({
+          key: notesMutationKey,
+          path: `/api/protocols/${protocol.id}`,
+          method: "PATCH",
+          body: JSON.stringify({ session_notes: value, expected_session_notes: expectedSessionNotes }),
+        });
         if (notesTimerRef.current) window.clearTimeout(notesTimerRef.current);
         setNotesSaveState("saving");
         notesTimerRef.current = window.setTimeout(async () => {
           try {
-            await browserApiFetch(`/api/protocols/${protocol.id}`, {
+            const updated = await browserApiFetch<ProtocolSummary>(`/api/protocols/${protocol.id}`, {
               method: "PATCH",
-              body: JSON.stringify({ session_notes: value }),
+              body: JSON.stringify({ session_notes: value, expected_session_notes: expectedSessionNotes }),
             });
+            notesServerValueRef.current = updated.session_notes ?? "";
             setNotesSaveState("saved");
+            clearDraft(notesMutationKey);
+            removeMutation(notesMutationKey);
             onSessionNotesChange?.(value);
             window.setTimeout(() => setNotesSaveState("idle"), 1800);
-          } catch {
+          } catch (error) {
             setNotesSaveState("error");
+            queueMutation({
+              key: notesMutationKey,
+              path: `/api/protocols/${protocol.id}`,
+              method: "PATCH",
+              body: JSON.stringify({ session_notes: value, expected_session_notes: expectedSessionNotes }),
+              lastError: error instanceof Error ? error.message : "Notizen konnten nicht gespeichert werden",
+            });
           }
         }, 700);
       },
-      [protocol.id, onSessionNotesChange]
+      [protocol.id, onSessionNotesChange, notesMutationKey]
     );
 
     const handleNotesChange = (value: string) => {
@@ -151,7 +244,7 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
       if (!task) return;
       setCreatingTodo(true);
       try {
-        const result = await browserApiFetch<{ block_id: number; todo_id: number; element_id: number }>(
+        const result = await browserApiFetch<{ block_id: string; todo_id: string; element_id: string }>(
           `/api/protocols/${protocol.id}/quick-todos`,
           {
             method: "POST",
@@ -303,6 +396,10 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
     };
 
     const handleMouseLeave = () => {
+      if (openedByHoverRef.current) {
+        scheduleClose();
+        return;
+      }
       leaveTimerRef.current = window.setTimeout(() => {
         const activeEl = document.activeElement;
         const stillEditing =

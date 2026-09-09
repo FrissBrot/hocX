@@ -2,6 +2,8 @@
 must reject a linked_list_id (whole-list top-level or any rows[].linked_list_id row-link) in
 configuration_json that references a nonexistent or cross-tenant ListDefinition, instead of
 storing it silently and only failing much later when a protocol snapshot tries to resolve it."""
+import uuid
+
 import pytest
 
 from app.schemas.template import TemplateElementCreate, TemplateElementUpdate
@@ -37,9 +39,9 @@ def test_create_template_element_rejects_foreign_tenant_linked_list(db):
 
     service = TemplateElementService()
     payload = TemplateElementCreate(
-        element_definition_id=definition.id,
+        element_definition_id=definition.public_id,
         sort_index=10,
-        configuration_json={"linked_list_id": foreign_list.id},
+        configuration_json={"linked_list_id": foreign_list.public_id},
     )
 
     with pytest.raises(ValueError):
@@ -53,9 +55,9 @@ def test_create_template_element_rejects_nonexistent_linked_list(db):
 
     service = TemplateElementService()
     payload = TemplateElementCreate(
-        element_definition_id=definition.id,
+        element_definition_id=definition.public_id,
         sort_index=10,
-        configuration_json={"linked_list_id": 999999},
+        configuration_json={"linked_list_id": str(uuid.uuid4())},
     )
 
     with pytest.raises(ValueError):
@@ -70,14 +72,14 @@ def test_create_template_element_accepts_same_tenant_linked_list(db):
 
     service = TemplateElementService()
     payload = TemplateElementCreate(
-        element_definition_id=definition.id,
+        element_definition_id=definition.public_id,
         sort_index=10,
-        configuration_json={"linked_list_id": own_list.id},
+        configuration_json={"linked_list_id": own_list.public_id},
     )
 
     result = service.create_template_element(db, template.id, payload)
 
-    assert result.configuration_json.get("linked_list_id") == own_list.id
+    assert result.configuration_json.get("linked_list_id") == own_list.public_id
 
 
 def test_update_template_element_rejects_foreign_tenant_linked_list_in_rows(db):
@@ -103,8 +105,8 @@ def test_update_template_element_accepts_same_tenant_linked_list(db):
     own_list = make_list_definition(db, tenant.id, "Eigene Liste")
 
     service = TemplateElementService()
-    payload = TemplateElementUpdate(configuration_json={"linked_list_id": own_list.id})
+    payload = TemplateElementUpdate(configuration_json={"linked_list_id": own_list.public_id})
 
     result = service.update_template_element(db, template_element.id, payload)
 
-    assert result.configuration_json.get("linked_list_id") == own_list.id
+    assert result.configuration_json.get("linked_list_id") == own_list.public_id

@@ -1,0 +1,17 @@
+title = "hocX secret & sensitive-data scan"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "hocx-personal-domain"
+description = "Private/production domain or real tenant identifiers that must never be committed"
+regex = '''(?i)(tweber\.ch|jwsachseln\.ch)'''
+tags = ["hocx", "pii"]
+
+[allowlist]
+description = "Known-safe local dev fixtures"
+regexes = [
+  '''ChangeMe123!''',
+  '''POSTGRES_PASSWORD:\s*ci''',
+]

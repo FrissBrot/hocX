@@ -82,7 +82,7 @@ def test_element_is_open_when_nothing_uploaded_yet(db):
     elements = service.get_assignment_elements(db, assignment)
 
     assert len(elements) == 1
-    assert elements[0].element_ref == f"entry-{entry.id}"
+    assert elements[0].element_ref == f"entry-{entry.public_id}"
     assert elements[0].status == "open"
     assert elements[0].files == []
 
@@ -95,7 +95,7 @@ def test_element_is_submitted_with_files_after_upload(db):
     elements = service.get_assignment_elements(db, assignment)
 
     assert elements[0].status == "submitted"
-    assert elements[0].upload_id == upload.id
+    assert elements[0].upload_id == upload.public_id
     assert len(elements[0].files) == 1
     assert elements[0].files[0].original_name == "foto.pdf"
 
@@ -112,7 +112,7 @@ def test_element_stays_open_for_further_uploads_without_being_closed(db):
     elements = service.get_assignment_elements(db, assignment)
 
     assert elements[0].status == "submitted"
-    assert elements[0].upload_id == second.id
+    assert elements[0].upload_id == second.public_id
     names = {f.original_name for f in elements[0].files}
     assert names == {"foto-v1.pdf", "foto-v2.pdf"}
 
@@ -125,7 +125,7 @@ def test_close_element_marks_it_closed_and_keeps_existing_files(db):
     _make_submitted_upload(db, assignment_id=assignment.id, list_entry_id=entry.id, tenant_id=tenant.id, filename="foto.pdf")
     service = SubmissionService()
 
-    element = service.close_element(db, assignment, f"entry-{entry.id}")
+    element = service.close_element(db, assignment, f"entry-{entry.public_id}")
 
     assert element.status == "closed"
     assert len(element.files) == 1
@@ -138,7 +138,7 @@ def test_close_element_works_even_when_nothing_was_ever_submitted(db):
     tenant, assignment, entry = _setup(db)
     service = SubmissionService()
 
-    element = service.close_element(db, assignment, f"entry-{entry.id}")
+    element = service.close_element(db, assignment, f"entry-{entry.public_id}")
 
     assert element.status == "closed"
     assert element.files == []
@@ -147,10 +147,10 @@ def test_close_element_works_even_when_nothing_was_ever_submitted(db):
 def test_close_element_fails_when_already_closed(db):
     tenant, assignment, entry = _setup(db)
     service = SubmissionService()
-    service.close_element(db, assignment, f"entry-{entry.id}")
+    service.close_element(db, assignment, f"entry-{entry.public_id}")
 
     with pytest.raises(ValueError, match="bereits geschlossen"):
-        service.close_element(db, assignment, f"entry-{entry.id}")
+        service.close_element(db, assignment, f"entry-{entry.public_id}")
 
 
 def test_reopen_element_fails_when_not_closed(db):
@@ -158,7 +158,7 @@ def test_reopen_element_fails_when_not_closed(db):
     service = SubmissionService()
 
     with pytest.raises(ValueError, match="nicht geschlossen"):
-        service.reopen_element(db, assignment, f"entry-{entry.id}")
+        service.reopen_element(db, assignment, f"entry-{entry.public_id}")
 
 
 def test_reopen_element_keeps_files_unlike_pre_2026_08_17_behavior(db):
@@ -166,9 +166,9 @@ def test_reopen_element_keeps_files_unlike_pre_2026_08_17_behavior(db):
     old_upload = _make_submitted_upload(db, assignment_id=assignment.id, list_entry_id=entry.id, tenant_id=tenant.id, filename="foto-v1.pdf")
     stored_file_id = db.scalar(select(SubmissionUploadFile.stored_file_id).where(SubmissionUploadFile.upload_id == old_upload.id))
     service = SubmissionService()
-    service.close_element(db, assignment, f"entry-{entry.id}")
+    service.close_element(db, assignment, f"entry-{entry.public_id}")
 
-    element = service.reopen_element(db, assignment, f"entry-{entry.id}")
+    element = service.reopen_element(db, assignment, f"entry-{entry.public_id}")
 
     assert element.status == "submitted"
     assert len(element.files) == 1
@@ -271,7 +271,7 @@ def test_list_assignment_without_deadline_is_accepted(db):
     service = SubmissionService()
     payload = SubmissionAssignmentCreate(
         title="Ohne Deadline", public_slug="ohne-deadline", source_type="list",
-        list_definition_id=list_definition.id, deadline=None,
+        list_definition_id=list_definition.public_id, deadline=None,
     )
 
     created = service.create_assignment(db, payload, tenant_id=tenant.id)
@@ -302,7 +302,7 @@ def test_count_submissions_summary_ignores_closed_element_with_no_files(db):
     as 'submitted' in the assignment summary bar - only elements with an actual file do."""
     tenant, assignment, entry = _setup(db)
     service = SubmissionService()
-    service.close_element(db, assignment, f"entry-{entry.id}")
+    service.close_element(db, assignment, f"entry-{entry.public_id}")
 
     counts = service.repository.count_submissions_summary(db, assignment_id=assignment.id)
 

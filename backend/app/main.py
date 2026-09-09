@@ -13,8 +13,10 @@ from app.core.config import settings
 from app.core.error_log import best_effort_actor_from_request, record_system_error
 from app.core.redis_client import close_redis_pool
 from app.core.security import hash_password
-from app.models import ElementType, PlatformAdmin, Role, Tenant
+from app.models import AppUser, ElementType, PlatformAdmin, Role, Tenant
 from app.services import domain_health_check_service, traefik_config_service
+from app.services.admin_error_log_service import AdminErrorLogService
+from app.services.audit_service import AuditService
 from app.services.submission_service import SubmissionService
 from app.services.document_template_service import DocumentTemplateService
 from app.services.export_service import ExportService
@@ -62,6 +64,41 @@ def ensure_platform_admin_bootstrap() -> None:
             )
         )
         db.commit()
+
+
+def ensure_no_production_demo_data() -> None:
+    """Fail closed if legacy/accidentally seeded demo identities remain in production."""
+    if not settings.is_production:
+        return
+    demo_emails = {
+        "superadmin@hocx.local",
+        "admin@hocx.local",
+        "writer@hocx.local",
+        "reader@hocx.local",
+    }
+    with SessionLocal() as db:
+        active = set(
+            db.scalars(
+                select(AppUser.email).where(
+                    AppUser.is_active.is_(True),
+                    AppUser.email.in_(demo_emails),
+                )
+            )
+        )
+        demo_tenants = set(
+            db.scalars(
+                select(Tenant.name).where(
+                    Tenant.name.in_({"hocX Workspace", "Regional Workspace"})
+                )
+            )
+        )
+    if active or demo_tenants:
+        raise RuntimeError(
+            "Production startup blocked: local demo identities exist: accounts="
+            + ",".join(sorted(active))
+            + "; tenants="
+            + ",".join(sorted(demo_tenants))
+        )
 
 
 def ensure_startup_seed_data() -> None:
@@ -201,6 +238,29 @@ async def gallery_upload_rescan_loop() -> None:
         await asyncio.sleep(interval_seconds)
 
 
+async def protocol_image_rescan_loop() -> None:
+    """Periodic sweep for protocol-image StoredFile rows stuck in scan_status='pending'
+    (ClamAV was unreachable at upload time - see file_service.py's save_protocol_image,
+    which previously never scanned protocol images at all). Same every-worker-but-
+    advisory-locked pattern as the loops above; reuses word_import_rescan_interval_minutes
+    rather than adding a dedicated setting for what is the same fail-open-then-rescan
+    convention applied to a second file type."""
+    interval_seconds = settings.word_import_rescan_interval_minutes * 60
+    file_service = FileService()
+    while True:
+        with SessionLocal() as db:
+            # Distinct lock id (202600010) from gallery_upload_rescan_loop's 202600008 above -
+            # both loops run concurrently in the same worker and must not share one advisory
+            # lock, or whichever loop wins it would starve the other every interval.
+            acquired = db.execute(text("SELECT pg_try_advisory_lock(202600010)")).scalar()
+            if acquired:
+                try:
+                    file_service.rescan_pending_protocol_images(db)
+                finally:
+                    db.execute(text("SELECT pg_advisory_unlock(202600010)"))
+        await asyncio.sleep(interval_seconds)
+
+
 async def export_cleanup_loop() -> None:
     """Periodic retention sweep for old generated export files under EXPORT_ROOT/generated
     (see export_service.py's cleanup_old_generated_exports). Unlike the rescan loops above
@@ -221,11 +281,31 @@ async def export_cleanup_loop() -> None:
         await asyncio.sleep(interval_seconds)
 
 
+async def log_cleanup_loop() -> None:
+    """Periodic retention sweep for audit_log/system_error_log (audit finding, 2026-08-26:
+    neither table had any cleanup, both grew unbounded forever - unlike the export cleanup
+    loop above, which already existed). Same every-worker-but-advisory-locked pattern."""
+    interval_seconds = settings.log_cleanup_interval_minutes * 60
+    audit_service = AuditService()
+    error_log_service = AdminErrorLogService()
+    while True:
+        with SessionLocal() as db:
+            acquired = db.execute(text("SELECT pg_try_advisory_lock(202600009)")).scalar()
+            if acquired:
+                try:
+                    audit_service.cleanup_old_entries(db, retention_days=settings.audit_log_retention_days)
+                    error_log_service.cleanup_old_entries(db, retention_days=settings.error_log_retention_days)
+                finally:
+                    db.execute(text("SELECT pg_advisory_unlock(202600009)"))
+        await asyncio.sleep(interval_seconds)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     FileService().ensure_storage()
     warm_up_word_import_parse_pool()
     ensure_runtime_columns()
+    ensure_no_production_demo_data()
     ensure_startup_seed_data()
     ensure_default_document_templates()
     ensure_traefik_dynamic_config()
@@ -233,17 +313,28 @@ async def lifespan(_: FastAPI):
     rescan_task = asyncio.create_task(abgabebox_rescan_loop())
     word_import_rescan_task = asyncio.create_task(word_import_rescan_loop())
     gallery_upload_rescan_task = asyncio.create_task(gallery_upload_rescan_loop())
+    protocol_image_rescan_task = asyncio.create_task(protocol_image_rescan_loop())
     export_cleanup_task = asyncio.create_task(export_cleanup_loop())
+    log_cleanup_task = asyncio.create_task(log_cleanup_loop())
     yield
     health_check_task.cancel()
     rescan_task.cancel()
     word_import_rescan_task.cancel()
     gallery_upload_rescan_task.cancel()
+    protocol_image_rescan_task.cancel()
     export_cleanup_task.cancel()
+    log_cleanup_task.cancel()
     await close_redis_pool()
 
 
-app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
+app = FastAPI(
+    title=settings.app_name,
+    version="1.0.0",
+    lifespan=lifespan,
+    docs_url=None if settings.is_production else "/docs",
+    redoc_url=None,
+    openapi_url=None if settings.is_production else "/openapi.json",
+)
 
 app.add_middleware(
     CORSMiddleware,

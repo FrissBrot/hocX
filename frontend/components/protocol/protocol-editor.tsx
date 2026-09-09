@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -17,7 +17,8 @@ import { computePopoverPosition, usePopoverDismiss } from "@/components/ui/popov
 import { useProtocolCollaboration } from "@/lib/hooks/use-protocol-collaboration";
 import { useTagConfig } from "@/lib/hooks/use-tag-config";
 import { usePdfExport } from "@/lib/hooks/use-pdf-export";
-import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
+import { ApiError, browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
+import { clearDraft, discardMutation, queueMutation, readDraft, removeMutation, saveDraft } from "@/lib/offline-store";
 import { getCycleYear } from "@/lib/utils/cycle";
 import { protocolStatusVariant } from "@/components/protocol/protocol-status";
 import {
@@ -43,7 +44,6 @@ import {
   TODO_STATUS,
   TodoMenuOption,
   TodoMiniMenu,
-  attendanceParticipants,
   createProtocolEventDraft,
   protocolStatusLabel,
   resequenceProtocolElements,
@@ -58,19 +58,20 @@ import { FocusedElementEditor } from "@/components/protocol/focused-element-edit
 type ProtocolEditorProps = {
   protocol: ProtocolSummary;
   initialElements: ProtocolElement[];
-  initialTodos: Record<number, ProtocolTodo[]>;
-  initialImages: Record<number, ProtocolImage[]>;
+  initialTodos: Record<string, ProtocolTodo[]>;
+  initialImages: Record<string, ProtocolImage[]>;
   availableParticipants: ParticipantSummary[];
   availableEvents: EventSummary[];
   availableLists: StructuredListDefinition[];
-  initialListEntries: Record<number, StructuredListEntry[]>;
+  initialListEntries: Record<string, StructuredListEntry[]>;
   availableTemplates: TemplateSummary[];
   availableAccounts: FinanceAccount[];
-  initialFinanceTransactions: Record<number, FinanceTransaction[]>;
+  initialFinanceTransactions: Record<string, FinanceTransaction[]>;
   initialPendingTodos?: TodoListItem[];
   documentTemplates?: DocumentTemplate[];
   forceReadOnly?: boolean;
   canViewFines?: boolean;
+  accordionEnabled?: boolean;
 };
 
 export function ProtocolEditor({
@@ -89,12 +90,13 @@ export function ProtocolEditor({
   documentTemplates = [],
   forceReadOnly = false,
   canViewFines = true,
+  accordionEnabled = true,
 }: ProtocolEditorProps) {
   const router = useRouter();
   const [elements, setElements] = useState(initialElements);
   const [events, setEvents] = useState(availableEvents);
   const [lists, setLists] = useState(availableLists);
-  const [eventContextMenu, setEventContextMenu] = useState<{ x: number; y: number; eventRow: EventSummary; blockId: number } | null>(null);
+  const [eventContextMenu, setEventContextMenu] = useState<{ x: number; y: number; eventRow: EventSummary; blockId: string } | null>(null);
   const eventContextMenuRef = useRef<HTMLDivElement | null>(null);
 
   usePopoverDismiss(!!eventContextMenu, () => setEventContextMenu(null), [eventContextMenuRef]);
@@ -115,16 +117,16 @@ export function ProtocolEditor({
   const currentCycleYear: number | null = protocol.protocol_date && currentTemplate?.cycle_config
     ? getCycleYear(protocol.protocol_date, currentTemplate.cycle_config.reset_month, currentTemplate.cycle_config.reset_day)
     : null;
-  const [listEntriesByDefinition, setListEntriesByDefinition] = useState<Record<number, StructuredListEntry[]>>(initialListEntries);
-  const [todosByBlock, setTodosByBlock] = useState<Record<number, ProtocolTodo[]>>(initialTodos);
+  const [listEntriesByDefinition, setListEntriesByDefinition] = useState<Record<string, StructuredListEntry[]>>(initialListEntries);
+  const [todosByBlock, setTodosByBlock] = useState<Record<string, ProtocolTodo[]>>(initialTodos);
   const [pendingTodos, setPendingTodos] = useState<TodoListItem[]>(initialPendingTodos);
-  const [imagesByBlock, setImagesByBlock] = useState<Record<number, ProtocolImage[]>>(initialImages);
-  const [financeTransactions, setFinanceTransactions] = useState<Record<number, FinanceTransaction[]>>(initialFinanceTransactions);
+  const [imagesByBlock, setImagesByBlock] = useState<Record<string, ProtocolImage[]>>(initialImages);
+  const [financeTransactions, setFinanceTransactions] = useState<Record<string, FinanceTransaction[]>>(initialFinanceTransactions);
   const [protocolFines, setProtocolFines] = useState<AttendanceFine[]>([]);
   const [pendingFines, setPendingFines] = useState<AttendanceFineListItem[]>([]);
   // Refresh chart blocks whenever fines change (add/delete)
   useEffect(() => { bumpStatsCharts(); }, [protocolFines.length]);
-  const [textDrafts, setTextDrafts] = useState<Record<number, string>>(
+  const [textDrafts, setTextDrafts] = useState<Record<string, string>>(
     Object.fromEntries(
       initialElements.flatMap((element) =>
         element.blocks
@@ -133,14 +135,14 @@ export function ProtocolEditor({
       )
     )
   );
-  const [newTodoTask, setNewTodoTask] = useState<Record<number, string>>({});
-  const [newTodoTags, setNewTodoTags] = useState<Record<number, string>>({});
-  const [todoTagFilter, setTodoTagFilter] = useState<Record<number, string | null>>({});
-  const [newEventDrafts, setNewEventDrafts] = useState<Record<number, ProtocolEventDraft>>({});
-  const [selectedFiles, setSelectedFiles] = useState<Record<number, File | null>>({});
-  const [blockStatus, setBlockStatus] = useState<Record<number, SaveState>>({});
-  const [selectedElementId, setSelectedElementId] = useState<number | null>(initialElements[0]?.id ?? null);
-  const [draggedElementId, setDraggedElementId] = useState<number | null>(null);
+  const [newTodoTask, setNewTodoTask] = useState<Record<string, string>>({});
+  const [newTodoTags, setNewTodoTags] = useState<Record<string, string>>({});
+  const [todoTagFilter, setTodoTagFilter] = useState<Record<string, string | null>>({});
+  const [newEventDrafts, setNewEventDrafts] = useState<Record<string, ProtocolEventDraft>>({});
+  const [selectedFiles, setSelectedFiles] = useState<Record<string, File | null>>({});
+  const [blockStatus, setBlockStatus] = useState<Record<string, SaveState>>({});
+  const [selectedElementId, setSelectedElementId] = useState<string | null>(initialElements[0]?.id ?? null);
+  const [draggedElementId, setDraggedElementId] = useState<string | null>(null);
   const [protocolStatus, setProtocolStatus] = useState(protocol.status);
   const [trackChangesEnabled, setTrackChangesEnabledState] = useState(protocol.track_changes_enabled ?? false);
   // Tracking applies during "geplant" - confusingly, that's the status the app's own
@@ -156,7 +158,7 @@ export function ProtocolEditor({
   const isRestoringRef = useRef(true);
   const [showSavedIndicator, setShowSavedIndicator] = useState(false);
   const savedIndicatorTimerRef = useRef<number | null>(null);
-  const prevBlockStatusRef = useRef<Record<number, SaveState>>({});
+  const prevBlockStatusRef = useRef<Record<string, SaveState>>({});
   const collab = useProtocolCollaboration(protocol.id);
   const [showStatusChangeWarning, setShowStatusChangeWarning] = useState(false);
 
@@ -194,15 +196,15 @@ export function ProtocolEditor({
         // addTodo/updateTodo/deleteTodo, uploadImage/deleteImage,
         // createEventFromBlock/updateEventFromBlock/deleteEventFromBlock.
         if (field_key.endsWith("-todos") && field_key.startsWith("block-")) {
-          const blockId = Number(field_key.slice("block-".length, -"-todos".length));
-          if (Number.isFinite(blockId) && Array.isArray(patch)) {
+          const blockId = field_key.slice("block-".length, -"-todos".length);
+          if (blockId && Array.isArray(patch)) {
             setTodosByBlock((current) => ({ ...current, [blockId]: patch as ProtocolTodo[] }));
           }
           return;
         }
         if (field_key.endsWith("-images") && field_key.startsWith("block-")) {
-          const blockId = Number(field_key.slice("block-".length, -"-images".length));
-          if (Number.isFinite(blockId) && Array.isArray(patch)) {
+          const blockId = field_key.slice("block-".length, -"-images".length);
+          if (blockId && Array.isArray(patch)) {
             setImagesByBlock((current) => ({ ...current, [blockId]: patch as ProtocolImage[] }));
           }
           return;
@@ -218,13 +220,13 @@ export function ProtocolEditor({
           return;
         }
         if (field_key === "event-deleted" && patch && typeof patch === "object") {
-          const { id } = patch as { id: number };
+          const { id } = patch as { id: string };
           setEvents((current) => current.filter((event) => event.id !== id));
           return;
         }
         if (!field_key.startsWith("block-")) return;
-        const blockId = Number(field_key.slice("block-".length).split("-cell-")[0]);
-        if (!Number.isFinite(blockId) || !patch || typeof patch !== "object") return;
+        const blockId = field_key.slice("block-".length).split("-cell-")[0];
+        if (!blockId || !patch || typeof patch !== "object") return;
         updateBlockInState(blockId, (block) => ({ ...block, ...(patch as Partial<typeof block>) }));
         // textDrafts (what the <textarea> actually renders, see handleTextChange) is
         // separate from the elements/blocks state updated above - without this, a text
@@ -265,7 +267,7 @@ export function ProtocolEditor({
 
   // Restore last active element from backend
   useEffect(() => {
-    browserApiFetch<{ element_id: number | null }>(`/api/protocols/${protocol.id}/scroll-position`)
+    browserApiFetch<{ element_id: string | null }>(`/api/protocols/${protocol.id}/scroll-position`)
       .then((data) => {
         isRestoringRef.current = false;
         if (!data?.element_id) return;
@@ -287,6 +289,9 @@ export function ProtocolEditor({
       void browserApiFetch(`/api/protocols/${protocol.id}/scroll-position`, {
         method: "PUT",
         body: JSON.stringify({ element_id: selectedElementId }),
+      }).catch(() => {
+        // Remembering the editor position is only a convenience. A transient network
+        // failure must not surface as an unhandled rejection and crash the editor.
       });
     }, 800);
     return () => {
@@ -365,8 +370,11 @@ export function ProtocolEditor({
   const closeProtocol = () => {
     router.push("/protocols");
   };
-  const timers = useRef<Record<number, number>>({});
+  const timers = useRef<Record<string, number>>({});
   const shouldScrollToElementRef = useRef(false);
+  const passiveScrollTargetRef = useRef<string | null>(null);
+  const selectedElementIdRef = useRef(selectedElementId);
+  selectedElementIdRef.current = selectedElementId;
   const navRef = useRef<HTMLElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
   const documentRef = useRef<HTMLElement | null>(null);
@@ -390,10 +398,58 @@ export function ProtocolEditor({
     };
   }, []);
 
+  // Recover text that was typed before a tab/browser crash or a failed request. A draft is
+  // only ever removed after the backend confirmed the exact value.
+  useEffect(() => {
+    const restoredDrafts = Object.keys(textDrafts).flatMap((blockId) => {
+      const draft = readDraft(`protocol-text:${blockId}`);
+      return draft !== null && draft !== textDrafts[blockId] ? [[blockId, draft] as const] : [];
+    });
+    if (restoredDrafts.length === 0) return;
+    setTextDrafts((current) => {
+      const next = { ...current };
+      for (const [blockId, draft] of restoredDrafts) next[blockId] = draft;
+      return next;
+    });
+    showToast(`${restoredDrafts.length} lokaler Textentwurf wurde wiederhergestellt.`, "info");
+  // Initial server values are deliberately compared exactly once per mounted protocol.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [protocol.id]);
+
+  useEffect(() => {
+    const flushed = (event: Event) => {
+      const key = (event as CustomEvent<{ key?: string }>).detail?.key;
+      if (!key?.startsWith("protocol-text:")) return;
+      clearDraft(key);
+      const blockId = key.slice("protocol-text:".length);
+      if (blockId) setStatus(blockId, "saved");
+    };
+    window.addEventListener("hocx:mutation-flushed", flushed);
+    return () => window.removeEventListener("hocx:mutation-flushed", flushed);
+  }, []);
+
+  useEffect(() => {
+    // Covers the bulk "verwerfen" action in ConnectivityStatus discarding a text-save that
+    // was blocked on the outbox (e.g. a conflict that happened while this tab was offline,
+    // only surfacing once it reconnected and flushOutbox tried it) - the immediate-conflict
+    // path in handleTextChange already refreshes state itself, so this only matters for
+    // that separate route into the same "blocked" outcome. Deliberately does not clearDraft:
+    // the local draft stays as the documented fallback until the user's next edit overwrites
+    // it or they reload and accept the server content.
+    const discarded = (event: Event) => {
+      const key = (event as CustomEvent<{ key?: string }>).detail?.key;
+      if (!key?.startsWith("protocol-text:")) return;
+      const blockId = key.slice("protocol-text:".length);
+      if (blockId) setStatus(blockId, "error");
+    };
+    window.addEventListener("hocx:mutation-discarded", discarded);
+    return () => window.removeEventListener("hocx:mutation-discarded", discarded);
+  }, []);
+
   useEffect(() => {
     const prev = prevBlockStatusRef.current;
     const justSaved = Object.entries(blockStatus).some(
-      ([id, state]) => state === "saved" && prev[Number(id)] === "saving"
+      ([id, state]) => state === "saved" && prev[id] === "saving"
     );
     prevBlockStatusRef.current = { ...blockStatus };
     if (justSaved) {
@@ -438,24 +494,32 @@ export function ProtocolEditor({
       : [];
     return tallyAttendance(availableParticipants, entries);
   }, [elements, availableParticipants]);
-  const attendanceRoster = useMemo(() => {
-    const attendanceBlock = elements.flatMap((element) => element.blocks).find((block) => block.element_type_code === "attendance");
-    const entries = attendanceBlock && Array.isArray(attendanceBlock.configuration_snapshot_json.attendance_entries)
-      ? (attendanceBlock.configuration_snapshot_json.attendance_entries as Array<Record<string, any>>)
-      : [];
-    return attendanceParticipants(availableParticipants).map((participant) => ({
-      id: participant.id,
-      name: participant.display_name,
-      status: (entries.find((entry) => Number(entry.participant_id) === participant.id)?.status as string | undefined) ?? null,
-    }));
-  }, [elements, availableParticipants]);
   const [collabStatusPanelOpen, setCollabStatusPanelOpen] = useState(false);
+  const collabHoverCloseTimerRef = useRef<number | undefined>(undefined);
+  const collabOpenedByHoverRef = useRef(false);
 
-  function setStatus(protocolElementBlockId: number, status: SaveState) {
+  const cancelCollabHoverClose = useCallback(() => {
+    if (collabHoverCloseTimerRef.current) window.clearTimeout(collabHoverCloseTimerRef.current);
+  }, []);
+
+  const scheduleCollabHoverClose = useCallback(() => {
+    cancelCollabHoverClose();
+    collabHoverCloseTimerRef.current = window.setTimeout(() => {
+      if (!collabOpenedByHoverRef.current) return;
+      const pointerStillInside = document.querySelector(
+        ".protocol-quick-actions:hover, .quick-flyout-open:hover"
+      );
+      if (!pointerStillInside) setCollabStatusPanelOpen(false);
+    }, 300);
+  }, [cancelCollabHoverClose]);
+
+  useEffect(() => () => cancelCollabHoverClose(), [cancelCollabHoverClose]);
+
+  function setStatus(protocolElementBlockId: string, status: SaveState) {
     setBlockStatus((current) => ({ ...current, [protocolElementBlockId]: status }));
   }
 
-  function focusElement(protocolElementId: number) {
+  function focusElement(protocolElementId: string) {
     shouldScrollToElementRef.current = true;
     setSelectedElementId(protocolElementId);
   }
@@ -491,14 +555,23 @@ export function ProtocolEditor({
         // never shows a scrollbar or responds to wheel input, so it silently absorbed
         // part of the scroll too, leaving the pinned shell offset from the viewport
         // with a matching dead strip of blank space at its bottom edge). The division
-        // below undoes .protocol-document-shell's zoom: 0.9, which scales visual
+        // below undoes .protocol-document-shell's zoom, which scales visual
         // pixels (getBoundingClientRect) relative to scrollTop's own unscaled space.
         const container = documentRef.current;
         const section = document.getElementById(`protocol-element-${selectedElementId}`);
         if (container && section) {
           const zoomHost = container.closest<HTMLElement>(".protocol-document-shell");
           const zoom = zoomHost ? parseFloat(getComputedStyle(zoomHost).zoom) || 1 : 1;
-          const delta = (section.getBoundingClientRect().top - container.getBoundingClientRect().top) / zoom;
+          const containerRect = container.getBoundingClientRect();
+          const sectionRect = section.getBoundingClientRect();
+          const safeInset = 16 * zoom;
+          const isTallSection = sectionRect.height >= containerRect.height - safeInset * 2;
+          const delta = isTallSection
+            ? (sectionRect.top - containerRect.top - safeInset) / zoom
+            : (
+                sectionRect.top + sectionRect.height / 2
+                - (containerRect.top + containerRect.height / 2)
+              ) / zoom;
           container.scrollTo({ top: container.scrollTop + delta, behavior: "smooth" });
         }
       }
@@ -541,19 +614,48 @@ export function ProtocolEditor({
 
   const visibleElementIdsKey = visibleElements.map((element) => element.id).join(",");
 
-  // Scroll-spy for the continuous document layout: tracks whichever section currently sits
-  // at the top of .protocol-document and makes it the active/highlighted one - matching
-  // scroll-snap-align: start below (a short section snapped to the top of a much taller
-  // pane would otherwise never contain the pane's vertical center, so center-based
-  // detection stopped matching scroll-snap-align: start once that was switched from
-  // "center"). Uses plain getBoundingClientRect() math (rAF-throttled on scroll/resize)
+  // Collapsing the previously active accordion section can remove hundreds of pixels above
+  // the viewport. Preserve the newly selected section as the visual anchor so that moving
+  // past a long section lands on its immediate neighbour instead of skipping several points.
+  // useLayoutEffect runs after React changed the open section but before the browser paints
+  // that layout, avoiding a visible jump. This is only used for passive scroll-spy changes;
+  // clicks and keyboard navigation already have their own smooth-scroll path above.
+  useLayoutEffect(() => {
+    if (!accordionEnabled) return;
+    if (passiveScrollTargetRef.current !== selectedElementId) return;
+    passiveScrollTargetRef.current = null;
+
+    const container = documentRef.current;
+    const section = selectedElementId
+      ? document.getElementById(`protocol-element-${selectedElementId}`)
+      : null;
+    if (!container || !section) return;
+
+    const zoomHost = container.closest<HTMLElement>(".protocol-document-shell");
+    const zoom = zoomHost ? parseFloat(getComputedStyle(zoomHost).zoom) || 1 : 1;
+    const containerRect = container.getBoundingClientRect();
+    const sectionRect = section.getBoundingClientRect();
+    const safeInset = 16 * zoom;
+    const isTallSection = sectionRect.height >= containerRect.height - safeInset * 2;
+    const delta = isTallSection
+      ? sectionRect.top - containerRect.top - safeInset
+      : sectionRect.top + sectionRect.height / 2 - (containerRect.top + containerRect.height / 2);
+
+    container.scrollTo({
+      top: container.scrollTop + delta / zoom,
+      behavior: "instant" as ScrollBehavior,
+    });
+  }, [accordionEnabled, selectedElementId]);
+
+  // Scroll-spy for the continuous document layout: tracks whichever section is closest to
+  // the visual centre of .protocol-document. Uses plain
+  // getBoundingClientRect() math (rAF-throttled on scroll/resize)
   // rather than IntersectionObserver - that earlier approach combined a custom `root`,
   // percentage rootMargin and the .protocol-document-shell `zoom` scale in a way that
   // didn't reliably fire (nothing ever got marked active). getBoundingClientRect always
   // reports already-zoomed, viewport-relative coordinates, so it isn't affected by that.
-  // Deliberately only calls setSelectedElementId directly (never focusElement/
-  // shouldScrollToElementRef) so passive scrolling never triggers the jump-effect's own
-  // scroll/focus side effects above.
+  // Deliberately avoids focusElement/shouldScrollToElementRef so passive scrolling never
+  // focuses a form field. The layout effect above only anchors the newly opened neighbour.
   useEffect(() => {
     if (!useDocumentLayout) return;
     const container = documentRef.current;
@@ -564,7 +666,7 @@ export function ProtocolEditor({
     function computeActiveSection() {
       rafId = null;
       const containerRect = container!.getBoundingClientRect();
-      const topY = containerRect.top + 32;
+      const centerY = containerRect.top + containerRect.height / 2;
       const sections = visibleElementIdsKey
         .split(",")
         .filter(Boolean)
@@ -572,23 +674,26 @@ export function ProtocolEditor({
         .filter((section): section is HTMLElement => Boolean(section));
       if (!sections.length) return;
 
-      let bestId: number | null = null;
+      let bestId: string | null = null;
       let bestDistance = Infinity;
       for (const section of sections) {
         const rect = section.getBoundingClientRect();
-        const id = Number(section.id.replace("protocol-element-", ""));
-        if (rect.top <= topY && rect.bottom >= topY) {
+        const id = section.id.replace("protocol-element-", "");
+        if (rect.top <= centerY && rect.bottom >= centerY) {
           bestId = id;
           break;
         }
-        const distance = Math.abs(rect.top - topY);
+        const sectionCenter = rect.top + rect.height / 2;
+        const distance = Math.abs(sectionCenter - centerY);
         if (distance < bestDistance) {
           bestDistance = distance;
           bestId = id;
         }
       }
-      if (bestId !== null) {
-        setSelectedElementId((current) => (current === bestId ? current : bestId));
+      if (bestId !== null && selectedElementIdRef.current !== bestId) {
+        passiveScrollTargetRef.current = accordionEnabled ? bestId : null;
+        selectedElementIdRef.current = bestId;
+        setSelectedElementId(bestId);
       }
     }
 
@@ -605,29 +710,7 @@ export function ProtocolEditor({
       window.removeEventListener("resize", scheduleCompute);
       if (rafId !== null) window.cancelAnimationFrame(rafId);
     };
-  }, [useDocumentLayout, visibleElementIdsKey]);
-
-  // Suspend the section blur/opacity transition while .protocol-document is actively being
-  // scrolled - animating `filter: blur()` on a section at the same time the browser is running
-  // its own native scroll-snap animation is what made the whole thing feel janky/buggy;
-  // applying the blur state change instantly (no transition) once scrolling settles avoids the
-  // two animations fighting each other.
-  useEffect(() => {
-    if (!useDocumentLayout) return;
-    const container = documentRef.current;
-    if (!container) return;
-    let settleTimer: number | null = null;
-    function onScroll() {
-      container!.classList.add("is-scrolling");
-      if (settleTimer) window.clearTimeout(settleTimer);
-      settleTimer = window.setTimeout(() => container!.classList.remove("is-scrolling"), 150);
-    }
-    container.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      container.removeEventListener("scroll", onScroll);
-      if (settleTimer) window.clearTimeout(settleTimer);
-    };
-  }, [useDocumentLayout]);
+  }, [accordionEnabled, useDocumentLayout, visibleElementIdsKey]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -637,14 +720,14 @@ export function ProtocolEditor({
       // Ctrl+Alt+T → open session panel and focus todo input
       if (event.key === "t" && (event.ctrlKey || event.metaKey) && event.altKey) {
         event.preventDefault();
-        sessionPanelRef.current?.openAndFocusTodo();
+        sessionPanelRef.current?.openTodo();
         return;
       }
 
       // Ctrl+Alt+N → open session panel and focus notes
       if (event.key === "n" && (event.ctrlKey || event.metaKey) && event.altKey) {
         event.preventDefault();
-        sessionPanelRef.current?.openAndFocusNotes();
+        sessionPanelRef.current?.openNotes();
         return;
       }
 
@@ -695,7 +778,7 @@ export function ProtocolEditor({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [selectedElementId, visibleElements]);
 
-  async function reorderElements(sourceId: number, targetId: number) {
+  async function reorderElements(sourceId: string, targetId: string) {
     if (sourceId === targetId) return;
     const ordered = [...elements].sort((left, right) => left.sort_index - right.sort_index);
     const sourceIndex = ordered.findIndex((item) => item.id === sourceId);
@@ -706,7 +789,7 @@ export function ProtocolEditor({
     const [moved] = ordered.splice(sourceIndex, 1);
     ordered.splice(targetIndex, 0, moved);
     const resequenced = resequenceProtocolElements(ordered);
-    const nextStatus: Record<number, SaveState> = {};
+    const nextStatus: Record<string, SaveState> = {};
     resequenced.forEach((element) => {
       element.blocks.forEach((block) => {
         nextStatus[block.id] = "saving";
@@ -754,7 +837,7 @@ export function ProtocolEditor({
     }
   }
 
-  function updateBlockInState(blockId: number, updater: (current: ProtocolElement["blocks"][number]) => ProtocolElement["blocks"][number]) {
+  function updateBlockInState(blockId: string, updater: (current: ProtocolElement["blocks"][number]) => ProtocolElement["blocks"][number]) {
     setElements((current) =>
       current.map((element) => ({
         ...element,
@@ -812,7 +895,30 @@ export function ProtocolEditor({
     }
   }
 
-  async function saveBlockConfiguration(blockId: number, configurationSnapshotJson: Record<string, unknown>) {
+  // Pulls the current server-side text_content for a single block after a 409 conflict on
+  // its text save (see handleTextChange) - reuses the same "/elements" list endpoint as
+  // refreshElementTitles/refreshAfterTrackingCleared rather than a dedicated per-block GET,
+  // since one doesn't exist and this only needs to run once, on-demand, per conflict.
+  async function refreshBlockTextFromServer(blockId: string) {
+    try {
+      const fresh = await browserApiFetch<ProtocolElement[]>(`/api/protocols/${protocol.id}/elements`);
+      const freshBlock = fresh.flatMap((element) => element.blocks).find((block) => block.id === blockId);
+      if (!freshBlock) return;
+      updateBlockInState(blockId, (block) => ({
+        ...block,
+        text_content: freshBlock.text_content,
+        tracked_dirty: freshBlock.tracked_dirty,
+        tracked_baseline_content: freshBlock.tracked_baseline_content,
+      }));
+      setTextDrafts((current) => ({ ...current, [blockId]: freshBlock.text_content ?? "" }));
+      setStatus(blockId, "saved");
+    } catch {
+      // best-effort - the conflict toast already told the user to reload manually if this
+      // silent refresh also fails.
+    }
+  }
+
+  async function saveBlockConfiguration(blockId: string, configurationSnapshotJson: Record<string, unknown>) {
     setStatus(blockId, "saving");
     updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: configurationSnapshotJson }));
     try {
@@ -832,7 +938,18 @@ export function ProtocolEditor({
     }
   }
 
-  function handleTextChange(protocolElementBlockId: number, content: string) {
+  function handleTextChange(protocolElementBlockId: string, content: string) {
+    const mutationKey = `protocol-text:${protocolElementBlockId}`;
+    const expectedContent = elements
+      .flatMap((element) => element.blocks)
+      .find((block) => block.id === protocolElementBlockId)?.text_content ?? "";
+    saveDraft(mutationKey, content);
+    queueMutation({
+      key: mutationKey,
+      path: `/api/protocol-element-blocks/${protocolElementBlockId}/text`,
+      method: "PUT",
+      body: JSON.stringify({ content, expected_content: expectedContent }),
+    });
     setTextDrafts((current) => ({ ...current, [protocolElementBlockId]: content }));
     setStatus(protocolElementBlockId, "saving");
 
@@ -844,7 +961,7 @@ export function ProtocolEditor({
       try {
         const result = await browserApiFetch<{ tracked_dirty: boolean; tracked_baseline_content: string | null }>(
           `/api/protocol-element-blocks/${protocolElementBlockId}/text`,
-          { method: "PUT", body: JSON.stringify({ content }) }
+          { method: "PUT", body: JSON.stringify({ content, expected_content: expectedContent }) }
         );
         updateBlockInState(protocolElementBlockId, (block) => ({
           ...block,
@@ -853,6 +970,8 @@ export function ProtocolEditor({
           tracked_baseline_content: result.tracked_baseline_content,
         }));
         setStatus(protocolElementBlockId, "saved");
+        clearDraft(mutationKey);
+        removeMutation(mutationKey);
         collab.sendFieldUpdate(`block-${protocolElementBlockId}`, {
           text_content: content,
           tracked_dirty: result.tracked_dirty,
@@ -860,14 +979,42 @@ export function ProtocolEditor({
         });
       } catch (err: unknown) {
         setStatus(protocolElementBlockId, "error");
-        showToast(err instanceof Error ? err.message : "Text konnte nicht gespeichert werden", "error");
+        if (err instanceof ApiError && err.kind === "conflict") {
+          // A real edit conflict, not a connectivity problem: someone else already saved a
+          // newer version of this exact text since we last loaded it. `content` here is
+          // already-rejected - re-queueing it (the generic path below) would just keep
+          // losing to the same 409 on every future flush with the misleading "will save
+          // automatically once back online" toast. Instead: drop it from the outbox so it
+          // stops being retried (fix for the outbox-stall issue above applies to this item
+          // too - it must end up explicitly discarded, not silently stuck), pull in the
+          // current server content, and tell the user plainly what happened. Their locally
+          // typed text isn't lost - saveDraft() above already wrote it to
+          // `protocol-text:${id}` in localStorage as a fallback; it's just not queued for
+          // silent resend anymore.
+          discardMutation(mutationKey);
+          void refreshBlockTextFromServer(protocolElementBlockId);
+          showToast(
+            "Konflikt: Diese Stelle wurde inzwischen von jemand anderem gespeichert. Die aktuelle Version wurde geladen – Ihre letzte Änderung wurde nicht übernommen, ist aber als lokaler Entwurf gesichert.",
+            "error",
+            { onMessageClick: () => void refreshBlockTextFromServer(protocolElementBlockId) }
+          );
+          return;
+        }
+        queueMutation({
+          key: mutationKey,
+          path: `/api/protocol-element-blocks/${protocolElementBlockId}/text`,
+          method: "PUT",
+          body: JSON.stringify({ content, expected_content: expectedContent }),
+          lastError: err instanceof Error ? err.message : "Text konnte nicht gespeichert werden",
+        });
+        showToast("Text lokal gesichert – wird nach Wiederherstellung der Verbindung automatisch gespeichert.", "error");
       }
     }, 700);
   }
 
   // "Ausblenden" for a text block's red tracked-change highlight (whole block at once -
   // see AutosaveService.accept_tracked_changes for why not per-word).
-  async function acceptTextTrackedChanges(protocolElementBlockId: number) {
+  async function acceptTextTrackedChanges(protocolElementBlockId: string) {
     try {
       const result = await browserApiFetch<{ tracked_dirty: boolean; tracked_baseline_content: string | null }>(
         `/api/protocol-element-blocks/${protocolElementBlockId}/text/accept-tracked-changes`,
@@ -887,7 +1034,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function addTodo(protocolElementBlockId: number) {
+  async function addTodo(protocolElementBlockId: string) {
     const task = newTodoTask[protocolElementBlockId]?.trim();
     if (!task) return;
     setStatus(protocolElementBlockId, "saving");
@@ -912,7 +1059,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function updateTodo(protocolElementBlockId: number, todoId: number, patch: Partial<ProtocolTodo>) {
+  async function updateTodo(protocolElementBlockId: string, todoId: string, patch: Partial<ProtocolTodo>) {
     setStatus(protocolElementBlockId, "saving");
     try {
       const updated = await browserApiFetch<ProtocolTodo>(`/api/protocol-todos/${todoId}`, {
@@ -929,7 +1076,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function deleteTodo(protocolElementBlockId: number, todoId: number) {
+  async function deleteTodo(protocolElementBlockId: string, todoId: string) {
     const ok = await confirm({
       message: "Todo endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
       tone: "danger",
@@ -952,7 +1099,7 @@ export function ProtocolEditor({
   // "Ausblenden" on a todo's red tracked-change highlight: keeps the todo, just stops
   // marking it as changed/added/pending-delete. A pending-delete ghost is hard-deleted
   // server-side, so it disappears from the list entirely.
-  async function acceptTodoTrackedChange(protocolElementBlockId: number, todoId: number) {
+  async function acceptTodoTrackedChange(protocolElementBlockId: string, todoId: string) {
     try {
       const result = await browserApiFetch<{ todo: ProtocolTodo | null }>(
         `/api/protocol-todos/${todoId}/accept-tracked-change`,
@@ -969,7 +1116,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function uploadImage(protocolElementBlockId: number) {
+  async function uploadImage(protocolElementBlockId: string) {
     const file = selectedFiles[protocolElementBlockId];
     if (!file) return;
     setStatus(protocolElementBlockId, "saving");
@@ -992,7 +1139,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function deleteImage(protocolElementBlockId: number, imageId: number) {
+  async function deleteImage(protocolElementBlockId: string, imageId: string) {
     const ok = await confirm({
       message: "Bild endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
       tone: "danger",
@@ -1012,7 +1159,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function createEventFromBlock(protocolElementBlockId: number, blockConfig: Record<string, any>, draftOverride?: ProtocolEventDraft): Promise<EventSummary | null> {
+  async function createEventFromBlock(protocolElementBlockId: string, blockConfig: Record<string, any>, draftOverride?: ProtocolEventDraft): Promise<EventSummary | null> {
     const configuredTag = String(blockConfig.event_tag_filter ?? "").trim();
     const allowEndDate = blockConfig.event_allow_end_date === true;
     const draft = draftOverride ?? newEventDrafts[protocolElementBlockId] ?? createProtocolEventDraft(protocol.protocol_date, configuredTag);
@@ -1021,7 +1168,7 @@ export function ProtocolEditor({
       return null;
     }
     setStatus(protocolElementBlockId, "saving");
-    const cycleAssignments: { cycle_config_id: number; cycle_year: number }[] = [];
+    const cycleAssignments: { cycle_config_id: string; cycle_year: number }[] = [];
     if (currentCycleYear !== null && currentTemplate?.cycle_config_id && currentTemplate.cycle_config) {
       cycleAssignments.push({ cycle_config_id: currentTemplate.cycle_config_id, cycle_year: currentCycleYear });
       const eventCycleYear = draft.event_date
@@ -1061,7 +1208,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function updateEventFromBlock(protocolElementBlockId: number, eventId: number, patch: Partial<EventSummary>) {
+  async function updateEventFromBlock(protocolElementBlockId: string, eventId: string, patch: Partial<EventSummary>) {
     setStatus(protocolElementBlockId, "saving");
     try {
       const updated = await browserApiFetch<EventSummary>(`/api/events/${eventId}`, {
@@ -1079,7 +1226,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function deleteEventFromBlock(protocolElementBlockId: number, eventId: number) {
+  async function deleteEventFromBlock(protocolElementBlockId: string, eventId: string) {
     setStatus(protocolElementBlockId, "saving");
     try {
       await browserApiFetch(`/api/events/${eventId}`, { method: "DELETE" });
@@ -1092,7 +1239,7 @@ export function ProtocolEditor({
     }
   }
 
-  function openEventContextMenu(nativeEvent: React.MouseEvent, eventRow: EventSummary, protocolElementBlockId: number) {
+  function openEventContextMenu(nativeEvent: React.MouseEvent, eventRow: EventSummary, protocolElementBlockId: string) {
     nativeEvent.preventDefault();
     nativeEvent.stopPropagation();
     setEventContextMenu({ x: nativeEvent.clientX, y: nativeEvent.clientY, eventRow, blockId: protocolElementBlockId });
@@ -1116,7 +1263,7 @@ export function ProtocolEditor({
   // of these three handlers spread the whole response and nulled out element_type_code,
   // which made the block fall back to an "unknown" type and stop rendering its content
   // at all - found via Timo's own browser test.
-  async function refreshBlockListSnapshot(blockId: number) {
+  async function refreshBlockListSnapshot(blockId: string) {
     try {
       const updated = await browserApiFetch<ProtocolElement["blocks"][number]>(
         `/api/protocol-element-blocks/${blockId}/list-snapshot/refresh`,
@@ -1130,7 +1277,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function undoBlockListSnapshot(blockId: number) {
+  async function undoBlockListSnapshot(blockId: string) {
     try {
       const updated = await browserApiFetch<ProtocolElement["blocks"][number]>(
         `/api/protocol-element-blocks/${blockId}/list-snapshot/undo`,
@@ -1145,7 +1292,7 @@ export function ProtocolEditor({
   }
 
   // "Ausblenden" on one whole-list entry's or row-link row's red tracked-change highlight.
-  async function acceptTrackedListEntry(blockId: number, entryId: number) {
+  async function acceptTrackedListEntry(blockId: string, entryId: string) {
     try {
       const updated = await browserApiFetch<ProtocolElement["blocks"][number]>(
         `/api/protocol-element-blocks/${blockId}/list-snapshot/entries/${entryId}/accept-tracked-change`,
@@ -1157,7 +1304,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function acceptTrackedRow(blockId: number, rowId: string) {
+  async function acceptTrackedRow(blockId: string, rowId: string) {
     try {
       const updated = await browserApiFetch<ProtocolElement["blocks"][number]>(
         `/api/protocol-element-blocks/${blockId}/rows/${rowId}/accept-tracked-change`,
@@ -1174,7 +1321,7 @@ export function ProtocolEditor({
   // so the editor never shows a stale hint for a change it just made itself. Best-effort:
   // a failure here just leaves a stale badge until the next sync/manual refresh, never
   // corrupts data.
-  async function syncBlockListSnapshot(blockId: number) {
+  async function syncBlockListSnapshot(blockId: string) {
     try {
       const updated = await browserApiFetch<ProtocolElement["blocks"][number]>(
         `/api/protocol-element-blocks/${blockId}/list-snapshot/sync`,
@@ -1211,7 +1358,7 @@ export function ProtocolEditor({
   // so it goes stale the moment the list changes through any other route (another tab,
   // another protocol, or this block's own "Daten aktualisieren"). Refetch right before
   // opening the popup so it always starts from the real current list state.
-  async function refreshListEntries(listDefinitionId: number) {
+  async function refreshListEntries(listDefinitionId: string) {
     try {
       const fresh = await browserApiFetch<StructuredListEntry[]>(`/api/lists/${listDefinitionId}/entries`);
       setListEntriesByDefinition((current) => ({ ...current, [listDefinitionId]: fresh }));
@@ -1221,8 +1368,8 @@ export function ProtocolEditor({
   }
 
   async function createListEntryFromBlock(
-    protocolElementBlockId: number,
-    listDefinitionId: number,
+    protocolElementBlockId: string,
+    listDefinitionId: string,
     payload: { sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }
   ) {
     setStatus(protocolElementBlockId, "saving");
@@ -1234,7 +1381,7 @@ export function ProtocolEditor({
       setListEntriesByDefinition((current) => ({
         ...current,
         [listDefinitionId]: [...(current[listDefinitionId] ?? []), created].sort(
-          (left, right) => left.sort_index - right.sort_index || left.id - right.id
+          (left, right) => left.sort_index - right.sort_index || left.created_at.localeCompare(right.created_at)
         ),
       }));
       setStatus(protocolElementBlockId, "saved");
@@ -1248,9 +1395,9 @@ export function ProtocolEditor({
   }
 
   async function updateListEntryFromBlock(
-    protocolElementBlockId: number,
-    listDefinitionId: number,
-    entryId: number,
+    protocolElementBlockId: string,
+    listDefinitionId: string,
+    entryId: string,
     payload: Partial<{
       sort_index: number;
       column_one_value: Record<string, unknown>;
@@ -1277,7 +1424,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function deleteListEntryFromBlock(protocolElementBlockId: number, listDefinitionId: number, entryId: number) {
+  async function deleteListEntryFromBlock(protocolElementBlockId: string, listDefinitionId: string, entryId: string) {
     const ok = await confirm({
       message: "Eintrag endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
       tone: "danger",
@@ -1299,7 +1446,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function unhideEventBlock(blockId: number) {
+  async function unhideEventBlock(blockId: string) {
     const block = elements.flatMap((e) => e.blocks).find((b) => b.id === blockId);
     if (!block) return;
     const newConfig = { ...(block.configuration_snapshot_json ?? {}), manually_hidden: false };
@@ -1315,11 +1462,11 @@ export function ProtocolEditor({
     }
   }
 
-  async function removeEventBlock(blockId: number) {
+  async function removeEventBlock(blockId: string) {
     // Optimistic removal, rolled back on failure by re-inserting the removed block into its
     // original element at its original position - mirrors the rollback pattern used for todo
     // updates in todos/todo-list-view.tsx.
-    let removedFrom: { elementId: number; block: ProtocolElement["blocks"][number]; index: number } | null = null;
+    let removedFrom: { elementId: string; block: ProtocolElement["blocks"][number]; index: number } | null = null;
     setElements((current) =>
       current.map((element) => {
         const index = element.blocks.findIndex((b) => b.id === blockId);
@@ -1346,7 +1493,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function handleQuickTodoCreated(blockId: number, _todoId: number, elementId: number) {
+  async function handleQuickTodoCreated(blockId: string, _todoId: string, elementId: string) {
     // Fetch updated element (may be newly created session element)
     try {
       const updatedElements = await browserApiFetch<ProtocolElement[]>(`/api/protocols/${protocol.id}/elements`);
@@ -1373,7 +1520,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function addEventBlockToElement(elementId: number, eventId: number): Promise<ProtocolElement["blocks"][number] | null> {
+  async function addEventBlockToElement(elementId: string, eventId: string): Promise<ProtocolElement["blocks"][number] | null> {
     try {
       const newBlock = await browserApiFetch<ProtocolElement["blocks"][number]>(
         `/api/protocol-elements/${elementId}/blocks/from-event`,
@@ -1480,7 +1627,10 @@ export function ProtocolEditor({
 
       {useDocumentLayout ? (
         <div className="protocol-document-shell">
-          <article className="protocol-document" ref={documentRef}>
+          <article
+            className={`protocol-document${accordionEnabled ? " protocol-document-accordion" : ""}`}
+            ref={documentRef}
+          >
             {visibleElements.length === 0 && (
               <div className="editor-panel-empty">
                 <div>
@@ -1820,9 +1970,26 @@ export function ProtocolEditor({
       {protocolStatus === "vorbereitet" && !forceReadOnly && (
         <>
           <QuickActionsPill
-            onNotesClick={() => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openAndFocusNotes(); }}
-            onTodosClick={() => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openAndFocusTodo(); }}
-            onCollabClick={() => { sessionPanelRef.current?.close(); setCollabStatusPanelOpen(true); }}
+            onNotesClick={() => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openNotes(); }}
+            onNotesHover={() => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openNotes(false); }}
+            onTodosClick={() => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openTodo(); }}
+            onTodosHover={() => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openTodo(false); }}
+            onHoverLeave={() => {
+              sessionPanelRef.current?.scheduleClose();
+              scheduleCollabHoverClose();
+            }}
+            onCollabClick={() => {
+              cancelCollabHoverClose();
+              collabOpenedByHoverRef.current = false;
+              sessionPanelRef.current?.close();
+              setCollabStatusPanelOpen(true);
+            }}
+            onCollabHover={() => {
+              cancelCollabHoverClose();
+              collabOpenedByHoverRef.current = true;
+              sessionPanelRef.current?.close();
+              setCollabStatusPanelOpen(true);
+            }}
           />
           <CollaborationStatusPanel
             open={collabStatusPanelOpen}
@@ -1830,7 +1997,6 @@ export function ProtocolEditor({
             protocolNumber={protocol.protocol_number}
             modeLabel={workflowMeta[protocolStatus]?.modeLabel ?? protocolStatusLabel(protocolStatus)}
             attendanceTally={attendanceTally}
-            attendanceRoster={attendanceRoster}
             otherPresence={collab.otherPresence}
             connected={collab.connected}
             ctaLabel={!isReadOnly ? workflowMeta[protocolStatus]?.ctaLabel : undefined}
@@ -1839,6 +2005,8 @@ export function ProtocolEditor({
               transitionStatus();
             }}
             ctaBusy={transitioningStatus}
+            onMouseEnter={cancelCollabHoverClose}
+            onMouseLeave={scheduleCollabHoverClose}
           />
         </>
       )}

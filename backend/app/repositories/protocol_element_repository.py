@@ -1,3 +1,5 @@
+import uuid
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -11,6 +13,7 @@ from app.models import (
     RenderType,
     TemplateElement,
 )
+from app.services import public_id_service
 
 
 class ProtocolElementRepository:
@@ -55,6 +58,11 @@ class ProtocolElementRepository:
     def get(self, db: Session, protocol_element_id: int) -> ProtocolElement | None:
         return db.get(ProtocolElement, protocol_element_id)
 
+    def get_by_public_id(self, db: Session, public_id: uuid.UUID) -> ProtocolElement | None:
+        # No tenant_id column of its own (scoped via protocol_id) - callers must verify
+        # tenant/access on the resolved row's protocol, same as for the numeric-id path.
+        return public_id_service.get_by_public_id(db, ProtocolElement, public_id)
+
     def update(self, db: Session, protocol_element: ProtocolElement, values: dict) -> ProtocolElement:
         for key, value in values.items():
             setattr(protocol_element, key, value)
@@ -67,6 +75,11 @@ class ProtocolElementRepository:
 class ProtocolElementBlockRepository:
     def get(self, db: Session, protocol_element_block_id: int) -> ProtocolElementBlock | None:
         return db.get(ProtocolElementBlock, protocol_element_block_id)
+
+    def get_by_public_id(self, db: Session, public_id: uuid.UUID) -> ProtocolElementBlock | None:
+        # No tenant_id column of its own (scoped via protocol_element_id -> protocol) -
+        # callers must verify tenant/access on the resolved row, same as for numeric ids.
+        return public_id_service.get_by_public_id(db, ProtocolElementBlock, public_id)
 
     def update(self, db: Session, protocol_element_block: ProtocolElementBlock, values: dict) -> ProtocolElementBlock:
         for key, value in values.items():

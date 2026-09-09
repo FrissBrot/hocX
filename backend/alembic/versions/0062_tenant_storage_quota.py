@@ -1,7 +1,7 @@
 """add storage_quota_bytes to tenant for the per-tenant storage quota feature"""
 
 revision = "0062_tenant_storage_quota"
-down_revision = "0061_tenant_last_word_import"
+down_revision = "0059_stored_file_tags"
 
 import sqlalchemy as sa
 from alembic import op

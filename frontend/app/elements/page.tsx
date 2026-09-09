@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+
 import { ElementDefinitionManager } from "@/components/template/element-definition-manager";
 import { AppShell } from "@/components/ui/app-shell";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
@@ -6,10 +8,13 @@ import { ElementDefinition, EventSummary, FinanceAccount, ParticipantSummary, St
 export default async function ElementsPage() {
   const session = await requireSession();
   const canAdmin = session.current_role === "admin";
+  if (!canAdmin) {
+    redirect("/");
+  }
   const definitions = await backendFetchWithSession<ElementDefinition[]>("/api/element-definitions");
   const events = (await backendFetchWithSession<EventSummary[]>("/api/events")) ?? [];
   const lists = (await backendFetchWithSession<StructuredListDefinition[]>("/api/lists")) ?? [];
-  const participants = canAdmin ? (await backendFetchWithSession<ParticipantSummary[]>("/api/participants?limit=500")) ?? [] : [];
+  const participants = canAdmin ? (await backendFetchWithSession<ParticipantSummary[]>("/api/participants?limit=2000")) ?? [] : [];
   const accounts = (await backendFetchWithSession<FinanceAccount[]>("/api/finance/accounts")) ?? [];
   const knownEventTags = Array.from(
     new Set(events.map((event) => (event.tag ?? "").trim()).filter((tag) => tag.length > 0))

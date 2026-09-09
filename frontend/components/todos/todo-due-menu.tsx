@@ -8,7 +8,7 @@ import { useToast } from "@/contexts/toast-context";
 import { formatDate, formatDateRange } from "@/lib/utils/format";
 
 type DueEvent = {
-  id: number;
+  id: string;
   title: string;
   event_date: string;
   event_end_date: string | null;
@@ -16,19 +16,19 @@ type DueEvent = {
 };
 
 type DueEventsResponse = {
-  next_event_id: number | null;
+  next_event_id: string | null;
   tag_filter: string | null;
   events: DueEvent[];
 };
 
 export type DuePatch = {
   due_date?: string | null;
-  due_event_id?: number | null;
+  due_event_id?: string | null;
   due_marker?: string | null;
 };
 
 type Props = {
-  todoId: number;
+  todoId: string;
   label: string;
   onApply: (patch: DuePatch) => void;
 };

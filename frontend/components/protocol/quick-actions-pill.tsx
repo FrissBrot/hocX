@@ -4,19 +4,23 @@ import { NavIcon } from "@/components/ui/nav-icons";
 
 type QuickActionsPillProps = {
   onNotesClick: () => void;
+  onNotesHover: () => void;
   onTodosClick: () => void;
+  onTodosHover: () => void;
+  onHoverLeave: () => void;
   onCollabClick?: () => void;
+  onCollabHover?: () => void;
 };
 
-export function QuickActionsPill({ onNotesClick, onTodosClick, onCollabClick }: QuickActionsPillProps) {
+export function QuickActionsPill({ onNotesClick, onNotesHover, onTodosClick, onTodosHover, onHoverLeave, onCollabClick, onCollabHover }: QuickActionsPillProps) {
   return (
-    <div className="protocol-quick-actions" role="toolbar" aria-label="Schnellmenü">
+    <div className="protocol-quick-actions" role="toolbar" aria-label="Schnellmenü" onMouseLeave={onHoverLeave}>
       <button
         type="button"
         className="protocol-quick-actions-btn"
         title="Sitzungsnotizen öffnen"
         onClick={onNotesClick}
-        onMouseEnter={onNotesClick}
+        onMouseEnter={onNotesHover}
       >
         <NavIcon name="lists" />
       </button>
@@ -25,7 +29,7 @@ export function QuickActionsPill({ onNotesClick, onTodosClick, onCollabClick }: 
         className="protocol-quick-actions-btn"
         title="Todo erstellen"
         onClick={onTodosClick}
-        onMouseEnter={onTodosClick}
+        onMouseEnter={onTodosHover}
       >
         <NavIcon name="todos" />
       </button>
@@ -34,7 +38,7 @@ export function QuickActionsPill({ onNotesClick, onTodosClick, onCollabClick }: 
         className="protocol-quick-actions-btn"
         title={onCollabClick ? "Kollaborationsansicht" : "Kollaborationsansicht (bald verfügbar)"}
         onClick={onCollabClick}
-        onMouseEnter={onCollabClick}
+        onMouseEnter={onCollabHover}
         disabled={!onCollabClick}
       >
         <NavIcon name="activity" />

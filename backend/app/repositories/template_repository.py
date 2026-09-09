@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import date
 
 from sqlalchemy import delete, select
@@ -7,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Participant, Template, TemplateParticipant
 from app.repositories.participant_repository import participant_eligible_on
+from app.services import public_id_service
 
 
 class TemplateRepository:
@@ -33,6 +35,9 @@ class TemplateRepository:
 
     def get(self, db: Session, template_id: int) -> Template | None:
         return db.get(Template, template_id)
+
+    def get_by_public_id(self, db: Session, public_id: uuid.UUID, *, tenant_id: int) -> Template | None:
+        return public_id_service.get_by_public_id(db, Template, public_id, tenant_id=tenant_id)
 
     def create(self, db: Session, template: Template) -> Template:
         db.add(template)

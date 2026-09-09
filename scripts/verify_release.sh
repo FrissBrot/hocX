@@ -7,10 +7,16 @@ set -euo pipefail
 #
 # Runs container-local health checks plus a small set of externally reachable endpoint
 # checks through Traefik. The script assumes DNS/TLS is already set up for the host's
-# domains (same expectation as RUNBOOK.md / deployment.md).
+# domains (same expectation as RUNBOOK.md / deployment.md) - except on a host running
+# fully private (TRAEFIK_WEBSECURE_BIND != 0.0.0.0, siehe Konfiguration-Wiki), wo die
+# Domains bewusst nicht oeffentlich aufloesen; dort werden die externen Checks
+# uebersprungen, exakt wie es fuer den Admin-Zugang schon immer der Fall war.
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENVIRONMENT="${1:-}"
+
+# shellcheck source=scripts/lib/env.sh
+source "$REPO_DIR/scripts/lib/env.sh"
 
 case "$ENVIRONMENT" in
   test)
@@ -42,15 +48,14 @@ case "$ENVIRONMENT" in
     ;;
 esac
 
+require_host_environment "$ENVIRONMENT"
+
 if [ ! -f "$ENV_FILE" ]; then
   echo "Env-Datei $ENV_FILE fehlt." >&2
   exit 1
 fi
 
-set -a
-# shellcheck disable=SC1090
-source "$ENV_FILE"
-set +a
+load_env_file "$ENV_FILE"
 
 : "${HOCX_VERSION:?HOCX_VERSION fehlt in $ENV_FILE}"
 : "${TRAEFIK_DOMAIN:?TRAEFIK_DOMAIN fehlt in $ENV_FILE}"
@@ -114,15 +119,37 @@ run_check "Frontend antwortet lokal" check_frontend_local
 run_check "Website antwortet lokal" check_website_local
 run_check "Docs antworten lokal" check_docs_local
 run_check "Alembic steht auf head" check_alembic_head
-run_check "Hauptdomain antwortet via Traefik" probe_from_backend "https://${TRAEFIK_DOMAIN}/login"
-run_check "Abgabebox antwortet via Traefik" probe_from_backend "https://${TRAEFIK_ABGABEBOX_DOMAIN}/"
 
-if [ -n "${TRAEFIK_DOCS_DOMAIN:-}" ]; then
-  run_check "Docs-Domain antwortet via Traefik" probe_from_backend "https://${TRAEFIK_DOCS_DOMAIN}/"
-fi
-
-if [ -n "${TRAEFIK_WEB_DOMAIN:-}" ]; then
-  run_check "Website-Domain antwortet via Traefik" probe_from_backend "https://${TRAEFIK_WEB_DOMAIN}/"
+# TRAEFIK_WEBSECURE_BIND != 0.0.0.0 heisst: dieser Host laeuft bewusst rein privat
+# (siehe Konfiguration-Wiki, "Test-Host komplett privat betreiben") - die Domains
+# loesen dann absichtlich nicht oeffentlich auf. Die folgenden Checks probieren einen
+# echten DNS-Lookup aus dem Backend-Container; das kann auf einem privaten Host nie
+# gelingen, genau wie es fuer TRAEFIK_ADMIN_DOMAIN schon immer der Fall war (dafuer
+# gibt es hier bewusst nie einen automatisierten externen Check).
+if [ "${TRAEFIK_WEBSECURE_BIND:-0.0.0.0}" != "0.0.0.0" ]; then
+  note "Traefik ist privat (TRAEFIK_WEBSECURE_BIND=${TRAEFIK_WEBSECURE_BIND}) - externe Domain-Checks werden uebersprungen"
+  note "  Manuell ueber den privaten Tunnel pruefen: https://${TRAEFIK_DOMAIN}/login"
+  note "  Manuell ueber den privaten Tunnel pruefen: https://${TRAEFIK_ABGABEBOX_DOMAIN}/"
+  if [ -n "${TRAEFIK_DOCS_DOMAIN:-}" ]; then
+    note "  Manuell ueber den privaten Tunnel pruefen: https://${TRAEFIK_DOCS_DOMAIN}/"
+  fi
+  if [ -n "${TRAEFIK_WEB_DOMAIN:-}" ]; then
+    note "  Manuell ueber den privaten Tunnel pruefen: https://${TRAEFIK_WEB_DOMAIN}/"
+  fi
+else
+  run_check "Hauptdomain antwortet via Traefik" probe_from_backend "https://${TRAEFIK_DOMAIN}/login"
+  run_check "Abgabebox antwortet via Traefik" probe_from_backend "https://${TRAEFIK_ABGABEBOX_DOMAIN}/"
+  if [ -n "${TRAEFIK_DOCS_DOMAIN:-}" ]; then
+    run_check "Docs-Domain antwortet via Traefik" probe_from_backend "https://${TRAEFIK_DOCS_DOMAIN}/"
+  fi
+  if [ -n "${TRAEFIK_WEB_DOMAIN:-}" ]; then
+    run_check "Website-Domain antwortet via Traefik" probe_from_backend "https://${TRAEFIK_WEB_DOMAIN}/"
+  fi
 fi
 
 note "Alle Verify-Checks erfolgreich fuer $HOCX_VERSION"
+
+if [ "$ENVIRONMENT" = test ]; then
+  run_check "Testnachweis fuer die Prod-Promotion speichern" \
+    "$REPO_DIR/scripts/record_tested_candidate.sh"
+fi

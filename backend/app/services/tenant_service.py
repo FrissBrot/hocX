@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import secrets
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -18,10 +19,10 @@ from app.services import domain_verification_service, traefik_config_service
 from app.services.document_template_service import DocumentTemplateService
 
 
-def build_tenant_profile_image_url(tenant_id: int, profile_image_path: str | None) -> str | None:
+def build_tenant_profile_image_url(tenant_public_id: uuid.UUID, profile_image_path: str | None) -> str | None:
     if not profile_image_path:
         return None
-    return f"/api/tenants/{tenant_id}/profile-image"
+    return f"/api/tenants/{tenant_public_id}/profile-image"
 
 
 async def apply_tenant_profile_image(tenant: Tenant, profile_image: UploadFile) -> None:
@@ -49,10 +50,10 @@ class TenantService:
 
     def _read_model(self, tenant: Tenant) -> TenantRead:
         return TenantRead(
-            id=tenant.id,
+            id=tenant.public_id,
             name=tenant.name,
             profile_image_path=tenant.profile_image_path,
-            profile_image_url=build_tenant_profile_image_url(tenant.id, tenant.profile_image_path),
+            profile_image_url=build_tenant_profile_image_url(tenant.public_id, tenant.profile_image_path),
             public_slug=tenant.public_slug,
             created_at=tenant.created_at,
             updated_at=tenant.updated_at,
@@ -106,7 +107,7 @@ class TenantService:
 
     def _domain_read_model(self, row: TenantDomain) -> TenantDomainRead:
         return TenantDomainRead(
-            id=row.id,
+            id=row.public_id,
             purpose=row.purpose,
             domain=row.domain,
             status=row.status,

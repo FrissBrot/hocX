@@ -1,4 +1,5 @@
 import json
+import uuid
 
 from sqlalchemy import BigInteger, Date, String, and_, cast, func, literal, null, or_, select, union_all
 from sqlalchemy.dialects.postgresql import JSONB
@@ -17,6 +18,7 @@ from app.models import (
     SubmissionUploadFile,
     WordImportDocument,
 )
+from app.services import public_id_service
 
 # Cap for the "list every tag/origin-tag currently in use" suggestion query - this app is
 # per-tenant scout/school data (hundreds to low thousands of files), not enterprise scale,
@@ -31,8 +33,15 @@ class StoredFileRepository:
         db.flush()
         return stored_file
 
+    def get_for_tenant(self, db: Session, stored_file_id: int, tenant_id: int) -> StoredFile | None:
+        stored_file = db.get(StoredFile, stored_file_id)
+        return stored_file if stored_file is not None and stored_file.tenant_id == tenant_id else None
+
     def get(self, db: Session, stored_file_id: int) -> StoredFile | None:
         return db.get(StoredFile, stored_file_id)
+
+    def get_by_public_id(self, db: Session, public_id: uuid.UUID, *, tenant_id: int) -> StoredFile | None:
+        return public_id_service.get_by_public_id(db, StoredFile, public_id, tenant_id=tenant_id)
 
     def delete(self, db: Session, stored_file: StoredFile) -> None:
         db.delete(stored_file)
@@ -285,6 +294,20 @@ class StoredFileRepository:
         db.refresh(stored_file)
         return stored_file
 
+    def list_pending_protocol_images(self, db: Session) -> list[StoredFile]:
+        # Joined through ProtocolImage rather than a path prefix (unlike
+        # list_pending_word_import_files) - a protocol image's StoredFile and its
+        # ProtocolImage row are always created together in the same call
+        # (FileService.save_protocol_image), so there's no "not yet linked" gap to worry
+        # about here.
+        return list(
+            db.execute(
+                select(StoredFile)
+                .join(ProtocolImage, ProtocolImage.stored_file_id == StoredFile.id)
+                .where(StoredFile.scan_status == "pending")
+            ).scalars()
+        )
+
 
 class ProtocolImageRepository:
     def list_for_protocol_block(self, db: Session, protocol_element_block_id: int):
@@ -309,6 +332,13 @@ class ProtocolImageRepository:
 
     def get(self, db: Session, image_id: int) -> ProtocolImage | None:
         return db.get(ProtocolImage, image_id)
+
+    def get_by_public_id(self, db: Session, public_id: uuid.UUID) -> ProtocolImage | None:
+        # ProtocolImage has no tenant_id column of its own (scoped transitively via
+        # protocol_element_block -> protocol_element -> protocol) - callers must verify
+        # tenant/access via access_repository on the resolved row, same as for the
+        # numeric-id path this replaces.
+        return public_id_service.get_by_public_id(db, ProtocolImage, public_id)
 
     def delete(self, db: Session, protocol_image: ProtocolImage) -> None:
         db.delete(protocol_image)

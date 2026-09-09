@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, DragEvent, FormEvent, useCallback, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { CaptchaWidget } from "@/components/captcha-widget";
 import { publicApiUrl } from "@/lib/api";
@@ -27,11 +27,23 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [done, setDone] = useState(false);
+  const [online, setOnline] = useState(true);
   const [uploadedSoFar, setUploadedSoFar] = useState(alreadyUploadedCount);
   const inputRef = useRef<HTMLInputElement>(null);
   // Welche rohe FriendlyCaptcha-Loesung bereits gegen ein Sitzungs-Token eingetauscht wurde -
   // handleSolved kann mehrfach mit derselben Loesung feuern (Callback + DOM-Fallback im Widget).
   const exchangedSolutionRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    update();
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
 
   const accept = allowedFileTypes.length > 0 ? allowedFileTypes.map((t) => `.${t}`).join(",") : undefined;
   const typeLabel = allowedFileTypes.length > 0 ? allowedFileTypes.map((t) => t.toUpperCase()).join(", ") : "Alle Dateitypen";
@@ -82,7 +94,9 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
       const formData = new FormData();
       formData.append("captcha_solution", solution);
       const response = await fetch(
-        publicApiUrl(`/api/public/${tenantSlug}/assignments/${assignmentSlug}/elements/${elementRef}/captcha-verify`),
+        publicApiUrl(
+          `/api/public/${encodeURIComponent(tenantSlug)}/assignments/${encodeURIComponent(assignmentSlug)}/elements/${encodeURIComponent(elementRef)}/captcha-verify`
+        ),
         { method: "POST", body: formData }
       );
       if (!response.ok) {
@@ -102,6 +116,17 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
     }
   }, [tenantSlug, assignmentSlug, elementRef]);
 
+  // Kein Sitekey konfiguriert (lokale Entwicklung/Test-Stack ohne eigene FriendlyCaptcha-Keys) -
+  // das Widget kann gar nicht laden, also direkt den Backend-Austausch anstossen; captcha.py
+  // laesst den Platzhalter-Wert durch, solange dort ebenfalls keine Keys gesetzt sind (siehe
+  // captcha_enabled() im Backend). Ist doch ein Sitekey gesetzt, greift stattdessen der echte
+  // Widget-Callback oben.
+  useEffect(() => {
+    if (!sitekey) {
+      handleSolved("no-friendly-captcha-configured");
+    }
+  }, [sitekey, handleSolved]);
+
   // Startet einen frischen Sicherheitscheck (z.B. nach abgelaufenem Sitzungs-Token) - der `key`-
   // Wechsel zwingt React, das Widget komplett neu zu montieren, was dank data-start="auto" sofort
   // eine neue Challenge loest, ohne dass ausgewaehlte Dateien verloren gehen.
@@ -114,6 +139,7 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (files.length === 0) { setError("Bitte mindestens eine Datei auswählen"); return; }
+    if (!navigator.onLine) { setError("Keine Internetverbindung – die ausgewählten Dateien bleiben erhalten. Bitte nach dem Verbinden erneut senden."); return; }
 
     if (!captchaSessionToken) {
       setError("Sicherheitscheck läuft noch – bitte kurz warten und nochmals versuchen");
@@ -128,7 +154,9 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
       formData.append("captcha_session_token", captchaSessionToken);
       files.forEach((file) => formData.append("files", file));
       const response = await fetch(
-        publicApiUrl(`/api/public/${tenantSlug}/assignments/${assignmentSlug}/elements/${elementRef}/upload`),
+        publicApiUrl(
+          `/api/public/${encodeURIComponent(tenantSlug)}/assignments/${encodeURIComponent(assignmentSlug)}/elements/${encodeURIComponent(elementRef)}/upload`
+        ),
         { method: "POST", body: formData }
       );
       if (!response.ok) {
@@ -150,7 +178,9 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
       setFiles([]);
       setDone(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload fehlgeschlagen");
+      setError(navigator.onLine
+        ? (err instanceof Error ? err.message : "Upload fehlgeschlagen")
+        : "Verbindung während des Uploads unterbrochen. Prüfe vor dem erneuten Senden, ob die Abgabe bereits angekommen ist.");
     } finally {
       // Das Sitzungs-Token bleibt bewusst erhalten (ausser beim 401-Fall oben) - der
       // Sicherheitscheck soll nur einmal pro Seitenaufruf laufen, nicht vor jedem Upload.
@@ -187,6 +217,7 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
 
   return (
     <form onSubmit={handleSubmit}>
+      {!online && <div className="upload-error" role="status">Offline – Uploads sind erst nach Wiederherstellung der Verbindung möglich. Die Auswahl bleibt in diesem Tab erhalten.</div>}
       {uploadedSoFar > 0 && (
         <p className="upload-already-count">
           Bereits {uploadedSoFar} Datei{uploadedSoFar === 1 ? "" : "en"} für diese Abgabe hochgeladen.
@@ -236,8 +267,11 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
 
       {/* Captcha - laeuft einmal beim Laden der Seite, bleibt danach fuer alle weiteren Uploads
           gueltig (siehe handleSolved oben) - das Widget selbst wird nach erfolgreichem Eintausch
-          ausgeblendet, nur der Status bleibt sichtbar. */}
-      {sitekey && (
+          ausgeblendet, nur der Status bleibt sichtbar. Ohne Sitekey (kein FriendlyCaptcha
+          konfiguriert) zeigen wir statt des Widgets nur einen Platzhalter - der Eintausch laeuft
+          im Hintergrund trotzdem (siehe useEffect oben), damit der Rest des Formulars unveraendert
+          bleibt. */}
+      {sitekey ? (
         <div style={{ margin: "20px 0 4px" }}>
           {!captchaSessionToken && (
             <CaptchaWidget key={captchaKey} sitekey={sitekey} onSolved={handleSolved} onExpired={() => { exchangedSolutionRef.current = null; }} />
@@ -249,6 +283,10 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
                 ? "Sicherheitscheck wird geprüft…"
                 : "Sicherheitscheck läuft…"}
           </div>
+        </div>
+      ) : (
+        <div style={{ margin: "20px 0 4px" }}>
+          <div className="captcha-placeholder">Sicherheitscheck (kein FriendlyCaptcha konfiguriert – Test-/Dev-Betrieb)</div>
         </div>
       )}
 

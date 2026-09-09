@@ -57,10 +57,10 @@ export function MatrixEmbeddedBlockEditor({
   updateEmbeddedBlock: (updater: (current: MatrixEmbeddedBlock) => MatrixEmbeddedBlock, persist?: boolean) => void;
   openMultiParticipantPicker: (row: Record<string, any>) => void;
   createEvent: (forcedTag: string, draft: ProtocolEventDraft) => Promise<EventSummary | null>;
-  updateEvent: (eventId: number, patch: Partial<EventSummary>) => Promise<boolean>;
-  deleteEvent: (eventId: number) => Promise<void>;
+  updateEvent: (eventId: string, patch: Partial<EventSummary>) => Promise<boolean>;
+  deleteEvent: (eventId: string) => Promise<void>;
   currentCycleYear: number | null;
-  cycleConfigId: number | null;
+  cycleConfigId: string | null;
   onEventContextMenu: (nativeEvent: React.MouseEvent, eventRow: EventSummary) => void;
   isPlanningMode: boolean;
   knownEventTags: string[];
@@ -77,8 +77,8 @@ export function MatrixEmbeddedBlockEditor({
     () => attendanceParticipants(availableParticipants),
     [availableParticipants]
   );
-  const [embeddedEventDrafts, setEmbeddedEventDrafts] = useState<Record<number, Partial<EventSummary>>>({});
-  const embeddedEventAutosaveTimers = useRef<Record<number, number>>({});
+  const [embeddedEventDrafts, setEmbeddedEventDrafts] = useState<Record<string, Partial<EventSummary>>>({});
+  const embeddedEventAutosaveTimers = useRef<Record<string, number>>({});
   const forcedEmbeddedTag =
     (embeddedConfig.event_use_column_tag_filter === true ? String(matrixColumn?.event_tag_filter || matrixColumn?.title || "").trim() : "") ||
     String(embeddedConfig.event_tag_filter ?? "").trim();
@@ -141,12 +141,12 @@ export function MatrixEmbeddedBlockEditor({
     };
   }, []);
 
-  function participantNameById(participantId: number | null | undefined) {
-    return availableParticipants.find((participant) => participant.id === Number(participantId ?? 0))?.display_name ?? "—";
+  function participantNameById(participantId: string | null | undefined) {
+    return availableParticipants.find((participant) => participant.id === participantId)?.display_name ?? "—";
   }
 
-  function eventLabelById(eventId: number | null | undefined) {
-    const eventRow = sortedEvents.find((entry) => entry.id === Number(eventId ?? 0));
+  function eventLabelById(eventId: string | null | undefined) {
+    const eventRow = sortedEvents.find((entry) => entry.id === eventId);
     return eventRow ? `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}` : "—";
   }
 
@@ -233,7 +233,7 @@ export function MatrixEmbeddedBlockEditor({
   }
 
   function embeddedParticipantSummary(row: Record<string, any>) {
-    const selectedIds = Array.isArray(row.participant_ids) ? row.participant_ids.map(Number) : [];
+    const selectedIds = Array.isArray(row.participant_ids) ? row.participant_ids.map(String) : [];
     if (!selectedIds.length) {
       return "Teilnehmer waehlen";
     }
@@ -472,7 +472,7 @@ export function MatrixEmbeddedBlockEditor({
             <div className="form-block-list">
               {rows.map((row, index) => {
                 const rowType = String(row.value_type ?? row.row_type ?? "text");
-                const referencedEvent = rowType === "event" ? sortedEvents.find((entry) => entry.id === Number(row.event_id ?? 0)) : undefined;
+                const referencedEvent = rowType === "event" ? sortedEvents.find((entry) => entry.id === row.event_id) : undefined;
                 const rowValue: ReactNode =
                   rowType === "participant"
                     ? participantNameById(row.participant_id)
@@ -1126,7 +1126,7 @@ export function MatrixEmbeddedBlockEditor({
         <div className={embeddedBlockClassName}>
           <div className="matrix-static-list">
             {eligibleAttendanceParticipants.map((participant) => {
-              const currentEntry = attendanceEntries.find((entry) => Number(entry.participant_id) === participant.id);
+              const currentEntry = attendanceEntries.find((entry) => String(entry.participant_id) === participant.id);
               return (
                 <div className="matrix-static-list-item" key={`embedded-attendance-${participant.id}`}>
                   <strong>{participant.display_name}</strong>: {currentEntry?.status ? attendanceStatusLabel(currentEntry.status) : "—"}
@@ -1141,7 +1141,7 @@ export function MatrixEmbeddedBlockEditor({
       <div className={embeddedBlockClassName}>
         <div className="attendance-list">
           {eligibleAttendanceParticipants.map((participant) => {
-            const currentEntry = attendanceEntries.find((entry) => Number(entry.participant_id) === participant.id);
+            const currentEntry = attendanceEntries.find((entry) => String(entry.participant_id) === participant.id);
             const selectedStatus = currentEntry?.status ?? null;
             return (
               <div className="attendance-row" key={`embedded-attendance-${participant.id}`}>
@@ -1156,7 +1156,7 @@ export function MatrixEmbeddedBlockEditor({
                         updateEmbeddedConfig((current) => ({
                           ...current,
                           attendance_entries: [
-                            ...attendanceEntries.filter((entry) => Number(entry.participant_id) !== participant.id),
+                            ...attendanceEntries.filter((entry) => String(entry.participant_id) !== participant.id),
                             {
                               participant_id: participant.id,
                               participant_name: participant.display_name,

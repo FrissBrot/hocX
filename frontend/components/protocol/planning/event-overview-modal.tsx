@@ -27,7 +27,7 @@ type NewEventDraft = {
 type EventOverviewModalProps = {
   open: boolean;
   onClose: () => void;
-  protocolId: number;
+  protocolId: string;
   forcedTag: string;
   allowEndDate: boolean;
   protocolDate: string | null;
@@ -39,8 +39,8 @@ type EventOverviewModalProps = {
   onTagColorChange: (tag: string, color: string) => Promise<void>;
   onTagRename: (oldTag: string, newTag: string) => Promise<void>;
   onCreateEvent: (draft: NewEventDraft) => Promise<EventSummary | null>;
-  onUpdateEvent: (eventId: number, patch: Partial<EventSummary>) => Promise<boolean>;
-  onDeleteEvent: (eventId: number) => Promise<void>;
+  onUpdateEvent: (eventId: string, patch: Partial<EventSummary>) => Promise<boolean>;
+  onDeleteEvent: (eventId: string) => Promise<void>;
 };
 
 function emptyDraft(protocolDate: string | null, forcedTag: string): NewEventDraft {
@@ -88,7 +88,7 @@ export function EventOverviewModal({
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newDraft, setNewDraft] = useState<NewEventDraft>(() => emptyDraft(protocolDate, forcedTag));
   const [creating, setCreating] = useState(false);
-  const [assigningId, setAssigningId] = useState<number | null>(null);
+  const [assigningId, setAssigningId] = useState<string | null>(null);
   const [detailEvent, setDetailEvent] = useState<EventSummary | null>(null);
   const confirm = useConfirm();
 
@@ -142,12 +142,12 @@ export function EventOverviewModal({
     }
   }
 
-  async function handleUpdate(eventId: number, patch: Partial<EventSummary>) {
+  async function handleUpdate(eventId: string, patch: Partial<EventSummary>) {
     setDetailEvent((current) => (current && current.id === eventId ? { ...current, ...patch } : current));
     await onUpdateEvent(eventId, patch);
   }
 
-  async function handleDelete(eventId: number, title: string) {
+  async function handleDelete(eventId: string, title: string) {
     if (
       !(await confirm({
         message: `Termin "${title}" endgültig löschen? Das entfernt ihn aus allen Protokollen.`,

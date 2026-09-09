@@ -1,3 +1,5 @@
+import uuid
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy import select, text
@@ -6,7 +8,8 @@ from sqlalchemy.orm import Session
 from app.core.cycle_utils import format_cycle_name
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, require_reader
-from app.models.entities import CycleConfig, Participant, Protocol
+from app.models.entities import CycleConfig, FinanceAccount, Participant, Protocol
+from app.services import public_id_service
 from app.services.statistics_common import (
     aggregate_attendance,
     aggregate_todo_counts,
@@ -69,7 +72,7 @@ class TodoSummary(BaseModel):
 
 class FinanceMonthStat(BaseModel):
     month: str
-    account_id: int
+    account_id: uuid.UUID
     account_name: str
     income: float
     expenses: float
@@ -77,7 +80,7 @@ class FinanceMonthStat(BaseModel):
 
 
 class CycleInfo(BaseModel):
-    cycle_config_id: int
+    cycle_config_id: uuid.UUID
     cycle_config_name: str
     cycle_year: int
     label: str
@@ -85,7 +88,7 @@ class CycleInfo(BaseModel):
 
 class GroupStat(BaseModel):
     group_name: str
-    cycle_config_id: int | None
+    cycle_config_id: uuid.UUID | None
     cycle_year: int | None
     session_count: int
     session_count_with_participants: int
@@ -141,7 +144,7 @@ def get_statistics_overview(
             cc = cycle_configs.get(ec.cycle_config_id)
             if cc:
                 cycles.append(CycleInfo(
-                    cycle_config_id=ec.cycle_config_id,
+                    cycle_config_id=cc.public_id,
                     cycle_config_name=cc.name,
                     cycle_year=ec.cycle_year,
                     label=format_cycle_name(cc.name_pattern or cc.name, ec.cycle_year),
@@ -153,7 +156,7 @@ def get_statistics_overview(
     groups_stats = [
         GroupStat(
             group_name=r.group_name,
-            cycle_config_id=r.cycle_config_id,
+            cycle_config_id=cycle_configs[r.cycle_config_id].public_id if r.cycle_config_id in cycle_configs else None,
             cycle_year=r.cycle_year,
             session_count=int(r.session_count),
             session_count_with_participants=int(r.session_count_with_participants),
@@ -220,11 +223,12 @@ def get_statistics_overview(
 
     # ── Finance by month ─────────────────────────────────────────────────────
     finance_rows = fetch_finance_by_account_month(db, tenant_id)
+    account_public_ids = public_id_service.resolve_public_ids(db, FinanceAccount, [r.account_id for r in finance_rows])
 
     finance_by_month = [
         FinanceMonthStat(
             month=r.month,
-            account_id=r.account_id,
+            account_id=account_public_ids[r.account_id],
             account_name=r.account_name,
             income=float(r.income or 0),
             expenses=float(r.expenses or 0),

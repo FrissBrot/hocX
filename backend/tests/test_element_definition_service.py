@@ -16,6 +16,6 @@ def test_normalize_blocks_sets_plain_text_render_type_for_display_blocks():
     service = ElementDefinitionService()
     blocks = [{"element_type_id": 4, "title": "Anzeige-Block"}]
 
-    normalized = service._normalize_blocks(blocks)
+    normalized = service._normalize_blocks(None, blocks, tenant_id=1)
 
     assert normalized[0]["render_type_id"] == 6

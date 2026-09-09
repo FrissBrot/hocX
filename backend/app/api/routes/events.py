@@ -1,4 +1,5 @@
 import json
+import uuid
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -10,6 +11,7 @@ from pydantic import BaseModel
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
 from app.schemas.event import EventCreate, EventImportPreview, EventRead, EventUpdate
+from app.services import public_id_service
 from app.services.event_service import EventService
 from app.services.submission_service import SubmissionService
 from app.services.audit_service import AuditService
@@ -93,17 +95,17 @@ async def import_events_csv(
 
 @router.patch("/events/{event_id}", response_model=EventRead)
 def patch_event(
-    event_id: int,
+    event_id: uuid.UUID,
     payload: EventUpdate,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
-    current = service.get_event(db, event_id)
-    if current is None or current.tenant_id != user.current_tenant_id:
+    current = public_id_service.get_by_public_id(db, Event, event_id, tenant_id=user.current_tenant_id)
+    if current is None:
         raise HTTPException(status_code=404, detail="Event not found")
     try:
-        updated = service.update_event(db, event_id, payload)
+        updated = service.update_event(db, current.id, payload)
     except (SQLAlchemyError, ValueError) as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Event could not be updated") from exc
@@ -115,23 +117,23 @@ def patch_event(
 
 @router.delete("/events/{event_id}", response_model=dict[str, str])
 def delete_event(
-    event_id: int,
+    event_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
-    current = service.get_event(db, event_id)
-    if current is None or current.tenant_id != user.current_tenant_id:
+    current = public_id_service.get_by_public_id(db, Event, event_id, tenant_id=user.current_tenant_id)
+    if current is None:
         raise HTTPException(status_code=404, detail="Event not found")
     try:
-        deleted = service.delete_event(db, event_id)
+        deleted = service.delete_event(db, current.id)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Event could not be deleted") from exc
     if not deleted:
         raise HTTPException(status_code=404, detail="Event not found")
     # Audit S10, 2026-08-16 - see the identical fix in participants.py.
-    audit.log(db, action="event.deleted", actor=user, entity_type="event", entity_id=event_id)
+    audit.log(db, action="event.deleted", actor=user, entity_type="event", entity_id=current.id)
     return {"message": "Event deleted"}
 
 

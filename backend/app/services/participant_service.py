@@ -7,10 +7,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password
-from app.models import AppUser, Participant, Role, Template, UserTenantRole
+from app.models import AppUser, ListDefinition, ListEntry, Participant, Role, Template, UserTenantRole
 from app.repositories.participant_repository import ParticipantRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.participant import ParticipantCreate, ParticipantImportResult, ParticipantUpdate
+from app.services import public_id_service
 from app.services.access_service import AccessService
 
 
@@ -93,8 +94,13 @@ class ParticipantService:
             {
                 "first_name": participant.first_name or participant.display_name,
                 "last_name": participant.last_name or "Participant",
+                # app_user.name is `GENERATED ALWAYS AS (display_name) STORED` (see the
+                # baseline schema) - Postgres rejects any explicit value for it outright,
+                # which made every participant update with a linked user fail with a
+                # generic "could not be updated" 400 (masked SQLAlchemyError, found via
+                # e2e once auth was fixed enough for the suite to reach this code at all;
+                # no existing backend test covered update_participant with a linked user).
                 "display_name": participant.display_name,
-                "name": participant.display_name,
                 "is_active": participant.is_active,
                 "external_identity_json": {
                     **(user.external_identity_json or {}),
@@ -143,11 +149,15 @@ class ParticipantService:
             )
 
     def create_participant(self, db: Session, payload: ParticipantCreate, *, tenant_id: int) -> Participant:
+        app_user_id: int | None = None
         if payload.app_user_id is not None:
-            self._ensure_app_user_belongs_to_tenant(db, payload.app_user_id, tenant_id=tenant_id)
+            app_user_id = public_id_service.resolve_internal_id(db, AppUser, payload.app_user_id)
+            if app_user_id is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App user not found")
+            self._ensure_app_user_belongs_to_tenant(db, app_user_id, tenant_id=tenant_id)
         participant = Participant(
             tenant_id=tenant_id,
-            app_user_id=payload.app_user_id,
+            app_user_id=app_user_id,
             first_name=payload.first_name,
             last_name=payload.last_name,
             display_name=payload.display_name,
@@ -188,11 +198,44 @@ class ParticipantService:
         db.refresh(updated)
         return updated
 
+    def _clear_orphaned_list_references(self, db: Session, tenant_id: int, participant_ids: set[int]) -> None:
+        """ListEntry.column_one/two_value_json has no FK to Participant (it's a JSONB
+        value, not a real column), so deleting a participant otherwise leaves a dangling
+        participant_id/participant_ids reference behind - list_service._normalize_value
+        only validates on write, never on the referenced participant's later deletion
+        (audit finding, 2026-08-25). Clears the value to {} (the same "empty" convention
+        already used for a column-type change in ListRepository.update_definition) rather
+        than leaving stale ids that a future entry read/write could stumble over."""
+        if not participant_ids:
+            return
+        entries = list(
+            db.scalars(
+                select(ListEntry)
+                .join(ListDefinition, ListDefinition.id == ListEntry.list_definition_id)
+                .where(ListDefinition.tenant_id == tenant_id)
+            )
+        )
+        for entry in entries:
+            changed = False
+            for column in ("column_one_value_json", "column_two_value_json"):
+                value = getattr(entry, column) or {}
+                pid = value.get("participant_id")
+                pids = value.get("participant_ids")
+                if pid is not None and int(pid) in participant_ids:
+                    setattr(entry, column, {})
+                    changed = True
+                elif isinstance(pids, list) and any(int(x) in participant_ids for x in pids if x is not None):
+                    setattr(entry, column, {**value, "participant_ids": [x for x in pids if int(x) not in participant_ids]})
+                    changed = True
+            if changed:
+                db.add(entry)
+
     def delete_participant(self, db: Session, participant_id: int, *, tenant_id: int) -> bool:
         # Audit D7, 2026-08-16 - see get_participant's identical note above.
         participant = self.repository.get(db, participant_id)
         if participant is None or participant.tenant_id != tenant_id:
             return False
+        self._clear_orphaned_list_references(db, tenant_id, {participant_id})
         self.repository.delete(db, participant)
         db.commit()
         return True
@@ -205,6 +248,7 @@ class ParticipantService:
         ]
         if not participants:
             return 0
+        self._clear_orphaned_list_references(db, tenant_id, {participant.id for participant in participants})
         deleted = self.repository.delete_many(db, participants)
         db.commit()
         return deleted

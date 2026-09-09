@@ -26,6 +26,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.secret_crypto import decrypt_secret
 from app.models import (
     AppUser,
     AttendanceFine,
@@ -47,6 +48,7 @@ from app.models import (
     ProtocolDisplaySnapshot,
     ProtocolElement,
     ProtocolElementBlock,
+    ProtocolExportCache,
     ProtocolImage,
     ProtocolText,
     ProtocolTodo,
@@ -62,8 +64,13 @@ from app.models import (
     Tenant,
     TenantDomain,
     UserProtocolAccess,
+    UserProtocolScroll,
+    UserMfaFactor,
     UserTemplateAccess,
     UserTenantRole,
+    WordImportDocument,
+    WordImportProfile,
+    WordImportSuggestionOutcome,
 )
 from app.services.file_service import _safe_storage_path
 from app.services.tenant_transfer_common import (
@@ -75,7 +82,11 @@ from app.services.tenant_transfer_common import (
     row_to_dict,
 )
 
-FORMAT_VERSION = 1
+# Bumped 1 -> 2: exported rows now include a public_id column (see build_row in
+# tenant_transfer_common.py, which drops it on import so each row gets a fresh UUIDv7) -
+# older exports remain readable in principle but importers should be explicit about the
+# format they were generated against.
+FORMAT_VERSION = 2
 ExportScope = Literal["structure", "structure_lists", "full", "full_abgabebox"]
 
 
@@ -125,6 +136,26 @@ class TenantExportService:
                 row["password_hash"] = REDACTED_PASSWORD_HASH_MARKER
             user_rows.append(row)
         tables["app_user"] = user_rows
+
+        # MFA belongs to the system-wide AppUser rather than directly to a tenant. Only
+        # factors of actual tenant members travel with a tenant export; metadata-only user
+        # references must not leak authentication credentials. TOTP ciphertext is tied to
+        # this installation's ADMIN_AUTH_SECRET, so export the plaintext secret and let the
+        # target installation encrypt it with its own key during import.
+        member_user_ids = {u.id for u in users if u.email in member_emails}
+        factors = (
+            db.scalars(select(UserMfaFactor).where(UserMfaFactor.user_id.in_(member_user_ids))).all()
+            if member_user_ids
+            else []
+        )
+        factor_rows = []
+        for factor in factors:
+            row = row_to_dict(factor)
+            row["user_id"] = self._user_cache.email_for(factor.user_id)
+            row["totp_secret"] = decrypt_secret(factor.secret_encrypted) if factor.secret_encrypted else None
+            row.pop("secret_encrypted", None)
+            factor_rows.append(row)
+        tables["user_mfa_factor"] = factor_rows
 
         manifest = {
             "format_version": FORMAT_VERSION,
@@ -234,6 +265,12 @@ class TenantExportService:
         # for how a global domain-uniqueness collision on the target is handled.
         tables["tenant_domain"] = self._rows(
             db.scalars(select(TenantDomain).where(TenantDomain.tenant_id == tenant_id)).all(), "tenant_domain"
+        )
+        # Learned Word-import mappings are template configuration and therefore belong
+        # to every structure backup, not only to exports containing operational data.
+        tables["word_import_profile"] = self._rows(
+            db.scalars(select(WordImportProfile).where(WordImportProfile.tenant_id == tenant_id)).all(),
+            "word_import_profile",
         )
 
     def _export_list_entries(self, db: Session, tables: dict[str, Any]) -> None:
@@ -348,6 +385,20 @@ class TenantExportService:
         tables["protocol"] = self._rows(protocols, "protocol")
         protocol_ids = [p.id for p in protocols]
 
+        # Keep the import queue/history as well as its link to the generated protocol.
+        # The referenced original files are already included through the tenant-wide
+        # StoredFile export above.
+        tables["word_import_document"] = self._rows(
+            db.scalars(select(WordImportDocument).where(WordImportDocument.tenant_id == tenant_id)).all(),
+            "word_import_document",
+        )
+        tables["word_import_suggestion_outcome"] = self._rows(
+            db.scalars(
+                select(WordImportSuggestionOutcome).where(WordImportSuggestionOutcome.tenant_id == tenant_id)
+            ).all(),
+            "word_import_suggestion_outcome",
+        )
+
         protocol_elements = (
             db.scalars(select(ProtocolElement).where(ProtocolElement.protocol_id.in_(protocol_ids))).all()
             if protocol_ids
@@ -403,4 +454,16 @@ class TenantExportService:
         tables["user_protocol_access"] = self._rows(
             db.scalars(select(UserProtocolAccess).where(UserProtocolAccess.tenant_id == tenant_id)).all(),
             "user_protocol_access",
+        )
+        tables["user_protocol_scroll"] = self._rows(
+            db.scalars(select(UserProtocolScroll).where(UserProtocolScroll.protocol_id.in_(protocol_ids))).all()
+            if protocol_ids
+            else [],
+            "user_protocol_scroll",
+        )
+        tables["protocol_export_cache"] = self._rows(
+            db.scalars(select(ProtocolExportCache).where(ProtocolExportCache.protocol_id.in_(protocol_ids))).all()
+            if protocol_ids
+            else [],
+            "protocol_export_cache",
         )

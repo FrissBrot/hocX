@@ -21,7 +21,7 @@ import {
 
 type ListManagerProps = {
   initialLists: StructuredListDefinition[];
-  initialEntriesByList: Record<number, StructuredListEntry[]>;
+  initialEntriesByList: Record<string, StructuredListEntry[]>;
   availableParticipants: ParticipantSummary[];
   availableEvents: EventSummary[];
   documentTemplates?: DocumentTemplate[];
@@ -81,10 +81,10 @@ export function ListManager({
   const confirm = useConfirm();
   const [lists, setLists] = useState(initialLists);
   const [entriesByList, setEntriesByList] = useState(initialEntriesByList);
-  const [selectedListId, setSelectedListId] = useState<number | null>(initialLists[0]?.id ?? null);
+  const [selectedListId, setSelectedListId] = useState<string | null>(initialLists[0]?.id ?? null);
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingListId, setEditingListId] = useState<number | null>(null);
+  const [editingListId, setEditingListId] = useState<string | null>(null);
   const [form, setForm] = useState(initialFormState);
 
   // Export modal state
@@ -92,14 +92,14 @@ export function ListManager({
     (t) => t.is_active && (t.configuration_json as { options?: { orientation?: string } })?.options?.orientation === "landscape"
   );
   const [exportModalOpen, setExportModalOpen] = useState(false);
-  const [exportTemplateId, setExportTemplateId] = useState<number | "">(landscapeTemplates[0]?.id ?? "");
-  const [exportListId, setExportListId] = useState<number | "">(initialLists[0]?.id ?? "");
+  const [exportTemplateId, setExportTemplateId] = useState<string | "">(landscapeTemplates[0]?.id ?? "");
+  const [exportListId, setExportListId] = useState<string | "">(initialLists[0]?.id ?? "");
   const [exportGroupBy, setExportGroupBy] = useState<"" | "column_one" | "column_two">("");
   const [exportSortBy, setExportSortBy] = useState<"" | "column_one" | "column_two">("");
   const [exportSortDirection, setExportSortDirection] = useState<"asc" | "desc">("asc");
   const [exportFilterColumn, setExportFilterColumn] = useState<"" | "column_one" | "column_two">("");
-  const [exportFilterParticipantId, setExportFilterParticipantId] = useState<number | "">("");
-  const [exportFilterEventId, setExportFilterEventId] = useState<number | "">("");
+  const [exportFilterParticipantId, setExportFilterParticipantId] = useState<string | "">("");
+  const [exportFilterEventId, setExportFilterEventId] = useState<string | "">("");
   const [exportFilterText, setExportFilterText] = useState("");
   const [exportBusy, setExportBusy] = useState(false);
   const [exportUrl, setExportUrl] = useState<string | null>(null);
@@ -136,23 +136,23 @@ export function ListManager({
 
   const exportFilteredEntries = useMemo(() => {
     if (!exportListId) return [];
-    const entries = entriesByList[exportListId as number] ?? [];
+    const entries = entriesByList[exportListId] ?? [];
     if (!exportFilterColumn || !exportListDef) return entries;
     const valueType = exportFilterColumn === "column_one" ? exportListDef.column_one_value_type : exportListDef.column_two_value_type;
     return entries.filter((entry) => {
       const value = exportFilterColumn === "column_one" ? entry.column_one_value : entry.column_two_value;
       if (valueType === "participant") {
         if (!exportFilterParticipantId) return true;
-        return Number(value.participant_id) === exportFilterParticipantId;
+        return String(value.participant_id) === exportFilterParticipantId;
       }
       if (valueType === "participants") {
         if (!exportFilterParticipantId) return true;
-        const ids = Array.isArray(value.participant_ids) ? (value.participant_ids as unknown[]).map(Number) : [];
-        return ids.includes(exportFilterParticipantId as number);
+        const ids = Array.isArray(value.participant_ids) ? (value.participant_ids as unknown[]).map(String) : [];
+        return ids.includes(exportFilterParticipantId);
       }
       if (valueType === "event") {
         if (!exportFilterEventId) return true;
-        return Number(value.event_id) === exportFilterEventId;
+        return String(value.event_id) === exportFilterEventId;
       }
       if (!exportFilterText) return true;
       return String(value.text_value ?? "").toLowerCase().includes(exportFilterText.toLowerCase());
@@ -200,7 +200,7 @@ export function ListManager({
     }
   }
 
-  const [hoveredListId, setHoveredListId] = useState<number | null>(null);
+  const [hoveredListId, setHoveredListId] = useState<string | null>(null);
 
   const filteredLists = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -261,7 +261,7 @@ export function ListManager({
     }
   }
 
-  async function deleteDefinition(listId: number) {
+  async function deleteDefinition(listId: string) {
     const ok = await confirm({
       message: "Liste endgültig löschen? Alle Einträge dieser Liste gehen dabei unwiderruflich verloren.",
       tone: "danger",
@@ -284,7 +284,7 @@ export function ListManager({
     }
   }
 
-  async function createEntry(listId: number, payload: { sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }) {
+  async function createEntry(listId: string, payload: { sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }) {
     try {
       const created = await browserApiFetch<StructuredListEntry>(`/api/lists/${listId}/entries`, {
         method: "POST",
@@ -303,8 +303,8 @@ export function ListManager({
   }
 
   async function updateEntry(
-    listId: number,
-    entryId: number,
+    listId: string,
+    entryId: string,
     payload: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>
   ) {
     try {
@@ -324,7 +324,7 @@ export function ListManager({
     }
   }
 
-  async function deleteEntry(listId: number, entryId: number) {
+  async function deleteEntry(listId: string, entryId: string) {
     const ok = await confirm({
       message: "Eintrag endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
       tone: "danger",

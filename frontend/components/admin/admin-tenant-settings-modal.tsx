@@ -125,7 +125,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     void loadStorageUsage(tenant.id);
   }, [open, tenant]);
 
-  async function loadStorageUsage(tenantId: number) {
+  async function loadStorageUsage(tenantId: string) {
     setStorageLoading(true);
     try {
       const result = await browserApiFetch<StorageUsageRead>(`/api/admin/tenants/${tenantId}/storage`);
@@ -162,7 +162,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     }
   }
 
-  async function loadCleanupPreview(tenantId: number) {
+  async function loadCleanupPreview(tenantId: string) {
     setCleanupLoading(true);
     try {
       const result = await browserApiFetch<TenantCleanupCounts>(`/api/admin/tenants/${tenantId}/cleanup/preview`);
@@ -223,7 +223,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     }
   }
 
-  async function loadTenantUsers(tenantId: number) {
+  async function loadTenantUsers(tenantId: string) {
     setUsersLoading(true);
     try {
       const result = await browserApiFetch<AdminTenantUser[]>(`/api/admin/tenants/${tenantId}/users`);
@@ -259,7 +259,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     }
   }
 
-  async function changeUserRole(userId: number, roleCode: string) {
+  async function changeUserRole(userId: string, roleCode: string) {
     if (!tenant) return;
     const previous = tenantUsers;
     setTenantUsers((current) => current.map((u) => (u.user_id === userId ? { ...u, role_code: roleCode } : u)));
@@ -275,7 +275,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     }
   }
 
-  async function removeUser(userId: number, displayName: string) {
+  async function removeUser(userId: string, displayName: string) {
     if (!tenant) return;
     if (
       !(await confirm({

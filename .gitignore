@@ -6,15 +6,24 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+.coverage*
 .mypy_cache/
 .ruff_cache/
+.tools/
+.releases/
+.secrets/
+.deploy.lock
 node_modules/
 .next/
 dist/
 build/
 coverage/
+playwright-report/
+test-results/
+frontend/e2e/.auth/
 *.log
 frontend/tsconfig.tsbuildinfo
+abgabebox-frontend/tsconfig.tsbuildinfo
 
 # Runtime storage — may contain personal/tenant data
 storage/uploads/*
@@ -54,3 +63,4 @@ storage/abgabebox-uploads/*
 # up the compose change that added it).
 /storage-local/
 backend/storage-local/
+storage-e2e/

@@ -98,13 +98,12 @@ type Config = {
 };
 
 type Props = {
-  blockId: number;
   config: Config;
   editable: boolean;
   onSave: (cfg: Record<string, unknown>) => void;
 };
 
-export function ChartBlock({ blockId, config, editable, onSave }: Props) {
+export function ChartBlock({ config, editable, onSave }: Props) {
   const [data, setData] = useState<StatisticsOverview | null>(_statsCacheVersion >= 0 ? _statsCache : null);
   const [stale, setStale] = useState(_statsCacheStale);
   const [loading, setLoading] = useState(_statsCacheVersion < 0);
@@ -307,8 +306,8 @@ function ChartPreview({ chartType, cycleKey, data }: { chartType: string; cycleK
   if (chartType === "groups_sessions" || chartType === "groups_avg") {
     let groups = data.groups_stats;
     if (cycleKey !== "all") {
-      const [cid, yr] = cycleKey.split(":").map(Number);
-      groups = groups.filter((g) => g.cycle_config_id === cid && g.cycle_year === yr);
+      const [cid, yr] = cycleKey.split(":");
+      groups = groups.filter((g) => g.cycle_config_id === cid && g.cycle_year === Number(yr));
     }
     const merged: Record<string, { name: string; sessions: number; sessions_with_p: number; weighted: number; sp: number }> = {};
     for (const g of groups) {

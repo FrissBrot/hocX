@@ -27,13 +27,29 @@ def test_returns_default_below_minimum_sample_size(db):
 def test_learns_a_lower_threshold_when_history_supports_it(db):
     tenant = make_tenant(db)
     template = make_template(db, tenant.id)
-    # 10 accepted, 0 rejected at score 0.5-0.59 - well above _MIN_SAMPLE_SIZE (20) once
-    # combined with the 0.9 bucket below, and this bucket's own rate is a clean 100%.
+    # Every bucket from 0.5 up through 0.9 has a clean 100% accept rate with n>=5 - an
+    # unbroken monotonic chain all the way to the top, so 0.5 is a genuinely safe floor.
+    for score in (0.55, 0.65, 0.75, 0.85, 0.95):
+        _seed_outcomes(db, tenant_id=tenant.id, template_id=template.id, signal_type="event_match", score=score, accepted_count=6, rejected_count=0)
+
+    result = adaptive_threshold(db, tenant_id=tenant.id, template_id=template.id, signal_type="event_match", default=0.8)
+    assert result == 0.5
+
+
+def test_a_gap_between_buckets_stops_the_threshold_from_reaching_past_it(db):
+    """Monotonicity constraint (audit finding, 2026-08-25): each bucket's acceptance rate
+    only justifies trusting *that* bucket if every bucket above it (up to 1.0) also
+    clears the floor - an isolated good-looking low bucket with no connection to the top
+    must not be trusted just because it happens to have a strong rate on its own. Here
+    bucket 5 (0.5-0.59) looks perfect in isolation, but buckets 6/7/8 have no data at all
+    (a gap), so the chain from 0.9 breaks immediately below the top bucket."""
+    tenant = make_tenant(db)
+    template = make_template(db, tenant.id)
     _seed_outcomes(db, tenant_id=tenant.id, template_id=template.id, signal_type="event_match", score=0.55, accepted_count=10, rejected_count=0)
     _seed_outcomes(db, tenant_id=tenant.id, template_id=template.id, signal_type="event_match", score=0.95, accepted_count=15, rejected_count=0)
 
     result = adaptive_threshold(db, tenant_id=tenant.id, template_id=template.id, signal_type="event_match", default=0.8)
-    assert result == 0.5
+    assert result == 0.9
 
 
 def test_falls_back_to_default_when_no_bucket_clears_the_floor(db):

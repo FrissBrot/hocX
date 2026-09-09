@@ -29,7 +29,7 @@ def test_list_fines_for_protocol_scoped_to_tenant(db):
     protocol_a, fine_a = _build_protocol_with_fine(db, tenant_a)
 
     own_tenant_result = repo.list_fines_for_protocol(db, protocol_a.id, tenant_id=tenant_a.id)
-    assert [f.id for f in own_tenant_result] == [fine_a.id]
+    assert [f.id for f in own_tenant_result] == [fine_a.public_id]
 
     other_tenant_result = repo.list_fines_for_protocol(db, protocol_a.id, tenant_id=tenant_b.id)
     assert other_tenant_result == []
@@ -45,7 +45,7 @@ def test_list_fines_for_tenant_does_not_leak_other_tenants(db):
     result_a = repo.list_fines_for_tenant(db, tenant_id=tenant_a.id, limit=200)
     result_b = repo.list_fines_for_tenant(db, tenant_id=tenant_b.id, limit=200)
 
-    assert fine_a.id in [f.id for f in result_a]
-    assert fine_b.id not in [f.id for f in result_a]
-    assert fine_b.id in [f.id for f in result_b]
-    assert fine_a.id not in [f.id for f in result_b]
+    assert fine_a.public_id in [f.id for f in result_a]
+    assert fine_b.public_id not in [f.id for f in result_a]
+    assert fine_b.public_id in [f.id for f in result_b]
+    assert fine_a.public_id not in [f.id for f in result_b]

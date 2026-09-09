@@ -1,0 +1,49 @@
+# Audit finding (Low), 2026-08-27: no explicit TLS policy and no baseline security-header
+# middleware at the Traefik edge - the Next.js apps set their own headers, but other origins
+# behind this Traefik instance (docs-site, direct API error responses, future services) got
+# no consistent policy at all.
+#
+# This file is static and repo-managed - NOT touched by backend/app/services/
+# traefik_config_service.py, which only ever reads/writes its own fixed
+# "tenant-domains.yml" in this same directory (see that file's `regenerate()`), so this is
+# safe to keep alongside the generated file.
+tls:
+  options:
+    # "default" is a magic name in Traefik: it is applied to every router that does not
+    # explicitly set its own `tls.options`, with no per-router label changes needed (see
+    # https://doc.traefik.io/traefik/https/tls/#tls-options, "'default' TLS Option"). None of
+    # the routers defined via Docker labels in this repo set `tls.options`, only
+    # `tls.certresolver`, so this applies everywhere automatically.
+    default:
+      minVersion: VersionTLS12
+      # Only relevant for TLS 1.2 and below - Go's crypto/tls (Traefik's TLS stack) picks
+      # its own (already-modern) cipher suites for TLS 1.3 connections and does not allow
+      # configuring them. Ordered strongest/AEAD-first; RSA fallbacks kept for older clients
+      # that don't support ECDSA.
+      cipherSuites:
+        - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+        - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+
+http:
+  middlewares:
+    # Referenced from infra/traefik/traefik.yml's entryPoints.websecure/adminsecure
+    # `http.middlewares` list (as "security-headers@file"), so it applies to every router on
+    # those entrypoints - Docker-label-defined services here and in
+    # docker-compose.release.yml, plus the backend-generated tenant-custom-domain routers in
+    # tenant-domains.yml@file - without editing every router's own labels. Purely additive:
+    # does not remove or weaken any header an app (e.g. the Next.js frontends) already sets
+    # itself; Traefik's headers middleware only adds headers that are not already present in
+    # the backend's response, it does not overwrite existing ones.
+    security-headers:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        forceSTSHeader: true
+        contentTypeNosniff: true
+        frameDeny: true
+        referrerPolicy: "strict-origin-when-cross-origin"

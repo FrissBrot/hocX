@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from app.models import CycleConfig, Protocol
+from app.models import CycleConfig, Protocol, Template
 from app.schemas.protocol import ProtocolCreateFromTemplate
 from app.services.protocol_service import ProtocolService
 
@@ -26,9 +26,13 @@ from tests.factories import make_protocol, make_tenant, make_template
 
 
 def _create(db, *, tenant_id, template_id, protocol_date):
+    # tenant_id/template_id here are internal ints (matching every other call site in this
+    # file) - ProtocolCreateFromTemplate.template_id is the public-facing uuid field, so
+    # resolve it from the internal id right here rather than changing every caller.
+    template = db.get(Template, template_id)
     protocol_id = ProtocolService().create_from_template(
         db,
-        ProtocolCreateFromTemplate(template_id=template_id, protocol_date=protocol_date),
+        ProtocolCreateFromTemplate(template_id=template.public_id, protocol_date=protocol_date),
         tenant_id=tenant_id,
         created_by=None,
     )

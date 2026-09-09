@@ -1,162 +1,258 @@
 # hocX
 
-Monorepo for a protocol and template management application with:
+hocX ist eine mandantenfähige Webanwendung für die Planung, Durchführung und
+Dokumentation von Sitzungen. Sie verbindet Vorlagen, kollaborative Protokolle,
+Aufgaben, Teilnehmende, Finanzen und Exporte in einer gemeinsamen Arbeitsumgebung.
 
-- Frontend: Next.js App Router + TypeScript
-- Backend: FastAPI + SQLAlchemy 2.x
-- Migrations: Alembic
-- Database: PostgreSQL
-- Files: local filesystem for uploads, LaTeX templates, generated exports
+Das Monorepo enthält zusätzlich eine öffentliche **Abgabebox** für Datei-Uploads,
+eine separate Plattform-Administration und eine mit MkDocs gebaute Dokumentationsseite.
 
-## Current Scope
+## Funktionsumfang
 
-This repository contains a Docker-first starter implementation with:
+- Mandanten, Benutzer und mandantenspezifische Rollen
+- Sitzungsplanung, Veranstaltungen und Teilnehmendenverwaltung
+- konfigurierbare Protokoll- und Dokumentvorlagen
+- kollaborative Protokollbearbeitung mit Autosave, Präsenz und Konfliktbehandlung
+- Aufgaben, strukturierte Listen, Finanzen, Bussen und Statistiken
+- Word-, PDF- und ZIP-Import sowie PDF-/Dokumentexport
+- öffentliche Abgabebox mit optionalem Virenscan und CAPTCHA
+- lokale Anmeldung, MFA und getrennte Plattform-Admin-Sitzungen
+- vollständiger Mandantenexport und -import für Transfers und Backups
+- mandantenspezifisches Branding und eigene Domains
 
-- Docker Compose for `traefik`, `frontend`, `backend`, and `db`
-- initial FastAPI app with modular route structure
-- initial Next.js App Router UI shell
-- SQLAlchemy models aligned to the V1 PostgreSQL schema
-- Alembic initial migration based on the provided PostgreSQL schema
-- placeholder LaTeX template structure
-- seeded lookup/master bootstrap data for local development
+## Technik
 
-## Project Structure
+| Bereich | Technologie |
+|---|---|
+| Frontend | Next.js 16, React 19, TypeScript |
+| Backend | FastAPI, SQLAlchemy 2, Alembic |
+| Daten | PostgreSQL 16, Redis, lokaler oder gemounteter Dateispeicher |
+| Betrieb | Docker Compose, Traefik, optional ClamAV |
+| Tests | Pytest, Vitest, Smoke- und Release-Checks |
+
+## Repository-Struktur
 
 ```text
-frontend/
-  app/
-  components/
-  lib/
-  types/
-backend/
-  app/
-    api/routes/
-    core/
-    db/
-    models/
-    repositories/
-    schemas/
-    services/
-  alembic/
-storage/
-  uploads/
-  exports/
-  latex_templates/
+frontend/              Hauptanwendung und Plattform-Admin-UI
+backend/               API, Geschäftslogik und Alembic-Migrationen
+abgabebox-frontend/    öffentliche Upload-Oberfläche
+abgabebox-backend/     eingeschränkte API der Abgabebox
+docs-site/             MkDocs-Dokumentation
+infra/traefik/         statische und dynamische Traefik-Konfiguration
+scripts/               Entwicklung, Deployment, Backups und Verifikation
+storage/               lokale Uploads, Exporte und Dokumentvorlagen
 ```
 
-## Quick Start
+## Lokale Entwicklung
 
-1. Copy environment defaults if needed:
+Voraussetzungen:
+
+- Docker Engine
+- Docker Compose v2
+- freie Ports `3000`, `3001`, `8000` und `8001`
+
+Konfiguration anlegen und den Entwicklungs-Stack starten:
 
 ```bash
 cp .env.example .env
+./scripts/dev.sh
 ```
 
-2. Build and start:
+`scripts/dev.sh` baut und startet die Container, führt die Datenbankmigrationen aus
+und prüft die erreichbaren Dienste. Nach dem Start sind verfügbar:
+
+| Dienst | Adresse |
+|---|---|
+| hocX | <http://localhost:3000> |
+| API und OpenAPI | <http://localhost:8000> |
+| Abgabebox | <http://localhost:3001> |
+| Abgabebox-API | <http://localhost:8001> |
+
+Der gleiche Stack kann ohne Wrapper gestartet werden:
 
 ```bash
-docker compose up --build
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
 
-3. Open:
-
-- Frontend through Traefik: <https://your-domain.example.com>
-- Marketing site through Traefik: <https://web.your-domain.example.com>
-- Backend API through Traefik: <https://your-domain.example.com/api>
-- OpenAPI docs through Traefik: <https://your-domain.example.com/docs>
-
-## Database
-
-The backend expects PostgreSQL. The initial Alembic migration now builds the composite section/block model:
-
-- core tenant/user/role tables
-- `template_element` as section/container rows
-- `template_element_block` as nested predefined blocks inside a section
-- `protocol_element` as snapshot section/container rows
-- `protocol_element_block` as nested protocol block snapshots
-- content tables for text/todos/images/display snapshots linked to protocol blocks
-- export cache and stored file metadata
-- `create_protocol_from_template(...)`
-
-The raw first-setup SQL is stored at:
-
-- [first_setup.sql](/docker/hocX/backend/sql/first_setup.sql)
-
-Migrations run automatically when the backend container starts. You can still run them manually:
+Optionale Profile:
 
 ```bash
-docker compose exec backend alembic upgrade head
+./scripts/dev.sh up --profile docs   # Dokumentation auf localhost:3002
+./scripts/dev.sh up --profile scan   # ClamAV für echte Upload-Scans
+./scripts/dev.sh up --profile edge   # lokaler Traefik-Edge-Stack
 ```
 
-## Step 2 Status
-
-The database foundation currently includes:
-
-- initial schema as an Alembic migration
-- static seed data for `role`, `event_category`, `element_type`, `render_type`, and `todo_status`
-- a default tenant and starter document/template records for local development
-- SQLAlchemy models for all V1 tables in the provided schema
-
-Useful verification commands:
+Stack anhalten oder inklusive Container und Netzwerk entfernen:
 
 ```bash
-docker compose exec backend alembic current
-docker compose exec db psql -U hocx -d hocx -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public';"
-docker compose exec db psql -U hocx -d hocx -c "SELECT * FROM role;"
+./scripts/dev.sh stop
+./scripts/dev.sh down
 ```
 
-## Notes
+## Secret-Scan-Hook
 
-- OIDC is intentionally not implemented yet.
-- The schema already contains OIDC preparation fields on `app_user`.
-- Local login is active for V1 and isolated behind `/api/auth/*`.
-- Users are systemwide, while `user_tenant_role` stores tenant-specific permissions.
-- Cross-tenant access lives exclusively in the separate platform-admin panel (see below) -
-  no customer/tenant user can ever see or manage more than the tenants they are a member of.
-- Protocols are treated as snapshots and should never be mutated by template changes.
-- Exports are designed to read protocol snapshot data only.
+Damit private Domains, echte Mandantennamen oder Secrets nicht versehentlich committet
+werden, gibt es einen gitleaks-basierten `pre-commit`-Hook (`.githooks/pre-commit`,
+Regeln in `.gitleaks.toml`). Einmalig pro Klon aktivieren:
 
-## Local Login And Roles
+```bash
+git config core.hooksPath .githooks
+```
 
-Seed accounts for a fresh setup:
+Für vollen Schutz zusätzlich `gitleaks` installieren (z. B. `apt-get install gitleaks`);
+ohne gitleaks greift ein eingeschränkter Fallback-Check. Der gleiche Scan läuft
+zusätzlich als GitHub-Actions-Workflow (`.github/workflows/secret-scan.yml`) auf jeden
+Push und jede PR, unabhängig davon, ob der lokale Hook aktiviert ist.
 
-- `admin@hocx.local` / `ChangeMe123!`
-- `writer@hocx.local` / `ChangeMe123!`
-- `reader@hocx.local` / `ChangeMe123!`
+## Lokale Testkonten
 
-Roles (all tenant-scoped via `user_tenant_role`):
+Eine frisch migrierte Entwicklungsdatenbank enthält folgende Mandantenkonten:
 
-- `admin`: full access inside the currently selected tenant
-- `writer`: may work inside the protocol workspace, but not change structure
-- `reader`: may only view workspace data and trigger PDF export
-- `kassier`: reader access plus full finance and fines management
+| E-Mail | Passwort | Rolle |
+|---|---|---|
+| `admin@hocx.local` | `ChangeMe123!` | Admin |
+| `writer@hocx.local` | `ChangeMe123!` | Bearbeitung |
+| `reader@hocx.local` | `ChangeMe123!` | Lesen |
 
-## Platform-Admin Panel
+Diese Zugangsdaten sind ausschließlich für die lokale Entwicklung bestimmt. Der erste
+Plattform-Admin wird aus `INITIAL_ADMIN_EMAIL` und `INITIAL_ADMIN_PASSWORD` in `.env`
+angelegt, solange die Plattform-Admin-Tabelle noch leer ist.
 
-`/admin` is a separate operator area with its own login, its own `platform_admin` accounts
-table, and its own session cookie (`hocx_admin_session`) - entirely independent from the
-customer `app_user`/session system. It is the only place with an overview across all tenants
-and all users, and the only place tenants get created or two `app_user` accounts get merged.
+Die Demo-Daten werden nur durch den lokalen Compose-Override mit dem expliziten Alembic-
+Schalter `-x seed_demo=true` angelegt. Normale Migrationen und der Release-/Produktionspfad
+legen weder Demo-Mandanten noch `@hocx.local`-Konten an.
 
-The first platform-admin account is bootstrapped from `INITIAL_ADMIN_EMAIL` /
-`INITIAL_ADMIN_PASSWORD` env vars on first startup (only when the `platform_admin` table is
-still empty); further admins are managed through the panel itself under `/admin/admins`.
+## Konfiguration
 
-## Public Access With Traefik
+Alle dokumentierten Variablen stehen in [`.env.example`](.env.example). Für lokale
+Entwicklung funktionieren die Beispielwerte; vor einem extern erreichbaren Deployment
+müssen insbesondere Passwörter, Session-Secrets, Domains, ACME-Kontakt und der auf die
+DNS-Zone beschränkte Cloudflare-Token ersetzt werden.
 
-The stack includes Traefik for public HTTPS access under `your-domain.example.com`.
+Persistente Anwendungsdateien liegen standardmäßig in `./storage`. Mit
+`HOCX_STORAGE_PATH` kann stattdessen ein Host-Pfad oder Cloud-Volume eingebunden werden,
+ohne die Compose-Dateien zu ändern.
 
-Requirements:
+## Datenbank und Migrationen
 
-- the DNS record for `your-domain.example.com` must point to this server
-- ports `80` and `443` must be reachable from the internet
-- Docker must be allowed to bind those ports
+Beim Start des Backends wird automatisch `alembic upgrade head` ausgeführt. Manuelle
+Kontrolle und Migration im laufenden Entwicklungs-Stack:
 
-Traefik setup files:
+```bash
+docker compose -p hocx-dev exec backend alembic current
+docker compose -p hocx-dev exec backend alembic upgrade head
+```
 
-- [docker-compose.yml](/docker/hocX/docker-compose.yml)
-- [traefik.yml](/docker/hocX/infra/traefik/traefik.yml)
+Protokolle speichern Schnappschüsse ihrer Vorlagen. Spätere Änderungen an einer Vorlage
+verändern daher keine bereits angelegten Protokolle oder deren Exporte.
 
-ACME / Let's Encrypt contact:
+## Tests
 
-- Set via `ACME_EMAIL` in `.env`
+Der einheitliche Test-Runner baut bei Bedarf eigene Python-Test-Images. Die Python-Tests
+verwenden eine flüchtige PostgreSQL-Instanz und niemals die Entwicklungsdatenbank. Der
+Browserlauf startet ebenfalls einen vollständig separaten Stack unter dem Projektnamen
+`hocx-e2e`, verwendet eigene Ports und löscht anschließend Datenbank-Volume sowie
+E2E-Dateispeicher. Für die beiden Vitest-Befehle muss der Entwicklungs-Stack laufen:
+
+```bash
+# Gesamte Testsuite
+./scripts/test.sh all
+
+# Einzelne Bereiche
+./scripts/test.sh backend
+./scripts/test.sh abgabebox-backend
+./scripts/test.sh frontend
+./scripts/test.sh abgabebox-frontend
+./scripts/test.sh e2e
+```
+
+Die Browser-Suite verwendet Playwright und prüft aktuell Anmeldung, Ablehnung falscher
+Zugangsdaten, den Schutz angemeldeter Seiten, die zentrale Workspace- und
+Admin-Navigation sowie das Erstellen von Todos und Terminen. Für Todo-Exporte werden
+sowohl der Markdown-Inhalt als auch eine erzeugte und abrufbare PDF-Datei kontrolliert.
+Zusätzlich werden vollständige Erstellen-/Ändern-/Lesen-/Löschen-Abläufe für Teilnehmer,
+Listen und Einträge, Benutzer, Vorlagenkopien, Protokolle und Termine geprüft. Writer- und
+Reader-Rechte sowie die Trennung zweier Mandanten werden mit getrennten Sitzungen
+kontrolliert. Der Abgabebox-Test veröffentlicht einen Auftrag, lädt über die öffentliche
+Oberfläche eine echte Testdatei hoch und kontrolliert den Eingang im Hauptsystem.
+Temporäre Datensätze werden nach jedem Test gelöscht. Screenshots, Videos, Traces und
+Dienstlogs werden bei Fehlern unter `frontend/test-results/` abgelegt.
+
+```bash
+./scripts/test.sh e2e
+```
+
+Der isolierte Stack kann zur Fehlersuche auch getrennt gesteuert werden:
+
+```bash
+./scripts/e2e.sh up
+./scripts/e2e.sh test
+./scripts/e2e.sh down
+```
+
+Standardmässig läuft Playwright lokal in einem passenden Browser-Container. Wenn Chromium
+bereits auf dem Host installiert ist, spart `E2E_USE_HOST_PLAYWRIGHT=1 ./scripts/e2e.sh all`
+mehrere Gigabyte Docker-Speicher. Die CI verwendet diese platzsparende Variante.
+
+Einzelne Tests können weiterhin direkt gestartet werden:
+
+```bash
+docker compose -p hocx-dev exec frontend npm test -- lib/offline-store.test.ts
+docker compose -p hocx-dev exec abgabebox-frontend npm test
+
+# Status und Logs des Entwicklungs-Stacks
+docker compose -p hocx-dev ps
+docker compose -p hocx-dev logs --tail=100 backend frontend
+```
+
+Die CI läuft bei Pull Requests gegen `main` und bei Pushes auf `main`. Sie testet beide
+Backends, beide Frontends, Datenbankmigrationen, Builds, Deployment-Skripte und die
+Playwright-Browser-Suite. Bei fehlgeschlagenen Browser-Tests werden Diagnose-Artefakte
+hochgeladen. Release-Kandidaten werden als signierte Images gebaut, zuerst in der
+Testumgebung verifiziert und anschließend ohne erneuten Build zu unveränderten
+Release-Images promotet.
+
+## Rollen und Sicherheitsgrenzen
+
+Anwendungsrollen gelten immer innerhalb eines Mandanten:
+
+- `admin`: vollständige Verwaltung im ausgewählten Mandanten
+- `writer`: Arbeit im Protokollbereich ohne strukturelle Administration
+- `reader`: Lesezugriff und PDF-Export
+- `kassier`: Lesezugriff plus Verwaltung von Finanzen und Bussen
+
+Die Plattform-Administration unter `/admin` verwendet eigene Konten, Sitzungen und
+Cookies. Im Traefik-Deployment ist sie nicht über die öffentliche Hauptdomain erreichbar,
+sondern nur über einen an `127.0.0.1` gebundenen Admin-EntryPoint, der für einen privaten
+OpenZiti-Zugang vorgesehen ist. Die Abgabebox besitzt ebenfalls ein separates Backend
+mit eingeschränkter Datenbankrolle.
+
+## Deployment und Betrieb
+
+Test und Produktion verwenden gepinnte Images aus GHCR, getrennte Compose-Overlays,
+Cosign-Signaturprüfung, automatische Datenbank-Backups, Smoke-Checks und einen
+Digest-basierten Rollback. Die vollständigen Abläufe für Provisionierung, Candidate-Build,
+Test, Promotion, Produktion, Rollback und Restore stehen im [RUNBOOK](RUNBOOK.md).
+
+Wichtige Skripte:
+
+| Skript | Zweck |
+|---|---|
+| `scripts/dev.sh` | lokalen Entwicklungs-Stack verwalten |
+| `scripts/deploy.sh` | Test- oder Produktionsrelease ausrollen |
+| `scripts/verify_release.sh` | Deployment und Migrationen verifizieren |
+| `scripts/backup_db.sh` | PostgreSQL-Backup erstellen |
+| `scripts/cleanup_storage.sh` | nicht mehr benötigte Dateien bereinigen |
+
+Für ein öffentliches Deployment müssen die DNS-Einträge vor dem ersten Start auf den
+Server zeigen, damit Traefik die Let's-Encrypt-Zertifikate ohne fehlgeschlagene
+Autorisierungen beziehen kann.
+
+## Lizenz
+
+Copyright © 2026 hocX Project. All rights reserved.
+
+Dieses Projekt ist proprietäre Software. Nutzung, Vervielfältigung, Veränderung oder
+Weitergabe ist nur mit vorheriger schriftlicher Genehmigung des Rechteinhabers erlaubt.
+Weitere Einzelheiten stehen in der [LICENSE](LICENSE). Eingebundene Komponenten von
+Drittanbietern unterliegen weiterhin ihren jeweiligen Lizenzen.

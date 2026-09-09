@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import traceback as traceback_module
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -9,13 +10,44 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from app.config import settings
+from app.captcha import captcha_configured, captcha_partially_configured
+from app.config import is_dev_or_test_environment, settings
 from app.db import SessionLocal
 from app.repository import insert_error_log
 from app.routes import public
 from app.storage import cleanup_stale_quarantine_files
 
+_logger = logging.getLogger(__name__)
+
 Path(settings.storage_root).mkdir(parents=True, exist_ok=True)
+
+# Loud, once-at-startup version of captcha.captcha_enabled()'s per-request warning (audit
+# finding, 2026-08-25) - a partial FriendlyCaptcha config (exactly one of sitekey/api_key
+# set) is a real misconfiguration that previously disabled bot verification silently with no
+# signal anywhere. This surfaces it immediately in the deploy/startup logs instead of only
+# lazily on the first upload attempt.
+if captcha_partially_configured():
+    _logger.warning(
+        "STARTUP: FriendlyCaptcha ist nur teilweise konfiguriert (FRIENDLY_CAPTCHA_SITEKEY "
+        "oder FRIENDLY_CAPTCHA_API_KEY fehlt). Bot-Verifikation ist aktiv, schlaegt aber bis "
+        "zur vollstaendigen Konfiguration fehl - Uploads werden abgelehnt."
+    )
+
+# Loud, once-at-startup counterpart for the "entirely unconfigured" case (audit finding,
+# 2026-08-27): captcha.py's _skip_captcha_when_unconfigured() now only skips verification on a
+# stack explicitly marked dev/test (ABGABEBOX_ENVIRONMENT) - everywhere else, no FriendlyCaptcha
+# keys at all now means every upload is rejected (fail closed), not silently allowed through.
+# That is a much bigger operational change than the partial-config case above (ALL uploads fail,
+# not just some), so it gets the same immediate startup visibility rather than only surfacing
+# lazily on the first upload attempt.
+if not captcha_configured() and not is_dev_or_test_environment():
+    _logger.warning(
+        "STARTUP: Kein FriendlyCaptcha konfiguriert (FRIENDLY_CAPTCHA_SITEKEY und "
+        "FRIENDLY_CAPTCHA_API_KEY fehlen beide) und ABGABEBOX_ENVIRONMENT=%r gilt nicht als "
+        "dev/test. Alle Uploads werden abgelehnt (fail closed), bis FriendlyCaptcha konfiguriert "
+        "ist oder ABGABEBOX_ENVIRONMENT auf 'development'/'test' gesetzt wird.",
+        settings.environment,
+    )
 
 
 async def quarantine_cleanup_loop() -> None:
@@ -54,7 +86,7 @@ async def lifespan(_: FastAPI):
     cleanup_task.cancel()
 
 
-app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
+app = FastAPI(title=settings.app_name, version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

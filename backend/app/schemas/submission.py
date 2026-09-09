@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import uuid
 from datetime import date, datetime
-from typing import Literal
+from typing import ClassVar, Literal
 
 from pydantic import BaseModel, Field
+
+from app.models.entities import ListDefinition, Tenant
+from app.schemas.base import PublicIdModel
 
 SubmissionSourceType = Literal["events", "list"]
 SubmissionElementStatus = Literal["open", "submitted", "closed"]
@@ -19,7 +23,7 @@ class SubmissionAssignmentBase(BaseModel):
     tag_filter: str | None = None
     offset_days_before: int | None = Field(default=None, ge=0)
     offset_days_after: int | None = Field(default=None, ge=0)
-    list_definition_id: int | None = None
+    list_definition_id: uuid.UUID | None = None
     deadline: date | None = None
     allowed_file_types: list[str] = Field(default_factory=list)
     max_files_per_element: int | None = Field(default=5, ge=1)
@@ -40,7 +44,7 @@ class SubmissionAssignmentUpdate(BaseModel):
     tag_filter: str | None = None
     offset_days_before: int | None = Field(default=None, ge=0)
     offset_days_after: int | None = Field(default=None, ge=0)
-    list_definition_id: int | None = None
+    list_definition_id: uuid.UUID | None = None
     deadline: date | None = None
     allowed_file_types: list[str] | None = None
     max_files_per_element: int | None = Field(default=None, ge=1)
@@ -49,18 +53,18 @@ class SubmissionAssignmentUpdate(BaseModel):
     responsible_participant_source: str | None = None
 
 
-class SubmissionAssignmentRead(SubmissionAssignmentBase):
-    id: int
-    tenant_id: int
+class SubmissionAssignmentRead(PublicIdModel, SubmissionAssignmentBase):
+    _fk_models: ClassVar[dict[str, type]] = {"tenant_id": Tenant, "list_definition_id": ListDefinition}
+
+    id: uuid.UUID
+    tenant_id: uuid.UUID
     public_slug: str
     created_at: datetime
     updated_at: datetime
 
-    model_config = {"from_attributes": True}
-
 
 class SubmissionFileRead(BaseModel):
-    id: int
+    id: uuid.UUID
     original_name: str
     mime_type: str | None
     file_size_bytes: int | None
@@ -75,16 +79,14 @@ class SubmissionElementRead(BaseModel):
     window_end: date | None = None
     status: SubmissionElementStatus
     submitted_at: datetime | None = None
-    upload_id: int | None = None
+    upload_id: uuid.UUID | None = None
     files: list[SubmissionFileRead] = Field(default_factory=list)
-    responsible_participant_id: int | None = None
+    responsible_participant_id: uuid.UUID | None = None
 
 
-class SubmissionUploadLogEntry(BaseModel):
-    id: int
+class SubmissionUploadLogEntry(PublicIdModel):
+    id: uuid.UUID
     element_ref: str
     status: str
     error_message: str | None = None
     created_at: datetime
-
-    model_config = {"from_attributes": True}

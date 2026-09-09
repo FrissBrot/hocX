@@ -18,6 +18,11 @@
 // die Seite hydratisierte nie (kein Fehler im Server-Log, nur eine tote Seite im Browser) - der
 // urspruengliche Build-only-Test hatte das nicht erkannt. Ein Nonce-basierter Ansatz waere die
 // sauberere Loesung, ist hier aber (wie in frontend/next.config.mjs) bewusst zurueckgestellt.
+const isDevelopment = process.env.NODE_ENV !== "production";
+const scriptSrc = ["'self'", "'unsafe-inline'", isDevelopment && "'unsafe-eval'"]
+  .filter(Boolean)
+  .join(" ");
+
 const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -27,7 +32,7 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline'",
+      `script-src ${scriptSrc}`,
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
       "font-src 'self'",
@@ -42,6 +47,8 @@ const securityHeaders = [
   },
 ];
 
+const apiProxyTarget = process.env.ABGABEBOX_API_PROXY_TARGET?.replace(/\/$/, "");
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
@@ -55,6 +62,17 @@ const nextConfig = {
       {
         source: "/(.*)",
         headers: securityHeaders,
+      },
+    ];
+  },
+  async rewrites() {
+    if (!apiProxyTarget) {
+      return [];
+    }
+    return [
+      {
+        source: "/api/:path*",
+        destination: `${apiProxyTarget}/api/:path*`,
       },
     ];
   },

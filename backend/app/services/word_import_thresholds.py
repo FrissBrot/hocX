@@ -53,12 +53,21 @@ def adaptive_threshold(db: Session, *, tenant_id: int, template_id: int, signal_
     for score, accepted in rows:
         buckets[min(int(score * 10), 9)].append(accepted)
 
-    candidate_thresholds: list[float] = []
-    for bucket_index in sorted(buckets):
-        accepted_list = buckets[bucket_index]
+    # Monotonicity constraint (audit finding, 2026-08-25): scans from the highest bucket
+    # (0.9-1.0) downward and stops at the first bucket that doesn't clear the floor -
+    # every previous version instead checked each bucket independently and returned the
+    # lowest one that happened to clear it in isolation, so a single small, lucky sample
+    # (_MIN_BUCKET_SAMPLE_SIZE=5, e.g. 4/5 accepted) at a low bucket could set the learned
+    # threshold there even while multiple higher buckets in between had a genuinely worse
+    # acceptance rate. The returned threshold now always means "this bucket AND every
+    # bucket above it are safe," not just "this one bucket looked safe on its own."
+    lowest_qualifying_bucket: int | None = None
+    for bucket_index in range(9, -1, -1):
+        accepted_list = buckets.get(bucket_index, [])
         if len(accepted_list) < _MIN_BUCKET_SAMPLE_SIZE:
-            continue
+            break
         rate = sum(accepted_list) / len(accepted_list)
-        if rate >= _ACCEPT_RATE_FLOOR:
-            candidate_thresholds.append(bucket_index / 10.0)
-    return min(candidate_thresholds) if candidate_thresholds else default
+        if rate < _ACCEPT_RATE_FLOOR:
+            break
+        lowest_qualifying_bucket = bucket_index
+    return lowest_qualifying_bucket / 10.0 if lowest_qualifying_bucket is not None else default

@@ -137,7 +137,7 @@ def test_save_text_block_syncs_to_linked_event_field(db):
     # the Rückblick block for Herbsthock (2026-10-18) without any manual wiring.
     protocol_id = protocol_service.create_from_template(
         db,
-        ProtocolCreateFromTemplate(template_id=ctx["template"].id, protocol_date=date(2026, 10, 10), event_id=None),
+        ProtocolCreateFromTemplate(template_id=ctx["template"].public_id, protocol_date=date(2026, 10, 10), event_id=None),
         tenant_id=ctx["tenant"].id, created_by=None,
     )
     db.flush()

@@ -9,7 +9,7 @@ type Props = {
   session: SessionInfo | null;
   onSelect: (membership: TenantMembership) => void;
   onOpenSettings: (membership: TenantMembership) => void;
-  onSetDefault: (tenantId: number | null) => void;
+  onSetDefault: (tenantId: string | null) => void;
 };
 
 export function TenantSelectorModal({ open, onClose, session, onSelect, onOpenSettings, onSetDefault }: Props) {

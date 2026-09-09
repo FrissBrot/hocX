@@ -17,6 +17,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <span className="page-header-name">hocX</span>
           </header>
           <main>{children}</main>
+          <footer className="page-footer">
+            Copyright © 2026 hocX Project · All rights reserved.
+          </footer>
         </div>
       </body>
     </html>

@@ -23,7 +23,7 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
   const role = session?.current_role ?? null;
   const isAdmin = role === "admin";
   const isWriter = isAdmin || role === "writer";
-  const hasFinance = isWriter || role === "kassier";
+  const hasFinance = role !== null;
 
   const workspaceLinks: NavLink[] = [
     { href: "/", label: "Dashboard", icon: "dashboard" },

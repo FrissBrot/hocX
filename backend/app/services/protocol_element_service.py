@@ -3,7 +3,7 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Event, EventCategory, Protocol, ProtocolElement, ProtocolElementBlock, Template
+from app.models import ElementDefinition, Event, EventCategory, Protocol, ProtocolElement, ProtocolElementBlock, Template, TemplateElement, TemplateElementBlock
 from app.repositories.protocol_element_repository import (
     ProtocolElementBlockRepository,
     ProtocolElementRepository,
@@ -14,6 +14,7 @@ from app.schemas.protocol import (
     ProtocolElementRead,
     ProtocolElementUpdate,
 )
+from app.services import public_id_service
 from app.services.responsible_label_service import resolve_display_section_titles_batch
 
 
@@ -27,13 +28,17 @@ class ProtocolElementService:
         self.block_repository = block_repository or ProtocolElementBlockRepository()
 
     def list_protocol_elements(self, db: Session, protocol_id: int) -> list[ProtocolElementRead]:
-        protocol_status = db.scalar(select(Protocol.status).where(Protocol.id == protocol_id))
+        protocol_row = db.execute(
+            select(Protocol.status, Protocol.tenant_id).where(Protocol.id == protocol_id)
+        ).one_or_none()
+        protocol_status = protocol_row.status if protocol_row else ""
+        protocol_tenant_id = protocol_row.tenant_id if protocol_row else None
         element_rows = self.repository.list_for_protocol(db, protocol_id)
         elements = [row[0] for row in element_rows]
         show_when_empty_by_id = {row[0].id: row[1] for row in element_rows}
         block_rows = self.repository.list_blocks_for_elements(db, [element.id for element in elements])
         blocks_by_element: dict[int, list[ProtocolElementBlockRead]] = {}
-        section_titles_by_element_id = resolve_display_section_titles_batch(db, elements, protocol_status or "")
+        section_titles_by_element_id = resolve_display_section_titles_batch(db, elements, protocol_status or "", protocol_tenant_id)
 
         for row in block_rows:
             block = row.ProtocolElementBlock
@@ -52,10 +57,14 @@ class ProtocolElementService:
                         config[fine_key] = fine_source[fine_key]
             blocks_by_element.setdefault(block.protocol_element_id, []).append(
                 ProtocolElementBlockRead(
-                    id=block.id,
-                    protocol_element_id=block.protocol_element_id,
-                    template_element_block_id=block.template_element_block_id,
-                    element_definition_id=block.element_definition_id,
+                    id=block.public_id,
+                    protocol_element_id=public_id_service.resolve_public_id(db, ProtocolElement, block.protocol_element_id),
+                    template_element_block_id=public_id_service.resolve_public_id(db, TemplateElementBlock, block.template_element_block_id)
+                    if block.template_element_block_id is not None
+                    else None,
+                    element_definition_id=public_id_service.resolve_public_id(db, ElementDefinition, block.element_definition_id)
+                    if block.element_definition_id is not None
+                    else None,
                     element_type_id=block.element_type_id,
                     render_type_id=block.render_type_id,
                     element_type_code=row.element_type_code,
@@ -84,9 +93,11 @@ class ProtocolElementService:
 
         return [
             ProtocolElementRead(
-                id=element.id,
-                protocol_id=element.protocol_id,
-                template_element_id=element.template_element_id,
+                id=element.public_id,
+                protocol_id=public_id_service.resolve_public_id(db, Protocol, element.protocol_id),
+                template_element_id=public_id_service.resolve_public_id(db, TemplateElement, element.template_element_id)
+                if element.template_element_id is not None
+                else None,
                 sort_index=element.sort_index,
                 section_name_snapshot=section_titles_by_element_id[element.id],
                 section_order_snapshot=element.section_order_snapshot,
@@ -159,10 +170,16 @@ class ProtocolElementService:
             category_id = db.scalar(select(EventCategory.id).where(EventCategory.code == "group_session"))
             if category_id is None:
                 category_id = db.scalar(select(EventCategory.id).where(EventCategory.code == "other"))
+            if category_id is None:
+                # Falling back to the magic id 1 here (audit finding, 2026-08-25) would
+                # silently attach the generated session-marker event to whatever category
+                # happens to occupy that id - a missing seed category is a data/setup bug
+                # that should surface loudly instead.
+                raise ValueError("Neither 'group_session' nor 'other' event category is seeded for this installation")
             next_event = Event(
                 tenant_id=protocol.tenant_id,
                 event_date=parsed_date,
-                event_category_id=int(category_id or 1),
+                event_category_id=int(category_id),
                 tag=tag,
                 title=title,
                 description="Generated from session date block",

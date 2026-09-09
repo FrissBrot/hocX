@@ -24,6 +24,7 @@ export const ELEMENT_TYPE_OPTIONS: ElementTypeOption[] = [
   { value: "13", label: "Transaktionen", description: "Tabelle mit Transaktionen eines Finanzkontos" },
   { value: "14", label: "Bussenliste", description: "Liste der ausstehenden Bussen aus der Anwesenheitskontrolle" },
   { value: "15", label: "Diagramm", description: "Statistik-Diagramm aus vordefinierten Daten (Anwesenheit, Finanzen, Bussen, Gruppen)" },
+  { value: "16", label: "Ein-/Austritte", description: "Listet Teilnehmer-Ein- und Austritte seit der letzten Verwendung dieses Blocks auf" },
 ];
 
 // id -> label only, for spots that just need a display label (e.g. a fallback block title)

@@ -140,14 +140,14 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
     if (!userForm.pickerTenantId) {
       return;
     }
-    const tenantId = Number(userForm.pickerTenantId);
+    const tenantId = userForm.pickerTenantId;
     setUserForm((current) => ({
       ...current,
       memberships: addOrUpsertMembership(current.memberships, tenantId, current.pickerRoleCode, "upsert")
     }));
   }
 
-  function removeMembership(tenantId: number) {
+  function removeMembership(tenantId: string) {
     setUserForm((current) => ({
       ...current,
       memberships: removeMembershipEntry(current.memberships, tenantId)
@@ -183,7 +183,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
     }
   }
 
-  async function deleteUser(userId: number, displayName: string) {
+  async function deleteUser(userId: string, displayName: string) {
     const ok = await confirm({
       message: `Benutzer "${displayName}" endgültig löschen? Der Zugriff auf alle Mandanten geht sofort verloren.`,
       tone: "danger",
@@ -345,7 +345,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
             </label>
             <label className="field-stack">
               <span className="field-label">{userForm.id ? "Neues Passwort" : "Passwort"}</span>
-              <input type="password" value={userForm.password} onChange={(event) => setUserForm((current) => ({ ...current, password: event.target.value }))} required={!userForm.id} />
+              <input type="password" autoComplete="new-password" value={userForm.password} onChange={(event) => setUserForm((current) => ({ ...current, password: event.target.value }))} required={!userForm.id} />
             </label>
             <label className="field-stack">
               <span className="field-label">Sprache</span>
@@ -451,6 +451,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
             <span className="field-label">Passwort</span>
             <input
               type="password"
+              autoComplete="new-password"
               value={loginPassword}
               onChange={(event) => setLoginPassword(event.target.value)}
               required

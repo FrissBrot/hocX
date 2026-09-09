@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import uuid
+
 from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import Event, EventCategory, Protocol
+from app.services import public_id_service
 
 
 class EventRepository:
@@ -49,6 +52,9 @@ class EventRepository:
 
     def get(self, db: Session, event_id: int) -> Event | None:
         return db.get(Event, event_id)
+
+    def get_by_public_id(self, db: Session, public_id: uuid.UUID, *, tenant_id: int) -> Event | None:
+        return public_id_service.get_by_public_id(db, Event, public_id, tenant_id=tenant_id)
 
     def create(self, db: Session, event: Event, *, commit: bool = True) -> Event:
         db.add(event)

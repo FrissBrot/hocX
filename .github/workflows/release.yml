@@ -16,14 +16,78 @@ on:
         required: true
         type: boolean
         default: true
+      confirm_production:
+        description: "Zum Schutz vor Fehlklicks exakt DEPLOY eingeben"
+        required: true
+        type: string
 
 permissions:
   contents: read
   packages: write
+  deployments: write
+
+concurrency:
+  group: hocx-production-promotion
+  cancel-in-progress: false
 
 jobs:
-  promote:
+  verify-tested-candidate:
     runs-on: ubuntu-latest
+    steps:
+      - name: Validate production confirmation and tags
+        env:
+          SOURCE_TAG: ${{ inputs.source_tag }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          CONFIRM_PRODUCTION: ${{ inputs.confirm_production }}
+        run: |
+          set -euo pipefail
+          [ "$CONFIRM_PRODUCTION" = DEPLOY ] || {
+            echo "Prod-Promotion nicht bestaetigt: exakt DEPLOY eingeben." >&2
+            exit 1
+          }
+          [[ "$SOURCE_TAG" =~ ^test-[0-9]{8}-[0-9a-f]{7,40}-r[0-9]+$ ]] || {
+            echo "source_tag ist kein hocX Candidate-Tag: $SOURCE_TAG" >&2
+            exit 1
+          }
+          tag_regex='^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$'
+          [[ "$RELEASE_TAG" =~ $tag_regex ]] || {
+            echo "Ungueltiger release_tag: $RELEASE_TAG" >&2
+            exit 1
+          }
+
+      - name: Require successful test-host verification
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_TAG: ${{ inputs.source_tag }}
+        run: |
+          set -euo pipefail
+          candidate_sha="$(printf '%s' "$SOURCE_TAG" | sed -E 's/^test-[0-9]{8}-([0-9a-f]{7,40})-r[0-9]+$/\1/')"
+          proof="$(gh api \
+            'repos/${{ github.repository }}/deployments?environment=test&task=hocx-candidate&per_page=100' \
+            --jq "first(.[] | select(.payload.candidate_tag == \"$SOURCE_TAG\")) | [.id, .sha] | @tsv")"
+          read -r deployment_id deployment_sha <<< "$proof"
+          [ -n "$deployment_id" ] || {
+            echo "Kein Testnachweis fuer $SOURCE_TAG vorhanden." >&2
+            echo "Auf dem Testhost zuerst ./scripts/verify_release.sh test ausfuehren." >&2
+            exit 1
+          }
+          [[ "$deployment_sha" = "$candidate_sha"* ]] || {
+            echo "Testnachweis gehoert zu Commit $deployment_sha, Candidate nennt aber $candidate_sha." >&2
+            exit 1
+          }
+          state="$(gh api "repos/${{ github.repository }}/deployments/${deployment_id}/statuses" --jq '.[0].state')"
+          [ "$state" = success ] || {
+            echo "Letzter Teststatus fuer $SOURCE_TAG ist '$state', nicht 'success'." >&2
+            exit 1
+          }
+          echo "Testnachweis $deployment_id fuer $SOURCE_TAG ist erfolgreich."
+
+  promote:
+    needs: verify-tested-candidate
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://hocx.ch
     strategy:
       matrix:
         service:

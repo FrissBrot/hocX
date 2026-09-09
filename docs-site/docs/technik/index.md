@@ -1,7 +1,9 @@
 # Übersicht Technik & Betrieb
 
 Dieser Bereich richtet sich an alle, die hocX betreiben, weiterentwickeln oder tief
-verstehen müssen.
+verstehen müssen. Die Seiten unten sind ins
+[GitHub-Wiki](https://github.com/FrissBrot/hocX/wiki) umgezogen, das nun die führende
+technische Quelle ist; hier stehen nur noch kurze Verweise.
 
 | Thema | Inhalt |
 |---|---|

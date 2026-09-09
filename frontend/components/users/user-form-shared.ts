@@ -8,12 +8,12 @@
 // in beiden Komponenten identisch war.
 
 export type MembershipEntry = {
-  tenant_id: number;
+  tenant_id: string;
   role_code: string;
 };
 
 export type UserFormState = {
-  id?: number;
+  id?: string;
   first_name: string;
   last_name: string;
   display_name: string;
@@ -31,7 +31,7 @@ export type UserFormState = {
   pickerRoleCode: string;
 };
 
-type TenantLike = { id: number };
+type TenantLike = { id: string };
 
 /**
  * Baut ein leeres Formular auf. `prefillMembership` steuert den einzigen echten
@@ -94,7 +94,7 @@ export function userFormToPayload(form: UserFormState) {
  */
 export function addOrUpsertMembership(
   memberships: MembershipEntry[],
-  tenantId: number,
+  tenantId: string,
   roleCode: string,
   mode: "add" | "upsert"
 ): MembershipEntry[] {
@@ -104,13 +104,15 @@ export function addOrUpsertMembership(
           membership.tenant_id === tenantId ? { tenant_id: tenantId, role_code: roleCode } : membership
         )
       : [...memberships, { tenant_id: tenantId, role_code: roleCode }];
-  return next.sort((a, b) => a.tenant_id - b.tenant_id);
+  // Ids are opaque UUIDs now (no natural numeric order) - sort just keeps display order
+  // stable/deterministic, not meaningful by itself.
+  return next.sort((a, b) => a.tenant_id.localeCompare(b.tenant_id));
 }
 
-export function removeMembershipEntry(memberships: MembershipEntry[], tenantId: number): MembershipEntry[] {
+export function removeMembershipEntry(memberships: MembershipEntry[], tenantId: string): MembershipEntry[] {
   return memberships.filter((membership) => membership.tenant_id !== tenantId);
 }
 
-export function buildTenantNameMap<T extends TenantLike & { name: string }>(tenants: T[]): Map<number, string> {
+export function buildTenantNameMap<T extends TenantLike & { name: string }>(tenants: T[]): Map<string, string> {
   return new Map(tenants.map((tenant) => [tenant.id, tenant.name]));
 }

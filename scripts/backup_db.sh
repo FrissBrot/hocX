@@ -32,6 +32,11 @@ ENV_FILE="$PROJECT_DIR/.env"
 BACKUP_DIR="$PROJECT_DIR/backups"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
 
+# shellcheck source=scripts/lib/env.sh
+source "$REPO_DIR/scripts/lib/env.sh"
+
+require_host_environment prod
+
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 fail() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $*" >&2; exit 1; }
 
@@ -39,10 +44,7 @@ if [ ! -f "$ENV_FILE" ]; then
   fail "Env-Datei $ENV_FILE fehlt."
 fi
 
-set -a
-# shellcheck disable=SC1090
-source "$ENV_FILE"
-set +a
+load_env_file "$ENV_FILE"
 
 : "${POSTGRES_USER:?POSTGRES_USER fehlt in $ENV_FILE}"
 : "${POSTGRES_DB:?POSTGRES_DB fehlt in $ENV_FILE}"
@@ -55,6 +57,12 @@ if ! "${DC[@]}" ps db --status running -q > /dev/null 2>&1 || [ -z "$("${DC[@]}"
 fi
 
 mkdir -p "$BACKUP_DIR"
+# Haerten unabhaengig vom Umask des aufrufenden Kontexts (Cron etc.) - anders als deploy.sh
+# (chmod 700 in dessen Preflight) laeuft dieses Skript laut Header-Kommentar eigenstaendig
+# und darf sich nicht darauf verlassen, dass deploy.sh das Verzeichnis vorher gehaertet hat.
+# Die pg_dump-Inhalte (Passwort-Hashes, alle Mandantendaten) duerfen nicht world-/group-lesbar
+# im Dateisystem liegen.
+chmod 700 "$BACKUP_DIR"
 BACKUP_FILE="$BACKUP_DIR/$(date +%Y%m%d-%H%M%S)-cron.sql.gz"
 TMP_FILE="$BACKUP_FILE.tmp"
 

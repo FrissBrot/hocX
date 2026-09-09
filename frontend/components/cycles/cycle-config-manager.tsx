@@ -22,10 +22,13 @@ const emptyForm: CycleConfigForm = {
   name_pattern: "",
 };
 
-function cyclePreview(form: CycleConfigForm): string {
+function currentCycleYear(resetMonth: number): number {
   const today = new Date();
-  const year =
-    today.getMonth() + 1 > Number(form.reset_month) ? today.getFullYear() : today.getFullYear() - 1;
+  return today.getMonth() + 1 > resetMonth ? today.getFullYear() : today.getFullYear() - 1;
+}
+
+function cyclePreview(form: CycleConfigForm): string {
+  const year = currentCycleYear(Number(form.reset_month));
   return form.name_pattern ? formatCycleName(form.name_pattern, year) : `${year}/${year + 1}`;
 }
 
@@ -138,7 +141,7 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
   const [configs, setConfigs] = useState(initialConfigs);
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState<CycleConfigForm>(emptyForm);
-  const [editId, setEditId] = useState<number | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<CycleConfigForm>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -212,7 +215,7 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
     }
   }
 
-  async function handleDelete(id: number) {
+  async function handleDelete(id: string) {
     if (
       !(await confirm({
         message: "Zyklus-Konfiguration löschen? Nur möglich solange kein Template zugeordnet ist.",
@@ -323,7 +326,12 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
                       <span>
                         Aktuell:{" "}
                         <strong style={{ color: "var(--text)", fontWeight: 600 }}>
-                          {formatCycleName(cfg.name_pattern, new Date().getFullYear() - 1)}
+                          {/* Was hardcoded getFullYear() - 1 regardless of reset_month/day
+                              (audit finding, 2026-08-25) - showed the wrong, previous cycle
+                              year for the whole second half of the year under the default
+                              reset (31 July). Mirrors cyclePreview's reset_month-aware
+                              computation instead. */}
+                          {formatCycleName(cfg.name_pattern, currentCycleYear(Number(cfg.reset_month)))}
                         </strong>
                       </span>
                       {cfg.name_pattern && (

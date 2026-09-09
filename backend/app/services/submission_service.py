@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import date, datetime, timedelta
 
 from sqlalchemy.orm import Session
@@ -8,7 +9,7 @@ from pathlib import Path
 
 from app.core.config import settings
 from app import scanner
-from app.models import Event, Participant, ProtocolTodo, SubmissionAssignment, SubmissionUpload, TenantDomain
+from app.models import Event, ListDefinition, ListEntry, Participant, ProtocolTodo, StoredFile, SubmissionAssignment, SubmissionUpload, Tenant, TenantDomain
 from app.repositories.submission_repository import SubmissionRepository
 from app.schemas.submission import (
     SubmissionAssignmentCreate,
@@ -18,6 +19,7 @@ from app.schemas.submission import (
     SubmissionFileRead,
     SubmissionUploadLogEntry,
 )
+from app.services import public_id_service
 from app.services.file_service import _safe_storage_path
 
 
@@ -38,6 +40,12 @@ def _move_from_quarantine(quarantine_rel_path: str, storage_root: str) -> str:
     q_full = _safe_storage_path(storage_root, quarantine_rel_path)
     # quarantine/tenant-1/assignment-2/abc.pdf -> tenant-1/assignment-2/abc.pdf
     parts = Path(quarantine_rel_path).parts
+    if not parts or parts[0] != "quarantine":
+        # Blindly dropping parts[0] on the (previously unchecked) assumption that it's
+        # always "quarantine" silently moved the file to the wrong path - stripping a real
+        # tenant-id/assignment-id segment instead - for any path that didn't start with it
+        # (audit finding, 2026-08-25). Fail loudly instead.
+        raise ValueError(f"Expected a quarantine-prefixed path, got {quarantine_rel_path!r}")
     new_rel = str(Path(*parts[1:]))
     new_full = _safe_storage_path(storage_root, new_rel)
     new_full.parent.mkdir(parents=True, exist_ok=True)
@@ -45,10 +53,10 @@ def _move_from_quarantine(quarantine_rel_path: str, storage_root: str) -> str:
     return new_rel
 
 
-def _element_ref(*, event_id: int | None, list_entry_id: int | None) -> str:
-    if event_id is not None:
-        return f"event-{event_id}"
-    return f"entry-{list_entry_id}"
+def _element_ref(*, event_public_id: uuid.UUID | None, list_entry_public_id: uuid.UUID | None) -> str:
+    if event_public_id is not None:
+        return f"event-{event_public_id}"
+    return f"entry-{list_entry_public_id}"
 
 
 def _resolve_event_responsible(event: Event, source: str | None) -> int | None:
@@ -69,12 +77,22 @@ def _resolve_list_responsible(entry: object, source: str | None) -> int | None:
     return int(pid) if pid else None
 
 
-def _parse_element_ref(element_ref: str) -> tuple[int | None, int | None]:
+def _parse_element_ref(db: Session, element_ref: str) -> tuple[int | None, int | None]:
     kind, _, raw_id = element_ref.partition("-")
-    if kind == "event" and raw_id.isdigit():
-        return int(raw_id), None
-    if kind == "entry" and raw_id.isdigit():
-        return None, int(raw_id)
+    try:
+        public_id = uuid.UUID(raw_id)
+    except ValueError:
+        raise ValueError("Ungueltige Element-Referenz") from None
+    if kind == "event":
+        internal_id = public_id_service.resolve_internal_id(db, Event, public_id)
+        if internal_id is None:
+            raise ValueError("Ungueltige Element-Referenz")
+        return internal_id, None
+    if kind == "entry":
+        internal_id = public_id_service.resolve_internal_id(db, ListEntry, public_id)
+        if internal_id is None:
+            raise ValueError("Ungueltige Element-Referenz")
+        return None, internal_id
     raise ValueError("Ungueltige Element-Referenz")
 
 
@@ -120,7 +138,10 @@ class SubmissionService:
         self, db: Session, payload: SubmissionAssignmentCreate, *, tenant_id: int
     ) -> SubmissionAssignmentRead:
         self._validate_source_fields(payload)
-        entity = SubmissionAssignment(tenant_id=tenant_id, **payload.model_dump())
+        list_definition_id = self._resolve_list_definition_tenant(db, payload.list_definition_id, tenant_id=tenant_id)
+        values = payload.model_dump()
+        values["list_definition_id"] = list_definition_id
+        entity = SubmissionAssignment(tenant_id=tenant_id, **values)
         created = self.repository.create_assignment(db, entity)
         return self._assignment_read(created)
 
@@ -133,6 +154,10 @@ class SubmissionService:
         values = payload.model_dump(exclude_unset=True)
         if not values:
             return self._assignment_read(assignment)
+        if "list_definition_id" in values:
+            values["list_definition_id"] = self._resolve_list_definition_tenant(
+                db, values["list_definition_id"], tenant_id=assignment.tenant_id
+            )
         merged = {
             "source_type": values.get("source_type", assignment.source_type),
             "tag_filter": values.get("tag_filter", assignment.tag_filter),
@@ -144,6 +169,19 @@ class SubmissionService:
         self._validate_source_fields_dict(merged)
         updated = self.repository.update_assignment(db, assignment, values)
         return self._assignment_read(updated)
+
+    def _resolve_list_definition_tenant(self, db: Session, list_definition_public_id: uuid.UUID | None, *, tenant_id: int) -> int | None:
+        # list_definition_id is client-supplied - without this, a writer could point a
+        # submission assignment at another tenant's list, exposing its entries both in the
+        # admin UI and in the public Abgabebox (audit finding, 2026-08-25). Resolving scoped
+        # to tenant_id here is also the ownership check itself: a foreign id simply fails to
+        # resolve.
+        if list_definition_public_id is None:
+            return None
+        internal_id = public_id_service.resolve_internal_id(db, ListDefinition, list_definition_public_id, tenant_id=tenant_id)
+        if internal_id is None:
+            raise ValueError("list_definition_id not found")
+        return internal_id
 
     def delete_assignment(self, db: Session, assignment_id: int) -> bool:
         assignment = self.repository.get_assignment(db, assignment_id)
@@ -177,7 +215,9 @@ class SubmissionService:
             raw = [
                 {
                     "event_id": event.id,
+                    "event_public_id": event.public_id,
                     "list_entry_id": None,
+                    "list_entry_public_id": None,
                     "label": event.title,
                     "sort_date": event.event_date,
                     # None (kein Offset gesetzt) = kein Zeitfenster auf dieser Seite - die
@@ -210,7 +250,9 @@ class SubmissionService:
         raw = [
             {
                 "event_id": None,
+                "event_public_id": None,
                 "list_entry_id": entry.id,
+                "list_entry_public_id": entry.public_id,
                 "label": _value_label(
                     definition.column_one_value_type,
                     entry.column_one_value_json,
@@ -291,11 +333,11 @@ class SubmissionService:
                 for _upload_file, stored_file in self.repository.list_upload_files(db, upload_id=upload.id):
                     files.append(
                         SubmissionFileRead(
-                            id=stored_file.id,
+                            id=stored_file.public_id,
                             original_name=stored_file.original_name,
                             mime_type=stored_file.mime_type,
                             file_size_bytes=stored_file.file_size_bytes,
-                            content_url=f"/api/submission-uploads/{upload.id}/files/{stored_file.id}/content",
+                            content_url=f"/api/submission-uploads/{upload.public_id}/files/{stored_file.public_id}/content",
                             scan_status=stored_file.scan_status,
                         )
                     )
@@ -311,15 +353,17 @@ class SubmissionService:
 
             results.append(
                 SubmissionElementRead(
-                    element_ref=_element_ref(event_id=raw["event_id"], list_entry_id=raw["list_entry_id"]),
+                    element_ref=_element_ref(event_public_id=raw["event_public_id"], list_entry_public_id=raw["list_entry_public_id"]),
                     label=raw["label"],
                     window_start=raw["window_start"],
                     window_end=raw["window_end"],
                     status=status,
                     submitted_at=submitted_at,
-                    upload_id=element_uploads[-1].id if element_uploads else None,
+                    upload_id=element_uploads[-1].public_id if element_uploads else None,
                     files=files,
-                    responsible_participant_id=raw.get("responsible_participant_id"),
+                    responsible_participant_id=public_id_service.resolve_public_id(db, Participant, raw["responsible_participant_id"])
+                    if raw.get("responsible_participant_id")
+                    else None,
                 )
             )
         return results
@@ -327,7 +371,7 @@ class SubmissionService:
     def _latest_upload_for_element(
         self, db: Session, assignment: SubmissionAssignment, element_ref: str
     ) -> tuple[int | None, int | None, SubmissionUpload | None]:
-        event_id, list_entry_id = _parse_element_ref(element_ref)
+        event_id, list_entry_id = _parse_element_ref(db, element_ref)
         uploads = self.repository.list_uploads_for_assignment(db, assignment_id=assignment.id)
         matching = [u for u in uploads if u.event_id == event_id and u.list_entry_id == list_entry_id]
         return event_id, list_entry_id, (matching[-1] if matching else None)
@@ -351,8 +395,7 @@ class SubmissionService:
             ),
         )
         elements = self.get_assignment_elements(db, assignment)
-        target_ref = _element_ref(event_id=event_id, list_entry_id=list_entry_id)
-        return next(element for element in elements if element.element_ref == target_ref)
+        return next(element for element in elements if element.element_ref == element_ref)
 
     def reopen_element(self, db: Session, assignment: SubmissionAssignment, element_ref: str) -> SubmissionElementRead:
         """Hebt eine manuelle Schliessung wieder auf. Bereits eingereichte Dateien bleiben
@@ -373,8 +416,7 @@ class SubmissionService:
             ),
         )
         elements = self.get_assignment_elements(db, assignment)
-        target_ref = _element_ref(event_id=event_id, list_entry_id=list_entry_id)
-        return next(element for element in elements if element.element_ref == target_ref)
+        return next(element for element in elements if element.element_ref == element_ref)
 
     def sync_todos_for_event(self, db: Session, event: Event) -> None:
         if not event.tag:
@@ -409,7 +451,7 @@ class SubmissionService:
             participant_id = raw.get("responsible_participant_id")
             if not participant_id:
                 continue
-            element_ref = _element_ref(event_id=raw["event_id"], list_entry_id=raw["list_entry_id"])
+            element_ref = _element_ref(event_public_id=raw["event_public_id"], list_entry_public_id=raw["list_entry_public_id"])
             url = f"{base_url}/{tenant_slug}/{assignment.public_slug}/{element_ref}"
             task = f"{assignment.title}: {raw['label']}"
             due_date = raw.get("window_end")
@@ -454,7 +496,20 @@ class SubmissionService:
             file_path = _safe_storage_path(settings.abgabebox_storage_root, stored_file.storage_path)
             result = scanner.scan_file(file_path, host=settings.clamav_host, port=settings.clamav_port)
             if result == "clean":
-                new_path = _move_from_quarantine(stored_file.storage_path, settings.abgabebox_storage_root)
+                try:
+                    new_path = _move_from_quarantine(stored_file.storage_path, settings.abgabebox_storage_root)
+                except ValueError:
+                    # _move_from_quarantine now rejects a storage_path that doesn't
+                    # actually start with "quarantine/" instead of silently mismoving it
+                    # (audit finding, 2026-08-25) - caught here specifically so one
+                    # malformed row can't abort the whole rescan batch for every other
+                    # still-pending file behind it in this loop.
+                    self.repository.create_upload_log(
+                        db, assignment_id=assignment_id, element_ref=element_ref,
+                        status="rescan_pending", error_message="Ungültiger Quarantäne-Pfad",
+                    )
+                    results["still_pending"] += 1
+                    continue
                 self.repository.update_stored_file_scan(db, stored_file, scan_status="clean", storage_path=new_path)
                 self.repository.create_upload_log(db, assignment_id=assignment_id, element_ref=element_ref, status="rescan_clean")
                 results["clean"] += 1

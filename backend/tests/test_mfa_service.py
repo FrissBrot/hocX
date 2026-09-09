@@ -4,7 +4,7 @@ from app.core.secret_crypto import encrypt_secret
 from app.core.security import build_current_user, create_session_token, get_optional_current_user
 from app.core.totp import current_totp_code, generate_totp_secret
 from app.models import UserMfaFactor
-from app.services.mfa_service import MfaService
+from app.services.mfa_service import _ACCOUNT_TOTP_ATTEMPT_LIMIT, MfaService
 from tests.factories import make_app_user, make_tenant, make_user_tenant_role
 
 
@@ -141,6 +141,46 @@ def test_set_self_preferred_method_updates_overview(db):
 
     assert overview.preferred_factor_type == "webauthn"
     assert overview.preferred_factor_label == "Passkey"
+
+
+def test_verify_login_totp_locks_out_account_across_tickets(db):
+    """Audit finding, 2026-08-27: a fresh ticket is minted on every successful password login,
+    so the pre-existing per-ticket TOTP rate limit alone let an attacker who already has valid
+    credentials mint unlimited tickets and get more guesses each time. Verifies the new
+    account-level ceiling (keyed by user id, not ticket) actually caps guesses across tickets."""
+    tenant = make_tenant(db)
+    user = make_app_user(db, email="totp-lockout@example.com")
+    make_user_tenant_role(db, user.id, tenant.id, role_code="writer")
+    secret = generate_totp_secret()
+    db.add(
+        UserMfaFactor(
+            user_id=user.id,
+            factor_type="totp",
+            label="Auth App",
+            secret_encrypted=encrypt_secret(secret),
+        )
+    )
+    db.flush()
+
+    service = MfaService()
+    current_user = build_current_user(db, user, tenant.id)
+
+    for _ in range(_ACCOUNT_TOTP_ATTEMPT_LIMIT):
+        pending = service.prepare_login(db, user=user, current_user=current_user, request_host="app.example.com")
+        try:
+            service.verify_login_totp(db, ticket=pending.ticket, code="000000")
+            assert False, "expected wrong TOTP code to fail"
+        except HTTPException as exc:
+            assert exc.status_code == 401
+
+    # A brand-new ticket with the *correct* code should still be blocked: the ceiling is
+    # per-account, not per-ticket.
+    pending = service.prepare_login(db, user=user, current_user=current_user, request_host="app.example.com")
+    try:
+        service.verify_login_totp(db, ticket=pending.ticket, code=current_totp_code(secret))
+        assert False, "expected account-level lockout to trigger"
+    except HTTPException as exc:
+        assert exc.status_code == 429
 
 
 def test_delete_self_factor_blocks_last_factor_for_required_user(db):

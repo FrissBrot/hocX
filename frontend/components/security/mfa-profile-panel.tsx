@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { TotpEnrollCard } from "@/components/security/totp-enroll-card";
 import { browserApiFetch } from "@/lib/api/client";
 import { browserSupportsPasskeys, createPasskeyCredential } from "@/lib/webauthn";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -130,7 +131,7 @@ export function MfaProfilePanel({ open }: Props) {
     }
   }
 
-  async function deleteFactor(factorId: number, label: string) {
+  async function deleteFactor(factorId: string, label: string) {
     const ok = await confirm({
       message: `MFA-Faktor "${label}" wirklich entfernen?`,
       tone: "danger",
@@ -224,40 +225,16 @@ export function MfaProfilePanel({ open }: Props) {
               TOTP einrichten
             </button>
           ) : (
-            <div className="grid">
-              <div className="security-secret-card">
-                <div className="field-label">Setup-Key</div>
-                <code className="security-secret-value">{totpSetup.manual_entry_key}</code>
-                <a href={totpSetup.provisioning_uri} className="button-inline button-ghost">
-                  In Authenticator-App öffnen
-                </a>
-              </div>
-              <label className="field-stack">
-                <span className="field-label">Bezeichnung</span>
-                <input
-                  value={totpLabel}
-                  onChange={(event) => setTotpLabel(event.target.value)}
-                  placeholder="z.B. Diensthandy"
-                />
-              </label>
-              <label className="field-stack">
-                <span className="field-label">6-stelligen Code eingeben</span>
-                <input
-                  value={totpCode}
-                  onChange={(event) => setTotpCode(event.target.value)}
-                  inputMode="numeric"
-                  placeholder="123 456"
-                />
-              </label>
-              <div className="table-actions table-actions-start">
-                <button type="button" className="button-inline" disabled={!totpCode || busy} onClick={() => void completeTotp()}>
-                  {busy ? "Wird bestätigt…" : "TOTP aktivieren"}
-                </button>
-                <button type="button" className="button-inline button-ghost" onClick={() => setTotpSetup(null)}>
-                  Abbrechen
-                </button>
-              </div>
-            </div>
+            <TotpEnrollCard
+              setup={totpSetup}
+              label={totpLabel}
+              onLabelChange={setTotpLabel}
+              code={totpCode}
+              onCodeChange={setTotpCode}
+              onSubmit={() => void completeTotp()}
+              onCancel={() => setTotpSetup(null)}
+              busy={busy}
+            />
           )}
         </article>
 
@@ -312,21 +289,36 @@ export function MfaProfilePanel({ open }: Props) {
         <div className="field-label">Aktive Faktoren</div>
         <div className="security-factor-list">
           {!overview?.factors.length ? <div className="selection-card muted">Noch keine MFA-Faktoren eingerichtet.</div> : null}
-          {overview?.factors.map((factor) => (
-            <article key={factor.id} className="security-factor-card">
-              <div className="security-factor-main">
-                <div className="security-factor-row">
-                  <strong>{factor.label}</strong>
-                  <span className="pill">{factor.factor_type === "totp" ? "TOTP" : "Passkey"}</span>
+          {overview?.factors.map((factor) => {
+            // The backend already rejects this with a 409 (delete_self_factor requires at
+            // least one factor to remain when MFA is required), but the button here gave
+            // no indication of that until the request failed (audit finding, 2026-08-25).
+            const isLastRequiredFactor = Boolean(overview?.required) && (overview?.factors.length ?? 0) <= 1;
+            return (
+              <article key={factor.id} className="security-factor-card">
+                <div className="security-factor-main">
+                  <div className="security-factor-row">
+                    <strong>{factor.label}</strong>
+                    <span className="pill">{factor.factor_type === "totp" ? "TOTP" : "Passkey"}</span>
+                  </div>
+                  <div className="muted">Eingerichtet: {formatDate(factor.created_at)}</div>
+                  <div className="muted">Zuletzt verwendet: {formatDate(factor.last_used_at)}</div>
+                  {isLastRequiredFactor && (
+                    <div className="muted">Letzter Pflicht-Faktor kann nicht entfernt werden.</div>
+                  )}
                 </div>
-                <div className="muted">Eingerichtet: {formatDate(factor.created_at)}</div>
-                <div className="muted">Zuletzt verwendet: {formatDate(factor.last_used_at)}</div>
-              </div>
-              <button type="button" className="button-inline button-danger" onClick={() => void deleteFactor(factor.id, factor.label)}>
-                Entfernen
-              </button>
-            </article>
-          ))}
+                <button
+                  type="button"
+                  className="button-inline button-danger"
+                  disabled={isLastRequiredFactor}
+                  title={isLastRequiredFactor ? "Tenant-Administratoren müssen mindestens einen MFA-Faktor behalten" : undefined}
+                  onClick={() => void deleteFactor(factor.id, factor.label)}
+                >
+                  Entfernen
+                </button>
+              </article>
+            );
+          })}
         </div>
       </div>
     </div>

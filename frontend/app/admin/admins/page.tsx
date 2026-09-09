@@ -11,7 +11,7 @@ export default async function AdminAccountsPage() {
   return (
     <AdminShell session={session}>
       <section className="panel">
-        <AdminAccountManagement initialAdmins={admins ?? []} currentAdminId={session.admin?.id ?? 0} />
+        <AdminAccountManagement initialAdmins={admins ?? []} currentAdminId={session.admin?.id ?? ""} />
       </section>
     </AdminShell>
   );

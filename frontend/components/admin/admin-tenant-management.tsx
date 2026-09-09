@@ -43,6 +43,7 @@ export function AdminTenantManagement({ initialPage }: Props) {
   const [importName, setImportName] = useState("");
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importBusy, setImportBusy] = useState(false);
+  const [importWarnings, setImportWarnings] = useState<string[] | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Server now applies `search` before pagination (audit A1, 2026-08-16 - fetchPage below
@@ -144,14 +145,37 @@ export function AdminTenantManagement({ initialPage }: Props) {
     setExportModalOpen(true);
   }
 
-  function submitExport(event: FormEvent<HTMLFormElement>) {
+  async function submitExport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!exportTenant) return;
-    const a = document.createElement("a");
-    a.href = `/api/admin/tenants/${exportTenant.id}/export?scope=${exportScope}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    // Was a plain <a href> GET navigation (audit finding, 2026-08-25): with
+    // SameSite=Lax cookies, a top-level navigation to that same URL from an external
+    // page (an <a target=_top>, a redirect, ...) would have carried the logged-in
+    // admin's session cookie and triggered a real export server-side, even though the
+    // attacker page couldn't read the resulting file back. Fetching it here instead -
+    // only reachable by JS running on this same origin, i.e. only by the admin actually
+    // clicking this button - closes that off entirely; same blob-download pattern
+    // downloadZip/downloadFile already use elsewhere in this codebase.
+    try {
+      const { browserApiBaseUrl } = await import("@/lib/api/client");
+      const res = await fetch(`${browserApiBaseUrl}/api/admin/tenants/${exportTenant.id}/export?scope=${exportScope}`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const disposition = res.headers.get("content-disposition") ?? "";
+      const filenameMatch = /filename="?([^";]+)"?/i.exec(disposition);
+      const filename = filenameMatch?.[1] ?? `${exportTenant.name}-export.zip`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Export fehlgeschlagen", "error");
+      return;
+    }
     setExportModalOpen(false);
   }
 
@@ -194,13 +218,20 @@ export function AdminTenantManagement({ initialPage }: Props) {
       formData.append("file", importFile);
       const result = await browserApiFetch<{ tenant: AdminTenantSummary; warnings: string[] }>(
         "/api/admin/tenants/import",
-        { method: "POST", body: formData }
+        // Uploads/entpackt/importiert bis zu MAX_TENANT_IMPORT_UPLOAD_BYTES (2 GB, siehe
+        // backend/app/api/routes/admin.py) - browserApiFetch's Default-Timeout von 15s reicht
+        // dafuer bei weitem nicht, was zuvor als "Zeitueberschreitung beim Server" fehlschlug.
+        { method: "POST", body: formData, signal: AbortSignal.timeout(600_000) }
       );
       await fetchPage(offset, search);
       setImportModalOpen(false);
       if (result.warnings.length > 0) {
-        showToast(`Mandant importiert mit ${result.warnings.length} Hinweis(en) - siehe Konsole`, "success");
-        console.warn("Import-Hinweise:", result.warnings);
+        // Warnings only ever went to the browser console before this fix (audit finding,
+        // 2026-08-25) - the toast pointed there but most admins never open devtools, so
+        // real issues (skipped rows, missing source files, ...) went unseen in practice.
+        // Shown in a dedicated modal now instead.
+        showToast(`Mandant importiert mit ${result.warnings.length} Hinweis(en)`, "success");
+        setImportWarnings(result.warnings);
       } else {
         showToast("Mandant importiert", "success");
       }
@@ -434,14 +465,16 @@ export function AdminTenantManagement({ initialPage }: Props) {
 
       <Modal
         open={importModalOpen}
-        onClose={() => setImportModalOpen(false)}
+        onClose={() => {
+          if (!importBusy) setImportModalOpen(false);
+        }}
         title="Mandant importieren"
         description="Legt anhand einer zuvor exportierten ZIP-Datei einen neuen Mandanten an."
       >
         <form className="grid" onSubmit={submitImport}>
           <label className="field-stack">
             <span className="field-label">Name des neuen Mandanten</span>
-            <input value={importName} onChange={(event) => setImportName(event.target.value)} required />
+            <input value={importName} onChange={(event) => setImportName(event.target.value)} disabled={importBusy} required />
           </label>
           <label className="field-stack">
             <span className="field-label">Export-Datei (.zip)</span>
@@ -449,15 +482,54 @@ export function AdminTenantManagement({ initialPage }: Props) {
               type="file"
               accept=".zip"
               onChange={(event) => setImportFile(event.target.files?.[0] ?? null)}
+              disabled={importBusy}
               required
             />
           </label>
+          {importBusy ? (
+            <div className="tenant-import-status" role="status" aria-live="polite">
+              <div className="tenant-import-status-copy">
+                <span className="tenant-import-upload-icon" aria-hidden="true">↑</span>
+                <span>
+                  <strong>Datei wird hochgeladen und verarbeitet …</strong>
+                  <span className="tenant-import-filename">{importFile?.name}</span>
+                </span>
+              </div>
+              <div
+                className="tenant-import-progress-track"
+                role="progressbar"
+                aria-label="Upload und Import laufen"
+                aria-valuetext="Upload und Import laufen"
+              >
+                <span className="tenant-import-progress-bar" />
+              </div>
+              <span className="tenant-import-status-hint">Das kann je nach Dateigrösse einen Moment dauern.</span>
+            </div>
+          ) : null}
           <div className="table-actions table-actions-start">
             <button type="submit" className="button-inline" disabled={importBusy || !importFile}>
               {importBusy ? "Wird importiert…" : "Importieren"}
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={importWarnings !== null}
+        onClose={() => setImportWarnings(null)}
+        title="Import-Hinweise"
+        description="Der Mandant wurde importiert, aber einzelne Zeilen wurden dabei übersprungen oder angepasst:"
+      >
+        <ul className="grid">
+          {(importWarnings ?? []).map((warning, index) => (
+            <li key={index} className="muted">{warning}</li>
+          ))}
+        </ul>
+        <div className="table-actions table-actions-start">
+          <button type="button" className="button-inline" onClick={() => setImportWarnings(null)}>
+            Schliessen
+          </button>
+        </div>
       </Modal>
     </div>
   );

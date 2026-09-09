@@ -8,6 +8,11 @@
 // verlagern (Nonces sind pro Request und koennen nicht statisch in next.config.mjs stehen).
 // Beides ist fuer eine reine Security-Header-Ergaenzung unverhaeltnismaessig invasiv - bewusster
 // Kompromiss: 'unsafe-inline' nur fuer script-src, kein CDN/keine Fremd-Domains in script-src.
+const isDevelopment = process.env.NODE_ENV !== "production";
+const scriptSrc = ["'self'", "'unsafe-inline'", isDevelopment && "'unsafe-eval'"]
+  .filter(Boolean)
+  .join(" ");
+
 const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -17,7 +22,7 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline'",
+      `script-src ${scriptSrc}`,
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
       "font-src 'self'",
@@ -31,11 +36,27 @@ const securityHeaders = [
   },
 ];
 
+const apiProxyTarget = process.env.FRONTEND_API_PROXY_TARGET?.replace(/\/$/, "");
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
   typedRoutes: true,
+  // next dev's cross-origin protection auto-allows "localhost" and the --hostname
+  // value (0.0.0.0 here) but not "127.0.0.1" - dev/test tooling (this repo's e2e
+  // stack included, see scripts/e2e.sh / playwright.config.ts) hits the dev server
+  // via 127.0.0.1, which without this got its HMR websocket silently rejected
+  // (403/handshake failure), breaking client-side hydration for the whole page:
+  // markup rendered, but nothing was interactive - inputs still worked natively,
+  // but anything needing JS (onClick, contenteditable) looked dead. Has no effect
+  // outside dev (only read when `next dev` is running).
+  allowedDevOrigins: ["127.0.0.1"],
   experimental: {
+    // Lokale/Test-Requests laufen ueber den Next-Proxy. Mandantenexporte duerfen laut
+    // Backend bis zu 2 GiB gross sein; der Next-Standard von 10 MB schneidet solche
+    // multipart-Uploads ab und endet dann mit ECONNRESET / "Internal Server Error".
+    // 2050 MB lassen zusaetzlich etwas Platz fuer den multipart/form-data-Overhead.
+    proxyClientMaxBodySize: "2050mb",
     staleTimes: {
       dynamic: 0,
     },
@@ -48,7 +69,17 @@ const nextConfig = {
       },
     ];
   },
+  async rewrites() {
+    if (!apiProxyTarget) {
+      return [];
+    }
+    return [
+      {
+        source: "/api/:path*",
+        destination: `${apiProxyTarget}/api/:path*`,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
-

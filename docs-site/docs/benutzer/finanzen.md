@@ -2,11 +2,14 @@
 
 ## Finanzen
 
-Unter *Finanzen* werden Konten und Buchungen für den Verein geführt. Zugriff haben
-`admin` und `kassier` uneingeschränkt schreibend, `reader`/`writer` nur lesend.
+Unter *Finanzen* werden Konten und Buchungen für den Verein geführt. `admin` und
+`kassier` dürfen Konten und Buchungen lesen und bearbeiten. `reader` und `writer`
+dürfen die Finanzdaten nur lesen.
 
 ## Bussen
 
 Bussen (`Fines`) lassen sich pro Protokoll bzw. pro Teilnehmer erfassen und
-nachverfolgen (offen/bezahlt). Wie Finanzen ist die Bearbeitung `kassier`/`admin`
-vorbehalten.
+nachverfolgen (offen/bezahlt). Die Bearbeitung ist `kassier` und `admin`
+vorbehalten. `writer` darf alle Bussen des aktuellen Vereins lesen, aber nicht
+verändern. `reader` sieht ausschliesslich Bussen, die einem mit seinem Konto
+verknüpften Teilnehmerdatensatz zugeordnet sind.

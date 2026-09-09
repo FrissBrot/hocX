@@ -1,7 +1,7 @@
 """add perceptual_hash to stored_file for tenant-wide image duplicate warnings"""
 
 revision = "0057_stored_file_perceptual_hash"
-down_revision = "0056_submission_flexible_window"
+down_revision = "0001_initial_schema"
 
 import sqlalchemy as sa
 from alembic import op

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import date
 
 from sqlalchemy import ColumnElement, and_, delete, or_, select
@@ -7,6 +8,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.models import Participant, Template, TemplateParticipant
+from app.services import public_id_service
 
 
 def participant_eligible_on(as_of: date) -> ColumnElement[bool]:
@@ -29,6 +31,9 @@ class ParticipantRepository:
 
     def get(self, db: Session, participant_id: int) -> Participant | None:
         return db.get(Participant, participant_id)
+
+    def get_by_public_id(self, db: Session, public_id: uuid.UUID, *, tenant_id: int) -> Participant | None:
+        return public_id_service.get_by_public_id(db, Participant, public_id, tenant_id=tenant_id)
 
     def create(self, db: Session, participant: Participant, *, commit: bool = True) -> Participant:
         db.add(participant)

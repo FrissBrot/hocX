@@ -65,7 +65,7 @@ def test_freeze_responsible_titles_resolves_correct_labels_and_avoids_per_elemen
         "app.services.protocol_service.resolve_responsible_labels_batch",
         wraps=resolve_responsible_labels_batch,
     ) as spy:
-        service._freeze_responsible_titles(db, protocol.id, commit=True)
+        service._freeze_responsible_titles(db, protocol.id, protocol.tenant_id, commit=True)
         # Exactly one batch call for all elements, not one resolve call (and one or more
         # db.get() calls inside it) per element.
         assert spy.call_count == 1

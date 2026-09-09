@@ -11,9 +11,10 @@ type ModalProps = {
   onClose: () => void;
   size?: "default" | "wide" | "fullscreen";
   headerActions?: ReactNode;
+  hideCloseButton?: boolean;
 };
 
-export function Modal({ open, title, description, children, onClose, size = "default", headerActions }: ModalProps) {
+export function Modal({ open, title, description, children, onClose, size = "default", headerActions, hideCloseButton = false }: ModalProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -54,9 +55,11 @@ export function Modal({ open, title, description, children, onClose, size = "def
           </div>
           <div className="modal-header-actions">
             {headerActions}
-            <button type="button" className="button-ghost modal-close" onClick={onClose}>
-              Schliessen
-            </button>
+            {!hideCloseButton ? (
+              <button type="button" className="button-ghost modal-close" onClick={onClose}>
+                Schliessen
+              </button>
+            ) : null}
           </div>
         </div>
         <div className="modal-content">{children}</div>

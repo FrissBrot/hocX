@@ -46,7 +46,7 @@ function parseCsvForPreview(text: string): CsvPreviewRow[] {
 type ParticipantManagerProps = {
   initialParticipants: ParticipantSummary[];
   templates: TemplateSummary[];
-  tenantId: number | null;
+  tenantId: string | null;
 };
 
 type ParticipantFormState = {
@@ -75,7 +75,12 @@ const emptyForm: ParticipantFormState = {
  * protocols' attendance rosters a participant appears in. */
 function membershipStatus(participant: ParticipantSummary): string | null {
   const today = new Date().toISOString().slice(0, 10);
-  if (participant.left_at && participant.left_at <= today) {
+  // left_at is inclusive - the participant is still a member through the end of that day
+  // itself (see participant_eligible_on / the help text "Erscheint ab dem Folgetag nicht
+  // mehr in Anwesenheitslisten") - `<= today` showed the "Ausgetreten" badge one day
+  // early, on left_at itself, contradicting that same help text (audit finding,
+  // 2026-08-25).
+  if (participant.left_at && participant.left_at < today) {
     return `Ausgetreten seit ${formatDate(participant.left_at)}`;
   }
   if (participant.joined_at && participant.joined_at > today) {
@@ -92,8 +97,8 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");
   const [form, setForm] = useState<ParticipantFormState>(emptyForm);
-  const [selectedParticipantIds, setSelectedParticipantIds] = useState<number[]>([]);
-  const [assignedTemplateIds, setAssignedTemplateIds] = useState<number[]>([]);
+  const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
+  const [assignedTemplateIds, setAssignedTemplateIds] = useState<string[]>([]);
   const [csvPreview, setCsvPreview] = useState<{ rows: CsvPreviewRow[]; file: File } | null>(null);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importing, setImporting] = useState(false);
@@ -195,7 +200,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
         left_at: form.left_at || null,
       };
 
-      let participantId: number;
+      let participantId: string;
       let updatedParticipant: ParticipantSummary;
       let successMessage = "";
 
@@ -232,7 +237,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
     }
   }
 
-  async function deleteParticipant(participantId: number) {
+  async function deleteParticipant(participantId: string) {
     const ok = await confirm({
       message: "Teilnehmer endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
       tone: "danger",
@@ -240,10 +245,11 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
     });
     if (!ok) return;
     try {
+      const deletedName = participants.find((participant) => participant.id === participantId)?.display_name ?? participantId;
       await browserApiFetch(`/api/participants/${participantId}`, { method: "DELETE" });
       setParticipants((current) => current.filter((participant) => participant.id !== participantId));
       setSelectedParticipantIds((current) => current.filter((id) => id !== participantId));
-      showToast(`Teilnehmer #${participantId} gelöscht`, "success");
+      showToast(`Teilnehmer "${deletedName}" gelöscht`, "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Teilnehmer konnte nicht gelöscht werden", "error");
     }

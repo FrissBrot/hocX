@@ -9,6 +9,26 @@ Drei Umgebungen:
 | Woher kommt der Code | lokal, `build:` aus Source | Docker-Image von GHCR | Docker-Image von GHCR |
 | Verzeichnis | `/docker/hocX` | Repo-Checkout auf dem Test-Server | Repo-Checkout auf dem Prod-Server |
 
+**Lokale Entwicklung** (Laptop/Workspace, nicht `hocx.example.com`) läuft jetzt bewusst separat
+über den Overlay `docker-compose.dev.yml`:
+
+```bash
+cp .env.example .env
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+```
+
+Optional dazu: `--profile scan` (ClamAV), `--profile docs` (Docs auf localhost:3002),
+`--profile edge` (lokaler Traefik).
+
+Bequemer Wrapper dafuer:
+
+```bash
+./scripts/dev.sh
+./scripts/dev.sh stop
+./scripts/dev.sh down
+./scripts/dev.sh up --profile docs --profile scan
+```
+
 **Wichtig vor dem allerersten Start einer neuen Domain (Test wie Prod)**: DNS-Eintrag
 zuerst setzen, dann erst den Stack starten. Traefik versucht bei jedem Container-Start
 sofort ein Let's-Encrypt-Zertifikat zu beziehen; schlägt die HTTP-01-Challenge fehl
@@ -33,8 +53,13 @@ bereits laufenden Zertifikate der anderen Umgebungen.
 
 ## 2. Testumgebung aktualisieren
 
+Einmalig nach der Umstellung auf den sicheren Env-Loader sicherstellen, dass nur der
+Eigentuemer die vorhandene Secret-Datei lesen kann: `chmod 600 .env`. Symlinks und
+gruppen- oder weltlesbare `.env`-Dateien werden vom Deploy bewusst abgelehnt.
+
 ```bash
-# Auf dem Test-Host im Repo-Root .env pflegen (Startpunkt: .env.test.example)
+# Auf dem Test-Host im Repo-Root .env pflegen. Fehlt sie beim ersten Deploy,
+# fragt deploy.sh die externen Werte ab und erzeugt alle Secrets automatisch.
 vim .env
 
 # HOCX_VERSION auf den eben gebauten Candidate-Tag setzen, z.B.:
@@ -44,8 +69,10 @@ vim .env
 ./scripts/verify_release.sh test
 ```
 
-`deploy.sh test` macht automatisch: DB-Backup (`backups/`) → Images pullen →
-Container neu starten (Alembic migriert die Test-DB dabei automatisch) → Basis-Health-Check.
+`deploy.sh test` macht automatisch: Preflight + exklusiver Deploy-Lock → DB-Backup
+(`backups/`) → Images pullen → Cosign-Signaturen pruefen → Digest-Manifest schreiben →
+Alembic explizit ausfuehren → Container neu starten → Smoke-Checks
+(Backend, Frontend, Abgabebox, Docs, ClamAV).
 `verify_release.sh test` prueft danach zusaetzlich:
 - Backend / Abgabebox-Backend lokal erreichbar
 - Frontend / Website / Docs lokal erreichbar
@@ -69,10 +96,19 @@ Wenn Test erfolgreich war:
    - `source_tag`: genau der getestete Candidate-Tag, z.B. `test-20260825-abc1234-r42`
    - `release_tag`: finaler Semver-Tag, z.B. `v1.2.0`
    - `update_latest`: in der Regel `true`
-3. Der Workflow baut **nicht** neu, sondern setzt die finalen GHCR-Tags auf dieselben
+   - `confirm_production`: zur Fehlklick-Sicherung exakt `DEPLOY`
+3. Der Workflow verlangt einen erfolgreichen, von `verify_release.sh test` erzeugten
+   GitHub-Testnachweis fuer genau den `source_tag`. Danach laeuft er in der GitHub-
+   Umgebung `production`. Fuer deinen Solo-Workflow muss dort kein Required Reviewer
+   konfiguriert werden.
+4. Der Workflow baut **nicht** neu, sondern setzt die finalen GHCR-Tags auf dieselben
    bereits getesteten Images.
-4. Optional danach ein GitHub-Release fuer Release Notes / Changelog anlegen. Das ist
+5. Optional danach ein GitHub-Release fuer Release Notes / Changelog anlegen. Das ist
    rein dokumentarisch; Images sind zu diesem Zeitpunkt schon gepromoted.
+
+Die GitHub-Umgebung wird beim ersten Workflow-Lauf automatisch angelegt. In
+**Settings → Environments → production** keine Reviewer-Regel aktivieren, solange du
+allein arbeitest. Die technische Test-Gate- und `DEPLOY`-Pruefung bleiben aktiv.
 
 ## 4. Prod aktualisieren
 
@@ -89,7 +125,12 @@ Auf Prod immer den finalen Release-Tag pinnen, nie einen Candidate-Tag.
 
 ## 5. Rollback
 
-Falls nach einem Update etwas kaputt ist:
+Schlagen Containerstart oder Smoke-Checks fehl, startet `deploy.sh` automatisch das
+letzte erfolgreiche Image-Set aus `.releases/current.env`. Das Manifest enthaelt
+unveraenderliche Image-Digests, nicht nur Tags. Eine bereits erfolgreiche
+Datenbankmigration wird dabei bewusst nicht automatisch zurueckgerollt.
+
+Falls ein Problem erst spaeter auffaellt:
 
 ```bash
 vim .env   # HOCX_VERSION auf die vorherige, bekannt gute Version zuruecksetzen
@@ -110,13 +151,6 @@ gunzip -c backups/<timestamp>-pre-vX.Y.Z.sql.gz | docker compose -p hocx exec -T
 befüllen in Release A, alte Spalte erst in Release B entfernen. Das hält jeden
 einzelnen Schritt rückwärtskompatibel und Rollback ohne Backup-Restore möglich.
 
-**Bekannte Ausnahme (Audit I6, 2026-08-16):** `backend/alembic/versions/0018_cycle_config.py`
-migriert Daten und entfernt die alten Spalten im selben Schritt (plus ein
-downgrade-unfähiges `DELETE` verwaister Zeilen) - verstößt gegen diese Regel, ist aber
-bereits produktiv angewendet und wird nicht nachträglich umgeschrieben. Nur als Beleg
-stehen gelassen, dass die Regel oben nicht rückwirkend gilt, aber für alle künftigen
-Migrationen bindend bleibt.
-
 ## 6. Testumgebung neu aufsetzen (falls die Test-DB mal komplett zurückgesetzt werden soll)
 
 ```bash
@@ -135,41 +169,101 @@ durchläuft beim nächsten Start die komplette Alembic-Historie von Anfang an.
 1. Test-Server provisionieren, Docker + Docker Compose installieren.
 2. DNS: `test.hocx.ch`, `abgabe-test.hocx.ch`, optional `docs-test.hocx.ch` und
    `web-test.hocx.ch` auf die Test-Server-IP zeigen lassen.
-3. Repo klonen: `git clone git@github.com:FrissBrot/hocX.git`.
-4. `.env.test.example` nach `.env` kopieren, alle `change-me`-Werte durch echte Werte
-   ersetzen und `GHCR_NAMESPACE` setzen.
-5. `mkdir -p storage/abgabebox-uploads infra/traefik/letsencrypt infra/traefik/dynamic`
-   und `chown root:5001 storage/abgabebox-uploads && chmod 775 storage/abgabebox-uploads`
-   - gleiche Begruendung wie bei Prod unten.
-6. In `.env` `HOCX_VERSION` auf einen bereits gebauten Candidate-Tag setzen.
-7. `./scripts/deploy.sh test` und danach `./scripts/verify_release.sh test`.
+3. Repo als root klonen: `git clone git@github.com:FrissBrot/hocX.git`.
+4. Im Repo als root `./scripts/provision_deploy_user.sh test` ausfuehren. Das Skript erstellt
+   `hocx-deploy`, installiert bei Debian/Ubuntu fehlende Werkzeuge (`gh`, `jq`, `curl`),
+   richtet Docker-Zugriff und alle Besitz-/Runtime-Rechte ein und zeigt
+   danach den erforderlichen Benutzerwechsel an. `/etc/hocx/environment` bindet den Host
+   dauerhaft an `test`; Prod- und Dev-Starts werden auf diesem Host abgelehnt.
+5. Mit `sudo -iu hocx-deploy` wechseln, ins Repository gehen und
+   `./scripts/deploy.sh test` starten. Falls `.env` fehlt, fragt das Skript die nicht
+   automatisch erzeugbaren Werte interaktiv ab, legt die Datei mit zufaelligen Secrets
+   und Dateirechten 600 an und startet danach direkt die Umgebung.
+6. Bei spaeteren Deploys in `.env` `HOCX_VERSION` auf den neuen Candidate-Tag setzen.
+7. Nach dem ersten Deploy und nach Updates `./scripts/verify_release.sh test` ausfuehren.
+   Bei erfolgreichen Checks schreibt das Skript automatisch einen maschinenlesbaren
+   GitHub-Deployment-Status fuer exakt diesen Candidate-Tag. Dieser Nachweis ist die
+   technische Voraussetzung fuer eine spaetere Prod-Promotion.
 8. Test-Admin-Login mit `INITIAL_ADMIN_EMAIL`/`INITIAL_ADMIN_PASSWORD` pruefen, danach
    weitere Test-Admins anlegen und das Bootstrap-Passwort aendern.
+
+Beim ersten Deploy fragt `deploy.sh` zwei getrennte Tokens verdeckt ab. Empfohlen sind:
+
+- ein Fine-grained PAT, ausschliesslich fuer `FrissBrot/hocX`, mit `Contents: read`,
+  `Actions: read` und `Deployments: read and write`;
+- ein klassischer PAT mit ausschliesslich `read:packages` fuer GHCR.
+
+Die Trennung verhindert, dass der Registry-Token auch Repository-Rechte erhaelt. Beide
+werden mit Modus 600 unter `.tools/` statt in `.env` gespeichert. Das Skript prueft
+Repository-, Actions-, Deployment- und GHCR-Anmeldung bei jedem Deploy erneut.
+
+Der Status kann bei Bedarf manuell kontrolliert werden:
+
+```bash
+sudo -iu hocx-deploy
+gh auth status
+```
+
+Der Token wird von `gh` im geschuetzten Benutzer-Credential-Speicher verwaltet und
+gehoert nicht in `.env`. Die Deployment-Schreibberechtigung kann ohne einen kuenstlichen
+Testeintrag nicht vorab geprueft werden; sie wird spaetestens beim ersten erfolgreichen
+`verify_release.sh test` real validiert. Scheitert dieser Eintrag, bleibt die
+Prod-Promotion gesperrt.
 
 ## 8. Prod-Server das erste Mal aufsetzen (sobald der Server existiert)
 
 1. Server provisionieren, Docker + Docker Compose installieren.
 2. DNS: `hocx.ch` und `abgabe.hocx.ch` (oder analog) auf die Server-IP zeigen lassen.
-3. Repo klonen (nur für die Compose-Dateien und `infra/traefik/` nötig, kein
+3. Repo als root klonen (nur für die Compose-Dateien und `infra/traefik/` nötig, kein
    Source-Build): `git clone git@github.com:FrissBrot/hocX.git`.
-4. `.env.prod.example` nach `.env` kopieren (im Repo-Root auf dem Prod-Server), alle
-   `change-me`-Werte durch echte, zufällige Werte ersetzen (`openssl rand -hex 32` für
-   Secrets).
-5. `mkdir -p storage/abgabebox-uploads infra/traefik/letsencrypt infra/traefik/dynamic`
-   und `chown root:5001 storage/abgabebox-uploads && chmod 775 storage/abgabebox-uploads`
-   - `abgabebox-backend` läuft im Container als nicht-root User `abgabebox` (uid/gid 5001,
-   siehe `abgabebox-backend/Dockerfile`), `backend` schreibt als root in denselben
-   Host-Ordner (unterschiedliche Mountpunkte, siehe `docker-compose.yml`). Ohne die
-   Gruppen-Freigabe bräuchte es sonst 777 (Audit I3, 2026-08-16 - genau das lag hier vorher
-   unbemerkt vor).
-6. `./scripts/deploy.sh prod` - zieht die in `.env` gepinnte Version, startet den
+4. Im Repo als root `./scripts/provision_deploy_user.sh prod` ausfuehren. Danach mit
+   `sudo -iu hocx-deploy` zum dedizierten Deploy-Benutzer wechseln. Direkte
+   `deploy.sh`-Aufrufe als root werden bewusst abgelehnt. Die Root-eigene Markierung
+   `/etc/hocx/environment` blockiert auf diesem Host Test- und Dev-Starts.
+5. Im Repo `./scripts/deploy.sh prod` starten. Falls `.env` fehlt, fragt das Skript Domains,
+   Image-Version und externe Zugangsdaten interaktiv ab. Ableitbare Werte und sichere
+   Zufalls-Secrets erzeugt es selbst; die neue `.env` erhaelt Dateirechte 600.
+6. Das Skript zieht die in `.env` gepinnte Version und startet den
    kompletten Stack inkl. eigenem Traefik (Let's-Encrypt-Zertifikate werden beim ersten
    Start automatisch bezogen, dauert ein paar Minuten).
+   Vor dem Start verifiziert es jedes Image gegen die Signatur des
+   `build-test-images.yml`-Workflows. Eine fest gepinnte Cosign-Version wird bei Bedarf
+   nach `.tools/` geladen und gegen die im Skript hinterlegte SHA-256-Pruefsumme geprueft;
+   eine systemweite Installation ist nicht erforderlich.
 7. Bootstrap-Admin-Login mit `INITIAL_ADMIN_EMAIL`/`INITIAL_ADMIN_PASSWORD` aus `.env`
    prüfen, danach im Admin-Panel weitere Admins anlegen und das Bootstrap-Passwort
    ändern.
 
-## 9. Backup- und Cleanup-Cronjobs
+## 9. Deploy-Code kontrolliert aktualisieren
+
+Ein normaler `deploy.sh`-Lauf aktualisiert Skripte und Compose-Dateien niemals selbst.
+Als `hocx-deploy` wird ein Update bewusst separat ausgefuehrt:
+
+```bash
+cd /docker/hocX
+./scripts/update_deploy_code.sh
+./scripts/deploy.sh prod  # auf dem Testhost entsprechend: test
+```
+
+Optional kann das erfolgreiche Fast-Forward-Update direkt den an den Host gebundenen
+Deploy starten:
+
+```bash
+./scripts/update_deploy_code.sh --deploy
+```
+
+Der Updater akzeptiert nur die fest hinterlegte hocX-GitHub-Remote, den Branch `main`,
+einen sauberen tracked Worktree und einen reinen Fast-Forward auf `origin/main`. Vor dem
+Fast-Forward lädt er den zum Commit gehoerenden CI-Nachweis, prueft dessen keyless
+Cosign-Signatur gegen den festen `build-test-images.yml`-Workflow und verifiziert die
+Hashes aller Deploy-Skripte, Compose- und Traefik-Dateien. Damit reicht ein blosses
+Manipulieren von Git oder `origin/main` nicht mehr aus. Hierfuer wird dieselbe einmalige
+GitHub-Anmeldung wie fuer den Testnachweis benoetigt; fehlt sie, wird der Token auch hier
+verdeckt abgefragt und geprueft. Der Updater nutzt denselben
+exklusiven Lock wie `deploy.sh`. `.env`, Storage, Backups, `.tools` und `.releases` sind
+ignoriert und werden nicht veraendert.
+
+## 10. Backup- und Cleanup-Cronjobs
 
 Zwei eigenständige Skripte in `scripts/`, gedacht für periodische Ausführung per Cron
 (zusätzlich zum automatischen Pre-Deploy-Backup, das `deploy.sh` bei jedem Update ohnehin
@@ -227,7 +321,7 @@ Fehlern mit Exit-Code ≠ 0 ab (wichtig für Cron-Fehlerbenachrichtigung/Monitor
 - **Manuell testen**: erst `./scripts/cleanup_storage.sh --dry-run` (zeigt betroffene
   Dateien, löscht nichts), danach bei Bedarf ohne Flag fuer den echten Lauf.
 
-## 10. hocx.example.com ist faktisches Prod, nicht Dev
+## 11. hocx.example.com ist faktisches Prod, nicht lokales Dev
 
 Die Tabelle in Abschnitt "Drei Umgebungen" oben führt `hocx.example.com` als "Dev" -
 das beschreibt korrekt, *wie* die Umgebung technisch betrieben wird (lokaler Build aus
@@ -237,12 +331,16 @@ wird faktisch wie Prod genutzt, auch wenn sie technisch wie Dev aufgesetzt ist. 
 Update dort ohne Vorsicht (kein vorheriges Backup, kein Health-Check danach) ist damit
 ein echtes Ausfallrisiko für echte Nutzer, nicht nur für einen Wegwerf-Testaccount.
 
+Das echte **lokale** Entwickeln ist davon inzwischen bewusst getrennt: dafür ist der
+Overlay `docker-compose.dev.yml` gedacht (siehe Abschnitt oben), nicht die Server-Instanz
+`hocx.example.com`.
+
 **Deshalb gilt für jedes Update von hocx.example.com** (der lokale Source-Build-Mechanismus
 selbst bleibt unverändert - das ist eine bewusste, hier nicht revidierte Entscheidung,
 keine Pipeline-Umstellung auf GHCR-Images ist im Rahmen dieses Punkts vorgesehen):
 
 1. **Vor jedem Update**: Backup ziehen, unabhängig vom nächtlichen Cron-Lauf aus
-   Abschnitt 9 - `./scripts/backup_db.sh` im Repo-Root ausführen und den Erfolg
+   Abschnitt 10 - `./scripts/backup_db.sh` im Repo-Root ausführen und den Erfolg
    (neue Datei unter `backups/`) prüfen, bevor der Code aktualisiert wird.
 2. **Update durchführen**: `git pull` + `docker compose up -d --build` (Alembic migriert
    die DB dabei automatisch, wie bei den anderen Umgebungen auch).

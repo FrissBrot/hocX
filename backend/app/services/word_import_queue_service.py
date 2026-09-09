@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import logging
 from collections import Counter, defaultdict
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.models import Template, WordImportDocument
@@ -192,7 +192,7 @@ class WordImportQueueService:
         return documents, errors
 
     def _apply_batch_consensus(self, db: Session, *, document: WordImportDocument, hint: dict) -> None:
-        stored_file = self.file_service.get_stored_file(db, document.stored_file_id)
+        stored_file = self.file_service.get_stored_file(db, document.stored_file_id, tenant_id=document.tenant_id)
         if stored_file is None:
             return
         raw_bytes = self.file_service.read_stored_file_bytes(stored_file)
@@ -247,11 +247,18 @@ class WordImportQueueService:
         return list(db.execute(statement).scalars())
 
     def _duplicate_map(self, db: Session, *, tenant_id: int) -> dict[int, list[WordImportDocument]]:
+        # Scoped to still-open documents plus a recent window (audit finding, 2026-08-25) -
+        # unbounded over a tenant's entire import history otherwise, a real performance
+        # risk for the same reason already flagged elsewhere in this file (long-running
+        # tenants accumulating years of word-import rows). A duplicate flag on two
+        # documents imported years apart isn't practically useful to keep computing anyway.
+        recent_cutoff = datetime.now(timezone.utc) - timedelta(days=180)
         rows = list(
             db.execute(
                 select(WordImportDocument).where(
                     WordImportDocument.tenant_id == tenant_id,
                     WordImportDocument.protocol_date.is_not(None),
+                    or_(WordImportDocument.status == "eingelesen", WordImportDocument.created_at >= recent_cutoff),
                 )
             ).scalars()
         )
@@ -280,6 +287,13 @@ class WordImportQueueService:
         protocol_date: date | None,
         table_role_overrides: dict[int, dict] | None,
     ) -> WordImportAnalysis:
+        # Unlike commit_document/save_draft/delete_document, this had no status guard at
+        # all (audit finding, 2026-08-25): a second tab could reanalyze an already-
+        # "importiert" document and overwrite its review_draft_json/protocol_date even
+        # though the real Protocol from the original import already exists with the old
+        # data - drifting the audit trail from what was actually imported.
+        if document.status != "eingelesen":
+            raise ValueError("Dokument wurde bereits importiert")
         analysis = self._reanalyze_document(
             db, document=document, protocol_date=protocol_date, table_role_overrides=table_role_overrides
         )
@@ -287,10 +301,20 @@ class WordImportQueueService:
         return analysis
 
     def save_draft(self, db: Session, *, document: WordImportDocument, draft: dict) -> None:
-        if document.status != "eingelesen":
+        # Atomic conditional UPDATE, not a read-then-write on the (possibly stale, if
+        # fetched earlier by the caller) in-memory `document` object - checking
+        # document.status here only reflects its state at the last read, not the current
+        # DB row, so a concurrent commit_document landing in between could still be
+        # overwritten by this save_draft (audit finding, 2026-08-25). Mirrors
+        # commit_document's claim UPDATE and delete_document's conditional DELETE above.
+        updated = db.execute(
+            update(WordImportDocument)
+            .where(WordImportDocument.id == document.id, WordImportDocument.status == "eingelesen")
+            .values(review_draft_json=draft)
+        )
+        if updated.rowcount == 0:
+            db.rollback()
             raise ValueError("Dokument wurde bereits importiert")
-        document.review_draft_json = draft
-        db.add(document)
         db.commit()
 
     def commit_document(
@@ -302,25 +326,43 @@ class WordImportQueueService:
         user_id: int | None,
         payload: WordImportCommit,
     ) -> WordImportCommitResult:
-        # Row-locks the document for the rest of this transaction (audit D11, 2026-08-16):
-        # without this, two near-simultaneous commit requests for the same document (double-
-        # click, two tabs, a client retry after a slow response) can both read
-        # status == "eingelesen" before either has written "importiert", so both proceed and
-        # each creates its own Protocol - one gets referenced by this document, the other
-        # survives as an invisible orphaned duplicate. A concurrent SELECT ... FOR UPDATE on
-        # this row now blocks until the first commit's transaction ends, so the second
-        # request re-reads the now-"importiert" status and hits the check below instead.
-        db.execute(
-            select(WordImportDocument).where(WordImportDocument.id == document.id).with_for_update()
-        ).scalar_one()
-        if document.status == "importiert":
+        # Atomically claim the document by flipping its status to "importiert" up front, in
+        # its own short transaction, rather than relying on a SELECT ... FOR UPDATE row lock
+        # held across the call to word_import_service.commit() below (audit finding,
+        # 2026-08-25: that lock is released the moment commit()'s own first internal
+        # db.commit() runs - long before this method itself would have written
+        # status="importiert" - so a near-simultaneous second commit request could still
+        # read "eingelesen" and also proceed, creating a second, invisible duplicate
+        # Protocol). The UPDATE's WHERE clause makes the claim itself atomic: only one
+        # concurrent request can ever flip an "eingelesen" row, and delete_document's
+        # matching atomic conditional DELETE (see below) can never remove a row this claim
+        # already flipped.
+        claim = db.execute(
+            update(WordImportDocument)
+            .where(WordImportDocument.id == document.id, WordImportDocument.status == "eingelesen")
+            .values(status="importiert")
+        )
+        db.commit()
+        if claim.rowcount == 0:
             raise ValueError("Dokument wurde bereits importiert")
+
         if payload.template_id != document.template_id:
+            # This request never gets to actually import - release the claim again so the
+            # document stays reopenable instead of being stuck as "importiert" with no
+            # protocol_id.
+            document.status = "eingelesen"
+            db.add(document)
+            db.commit()
             raise ValueError("Vorlage stimmt nicht mit dem Dokument überein")
 
-        result = self.word_import_service.commit(db, tenant_id=tenant_id, user_id=user_id, payload=payload)
+        try:
+            result = self.word_import_service.commit(db, tenant_id=tenant_id, user_id=user_id, payload=payload)
+        except Exception:
+            document.status = "eingelesen"
+            db.add(document)
+            db.commit()
+            raise
 
-        document.status = "importiert"
         document.protocol_id = result.id
         document.imported_by = user_id
         document.imported_at = datetime.now(timezone.utc)
@@ -334,10 +376,24 @@ class WordImportQueueService:
         document = self.get_document(db, tenant_id=tenant_id, document_id=document_id)
         if document is None:
             return False
-        if document.status != "eingelesen":
+        stored_file = self.file_service.get_stored_file(db, document.stored_file_id, tenant_id=document.tenant_id)
+        # Atomic conditional DELETE (audit finding, 2026-08-25) - a separate status check
+        # followed by an unconditional db.delete(document) left a window where a concurrent
+        # commit_document could flip the row to "importiert" in between, and this DELETE
+        # would then remove it anyway, destroying the just-created Protocol's source
+        # document and file. Folding the status check into the DELETE's WHERE clause makes
+        # "is it still eingelesen" and "delete it" a single atomic database operation, which
+        # commit_document's own atomic claim UPDATE above is written to be safe against
+        # either way round.
+        deleted = db.execute(
+            delete(WordImportDocument).where(
+                WordImportDocument.id == document.id,
+                WordImportDocument.status == "eingelesen",
+            )
+        )
+        if deleted.rowcount == 0:
+            db.rollback()
             raise ValueError("Nur noch nicht importierte Dokumente können entfernt werden")
-        stored_file = self.file_service.get_stored_file(db, document.stored_file_id)
-        db.delete(document)
         db.flush()
         if stored_file is not None:
             self.file_service.delete_stored_file(db, stored_file)
@@ -378,7 +434,7 @@ class WordImportQueueService:
         table_role_overrides: dict[int, dict] | None,
         reset_draft: bool = True,
     ) -> WordImportAnalysis:
-        stored_file = self.file_service.get_stored_file(db, document.stored_file_id)
+        stored_file = self.file_service.get_stored_file(db, document.stored_file_id, tenant_id=document.tenant_id)
         if stored_file is None:
             raise ValueError("Original-Datei nicht mehr vorhanden")
         raw_bytes = self.file_service.read_stored_file_bytes(stored_file)

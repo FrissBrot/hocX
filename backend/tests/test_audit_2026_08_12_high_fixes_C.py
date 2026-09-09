@@ -40,7 +40,7 @@ def test_h7_delete_blocked_when_referenced_by_template_element_block(db):
     user = make_current_user(tenant.id)
 
     with pytest.raises(HTTPException) as exc_info:
-        lists_route.delete_definition(definition.id, db=db, user=user)
+        lists_route.delete_definition(definition.public_id, db=db, user=user)
     assert exc_info.value.status_code == 409
     assert db.get(ListDefinition, definition.id) is not None
 
@@ -51,7 +51,7 @@ def test_h7_delete_blocked_when_referenced_by_template_element_block(db):
     db.add(element_definition)
     db.flush()
 
-    result = lists_route.delete_definition(definition.id, db=db, user=user)
+    result = lists_route.delete_definition(definition.public_id, db=db, user=user)
     assert result == {"message": "Liste geloescht"}
     assert db.get(ListDefinition, definition.id) is None
 
@@ -68,7 +68,7 @@ def test_h7_delete_blocked_when_referenced_by_protocol_block(db):
     user = make_current_user(tenant.id)
 
     with pytest.raises(HTTPException) as exc_info:
-        lists_route.delete_definition(definition.id, db=db, user=user)
+        lists_route.delete_definition(definition.public_id, db=db, user=user)
     assert exc_info.value.status_code == 409
     assert db.get(ListDefinition, definition.id) is not None
 
@@ -100,7 +100,7 @@ def test_h7_delete_blocked_when_referenced_via_row_link(db):
     user = make_current_user(tenant.id)
 
     with pytest.raises(HTTPException) as exc_info:
-        lists_route.delete_definition(definition.id, db=db, user=user)
+        lists_route.delete_definition(definition.public_id, db=db, user=user)
     assert exc_info.value.status_code == 409
 
 
@@ -109,7 +109,7 @@ def test_h7_delete_succeeds_when_unreferenced(db):
     definition = make_list_definition(db, tenant.id)
     user = make_current_user(tenant.id)
 
-    result = lists_route.delete_definition(definition.id, db=db, user=user)
+    result = lists_route.delete_definition(definition.public_id, db=db, user=user)
     assert result == {"message": "Liste geloescht"}
     assert db.get(ListDefinition, definition.id) is None
 
@@ -176,14 +176,14 @@ def test_h9_deleted_source_list_marks_entry_exists_false_in_table_block(db):
     )
 
     # First refresh while the source list still exists - captures a live snapshot.
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, keep_undo=False)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=False)
     assert block.configuration_snapshot_json["list_snapshot"]["entries"]
 
     # Delete the source list out from under the block, then recompute.
     db.delete(db.get(ListDefinition, definition.id))
     db.flush()
 
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, keep_undo=False)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=False)
     snapshot = block.configuration_snapshot_json["list_snapshot"]
     assert snapshot == {"synced_version": 0, "entry_exists": False}, (
         "must mirror compute_row_list_snapshot's deleted-source marker, not keep the stale "
@@ -206,8 +206,8 @@ def test_h9_refresh_is_idempotent_once_marked_deleted(db):
     db.delete(db.get(ListDefinition, definition.id))
     db.flush()
 
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, keep_undo=False)
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, keep_undo=False)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=False)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=False)
     assert block.configuration_snapshot_json["list_snapshot"] == {
         "synced_version": 0,
         "entry_exists": False,
