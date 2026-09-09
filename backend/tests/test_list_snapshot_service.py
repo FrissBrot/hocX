@@ -1,11 +1,14 @@
 """Tests for list_snapshot_service.py - the snapshot compute/refresh/undo/freeze logic
 backing the "Daten aktualisieren" hint on list-linked protocol blocks."""
-from app.models import ListEntry
+from datetime import date
+
+from app.models import ListEntry, TableSnapshot
 from app.schemas.list_definition import ListDefinitionUpdate, ListEntryCreate, ListEntryUpdate
 from app.services import list_snapshot_service, public_id_service
 from app.services.list_service import ListService
 
 from tests.factories import (
+    make_cycle_config,
     make_list_definition,
     make_list_entry,
     make_protocol,
@@ -55,6 +58,126 @@ def test_compute_row_list_snapshot_deleted_entry(db):
 
     assert snapshot["entry_exists"] is False
     assert snapshot["synced_version"] == definition.content_version
+
+
+def _protocol_with_cycle(db, tenant_id, *, protocol_date):
+    """A protocol whose template has a cycle_config, so resolve_protocol_cycle can
+    determine which cycle_year it falls into - needed for compute_row_list_snapshot_
+    for_protocol's historical resolution."""
+    cycle_config = make_cycle_config(db, tenant_id, reset_month=12, reset_day=31)
+    template = make_template(db, tenant_id)
+    template.cycle_config_id = cycle_config.id
+    db.flush()
+    protocol = make_protocol(db, tenant_id, template.id, protocol_date=protocol_date)
+    return cycle_config, protocol
+
+
+def test_compute_row_list_snapshot_for_protocol_ignores_historical_when_source_is_live(db):
+    tenant = make_tenant(db)
+    definition = make_list_definition(db, tenant.id)
+    entry = make_list_entry(db, definition.id, column_one_value={"text_value": "live value"})
+    _cycle_config, protocol = _protocol_with_cycle(db, tenant.id, protocol_date=date(2024, 6, 1))
+
+    snapshot = list_snapshot_service.compute_row_list_snapshot_for_protocol(
+        db, list_definition_id=definition.id, list_entry_id=entry.id, tenant_id=tenant.id,
+        value_source=None, protocol=protocol,
+    )
+
+    assert snapshot["column_one_value"]["text_value"] == "live value"
+
+
+def test_compute_row_list_snapshot_for_protocol_uses_historical_table_snapshot(db):
+    tenant = make_tenant(db)
+    definition = make_list_definition(db, tenant.id)
+    entry = make_list_entry(db, definition.id, column_one_value={"text_value": "live value"})
+    cycle_config, protocol = _protocol_with_cycle(db, tenant.id, protocol_date=date(2024, 6, 1))
+
+    db.add(TableSnapshot(
+        tenant_id=tenant.id, cycle_config_id=cycle_config.id, cycle_year=2024, table_name="list_definition",
+        snapshot_json=[{
+            "id": definition.id, "public_id": str(definition.public_id), "content_version": 3,
+            "column_one_title": definition.column_one_title, "column_one_value_type": definition.column_one_value_type,
+            "column_two_title": definition.column_two_title, "column_two_value_type": definition.column_two_value_type,
+        }],
+        row_count=1,
+    ))
+    db.add(TableSnapshot(
+        tenant_id=tenant.id, cycle_config_id=cycle_config.id, cycle_year=2024, table_name="list_entry",
+        snapshot_json=[{
+            "id": entry.id, "public_id": str(entry.public_id), "list_definition_id": definition.id,
+            "column_one_value_json": {"text_value": "historical value"}, "column_two_value_json": {},
+        }],
+        row_count=1,
+    ))
+    db.flush()
+
+    snapshot = list_snapshot_service.compute_row_list_snapshot_for_protocol(
+        db, list_definition_id=definition.id, list_entry_id=entry.id, tenant_id=tenant.id,
+        value_source="historical", protocol=protocol,
+    )
+
+    assert snapshot["entry_exists"] is True
+    assert snapshot["column_one_value"]["text_value"] == "historical value"
+    assert snapshot["synced_version"] == 3
+
+
+def test_compute_row_list_snapshot_for_protocol_falls_back_to_live_when_cycle_has_no_snapshot(db):
+    tenant = make_tenant(db)
+    definition = make_list_definition(db, tenant.id)
+    entry = make_list_entry(db, definition.id, column_one_value={"text_value": "live value"})
+    _cycle_config, protocol = _protocol_with_cycle(db, tenant.id, protocol_date=date(2024, 6, 1))
+
+    snapshot = list_snapshot_service.compute_row_list_snapshot_for_protocol(
+        db, list_definition_id=definition.id, list_entry_id=entry.id, tenant_id=tenant.id,
+        value_source="historical", protocol=protocol,
+    )
+
+    assert snapshot["column_one_value"]["text_value"] == "live value"
+
+
+def test_compute_row_list_snapshot_for_protocol_falls_back_when_template_has_no_cycle_config(db):
+    tenant = make_tenant(db)
+    definition = make_list_definition(db, tenant.id)
+    entry = make_list_entry(db, definition.id, column_one_value={"text_value": "live value"})
+    template = make_template(db, tenant.id)  # no cycle_config_id
+    protocol = make_protocol(db, tenant.id, template.id)
+
+    snapshot = list_snapshot_service.compute_row_list_snapshot_for_protocol(
+        db, list_definition_id=definition.id, list_entry_id=entry.id, tenant_id=tenant.id,
+        value_source="historical", protocol=protocol,
+    )
+
+    assert snapshot["column_one_value"]["text_value"] == "live value"
+
+
+def test_compute_row_list_snapshot_for_protocol_entry_exists_false_when_entry_missing_from_snapshot(db):
+    tenant = make_tenant(db)
+    definition = make_list_definition(db, tenant.id)
+    entry = make_list_entry(db, definition.id, column_one_value={"text_value": "live value"})
+    cycle_config, protocol = _protocol_with_cycle(db, tenant.id, protocol_date=date(2024, 6, 1))
+
+    db.add(TableSnapshot(
+        tenant_id=tenant.id, cycle_config_id=cycle_config.id, cycle_year=2024, table_name="list_definition",
+        snapshot_json=[{
+            "id": definition.id, "public_id": str(definition.public_id), "content_version": 0,
+            "column_one_title": definition.column_one_title, "column_one_value_type": definition.column_one_value_type,
+            "column_two_title": definition.column_two_title, "column_two_value_type": definition.column_two_value_type,
+        }],
+        row_count=1,
+    ))
+    db.add(TableSnapshot(
+        tenant_id=tenant.id, cycle_config_id=cycle_config.id, cycle_year=2024, table_name="list_entry",
+        snapshot_json=[],  # this entry didn't exist yet as of this cycle's snapshot
+        row_count=0,
+    ))
+    db.flush()
+
+    snapshot = list_snapshot_service.compute_row_list_snapshot_for_protocol(
+        db, list_definition_id=definition.id, list_entry_id=entry.id, tenant_id=tenant.id,
+        value_source="historical", protocol=protocol,
+    )
+
+    assert snapshot["entry_exists"] is False
 
 
 def test_content_version_bumps_on_entry_create_update_delete(db):
@@ -122,7 +245,7 @@ def test_refresh_row_block_sets_snapshot_and_keeps_undo_one_level_deep(db):
     entry = make_list_entry(db, definition.id, column_one_value={"text_value": "v1"})
     _protocol, block = _protocol_with_list_row_block(db, tenant, definition, entry)
 
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=True)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=True, protocol=_protocol)
     row = block.configuration_snapshot_json["rows"][0]
     assert row["list_snapshot"]["column_one_value"]["text_value"] == "v1"
     assert row["list_snapshot"]["previous"] is None  # nothing to stash the first time
@@ -131,7 +254,7 @@ def test_refresh_row_block_sets_snapshot_and_keeps_undo_one_level_deep(db):
     db.add(entry)
     db.commit()
 
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=True)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=True, protocol=_protocol)
     row = block.configuration_snapshot_json["rows"][0]
     assert row["list_snapshot"]["column_one_value"]["text_value"] == "v2"
     assert row["list_snapshot"]["previous"]["column_one_value"]["text_value"] == "v1"
@@ -146,11 +269,11 @@ def test_silent_sync_never_overwrites_existing_previous(db):
 
     # First manual refresh with nothing to undo yet, then a real change + a second manual
     # refresh to establish a genuine undo point.
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=True)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=True, protocol=_protocol)
     entry.column_one_value_json = {"text_value": "v2"}
     db.add(entry)
     db.commit()
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=True)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=True, protocol=_protocol)
     assert block.configuration_snapshot_json["rows"][0]["list_snapshot"]["previous"]["column_one_value"]["text_value"] == "v1"
 
     # Now simulate a silent self-write sync (keep_undo=False) after further edits - the
@@ -158,7 +281,7 @@ def test_silent_sync_never_overwrites_existing_previous(db):
     entry.column_one_value_json = {"text_value": "v3"}
     db.add(entry)
     db.commit()
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=False)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=False, protocol=_protocol)
     row = block.configuration_snapshot_json["rows"][0]
     assert row["list_snapshot"]["column_one_value"]["text_value"] == "v3"
     assert row["list_snapshot"]["previous"]["column_one_value"]["text_value"] == "v1"
@@ -170,11 +293,11 @@ def test_undo_restores_and_clears_previous(db):
     entry = make_list_entry(db, definition.id, column_one_value={"text_value": "v1"})
     _protocol, block = _protocol_with_list_row_block(db, tenant, definition, entry)
 
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=True)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=True, protocol=_protocol)
     entry.column_one_value_json = {"text_value": "v2"}
     db.add(entry)
     db.commit()
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=True)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=True, protocol=_protocol)
     assert block.configuration_snapshot_json["rows"][0]["list_snapshot"]["column_one_value"]["text_value"] == "v2"
 
     restored = list_snapshot_service.undo_block_list_snapshot(db, block)
@@ -188,7 +311,7 @@ def test_undo_returns_none_when_nothing_to_undo(db):
     definition = make_list_definition(db, tenant.id)
     entry = make_list_entry(db, definition.id, column_one_value={"text_value": "v1"})
     _protocol, block = _protocol_with_list_row_block(db, tenant, definition, entry)
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=True)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=True, protocol=_protocol)
 
     assert list_snapshot_service.undo_block_list_snapshot(db, block) is None
 
@@ -199,11 +322,11 @@ def test_freeze_updates_version_and_clears_previous(db):
     entry = make_list_entry(db, definition.id, column_one_value={"text_value": "v1"})
     protocol, block = _protocol_with_list_row_block(db, tenant, definition, entry)
 
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=True)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=True, protocol=protocol)
     entry.column_one_value_json = {"text_value": "v2"}
     db.add(entry)
     db.commit()
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=True)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=True, protocol=protocol)
     assert block.configuration_snapshot_json["rows"][0]["list_snapshot"]["previous"] is not None
 
     list_snapshot_service.freeze_list_snapshots_for_protocol(db, protocol.id, tenant.id)

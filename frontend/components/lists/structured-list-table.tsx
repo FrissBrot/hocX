@@ -29,6 +29,11 @@ type StructuredListTableProps = {
   availableParticipants: ParticipantSummary[];
   availableEvents: EventSummary[];
   editable?: boolean;
+  /** Independent of `editable` - hides the "add row" control even while existing rows
+   * are editable/deletable. Used by the historical-snapshot view: an unlocked
+   * historical row can be edited or removed, but new rows were never part of that
+   * cycle's data and aren't something the guarded historical-edit API supports adding. */
+  allowCreate?: boolean;
   fullWidth?: boolean;
   emptyMessage?: string;
   groupByColumn?: "" | StructuredListDisplayColumn;
@@ -186,6 +191,7 @@ export function StructuredListTable({
   availableParticipants,
   availableEvents,
   editable = true,
+  allowCreate = true,
   fullWidth = false,
   emptyMessage = "Noch keine Eintraege.",
   groupByColumn = "",
@@ -581,6 +587,7 @@ export function StructuredListTable({
               </th>
               {editable ? (
                 <th className="event-column-actions" aria-label="Aktionen">
+                  {allowCreate && (
                   <button
                     type="button"
                     className="button-ghost button-icon"
@@ -594,6 +601,7 @@ export function StructuredListTable({
                   >
                     +
                   </button>
+                  )}
                 </th>
               ) : null}
             </tr>

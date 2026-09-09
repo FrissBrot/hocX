@@ -202,7 +202,7 @@ def refresh_block_list_snapshot(
     block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     track_changes_active = protocol.status == "geplant" and protocol.track_changes_enabled
     block = list_snapshot_service.refresh_block_list_snapshot(
-        db, block, protocol.tenant_id, keep_undo=True, track_changes_active=track_changes_active
+        db, block, protocol.tenant_id, keep_undo=True, protocol=protocol, track_changes_active=track_changes_active
     )
     _broadcast_block_update(protocol.id, block, user)
     return _block_to_read(db, block)
@@ -221,7 +221,7 @@ def sync_block_list_snapshot(
     block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     track_changes_active = protocol.status == "geplant" and protocol.track_changes_enabled
     block = list_snapshot_service.refresh_block_list_snapshot(
-        db, block, protocol.tenant_id, keep_undo=False, track_changes_active=track_changes_active
+        db, block, protocol.tenant_id, keep_undo=False, protocol=protocol, track_changes_active=track_changes_active
     )
     _broadcast_block_update(protocol.id, block, user)
     return _block_to_read(db, block)

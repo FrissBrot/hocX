@@ -3,13 +3,16 @@
 import { FormEvent, useMemo, useRef, useState } from "react";
 
 import { StructuredListTable } from "@/components/lists/structured-list-table";
+import { HistoricalEditConfirmModal, HistoricalViewBanner, ReconstructionBanner } from "@/components/ui/historical-view-banner";
 import { Modal } from "@/components/ui/modal";
 import { usePopoverDismiss } from "@/components/ui/popover";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
+import { SnapshotSwitcher } from "@/components/ui/snapshot-switcher";
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
+import { useHistoricalList } from "@/lib/hooks/use-historical-list";
 import {
   DocumentTemplate,
   EventSummary,
@@ -214,6 +217,15 @@ export function ListManager({
     [lists, selectedListId]
   );
 
+  const historical = useHistoricalList(selectedListId);
+  const isHistorical = historical.mode === "historical";
+  const isReconstructing = historical.mode === "reconstructing";
+  const isLive = historical.mode === "live";
+  const [showUnlockConfirm, setShowUnlockConfirm] = useState(false);
+  const [isConfirmingReconstruction, setIsConfirmingReconstruction] = useState(false);
+  const displayedDefinition = isLive ? selectedList : historical.definition;
+  const displayedEntries = isLive ? entriesByList[selectedList?.id ?? ""] ?? [] : historical.entries;
+
   function openCreate() {
     setEditingListId(null);
     setForm(initialFormState);
@@ -343,6 +355,75 @@ export function ListManager({
     }
   }
 
+  async function updateHistoricalEntry(
+    entryId: string,
+    payload: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>
+  ) {
+    if (!historical.editUnlocked) {
+      setShowUnlockConfirm(true);
+      return false;
+    }
+    try {
+      await historical.saveHistoricalEntry(entryId, payload);
+      showToast("Historischer Eintrag gespeichert", "success");
+      return true;
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Historischer Eintrag konnte nicht gespeichert werden", "error");
+      return false;
+    }
+  }
+
+  async function deleteHistoricalEntry(entryId: string) {
+    if (!historical.editUnlocked) {
+      setShowUnlockConfirm(true);
+      return;
+    }
+    const ok = await confirm({
+      message: "Diesen Eintrag aus der historischen Ansicht entfernen? Dies verändert den historischen Datenstand dauerhaft.",
+      tone: "danger",
+      confirmLabel: "Entfernen"
+    });
+    if (!ok) return;
+    try {
+      await historical.deleteHistoricalEntry(entryId);
+      showToast("Eintrag aus der historischen Ansicht entfernt", "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Eintrag konnte nicht entfernt werden", "error");
+    }
+  }
+
+  // Reconstruction-mode edits stay purely local (no network call) until "Bestätigen" -
+  // see useHistoricalList.confirmReconstruction.
+  async function updateDraftEntry(
+    entryId: string,
+    payload: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>
+  ) {
+    historical.updateDraftEntry(entryId, payload);
+    return true;
+  }
+
+  async function deleteDraftEntry(entryId: string) {
+    const ok = await confirm({
+      message: "Diesen Eintrag aus dem Entwurf entfernen? Er wird beim Bestätigen nicht mit übernommen.",
+      tone: "danger",
+      confirmLabel: "Entfernen"
+    });
+    if (!ok) return;
+    historical.deleteDraftEntry(entryId);
+  }
+
+  async function confirmReconstruction() {
+    setIsConfirmingReconstruction(true);
+    try {
+      await historical.confirmReconstruction();
+      showToast("Snapshot für diese Periode erstellt", "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Snapshot konnte nicht erstellt werden", "error");
+    } finally {
+      setIsConfirmingReconstruction(false);
+    }
+  }
+
   return (
     <div className="grid">
       <div className="list-manager-layout">
@@ -420,26 +501,89 @@ export function ListManager({
                   )}
                 </div>
                 <div className="table-toolbar-actions">
-                  {landscapeTemplates.length > 0 && (
+                  <SnapshotSwitcher
+                    mode={historical.mode}
+                    availableCycles={historical.availableCycles}
+                    cycleConfigId={historical.cycleConfigId}
+                    cycleYear={historical.cycleYear}
+                    onSwitchToLive={historical.switchToLive}
+                    onSwitchToHistorical={historical.switchToHistorical}
+                  />
+                  {isLive && landscapeTemplates.length > 0 && (
                     <button type="button" className="button-inline button-ghost" onClick={() => { setExportListId(selectedListId ?? ""); setExportUrl(null); setExportModalOpen(true); }}>
                       Export
                     </button>
                   )}
-                  <button type="button" className="button-inline button-ghost" onClick={() => openEdit(selectedList)}>
-                    Bearbeiten
-                  </button>
+                  {isLive && (
+                    <button type="button" className="button-inline button-ghost" onClick={() => openEdit(selectedList)}>
+                      Bearbeiten
+                    </button>
+                  )}
                 </div>
               </div>
-              <StructuredListTable
-                definition={selectedList}
-                entries={entriesByList[selectedList.id] ?? []}
-                availableParticipants={availableParticipants}
-                availableEvents={availableEvents}
-                fullWidth
-                onCreateEntry={(payload) => createEntry(selectedList.id, payload)}
-                onUpdateEntry={(entryId, payload) => updateEntry(selectedList.id, entryId, payload)}
-                onDeleteEntry={(entryId) => deleteEntry(selectedList.id, entryId)}
-              />
+
+              {isHistorical && historical.cycleYear !== null && (
+                <HistoricalViewBanner
+                  cycleConfigName={historical.cycleConfigName ?? ""}
+                  cycleYear={historical.cycleYear}
+                  isEdited={historical.isEdited}
+                  editUnlocked={historical.editUnlocked}
+                  onRequestUnlock={() => setShowUnlockConfirm(true)}
+                />
+              )}
+
+              {isReconstructing && historical.cycleYear !== null && (
+                <ReconstructionBanner
+                  cycleConfigName={historical.cycleConfigName ?? ""}
+                  cycleYear={historical.cycleYear}
+                  source={historical.reconstructSource}
+                  isConfirming={isConfirmingReconstruction}
+                  onConfirm={() => void confirmReconstruction()}
+                  onCancel={historical.cancelReconstruction}
+                />
+              )}
+
+              {!isLive && !historical.isLoading && !historical.definition ? (
+                <p className="muted">
+                  {isReconstructing
+                    ? "Für diese Liste konnten keine Daten gefunden werden - weder aktuell noch in einem anderen Zyklus."
+                    : "Diese Liste existierte in diesem Zyklus noch nicht."}
+                </p>
+              ) : (
+                displayedDefinition && (
+                  <StructuredListTable
+                    definition={displayedDefinition}
+                    entries={displayedEntries}
+                    availableParticipants={availableParticipants}
+                    availableEvents={availableEvents}
+                    fullWidth
+                    editable={isLive || isReconstructing || historical.editUnlocked}
+                    allowCreate={isLive}
+                    onCreateEntry={
+                      isLive
+                        ? (payload) => createEntry(selectedList.id, payload)
+                        : async () => {
+                            showToast("Es können keine neuen Einträge angelegt werden - nur bestehende bearbeiten oder entfernen", "error");
+                            return false;
+                          }
+                    }
+                    onUpdateEntry={
+                      isLive
+                        ? (entryId, payload) => updateEntry(selectedList.id, entryId, payload)
+                        : isReconstructing
+                          ? updateDraftEntry
+                          : updateHistoricalEntry
+                    }
+                    onDeleteEntry={
+                      isLive
+                        ? (entryId) => deleteEntry(selectedList.id, entryId)
+                        : isReconstructing
+                          ? deleteDraftEntry
+                          : deleteHistoricalEntry
+                    }
+                  />
+                )
+              )}
             </div>
           ) : (
             <p className="muted">Wähle eine Liste aus oder erstelle eine neue.</p>
@@ -756,6 +900,15 @@ export function ListManager({
           </div>
         </form>
       </Modal>
+
+      <HistoricalEditConfirmModal
+        open={showUnlockConfirm}
+        onCancel={() => setShowUnlockConfirm(false)}
+        onConfirm={() => {
+          historical.unlockEditing();
+          setShowUnlockConfirm(false);
+        }}
+      />
     </div>
   );
 }

@@ -176,14 +176,14 @@ def test_h9_deleted_source_list_marks_entry_exists_false_in_table_block(db):
     )
 
     # First refresh while the source list still exists - captures a live snapshot.
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=False)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=False, protocol=protocol)
     assert block.configuration_snapshot_json["list_snapshot"]["entries"]
 
     # Delete the source list out from under the block, then recompute.
     db.delete(db.get(ListDefinition, definition.id))
     db.flush()
 
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=False)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=False, protocol=protocol)
     snapshot = block.configuration_snapshot_json["list_snapshot"]
     assert snapshot == {"synced_version": 0, "entry_exists": False}, (
         "must mirror compute_row_list_snapshot's deleted-source marker, not keep the stale "
@@ -206,8 +206,8 @@ def test_h9_refresh_is_idempotent_once_marked_deleted(db):
     db.delete(db.get(ListDefinition, definition.id))
     db.flush()
 
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=False)
-    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=False)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=False, protocol=protocol)
+    block = list_snapshot_service.refresh_block_list_snapshot(db, block, tenant.id, keep_undo=False, protocol=protocol)
     assert block.configuration_snapshot_json["list_snapshot"] == {
         "synced_version": 0,
         "entry_exists": False,

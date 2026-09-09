@@ -397,6 +397,37 @@ export type CycleInfo = {
   name: string;
 };
 
+export type TableSnapshotTableSummary = {
+  table_name: string;
+  row_count: number;
+  created_at: string;
+  is_edited: boolean;
+  edited_at?: string | null;
+};
+
+export type TableSnapshotCycleSummary = {
+  cycle_config_id: string;
+  cycle_config_name: string;
+  cycle_year: number;
+  has_snapshot: boolean;
+  tables: TableSnapshotTableSummary[];
+};
+
+export type TableSnapshotListReconstructDraft = {
+  source: "live" | "snapshot";
+  source_cycle_year: number | null;
+  definition_values: Record<string, unknown>;
+  entries: Record<string, unknown>[];
+};
+
+export type TableSnapshotRowsRead = {
+  table_name: string;
+  cycle_year: number;
+  row_count: number;
+  is_edited: boolean;
+  rows: Record<string, unknown>[];
+};
+
 export type ParticipantSummary = {
   id: string;
   tenant_id: string;

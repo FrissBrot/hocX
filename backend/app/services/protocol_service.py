@@ -1246,6 +1246,7 @@ class ProtocolService:
             "linked_list_id": self._coerce_optional_int(row_config.get("linked_list_id")) if row_value_type == "list_entry" else None,
             "linked_list_entry_id": self._coerce_optional_int(row_config.get("linked_list_entry_id")) if row_value_type == "list_entry" else None,
             "list_fixed_column": row_config.get("list_fixed_column") if row_value_type == "list_entry" else None,
+            "value_source": row_config.get("value_source") if row_value_type == "list_entry" else None,
         }
 
     def create_from_template(self, db: Session, payload: ProtocolCreateFromTemplate, *, tenant_id: int, created_by: int | None) -> int:
@@ -1602,8 +1603,13 @@ class ProtocolService:
                     }
                     for _field_row in field_rows:
                         if _field_row.get("linked_list_id") and _field_row.get("linked_list_entry_id"):
-                            _live_row_snapshot = list_snapshot_service.compute_row_list_snapshot(
-                                db, _field_row["linked_list_id"], _field_row["linked_list_entry_id"], tenant_id
+                            _live_row_snapshot = list_snapshot_service.compute_row_list_snapshot_for_protocol(
+                                db,
+                                list_definition_id=_field_row["linked_list_id"],
+                                list_entry_id=_field_row["linked_list_entry_id"],
+                                tenant_id=tenant_id,
+                                value_source=_field_row.get("value_source"),
+                                protocol=protocol,
                             )
                             _field_row["list_snapshot"] = list_snapshot_service.tag_initial_row_snapshot(
                                 _live_row_snapshot,
@@ -2156,7 +2162,7 @@ class ProtocolService:
         self.repository.delete(db, protocol)
         return True
 
-    def _build_event_repeat_form_snapshot(self, db: Session, *, raw_config: dict, repeat_context: dict, tenant_id: int) -> dict:
+    def _build_event_repeat_form_snapshot(self, db: Session, *, raw_config: dict, repeat_context: dict, tenant_id: int, protocol: Protocol) -> dict:
         """Same rows/value_type transform as create_from_template's form_type_id branch
         (raw ElementDefinition row schema -> runtime schema with text_value/participant_id/
         participant_ids/etc.), for a freshly-added single event-repeat "form" block. There
@@ -2172,8 +2178,13 @@ class ProtocolService:
         )
         for field_row in field_rows:
             if field_row.get("linked_list_id") and field_row.get("linked_list_entry_id"):
-                live_row_snapshot = list_snapshot_service.compute_row_list_snapshot(
-                    db, field_row["linked_list_id"], field_row["linked_list_entry_id"], tenant_id
+                live_row_snapshot = list_snapshot_service.compute_row_list_snapshot_for_protocol(
+                    db,
+                    list_definition_id=field_row["linked_list_id"],
+                    list_entry_id=field_row["linked_list_entry_id"],
+                    tenant_id=tenant_id,
+                    value_source=field_row.get("value_source"),
+                    protocol=protocol,
                 )
                 field_row["list_snapshot"] = list_snapshot_service.tag_initial_row_snapshot(
                     live_row_snapshot, None, track_changes_active=False
@@ -2296,7 +2307,7 @@ class ProtocolService:
 
         rendered_default_content = self._render_context_text(event_block_template.get("default_content"), repeat_context) or ""
         form_snapshot = (
-            self._build_event_repeat_form_snapshot(db, raw_config=block_config, repeat_context=repeat_context, tenant_id=tenant_id)
+            self._build_event_repeat_form_snapshot(db, raw_config=block_config, repeat_context=repeat_context, tenant_id=tenant_id, protocol=protocol)
             if event_block_template["element_type_id"] == form_type_id
             else {}
         )

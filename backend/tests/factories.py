@@ -9,6 +9,7 @@ from app.core.security import CurrentUser, hash_password
 from app.models.entities import (
     AppUser,
     AttendanceFine,
+    CycleConfig,
     ElementDefinition,
     ElementType,
     Event,
@@ -242,6 +243,19 @@ def make_current_user(tenant_id: int, role: str = "writer", user_id: int = 1) ->
         current_role=role,
         available_tenants=[],
     )
+
+
+def make_cycle_config(
+    db,
+    tenant_id: int,
+    name: str = "Test Cycle",
+    reset_month: int = 12,
+    reset_day: int = 31,
+) -> CycleConfig:
+    cycle_config = CycleConfig(tenant_id=tenant_id, name=name, reset_month=reset_month, reset_day=reset_day)
+    db.add(cycle_config)
+    db.flush()
+    return cycle_config
 
 
 def make_participant(db, tenant_id: int, display_name: str = "Test Person") -> Participant:

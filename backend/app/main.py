@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 
-from app.api.routes import admin, admin_auth, auth, collaboration_ws, cycle_configs, document_templates, events, exports, files, finance, fines, lists, participants, protocol_elements, protocols, statistics, storage, submission_assignments, tag_config, templates, tenants, todos, users, word_import
+from app.api.routes import admin, admin_auth, auth, collaboration_ws, cycle_configs, document_templates, events, exports, files, finance, fines, lists, participants, protocol_elements, protocols, statistics, storage, submission_assignments, table_snapshots, tag_config, templates, tenants, todos, users, word_import
 from app.core.db import SessionLocal
 from app.core.config import settings
 from app.core.error_log import best_effort_actor_from_request, record_system_error
@@ -22,6 +22,7 @@ from app.services.document_template_service import DocumentTemplateService
 from app.services.export_service import ExportService
 from app.services.file_service import FileService
 from app.services.isolated_parse import warm_up_pool as warm_up_word_import_parse_pool
+from app.services.table_snapshot_service import TableSnapshotService, run_due_cycle_snapshots
 
 
 def ensure_roles() -> None:
@@ -300,6 +301,25 @@ async def log_cleanup_loop() -> None:
         await asyncio.sleep(interval_seconds)
 
 
+async def cycle_snapshot_loop() -> None:
+    """Daily check (see settings.cycle_snapshot_check_interval_minutes): for every
+    CycleConfig, creates a table_snapshot for the most recently completed cycle if one
+    doesn't exist yet (see table_snapshot_service.run_due_cycle_snapshots for the
+    idempotent/self-healing boundary-crossing logic). Same every-worker-but-advisory-
+    locked pattern as the loops above."""
+    interval_seconds = settings.cycle_snapshot_check_interval_minutes * 60
+    snapshot_service = TableSnapshotService()
+    while True:
+        with SessionLocal() as db:
+            acquired = db.execute(text("SELECT pg_try_advisory_lock(202600010)")).scalar()
+            if acquired:
+                try:
+                    run_due_cycle_snapshots(db, snapshot_service)
+                finally:
+                    db.execute(text("SELECT pg_advisory_unlock(202600010)"))
+        await asyncio.sleep(interval_seconds)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     FileService().ensure_storage()
@@ -316,6 +336,7 @@ async def lifespan(_: FastAPI):
     protocol_image_rescan_task = asyncio.create_task(protocol_image_rescan_loop())
     export_cleanup_task = asyncio.create_task(export_cleanup_loop())
     log_cleanup_task = asyncio.create_task(log_cleanup_loop())
+    cycle_snapshot_task = asyncio.create_task(cycle_snapshot_loop())
     yield
     health_check_task.cancel()
     rescan_task.cancel()
@@ -324,6 +345,7 @@ async def lifespan(_: FastAPI):
     protocol_image_rescan_task.cancel()
     export_cleanup_task.cancel()
     log_cleanup_task.cancel()
+    cycle_snapshot_task.cancel()
     await close_redis_pool()
 
 
@@ -397,6 +419,7 @@ app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(document_templates.router, prefix="/api", tags=["document-templates"])
 app.include_router(templates.router, prefix="/api", tags=["templates"])
 app.include_router(cycle_configs.router, prefix="/api", tags=["cycle-configs"])
+app.include_router(table_snapshots.router, prefix="/api", tags=["table-snapshots"])
 app.include_router(participants.router, prefix="/api", tags=["participants"])
 app.include_router(events.router, prefix="/api", tags=["events"])
 app.include_router(tag_config.router, prefix="/api", tags=["tag-config"])

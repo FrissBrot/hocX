@@ -71,6 +71,11 @@ class Settings(BaseSettings):
     log_cleanup_interval_minutes: int = 1440
     audit_log_retention_days: int = 730
     error_log_retention_days: int = 90
+    # How often the cycle-snapshot loop checks whether any CycleConfig's reset boundary
+    # was crossed since the last snapshot (see main.py's cycle_snapshot_loop and
+    # table_snapshot_service.run_due_cycle_snapshots). Daily is enough - a cycle boundary
+    # is crossed at most once a year per config, and the loop self-heals a missed day.
+    cycle_snapshot_check_interval_minutes: int = 1440
     # Mirrors the abgabebox subapp's ABGABEBOX_TENANT_STORAGE_QUOTA_MB - protocol-image
     # uploads had only a per-file limit (MAX_UPLOAD_BYTES), no per-tenant total at all
     # (audit finding, 2026-08-25), a real risk given this app's two prior disk-full

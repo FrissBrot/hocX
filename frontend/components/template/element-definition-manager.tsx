@@ -1193,6 +1193,22 @@ export function ElementDefinitionManager({
                   <option value="column_two">{selectedListDefinition?.column_two_title || "Spalte 2"} ist fix</option>
                 </select>
               </label>
+              <label className="checkbox-line">
+                <input
+                  type="checkbox"
+                  checked={rowConfig.value_source === "historical"}
+                  onChange={(event) =>
+                    applyPatch({
+                      row_config: { ...rowConfig, value_source: event.target.checked ? "historical" : "live" },
+                    })
+                  }
+                />
+                Historische Daten verwenden
+              </label>
+              <p className="muted" style={{ fontSize: "0.8rem" }}>
+                Zeigt den Wert aus dem Snapshot des Zyklus, in den das jeweilige Protokoll fällt (statt immer den aktuellen Listenwert).
+                Existiert für diesen Zyklus noch kein Snapshot, wird der aktuelle Wert verwendet.
+              </p>
             </>
           ) : null}
         </div>

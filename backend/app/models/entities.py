@@ -355,6 +355,44 @@ class CycleConfig(Base, TimestampMixin, UpdatedAtMixin):
     name_pattern: Mapped[str | None] = mapped_column(Text)
 
 
+class TableSnapshot(Base, TimestampMixin):
+    """One row per (tenant, cycle_config, cycle_year, table_name): a frozen JSONB copy
+    of that table's rows (scoped to the tenant) as of the cycle boundary. Only ever
+    created by the daily cycle_snapshot_loop (see TableSnapshotService.create_snapshot)
+    - there is no manual/on-demand trigger, this is a historical-record feature, not a
+    backup tool. See app/services/table_snapshot_config.py for which tables are covered.
+    snapshot_json rows keep their original internal id/FK values verbatim (no
+    remapping), so a future feature can reference a specific historical row by
+    (table_name, cycle_config_id, cycle_year, row id) without any schema change here."""
+
+    __tablename__ = "table_snapshot"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id", "cycle_config_id", "cycle_year", "table_name",
+            name="uq_table_snapshot_tenant_cycle_table",
+        ),
+        Index("idx_table_snapshot_tenant_cycle", "tenant_id", "cycle_config_id", "cycle_year"),
+        Index("idx_table_snapshot_json_gin", "snapshot_json", postgresql_using="gin"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    cycle_config_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("cycle_config.id", ondelete="CASCADE"), nullable=False)
+    cycle_year: Mapped[int] = mapped_column(Integer, nullable=False)
+    table_name: Mapped[str] = mapped_column(Text, nullable=False)
+    snapshot_json: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
+    row_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    # Set the first time a guarded historical-edit write lands on this snapshot (see
+    # table_snapshots API routes) - the UI uses this to permanently flag "diese
+    # historische Ansicht wurde nachträglich bearbeitet" even after the fact.
+    is_edited: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    edited_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+
+
 class WordImportProfile(Base, TimestampMixin, UpdatedAtMixin):
     __tablename__ = "word_import_profile"
     __table_args__ = (
