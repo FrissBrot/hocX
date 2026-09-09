@@ -20,9 +20,24 @@ const GALLERY_UPLOAD_ACCEPT = "image/jpeg,image/png,image/gif,image/webp,image/b
 
 const PAGE_SIZE = 60;
 
-type ViewMode = "all" | "photos";
+type Mode = "photos" | "files";
 type SourceFilter = "all" | FileOverviewSource;
 type SortKey = "created_at" | "original_name" | "file_size_bytes";
+
+const SOURCE_OPTIONS: Record<Mode, { value: SourceFilter; label: string }[]> = {
+  photos: [
+    { value: "all", label: "Alle Quellen" },
+    { value: "protocol_image", label: "Protokolle" },
+    { value: "submission_upload", label: "Abgaben" },
+    { value: "gallery_upload", label: "Galerie" },
+  ],
+  files: [
+    { value: "all", label: "Alle Quellen" },
+    { value: "protocol_image", label: "Protokolle" },
+    { value: "word_import", label: "Word-Import" },
+    { value: "submission_upload", label: "Abgaben" },
+  ],
+};
 
 const SOURCE_LABEL: Record<FileOverviewSource, string> = {
   protocol_image: "Protokoll",
@@ -39,14 +54,14 @@ const SOURCE_BADGE_VARIANT: Record<FileOverviewSource, BadgeVariant> = {
 };
 
 type Props = {
+  mode: Mode;
   initialItems: FileOverviewItem[];
 };
 
-export function FilesView({ initialItems }: Props) {
+export function FilesView({ mode, initialItems }: Props) {
   const router = useRouter();
   const showToast = useToast();
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
-  const [view, setView] = useState<ViewMode>("all");
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const [search, setSearch] = useState("");
   const [tagFilter, setTagFilter] = useState<string[]>([]);
@@ -65,7 +80,8 @@ export function FilesView({ initialItems }: Props) {
     const params = new URLSearchParams();
     params.set("skip", String(skip));
     params.set("limit", String(PAGE_SIZE));
-    if (view === "photos") params.set("only_images", "true");
+    if (mode === "photos") params.set("only_images", "true");
+    if (mode === "files") params.set("exclude_images", "true");
     if (sourceFilter !== "all") params.set("source", sourceFilter);
     if (search.trim()) params.set("search", search.trim());
     tagFilter.forEach((tag) => params.append("tags", tag));
@@ -96,7 +112,7 @@ export function FilesView({ initialItems }: Props) {
     }, 300);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, sourceFilter, search, tagFilter, sortKey, sortDir]);
+  }, [sourceFilter, search, tagFilter, sortKey, sortDir]);
 
   useEffect(() => {
     browserApiFetch<string[]>("/api/files/tags")
@@ -144,34 +160,25 @@ export function FilesView({ initialItems }: Props) {
     <div className="grid">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Dateien</h1>
-          <p className="muted">Alle hochgeladenen Dateien dieses Mandanten - aus Protokollen, Word-Importen und Abgaben.</p>
+          <h1 className="page-title">{mode === "photos" ? "Fotos" : "Dateien"}</h1>
+          <p className="muted">
+            {mode === "photos"
+              ? "Alle Fotos dieses Mandanten - aus Protokollen, Abgaben und direkt hochgeladenen Galerie-Bildern."
+              : "Alle hochgeladenen Nicht-Bild-Dateien dieses Mandanten - aus Protokollen, Word-Importen und Abgaben. Fotos siehe die separate \"Fotos\"-Seite."}
+          </p>
         </div>
-        <div className="table-toolbar-actions">
-          <button type="button" className="button-inline" onClick={() => setUploadModalOpen(true)}>
-            + Bilder hochladen
-          </button>
-        </div>
+        {mode === "photos" && (
+          <div className="table-toolbar-actions">
+            <button type="button" className="button-inline" onClick={() => setUploadModalOpen(true)}>
+              + Bilder hochladen
+            </button>
+          </div>
+        )}
       </div>
-
-      <FilterTabs
-        options={[
-          { value: "all", label: "Alle Dateien" },
-          { value: "photos", label: "Fotos" },
-        ]}
-        value={view}
-        onChange={(value) => setView(value as ViewMode)}
-      />
 
       <div className="list-filter-row">
         <FilterTabs
-          options={[
-            { value: "all", label: "Alle Quellen" },
-            { value: "protocol_image", label: "Protokolle" },
-            { value: "word_import", label: "Word-Import" },
-            { value: "submission_upload", label: "Abgaben" },
-            { value: "gallery_upload", label: "Galerie" },
-          ]}
+          options={SOURCE_OPTIONS[mode]}
           value={sourceFilter}
           onChange={(value) => setSourceFilter(value as SourceFilter)}
         />
@@ -207,9 +214,9 @@ export function FilesView({ initialItems }: Props) {
       </div>
 
       {items.length === 0 && !isReloading ? (
-        <p className="muted">Keine Dateien gefunden.</p>
+        <p className="muted">{mode === "photos" ? "Keine Fotos gefunden." : "Keine Dateien gefunden."}</p>
       ) : (
-        <div className={view === "photos" ? "files-grid files-grid-photos" : "files-grid"}>
+        <div className={mode === "photos" ? "files-grid files-grid-photos" : "files-grid"}>
           {items.map((item) => (
             <FileCard
               key={item.id}

@@ -48,6 +48,7 @@ def list_files(
     limit: int = Query(default=60, ge=1, le=200),
     source: FileOverviewSource | None = Query(default=None),
     only_images: bool = Query(default=False),
+    exclude_images: bool = Query(default=False),
     search: str | None = Query(default=None),
     tags: list[str] | None = Query(default=None),
     sort_by: Literal["created_at", "original_name", "file_size_bytes"] = Query(default="created_at"),
@@ -56,10 +57,10 @@ def list_files(
     user: CurrentUser = Depends(get_current_user),
 ):
     """Alle vom Mandanten hochgeladenen Dateien (Protokoll-Bilder, Word-Import-Quelldokumente,
-    Abgabebox-Uploads) fuer die "Dateien"-Uebersichtsseite. Gleiche Rolle wie "Abgaben"
-    (require_writer): dies ist eine mandantenweite Aggregatsicht ueber alle Protokolle
-    hinweg, nicht scopebar auf die feingranulare Pro-Protokoll-Leserechte-Pruefung von
-    ensure_can_read_stored_file."""
+    Abgabebox-Uploads) fuer die "Dateien"- und "Fotos"-Uebersichtsseiten (only_images/
+    exclude_images trennen die beiden). Gleiche Rolle wie "Abgaben" (require_writer): dies
+    ist eine mandantenweite Aggregatsicht ueber alle Protokolle hinweg, nicht scopebar auf
+    die feingranulare Pro-Protokoll-Leserechte-Pruefung von ensure_can_read_stored_file."""
     require_writer(user)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
@@ -70,6 +71,7 @@ def list_files(
         limit=limit,
         source=source,
         only_images=only_images,
+        exclude_images=exclude_images,
         search=search,
         tags=tags,
         sort_by=sort_by,

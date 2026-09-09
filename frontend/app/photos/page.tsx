@@ -5,7 +5,7 @@ import { AppShell } from "@/components/ui/app-shell";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { FileOverviewItem } from "@/types/api";
 
-export default async function FilesPage() {
+export default async function PhotosPage() {
   const session = await requireSession();
   const canView = ["admin", "writer"].includes(session.current_role ?? "");
 
@@ -13,12 +13,12 @@ export default async function FilesPage() {
     redirect("/");
   }
 
-  const files = await backendFetchWithSession<FileOverviewItem[]>("/api/files?exclude_images=true");
+  const photos = await backendFetchWithSession<FileOverviewItem[]>("/api/files?only_images=true");
 
   return (
     <AppShell initialSession={session}>
       <section className="panel">
-        <FilesView mode="files" initialItems={files ?? []} />
+        <FilesView mode="photos" initialItems={photos ?? []} />
       </section>
     </AppShell>
   );

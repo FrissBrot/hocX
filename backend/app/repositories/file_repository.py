@@ -224,17 +224,20 @@ class StoredFileRepository:
         limit: int = 50,
         source: str | None = None,
         only_images: bool = False,
+        exclude_images: bool = False,
         search: str | None = None,
         tags: list[str] | None = None,
         sort_by: str = "created_at",
         sort_dir: str = "desc",
     ) -> list[Row]:
-        """Every "Dateien" the tenant has produced by uploading something - protocol images,
-        the raw .docx/.pdf a word-import was read from, and abgabebox submission uploads -
-        merged into one shape via UNION ALL (three differently-joined branches, one per
-        origin table) so a single paginated/sorted/filtered query can page across all of them.
-        Deliberately excludes tenant logo and generated PDF exports (protocol_export_cache):
-        neither is something a user "hochgeladen" hat, see project memory for this feature.
+        """Every "Dateien"/"Fotos" the tenant has produced by uploading something - protocol
+        images, the raw .docx/.pdf a word-import was read from, abgabebox submission uploads,
+        and direct gallery uploads - merged into one shape via UNION ALL (one differently-
+        joined branch per origin table) so a single paginated/sorted/filtered query can page
+        across all of them. only_images/exclude_images back the "Fotos" vs. "Dateien" pages
+        (mutually exclusive in practice - the UI never sets both). Deliberately excludes
+        tenant logo and generated PDF exports (protocol_export_cache): neither is something a
+        user "hochgeladen" hat, see project memory for this feature.
         """
         branches = self._files_overview_branches(tenant_id)
         selected = [branch for key, branch in branches.items() if source is None or source == key]
@@ -243,6 +246,10 @@ class StoredFileRepository:
         query = select(union_query).where(union_query.c.scan_status != "infected")
         if only_images:
             query = query.where(union_query.c.mime_type.like("image/%"))
+        if exclude_images:
+            query = query.where(
+                or_(union_query.c.mime_type.is_(None), union_query.c.mime_type.notlike("image/%"))
+            )
         if search:
             query = query.where(union_query.c.original_name.ilike(f"%{search}%"))
         if tags:

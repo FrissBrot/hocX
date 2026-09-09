@@ -213,6 +213,18 @@ def test_list_tenant_files_only_images_filters_out_documents(db):
     assert image_items[0].is_image is True
 
 
+def test_list_tenant_files_exclude_images_filters_out_photos(db):
+    tenant = make_tenant(db)
+    _make_protocol_image(db, tenant.id)
+    _make_word_import_document(db, tenant.id)
+
+    file_items = service.list_tenant_files(db, tenant.id, exclude_images=True)
+
+    assert len(file_items) == 1
+    assert file_items[0].is_image is False
+    assert file_items[0].source == "word_import"
+
+
 def test_list_tenant_files_source_filter(db):
     tenant = make_tenant(db)
     _make_protocol_image(db, tenant.id)
@@ -259,7 +271,7 @@ def test_list_files_route_requires_writer_role(db):
 
     with pytest.raises(HTTPException) as exc_info:
         files_routes.list_files(
-            skip=0, limit=60, source=None, only_images=False, search=None, tags=None,
+            skip=0, limit=60, source=None, only_images=False, exclude_images=False, search=None, tags=None,
             sort_by="created_at", sort_dir="desc", db=db, user=reader,
         )
     assert exc_info.value.status_code == 403
@@ -271,7 +283,7 @@ def test_list_files_route_returns_items_for_writer_role(db):
     writer = make_current_user(tenant.id, role="writer")
 
     result = files_routes.list_files(
-        skip=0, limit=60, source=None, only_images=False, search=None, tags=None,
+        skip=0, limit=60, source=None, only_images=False, exclude_images=False, search=None, tags=None,
         sort_by="created_at", sort_dir="desc", db=db, user=writer,
     )
 
