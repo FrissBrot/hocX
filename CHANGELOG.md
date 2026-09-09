@@ -6,6 +6,31 @@ Versionierung nach [SemVer](https://semver.org/lang/de/). Die Beta-Historie
 ist der erste offiziell unterstützte Stand und muss keine älteren
 Installationen aktualisieren können.
 
+## [1.1.0] - Unveröffentlicht
+
+**Status: in Erprobung/QA auf dem Testhost - noch nicht als Release promotet und ohne
+Veröffentlichungsdatum.** Diese Version enthält zusätzlich zu allen seit 1.0.0
+gemergten Fixes/Hardening-Massnahmen auf `main` die folgenden neuen Funktionen.
+
+### Hinzugefügt
+
+- **Fotos-Galerie**: direkter Bild-Upload (einzelne Dateien oder ZIP-Archive) auf der
+  "Dateien"-Seite, unabhängig von Protokoll/Word-Import/Abgabebox. Mit Tags,
+  Duplikat-Warnung (Perceptual Hash) und Vorschaubildern.
+- **Speicherkontingent**: Mandanten-Speichernutzung im Adminportal einsehbar, mit pro
+  Mandant konfigurierbarem Limit (Speicherkontingent-Verwaltung, eigene Storage-Seite).
+- **Word-Import-Verbesserungen**: Matrix-Spalten-Zuordnung für Tabellen mit variablen
+  Spalten, Unterstützung für mehrtägige Termine (Zeiträume statt Einzeldatum), sowie
+  eine "zuletzt gewählte Vorlage", die beim nächsten Öffnen des Import-Assistenten
+  automatisch vorausgewählt wird.
+- **Tenant-Export/Import-Erweiterungen**: verifizierte Custom-Domains,
+  Fotos-Galerie-Zuordnungen und die Word-Import-Vorlagen-Fremdschlüssel-Referenz
+  werden jetzt mitexportiert/-importiert.
+- **Tabellen-Snapshot-Funktion**: Zeilen einer "Zeile aus Liste"-Tabellenzeile können
+  auf "Historische Daten verwenden" umgestellt werden - die Zeile zeigt dann die
+  eingefrorenen Werte des Zyklus, in den das jeweilige Protokoll fällt, statt immer
+  die aktuellen Live-Daten des verknüpften Listeneintrags.
+
 ## [1.0.0] - 2026-08-27
 
 Erste stabile Version.
