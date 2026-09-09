@@ -148,7 +148,7 @@ export type SubmissionFile = {
 export type FileOverviewSource = "protocol_image" | "word_import" | "submission_upload" | "gallery_upload";
 
 export type FileOverviewItem = {
-  id: number;
+  id: string;
   original_name: string;
   mime_type: string | null;
   file_size_bytes: number | null;
@@ -167,7 +167,7 @@ export type FileOverviewItem = {
 };
 
 export type StoredFileMetadata = {
-  id: number;
+  id: string;
   original_name: string;
   mime_type: string | null;
   file_size_bytes: number | null;

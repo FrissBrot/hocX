@@ -3,6 +3,7 @@ import uuid
 
 from sqlalchemy import BigInteger, Date, String, and_, cast, func, literal, null, or_, select, union_all
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.engine import Row
 from sqlalchemy.orm import Session
 
@@ -100,6 +101,7 @@ class StoredFileRepository:
         protocol_branch = (
             select(
                 StoredFile.id.label("id"),
+                StoredFile.public_id.label("public_id"),
                 StoredFile.original_name.label("original_name"),
                 StoredFile.mime_type.label("mime_type"),
                 StoredFile.file_size_bytes.label("file_size_bytes"),
@@ -108,9 +110,11 @@ class StoredFileRepository:
                 StoredFile.tags.label("tags"),
                 literal("protocol_image").label("source"),
                 Protocol.id.label("ref_id"),
+                Protocol.public_id.label("ref_public_id"),
                 Protocol.protocol_number.label("ref_label"),
                 Protocol.protocol_date.label("ref_date"),
                 cast(null(), BigInteger).label("upload_id"),
+                cast(null(), PG_UUID(as_uuid=True)).label("upload_public_id"),
                 func.concat(
                     "Protokoll ",
                     Protocol.protocol_number,
@@ -133,6 +137,7 @@ class StoredFileRepository:
         word_import_branch = (
             select(
                 StoredFile.id.label("id"),
+                StoredFile.public_id.label("public_id"),
                 StoredFile.original_name.label("original_name"),
                 StoredFile.mime_type.label("mime_type"),
                 StoredFile.file_size_bytes.label("file_size_bytes"),
@@ -141,9 +146,11 @@ class StoredFileRepository:
                 StoredFile.tags.label("tags"),
                 literal("word_import").label("source"),
                 WordImportDocument.id.label("ref_id"),
+                cast(null(), PG_UUID(as_uuid=True)).label("ref_public_id"),
                 WordImportDocument.display_name.label("ref_label"),
                 WordImportDocument.protocol_date.label("ref_date"),
                 cast(null(), BigInteger).label("upload_id"),
+                cast(null(), PG_UUID(as_uuid=True)).label("upload_public_id"),
                 func.concat("Word-Import: ", WordImportDocument.display_name).label("origin_tag"),
             )
             .select_from(StoredFile)
@@ -154,6 +161,7 @@ class StoredFileRepository:
         submission_branch = (
             select(
                 StoredFile.id.label("id"),
+                StoredFile.public_id.label("public_id"),
                 StoredFile.original_name.label("original_name"),
                 StoredFile.mime_type.label("mime_type"),
                 StoredFile.file_size_bytes.label("file_size_bytes"),
@@ -162,9 +170,11 @@ class StoredFileRepository:
                 StoredFile.tags.label("tags"),
                 literal("submission_upload").label("source"),
                 SubmissionAssignment.id.label("ref_id"),
+                cast(null(), PG_UUID(as_uuid=True)).label("ref_public_id"),
                 SubmissionAssignment.title.label("ref_label"),
                 cast(null(), Date).label("ref_date"),
                 SubmissionUpload.id.label("upload_id"),
+                SubmissionUpload.public_id.label("upload_public_id"),
                 func.concat("Abgabe: ", SubmissionAssignment.title).label("origin_tag"),
             )
             .select_from(StoredFile)
@@ -177,6 +187,7 @@ class StoredFileRepository:
         gallery_branch = (
             select(
                 StoredFile.id.label("id"),
+                StoredFile.public_id.label("public_id"),
                 StoredFile.original_name.label("original_name"),
                 StoredFile.mime_type.label("mime_type"),
                 StoredFile.file_size_bytes.label("file_size_bytes"),
@@ -185,9 +196,11 @@ class StoredFileRepository:
                 StoredFile.tags.label("tags"),
                 literal("gallery_upload").label("source"),
                 GalleryImage.id.label("ref_id"),
+                cast(null(), PG_UUID(as_uuid=True)).label("ref_public_id"),
                 literal("").label("ref_label"),
                 cast(null(), Date).label("ref_date"),
                 cast(null(), BigInteger).label("upload_id"),
+                cast(null(), PG_UUID(as_uuid=True)).label("upload_public_id"),
                 literal("Direkt hochgeladen").label("origin_tag"),
             )
             .select_from(StoredFile)

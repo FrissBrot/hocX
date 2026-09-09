@@ -14,6 +14,7 @@ from starlette.datastructures import Headers
 from app.api.routes import files as files_routes
 from app.models.entities import GalleryImage, StoredFile
 from app.services import file_service as file_service_module
+from app.services import public_id_service
 from app.services.file_service import FileService, extract_image_files_from_zip
 from tests.factories import make_current_user, make_tenant
 
@@ -104,7 +105,7 @@ def test_save_gallery_uploads_stores_image_with_tags_and_creates_gallery_image_r
     assert item.tags == ["Sommerlager"]
     assert item.is_image is True
 
-    stored_file = db.get(StoredFile, item.id)
+    stored_file = public_id_service.get_by_public_id(db, StoredFile, item.id)
     assert stored_file is not None
     assert stored_file.mime_type == "image/png"
     assert stored_file.scan_status in {"clean", "pending"}

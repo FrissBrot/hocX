@@ -121,7 +121,7 @@ export function FilesView({ initialItems }: Props) {
     onLoadMore: () => void loadMore(),
   });
 
-  function handleTagsSaved(itemId: number, tags: string[]) {
+  function handleTagsSaved(itemId: string, tags: string[]) {
     setItems((current) => current.map((item) => (item.id === itemId ? { ...item, tags } : item)));
     setDetailItem((current) => (current && current.id === itemId ? { ...current, tags } : current));
     setTagSuggestions((current) => Array.from(new Set([...current, ...tags])).sort((a, b) => a.localeCompare(b)));

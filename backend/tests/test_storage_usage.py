@@ -6,6 +6,7 @@ overview would classify it under.
 """
 from __future__ import annotations
 
+import uuid
 from datetime import date
 
 import pytest
@@ -211,7 +212,9 @@ def test_storage_usage_route_returns_breakdown_for_admin(db):
 
 
 def _admin() -> CurrentAdmin:
-    return CurrentAdmin(admin_id=1, email="admin@example.com", display_name="Test Admin", role="owner")
+    return CurrentAdmin(
+        admin_id=1, admin_public_id=uuid.uuid4(), email="admin@example.com", display_name="Test Admin", role="owner"
+    )
 
 
 def test_admin_list_tenants_includes_storage_used_bytes(db):
@@ -220,7 +223,7 @@ def test_admin_list_tenants_includes_storage_used_bytes(db):
 
     page = admin_routes.list_tenants(limit=None, offset=0, q=None, db=db)
 
-    row = next(t for t in page.items if t.id == tenant.id)
+    row = next(t for t in page.items if t.id == tenant.public_id)
     assert row.storage_used_bytes == 777
     assert row.storage_quota_bytes is None
 
@@ -229,7 +232,7 @@ def test_admin_get_tenant_storage_returns_breakdown(db):
     tenant = make_tenant(db)
     _make_word_import_document(db, tenant.id, size=42)
 
-    result = admin_routes.get_tenant_storage(tenant.id, db=db)
+    result = admin_routes.get_tenant_storage(tenant.public_id, db=db)
 
     by_key = {c.key: c.bytes for c in result.categories}
     assert by_key["word_import"] == 42
@@ -237,7 +240,7 @@ def test_admin_get_tenant_storage_returns_breakdown(db):
 
 def test_admin_get_tenant_storage_404s_for_unknown_tenant(db):
     with pytest.raises(HTTPException) as exc_info:
-        admin_routes.get_tenant_storage(999999, db=db)
+        admin_routes.get_tenant_storage(uuid.uuid4(), db=db)
     assert exc_info.value.status_code == 404
 
 
@@ -245,7 +248,7 @@ def test_admin_update_tenant_storage_quota_sets_bytes_from_mb(db):
     tenant = make_tenant(db)
 
     result = admin_routes.update_tenant_storage_quota(
-        tenant.id, AdminTenantStorageQuotaUpdate(quota_mb=10), db=db, current_admin=_admin(),
+        tenant.public_id, AdminTenantStorageQuotaUpdate(quota_mb=10), db=db, current_admin=_admin(),
     )
 
     assert result.storage_quota_bytes == 10 * 1024 * 1024
@@ -253,14 +256,14 @@ def test_admin_update_tenant_storage_quota_sets_bytes_from_mb(db):
 
 def test_admin_update_tenant_storage_quota_clears_with_none(db):
     tenant = make_tenant(db)
-    admin_routes.update_tenant_storage_quota(tenant.id, AdminTenantStorageQuotaUpdate(quota_mb=10), db=db, current_admin=_admin())
+    admin_routes.update_tenant_storage_quota(tenant.public_id, AdminTenantStorageQuotaUpdate(quota_mb=10), db=db, current_admin=_admin())
 
-    result = admin_routes.update_tenant_storage_quota(tenant.id, AdminTenantStorageQuotaUpdate(quota_mb=None), db=db, current_admin=_admin())
+    result = admin_routes.update_tenant_storage_quota(tenant.public_id, AdminTenantStorageQuotaUpdate(quota_mb=None), db=db, current_admin=_admin())
 
     assert result.storage_quota_bytes is None
 
 
 def test_admin_update_tenant_storage_quota_404s_for_unknown_tenant(db):
     with pytest.raises(HTTPException) as exc_info:
-        admin_routes.update_tenant_storage_quota(999999, AdminTenantStorageQuotaUpdate(quota_mb=10), db=db, current_admin=_admin())
+        admin_routes.update_tenant_storage_quota(uuid.uuid4(), AdminTenantStorageQuotaUpdate(quota_mb=10), db=db, current_admin=_admin())
     assert exc_info.value.status_code == 404

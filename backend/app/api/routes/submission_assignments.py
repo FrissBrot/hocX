@@ -192,8 +192,8 @@ def get_submission_file_content(
 
 @router.get("/submission-uploads/{upload_id}/files/{file_id}/thumbnail")
 def get_submission_file_thumbnail(
-    upload_id: int,
-    file_id: int,
+    upload_id: uuid.UUID,
+    file_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -201,7 +201,11 @@ def get_submission_file_thumbnail(
     get_submission_file_content. Generated lazily on first request since abgabebox-backend's
     restricted DB role never sets thumbnail_path itself (see FileService.ensure_thumbnail)."""
     require_reader(user)
-    upload, stored_file = service.get_stored_file_for_upload(db, upload_id=upload_id, stored_file_id=file_id)
+    upload_public = public_id_service.get_by_public_id(db, SubmissionUpload, upload_id)
+    stored_file_public = public_id_service.get_by_public_id(db, StoredFile, file_id)
+    if upload_public is None or stored_file_public is None:
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden")
+    upload, stored_file = service.get_stored_file_for_upload(db, upload_id=upload_public.id, stored_file_id=stored_file_public.id)
     if upload is None or stored_file is None:
         raise HTTPException(status_code=404, detail="Datei nicht gefunden")
     assignment = service.get_assignment(db, upload.assignment_id)
@@ -223,8 +227,8 @@ def get_submission_file_thumbnail(
 
 @router.patch("/submission-uploads/{upload_id}/files/{file_id}/tags", response_model=list[str])
 def update_submission_file_tags(
-    upload_id: int,
-    file_id: int,
+    upload_id: uuid.UUID,
+    file_id: uuid.UUID,
     payload: StoredFileTagsUpdate,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
@@ -234,7 +238,11 @@ def update_submission_file_tags(
     aufruft (Tags werden ausschliesslich von Mandanten-Writern auf der "Dateien"-Seite
     gesetzt, nie beim Hochladen selbst)."""
     require_writer(user)
-    upload, stored_file = service.get_stored_file_for_upload(db, upload_id=upload_id, stored_file_id=file_id)
+    upload_public = public_id_service.get_by_public_id(db, SubmissionUpload, upload_id)
+    stored_file_public = public_id_service.get_by_public_id(db, StoredFile, file_id)
+    if upload_public is None or stored_file_public is None:
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden")
+    upload, stored_file = service.get_stored_file_for_upload(db, upload_id=upload_public.id, stored_file_id=stored_file_public.id)
     if upload is None or stored_file is None:
         raise HTTPException(status_code=404, detail="Datei nicht gefunden")
     assignment = service.get_assignment(db, upload.assignment_id)
@@ -245,13 +253,17 @@ def update_submission_file_tags(
 
 @router.get("/submission-uploads/{upload_id}/files/{file_id}/metadata", response_model=StoredFileMetadata)
 def get_submission_file_metadata(
-    upload_id: int,
-    file_id: int,
+    upload_id: uuid.UUID,
+    file_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_reader(user)
-    upload, stored_file = service.get_stored_file_for_upload(db, upload_id=upload_id, stored_file_id=file_id)
+    upload_public = public_id_service.get_by_public_id(db, SubmissionUpload, upload_id)
+    stored_file_public = public_id_service.get_by_public_id(db, StoredFile, file_id)
+    if upload_public is None or stored_file_public is None:
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden")
+    upload, stored_file = service.get_stored_file_for_upload(db, upload_id=upload_public.id, stored_file_id=stored_file_public.id)
     if upload is None or stored_file is None:
         raise HTTPException(status_code=404, detail="Datei nicht gefunden")
     assignment = service.get_assignment(db, upload.assignment_id)

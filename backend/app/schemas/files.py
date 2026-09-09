@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import date, datetime
 from typing import Literal
 
@@ -9,7 +10,7 @@ FileOverviewSource = Literal["protocol_image", "word_import", "submission_upload
 
 
 class FileOverviewItem(BaseModel):
-    id: int
+    id: uuid.UUID
     original_name: str
     mime_type: str | None
     file_size_bytes: int | None
@@ -44,7 +45,7 @@ class GalleryUploadResult(BaseModel):
 
 
 class StoredFileMetadata(BaseModel):
-    id: int
+    id: uuid.UUID
     original_name: str
     mime_type: str | None
     file_size_bytes: int | None

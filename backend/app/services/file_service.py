@@ -307,14 +307,14 @@ class FileService:
     def build_content_url(self, stored_file_public_id: uuid.UUID) -> str:
         return f"/api/stored-files/{stored_file_public_id}/content"
 
-    def build_thumbnail_url(self, stored_file_id: int) -> str:
-        return f"/api/stored-files/{stored_file_id}/thumbnail"
+    def build_thumbnail_url(self, stored_file_public_id: uuid.UUID) -> str:
+        return f"/api/stored-files/{stored_file_public_id}/thumbnail"
 
-    def build_tags_url(self, stored_file_id: int) -> str:
-        return f"/api/stored-files/{stored_file_id}/tags"
+    def build_tags_url(self, stored_file_public_id: uuid.UUID) -> str:
+        return f"/api/stored-files/{stored_file_public_id}/tags"
 
-    def build_metadata_url(self, stored_file_id: int) -> str:
-        return f"/api/stored-files/{stored_file_id}/metadata"
+    def build_metadata_url(self, stored_file_public_id: uuid.UUID) -> str:
+        return f"/api/stored-files/{stored_file_public_id}/metadata"
 
     def ensure_thumbnail(
         self, db: Session, stored_file: StoredFile, storage_root: str, thumbnail_root: str | None = None
@@ -402,26 +402,28 @@ class FileService:
         for row in rows:
             is_image = bool(row.mime_type and row.mime_type.startswith("image/"))
             if row.source == "submission_upload":
-                content_url = f"/api/submission-uploads/{row.upload_id}/files/{row.id}/content"
-                thumbnail_url = f"/api/submission-uploads/{row.upload_id}/files/{row.id}/thumbnail" if is_image else None
-                tags_url = f"/api/submission-uploads/{row.upload_id}/files/{row.id}/tags"
-                metadata_url = f"/api/submission-uploads/{row.upload_id}/files/{row.id}/metadata"
+                content_url = f"/api/submission-uploads/{row.upload_public_id}/files/{row.public_id}/content"
+                thumbnail_url = (
+                    f"/api/submission-uploads/{row.upload_public_id}/files/{row.public_id}/thumbnail" if is_image else None
+                )
+                tags_url = f"/api/submission-uploads/{row.upload_public_id}/files/{row.public_id}/tags"
+                metadata_url = f"/api/submission-uploads/{row.upload_public_id}/files/{row.public_id}/metadata"
                 ref_href = f"/submission-assignments/{row.ref_id}" if row.ref_id is not None else None
             elif row.source == "protocol_image":
-                content_url = self.build_content_url(row.id)
-                thumbnail_url = self.build_thumbnail_url(row.id) if is_image else None
-                tags_url = self.build_tags_url(row.id)
-                metadata_url = self.build_metadata_url(row.id)
-                ref_href = f"/protocols/{row.ref_id}" if row.ref_id is not None else None
+                content_url = self.build_content_url(row.public_id)
+                thumbnail_url = self.build_thumbnail_url(row.public_id) if is_image else None
+                tags_url = self.build_tags_url(row.public_id)
+                metadata_url = self.build_metadata_url(row.public_id)
+                ref_href = f"/protocols/{row.ref_public_id}" if row.ref_public_id is not None else None
             else:  # word_import / gallery_upload - no dedicated per-document frontend route to link to
-                content_url = self.build_content_url(row.id)
-                thumbnail_url = self.build_thumbnail_url(row.id) if is_image else None
-                tags_url = self.build_tags_url(row.id)
-                metadata_url = self.build_metadata_url(row.id)
+                content_url = self.build_content_url(row.public_id)
+                thumbnail_url = self.build_thumbnail_url(row.public_id) if is_image else None
+                tags_url = self.build_tags_url(row.public_id)
+                metadata_url = self.build_metadata_url(row.public_id)
                 ref_href = None
             items.append(
                 FileOverviewItem(
-                    id=row.id,
+                    id=row.public_id,
                     original_name=row.original_name,
                     mime_type=row.mime_type,
                     file_size_bytes=row.file_size_bytes,
@@ -482,7 +484,7 @@ class FileService:
             if uploader is not None:
                 uploaded_by_name = uploader.display_name
         return StoredFileMetadata(
-            id=stored_file.id,
+            id=stored_file.public_id,
             original_name=stored_file.original_name,
             mime_type=stored_file.mime_type,
             file_size_bytes=stored_file.file_size_bytes,
@@ -710,17 +712,17 @@ class FileService:
 
             items.append(
                 FileOverviewItem(
-                    id=stored_file.id,
+                    id=stored_file.public_id,
                     original_name=stored_file.original_name,
                     mime_type=stored_file.mime_type,
                     file_size_bytes=stored_file.file_size_bytes,
                     created_at=stored_file.created_at,
                     source="gallery_upload",
                     is_image=True,
-                    content_url=self.build_content_url(stored_file.id),
-                    thumbnail_url=self.build_thumbnail_url(stored_file.id),
-                    tags_url=self.build_tags_url(stored_file.id),
-                    metadata_url=self.build_metadata_url(stored_file.id),
+                    content_url=self.build_content_url(stored_file.public_id),
+                    thumbnail_url=self.build_thumbnail_url(stored_file.public_id),
+                    tags_url=self.build_tags_url(stored_file.public_id),
+                    metadata_url=self.build_metadata_url(stored_file.public_id),
                     ref_label="",
                     ref_date=None,
                     ref_href=None,

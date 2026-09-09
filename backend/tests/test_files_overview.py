@@ -118,8 +118,8 @@ def test_list_tenant_files_includes_gallery_upload_with_expected_shape(db):
     assert item.ref_href is None
     assert item.origin_tag == "Direkt hochgeladen"
     assert item.tags == ["Sommerlager"]
-    assert item.content_url == f"/api/stored-files/{stored_file.id}/content"
-    assert item.thumbnail_url == f"/api/stored-files/{stored_file.id}/thumbnail"
+    assert item.content_url == f"/api/stored-files/{stored_file.public_id}/content"
+    assert item.thumbnail_url == f"/api/stored-files/{stored_file.public_id}/thumbnail"
 
 
 def test_list_tenant_files_includes_protocol_image_with_context(db):
@@ -133,8 +133,8 @@ def test_list_tenant_files_includes_protocol_image_with_context(db):
     assert item.source == "protocol_image"
     assert item.is_image is True
     assert item.ref_label == "7/2026"
-    assert item.ref_href == f"/protocols/{protocol.id}"
-    assert item.content_url == f"/api/stored-files/{stored_file.id}/content"
+    assert item.ref_href == f"/protocols/{protocol.public_id}"
+    assert item.content_url == f"/api/stored-files/{stored_file.public_id}/content"
 
 
 def test_list_tenant_files_includes_word_import_document(db):
@@ -149,7 +149,7 @@ def test_list_tenant_files_includes_word_import_document(db):
     assert item.is_image is False
     assert item.ref_label == document.display_name
     assert item.ref_href is None
-    assert item.content_url == f"/api/stored-files/{stored_file.id}/content"
+    assert item.content_url == f"/api/stored-files/{stored_file.public_id}/content"
     # .docx/.pdf are never images - no thumbnail to load, the grid shows a type icon instead.
     assert item.thumbnail_url is None
 
@@ -160,7 +160,7 @@ def test_list_tenant_files_sets_thumbnail_url_for_protocol_images(db):
 
     items = service.list_tenant_files(db, tenant.id)
 
-    assert items[0].thumbnail_url == f"/api/stored-files/{stored_file.id}/thumbnail"
+    assert items[0].thumbnail_url == f"/api/stored-files/{stored_file.public_id}/thumbnail"
 
 
 def test_list_tenant_files_sets_thumbnail_url_for_image_submission_uploads(db):
@@ -172,7 +172,7 @@ def test_list_tenant_files_sets_thumbnail_url_for_image_submission_uploads(db):
     items = service.list_tenant_files(db, tenant.id)
 
     assert items[0].is_image is True
-    assert items[0].thumbnail_url == f"/api/submission-uploads/{upload.id}/files/{stored_file.id}/thumbnail"
+    assert items[0].thumbnail_url == f"/api/submission-uploads/{upload.public_id}/files/{stored_file.public_id}/thumbnail"
 
 
 def test_list_tenant_files_includes_submission_upload_with_correct_content_url(db):
@@ -186,7 +186,7 @@ def test_list_tenant_files_includes_submission_upload_with_correct_content_url(d
     assert item.source == "submission_upload"
     assert item.ref_label == "Fotos Sommerlager"
     assert item.ref_href == f"/submission-assignments/{assignment.id}"
-    assert item.content_url == f"/api/submission-uploads/{upload.id}/files/{stored_file.id}/content"
+    assert item.content_url == f"/api/submission-uploads/{upload.public_id}/files/{stored_file.public_id}/content"
 
 
 def test_list_tenant_files_excludes_other_tenant_files(db):
@@ -313,7 +313,7 @@ def test_list_tenant_files_tags_filter_matches_custom_tag(db):
     items = service.list_tenant_files(db, tenant.id, tags=["Wichtig"])
 
     assert len(items) == 1
-    assert items[0].id == stored_file_a.id
+    assert items[0].id == stored_file_a.public_id
 
 
 def test_list_tenant_files_tags_filter_matches_origin_tag(db):
@@ -324,7 +324,7 @@ def test_list_tenant_files_tags_filter_matches_origin_tag(db):
     items = service.list_tenant_files(db, tenant.id, tags=["Protokoll 7/2026 – Test Block"])
 
     assert len(items) == 1
-    assert items[0].id == stored_file_a.id
+    assert items[0].id == stored_file_a.public_id
 
 
 def test_list_tenant_files_tags_filter_requires_all_selected_tags(db):
@@ -370,7 +370,7 @@ def test_update_stored_file_tags_route_persists_for_writer_role(db):
     writer = make_current_user(tenant.id, role="writer")
 
     result = files_routes.update_stored_file_tags(
-        stored_file.id, files_routes.StoredFileTagsUpdate(tags=["Wichtig"]), db=db, user=writer,
+        stored_file.public_id, files_routes.StoredFileTagsUpdate(tags=["Wichtig"]), db=db, user=writer,
     )
 
     assert result == ["Wichtig"]

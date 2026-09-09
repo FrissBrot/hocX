@@ -252,30 +252,30 @@ def get_stored_file_content(
 
 @router.patch("/stored-files/{stored_file_id}/tags", response_model=list[str])
 def update_stored_file_tags(
-    stored_file_id: int,
+    stored_file_id: uuid.UUID,
     payload: StoredFileTagsUpdate,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
-    access_service.ensure_can_read_stored_file(db, user, stored_file_id)
-    stored_file = service.get_stored_file(db, stored_file_id)
+    stored_file = public_id_service.get_by_public_id(db, StoredFile, stored_file_id)
     if stored_file is None:
         raise HTTPException(status_code=404, detail="Stored file not found")
+    access_service.ensure_can_read_stored_file(db, user, stored_file.id)
     return service.update_stored_file_tags(db, stored_file, payload.tags)
 
 
 @router.get("/stored-files/{stored_file_id}/metadata", response_model=StoredFileMetadata)
 def get_stored_file_metadata(
-    stored_file_id: int,
+    stored_file_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_reader(user)
-    access_service.ensure_can_read_stored_file(db, user, stored_file_id)
-    stored_file = service.get_stored_file(db, stored_file_id)
+    stored_file = public_id_service.get_by_public_id(db, StoredFile, stored_file_id)
     if stored_file is None or user.current_tenant_id is None:
         raise HTTPException(status_code=404, detail="Stored file not found")
+    access_service.ensure_can_read_stored_file(db, user, stored_file.id)
     metadata = service.get_stored_file_metadata(db, stored_file, settings.storage_root, user.current_tenant_id)
     if metadata is None:
         raise HTTPException(status_code=404, detail="Keine Metadaten verfügbar")
@@ -284,17 +284,17 @@ def get_stored_file_metadata(
 
 @router.get("/stored-files/{stored_file_id}/thumbnail")
 def get_stored_file_thumbnail(
-    stored_file_id: int,
+    stored_file_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     """Small JPEG preview for the "Dateien" grid, so scrolling it stays fluid instead of every
     tile pulling in a full-size original - same access rules as get_stored_file_content."""
     require_reader(user)
-    access_service.ensure_can_read_stored_file(db, user, stored_file_id)
-    stored_file = service.get_stored_file(db, stored_file_id)
+    stored_file = public_id_service.get_by_public_id(db, StoredFile, stored_file_id)
     if stored_file is None:
         raise HTTPException(status_code=404, detail="Stored file not found")
+    access_service.ensure_can_read_stored_file(db, user, stored_file.id)
     if stored_file.scan_status == "infected":
         raise HTTPException(status_code=403, detail="Datei wurde von der Virenprüfung als infiziert erkannt und ist gesperrt")
     if stored_file.scan_status == "pending":

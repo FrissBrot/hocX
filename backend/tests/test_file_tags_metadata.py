@@ -153,7 +153,7 @@ def test_get_stored_file_metadata_route_returns_dimensions_for_writer(db):
     _, stored_file = _make_protocol_image_file(db, tenant.id, size=(200, 100))
     writer = make_current_user(tenant.id, role="writer")
 
-    metadata = files_routes.get_stored_file_metadata(stored_file.id, db=db, user=writer)
+    metadata = files_routes.get_stored_file_metadata(stored_file.public_id, db=db, user=writer)
 
     assert (metadata.width, metadata.height) == (200, 100)
 
@@ -176,7 +176,7 @@ def test_update_submission_file_tags_route_persists_for_writer_role(db):
     writer = make_current_user(tenant.id, role="writer")
 
     result = submission_routes.update_submission_file_tags(
-        upload.id, stored_file.id, submission_routes.StoredFileTagsUpdate(tags=["Sonne"]), db=db, user=writer,
+        upload.public_id, stored_file.public_id, submission_routes.StoredFileTagsUpdate(tags=["Sonne"]), db=db, user=writer,
     )
 
     assert result == ["Sonne"]
@@ -192,7 +192,7 @@ def test_update_submission_file_tags_route_rejects_other_tenant(db):
 
     with pytest.raises(HTTPException) as exc_info:
         submission_routes.update_submission_file_tags(
-            upload.id, stored_file.id, submission_routes.StoredFileTagsUpdate(tags=["Sonne"]), db=db, user=writer_b,
+            upload.public_id, stored_file.public_id, submission_routes.StoredFileTagsUpdate(tags=["Sonne"]), db=db, user=writer_b,
         )
     assert exc_info.value.status_code == 404
 
@@ -202,7 +202,7 @@ def test_get_submission_file_metadata_route_returns_dimensions(db):
     assignment, upload, stored_file = _make_submission_upload_image(db, tenant.id, size=(150, 75))
     writer = make_current_user(tenant.id, role="writer")
 
-    metadata = submission_routes.get_submission_file_metadata(upload.id, stored_file.id, db=db, user=writer)
+    metadata = submission_routes.get_submission_file_metadata(upload.public_id, stored_file.public_id, db=db, user=writer)
 
     assert (metadata.width, metadata.height) == (150, 75)
     assert metadata.source == "submission_upload"

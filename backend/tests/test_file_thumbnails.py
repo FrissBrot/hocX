@@ -14,6 +14,7 @@ from starlette.datastructures import Headers
 from fastapi import UploadFile
 
 from app.models.entities import StoredFile
+from app.services import public_id_service
 from app.services.file_service import FileService, _safe_storage_path
 from tests.factories import make_protocol, make_protocol_element, make_protocol_element_block, make_template, make_tenant
 
@@ -53,7 +54,7 @@ def test_save_protocol_image_eagerly_generates_a_thumbnail(db):
 
     result = asyncio.run(service.save_protocol_image(db, protocol_element_block=block, file=_upload_file(_png_bytes())))
 
-    stored_file = db.get(StoredFile, result.stored_file_id)
+    stored_file = public_id_service.get_by_public_id(db, StoredFile, result.stored_file_id)
     assert stored_file.thumbnail_path == f"{stored_file.id}.jpg"
     thumb_path = _safe_storage_path(settings.thumbnail_root, stored_file.thumbnail_path)
     assert thumb_path.exists()
@@ -136,15 +137,28 @@ def test_ensure_thumbnail_returns_none_for_non_image_mime(db):
 
 
 def test_delete_stored_file_also_removes_its_thumbnail(db):
+    """delete_stored_file is only ever called on a StoredFile with no other row referencing
+    it (see word_import_queue_service.py's queued-document cleanup, its only real caller) -
+    a protocol/gallery/submission-linked file must go through that row's own delete path
+    (e.g. delete_protocol_image) instead, or the FK from that row blocks the DELETE. This
+    builds a standalone StoredFile the same way, rather than via save_protocol_image."""
     from app.core.config import settings
 
     tenant = make_tenant(db)
-    block = _make_block(db, tenant.id)
-    service = FileService()
+    original_path = Path(settings.storage_root) / "original.png"
+    original_path.parent.mkdir(parents=True, exist_ok=True)
+    original_path.write_bytes(_png_bytes())
 
-    result = asyncio.run(service.save_protocol_image(db, protocol_element_block=block, file=_upload_file(_png_bytes())))
-    stored_file = db.get(StoredFile, result.stored_file_id)
-    thumb_path = _safe_storage_path(settings.thumbnail_root, stored_file.thumbnail_path)
+    stored_file = StoredFile(
+        tenant_id=tenant.id, original_name="original.png", mime_type="image/png",
+        storage_path="original.png",
+    )
+    db.add(stored_file)
+    db.flush()
+
+    service = FileService()
+    thumb_path = service.ensure_thumbnail(db, stored_file, settings.storage_root)
+    assert thumb_path is not None
     assert thumb_path.exists()
 
     service.delete_stored_file(db, stored_file)
