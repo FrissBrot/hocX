@@ -1,0 +1,93 @@
+"""Integration test for Phase 2 (photo_similarity.py) wired through the real upload
+pipeline: FileService.group_similar_gallery_images against StoredFile rows created by an
+actual save_gallery_uploads call, so this exercises the real perceptual_hash/sharpness/
+exposure values rather than hand-picked ones (see test_photo_similarity.py for the pure
+clustering-logic unit tests)."""
+
+import io
+
+import pytest
+from PIL import Image, ImageDraw, ImageFilter
+
+from tests.factories import make_tenant
+from app.services.file_service import FileService
+
+
+@pytest.fixture(autouse=True)
+def _isolated_storage_root(monkeypatch, tmp_path):
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
+    monkeypatch.setattr(settings, "upload_root", str(tmp_path / "uploads"))
+    monkeypatch.setattr(settings, "thumbnail_root", str(tmp_path / "thumbnails"))
+
+
+def _circle_png_bytes(cx: int, cy: int, r: int, size: tuple[int, int] = (200, 150)) -> bytes:
+    """Same helper as test_protocol_image_duplicate_check.py - a flat-color image is a
+    degenerate case for pHash, so an actual shape is needed for meaningful similarity."""
+    image = Image.new("RGB", size, (20, 20, 20))
+    ImageDraw.Draw(image).ellipse([cx - r, cy - r, cx + r, cy + r], fill=(220, 180, 60))
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def _blurred(content: bytes, radius: float) -> bytes:
+    """pHash is deliberately low-frequency/blur-resistant, so a blurred copy of the same
+    shot still lands in the same similarity group - exactly the "ten near-identical burst
+    shots, pick the sharpest" case this feature exists for."""
+    with Image.open(io.BytesIO(content)) as image:
+        blurred = image.filter(ImageFilter.GaussianBlur(radius=radius))
+        buffer = io.BytesIO()
+        blurred.save(buffer, format="PNG")
+        return buffer.getvalue()
+
+
+service = FileService()
+
+
+def _upload_and_group(db, tenant_id: int, files: list[tuple[str, bytes]]):
+    # errors may legitimately contain non-blocking "ähnelt einem bereits hochgeladenen
+    # Bild"-Hinweise here (that's the tenant-wide perceptual-hash duplicate warning this
+    # test's near-identical burst shots are expected to trigger) - every file still gets
+    # stored, which is what `items`'s length asserts below.
+    items, _errors = service.save_gallery_uploads(db, tenant_id=tenant_id, files=files, tags=[], created_by=None)
+    assert len(items) == len(files)
+    db.commit()
+    return service.group_similar_gallery_images(db, tenant_id)
+
+
+def test_sharp_and_blurred_burst_shot_group_together_with_the_sharp_one_ranked_first(db):
+    tenant = make_tenant(db)
+    sharp = _circle_png_bytes(100, 75, 50)
+    blurred = _blurred(sharp, radius=6)
+    different = _circle_png_bytes(40, 110, 45)
+
+    groups = _upload_and_group(
+        db,
+        tenant.id,
+        [("sharp.png", sharp), ("blurred.png", blurred), ("different.png", different)],
+    )
+
+    by_size = sorted(groups, key=lambda g: len(g.images))
+    assert [len(g.images) for g in by_size] == [1, 2]
+
+    singleton, burst_group = by_size
+    assert singleton.images[0].original_name == "different.png"
+    assert [image.original_name for image in burst_group.images] == ["sharp.png", "blurred.png"]
+    assert burst_group.best_id == burst_group.images[0].id
+
+
+def test_group_similar_gallery_images_scopes_to_the_given_tenant_only(db):
+    tenant_a = make_tenant(db)
+    tenant_b = make_tenant(db)
+    content = _circle_png_bytes(100, 75, 50)
+
+    service.save_gallery_uploads(db, tenant_id=tenant_a.id, files=[("a.png", content)], tags=[], created_by=None)
+    service.save_gallery_uploads(db, tenant_id=tenant_b.id, files=[("b.png", content)], tags=[], created_by=None)
+    db.commit()
+
+    groups_a = service.group_similar_gallery_images(db, tenant_a.id)
+
+    assert len(groups_a) == 1
+    assert [image.original_name for image in groups_a[0].images] == ["a.png"]

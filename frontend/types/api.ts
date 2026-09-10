@@ -168,6 +168,11 @@ export type FileOverviewItem = {
   exposure_score: number | null;
 };
 
+export type SimilarityGroup = {
+  best_id: string;
+  images: FileOverviewItem[];
+};
+
 export type StoredFileMetadata = {
   id: string;
   original_name: string;

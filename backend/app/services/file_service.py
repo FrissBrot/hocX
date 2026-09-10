@@ -22,10 +22,11 @@ from app import scanner
 from app.core.config import settings
 from app.models import AppUser, GalleryImage, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolImage, StoredFile
 from app.repositories.file_repository import ProtocolImageRepository, StoredFileRepository
-from app.schemas.files import FileOverviewItem, StoredFileMetadata
+from app.schemas.files import FileOverviewItem, SimilarityGroup, StoredFileMetadata
 from app.schemas.protocol import ProtocolImageRead
 from app.services import public_id_service
 from app.services.photo_quality import compute_exposure_score, compute_sharpness_score
+from app.services.photo_similarity import MAX_GROUPING_IMAGES, GroupableImage, group_similar_images
 
 # Max number of tags a suggestion query returns to the frontend's autocomplete dropdown.
 MAX_TAG_SUGGESTIONS = 50
@@ -403,52 +404,100 @@ class FileService:
             sort_dir=sort_dir,
             file_ids=file_ids,
         )
-        items: list[FileOverviewItem] = []
-        for row in rows:
-            is_image = bool(row.mime_type and row.mime_type.startswith("image/"))
-            if row.source == "submission_upload":
-                content_url = f"/api/submission-uploads/{row.upload_public_id}/files/{row.public_id}/content"
-                thumbnail_url = (
-                    f"/api/submission-uploads/{row.upload_public_id}/files/{row.public_id}/thumbnail" if is_image else None
-                )
-                tags_url = f"/api/submission-uploads/{row.upload_public_id}/files/{row.public_id}/tags"
-                metadata_url = f"/api/submission-uploads/{row.upload_public_id}/files/{row.public_id}/metadata"
-                ref_href = f"/submission-assignments/{row.ref_id}" if row.ref_id is not None else None
-            elif row.source == "protocol_image":
-                content_url = self.build_content_url(row.public_id)
-                thumbnail_url = self.build_thumbnail_url(row.public_id) if is_image else None
-                tags_url = self.build_tags_url(row.public_id)
-                metadata_url = self.build_metadata_url(row.public_id)
-                ref_href = f"/protocols/{row.ref_public_id}" if row.ref_public_id is not None else None
-            else:  # word_import / gallery_upload - no dedicated per-document frontend route to link to
-                content_url = self.build_content_url(row.public_id)
-                thumbnail_url = self.build_thumbnail_url(row.public_id) if is_image else None
-                tags_url = self.build_tags_url(row.public_id)
-                metadata_url = self.build_metadata_url(row.public_id)
-                ref_href = None
-            items.append(
-                FileOverviewItem(
-                    id=row.public_id,
-                    original_name=row.original_name,
-                    mime_type=row.mime_type,
-                    file_size_bytes=row.file_size_bytes,
-                    created_at=row.created_at,
-                    source=row.source,
-                    is_image=is_image,
-                    content_url=content_url,
-                    thumbnail_url=thumbnail_url,
-                    tags_url=tags_url,
-                    metadata_url=metadata_url,
-                    ref_label=row.ref_label,
-                    ref_date=row.ref_date,
-                    ref_href=ref_href,
-                    tags=list(row.tags or []),
-                    origin_tag=row.origin_tag,
-                    sharpness_score=row.sharpness_score,
-                    exposure_score=row.exposure_score,
-                )
+        return [self._build_overview_item(row) for row in rows]
+
+    def _build_overview_item(self, row) -> FileOverviewItem:
+        is_image = bool(row.mime_type and row.mime_type.startswith("image/"))
+        if row.source == "submission_upload":
+            content_url = f"/api/submission-uploads/{row.upload_public_id}/files/{row.public_id}/content"
+            thumbnail_url = (
+                f"/api/submission-uploads/{row.upload_public_id}/files/{row.public_id}/thumbnail" if is_image else None
             )
-        return items
+            tags_url = f"/api/submission-uploads/{row.upload_public_id}/files/{row.public_id}/tags"
+            metadata_url = f"/api/submission-uploads/{row.upload_public_id}/files/{row.public_id}/metadata"
+            ref_href = f"/submission-assignments/{row.ref_id}" if row.ref_id is not None else None
+        elif row.source == "protocol_image":
+            content_url = self.build_content_url(row.public_id)
+            thumbnail_url = self.build_thumbnail_url(row.public_id) if is_image else None
+            tags_url = self.build_tags_url(row.public_id)
+            metadata_url = self.build_metadata_url(row.public_id)
+            ref_href = f"/protocols/{row.ref_public_id}" if row.ref_public_id is not None else None
+        else:  # word_import / gallery_upload - no dedicated per-document frontend route to link to
+            content_url = self.build_content_url(row.public_id)
+            thumbnail_url = self.build_thumbnail_url(row.public_id) if is_image else None
+            tags_url = self.build_tags_url(row.public_id)
+            metadata_url = self.build_metadata_url(row.public_id)
+            ref_href = None
+        return FileOverviewItem(
+            id=row.public_id,
+            original_name=row.original_name,
+            mime_type=row.mime_type,
+            file_size_bytes=row.file_size_bytes,
+            created_at=row.created_at,
+            source=row.source,
+            is_image=is_image,
+            content_url=content_url,
+            thumbnail_url=thumbnail_url,
+            tags_url=tags_url,
+            metadata_url=metadata_url,
+            ref_label=row.ref_label,
+            ref_date=row.ref_date,
+            ref_href=ref_href,
+            tags=list(row.tags or []),
+            origin_tag=row.origin_tag,
+            sharpness_score=row.sharpness_score,
+            exposure_score=row.exposure_score,
+        )
+
+    def group_similar_gallery_images(
+        self,
+        db: Session,
+        tenant_id: int,
+        *,
+        source: str | None = None,
+        search: str | None = None,
+        tags: list[str] | None = None,
+        file_ids: list[uuid.UUID] | None = None,
+    ) -> list[SimilarityGroup]:
+        """Photo-culling Phase 2: clusters the tenant's images (same filters as list_tenant_files,
+        always only_images) by perceptual-hash similarity and ranks each cluster by the Phase 1
+        quality scores - see photo_similarity.py for why this can run synchronously instead of
+        needing the async worker later phases will need."""
+        rows = self.stored_file_repository.list_tenant_files(
+            db,
+            tenant_id,
+            skip=0,
+            limit=MAX_GROUPING_IMAGES + 1,
+            source=source,
+            only_images=True,
+            search=search,
+            tags=tags,
+            file_ids=file_ids,
+        )
+        if len(rows) > MAX_GROUPING_IMAGES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Zu viele Bilder für die Gruppierung ausgewählt (max. {MAX_GROUPING_IMAGES}) - Filter eingrenzen (z.B. Album, Tag oder Suche).",
+            )
+
+        rows_by_id = {row.id: row for row in rows}
+        groupable = [
+            GroupableImage(
+                id=row.id,
+                perceptual_hash=row.perceptual_hash,
+                sharpness_score=row.sharpness_score,
+                exposure_score=row.exposure_score,
+            )
+            for row in rows
+        ]
+        groups = group_similar_images(groupable)
+        return [
+            SimilarityGroup(
+                best_id=rows_by_id[group[0].id].public_id,
+                images=[self._build_overview_item(rows_by_id[image.id]) for image in group],
+            )
+            for group in groups
+        ]
 
     def list_distinct_tags(self, db: Session, tenant_id: int, *, query: str | None = None, limit: int = MAX_TAG_SUGGESTIONS) -> list[str]:
         """Every tag currently in use by this tenant's files (custom + auto origin tags),

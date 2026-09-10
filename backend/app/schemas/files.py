@@ -36,6 +36,15 @@ class FileOverviewItem(BaseModel):
     exposure_score: float | None
 
 
+class SimilarityGroup(BaseModel):
+    """Photo-culling Phase 2 (see photo_similarity.py). `images` is sorted best-first;
+    `best_id` is a convenience duplicate of `images[0].id` for a frontend that only wants
+    to pre-select/highlight one image per group without re-deriving "first"."""
+
+    best_id: uuid.UUID
+    images: list[FileOverviewItem]
+
+
 class StoredFileTagsUpdate(BaseModel):
     tags: list[str]
 

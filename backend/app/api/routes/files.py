@@ -15,7 +15,7 @@ from app.core.db import get_db
 from app.core.config import settings
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
 from app.models import ProtocolElementBlock, ProtocolImage, StoredFile
-from app.schemas.files import FileOverviewItem, FileOverviewSource, GalleryUploadResult, StoredFileMetadata, StoredFileTagsUpdate
+from app.schemas.files import FileOverviewItem, FileOverviewSource, GalleryUploadResult, SimilarityGroup, StoredFileMetadata, StoredFileTagsUpdate
 from app.schemas.protocol import ProtocolImageRead
 from app.services import public_id_service
 from app.services.access_service import AccessService
@@ -56,7 +56,9 @@ def list_files(
     exclude_images: bool = Query(default=False),
     search: str | None = Query(default=None),
     tags: list[str] | None = Query(default=None),
-    sort_by: Literal["created_at", "original_name", "file_size_bytes"] = Query(default="created_at"),
+    sort_by: Literal["created_at", "original_name", "file_size_bytes", "sharpness_score", "exposure_score"] = Query(
+        default="created_at"
+    ),
     sort_dir: Literal["asc", "desc"] = Query(default="desc"),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
@@ -103,6 +105,36 @@ def list_file_tags(
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     return service.list_distinct_tags(db, user.current_tenant_id, query=query, limit=limit)
+
+
+@router.get("/files/similarity-groups", response_model=list[SimilarityGroup])
+def list_similarity_groups(
+    source: FileOverviewSource | None = Query(default=None),
+    album_id: uuid.UUID | None = Query(default=None),
+    search: str | None = Query(default=None),
+    tags: list[str] | None = Query(default=None),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Photo-culling Phase 2: clustert die (per Filter eingegrenzten) Bilder des Mandanten
+    nach visueller Ähnlichkeit (Perceptual Hash) und markiert pro Gruppe das nach Schärfe/
+    Belichtung beste Bild. Gleiche Filter wie GET /files, aber immer nur Bilder und ohne
+    Pagination - siehe FileService.group_similar_gallery_images für die Grössenbeschränkung."""
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    file_ids = None
+    if album_id is not None:
+        _get_album(db, user, album_id)
+        file_ids = list(db.scalars(select(PhotoAlbumItem.file_id).where(PhotoAlbumItem.album_id == album_id)))
+    return service.group_similar_gallery_images(
+        db,
+        user.current_tenant_id,
+        source=source,
+        search=search,
+        tags=tags,
+        file_ids=file_ids,
+    )
 
 
 @router.post("/files/gallery-uploads", response_model=GalleryUploadResult, status_code=status.HTTP_201_CREATED)
