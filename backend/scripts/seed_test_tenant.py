@@ -19,6 +19,7 @@ Usage: python scripts/seed_test_tenant.py (from /app inside the backend containe
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -28,6 +29,7 @@ from starlette.datastructures import Headers
 
 from app.core.config import settings
 from app.core.db import SessionLocal
+from app.core.secret_crypto import encrypt_secret
 from app.core.security import hash_password
 from app.models.entities import (
     AppUser,
@@ -50,6 +52,7 @@ from app.models.entities import (
     TemplateElement,
     TemplateElementBlock,
     Tenant,
+    UserMfaFactor,
     UserTenantRole,
 )
 from app.schemas.list_definition import ListDefinitionCreate, ListEntryCreate
@@ -65,6 +68,12 @@ DEMO_TENANT_NAME = "Jubla Sonnenberg"
 DEMO_TENANT_SLUG = "jubla"
 DEMO_PASSWORD = "ChangeMe123!"
 SEED_ASSETS_DIR = Path(__file__).resolve().parents[1] / "sql" / "seed_assets"
+
+# Optional: a developer-chosen base32 TOTP secret (see .env.example) enrolled for every demo
+# account below, so the same authenticator entry keeps working across every reseed instead of
+# re-enrolling via QR code each time. Left unset, demo accounts get no MFA factor and go
+# through the normal enroll-on-first-login flow, same as any other new account.
+DEMO_TOTP_SEED = os.environ.get("DEMO_TOTP_SEED", "").strip().replace(" ", "").upper()
 
 # element_type/render_type/role/todo_status/event_category ids: fixed lookup rows from
 # sql/baseline_lookup_data.sql, always present regardless of environment.
@@ -137,6 +146,11 @@ def create_tenant_and_users(db) -> tuple[Tenant, dict[str, AppUser]]:
         db.flush()
         role_id = {"admin": ROLE_ADMIN, "writer": ROLE_WRITER, "reader": ROLE_READER, "kassier": ROLE_KASSIER}[role_code]
         db.add(UserTenantRole(user_id=user.id, tenant_id=tenant.id, role_id=role_id, is_active=True))
+        if DEMO_TOTP_SEED:
+            db.add(UserMfaFactor(
+                user_id=user.id, factor_type="totp", label="Dev-Seed (DEMO_TOTP_SEED)",
+                secret_encrypted=encrypt_secret(DEMO_TOTP_SEED),
+            ))
         users[role_code] = user
     db.flush()
     return tenant, users
@@ -431,6 +445,16 @@ def create_submission_assignment(db, tenant: Tenant, list_definition: ListDefini
 
 
 def main() -> None:
+    if settings.is_production:
+        print(
+            "FATAL: refusing to seed the demo tenant against a HOCX_ENVIRONMENT=production "
+            "backend. This script creates well-known @*.hocx.local accounts with a public "
+            "password - see AppUser.email/password_hash above and Settings.validate_for_"
+            "production's identical guard.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     db = SessionLocal()
     try:
         wipe_existing_tenant(db)

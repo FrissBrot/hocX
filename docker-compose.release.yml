@@ -129,6 +129,13 @@ services:
       ADMIN_SESSION_TTL_HOURS: ${ADMIN_SESSION_TTL_HOURS:-12}
       ADMIN_SESSION_COOKIE: ${ADMIN_SESSION_COOKIE:-hocx_admin_session}
       CLAMAV_PORT: ${CLAMAV_PORT:-3310}
+      # Read only by scripts/seed_test_tenant.py (backend/app/core/config.py never touches
+      # it) - lets a developer enroll the demo accounts' TOTP once in their own
+      # authenticator and keep using it across every reseed, instead of re-scanning a QR
+      # code after each test deploy. Deploy.sh only ever runs that script when
+      # ENVIRONMENT=test, and the script itself refuses to run against a
+      # HOCX_ENVIRONMENT=production backend - setting this here is inert on prod either way.
+      DEMO_TOTP_SEED: ${DEMO_TOTP_SEED:-}
     secrets:
       - database_url
       - app_database_url
