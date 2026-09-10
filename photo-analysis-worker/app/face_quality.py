@@ -4,9 +4,12 @@ backend/app/services/photo_quality.py's sharpness/exposure functions - this is a
 Docker build context (see the Dockerfile), and this worker already needs OpenCV for face
 detection, so it uses cv2/numpy directly instead of also pulling in Pillow/scipy.
 
-Not verified against a real photograph of a face in this codebase's automated tests (see
-tests/test_face_quality.py's docstring for why) - do one manual smoke test with a real
-photo before relying on this in production.
+Manually verified against a real photograph (a public-domain NASA official portrait - see
+tests/test_face_quality.py's docstring for why that isn't committed as a fixture). That
+smoke test caught a real bug fixed here: YuNet reliably fails to detect anything at all on
+a full, unscaled modern-camera-resolution image (tested: still finds a face at 2000px on
+the longer side, confidence ~0.94; finds nothing at all at 3000px) - _DETECTION_MAX_DIMENSION
+below keeps every image in the range that was actually confirmed to work.
 """
 
 from __future__ import annotations
@@ -17,6 +20,13 @@ import numpy as np
 # YuNet's own default from opencv_zoo's demo.py - below this, "detections" are mostly
 # false positives on texture/noise rather than real faces.
 MIN_FACE_CONFIDENCE = 0.9
+
+# See the module docstring: YuNet was confirmed working up to ~2000px and confirmed
+# broken (no detections at all, not just lower confidence) at 3000px on the same real
+# photo. 1600 keeps real-world phone/DSLR-resolution uploads well inside the confirmed-
+# working range while still giving the sharpness/exposure scoring below a decently
+# detailed crop to work with.
+_DETECTION_MAX_DIMENSION = 1600
 
 # Clipped-highlight/shadow pixel threshold, same convention as backend's
 # photo_quality.py's compute_exposure_score (0-255 range, close to either end counts as
@@ -60,6 +70,12 @@ def score_face_quality(detector: cv2.FaceDetectorYN, image_bytes: bytes) -> floa
     height, width = image.shape[:2]
     if height == 0 or width == 0:
         return None
+
+    scale = min(1.0, _DETECTION_MAX_DIMENSION / max(height, width))
+    if scale < 1.0:
+        image = cv2.resize(image, (round(width * scale), round(height * scale)))
+        height, width = image.shape[:2]
+
     detector.setInputSize((width, height))
     _, faces = detector.detect(image)
     if faces is None or len(faces) == 0:

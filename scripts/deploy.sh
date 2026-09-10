@@ -198,9 +198,11 @@ create_env_file() {
   APP_DB_PASSWORD="$(generate_secret)"
   ABGABEBOX_DB_PASSWORD="$(generate_secret)"
   ABGABEBOX_CAPTCHA_SESSION_SECRET="$(generate_secret)"
+  PHOTO_WORKER_DB_PASSWORD="$(generate_secret)"
   DATABASE_URL="postgresql+psycopg://hocx:${POSTGRES_PASSWORD}@db:5432/hocx"
   APP_DATABASE_URL="postgresql+psycopg://hocx_app:${APP_DB_PASSWORD}@db:5432/hocx"
   ABGABEBOX_DATABASE_URL="postgresql+psycopg://hocx_abgabebox:${ABGABEBOX_DB_PASSWORD}@db:5432/hocx"
+  PHOTO_WORKER_DATABASE_URL="postgresql+psycopg://hocx_photo_worker:${PHOTO_WORKER_DB_PASSWORD}@db:5432/hocx"
 
   umask 077
   ENV_TMP_FILE="$(mktemp "$PROJECT_DIR/.env.tmp.XXXXXX")"
@@ -239,6 +241,8 @@ create_env_file() {
   write_env_value FRIENDLY_CAPTCHA_SITEKEY "$FRIENDLY_CAPTCHA_SITEKEY"
   write_env_value FRIENDLY_CAPTCHA_API_KEY "$FRIENDLY_CAPTCHA_API_KEY"
   write_env_value ABGABEBOX_CAPTCHA_SESSION_SECRET "$ABGABEBOX_CAPTCHA_SESSION_SECRET"
+  write_env_value PHOTO_WORKER_DB_PASSWORD "$PHOTO_WORKER_DB_PASSWORD"
+  write_env_value PHOTO_WORKER_DATABASE_URL "$PHOTO_WORKER_DATABASE_URL"
   mv "$ENV_TMP_FILE" "$ENV_FILE"
   trap - EXIT
   exec 3>&-
@@ -256,7 +260,7 @@ load_env_file "$ENV_FILE"
 # Image-Referenzen kommen ausschliesslich aus einem lokal erzeugten, verifizierten
 # Release-Manifest. Werte aus der aufrufenden Shell duerfen den ersten Pull nicht lenken.
 unset HOCX_BACKEND_IMAGE HOCX_FRONTEND_IMAGE HOCX_ABGABEBOX_BACKEND_IMAGE \
-  HOCX_ABGABEBOX_FRONTEND_IMAGE HOCX_DOCS_IMAGE
+  HOCX_ABGABEBOX_FRONTEND_IMAGE HOCX_DOCS_IMAGE HOCX_PHOTO_ANALYSIS_WORKER_IMAGE
 
 : "${HOCX_VERSION:?HOCX_VERSION fehlt in $ENV_FILE}"
 : "${GHCR_NAMESPACE:?GHCR_NAMESPACE fehlt in $ENV_FILE}"
@@ -306,9 +310,9 @@ run_preflight() {
   esac
   for value in "$POSTGRES_PASSWORD" "$APP_DB_PASSWORD" "$AUTH_SECRET" \
     "$ADMIN_AUTH_SECRET" "$INITIAL_ADMIN_PASSWORD" "$ABGABEBOX_DB_PASSWORD" \
-    "$ABGABEBOX_CAPTCHA_SESSION_SECRET"; do
+    "$ABGABEBOX_CAPTCHA_SESSION_SECRET" "$PHOTO_WORKER_DB_PASSWORD"; do
     case "$value" in
-      ""|ChangeMe123\!*|change-me*|changeme*|secret|hocx|hocx_app|hocx_abgabebox|*keep-local-only*)
+      ""|ChangeMe123\!*|change-me*|changeme*|secret|hocx|hocx_app|hocx_abgabebox|hocx_photo_worker|*keep-local-only*)
         echo "Unsicherer Entwicklungs- oder Platzhalterwert in der Release-Konfiguration." >&2
         return 1
         ;;
@@ -381,6 +385,8 @@ write_secret_files() {
   write_secret_file "$secrets_dir" initial_admin_password "$INITIAL_ADMIN_PASSWORD"
   write_secret_file "$secrets_dir" abgabebox_db_password "$ABGABEBOX_DB_PASSWORD"
   write_secret_file "$secrets_dir" abgabebox_database_url "$ABGABEBOX_DATABASE_URL"
+  write_secret_file "$secrets_dir" photo_worker_db_password "$PHOTO_WORKER_DB_PASSWORD"
+  write_secret_file "$secrets_dir" photo_worker_database_url "$PHOTO_WORKER_DATABASE_URL"
   write_secret_file "$secrets_dir" friendly_captcha_api_key "$FRIENDLY_CAPTCHA_API_KEY"
   write_secret_file "$secrets_dir" abgabebox_captcha_session_secret "$ABGABEBOX_CAPTCHA_SESSION_SECRET"
   write_secret_file "$secrets_dir" cf_dns_api_token "$CF_DNS_API_TOKEN"
@@ -426,7 +432,7 @@ verify_release_images() {
   HOCX_SIGNING_IDENTITY_REGEXP="${HOCX_SIGNING_IDENTITY_REGEXP:-(?i)^https://github.com/${GHCR_NAMESPACE}/hocx/.github/workflows/build-test-images[.]yml@refs/heads/main$}"
 
   echo "==> [$ENVIRONMENT] Signaturen der gepullten Images pruefen"
-  for service in backend frontend abgabebox-backend abgabebox-frontend docs; do
+  for service in backend frontend abgabebox-backend abgabebox-frontend docs photo-analysis-worker; do
     repository="ghcr.io/${GHCR_NAMESPACE}/hocx-${service}"
     image="${repository}:${HOCX_VERSION}"
     digest_ref="$(docker image inspect "$image" --format '{{range .RepoDigests}}{{println .}}{{end}}' | grep -F "${repository}@sha256:" | head -n 1)"
@@ -449,7 +455,7 @@ create_release_manifest() {
   temp_file="$(mktemp "$PROJECT_DIR/.releases/.manifest.tmp.XXXXXX")"
   trap 'rm -f "$temp_file"' RETURN
   printf "HOCX_VERSION='%s'\n" "$HOCX_VERSION" > "$temp_file"
-  for service in backend frontend abgabebox-backend abgabebox-frontend docs; do
+  for service in backend frontend abgabebox-backend abgabebox-frontend docs photo-analysis-worker; do
     repository="ghcr.io/${GHCR_NAMESPACE}/hocx-${service}"
     image="${repository}:${HOCX_VERSION}"
     digest_ref="$(docker image inspect "$image" --format '{{range .RepoDigests}}{{println .}}{{end}}' | grep -F "${repository}@sha256:" | head -n 1)"
@@ -478,7 +484,7 @@ capture_current_release() {
   trap 'rm -f "$temp_file"' RETURN
   printf "HOCX_VERSION='%s'\n" "$previous_version" > "$temp_file"
 
-  for service in backend frontend abgabebox-backend abgabebox-frontend docs; do
+  for service in backend frontend abgabebox-backend abgabebox-frontend docs photo-analysis-worker; do
     container_id="$("${DC[@]}" ps -q "$service" 2> /dev/null || true)"
     [ -n "$container_id" ] || return 0
     repository="ghcr.io/${GHCR_NAMESPACE}/hocx-${service}"
@@ -500,11 +506,11 @@ rollback_apps() {
   echo "==> [$ENVIRONMENT] Automatischer App-Rollback"
   if [ ! -f "$current_manifest" ]; then
     echo "    Kein vorheriges Release vorhanden; stoppe neu gestartete App-Services." >&2
-    "${DC[@]}" stop backend frontend abgabebox-backend abgabebox-frontend docs || true
+    "${DC[@]}" stop backend frontend abgabebox-backend abgabebox-frontend docs photo-analysis-worker || true
     return 1
   fi
   load_env_file "$current_manifest"
-  if "${DC[@]}" up -d --no-deps --pull never backend frontend abgabebox-backend abgabebox-frontend docs; then
+  if "${DC[@]}" up -d --no-deps --pull never backend frontend abgabebox-backend abgabebox-frontend docs photo-analysis-worker; then
     if run_smoke_checks; then
       echo "    Vorheriges Image-Set wurde wieder gestartet und geprueft."
       echo "    Datenbankmigrationen wurden nicht zurueckgerollt."
@@ -567,6 +573,16 @@ run_smoke_checks() {
 
   if service_exists clamav; then
     wait_for_exec clamav "ClamAV" "clamdcheck.sh" 150 2 || return 1
+  fi
+
+  if service_exists photo-analysis-worker; then
+    # No HTTP endpoint (it's a polling worker, not a web service) - actually loads the
+    # baked-in YuNet model instead of just checking the process is alive, so a broken
+    # model file or missing dependency fails the deploy here instead of surfacing later
+    # as every photo_analysis_job silently failing.
+    wait_for_exec photo-analysis-worker "Photo-Analysis-Worker" \
+      "python3 -c \"from app.face_quality import load_detector; load_detector('/app/models/face_detection_yunet.onnx')\"" \
+      || return 1
   fi
 }
 

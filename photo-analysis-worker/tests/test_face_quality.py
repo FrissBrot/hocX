@@ -1,13 +1,15 @@
 """face_quality.py: face detection + crop scoring.
 
-Note on coverage: these tests verify (a) the detector loads and runs without crashing,
-(b) it correctly reports "no face" for non-face input, and (c) the sharpness/exposure
-scoring math itself is correct once a region is given to it. They do NOT verify positive
-detection accuracy against a real photograph of a face - sourcing a real face image as a
-committed test fixture raised licensing/consent questions (whose photo, redistributable
-under what terms) that weren't worth working around for this pass. Do one manual smoke
-test with a real photo before relying on this in production.
+tests/fixtures/nasa_official_portrait.jpg is a real photograph of a real face (public
+domain, see fixtures/ATTRIBUTION.md for provenance/license) - used below to verify actual
+positive detection, not just "doesn't crash". That fixture is also what caught a real bug:
+YuNet reliably found nothing at all on the original ~5200x6500px image, only after
+downscaling (see face_quality.py's module docstring and _DETECTION_MAX_DIMENSION) - so
+these tests double as the regression test for that fix.
 """
+
+import os
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -15,7 +17,11 @@ import pytest
 
 from app.face_quality import _exposure, _sharpness, load_detector, score_face_quality
 
-MODEL_PATH = "/app/models/face_detection_yunet.onnx"
+# Same env var app/worker.py reads (default matches the Dockerfile's bake-in path) - CI
+# runs this on a bare runner instead of inside the built image, so it points this at
+# wherever the "download the model" step put it.
+MODEL_PATH = os.environ.get("PHOTO_WORKER_MODEL_PATH", "/app/models/face_detection_yunet.onnx")
+FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
 def _png_bytes(image: np.ndarray) -> bytes:
@@ -65,3 +71,27 @@ def test_exposure_penalizes_clipped_highlights_and_shadows():
     assert _exposure(well_exposed) == 1.0
     assert _exposure(blown_out) == 0.0
     assert _exposure(crushed_black) == 0.0
+
+
+def test_score_face_quality_detects_a_real_face_and_returns_a_positive_score(detector):
+    image_bytes = (FIXTURES_DIR / "nasa_official_portrait.jpg").read_bytes()
+
+    score = score_face_quality(detector, image_bytes)
+
+    assert score is not None
+    assert score > 0
+
+
+def test_score_face_quality_is_lower_for_a_blurred_copy_of_the_same_real_photo(detector):
+    array = np.frombuffer((FIXTURES_DIR / "nasa_official_portrait.jpg").read_bytes(), dtype=np.uint8)
+    image = cv2.imdecode(array, cv2.IMREAD_COLOR)
+    blurred = cv2.GaussianBlur(image, (25, 25), 0)
+    ok, buffer = cv2.imencode(".jpg", blurred)
+    assert ok
+
+    sharp_score = score_face_quality(detector, cv2.imencode(".jpg", image)[1].tobytes())
+    blurred_score = score_face_quality(detector, buffer.tobytes())
+
+    assert sharp_score is not None
+    assert blurred_score is not None
+    assert sharp_score > blurred_score

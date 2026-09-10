@@ -20,8 +20,8 @@ if grep -q 'env_file:' docker-compose.release.yml; then
   exit 1
 fi
 
-test "$(grep -c 'read_only: true' docker-compose.release.yml)" -eq 5
-test "$(grep -c 'no-new-privileges:true' docker-compose.release.yml)" -eq 5
+test "$(grep -c 'read_only: true' docker-compose.release.yml)" -eq 6
+test "$(grep -c 'no-new-privileges:true' docker-compose.release.yml)" -eq 6
 
 # Audit finding, 2026-08-27: docker-compose.traefik.yml/docker-compose.clamav.yml (the
 # actual prod Traefik/ClamAV - deploy.sh/verify_release.sh never include the base
@@ -32,7 +32,13 @@ for f in docker-compose.traefik.yml docker-compose.clamav.yml; do
   test "$(grep -c 'read_only: true' "$f")" -eq 1
   test "$(grep -c 'no-new-privileges:true' "$f")" -eq 1
   test "$(grep -c 'mem_limit:' "$f")" -eq 1
-  test "$(grep -c 'cap_drop:' "$f")" -eq 1
+  # Anchored (unlike the other three greps above) because this file's own comment
+  # explaining CAP_DAC_OVERRIDE mentions "cap_drop:ALL" in prose - an unanchored grep
+  # double-counts that as a second directive, permanently red long before this diff
+  # (found while adding photo-analysis-worker's docker-compose.release.yml entry, which
+  # legitimately changed the read_only:true/no-new-privileges:true counts above from 5 to
+  # 6 and prompted actually running this test).
+  test "$(grep -c '^[[:space:]]*cap_drop:' "$f")" -eq 1
 done
 grep -q '^USER hocx$' backend/Dockerfile
 grep -q '^USER node$' frontend/Dockerfile

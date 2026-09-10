@@ -37,17 +37,17 @@ embedding, and never tries to tell two faces apart or match a face to a person. 
 the image at build time (see the `Dockerfile`), pinned by SHA-256, since the container
 runs `read_only` and has no reason to reach the network at runtime.
 
-## Known test gap
+## Test coverage
 
-`tests/test_face_quality.py` verifies the detector loads, runs without crashing, and
-correctly reports "no face" for non-face input (blank/random-noise images) - and separately
-verifies the sharpness/exposure scoring math against synthetic crops. It does **not**
-verify positive detection accuracy against a real photograph of a face: sourcing one as a
-committed test fixture raised licensing/consent questions (whose photo, redistributable
-under what terms) that weren't worth working around for this pass. Do one manual smoke
-test with a real photo before relying on this in production - e.g. run the container
-locally against a `stored_file` row that points at a real portrait and check
-`face_quality_score` comes back non-`NULL`.
+`tests/test_face_quality.py` covers both the "doesn't crash / correctly finds nothing" path
+(blank/random-noise/undecodable input) and positive detection against a real photograph of
+a face (`tests/fixtures/nasa_official_portrait.jpg` - public domain, see
+`fixtures/ATTRIBUTION.md` for provenance). That real-photo test is what caught a real bug:
+YuNet reliably found **nothing at all** on the original ~5200x6500px source image - only
+after downscaling did it detect the face (confirmed working up to ~2000px on the longer
+side, confirmed broken again at 3000px). `_DETECTION_MAX_DIMENSION` in `face_quality.py`
+fixes this for every image the worker processes, not just the fixture; the two real-photo
+tests double as the regression test for that fix.
 
 ## Local development
 
