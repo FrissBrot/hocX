@@ -283,7 +283,7 @@ def test_list_files_route_returns_items_for_writer_role(db):
     writer = make_current_user(tenant.id, role="writer")
 
     result = files_routes.list_files(
-        skip=0, limit=60, source=None, only_images=False, exclude_images=False, search=None, tags=None,
+        skip=0, limit=60, source=None, album_id=None, only_images=False, exclude_images=False, search=None, tags=None,
         sort_by="created_at", sort_dir="desc", db=db, user=writer,
     )
 

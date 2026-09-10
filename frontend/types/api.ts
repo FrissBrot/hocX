@@ -167,6 +167,17 @@ export type FileOverviewItem = {
   sharpness_score: number | null;
   exposure_score: number | null;
   face_quality_score: number | null;
+  // Best-of ("Stern") state within the album this item was fetched for - only set when
+  // the /files request that returned it was scoped to an album_id.
+  is_best: boolean | null;
+};
+
+export type PhotoAlbumKind = "manual" | "cycle" | "submission" | "submission_element";
+
+export type PhotoAlbum = {
+  id: string;
+  name: string;
+  kind: PhotoAlbumKind;
 };
 
 export type SimilarityGroup = {

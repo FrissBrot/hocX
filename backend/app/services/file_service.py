@@ -7,7 +7,7 @@ import zipfile
 import zlib
 from collections.abc import Callable
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Iterator
 from uuid import uuid4
@@ -20,8 +20,9 @@ from sqlalchemy.orm import Session
 
 from app import scanner
 from app.core.config import settings
+from app.core.cycle_utils import get_cycle_year
 from app.models import AppUser, GalleryImage, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolImage, StoredFile
-from app.models.entities import PhotoAnalysisJob
+from app.models.entities import CycleConfig, PhotoAnalysisJob, SubmissionAssignment
 from app.repositories.file_repository import ProtocolImageRepository, StoredFileRepository
 from app.schemas.files import FileOverviewItem, SimilarityGroup, StoredFileMetadata
 from app.schemas.protocol import ProtocolImageRead
@@ -606,6 +607,39 @@ class FileService:
                 db.refresh(job)
         return created
 
+    def backfill_missing_quality_scores(self, db: Session, *, limit: int = MAX_ANALYSIS_JOB_IMAGES) -> int:
+        """Phase 1 (sharpness_score/exposure_score) is computed inline for protocol-image
+        and gallery uploads (see save_protocol_image/save_gallery_uploads above), but the
+        abgabebox-backend submission-upload path never computes it - that service runs as
+        the separate, minimally-privileged hocx_abgabebox role and doesn't import this
+        module (see sql/baseline_schema.sql). Called from main.py's
+        photo_quality_backfill_loop to fill it in afterwards, from here, for any clean image
+        still missing either score regardless of source. Returns the number of files
+        updated."""
+        pending = list(
+            db.scalars(
+                select(StoredFile)
+                .where(
+                    StoredFile.mime_type.like("image/%"),
+                    StoredFile.scan_status == "clean",
+                    (StoredFile.sharpness_score.is_(None)) | (StoredFile.exposure_score.is_(None)),
+                )
+                .limit(limit)
+            )
+        )
+        updated = 0
+        for stored_file in pending:
+            file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
+            if not file_path.exists():
+                continue
+            content = file_path.read_bytes()
+            stored_file.sharpness_score = compute_sharpness_score(content)
+            stored_file.exposure_score = compute_exposure_score(content)
+            updated += 1
+        if updated:
+            db.commit()
+        return updated
+
     def list_distinct_tags(self, db: Session, tenant_id: int, *, query: str | None = None, limit: int = MAX_TAG_SUGGESTIONS) -> list[str]:
         """Every tag currently in use by this tenant's files (custom + auto origin tags),
         deduped and sorted, for the tag-filter/editor autocomplete."""
@@ -801,6 +835,11 @@ class FileService:
         files: list[tuple[str, bytes]],
         tags: list[str],
         created_by: int | None,
+        upload_event_id: int | None = None,
+        upload_assignment: SubmissionAssignment | None = None,
+        upload_element_ref: str | None = None,
+        upload_element_label: str | None = None,
+        upload_cycle_config: CycleConfig | None = None,
     ) -> tuple[list[FileOverviewItem], list[str]]:
         """Persists a batch of images uploaded directly through the "Dateien"/"Fotos" gallery
         upload window (route already expanded any .zip into individual (filename, bytes)
@@ -812,7 +851,16 @@ class FileService:
         writer/admin of the tenant), a checksum + tenant-wide perceptual-hash duplicate check
         (same "sieht aus wie ein bereits hochgeladenes Bild" warning as protocol images), and
         thumbnail generation for the "Fotos" grid. One bad file never aborts the whole batch -
-        problems are collected into `errors` and returned alongside whatever did succeed."""
+        problems are collected into `errors` and returned alongside whatever did succeed.
+
+        The upload_* kwargs are the optional Termin/Abgabe-Element/Zyklus target picker on
+        the upload window - at most one of upload_event_id, (upload_assignment +
+        upload_element_ref) or upload_cycle_config is ever set by a caller (see
+        upload_gallery_images), and files land in the matching auto-album(s) once the whole
+        batch is saved (see the end of this method). upload_cycle_config resolves each
+        file's own EXIF capture date to a period independently (see the loop below) since a
+        multi-file batch can span more than one Periode; the other two targets apply to
+        every file in the batch alike."""
         self.ensure_storage()
         normalized_tags = _normalize_tags(tags)
         storage_dir = Path(settings.upload_root) / f"tenant-{tenant_id}" / "gallery"
@@ -820,6 +868,7 @@ class FileService:
         tenant_hashes = self.stored_file_repository.list_tenant_image_hashes(db, tenant_id)
 
         items: list[FileOverviewItem] = []
+        item_taken_at: dict[uuid.UUID, datetime | None] = {}
         errors: list[str] = []
         for filename, content in files:
             label = filename or "Bild"
@@ -877,6 +926,10 @@ class FileService:
             if duplicate_id is not None:
                 errors.append(f"{label}: Hinweis - ähnelt einem bereits im Mandanten hochgeladenen Bild")
 
+            if upload_cycle_config is not None:
+                _, _, taken_at, _ = _extract_image_metadata(content)
+                item_taken_at[stored_file.public_id] = taken_at
+
             items.append(
                 FileOverviewItem(
                     id=stored_file.public_id,
@@ -902,6 +955,40 @@ class FileService:
             )
 
         db.commit()
+
+        if items:
+            # Deferred import: photo_album_service reuses SubmissionService's element-ref
+            # helpers, and importing it at module level here would form an import cycle
+            # (file_service -> photo_album_service -> submission_service -> file_service,
+            # for submission_service's own _safe_storage_path import).
+            from app.services import photo_album_service
+
+            if upload_cycle_config is not None:
+                groups: dict[int, list[uuid.UUID]] = {}
+                for item in items:
+                    taken_at = item_taken_at.get(item.id)
+                    on_date = taken_at.date() if taken_at is not None else date.today()
+                    cycle_year = get_cycle_year(on_date, upload_cycle_config.reset_month, upload_cycle_config.reset_day)
+                    groups.setdefault(cycle_year, []).append(item.id)
+                for cycle_year, file_ids in groups.items():
+                    album = photo_album_service.get_or_create_cycle_album(
+                        db, tenant_id=tenant_id, cycle_config=upload_cycle_config, cycle_year=cycle_year
+                    )
+                    photo_album_service.add_items(db, album, file_ids)
+                    db.commit()
+                    photo_album_service.recompute_best_of(db, self, album)
+            elif upload_event_id is not None or (upload_assignment is not None and upload_element_ref is not None):
+                photo_album_service.assign_uploaded_files(
+                    db,
+                    self,
+                    tenant_id=tenant_id,
+                    stored_file_public_ids=[item.id for item in items],
+                    event_id=upload_event_id,
+                    assignment=upload_assignment,
+                    element_ref=upload_element_ref,
+                    element_label=upload_element_label,
+                )
+
         return items, errors
 
     def save_word_import_document(

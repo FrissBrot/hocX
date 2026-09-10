@@ -4,9 +4,15 @@ import { useEffect, useState } from "react";
 import { browserApiFetch } from "@/lib/api/client";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/contexts/toast-context";
+import { PhotoAlbum as Album, PhotoAlbumKind } from "@/types/api";
 import { FilesView } from "./files-view";
 
-type Album = { id: string; name: string };
+const ALBUM_KIND_LABEL: Record<PhotoAlbumKind, string> = {
+  manual: "Manuell erstellt",
+  cycle: "Zyklus",
+  submission: "Abgabe",
+  submission_element: "Abgabe-Element",
+};
 
 export function PhotoAlbums() {
   const [albums, setAlbums] = useState<Album[]>([]);
@@ -51,7 +57,11 @@ export function PhotoAlbums() {
     {error && <p role="alert" className="form-error-banner">{error}</p>}
     {active ? <>
       <div className="page-header">
-        <div><button type="button" className="button-ghost" onClick={() => setActive(null)}>← Alle Alben</button><h2>{active.name}</h2></div>
+        <div>
+          <button type="button" className="button-ghost" onClick={() => setActive(null)}>← Alle Alben</button>
+          <h2>{active.name}</h2>
+          <p className="muted">{ALBUM_KIND_LABEL[active.kind]}{active.kind !== "manual" ? " (automatisch geführt)" : ""}</p>
+        </div>
         <button type="button" className="button-inline" onClick={() => setPicking(true)}>Vorhandene Fotos hinzufügen</button>
       </div>
       <FilesView key={active.id + revision} mode="photos" initialItems={[]} albumId={active.id} />
@@ -59,7 +69,7 @@ export function PhotoAlbums() {
       <div><button type="button" className="button-inline" onClick={() => { setError(""); setCreating(true); }}>+ Album erstellen</button></div>
       {loading ? <p className="muted">Alben werden geladen…</p> : albums.length === 0 ? <p className="muted">Noch keine Fotoalben vorhanden.</p> :
         <div className="files-grid">{albums.map((album) => <button type="button" className="file-card" key={album.id} onClick={() => setActive(album)}>
-          <span className="file-card-body">{album.name}</span>
+          <span className="file-card-body">{album.name}<span className="muted"> · {ALBUM_KIND_LABEL[album.kind]}</span></span>
         </button>)}</div>}
     </>}
     {creating && <Modal open title="Fotoalbum erstellen" onClose={() => { if (!busy) setCreating(false); }}>

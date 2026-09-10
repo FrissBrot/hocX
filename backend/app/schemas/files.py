@@ -37,6 +37,9 @@ class FileOverviewItem(BaseModel):
     # Phase 3 (see PhotoAnalysisJobCreate below) - None until a photo_analysis_job has
     # scored this file (or it has no detected face).
     face_quality_score: float | None
+    # Best-of ("Stern") state within the album this item was fetched for - only meaningful
+    # when GET /files was called with album_id, None otherwise (see files.py's list_files).
+    is_best: bool | None = None
 
 
 class PhotoAnalysisJobCreate(BaseModel):
@@ -99,6 +102,9 @@ class StoredFileMetadata(BaseModel):
     uploaded_by_name: str | None
 
 
+PhotoAlbumKind = Literal["manual", "cycle", "submission", "submission_element"]
+
+
 class PhotoAlbumCreate(BaseModel):
     name: str
 
@@ -106,7 +112,16 @@ class PhotoAlbumCreate(BaseModel):
 class PhotoAlbumRead(BaseModel):
     id: uuid.UUID
     name: str
+    # "manual" for an admin-created album; the other three are auto-generated and kept in
+    # sync by photo_album_service.py (one per Zyklus+Periode/Abgabe/Abgabe-Element).
+    kind: PhotoAlbumKind = "manual"
 
 
 class PhotoAlbumItemsUpdate(BaseModel):
     file_ids: list[uuid.UUID]
+
+
+class PhotoAlbumItemBestUpdate(BaseModel):
+    # "include" (always best-of), "exclude" (never best-of), or None (back to automatic -
+    # see photo_album_service.recompute_best_of).
+    best_override: Literal["include", "exclude"] | None

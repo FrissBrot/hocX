@@ -1251,11 +1251,27 @@ class SystemErrorLog(Base):
 
 
 class PhotoAlbum(Base, TimestampMixin):
+    """`kind` distinguishes an admin-created album ("manual") from the three auto-generated
+    kinds this table also holds (see photo_album_service.py): one per Zyklus+Periode
+    ("cycle"), one per Abgabe ("submission"), one per Abgabe-Element ("submission_element").
+    Exactly one of (cycle_config_id, cycle_year) / submission_assignment_id (+ optionally
+    submission_element_ref) is set, matching `kind` - see migration 0068's
+    ck_photo_album_kind_fields, enforced in Postgres rather than just in Python since
+    get_or_create_*_album()'s uniqueness guarantee (the partial unique indexes from that
+    same migration) depends on it."""
+
     __tablename__ = "photo_album"
 
     id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'manual'"))
+    cycle_config_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("cycle_config.id", ondelete="CASCADE"))
+    cycle_year: Mapped[int | None] = mapped_column(SmallInteger)
+    submission_assignment_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("submission_assignment.id", ondelete="CASCADE"))
+    # "event-<public_id>" / "entry-<public_id>", same format as SubmissionUploadLog.element_ref
+    # (see submission_service.py's _element_ref) - only set when kind == "submission_element".
+    submission_element_ref: Mapped[str | None] = mapped_column(Text)
 
 
 class PhotoAlbumItem(Base):
@@ -1264,6 +1280,12 @@ class PhotoAlbumItem(Base):
     album_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("photo_album.id", ondelete="CASCADE"), primary_key=True)
     # Overview IDs cover both StoredFile and SubmissionUploadFile.
     file_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
+    # Current resolved best-of ("Stern") state - auto-recomputed (see
+    # photo_album_service.recompute_best_of) except where best_override pins it.
+    is_best: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"), default=False)
+    # A user's manual "immer im Best-of" / "nie im Best-of" pick, surviving future
+    # recomputes. NULL = automatically managed (the common case).
+    best_override: Mapped[str | None] = mapped_column(Text)
 
 
 class PhotoAnalysisJob(Base, TimestampMixin):

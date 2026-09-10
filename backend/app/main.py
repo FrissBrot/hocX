@@ -24,6 +24,7 @@ from app.services.document_template_service import DocumentTemplateService
 from app.services.export_service import ExportService
 from app.services.file_service import FileService
 from app.services.isolated_parse import warm_up_pool as warm_up_word_import_parse_pool
+from app.services import photo_album_service
 from app.services.table_snapshot_service import TableSnapshotService, run_due_cycle_snapshots
 
 
@@ -364,6 +365,42 @@ async def photo_analysis_auto_queue_loop() -> None:
         await asyncio.sleep(interval_seconds)
 
 
+async def photo_quality_backfill_loop() -> None:
+    """Fills in sharpness_score/exposure_score for images the abgabebox submission-upload
+    path never computes them for (see FileService.backfill_missing_quality_scores) - cheap
+    enough per image that this runs continuously, not just in an off-peak window like
+    photo_analysis_auto_queue_loop. Same every-worker-but-advisory-locked pattern."""
+    interval_seconds = settings.photo_quality_backfill_interval_minutes * 60
+    file_service = FileService()
+    while True:
+        with SessionLocal() as db:
+            acquired = db.execute(text("SELECT pg_try_advisory_lock(202600012)")).scalar()
+            if acquired:
+                try:
+                    file_service.backfill_missing_quality_scores(db)
+                finally:
+                    db.execute(text("SELECT pg_advisory_unlock(202600012)"))
+        await asyncio.sleep(interval_seconds)
+
+
+async def photo_album_sync_loop() -> None:
+    """Folds newly-submitted (and newly removed) abgabebox submission files into their
+    Zyklus/Abgabe/Abgabe-Element albums - see photo_album_service.sync_submission_uploads
+    for why this can't happen inline in that public upload request. Same every-worker-but-
+    advisory-locked pattern as the loops above."""
+    interval_seconds = settings.photo_album_sync_interval_minutes * 60
+    file_service = FileService()
+    while True:
+        with SessionLocal() as db:
+            acquired = db.execute(text("SELECT pg_try_advisory_lock(202600013)")).scalar()
+            if acquired:
+                try:
+                    photo_album_service.sync_submission_uploads(db, file_service)
+                finally:
+                    db.execute(text("SELECT pg_advisory_unlock(202600013)"))
+        await asyncio.sleep(interval_seconds)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     FileService().ensure_storage()
@@ -382,9 +419,13 @@ async def lifespan(_: FastAPI):
     log_cleanup_task = asyncio.create_task(log_cleanup_loop())
     cycle_snapshot_task = asyncio.create_task(cycle_snapshot_loop())
     photo_analysis_auto_queue_task = asyncio.create_task(photo_analysis_auto_queue_loop())
+    photo_quality_backfill_task = asyncio.create_task(photo_quality_backfill_loop())
+    photo_album_sync_task = asyncio.create_task(photo_album_sync_loop())
     yield
     health_check_task.cancel()
     photo_analysis_auto_queue_task.cancel()
+    photo_quality_backfill_task.cancel()
+    photo_album_sync_task.cancel()
     rescan_task.cancel()
     word_import_rescan_task.cancel()
     gallery_upload_rescan_task.cancel()

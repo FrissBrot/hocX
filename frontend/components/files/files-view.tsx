@@ -15,7 +15,15 @@ import { useToast } from "@/contexts/toast-context";
 import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { formatDate, formatDateTime, formatFileSize } from "@/lib/utils/format";
-import { FileOverviewItem, FileOverviewSource, StoredFileMetadata } from "@/types/api";
+import {
+  CycleConfigSummary,
+  EventSummary,
+  FileOverviewItem,
+  FileOverviewSource,
+  StoredFileMetadata,
+  SubmissionAssignment,
+  SubmissionElementStatusEntry,
+} from "@/types/api";
 
 const GALLERY_UPLOAD_ACCEPT = "image/jpeg,image/png,image/gif,image/webp,image/bmp,image/tiff,.zip";
 
@@ -146,6 +154,20 @@ export function FilesView({ mode, initialItems, albumId, onSelectPhoto }: Props)
     onLoadMore: () => void loadMore(),
   });
 
+  async function toggleBest(item: FileOverviewItem) {
+    if (!albumId) return;
+    const nextOverride = item.is_best ? "exclude" : "include";
+    try {
+      await browserApiFetch(`/api/files/albums/${albumId}/items/${item.id}/best`, {
+        method: "PATCH",
+        body: JSON.stringify({ best_override: nextOverride }),
+      });
+      setItems((current) => current.map((current_item) => (current_item.id === item.id ? { ...current_item, is_best: nextOverride === "include" } : current_item)));
+    } catch {
+      showToast("Best-of-Status konnte nicht geändert werden.", "error");
+    }
+  }
+
   function handleTagsSaved(itemId: string, tags: string[]) {
     setItems((current) => current.map((item) => (item.id === itemId ? { ...item, tags } : item)));
     setDetailItem((current) => (current && current.id === itemId ? { ...current, tags } : current));
@@ -260,6 +282,7 @@ export function FilesView({ mode, initialItems, albumId, onSelectPhoto }: Props)
               onNavigate={(href) => router.push(href as Route)}
               onOpenDetail={() => setDetailItem(item)}
               onTagClick={(tag) => setTagFilter((current) => (current.includes(tag) ? current : [...current, tag]))}
+              onToggleBest={albumId ? () => void toggleBest(item) : undefined}
             />
             </div>
           ))}
@@ -318,6 +341,34 @@ function GalleryUploadModal({
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Optional target picker: land this batch straight in its Termin's/Abgabe-Element's/
+  // Zyklus' auto-album (see photo_album_service.py) instead of only the plain gallery.
+  const [targetKind, setTargetKind] = useState<"none" | "event" | "submission_element" | "cycle">("none");
+  const [events, setEvents] = useState<EventSummary[]>([]);
+  const [assignments, setAssignments] = useState<SubmissionAssignment[]>([]);
+  const [cycleConfigs, setCycleConfigs] = useState<CycleConfigSummary[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState("");
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState("");
+  const [elements, setElements] = useState<SubmissionElementStatusEntry[]>([]);
+  const [selectedElementRef, setSelectedElementRef] = useState("");
+  const [selectedCycleConfigId, setSelectedCycleConfigId] = useState("");
+
+  useEffect(() => {
+    browserApiFetch<EventSummary[]>("/api/events").then((data) => setEvents(data ?? [])).catch(() => {});
+    browserApiFetch<SubmissionAssignment[]>("/api/submission-assignments").then((data) => setAssignments(data ?? [])).catch(() => {});
+    browserApiFetch<CycleConfigSummary[]>("/api/cycle-configs").then((data) => setCycleConfigs(data ?? [])).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!selectedAssignmentId) {
+      setElements([]);
+      return;
+    }
+    browserApiFetch<SubmissionElementStatusEntry[]>(`/api/submission-assignments/${selectedAssignmentId}/elements`)
+      .then((data) => setElements(data ?? []))
+      .catch(() => setElements([]));
+  }, [selectedAssignmentId]);
+
   function addFiles(fileList: FileList | File[]) {
     setSelectedFiles((current) => [...current, ...Array.from(fileList)]);
     setError(null);
@@ -327,14 +378,25 @@ function GalleryUploadModal({
     setSelectedFiles((current) => current.filter((_, i) => i !== index));
   }
 
+  const targetIncomplete =
+    (targetKind === "event" && !selectedEventId) ||
+    (targetKind === "submission_element" && (!selectedAssignmentId || !selectedElementRef)) ||
+    (targetKind === "cycle" && !selectedCycleConfigId);
+
   async function handleUpload() {
-    if (selectedFiles.length === 0 || uploading) return;
+    if (selectedFiles.length === 0 || uploading || targetIncomplete) return;
     setUploading(true);
     setError(null);
     try {
       const body = new FormData();
       selectedFiles.forEach((file) => body.append("files", file));
       body.append("tags", tagsValue);
+      if (targetKind === "event") body.append("event_id", selectedEventId);
+      if (targetKind === "submission_element") {
+        body.append("submission_assignment_id", selectedAssignmentId);
+        body.append("submission_element_ref", selectedElementRef);
+      }
+      if (targetKind === "cycle") body.append("cycle_config_id", selectedCycleConfigId);
       const result = await browserApiFetch<{ items: FileOverviewItem[]; errors: string[] }>("/api/files/gallery-uploads", {
         method: "POST",
         body,
@@ -407,6 +469,56 @@ function GalleryUploadModal({
           <TagInput value={tagsValue} onChange={setTagsValue} suggestions={tagSuggestions} placeholder="Tag hinzufügen…" />
         </div>
 
+        <div className="gallery-upload-tags">
+          <span className="file-detail-tags-label">
+            Bezug (optional) - landet zusätzlich im passenden Zyklus-/Abgabe-Album mit Best-of-Auswahl
+          </span>
+          <label><input type="radio" name="upload-target" checked={targetKind === "none"} onChange={() => setTargetKind("none")} /> Kein Bezug</label>
+          <label><input type="radio" name="upload-target" checked={targetKind === "event"} onChange={() => setTargetKind("event")} /> Termin</label>
+          {targetKind === "event" && (
+            <select value={selectedEventId} onChange={(event) => setSelectedEventId(event.target.value)}>
+              <option value="">Termin wählen…</option>
+              {events.map((event) => (
+                <option key={event.id} value={event.id}>{event.title} ({formatDate(event.event_date)})</option>
+              ))}
+            </select>
+          )}
+          <label>
+            <input type="radio" name="upload-target" checked={targetKind === "submission_element"} onChange={() => setTargetKind("submission_element")} />
+            {" "}Abgabe-Element
+          </label>
+          {targetKind === "submission_element" && (
+            <>
+              <select
+                value={selectedAssignmentId}
+                onChange={(event) => { setSelectedAssignmentId(event.target.value); setSelectedElementRef(""); }}
+              >
+                <option value="">Abgabe wählen…</option>
+                {assignments.map((assignment) => (
+                  <option key={assignment.id} value={assignment.id}>{assignment.title}</option>
+                ))}
+              </select>
+              {selectedAssignmentId && (
+                <select value={selectedElementRef} onChange={(event) => setSelectedElementRef(event.target.value)}>
+                  <option value="">Element wählen…</option>
+                  {elements.map((element) => (
+                    <option key={element.element_ref} value={element.element_ref}>{element.label}</option>
+                  ))}
+                </select>
+              )}
+            </>
+          )}
+          <label><input type="radio" name="upload-target" checked={targetKind === "cycle"} onChange={() => setTargetKind("cycle")} /> Zyklus</label>
+          {targetKind === "cycle" && (
+            <select value={selectedCycleConfigId} onChange={(event) => setSelectedCycleConfigId(event.target.value)}>
+              <option value="">Zyklus wählen…</option>
+              {cycleConfigs.map((cycleConfig) => (
+                <option key={cycleConfig.id} value={cycleConfig.id}>{cycleConfig.name}</option>
+              ))}
+            </select>
+          )}
+        </div>
+
         {error && <p className="form-error-banner">{error}</p>}
 
         <div className="gallery-upload-actions">
@@ -417,7 +529,7 @@ function GalleryUploadModal({
             type="button"
             className="button-inline"
             onClick={() => void handleUpload()}
-            disabled={uploading || selectedFiles.length === 0}
+            disabled={uploading || selectedFiles.length === 0 || targetIncomplete}
           >
             {uploading
               ? "Lädt hoch…"
@@ -436,11 +548,13 @@ function FileCard({
   onNavigate,
   onOpenDetail,
   onTagClick,
+  onToggleBest,
 }: {
   item: FileOverviewItem;
   onNavigate: (href: string) => void;
   onOpenDetail: () => void;
   onTagClick: (tag: string) => void;
+  onToggleBest?: () => void;
 }) {
   const thumbnailUrl = item.thumbnail_url ? `${browserApiBaseUrl}${item.thumbnail_url}` : undefined;
   const extension = item.original_name.includes(".") ? item.original_name.split(".").pop()!.toUpperCase() : "DATEI";
@@ -461,9 +575,15 @@ function FileCard({
         <span className="file-card-name" title={item.original_name}>{item.original_name}</span>
         <div className="file-card-meta">
           <Badge variant={SOURCE_BADGE_VARIANT[item.source]}>{SOURCE_LABEL[item.source]}</Badge>
+          {item.is_best && <Badge variant="success">★ Best-of</Badge>}
           <span className="muted">{formatDate(item.created_at)}</span>
           {item.file_size_bytes ? <span className="muted">{formatFileSize(item.file_size_bytes)}</span> : null}
         </div>
+        {onToggleBest && (
+          <button type="button" className="button-ghost button-inline" onClick={onToggleBest}>
+            {item.is_best ? "★ Aus Best-of entfernen" : "☆ Zu Best-of hinzufügen"}
+          </button>
+        )}
         {item.ref_label ? (
           item.ref_href ? (
             <button type="button" className="file-card-ref" onClick={() => onNavigate(item.ref_href!)}>

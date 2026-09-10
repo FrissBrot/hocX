@@ -90,6 +90,19 @@ class Settings(BaseSettings):
     # reads /proc/loadavg, which reflects the whole Docker host, not just this container -
     # exactly the shared-host signal this needs, not a container-local one.
     photo_analysis_auto_queue_max_load_factor: float = 0.7
+    # Photo-culling Phase 1 backfill (main.py's photo_quality_backfill_loop): sharpness/
+    # exposure scores are computed inline for protocol-image/gallery uploads, but the
+    # abgabebox-backend submission-upload path runs as a separate, minimally-privileged
+    # process (see sql/baseline_schema.sql's hocx_abgabebox grants) that never computes
+    # them - this loop fills them in afterwards from the trusted backend instead. Cheap
+    # per-image (see photo_quality.py's module docstring), so unlike Phase 3 this doesn't
+    # need an off-peak time window.
+    photo_quality_backfill_interval_minutes: int = 15
+    # Auto-album sync (main.py's photo_album_sync_loop): folds newly-submitted (and newly
+    # removed) abgabebox submission files into their Zyklus/Abgabe/Abgabe-Element albums -
+    # same reason as the backfill above, this can't happen inline in the restricted
+    # abgabebox-backend request path.
+    photo_album_sync_interval_minutes: int = 15
     # Mirrors the abgabebox subapp's ABGABEBOX_TENANT_STORAGE_QUOTA_MB - protocol-image
     # uploads had only a per-file limit (MAX_UPLOAD_BYTES), no per-tenant total at all
     # (audit finding, 2026-08-25), a real risk given this app's two prior disk-full
