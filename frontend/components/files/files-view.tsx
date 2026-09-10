@@ -15,7 +15,7 @@ import { useToast } from "@/contexts/toast-context";
 import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { formatDate, formatDateTime, formatFileSize } from "@/lib/utils/format";
-import { FileOverviewItem, FileOverviewSource, PhotoAnalysisJob, SimilarityGroup, StoredFileMetadata } from "@/types/api";
+import { FileOverviewItem, FileOverviewSource, StoredFileMetadata } from "@/types/api";
 
 const GALLERY_UPLOAD_ACCEPT = "image/jpeg,image/png,image/gif,image/webp,image/bmp,image/tiff,.zip";
 
@@ -61,8 +61,6 @@ export function FilesView({ mode, initialItems, albumId, onSelectPhoto }: Props)
   const router = useRouter();
   const showToast = useToast();
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
-  const [similarityModalOpen, setSimilarityModalOpen] = useState(false);
-  const [analysisModalOpen, setAnalysisModalOpen] = useState(false);
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const [search, setSearch] = useState("");
   const [tagFilter, setTagFilter] = useState<string[]>([]);
@@ -77,9 +75,6 @@ export function FilesView({ mode, initialItems, albumId, onSelectPhoto }: Props)
   const didMountRef = useRef(false);
   const requestIdRef = useRef(0);
 
-  // Same filters as the current list view (minus pagination/sort) - "act on whatever this
-  // filtered view currently shows", shared by the similarity-grouping and face-quality-
-  // analysis actions below.
   function buildFilterParams() {
     const params = new URLSearchParams();
     if (sourceFilter !== "all") params.set("source", sourceFilter);
@@ -98,19 +93,6 @@ export function FilesView({ mode, initialItems, albumId, onSelectPhoto }: Props)
     params.set("sort_by", sortKey);
     params.set("sort_dir", sortDir);
     return `/api/files?${params.toString()}`;
-  }
-
-  // Same filters as the current list view (minus pagination/sort/only_images) - "act on
-  // whatever this filtered view currently shows", used by the similarity-grouping and
-  // face-quality-analysis actions below (both only offered outside an album context, so
-  // albumId is never set when buildAnalysisJobBody is actually used - the POST endpoint
-  // has no album_id param, unlike the GET ones).
-  function buildAnalysisJobBody() {
-    return {
-      source: sourceFilter !== "all" ? sourceFilter : null,
-      search: search.trim() || null,
-      tags: tagFilter.length > 0 ? tagFilter : null,
-    };
   }
 
   // Filters are applied server-side (the tenant can have far more files than one page),
@@ -205,12 +187,6 @@ export function FilesView({ mode, initialItems, albumId, onSelectPhoto }: Props)
           <div className="table-toolbar-actions">
             <button type="button" className="button-inline" onClick={() => setUploadModalOpen(true)}>
               + Bilder hochladen
-            </button>
-            <button type="button" className="button-inline button-ghost" onClick={() => setSimilarityModalOpen(true)}>
-              Ähnliche gruppieren
-            </button>
-            <button type="button" className="button-inline button-ghost" onClick={() => setAnalysisModalOpen(true)}>
-              Gesichtsqualität analysieren
             </button>
           </div>
         )}
@@ -322,26 +298,6 @@ export function FilesView({ mode, initialItems, albumId, onSelectPhoto }: Props)
         />
       )}
 
-      {similarityModalOpen && (
-        <SimilarityGroupsModal
-          filterParams={buildFilterParams()}
-          onClose={() => setSimilarityModalOpen(false)}
-        />
-      )}
-
-      {analysisModalOpen && (
-        <AnalysisJobModal
-          body={buildAnalysisJobBody()}
-          onClose={() => setAnalysisModalOpen(false)}
-          onDone={() => {
-            showToast("Analyse abgeschlossen - nach Gesichtsqualität sortieren, um die Ergebnisse zu sehen.", "success");
-            void browserApiFetch<FileOverviewItem[]>(buildUrl(0)).then((next) => {
-              setItems(next ?? []);
-              setHasMore((next ?? []).length === PAGE_SIZE);
-            });
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -470,153 +426,6 @@ function GalleryUploadModal({
                 : "Hochladen"}
           </button>
         </div>
-      </div>
-    </Modal>
-  );
-}
-
-function SimilarityGroupsModal({
-  filterParams,
-  onClose,
-}: {
-  filterParams: URLSearchParams;
-  onClose: () => void;
-}) {
-  const [groups, setGroups] = useState<SimilarityGroup[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    browserApiFetch<SimilarityGroup[]>(`/api/files/similarity-groups?${filterParams.toString()}`)
-      .then((data) => setGroups(data ?? []))
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : "Gruppen konnten nicht geladen werden."));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Singles (nothing similar found) aren't interesting here - this view exists to review
-  // near-duplicate clusters, not to re-list every photo.
-  const multiGroups = groups?.filter((group) => group.images.length > 1) ?? [];
-
-  return (
-    <Modal
-      open
-      title="Ähnliche Bilder"
-      description="Serienaufnahmen und andere sehr ähnliche Bilder, gruppiert per Bildvergleich. Das nach Schärfe/Belichtung beste Bild jeder Gruppe ist markiert."
-      onClose={onClose}
-      size="wide"
-    >
-      {error && <p className="form-error-banner">{error}</p>}
-      {!groups && !error ? (
-        <p className="muted">Gruppiert…</p>
-      ) : multiGroups.length === 0 ? (
-        <p className="muted">Keine ähnlichen Bilder gefunden.</p>
-      ) : (
-        <div className="grid">
-          {multiGroups.map((group) => (
-            <div key={group.best_id}>
-              <p className="muted">Gruppe von {group.images.length} ähnlichen Bildern</p>
-              <div className="files-grid">
-                {group.images.map((image) => {
-                  const thumbnailUrl = image.thumbnail_url ? `${browserApiBaseUrl}${image.thumbnail_url}` : `${browserApiBaseUrl}${image.content_url}`;
-                  const isBest = image.id === group.best_id;
-                  return (
-                    <div key={image.id} className="file-card">
-                      <a
-                        className="file-card-preview file-card-preview-button"
-                        href={`${browserApiBaseUrl}${image.content_url}`}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        <img alt={image.original_name} src={thumbnailUrl} loading="lazy" decoding="async" />
-                      </a>
-                      <div className="file-card-body">
-                        <span className="file-card-name" title={image.original_name}>{image.original_name}</span>
-                        {isBest && <Badge variant="success">Beste Wahl</Badge>}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </Modal>
-  );
-}
-
-function AnalysisJobModal({
-  body,
-  onClose,
-  onDone,
-}: {
-  body: { source: string | null; search: string | null; tags: string[] | null };
-  onClose: () => void;
-  onDone: () => void;
-}) {
-  const [job, setJob] = useState<PhotoAnalysisJob | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    function schedulePoll(jobId: string) {
-      pollTimerRef.current = setTimeout(async () => {
-        try {
-          const updated = await browserApiFetch<PhotoAnalysisJob>(`/api/files/analysis-jobs/${jobId}`);
-          if (cancelled || !updated) return;
-          setJob(updated);
-          if (updated.status === "queued" || updated.status === "running") {
-            schedulePoll(jobId);
-          } else if (updated.status === "done") {
-            onDone();
-          }
-        } catch {
-          if (!cancelled) setError("Status konnte nicht abgerufen werden.");
-        }
-      }, 2000);
-    }
-
-    browserApiFetch<PhotoAnalysisJob>("/api/files/analysis-jobs", { method: "POST", body: JSON.stringify(body) })
-      .then((created) => {
-        if (cancelled || !created) return;
-        setJob(created);
-        schedulePoll(created.id);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Auftrag konnte nicht gestartet werden.");
-      });
-
-    return () => {
-      cancelled = true;
-      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return (
-    <Modal
-      open
-      title="Gesichtsqualität analysieren"
-      description="Läuft im Hintergrund und kann je nach Anzahl Bilder einige Minuten dauern - dieses Fenster kann geschlossen werden, der Auftrag läuft weiter."
-      onClose={onClose}
-    >
-      {error && <p className="form-error-banner">{error}</p>}
-      {!job ? (
-        <p className="muted">Auftrag wird gestartet…</p>
-      ) : job.status === "queued" ? (
-        <p className="muted">In Warteschlange - {job.image_count} Bilder.</p>
-      ) : job.status === "running" ? (
-        <p className="muted">Analysiert {job.image_count} Bilder…</p>
-      ) : job.status === "done" ? (
-        <p>Fertig - {job.image_count} Bilder analysiert.</p>
-      ) : job.status === "failed" ? (
-        <p className="form-error-banner">Analyse fehlgeschlagen{job.error ? `: ${job.error}` : "."}</p>
-      ) : null}
-      <div className="gallery-upload-actions">
-        <button type="button" className="button-ghost" onClick={onClose}>
-          Schliessen
-        </button>
       </div>
     </Modal>
   );
