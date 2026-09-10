@@ -164,6 +164,8 @@ export type FileOverviewItem = {
   ref_href: string | null;
   tags: string[];
   origin_tag: string;
+  sharpness_score: number | null;
+  exposure_score: number | null;
 };
 
 export type StoredFileMetadata = {

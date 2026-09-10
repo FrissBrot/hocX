@@ -875,6 +875,12 @@ class StoredFile(Base, TimestampMixin):
     file_size_bytes: Mapped[int | None] = mapped_column(BigInteger)
     checksum_sha256: Mapped[str | None] = mapped_column(Text)
     perceptual_hash: Mapped[str | None] = mapped_column(Text)
+    # Laplacian-variance sharpness and clipped-histogram exposure estimates (see
+    # photo_quality.py) - relative ranking signals for the photo-culling "beste Bilder
+    # vorschlagen" feature, not an absolute/universal quality bar. None for non-image
+    # files and images PIL couldn't decode.
+    sharpness_score: Mapped[float | None] = mapped_column(Float)
+    exposure_score: Mapped[float | None] = mapped_column(Float)
     thumbnail_path: Mapped[str | None] = mapped_column(Text)
     scan_status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'clean'"))
     # User-assigned tags for the "Dateien" overview page's filter/editor - separate from the

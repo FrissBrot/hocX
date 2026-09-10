@@ -30,6 +30,10 @@ class FileOverviewItem(BaseModel):
     # Bilder", "Abgabe: Sommerlager Fotos", "Word-Import: ..."), see StoredFileRepository.
     # Filterable together with `tags` via the /files?tags= query param.
     origin_tag: str
+    # Photo-culling Phase 1 (see photo_quality.py) - None for non-images and for images
+    # uploaded before this scoring existed.
+    sharpness_score: float | None
+    exposure_score: float | None
 
 
 class StoredFileTagsUpdate(BaseModel):

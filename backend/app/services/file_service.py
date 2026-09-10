@@ -25,6 +25,7 @@ from app.repositories.file_repository import ProtocolImageRepository, StoredFile
 from app.schemas.files import FileOverviewItem, StoredFileMetadata
 from app.schemas.protocol import ProtocolImageRead
 from app.services import public_id_service
+from app.services.photo_quality import compute_exposure_score, compute_sharpness_score
 
 # Max number of tags a suggestion query returns to the frontend's autocomplete dropdown.
 MAX_TAG_SUGGESTIONS = 50
@@ -443,6 +444,8 @@ class FileService:
                     ref_href=ref_href,
                     tags=list(row.tags or []),
                     origin_tag=row.origin_tag,
+                    sharpness_score=row.sharpness_score,
+                    exposure_score=row.exposure_score,
                 )
             )
         return items
@@ -592,6 +595,8 @@ class FileService:
                 file_size_bytes=len(content),
                 checksum_sha256=checksum,
                 perceptual_hash=perceptual_hash,
+                sharpness_score=compute_sharpness_score(content),
+                exposure_score=compute_exposure_score(content),
                 thumbnail_path=None,
                 created_by=created_by,
                 scan_status=scan_status,
@@ -692,6 +697,8 @@ class FileService:
                 file_size_bytes=len(content),
                 checksum_sha256=checksum,
                 perceptual_hash=perceptual_hash,
+                sharpness_score=compute_sharpness_score(content),
+                exposure_score=compute_exposure_score(content),
                 tags=normalized_tags,
                 created_by=created_by,
                 scan_status=scan_status,
@@ -732,6 +739,8 @@ class FileService:
                     ref_href=None,
                     tags=list(stored_file.tags or []),
                     origin_tag="Direkt hochgeladen",
+                    sharpness_score=stored_file.sharpness_score,
+                    exposure_score=stored_file.exposure_score,
                 )
             )
 
