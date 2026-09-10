@@ -135,16 +135,17 @@ describe("FilesView (Fotos gallery)", () => {
     expect(img.src).not.toContain("thumbnail");
   });
 
-  it("shows the analysis status panel with per-category scores/pending state when the info icon is toggled", async () => {
+  it("shows the analysis status tooltip with per-category scores/pending state on hover", async () => {
     browserApiFetchMock.mockResolvedValue(null);
     const item = makeItem({ id: "q1", sharpness_score: 8.7, exposure_score: 0.92, face_quality_score: null });
     render(<FilesView mode="photos" initialItems={[item]} />);
     fireEvent.click(screen.getByAltText("urlaubsfoto.jpg").closest("button")!);
 
-    const toggle = await screen.findByRole("button", { name: "Analyse-Status anzeigen" });
-    expect(screen.queryByText("Schärfe")).not.toBeInTheDocument();
-    fireEvent.click(toggle);
+    await screen.findByRole("button", { name: "Analyse-Status" });
 
+    // A CSS-only hover tooltip (shown via :hover/:focus-within, see globals.css) rather
+    // than a click-toggled panel - the content is always in the DOM, visibility is purely
+    // CSS, so there's nothing to simulate hover for here beyond asserting it's present.
     expect(screen.getByText("Schärfe")).toBeInTheDocument();
     expect(screen.getByText("8.7")).toBeInTheDocument();
     expect(screen.getByText("92%")).toBeInTheDocument();

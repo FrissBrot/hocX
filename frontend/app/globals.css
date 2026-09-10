@@ -6348,6 +6348,11 @@ input[type="radio"] {
   color: var(--text);
 }
 
+.quality-info-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
 .quality-info-toggle {
   display: inline-flex;
   align-items: center;
@@ -6357,7 +6362,13 @@ input[type="radio"] {
   padding: 0;
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: var(--surface-2);
+  /* Custom property, not a literal `background` - the base `button` rule's hover state
+     reads var(--button-hover-bg, var(--button-bg)), so a variant that sets `background`
+     directly instead leaves --button-bg at its button-wide default (--primary) and hover
+     suddenly jumps to that instead of darkening this button's own resting color (the
+     "dark mode hover bug" - see the comment above the base `button:hover` rule). */
+  --button-bg: var(--surface-2);
+  background: var(--button-bg);
   color: var(--muted);
   cursor: pointer;
 }
@@ -6367,26 +6378,39 @@ input[type="radio"] {
   border-color: var(--text);
 }
 
-.file-detail-quality-panel {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 10px;
-  margin: 0 0 16px;
-  padding: 12px 14px;
-  background: var(--surface-2);
+.quality-info-tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: var(--z-popover);
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 190px;
+  padding: 10px 12px;
+  background: var(--panel-solid);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  font-size: 0.82rem;
+  color: var(--text);
+  pointer-events: none;
 }
 
-.file-detail-quality-panel dt {
-  font-size: 0.78rem;
+.quality-info-wrapper:hover .quality-info-tooltip,
+.quality-info-wrapper:focus-within .quality-info-tooltip {
+  display: flex;
+}
+
+.quality-info-tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.quality-info-tooltip-row strong {
   font-weight: 600;
   color: var(--muted);
-}
-
-.file-detail-quality-panel dd {
-  margin: 2px 0 0;
-  font-size: 0.95rem;
 }
 
 .segment-control {

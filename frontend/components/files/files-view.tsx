@@ -699,7 +699,6 @@ function FileDetailModal({
   const [loadingMetadata, setLoadingMetadata] = useState(true);
   const [tagsValue, setTagsValue] = useState(item.tags.join(","));
   const [saving, setSaving] = useState(false);
-  const [qualityPanelOpen, setQualityPanelOpen] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fileUrl = `${browserApiBaseUrl}${item.content_url}`;
@@ -749,34 +748,28 @@ function FileDetailModal({
       size="wide"
       headerActions={
         item.is_image ? (
-          <button
-            type="button"
-            className="quality-info-toggle"
-            aria-label="Analyse-Status anzeigen"
-            aria-expanded={qualityPanelOpen}
-            onClick={() => setQualityPanelOpen((open) => !open)}
-          >
-            <QualityInfoIcon />
-          </button>
+          <span className="quality-info-wrapper">
+            <button type="button" className="quality-info-toggle" aria-label="Analyse-Status" aria-describedby="quality-info-tooltip">
+              <QualityInfoIcon />
+            </button>
+            <span className="quality-info-tooltip" role="tooltip" id="quality-info-tooltip">
+              <span className="quality-info-tooltip-row">
+                <strong>Schärfe</strong>
+                <span>{item.sharpness_score !== null ? item.sharpness_score.toFixed(1) : "Ausstehend"}</span>
+              </span>
+              <span className="quality-info-tooltip-row">
+                <strong>Belichtung</strong>
+                <span>{item.exposure_score !== null ? `${Math.round(item.exposure_score * 100)}%` : "Ausstehend"}</span>
+              </span>
+              <span className="quality-info-tooltip-row">
+                <strong>Gesichtsqualität</strong>
+                <span>{item.face_quality_score !== null ? item.face_quality_score.toFixed(1) : "Ausstehend"}</span>
+              </span>
+            </span>
+          </span>
         ) : undefined
       }
     >
-      {qualityPanelOpen && item.is_image && (
-        <dl className="file-detail-quality-panel">
-          <div>
-            <dt>Schärfe</dt>
-            <dd>{item.sharpness_score !== null ? item.sharpness_score.toFixed(1) : "Ausstehend"}</dd>
-          </div>
-          <div>
-            <dt>Belichtung</dt>
-            <dd>{item.exposure_score !== null ? `${Math.round(item.exposure_score * 100)}%` : "Ausstehend"}</dd>
-          </div>
-          <div>
-            <dt>Gesichtsqualität</dt>
-            <dd>{item.face_quality_score !== null ? item.face_quality_score.toFixed(1) : "Ausstehend"}</dd>
-          </div>
-        </dl>
-      )}
       <div className="file-detail">
         <div className="file-detail-preview">
           {item.is_image ? (
