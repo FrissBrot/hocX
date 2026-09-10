@@ -306,17 +306,23 @@ async def cycle_snapshot_loop() -> None:
     CycleConfig, creates a table_snapshot for the most recently completed cycle if one
     doesn't exist yet (see table_snapshot_service.run_due_cycle_snapshots for the
     idempotent/self-healing boundary-crossing logic). Same every-worker-but-advisory-
-    locked pattern as the loops above."""
+    locked pattern as the loops above.
+
+    Bug found 2026-09-10: this used to share lock id 202600010 with
+    protocol_image_rescan_loop above (copy-paste from that loop's block, lock id never
+    changed) - both loops run concurrently in the same worker, so whichever one won the
+    lock in a given tick silently starved the other for that tick instead of both running.
+    202600011 here is distinct from every lock id in this file."""
     interval_seconds = settings.cycle_snapshot_check_interval_minutes * 60
     snapshot_service = TableSnapshotService()
     while True:
         with SessionLocal() as db:
-            acquired = db.execute(text("SELECT pg_try_advisory_lock(202600010)")).scalar()
+            acquired = db.execute(text("SELECT pg_try_advisory_lock(202600011)")).scalar()
             if acquired:
                 try:
                     run_due_cycle_snapshots(db, snapshot_service)
                 finally:
-                    db.execute(text("SELECT pg_advisory_unlock(202600010)"))
+                    db.execute(text("SELECT pg_advisory_unlock(202600011)"))
         await asyncio.sleep(interval_seconds)
 
 
