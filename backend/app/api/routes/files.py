@@ -15,7 +15,16 @@ from app.core.db import get_db
 from app.core.config import settings
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
 from app.models import ProtocolElementBlock, ProtocolImage, StoredFile
-from app.schemas.files import FileOverviewItem, FileOverviewSource, GalleryUploadResult, SimilarityGroup, StoredFileMetadata, StoredFileTagsUpdate
+from app.schemas.files import (
+    FileOverviewItem,
+    FileOverviewSource,
+    GalleryUploadResult,
+    PhotoAnalysisJobCreate,
+    PhotoAnalysisJobRead,
+    SimilarityGroup,
+    StoredFileMetadata,
+    StoredFileTagsUpdate,
+)
 from app.schemas.protocol import ProtocolImageRead
 from app.services import public_id_service
 from app.services.access_service import AccessService
@@ -56,9 +65,9 @@ def list_files(
     exclude_images: bool = Query(default=False),
     search: str | None = Query(default=None),
     tags: list[str] | None = Query(default=None),
-    sort_by: Literal["created_at", "original_name", "file_size_bytes", "sharpness_score", "exposure_score"] = Query(
-        default="created_at"
-    ),
+    sort_by: Literal[
+        "created_at", "original_name", "file_size_bytes", "sharpness_score", "exposure_score", "face_quality_score"
+    ] = Query(default="created_at"),
     sort_dir: Literal["asc", "desc"] = Query(default="desc"),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
@@ -135,6 +144,51 @@ def list_similarity_groups(
         tags=tags,
         file_ids=file_ids,
     )
+
+
+def _job_to_read(job) -> PhotoAnalysisJobRead:
+    return PhotoAnalysisJobRead(
+        id=job.id,
+        status=job.status,
+        image_count=len(job.stored_file_ids),
+        created_at=job.created_at,
+        started_at=job.started_at,
+        finished_at=job.finished_at,
+        error=job.error,
+    )
+
+
+@router.post("/files/analysis-jobs", response_model=PhotoAnalysisJobRead, status_code=status.HTTP_201_CREATED)
+def create_analysis_job(
+    payload: PhotoAnalysisJobCreate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Photo-culling Phase 3: queues a batch of (filtered) images for the separate
+    photo-analysis-worker container to score. Returns immediately with status "queued" -
+    poll GET .../{id} for progress."""
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    job = service.create_analysis_job(
+        db,
+        user.current_tenant_id,
+        source=payload.source,
+        search=payload.search,
+        tags=payload.tags,
+        file_ids=payload.file_ids,
+        requested_by=user.user_id,
+    )
+    return _job_to_read(job)
+
+
+@router.get("/files/analysis-jobs/{job_id}", response_model=PhotoAnalysisJobRead)
+def get_analysis_job(job_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    job = service.get_analysis_job(db, user.current_tenant_id, job_id)
+    return _job_to_read(job)
 
 
 @router.post("/files/gallery-uploads", response_model=GalleryUploadResult, status_code=status.HTTP_201_CREATED)

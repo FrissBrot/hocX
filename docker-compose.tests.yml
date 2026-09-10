@@ -35,6 +35,7 @@ services:
       POSTGRES_USER: hocx_test
       APP_DB_PASSWORD: hocx_app_test
       ABGABEBOX_DB_PASSWORD: hocx_abgabebox_test
+      PHOTO_WORKER_DB_PASSWORD: hocx_photo_worker_test
       # 32+ chars required by app/core/config.py's startup check - the old value here was
       # only 27 chars and made the whole `tests` profile fail closed on boot (found while
       # fixing the MFA/rate-limit findings, which made this path exercise AUTH_SECRET-gated
@@ -96,6 +97,20 @@ services:
       - ./backend/tests/fixtures:/backend/tests/fixtures:ro
       - ./docker-compose.yml:/docker-compose.yml:ro
       - ./docker-compose.release.yml:/docker-compose.release.yml:ro
+    profiles: [tests]
+
+  photo-analysis-worker-test:
+    build:
+      context: ./photo-analysis-worker
+      dockerfile: Dockerfile.test
+    environment:
+      PHOTO_WORKER_DATABASE_URL: postgresql+psycopg://hocx_photo_worker:hocx_photo_worker_test@test-db:5432/hocx_test
+    depends_on:
+      test-migrations:
+        condition: service_completed_successfully
+    volumes:
+      - ./photo-analysis-worker/app:/app/app
+      - ./photo-analysis-worker/tests:/app/tests
     profiles: [tests]
 
   frontend-test:

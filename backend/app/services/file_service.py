@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from app import scanner
 from app.core.config import settings
 from app.models import AppUser, GalleryImage, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolImage, StoredFile
+from app.models.entities import PhotoAnalysisJob
 from app.repositories.file_repository import ProtocolImageRepository, StoredFileRepository
 from app.schemas.files import FileOverviewItem, SimilarityGroup, StoredFileMetadata
 from app.schemas.protocol import ProtocolImageRead
@@ -73,6 +74,13 @@ MAX_ZIP_TOTAL_BYTES = 100 * 1024 * 1024  # 100 MB kombinierte entpackte Grösse
 # dasselbe Motiv" gelten - empirischer Richtwert, bei Bedarf anhand echter Fehlalarme
 # nachjustieren.
 PERCEPTUAL_DUPLICATE_THRESHOLD = 5
+
+# Phase 3: cap on how many images a single photo_analysis_job can queue. The worker
+# processes one job at a time (see photo-analysis-worker/app/worker.py), so an
+# unreasonably large job would monopolize it and starve every other tenant's queued jobs
+# behind it - narrower than MAX_GROUPING_IMAGES since this work is genuinely slower
+# per-image (face detection) even though it doesn't block a request the way Phase 2 does.
+MAX_ANALYSIS_JOB_IMAGES = 2000
 
 # Vorschaubilder fuer die "Dateien"-Uebersicht: klein genug, dass ein Grid mit vielen
 # Kacheln fluessig laedt, aber noch erkennbar - die Originaldatei wird nur beim Klick
@@ -447,6 +455,7 @@ class FileService:
             origin_tag=row.origin_tag,
             sharpness_score=row.sharpness_score,
             exposure_score=row.exposure_score,
+            face_quality_score=row.face_quality_score,
         )
 
     def group_similar_gallery_images(
@@ -498,6 +507,56 @@ class FileService:
             )
             for group in groups
         ]
+
+    def create_analysis_job(
+        self,
+        db: Session,
+        tenant_id: int,
+        *,
+        source: str | None = None,
+        search: str | None = None,
+        tags: list[str] | None = None,
+        file_ids: list[uuid.UUID] | None = None,
+        requested_by: int | None = None,
+    ) -> PhotoAnalysisJob:
+        """Photo-culling Phase 3: queues the (filtered) images for photo-analysis-worker to
+        score. Same filter shape as group_similar_gallery_images, but this only writes a
+        queued row - the actual face-detection work happens out of process, later, in the
+        separate worker container (see that container's README for why)."""
+        rows = self.stored_file_repository.list_tenant_files(
+            db,
+            tenant_id,
+            skip=0,
+            limit=MAX_ANALYSIS_JOB_IMAGES + 1,
+            source=source,
+            only_images=True,
+            search=search,
+            tags=tags,
+            file_ids=file_ids,
+        )
+        if len(rows) > MAX_ANALYSIS_JOB_IMAGES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Zu viele Bilder für einen Analyse-Auftrag ausgewählt (max. {MAX_ANALYSIS_JOB_IMAGES}) - Filter eingrenzen (z.B. Album, Tag oder Suche).",
+            )
+        if not rows:
+            raise HTTPException(status_code=400, detail="Keine Bilder für diesen Filter gefunden.")
+
+        job = PhotoAnalysisJob(
+            tenant_id=tenant_id,
+            stored_file_ids=[row.id for row in rows],
+            requested_by=requested_by,
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        return job
+
+    def get_analysis_job(self, db: Session, tenant_id: int, job_id: uuid.UUID) -> PhotoAnalysisJob:
+        job = db.get(PhotoAnalysisJob, job_id)
+        if job is None or job.tenant_id != tenant_id:
+            raise HTTPException(status_code=404, detail="Analyse-Auftrag nicht gefunden")
+        return job
 
     def list_distinct_tags(self, db: Session, tenant_id: int, *, query: str | None = None, limit: int = MAX_TAG_SUGGESTIONS) -> list[str]:
         """Every tag currently in use by this tenant's files (custom + auto origin tags),
@@ -790,6 +849,7 @@ class FileService:
                     origin_tag="Direkt hochgeladen",
                     sharpness_score=stored_file.sharpness_score,
                     exposure_score=stored_file.exposure_score,
+                    face_quality_score=stored_file.face_quality_score,
                 )
             )
 

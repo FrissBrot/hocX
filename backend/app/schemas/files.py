@@ -34,6 +34,29 @@ class FileOverviewItem(BaseModel):
     # uploaded before this scoring existed.
     sharpness_score: float | None
     exposure_score: float | None
+    # Phase 3 (see PhotoAnalysisJobCreate below) - None until a photo_analysis_job has
+    # scored this file (or it has no detected face).
+    face_quality_score: float | None
+
+
+class PhotoAnalysisJobCreate(BaseModel):
+    """Same filter shape as GET /files/similarity-groups - "analyze whatever this filtered
+    view currently shows"."""
+
+    source: FileOverviewSource | None = None
+    search: str | None = None
+    tags: list[str] | None = None
+    file_ids: list[uuid.UUID] | None = None
+
+
+class PhotoAnalysisJobRead(BaseModel):
+    id: uuid.UUID
+    status: Literal["queued", "running", "done", "failed"]
+    image_count: int
+    created_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
+    error: str | None
 
 
 class SimilarityGroup(BaseModel):

@@ -881,6 +881,10 @@ class StoredFile(Base, TimestampMixin):
     # files and images PIL couldn't decode.
     sharpness_score: Mapped[float | None] = mapped_column(Float)
     exposure_score: Mapped[float | None] = mapped_column(Float)
+    # Phase 3 (photo_analysis_job/photo-analysis-worker) - sharpness/exposure of the best
+    # detected face region, not the whole image. None if no face was detected, the file
+    # isn't an image, or it hasn't been analyzed yet.
+    face_quality_score: Mapped[float | None] = mapped_column(Float)
     thumbnail_path: Mapped[str | None] = mapped_column(Text)
     scan_status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'clean'"))
     # User-assigned tags for the "Dateien" overview page's filter/editor - separate from the
@@ -1260,3 +1264,26 @@ class PhotoAlbumItem(Base):
     album_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("photo_album.id", ondelete="CASCADE"), primary_key=True)
     # Overview IDs cover both StoredFile and SubmissionUploadFile.
     file_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
+
+
+class PhotoAnalysisJob(Base, TimestampMixin):
+    """Phase 3 of the photo-culling feature: a batch of stored_file rows queued for the
+    separate photo-analysis-worker container to score (currently: face_quality_score).
+    Written/read here by the backend (hocx_app); the worker itself connects as the
+    separate, minimally-privileged hocx_photo_worker role (see migration 0067) and only
+    ever transitions status/started_at/finished_at/error on a row it already sees."""
+
+    __tablename__ = "photo_analysis_job"
+    __table_args__ = (
+        Index("idx_photo_analysis_job_tenant", "tenant_id"),
+        Index("idx_photo_analysis_job_status_created", "status", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()"))
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'queued'"))
+    stored_file_ids: Mapped[list[int]] = mapped_column(JSONB, nullable=False)
+    requested_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    error: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

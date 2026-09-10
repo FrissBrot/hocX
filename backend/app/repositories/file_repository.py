@@ -111,6 +111,7 @@ class StoredFileRepository:
                 StoredFile.sharpness_score.label("sharpness_score"),
                 StoredFile.exposure_score.label("exposure_score"),
                 StoredFile.perceptual_hash.label("perceptual_hash"),
+                StoredFile.face_quality_score.label("face_quality_score"),
                 literal("protocol_image").label("source"),
                 Protocol.id.label("ref_id"),
                 Protocol.public_id.label("ref_public_id"),
@@ -150,6 +151,7 @@ class StoredFileRepository:
                 StoredFile.sharpness_score.label("sharpness_score"),
                 StoredFile.exposure_score.label("exposure_score"),
                 StoredFile.perceptual_hash.label("perceptual_hash"),
+                StoredFile.face_quality_score.label("face_quality_score"),
                 literal("word_import").label("source"),
                 WordImportDocument.id.label("ref_id"),
                 cast(null(), PG_UUID(as_uuid=True)).label("ref_public_id"),
@@ -177,6 +179,7 @@ class StoredFileRepository:
                 StoredFile.sharpness_score.label("sharpness_score"),
                 StoredFile.exposure_score.label("exposure_score"),
                 StoredFile.perceptual_hash.label("perceptual_hash"),
+                StoredFile.face_quality_score.label("face_quality_score"),
                 literal("submission_upload").label("source"),
                 SubmissionAssignment.id.label("ref_id"),
                 cast(null(), PG_UUID(as_uuid=True)).label("ref_public_id"),
@@ -206,6 +209,7 @@ class StoredFileRepository:
                 StoredFile.sharpness_score.label("sharpness_score"),
                 StoredFile.exposure_score.label("exposure_score"),
                 StoredFile.perceptual_hash.label("perceptual_hash"),
+                StoredFile.face_quality_score.label("face_quality_score"),
                 literal("gallery_upload").label("source"),
                 GalleryImage.id.label("ref_id"),
                 cast(null(), PG_UUID(as_uuid=True)).label("ref_public_id"),
@@ -296,6 +300,7 @@ class StoredFileRepository:
             "file_size_bytes": union_query.c.file_size_bytes,
             "sharpness_score": union_query.c.sharpness_score,
             "exposure_score": union_query.c.exposure_score,
+            "face_quality_score": union_query.c.face_quality_score,
         }.get(sort_by, union_query.c.created_at)
         order = sort_column.asc() if sort_dir == "asc" else sort_column.desc()
         query = query.order_by(order, union_query.c.id.desc()).offset(skip).limit(limit)

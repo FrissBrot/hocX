@@ -166,11 +166,22 @@ export type FileOverviewItem = {
   origin_tag: string;
   sharpness_score: number | null;
   exposure_score: number | null;
+  face_quality_score: number | null;
 };
 
 export type SimilarityGroup = {
   best_id: string;
   images: FileOverviewItem[];
+};
+
+export type PhotoAnalysisJob = {
+  id: string;
+  status: "queued" | "running" | "done" | "failed";
+  image_count: number;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  error: string | null;
 };
 
 export type StoredFileMetadata = {
