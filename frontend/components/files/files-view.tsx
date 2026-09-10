@@ -699,6 +699,7 @@ function FileDetailModal({
   const [loadingMetadata, setLoadingMetadata] = useState(true);
   const [tagsValue, setTagsValue] = useState(item.tags.join(","));
   const [saving, setSaving] = useState(false);
+  const [qualityPanelOpen, setQualityPanelOpen] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fileUrl = `${browserApiBaseUrl}${item.content_url}`;
@@ -741,7 +742,41 @@ function FileDetailModal({
   const dimensions = metadata?.width && metadata?.height ? `${metadata.width} × ${metadata.height} px` : null;
 
   return (
-    <Modal open title={item.original_name} onClose={onClose} size="wide">
+    <Modal
+      open
+      title={item.original_name}
+      onClose={onClose}
+      size="wide"
+      headerActions={
+        item.is_image ? (
+          <button
+            type="button"
+            className="quality-info-toggle"
+            aria-label="Analyse-Status anzeigen"
+            aria-expanded={qualityPanelOpen}
+            onClick={() => setQualityPanelOpen((open) => !open)}
+          >
+            <QualityInfoIcon />
+          </button>
+        ) : undefined
+      }
+    >
+      {qualityPanelOpen && item.is_image && (
+        <dl className="file-detail-quality-panel">
+          <div>
+            <dt>Schärfe</dt>
+            <dd>{item.sharpness_score !== null ? item.sharpness_score.toFixed(1) : "Ausstehend"}</dd>
+          </div>
+          <div>
+            <dt>Belichtung</dt>
+            <dd>{item.exposure_score !== null ? `${Math.round(item.exposure_score * 100)}%` : "Ausstehend"}</dd>
+          </div>
+          <div>
+            <dt>Gesichtsqualität</dt>
+            <dd>{item.face_quality_score !== null ? item.face_quality_score.toFixed(1) : "Ausstehend"}</dd>
+          </div>
+        </dl>
+      )}
       <div className="file-detail">
         <div className="file-detail-preview">
           {item.is_image ? (
@@ -846,6 +881,16 @@ function FileTypeIcon() {
     <svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round">
       <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z" />
       <path d="M14 3v5h5" />
+    </svg>
+  );
+}
+
+function QualityInfoIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+      <circle cx="12" cy="12" r="9.25" />
+      <line x1="12" y1="7.5" x2="12" y2="13" />
+      <line x1="12" y1="16.5" x2="12" y2="16.5" />
     </svg>
   );
 }

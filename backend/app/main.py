@@ -1,5 +1,7 @@
 import asyncio
+import os
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exception_handlers import http_exception_handler
@@ -320,6 +322,48 @@ async def cycle_snapshot_loop() -> None:
         await asyncio.sleep(interval_seconds)
 
 
+def _photo_analysis_auto_queue_window_is_open() -> bool:
+    hour = datetime.now(timezone.utc).hour
+    start, end = settings.photo_analysis_auto_queue_start_hour, settings.photo_analysis_auto_queue_end_hour
+    if start <= end:
+        return start <= hour < end
+    return hour >= start or hour < end  # window wraps past midnight, e.g. 22..5
+
+
+def _host_load_is_low() -> bool:
+    try:
+        load_1min, _, _ = os.getloadavg()
+    except OSError:
+        # Not available on this platform (e.g. Windows) - don't block automatic queuing on
+        # a check that can't run; the request-path/worker resource limits are the actual
+        # backstop against overload either way.
+        return True
+    cpu_count = os.cpu_count() or 1
+    return load_1min <= cpu_count * settings.photo_analysis_auto_queue_max_load_factor
+
+
+async def photo_analysis_auto_queue_loop() -> None:
+    """Automatically queues Phase 3 (face-quality) analysis for images nobody has manually
+    requested it for yet (see FileService.create_pending_analysis_jobs), but only during a
+    configured low-traffic UTC hour window and only when the host doesn't already look
+    busy - this work competes with live request traffic and the dedicated worker container
+    for the same constrained host (see photo-analysis-worker/README.md), so it must never
+    fire just because it's due. Same every-worker-but-advisory-locked pattern as the loops
+    above."""
+    interval_seconds = settings.photo_analysis_auto_queue_interval_minutes * 60
+    file_service = FileService()
+    while True:
+        if _photo_analysis_auto_queue_window_is_open() and _host_load_is_low():
+            with SessionLocal() as db:
+                acquired = db.execute(text("SELECT pg_try_advisory_lock(202600011)")).scalar()
+                if acquired:
+                    try:
+                        file_service.create_pending_analysis_jobs(db)
+                    finally:
+                        db.execute(text("SELECT pg_advisory_unlock(202600011)"))
+        await asyncio.sleep(interval_seconds)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     FileService().ensure_storage()
@@ -337,8 +381,10 @@ async def lifespan(_: FastAPI):
     export_cleanup_task = asyncio.create_task(export_cleanup_loop())
     log_cleanup_task = asyncio.create_task(log_cleanup_loop())
     cycle_snapshot_task = asyncio.create_task(cycle_snapshot_loop())
+    photo_analysis_auto_queue_task = asyncio.create_task(photo_analysis_auto_queue_loop())
     yield
     health_check_task.cancel()
+    photo_analysis_auto_queue_task.cancel()
     rescan_task.cancel()
     word_import_rescan_task.cancel()
     gallery_upload_rescan_task.cancel()

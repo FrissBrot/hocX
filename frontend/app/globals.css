@@ -6348,6 +6348,47 @@ input[type="radio"] {
   color: var(--text);
 }
 
+.quality-info-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.quality-info-toggle:hover {
+  color: var(--text);
+  border-color: var(--text);
+}
+
+.file-detail-quality-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.file-detail-quality-panel dt {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.file-detail-quality-panel dd {
+  margin: 2px 0 0;
+  font-size: 0.95rem;
+}
+
 .segment-control {
   display: inline-flex;
   flex-wrap: nowrap;

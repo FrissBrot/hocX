@@ -558,6 +558,54 @@ class FileService:
             raise HTTPException(status_code=404, detail="Analyse-Auftrag nicht gefunden")
         return job
 
+    def create_pending_analysis_jobs(self, db: Session) -> list[PhotoAnalysisJob]:
+        """Automatic off-peak counterpart to the manual "Gesichtsqualität analysieren"
+        button (create_analysis_job): one job per tenant that has at least one clean image
+        without a face_quality_score yet and no job already queued/running - called from
+        main.py's photo_analysis_auto_queue_loop. Skips a tenant with an in-flight job
+        rather than piling on a second one; it'll be picked up again next loop iteration
+        once that job finishes and still leaves unanalyzed images."""
+        tenants_with_active_jobs = set(
+            db.scalars(select(PhotoAnalysisJob.tenant_id).where(PhotoAnalysisJob.status.in_(["queued", "running"])))
+        )
+        pending_tenant_ids = db.scalars(
+            select(StoredFile.tenant_id)
+            .where(
+                StoredFile.mime_type.like("image/%"),
+                StoredFile.scan_status == "clean",
+                StoredFile.face_quality_score.is_(None),
+            )
+            .distinct()
+        ).all()
+
+        created: list[PhotoAnalysisJob] = []
+        for tenant_id in pending_tenant_ids:
+            if tenant_id in tenants_with_active_jobs:
+                continue
+            stored_file_ids = list(
+                db.scalars(
+                    select(StoredFile.id)
+                    .where(
+                        StoredFile.tenant_id == tenant_id,
+                        StoredFile.mime_type.like("image/%"),
+                        StoredFile.scan_status == "clean",
+                        StoredFile.face_quality_score.is_(None),
+                    )
+                    .limit(MAX_ANALYSIS_JOB_IMAGES)
+                )
+            )
+            if not stored_file_ids:
+                continue
+            job = PhotoAnalysisJob(tenant_id=tenant_id, stored_file_ids=stored_file_ids, requested_by=None)
+            db.add(job)
+            created.append(job)
+
+        if created:
+            db.commit()
+            for job in created:
+                db.refresh(job)
+        return created
+
     def list_distinct_tags(self, db: Session, tenant_id: int, *, query: str | None = None, limit: int = MAX_TAG_SUGGESTIONS) -> list[str]:
         """Every tag currently in use by this tenant's files (custom + auto origin tags),
         deduped and sorted, for the tag-filter/editor autocomplete."""

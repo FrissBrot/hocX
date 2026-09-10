@@ -63,6 +63,9 @@ function makeItem(overrides: Partial<FileOverviewItem> = {}): FileOverviewItem {
     ref_href: null,
     tags: [],
     origin_tag: "Galerie",
+    sharpness_score: null,
+    exposure_score: null,
+    face_quality_score: null,
     ...overrides,
   };
 }
@@ -130,6 +133,22 @@ describe("FilesView (Fotos gallery)", () => {
     const img = screen.getByAltText("urlaubsfoto.jpg") as HTMLImageElement;
     expect(img.src).toContain("/api/stored-files/b2");
     expect(img.src).not.toContain("thumbnail");
+  });
+
+  it("shows the analysis status panel with per-category scores/pending state when the info icon is toggled", async () => {
+    browserApiFetchMock.mockResolvedValue(null);
+    const item = makeItem({ id: "q1", sharpness_score: 8.7, exposure_score: 0.92, face_quality_score: null });
+    render(<FilesView mode="photos" initialItems={[item]} />);
+    fireEvent.click(screen.getByAltText("urlaubsfoto.jpg").closest("button")!);
+
+    const toggle = await screen.findByRole("button", { name: "Analyse-Status anzeigen" });
+    expect(screen.queryByText("Schärfe")).not.toBeInTheDocument();
+    fireEvent.click(toggle);
+
+    expect(screen.getByText("Schärfe")).toBeInTheDocument();
+    expect(screen.getByText("8.7")).toBeInTheDocument();
+    expect(screen.getByText("92%")).toBeInTheDocument();
+    expect(screen.getByText("Ausstehend")).toBeInTheDocument();
   });
 
   it("does not render an <img> for non-image files (icon tile instead)", () => {
