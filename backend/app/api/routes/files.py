@@ -1,5 +1,5 @@
 import uuid
-from typing import Literal
+from typing import Annotated, Literal
 
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
@@ -51,7 +51,7 @@ def list_files(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=60, ge=1, le=200),
     source: FileOverviewSource | None = Query(default=None),
-    album_id: uuid.UUID | None = Query(default=None),
+    album_id: Annotated[uuid.UUID | None, Query()] = None,
     only_images: bool = Query(default=False),
     exclude_images: bool = Query(default=False),
     search: str | None = Query(default=None),

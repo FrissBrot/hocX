@@ -277,14 +277,15 @@ def test_list_files_route_requires_writer_role(db):
     assert exc_info.value.status_code == 403
 
 
-def test_list_files_route_returns_items_for_writer_role(db):
+@pytest.mark.parametrize("album_filter", [{}, {"album_id": None}], ids=["omitted-album", "explicit-none"])
+def test_list_files_route_returns_items_for_writer_role(db, album_filter):
     tenant = make_tenant(db)
     _make_protocol_image(db, tenant.id)
     writer = make_current_user(tenant.id, role="writer")
 
     result = files_routes.list_files(
         skip=0, limit=60, source=None, only_images=False, exclude_images=False, search=None, tags=None,
-        sort_by="created_at", sort_dir="desc", db=db, user=writer,
+        sort_by="created_at", sort_dir="desc", db=db, user=writer, **album_filter,
     )
 
     assert len(result) == 1
