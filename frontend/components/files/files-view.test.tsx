@@ -84,10 +84,17 @@ describe("FilesView (Fotos gallery)", () => {
     vi.restoreAllMocks();
   });
 
-  it("shows only all photos and albums tabs and no sort selector", () => {
+  it("shows only all photos and albums tabs", () => {
     render(<FilesView mode="photos" initialItems={[]} />);
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Alle Fotos", "Alben"]);
-    expect(screen.queryByText("Neueste zuerst")).not.toBeInTheDocument();
+  });
+
+  it("shows a quality-focused sort selector for photos, not the files name/size options", () => {
+    render(<FilesView mode="photos" initialItems={[]} />);
+    expect(screen.getByText("Schärfe (am schärfsten zuerst)")).toBeInTheDocument();
+    expect(screen.getByText("Gesichtsqualität (am besten zuerst)")).toBeInTheDocument();
+    expect(screen.queryByText("Name (A-Z)")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Grösse/)).not.toBeInTheDocument();
   });
 
   it("creates a persistent album and opens its photos", async () => {
