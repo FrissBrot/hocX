@@ -96,8 +96,17 @@ def upgrade():
 
 
 def downgrade():
+    bind = op.get_bind()
+    db_name = bind.execute(sa.text("SELECT current_database()")).scalar()
+
     op.execute(f"REVOKE ALL ON TABLE public.photo_analysis_job FROM {PHOTO_WORKER_ROLE}")
     op.execute(f"REVOKE ALL ON TABLE public.stored_file FROM {PHOTO_WORKER_ROLE}")
+    # A role can't be dropped while it still holds any privilege, including the schema/
+    # database-level GRANTs from upgrade() above (found while downgrading a real dev
+    # database: DROP ROLE failed with "cannot be dropped because some objects depend on
+    # it" / "privileges for schema public" / "privileges for database ...").
+    op.execute(f"REVOKE USAGE ON SCHEMA public FROM {PHOTO_WORKER_ROLE}")
+    op.execute(f"REVOKE CONNECT ON DATABASE {db_name} FROM {PHOTO_WORKER_ROLE}")
     op.execute(f"DROP ROLE IF EXISTS {PHOTO_WORKER_ROLE}")
     op.drop_index("idx_photo_analysis_job_status_created", table_name="photo_analysis_job")
     op.drop_index("idx_photo_analysis_job_tenant", table_name="photo_analysis_job")
