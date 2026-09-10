@@ -1,7 +1,11 @@
 import uuid
 from typing import Literal
 
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.dialects.postgresql import insert
+from app.models.entities import PhotoAlbum, PhotoAlbumItem
+from app.schemas.files import PhotoAlbumCreate, PhotoAlbumRead, PhotoAlbumItemsUpdate
 from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
@@ -47,6 +51,7 @@ def list_files(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=60, ge=1, le=200),
     source: FileOverviewSource | None = Query(default=None),
+    album_id: uuid.UUID | None = Query(default=None),
     only_images: bool = Query(default=False),
     exclude_images: bool = Query(default=False),
     search: str | None = Query(default=None),
@@ -64,6 +69,10 @@ def list_files(
     require_writer(user)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
+    file_ids = None
+    if album_id is not None:
+        _get_album(db, user, album_id)
+        file_ids = list(db.scalars(select(PhotoAlbumItem.file_id).where(PhotoAlbumItem.album_id == album_id)))
     return service.list_tenant_files(
         db,
         user.current_tenant_id,
@@ -76,6 +85,7 @@ def list_files(
         tags=tags,
         sort_by=sort_by,
         sort_dir=sort_dir,
+        file_ids=file_ids,
     )
 
 
@@ -309,3 +319,46 @@ def get_stored_file_thumbnail(
         media_type="image/jpeg",
         headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=86400"},
     )
+
+
+def _get_album(db: Session, user: CurrentUser, album_id: uuid.UUID):
+    require_writer(user)
+    album = db.scalar(select(PhotoAlbum).where(PhotoAlbum.id == album_id, PhotoAlbum.tenant_id == user.current_tenant_id))
+    if album is None:
+        raise HTTPException(status_code=404, detail="Album nicht gefunden")
+    return album
+
+
+@router.get("/files/albums", response_model=list[PhotoAlbumRead])
+def list_albums(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    require_writer(user)
+    return [PhotoAlbumRead(id=a.id, name=a.name) for a in db.scalars(
+        select(PhotoAlbum).where(PhotoAlbum.tenant_id == user.current_tenant_id).order_by(PhotoAlbum.created_at.desc(), PhotoAlbum.id.desc()))]
+
+
+@router.post("/files/albums", response_model=PhotoAlbumRead, status_code=201)
+def create_album(payload: PhotoAlbumCreate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    name = payload.name.strip()
+    if not name or len(name) > 120:
+        raise HTTPException(status_code=422, detail="Albumname muss zwischen 1 und 120 Zeichen lang sein")
+    album = PhotoAlbum(tenant_id=user.current_tenant_id, name=name)
+    db.add(album)
+    db.commit()
+    db.refresh(album)
+    return PhotoAlbumRead(id=album.id, name=album.name)
+
+
+@router.post("/files/albums/{album_id}/items", status_code=204)
+def add_album_items(album_id: uuid.UUID, payload: PhotoAlbumItemsUpdate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    _get_album(db, user, album_id)
+    ids = set(payload.file_ids)
+    if not ids or len(ids) > 200:
+        raise HTTPException(status_code=422, detail="Bitte 1 bis 200 Fotos auswählen")
+    photos = service.list_tenant_files(db, user.current_tenant_id, only_images=True, file_ids=list(ids), limit=200)
+    if {photo.id for photo in photos} != ids:
+        raise HTTPException(status_code=404, detail="Foto nicht gefunden")
+    db.execute(insert(PhotoAlbumItem).values([{"album_id": album_id, "file_id": file_id} for file_id in ids]).on_conflict_do_nothing())
+    db.commit()

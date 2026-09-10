@@ -84,6 +84,28 @@ describe("FilesView (Fotos gallery)", () => {
     vi.restoreAllMocks();
   });
 
+  it("shows only all photos and albums tabs and no sort selector", () => {
+    render(<FilesView mode="photos" initialItems={[]} />);
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Alle Fotos", "Alben"]);
+    expect(screen.queryByText("Neueste zuerst")).not.toBeInTheDocument();
+  });
+
+  it("creates a persistent album and opens its photos", async () => {
+    browserApiFetchMock.mockImplementation((url: string, options?: { method?: string }) => {
+      if (url === "/api/files/albums" && options?.method === "POST") {
+        return Promise.resolve({ id: "album-1", name: "Sommerlager" });
+      }
+      return Promise.resolve([]);
+    });
+    render(<FilesView mode="photos" initialItems={[]} />);
+    fireEvent.click(screen.getByRole("tab", { name: "Alben" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Album erstellen" }));
+    fireEvent.change(screen.getByLabelText("Albumname"), { target: { value: "Sommerlager" } });
+    fireEvent.click(screen.getByRole("button", { name: "Album erstellen" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Sommerlager" })).toBeInTheDocument());
+    await waitFor(() => expect(browserApiFetchMock.mock.calls.some(([url]) => url.includes("album_id=album-1") && url.includes("sort_by=created_at") && url.includes("sort_dir=desc"))).toBe(true));
+  });
+
   it("renders each photo's <img> with the thumbnail URL and native lazy loading", () => {
     const item = makeItem({ id: "a1" });
     render(<FilesView mode="photos" initialItems={[item]} />);

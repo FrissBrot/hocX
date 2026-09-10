@@ -1,5 +1,6 @@
 "use client";
 
+import { PhotoAlbums } from "./photo-albums";
 import type { Route } from "next";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -25,12 +26,7 @@ type SourceFilter = "all" | FileOverviewSource;
 type SortKey = "created_at" | "original_name" | "file_size_bytes";
 
 const SOURCE_OPTIONS: Record<Mode, { value: SourceFilter; label: string }[]> = {
-  photos: [
-    { value: "all", label: "Alle Quellen" },
-    { value: "protocol_image", label: "Protokolle" },
-    { value: "submission_upload", label: "Abgaben" },
-    { value: "gallery_upload", label: "Galerie" },
-  ],
+  photos: [],
   files: [
     { value: "all", label: "Alle Quellen" },
     { value: "protocol_image", label: "Protokolle" },
@@ -56,9 +52,12 @@ const SOURCE_BADGE_VARIANT: Record<FileOverviewSource, BadgeVariant> = {
 type Props = {
   mode: Mode;
   initialItems: FileOverviewItem[];
+  albumId?: string;
+  onSelectPhoto?: (item: FileOverviewItem) => void;
 };
 
-export function FilesView({ mode, initialItems }: Props) {
+export function FilesView({ mode, initialItems, albumId, onSelectPhoto }: Props) {
+  const [photoTab, setPhotoTab] = useState<"all" | "albums">("all");
   const router = useRouter();
   const showToast = useToast();
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
@@ -85,8 +84,9 @@ export function FilesView({ mode, initialItems }: Props) {
     if (sourceFilter !== "all") params.set("source", sourceFilter);
     if (search.trim()) params.set("search", search.trim());
     tagFilter.forEach((tag) => params.append("tags", tag));
-    params.set("sort_by", sortKey);
-    params.set("sort_dir", sortDir);
+    if (albumId) params.set("album_id", albumId);
+    params.set("sort_by", mode === "photos" ? "created_at" : sortKey);
+    params.set("sort_dir", mode === "photos" ? "desc" : sortDir);
     return `/api/files?${params.toString()}`;
   }
 
@@ -96,7 +96,7 @@ export function FilesView({ mode, initialItems }: Props) {
   useEffect(() => {
     if (!didMountRef.current) {
       didMountRef.current = true;
-      return;
+      if (!albumId && !onSelectPhoto) return;
     }
     const requestId = ++requestIdRef.current;
     setIsReloading(true);
@@ -106,13 +106,15 @@ export function FilesView({ mode, initialItems }: Props) {
         if (requestIdRef.current !== requestId) return;
         setItems(next ?? []);
         setHasMore((next ?? []).length === PAGE_SIZE);
+      } catch {
+        if (requestIdRef.current === requestId) showToast("Fotos oder Dateien konnten nicht geladen werden.", "error");
       } finally {
         if (requestIdRef.current === requestId) setIsReloading(false);
       }
     }, 300);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourceFilter, search, tagFilter, sortKey, sortDir]);
+  }, [sourceFilter, search, tagFilter, sortKey, sortDir, albumId]);
 
   useEffect(() => {
     browserApiFetch<string[]>("/api/files/tags")
@@ -121,9 +123,11 @@ export function FilesView({ mode, initialItems }: Props) {
   }, []);
 
   async function loadMore() {
+    const requestId = requestIdRef.current;
     setIsLoadingMore(true);
     try {
       const next = await browserApiFetch<FileOverviewItem[]>(buildUrl(items.length));
+      if (requestId !== requestIdRef.current) return;
       setItems((current) => [...current, ...(next ?? [])]);
       setHasMore((next ?? []).length === PAGE_SIZE);
     } finally {
@@ -132,7 +136,7 @@ export function FilesView({ mode, initialItems }: Props) {
   }
 
   const loadMoreSentinelRef = useInfiniteScroll({
-    hasMore,
+    hasMore: hasMore && photoTab === "all",
     isLoading: isLoadingMore || isReloading,
     onLoadMore: () => void loadMore(),
   });
@@ -145,7 +149,14 @@ export function FilesView({ mode, initialItems }: Props) {
 
   function handleUploaded(uploaded: FileOverviewItem[], errors: string[]) {
     if (uploaded.length > 0) {
-      setItems((current) => [...uploaded, ...current]);
+      if (albumId) {
+        void browserApiFetch(`/api/files/albums/${albumId}/items`, { method: "POST", body: JSON.stringify({ file_ids: uploaded.map((item) => item.id) }) })
+          .then(() => browserApiFetch<FileOverviewItem[]>(buildUrl(0)))
+          .then((next) => { setItems(next ?? []); setHasMore((next ?? []).length === PAGE_SIZE); })
+          .catch(() => showToast("Bilder hochgeladen, aber Zuordnung zum Album fehlgeschlagen.", "error"));
+      } else {
+        void browserApiFetch<FileOverviewItem[]>(buildUrl(0)).then((next) => { setItems(next ?? []); setHasMore((next ?? []).length === PAGE_SIZE); });
+      }
       setTagSuggestions((current) =>
         Array.from(new Set([...current, ...uploaded.flatMap((item) => item.tags)])).sort((a, b) => a.localeCompare(b))
       );
@@ -158,7 +169,7 @@ export function FilesView({ mode, initialItems }: Props) {
 
   return (
     <div className="grid">
-      <div className="page-header">
+      {!albumId && !onSelectPhoto && <div className="page-header">
         <div>
           <h1 className="page-title">{mode === "photos" ? "Fotos" : "Dateien"}</h1>
           <p className="muted">
@@ -174,18 +185,21 @@ export function FilesView({ mode, initialItems }: Props) {
             </button>
           </div>
         )}
-      </div>
+      </div>}
 
+      {mode === "photos" && !albumId && !onSelectPhoto && <FilterTabs options={[{ value: "all", label: "Alle Fotos" }, { value: "albums", label: "Alben" }]} value={photoTab} onChange={setPhotoTab} />}
+      {photoTab === "albums" ? <PhotoAlbums /> : <>
+      {albumId && <button type="button" className="button-inline" onClick={() => setUploadModalOpen(true)}>+ Bilder hochladen</button>}
       <div className="list-filter-row">
-        <FilterTabs
+        {mode === "files" && <FilterTabs
           options={SOURCE_OPTIONS[mode]}
           value={sourceFilter}
           onChange={(value) => setSourceFilter(value as SourceFilter)}
-        />
+        />}
         <div className="list-filter-search">
-          <SearchInput value={search} onChange={setSearch} placeholder="Dateien durchsuchen" />
+          <SearchInput value={search} onChange={setSearch} placeholder={mode === "photos" ? "Fotos durchsuchen" : "Dateien durchsuchen"} />
         </div>
-        <select
+        {mode === "files" && <select
           className="files-sort-select"
           value={`${sortKey}:${sortDir}`}
           onChange={(event) => {
@@ -200,7 +214,7 @@ export function FilesView({ mode, initialItems }: Props) {
           <option value="original_name:desc">Name (Z-A)</option>
           <option value="file_size_bytes:desc">Grösse (gross-klein)</option>
           <option value="file_size_bytes:asc">Grösse (klein-gross)</option>
-        </select>
+        </select>}
       </div>
 
       <div className="files-tag-filter">
@@ -218,6 +232,8 @@ export function FilesView({ mode, initialItems }: Props) {
       ) : (
         <div className={mode === "photos" ? "files-grid files-grid-photos" : "files-grid"}>
           {items.map((item) => (
+            <div key={item.id}>
+            {onSelectPhoto && <button type="button" className="button-inline" onClick={() => onSelectPhoto(item)}>Zum Album hinzufügen</button>}
             <FileCard
               key={item.id}
               item={item}
@@ -225,6 +241,7 @@ export function FilesView({ mode, initialItems }: Props) {
               onOpenDetail={() => setDetailItem(item)}
               onTagClick={(tag) => setTagFilter((current) => (current.includes(tag) ? current : [...current, tag]))}
             />
+            </div>
           ))}
         </div>
       )}
@@ -240,6 +257,8 @@ export function FilesView({ mode, initialItems }: Props) {
           )}
         </div>
       )}
+
+      </>}
 
       {detailItem && (
         <FileDetailModal

@@ -61,3 +61,16 @@ class StoredFileMetadata(BaseModel):
     exif_taken_at: datetime | None
     exif_camera: str | None
     uploaded_by_name: str | None
+
+
+class PhotoAlbumCreate(BaseModel):
+    name: str
+
+
+class PhotoAlbumRead(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
+class PhotoAlbumItemsUpdate(BaseModel):
+    file_ids: list[uuid.UUID]

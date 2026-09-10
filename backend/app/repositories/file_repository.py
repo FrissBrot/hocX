@@ -229,6 +229,7 @@ class StoredFileRepository:
         tags: list[str] | None = None,
         sort_by: str = "created_at",
         sort_dir: str = "desc",
+        file_ids: list[uuid.UUID] | None = None,
     ) -> list[Row]:
         """Every "Dateien"/"Fotos" the tenant has produced by uploading something - protocol
         images, the raw .docx/.pdf a word-import was read from, abgabebox submission uploads,
@@ -244,6 +245,8 @@ class StoredFileRepository:
         union_query = union_all(*selected).subquery("files_overview")
 
         query = select(union_query).where(union_query.c.scan_status != "infected")
+        if file_ids is not None:
+            query = query.where(union_query.c.public_id.in_(file_ids))
         if only_images:
             query = query.where(union_query.c.mime_type.like("image/%"))
         if exclude_images:

@@ -386,6 +386,7 @@ class FileService:
         tags: list[str] | None = None,
         sort_by: str = "created_at",
         sort_dir: str = "desc",
+        file_ids: list[uuid.UUID] | None = None,
     ) -> list[FileOverviewItem]:
         rows = self.stored_file_repository.list_tenant_files(
             db,
@@ -399,6 +400,7 @@ class FileService:
             tags=tags,
             sort_by=sort_by,
             sort_dir=sort_dir,
+            file_ids=file_ids,
         )
         items: list[FileOverviewItem] = []
         for row in rows:
