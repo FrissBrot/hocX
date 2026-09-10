@@ -61,8 +61,8 @@ from app.services.list_service import ListService
 from app.services.protocol_service import ProtocolService
 from app.services.submission_service import SubmissionService
 
-DEMO_TENANT_NAME = "Demo Pfadi Rueeblihausen"
-DEMO_TENANT_SLUG = "demo"
+DEMO_TENANT_NAME = "Jubla Sonnenberg"
+DEMO_TENANT_SLUG = "jubla"
 DEMO_PASSWORD = "ChangeMe123!"
 SEED_ASSETS_DIR = Path(__file__).resolve().parents[1] / "sql" / "seed_assets"
 
@@ -279,7 +279,7 @@ def create_events(db, tenant: Tenant) -> list[Event]:
     specs = [
         (today - timedelta(days=180), None, "Gruppenstunde: Feuer machen", EVENT_CATEGORY_GROUP_SESSION),
         (today - timedelta(days=166), None, "Gruppenstunde: Knoten und Seile", EVENT_CATEGORY_GROUP_SESSION),
-        (today - timedelta(days=90), today - timedelta(days=83), "Sommerlager Rueeblihausen", EVENT_CATEGORY_CAMP),
+        (today - timedelta(days=90), today - timedelta(days=83), "Sommerlager Sonnenberg", EVENT_CATEGORY_CAMP),
         (today - timedelta(days=42), None, "Gruppenstunde: Nachlager-Auswertung", EVENT_CATEGORY_GROUP_SESSION),
         (today - timedelta(days=14), None, "Gruppenstunde: Spielabend", EVENT_CATEGORY_GROUP_SESSION),
         (today + timedelta(days=7), None, "Gruppenstunde: Planung Herbstausflug", EVENT_CATEGORY_GROUP_SESSION),
