@@ -442,7 +442,10 @@ def get_stored_file_content(
         media_type=stored_file.mime_type,
         filename=stored_file.original_name,
         content_disposition_type="inline" if is_inline_safe else "attachment",
-        headers={"X-Content-Type-Options": "nosniff"},
+        # A stored file's bytes never change after upload (a re-upload creates a new id), so the
+        # browser cache can keep this for a long time - saves refetching originals opened again
+        # from the Fotos viewer/lightbox within the same session.
+        headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=604800, immutable"},
     )
 
 
@@ -501,7 +504,9 @@ def get_stored_file_thumbnail(
     return FileResponse(
         path=thumbnail_path,
         media_type="image/jpeg",
-        headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=86400"},
+        # Same immutability as get_stored_file_content above - once generated, a thumbnail never
+        # changes for a given stored_file id, so it's safe to cache far longer than a day.
+        headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=604800, immutable"},
     )
 
 

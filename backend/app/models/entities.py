@@ -890,6 +890,14 @@ class StoredFile(Base, TimestampMixin):
     # yet" since both leave that column NULL.
     face_analyzed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     thumbnail_path: Mapped[str | None] = mapped_column(Text)
+    # Original pixel dimensions, captured alongside thumbnail generation (see
+    # _generate_thumbnail_bytes/ensure_thumbnail in file_service.py) so the Fotos gallery's
+    # masonry grid can reserve each tile's correct aspect-ratio box before the image itself
+    # has loaded, instead of the layout jumping as each thumbnail comes in. None for
+    # non-images, files PIL couldn't decode, and files uploaded before this column existed
+    # whose thumbnail was never regenerated since.
+    width: Mapped[int | None] = mapped_column(Integer)
+    height: Mapped[int | None] = mapped_column(Integer)
     scan_status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'clean'"))
     # User-assigned tags for the "Dateien" overview page's filter/editor - separate from the
     # auto-derived "origin tag" (which protocol/word-import/submission this file came from,

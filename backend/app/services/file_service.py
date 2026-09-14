@@ -214,19 +214,24 @@ def _compute_perceptual_hash(content: bytes, mime: str) -> str | None:
         return None
 
 
-def _generate_thumbnail_bytes(content: bytes) -> bytes | None:
-    """Downscaled JPEG preview for the "Dateien" grid. Returns None for content PIL can't
-    decode (e.g. a truncated file that still passed the magic-byte check) - callers fall
-    back to serving/linking the original in that case."""
+def _generate_thumbnail_bytes(content: bytes) -> tuple[bytes, int, int] | None:
+    """Downscaled JPEG preview for the "Dateien" grid, plus the original's (width, height) -
+    read here for free since exif_transpose() already decodes the full image, sparing
+    callers a second PIL decode just to learn the dimensions (see StoredFile.width/height).
+    Dimensions are taken post-transpose so they match what's actually rendered (a portrait
+    phone photo with a rotation EXIF tag reports portrait, not its sensor's landscape byte
+    layout). Returns None for content PIL can't decode (e.g. a truncated file that still
+    passed the magic-byte check) - callers fall back to serving/linking the original then."""
     try:
         with Image.open(io.BytesIO(content)) as image:
             image = ImageOps.exif_transpose(image)  # respect camera rotation metadata
+            width, height = image.size
             image.thumbnail((THUMBNAIL_MAX_DIMENSION, THUMBNAIL_MAX_DIMENSION))
             if image.mode not in ("RGB", "L"):
                 image = image.convert("RGB")
             buffer = io.BytesIO()
             image.save(buffer, format="JPEG", quality=THUMBNAIL_JPEG_QUALITY)
-            return buffer.getvalue()
+            return buffer.getvalue(), width, height
     except Exception:
         return None
 
@@ -352,14 +357,17 @@ class FileService:
         original_path = _safe_storage_path(storage_root, stored_file.storage_path)
         if not original_path.exists():
             return None
-        thumbnail_bytes = _generate_thumbnail_bytes(original_path.read_bytes())
-        if thumbnail_bytes is None:
+        generated = _generate_thumbnail_bytes(original_path.read_bytes())
+        if generated is None:
             return None
+        thumbnail_bytes, width, height = generated
 
         Path(thumbnail_root).mkdir(parents=True, exist_ok=True)
         thumbnail_path = Path(thumbnail_root).resolve() / f"{stored_file.id}.jpg"
         thumbnail_path.write_bytes(thumbnail_bytes)
         stored_file.thumbnail_path = thumbnail_path.name
+        stored_file.width = width
+        stored_file.height = height
         db.add(stored_file)
         db.commit()
         return thumbnail_path
@@ -510,6 +518,8 @@ class FileService:
             exposure_score=row.exposure_score,
             face_quality_score=row.face_quality_score,
             face_analyzed_at=row.face_analyzed_at,
+            width=row.width,
+            height=row.height,
             group_date=row.group_date,
             context_label=row.context_label,
         )
@@ -860,13 +870,16 @@ class FileService:
 
             # Thumbnail is keyed by stored_file.id (see ensure_thumbnail), so it's generated after
             # the insert/flush above instead of before it.
-            thumbnail_bytes = _generate_thumbnail_bytes(content)
-            if thumbnail_bytes is not None:
+            generated_thumbnail = _generate_thumbnail_bytes(content)
+            if generated_thumbnail is not None:
+                thumbnail_bytes, width, height = generated_thumbnail
                 thumbnail_root = Path(settings.thumbnail_root)
                 thumbnail_root.mkdir(parents=True, exist_ok=True)
                 thumbnail_target_path = thumbnail_root.resolve() / f"{stored_file.id}.jpg"
                 thumbnail_target_path.write_bytes(thumbnail_bytes)
                 stored_file.thumbnail_path = thumbnail_target_path.name
+                stored_file.width = width
+                stored_file.height = height
 
             protocol_image = ProtocolImage(
                 protocol_element_block_id=protocol_element_block.id,
@@ -976,13 +989,16 @@ class FileService:
             )
             stored_file = self.stored_file_repository.create(db, stored_file)
 
-            thumbnail_bytes = _generate_thumbnail_bytes(content)
-            if thumbnail_bytes is not None:
+            generated_thumbnail = _generate_thumbnail_bytes(content)
+            if generated_thumbnail is not None:
+                thumbnail_bytes, width, height = generated_thumbnail
                 thumbnail_root = Path(settings.thumbnail_root)
                 thumbnail_root.mkdir(parents=True, exist_ok=True)
                 thumbnail_target_path = thumbnail_root.resolve() / f"{stored_file.id}.jpg"
                 thumbnail_target_path.write_bytes(thumbnail_bytes)
                 stored_file.thumbnail_path = thumbnail_target_path.name
+                stored_file.width = width
+                stored_file.height = height
 
             db.add(
                 GalleryImage(
@@ -1022,6 +1038,8 @@ class FileService:
                     exposure_score=stored_file.exposure_score,
                     face_quality_score=stored_file.face_quality_score,
                     face_analyzed_at=stored_file.face_analyzed_at,
+                    width=stored_file.width,
+                    height=stored_file.height,
                     group_date=upload_event.event_date if upload_event is not None else stored_file.created_at.date(),
                     context_label=upload_event.title if upload_event is not None else None,
                 )

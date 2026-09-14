@@ -54,6 +54,12 @@ class FileOverviewItem(BaseModel):
     # the only reliable "analyzed" marker, since face_quality_score alone is also None when
     # analysis simply hasn't run yet.
     face_analyzed_at: datetime | None = None
+    # Original pixel dimensions (see StoredFile.width/height) - lets the Fotos gallery's
+    # masonry grid reserve each tile's correct aspect-ratio box before the thumbnail has
+    # loaded. None for non-images and for images uploaded before this column existed whose
+    # thumbnail hasn't been regenerated since.
+    width: int | None = None
+    height: int | None = None
     # The photo's logical date for the Fotos page's date-group headers - protocol/word-
     # import date, the Termin's event_date for a gallery upload, else the upload date.
     group_date: date | None = None
