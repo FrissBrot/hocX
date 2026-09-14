@@ -25,9 +25,16 @@ type Tab = "all" | "albums" | "similar";
 type Props = {
   albumId?: string;
   onSelectPhoto?: (item: FileOverviewItem) => void;
+  // Server-fetched first page (see app/photos/page.tsx), matching this component's own
+  // default filters/sort (only_images, group_date desc, no search/tags/album). Lets the
+  // initial paint - and the <img> requests for those thumbnails - happen with the server-
+  // rendered HTML instead of waiting for the client to mount and fire its own request.
+  // Never passed by the embedded (albumId/onSelectPhoto) call sites, which always fetch
+  // client-side.
+  initialItems?: FileOverviewItem[];
 };
 
-export function PhotosView({ albumId, onSelectPhoto }: Props) {
+export function PhotosView({ albumId, onSelectPhoto, initialItems }: Props) {
   const embedded = Boolean(albumId) || Boolean(onSelectPhoto);
   const showToast = useToast();
 
@@ -38,14 +45,15 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
   const [sortKey, setSortKey] = useState<SortKey>("group_date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const [items, setItems] = useState<FileOverviewItem[]>([]);
-  const [hasMore, setHasMore] = useState(false);
+  const [items, setItems] = useState<FileOverviewItem[]>(initialItems ?? []);
+  const [hasMore, setHasMore] = useState((initialItems ?? []).length === PAGE_SIZE);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [isReloading, setIsReloading] = useState(true);
+  const [isReloading, setIsReloading] = useState(initialItems === undefined);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [analysisProgress, setAnalysisProgress] = useState<ProgressData | null>(null);
   const requestIdRef = useRef(0);
+  const didMountRef = useRef(false);
 
   function buildUrl(skip: number) {
     const params = new URLSearchParams();
@@ -61,6 +69,13 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
   }
 
   useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      // The server already fetched exactly this default-filters page (see page.tsx) - skip
+      // the redundant refetch on mount. Embedded usages never get initialItems, so they
+      // always fall through and fetch client-side as before.
+      if (initialItems !== undefined) return;
+    }
     const requestId = ++requestIdRef.current;
     setIsReloading(true);
     const timer = setTimeout(async () => {
@@ -176,7 +191,7 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
   const grouped = sortKey === "group_date";
 
   return (
-    <div className="grid">
+    <div className="grid grid-tight">
       {!embedded && (
         <>
           <div className="page-header">
@@ -196,44 +211,22 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
               </button>
             </div>
           </div>
-          <FilterTabs
-            options={[
-              { value: "all", label: "Alle Fotos" },
-              { value: "albums", label: "Alben" },
-              { value: "similar", label: "Ähnliche" },
-            ]}
-            value={tab}
-            onChange={setTab}
-          />
-        </>
-      )}
-      {embedded && albumId && (
-        <button type="button" className="button-inline" onClick={() => setUploadModalOpen(true)}>+ Bilder hochladen</button>
-      )}
-
-      {tab === "albums" && !embedded ? (
-        <PhotoAlbums />
-      ) : tab === "similar" && !embedded ? (
-        <>
-          <div className="list-filter-row">
-            <div className="list-filter-search">
-              <SearchInput value={search} onChange={setSearch} placeholder="Fotos durchsuchen" />
-            </div>
-          </div>
-          <div className="files-tag-filter">
-            <span className="files-tag-filter-label">Nach Tags filtern</span>
-            <TagInput value={tagFilter.join(",")} onChange={(value) => setTagFilter(value ? value.split(",").map((t) => t.trim()).filter(Boolean) : [])} suggestions={tagSuggestions} placeholder="Tag wählen oder eingeben…" />
-          </div>
-          <PhotoSimilarSeries search={search} tagFilter={tagFilter} />
-        </>
-      ) : (
-        <>
-          {!embedded && <PhotoAnalysisProgress onUpdate={setAnalysisProgress} />}
-          <div className="list-filter-row">
-            <div className="list-filter-search">
-              <SearchInput value={search} onChange={setSearch} placeholder="Fotos durchsuchen" />
-            </div>
-            {!onSelectPhoto && (
+          <div className="list-filter-row list-filter-row-compact">
+            <FilterTabs
+              options={[
+                { value: "all", label: "Alle Fotos" },
+                { value: "albums", label: "Alben" },
+                { value: "similar", label: "Ähnliche" },
+              ]}
+              value={tab}
+              onChange={setTab}
+            />
+            {tab !== "albums" && (
+              <div className="list-filter-search">
+                <SearchInput value={search} onChange={setSearch} placeholder="Fotos durchsuchen" />
+              </div>
+            )}
+            {tab === "all" && !onSelectPhoto && (
               <select className="files-sort-select" value={`${sortKey}:${sortDir}`} onChange={(event) => {
                 const [key, dir] = event.target.value.split(":") as [SortKey, "asc" | "desc"];
                 setSortKey(key);
@@ -246,11 +239,48 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
                 <option value="face_quality_score:desc">Gesichtsqualität (am besten zuerst)</option>
               </select>
             )}
+            {tab !== "albums" && (
+              <div className="list-filter-tags">
+                <TagInput value={tagFilter.join(",")} onChange={(value) => setTagFilter(value ? value.split(",").map((t) => t.trim()).filter(Boolean) : [])} suggestions={tagSuggestions} placeholder="Tag wählen oder eingeben…" />
+              </div>
+            )}
           </div>
-          <div className="files-tag-filter">
-            <span className="files-tag-filter-label">Nach Tags filtern</span>
-            <TagInput value={tagFilter.join(",")} onChange={(value) => setTagFilter(value ? value.split(",").map((t) => t.trim()).filter(Boolean) : [])} suggestions={tagSuggestions} placeholder="Tag wählen oder eingeben…" />
-          </div>
+        </>
+      )}
+      {embedded && albumId && (
+        <button type="button" className="button-inline" onClick={() => setUploadModalOpen(true)}>+ Bilder hochladen</button>
+      )}
+
+      {tab === "albums" && !embedded ? (
+        <PhotoAlbums />
+      ) : tab === "similar" && !embedded ? (
+        <PhotoSimilarSeries search={search} tagFilter={tagFilter} />
+      ) : (
+        <>
+          {!embedded && <PhotoAnalysisProgress onUpdate={setAnalysisProgress} />}
+          {embedded && (
+            <div className="list-filter-row list-filter-row-compact">
+              <div className="list-filter-search">
+                <SearchInput value={search} onChange={setSearch} placeholder="Fotos durchsuchen" />
+              </div>
+              {!onSelectPhoto && (
+                <select className="files-sort-select" value={`${sortKey}:${sortDir}`} onChange={(event) => {
+                  const [key, dir] = event.target.value.split(":") as [SortKey, "asc" | "desc"];
+                  setSortKey(key);
+                  setSortDir(dir);
+                }}>
+                  <option value="group_date:desc">Neueste zuerst</option>
+                  <option value="group_date:asc">Älteste zuerst</option>
+                  <option value="sharpness_score:desc">Schärfe (am schärfsten zuerst)</option>
+                  <option value="exposure_score:desc">Belichtung (am besten zuerst)</option>
+                  <option value="face_quality_score:desc">Gesichtsqualität (am besten zuerst)</option>
+                </select>
+              )}
+              <div className="list-filter-tags">
+                <TagInput value={tagFilter.join(",")} onChange={(value) => setTagFilter(value ? value.split(",").map((t) => t.trim()).filter(Boolean) : [])} suggestions={tagSuggestions} placeholder="Tag wählen oder eingeben…" />
+              </div>
+            </div>
+          )}
 
           {!onSelectPhoto && selectedIds.size > 0 && (
             <PhotoBulkBar
@@ -272,7 +302,9 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
                     alt={item.original_name}
                     src={item.thumbnail_url ?? item.content_url}
                     loading="lazy"
-                    className="photo-tile-img"
+                    decoding="async"
+                    className={item.width && item.height ? "photo-tile-img photo-tile-img-fitted" : "photo-tile-img"}
+                    style={item.width && item.height ? { aspectRatio: item.width / item.height } : undefined}
                   />
                 </div>
               ))}

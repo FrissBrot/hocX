@@ -62,6 +62,8 @@ function makeItem(overrides: Partial<FileOverviewItem> = {}): FileOverviewItem {
     exposure_score: null,
     face_quality_score: null,
     face_analyzed_at: null,
+    width: null,
+    height: null,
     group_date: "2026-08-01",
     context_label: "1. Hock",
     albums: [],

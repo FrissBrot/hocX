@@ -179,6 +179,11 @@ export type FileOverviewItem = {
   // Set once the worker has processed this file, regardless of whether a face was found -
   // face_quality_score alone can't express "analyzed, no face" (both are null then).
   face_analyzed_at: string | null;
+  // Original pixel dimensions - lets the Fotos gallery reserve each tile's correct
+  // aspect-ratio box before the thumbnail has loaded. Null for non-images and for images
+  // uploaded before this field existed whose thumbnail hasn't been regenerated since.
+  width: number | null;
+  height: number | null;
   // The photo's logical date for the Fotos page's date-group headers.
   group_date: string | null;
   // Short context label for that date group's header (protocol/word-import/submission/
