@@ -118,7 +118,7 @@ export function FilesView({ initialItems }: Props) {
   }
 
   return (
-    <div className="grid">
+    <div className="grid grid-tight">
       <div className="page-header">
         <div>
           <h1 className="page-title">Dateien</h1>
@@ -131,7 +131,7 @@ export function FilesView({ initialItems }: Props) {
 
       <FileStatCards />
 
-      <div className="list-filter-row">
+      <div className="list-filter-row list-filter-row-compact">
         <FilterTabs options={SOURCE_OPTIONS} value={sourceFilter} onChange={(value) => setSourceFilter(value as SourceFilter)} />
         <div className="list-filter-search">
           <SearchInput value={search} onChange={setSearch} placeholder="Dateien durchsuchen" />
@@ -152,17 +152,15 @@ export function FilesView({ initialItems }: Props) {
           <option value="file_size_bytes:desc">Grösse (gross-klein)</option>
           <option value="file_size_bytes:asc">Grösse (klein-gross)</option>
         </select>
-        <span className="muted">{items.length} {items.length === 1 ? "Datei" : "Dateien"}</span>
-      </div>
-
-      <div className="files-tag-filter">
-        <span className="files-tag-filter-label">Nach Tags filtern</span>
-        <TagInput
-          value={tagFilter.join(",")}
-          onChange={(value) => setTagFilter(value ? value.split(",").map((t) => t.trim()).filter(Boolean) : [])}
-          suggestions={tagSuggestions}
-          placeholder="Tag wählen oder eingeben…"
-        />
+        <div className="list-filter-tags">
+          <TagInput
+            value={tagFilter.join(",")}
+            onChange={(value) => setTagFilter(value ? value.split(",").map((t) => t.trim()).filter(Boolean) : [])}
+            suggestions={tagSuggestions}
+            placeholder="Tag wählen oder eingeben…"
+          />
+        </div>
+        <span className="muted list-filter-count">{items.length} {items.length === 1 ? "Datei" : "Dateien"}</span>
       </div>
 
       <FilesTable items={items} onOpenDetail={setDetailItem} onNavigate={(href) => router.push(href as Route)} />

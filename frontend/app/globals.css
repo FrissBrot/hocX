@@ -6170,6 +6170,48 @@ input[type="radio"] {
 
 .files-sort-select {
   min-width: 180px;
+  max-width: 220px;
+}
+
+/* A <select> has no intrinsic width of its own in a flex row (see .files-sort-select
+   above needing its own max-width) - without a cap here it stretches to fill the row,
+   forcing the next flex item (tags/count) onto its own line even though there's plenty
+   of horizontal room, which is what pushed this whole toolbar into one control per row
+   instead of the mockup's single compact filter bar. */
+.list-filter-row {
+  row-gap: 10px;
+}
+
+/* .list-filter-row's own justify-content:space-between spreads a handful of controls
+   across the full row width (fine for its original two-item use elsewhere) - the Fotos/
+   Dateien toolbar instead wants tabs/search/sort/tags clustered together on the left,
+   like the mockup's compact single-bar toolbar, so this modifier overrides just that. */
+.list-filter-row-compact {
+  justify-content: flex-start;
+  gap: 12px;
+}
+
+.list-filter-count {
+  margin-left: auto;
+}
+
+.list-filter-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 1 260px;
+  min-width: 200px;
+}
+
+.list-filter-tags .tag-input-wrap {
+  flex: 1;
+}
+
+/* Tighter page-level rhythm for Fotos/Dateien specifically - the shared .grid utility's
+   18px gap (used app-wide) left a lot of empty space between the header/toolbar/progress
+   bar/gallery sections compared to the mockup's denser layout. */
+.grid-tight {
+  gap: 10px;
 }
 
 .files-tag-filter {
@@ -6182,6 +6224,7 @@ input[type="radio"] {
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--muted);
+  white-space: nowrap;
 }
 
 /* Gallery upload modal (components/files/files-view.tsx GalleryUploadModal) */
