@@ -14,6 +14,7 @@ export function TagInput({
   placeholder = "Tag hinzufügen…",
   multi = true,
   readOnly = false,
+  alwaysShowPlaceholder = false,
   tagConfig,
   onTagColorChange,
   onTagRename,
@@ -24,6 +25,9 @@ export function TagInput({
   placeholder?: string;
   multi?: boolean;
   readOnly?: boolean;
+  /** Keeps the placeholder visible even once tags exist, so the trailing input still reads
+   * as an "add tag" affordance (e.g. a compact "+ Tag" pill) instead of an empty box. */
+  alwaysShowPlaceholder?: boolean;
   tagConfig?: TagConfig;
   onTagColorChange?: (tag: string, color: string) => Promise<void>;
   onTagRename?: (oldTag: string, newTag: string) => Promise<void>;
@@ -152,7 +156,7 @@ export function TagInput({
             onChange={(e) => { setInputVal(e.target.value); setOpen(true); setEditingTag(null); }}
             onFocus={() => setOpen(true)}
             onKeyDown={handleKeyDown}
-            placeholder={tags.length === 0 ? placeholder : ""}
+            placeholder={alwaysShowPlaceholder || tags.length === 0 ? placeholder : ""}
           />
         )}
       </div>

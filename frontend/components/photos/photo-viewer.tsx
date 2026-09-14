@@ -83,19 +83,24 @@ export function PhotoViewer({
   return createPortal(
     <div className="photo-viewer" role="dialog" aria-modal="true" aria-label={item.original_name}>
       <div className="photo-viewer-header">
-        <div>
-          <div className="photo-viewer-title">{item.original_name}</div>
-          <div className="photo-viewer-subtitle">
-            {item.group_date ? `${formatWeekdayDate(item.group_date)} · ` : ""}
-            {index + 1}/{items.length}
+        <div className="photo-viewer-header-left">
+          <button type="button" className="photo-viewer-close" aria-label="Schliessen" onClick={onClose}>
+            ✕
+          </button>
+          <div>
+            <div className="photo-viewer-title">{item.original_name}</div>
+            <div className="photo-viewer-subtitle">
+              {item.group_date ? `${formatWeekdayDate(item.group_date)} · ` : ""}
+              {index + 1}/{items.length}
+            </div>
           </div>
         </div>
         <div className="photo-viewer-actions">
-          <button type="button" className="pill" onClick={() => onToggleBest(item)}>
+          <button type="button" className="pill" onClick={onClose}>Galerie</button>
+          <button type="button" className="pill photo-viewer-pill-accent" onClick={() => onToggleBest(item)}>
             {item.is_best ? "★ Best-of" : "☆ Best-of"}
           </button>
-          <button type="button" className="pill" onClick={onClose}>Galerie</button>
-          <a href={fileUrl} target="_blank" rel="noreferrer" className="button-inline button-ghost">
+          <a href={fileUrl} target="_blank" rel="noreferrer" className="pill photo-viewer-pill-solid">
             Original öffnen
           </a>
         </div>
@@ -121,16 +126,19 @@ export function PhotoViewer({
             <div className="photo-viewer-section-title">Analyse</div>
             <PhotoMeter
               label="Schärfe"
+              tone="sharpness"
               value={item.sharpness_score !== null ? item.sharpness_score.toFixed(1) : null}
               fraction={item.sharpness_score !== null ? Math.min(1, item.sharpness_score / 100) : null}
             />
             <PhotoMeter
               label="Belichtung"
+              tone="exposure"
               value={item.exposure_score !== null ? `${Math.round(item.exposure_score * 100)}%` : null}
               fraction={item.exposure_score}
             />
             <PhotoMeter
               label="Gesichtsqualität"
+              tone="face"
               value={
                 item.face_analyzed_at === null
                   ? null
@@ -184,7 +192,7 @@ export function PhotoViewer({
             <div className="photo-viewer-section-title">
               Tags {saving ? <span className="muted">(speichert…)</span> : null}
             </div>
-            <TagInput value={tagsValue} onChange={handleTagsChange} placeholder="Tag hinzufügen…" />
+            <TagInput value={tagsValue} onChange={handleTagsChange} placeholder="+ Tag" alwaysShowPlaceholder />
           </div>
         </div>
       </div>
@@ -193,7 +201,17 @@ export function PhotoViewer({
   );
 }
 
-function PhotoMeter({ label, value, fraction }: { label: string; value: string | null; fraction: number | null }) {
+function PhotoMeter({
+  label,
+  value,
+  fraction,
+  tone,
+}: {
+  label: string;
+  value: string | null;
+  fraction: number | null;
+  tone: "sharpness" | "exposure" | "face";
+}) {
   return (
     <div className="photo-meter-row">
       <div className="photo-meter-label-row">
@@ -201,7 +219,10 @@ function PhotoMeter({ label, value, fraction }: { label: string; value: string |
         <span className="photo-meter-value">{value ?? "Analyse ausstehend"}</span>
       </div>
       <div className="photo-meter-bar">
-        <div className="photo-meter-fill" style={{ width: `${fraction !== null ? Math.round(fraction * 100) : 0}%` }} />
+        <div
+          className={`photo-meter-fill photo-meter-fill-${tone}`}
+          style={{ width: `${fraction !== null ? Math.round(fraction * 100) : 0}%` }}
+        />
       </div>
     </div>
   );
