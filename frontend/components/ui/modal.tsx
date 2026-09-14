@@ -12,9 +12,10 @@ type ModalProps = {
   size?: "default" | "wide" | "fullscreen";
   headerActions?: ReactNode;
   hideCloseButton?: boolean;
+  className?: string;
 };
 
-export function Modal({ open, title, description, children, onClose, size = "default", headerActions, hideCloseButton = false }: ModalProps) {
+export function Modal({ open, title, description, children, onClose, size = "default", headerActions, hideCloseButton = false, className = "" }: ModalProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -47,7 +48,7 @@ export function Modal({ open, title, description, children, onClose, size = "def
 
   return createPortal(
     <div className="modal-backdrop" onClick={onClose} role="presentation">
-      <div className={`modal-shell modal-${size}`} onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-label={title}>
+      <div className={`modal-shell modal-${size} ${className}`} onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-label={title}>
         <div className="modal-header">
           <div>
             <h2>{title}</h2>

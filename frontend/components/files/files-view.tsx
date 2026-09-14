@@ -9,6 +9,7 @@ import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { LightboxImage } from "@/components/ui/lightbox-image";
 import { Modal } from "@/components/ui/modal";
+import { NavIcon } from "@/components/ui/nav-icons";
 import { SearchInput } from "@/components/ui/search-input";
 import { TagInput } from "@/components/ui/tag-input";
 import { useToast } from "@/contexts/toast-context";
@@ -147,10 +148,10 @@ export function FilesView({ mode, initialItems, albumId, onSelectPhoto }: Props)
     setTagSuggestions((current) => Array.from(new Set([...current, ...tags])).sort((a, b) => a.localeCompare(b)));
   }
 
-  function handleUploaded(uploaded: FileOverviewItem[], errors: string[]) {
+  function handleUploaded(uploaded: FileOverviewItem[], errors: string[], targetAlbumId = albumId) {
     if (uploaded.length > 0) {
-      if (albumId) {
-        void browserApiFetch(`/api/files/albums/${albumId}/items`, { method: "POST", body: JSON.stringify({ file_ids: uploaded.map((item) => item.id) }) })
+      if (targetAlbumId) {
+        void browserApiFetch(`/api/files/albums/${targetAlbumId}/items`, { method: "POST", body: JSON.stringify({ file_ids: uploaded.map((item) => item.id) }) })
           .then(() => browserApiFetch<FileOverviewItem[]>(buildUrl(0)))
           .then((next) => { setItems(next ?? []); setHasMore((next ?? []).length === PAGE_SIZE); })
           .catch(() => showToast("Bilder hochgeladen, aber Zuordnung zum Album fehlgeschlagen.", "error"));
@@ -272,6 +273,7 @@ export function FilesView({ mode, initialItems, albumId, onSelectPhoto }: Props)
 
       {uploadModalOpen && (
         <GalleryUploadModal
+          albumId={albumId}
           tagSuggestions={tagSuggestions}
           onClose={() => setUploadModalOpen(false)}
           onUploaded={handleUploaded}
@@ -282,13 +284,15 @@ export function FilesView({ mode, initialItems, albumId, onSelectPhoto }: Props)
 }
 
 function GalleryUploadModal({
+  albumId,
   tagSuggestions,
   onClose,
   onUploaded,
 }: {
+  albumId?: string;
   tagSuggestions: string[];
   onClose: () => void;
-  onUploaded: (items: FileOverviewItem[], errors: string[]) => void;
+  onUploaded: (items: FileOverviewItem[], errors: string[], albumId?: string) => void;
 }) {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [tagsValue, setTagsValue] = useState("");
@@ -296,9 +300,18 @@ function GalleryUploadModal({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [albums, setAlbums] = useState<{ id: string; name: string }[]>([]);
+  const [targetAlbumId, setTargetAlbumId] = useState(albumId ?? "");
+  useEffect(() => {
+    browserApiFetch<{ id: string; name: string }[]>("/api/files/albums")
+      .then((data) => setAlbums(data ?? []))
+      .catch(() => setError("Alben konnten nicht geladen werden."));
+  }, []);
 
   function addFiles(fileList: FileList | File[]) {
-    setSelectedFiles((current) => [...current, ...Array.from(fileList)]);
+    if (uploading) return;
+    const addedFiles = Array.from(fileList);
+    setSelectedFiles((current) => [...current, ...addedFiles]);
     setError(null);
   }
 
@@ -318,7 +331,7 @@ function GalleryUploadModal({
         method: "POST",
         body,
       });
-      onUploaded(result?.items ?? [], result?.errors ?? []);
+      onUploaded(result?.items ?? [], result?.errors ?? [], targetAlbumId || undefined);
       onClose();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Upload fehlgeschlagen");
@@ -331,11 +344,15 @@ function GalleryUploadModal({
     <Modal
       open
       title="Bilder hochladen"
-      description="Direkt in die Galerie hochladen - auch als ZIP-Archiv, dabei werden nur enthaltene Bilddateien übernommen. Jede Datei durchläuft die Virenprüfung."
-      onClose={onClose}
+      description="Die Bilder landen in der Galerie und werden beim Upload virengeprüft."
+      onClose={() => { if (!uploading) onClose(); }}
       size="wide"
+      className="gallery-upload-modal"
+      hideCloseButton
+      headerActions={<button type="button" className="gallery-upload-remove" aria-label="Schliessen" title="Schliessen" disabled={uploading} onClick={onClose}>×</button>}
     >
       <div className="gallery-upload">
+        <div className="gallery-upload-scroll">
         <div
           className={`gallery-upload-dropzone${isDragging ? " gallery-upload-dropzone-active" : ""}`}
           onDragOver={(event) => {
@@ -348,8 +365,16 @@ function GalleryUploadModal({
             setIsDragging(false);
             if (event.dataTransfer.files.length > 0) addFiles(event.dataTransfer.files);
           }}
-          onClick={() => inputRef.current?.click()}
+          onClick={() => { if (!uploading) inputRef.current?.click(); }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              if (!uploading) inputRef.current?.click();
+            }
+          }}
           role="button"
+          aria-label="Bilder oder ZIP-Dateien wählen"
+          aria-disabled={uploading}
           tabIndex={0}
         >
           <input
@@ -358,36 +383,55 @@ function GalleryUploadModal({
             multiple
             accept={GALLERY_UPLOAD_ACCEPT}
             hidden
+            disabled={uploading}
             onChange={(event) => {
               if (event.target.files) addFiles(event.target.files);
               event.target.value = "";
             }}
           />
-          <p>Bilder oder ZIP-Dateien hierher ziehen oder klicken zum Auswählen</p>
-          <p className="muted">JPEG, PNG, GIF, WebP, BMP, TIFF - oder ein ZIP-Archiv mit Bildern darin</p>
+          <span className="gallery-upload-image-icon" aria-hidden="true"><NavIcon name="photos" /></span>
+          <p>Bilder hierher ziehen oder Dateien wählen</p>
+          <p className="muted">JPG, PNG, GIF, WebP, BMP, TIFF · ZIP-Archive</p>
         </div>
 
+        <div className="gallery-upload-fields">
+          <label>Bezug<input value="Galerie" readOnly /></label>
+          <label>Album<select value={targetAlbumId} disabled={uploading || Boolean(albumId)} onChange={(event) => setTargetAlbumId(event.target.value)}>
+            <option value="">Kein Album</option>
+            {albumId && !albums.some((album) => album.id === albumId) && <option value={albumId}>Aktuelles Album</option>}
+            {albums.map((album) => <option key={album.id} value={album.id}>{album.name}</option>)}
+          </select></label>
+        </div>
+        <div className="gallery-upload-tags">
+          <span className="gallery-upload-label">Tags für alle Bilder</span>
+          <TagInput value={tagsValue} onChange={setTagsValue} suggestions={tagSuggestions} placeholder="Tag hinzufügen …" readOnly={uploading} />
+        </div>
+        <section className="gallery-upload-queue" aria-label="Warteschlange" aria-busy={uploading}>
+          <div className="gallery-upload-queue-heading"><span className="gallery-upload-label">Warteschlange</span><span>{selectedFiles.length} {selectedFiles.length === 1 ? "Datei gewählt" : "Dateien gewählt"}</span></div>
         {selectedFiles.length > 0 && (
           <ul className="gallery-upload-file-list">
             {selectedFiles.map((file, index) => (
               <li key={`${file.name}-${index}`}>
-                <span className="gallery-upload-file-name" title={file.name}>{file.name}</span>
-                <span className="muted">{formatFileSize(file.size)}</span>
-                <button type="button" className="button-ghost button-inline" onClick={() => removeFile(index)}>
-                  Entfernen
+                <UploadThumbnail file={file} />
+                <div className="gallery-upload-file-details">
+                  <div className="gallery-upload-file-heading"><span className="gallery-upload-file-name" title={file.name}>{file.name}</span><span className="muted">{formatFileSize(file.size)}</span></div>
+                  {uploading && <progress className="gallery-upload-progress" aria-label={`${file.name}: Upload und Virenprüfung laufen`} />}
+                  <span className="gallery-upload-file-status">{uploading ? "Upload und Virenprüfung laufen …" : "Bereit zum Hochladen"}</span>
+                </div>
+                <button type="button" className="gallery-upload-remove" title="Datei entfernen" aria-label={`${file.name} entfernen`} disabled={uploading} onClick={() => removeFile(index)}>
+                  ×
                 </button>
               </li>
             ))}
           </ul>
         )}
-
-        <div className="gallery-upload-tags">
-          <span className="file-detail-tags-label">Tags für diesen Upload</span>
-          <TagInput value={tagsValue} onChange={setTagsValue} suggestions={tagSuggestions} placeholder="Tag hinzufügen…" />
-        </div>
+        {selectedFiles.length === 0 && <p className="gallery-upload-empty">Keine Dateien gewählt</p>}
+        </section>
 
         {error && <p className="form-error-banner">{error}</p>}
-
+        </div>
+        <div className="gallery-upload-footer">
+        <span className="gallery-upload-summary" aria-live="polite">{selectedFiles.length} {selectedFiles.length === 1 ? "Datei" : "Dateien"} · {formatFileSize(selectedFiles.reduce((total, file) => total + file.size, 0))}</span>
         <div className="gallery-upload-actions">
           <button type="button" className="button-ghost" onClick={onClose} disabled={uploading}>
             Abbrechen
@@ -399,15 +443,27 @@ function GalleryUploadModal({
             disabled={uploading || selectedFiles.length === 0}
           >
             {uploading
-              ? "Lädt hoch…"
+              ? "Upload läuft …"
               : selectedFiles.length > 0
                 ? `${selectedFiles.length} ${selectedFiles.length === 1 ? "Bild" : "Bilder"} hochladen`
                 : "Hochladen"}
           </button>
         </div>
+        </div>
       </div>
     </Modal>
   );
+}
+
+function UploadThumbnail({ file }: { file: File }) {
+  const [url, setUrl] = useState<string>();
+  useEffect(() => {
+    if (!file.type.startsWith("image/")) return;
+    const preview = URL.createObjectURL(file);
+    setUrl(preview);
+    return () => URL.revokeObjectURL(preview);
+  }, [file]);
+  return <span className="gallery-upload-thumbnail">{url && <img src={url} alt="" onError={() => setUrl(undefined)} />}</span>;
 }
 
 function FileCard({
