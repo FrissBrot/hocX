@@ -11917,15 +11917,15 @@ input[type="radio"] {
 }
 
 .photo-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 12px;
+  columns: 180px;
+  column-gap: 6px;
 }
 
 .photo-tile {
   position: relative;
-  aspect-ratio: 1;
-  border-radius: var(--radius-lg);
+  break-inside: avoid;
+  margin-bottom: 6px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   background: var(--border);
 }
@@ -11933,18 +11933,16 @@ input[type="radio"] {
 .photo-tile-preview {
   display: block;
   width: 100%;
-  height: 100%;
   padding: 0;
   border: none;
-  background: none;
   cursor: zoom-in;
+  line-height: 0;
 }
 
 .photo-tile-img {
   display: block;
   width: 100%;
-  height: 100%;
-  object-fit: cover;
+  height: auto;
 }
 
 .photo-tile-selected {
@@ -11959,15 +11957,25 @@ input[type="radio"] {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
+  min-height: 0;
   padding: 0;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.9);
-  background: rgba(16, 24, 40, 0.28);
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  background: rgba(16, 24, 40, 0.22);
   backdrop-filter: blur(2px);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
   color: #fff;
   cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.photo-tile:hover .photo-tile-select,
+.photo-tile-select:focus-visible,
+.photo-tile-select-checked {
+  opacity: 1;
 }
 
 .photo-tile-select-checked {
@@ -11981,8 +11989,8 @@ input[type="radio"] {
   left: 8px;
   padding: 2px 9px;
   border-radius: 999px;
-  background: var(--success-bg);
-  color: var(--success-fg);
+  background: rgba(16, 24, 40, 0.82);
+  color: #fff;
   font-size: 0.72rem;
   font-weight: 700;
 }
