@@ -8,6 +8,7 @@ from sqlalchemy.engine import Row
 from sqlalchemy.orm import Session
 
 from app.models import (
+    Event,
     GalleryImage,
     Protocol,
     ProtocolElement,
@@ -99,7 +100,15 @@ class StoredFileRepository:
         come from" string (protocol+block, word-import document, submission assignment) that
         behaves as an extra, non-editable tag: filterable the same way as `tags` but always
         computed fresh from the live relation instead of stored, so it never goes stale if
-        e.g. a protocol number or assignment title is renamed later."""
+        e.g. a protocol number or assignment title is renamed later.
+
+        Each branch also labels `group_date` (the photo's logical date - protocol/word-
+        import date, the Termin's event_date for a gallery upload, else the upload
+        timestamp's date - used to group the Fotos page into date sections) and
+        `context_label` (a short human label for that date group's header: protocol title +
+        block title, word-import display name, submission assignment title, or event
+        title/None). Column position must stay identical across all four SELECTs - union_all
+        matches columns positionally, not by label."""
         tenant_filter = (StoredFile.tenant_id == tenant_id,) if tenant_id is not None else ()
         protocol_branch = (
             select(
@@ -114,6 +123,13 @@ class StoredFileRepository:
                 StoredFile.created_at.label("created_at"),
                 StoredFile.scan_status.label("scan_status"),
                 StoredFile.tags.label("tags"),
+                StoredFile.sharpness_score.label("sharpness_score"),
+                StoredFile.exposure_score.label("exposure_score"),
+                StoredFile.perceptual_hash.label("perceptual_hash"),
+                StoredFile.face_quality_score.label("face_quality_score"),
+                StoredFile.face_analyzed_at.label("face_analyzed_at"),
+                StoredFile.width.label("width"),
+                StoredFile.height.label("height"),
                 literal("protocol_image").label("source"),
                 Protocol.id.label("ref_id"),
                 Protocol.public_id.label("ref_public_id"),
@@ -131,6 +147,16 @@ class StoredFileRepository:
                         ProtocolElementBlock.title_snapshot,
                     ),
                 ).label("origin_tag"),
+                func.coalesce(Protocol.protocol_date, cast(StoredFile.created_at, Date)).label("group_date"),
+                func.concat(
+                    func.coalesce(Protocol.title, func.concat("Protokoll ", Protocol.protocol_number)),
+                    " · ",
+                    func.coalesce(
+                        ProtocolElementBlock.block_title_snapshot,
+                        ProtocolElementBlock.display_title_snapshot,
+                        ProtocolElementBlock.title_snapshot,
+                    ),
+                ).label("context_label"),
             )
             .select_from(StoredFile)
             .join(Tenant, Tenant.id == StoredFile.tenant_id)
@@ -154,6 +180,13 @@ class StoredFileRepository:
                 StoredFile.created_at.label("created_at"),
                 StoredFile.scan_status.label("scan_status"),
                 StoredFile.tags.label("tags"),
+                StoredFile.sharpness_score.label("sharpness_score"),
+                StoredFile.exposure_score.label("exposure_score"),
+                StoredFile.perceptual_hash.label("perceptual_hash"),
+                StoredFile.face_quality_score.label("face_quality_score"),
+                StoredFile.face_analyzed_at.label("face_analyzed_at"),
+                StoredFile.width.label("width"),
+                StoredFile.height.label("height"),
                 literal("word_import").label("source"),
                 WordImportDocument.id.label("ref_id"),
                 cast(null(), PG_UUID(as_uuid=True)).label("ref_public_id"),
@@ -162,6 +195,8 @@ class StoredFileRepository:
                 cast(null(), BigInteger).label("upload_id"),
                 cast(null(), PG_UUID(as_uuid=True)).label("upload_public_id"),
                 func.concat("Word-Import: ", WordImportDocument.display_name).label("origin_tag"),
+                func.coalesce(WordImportDocument.protocol_date, cast(StoredFile.created_at, Date)).label("group_date"),
+                WordImportDocument.display_name.label("context_label"),
             )
             .select_from(StoredFile)
             .join(Tenant, Tenant.id == StoredFile.tenant_id)
@@ -182,6 +217,13 @@ class StoredFileRepository:
                 StoredFile.created_at.label("created_at"),
                 StoredFile.scan_status.label("scan_status"),
                 StoredFile.tags.label("tags"),
+                StoredFile.sharpness_score.label("sharpness_score"),
+                StoredFile.exposure_score.label("exposure_score"),
+                StoredFile.perceptual_hash.label("perceptual_hash"),
+                StoredFile.face_quality_score.label("face_quality_score"),
+                StoredFile.face_analyzed_at.label("face_analyzed_at"),
+                StoredFile.width.label("width"),
+                StoredFile.height.label("height"),
                 literal("submission_upload").label("source"),
                 SubmissionAssignment.id.label("ref_id"),
                 cast(null(), PG_UUID(as_uuid=True)).label("ref_public_id"),
@@ -190,6 +232,8 @@ class StoredFileRepository:
                 SubmissionUpload.id.label("upload_id"),
                 SubmissionUpload.public_id.label("upload_public_id"),
                 func.concat("Abgabe: ", SubmissionAssignment.title).label("origin_tag"),
+                cast(StoredFile.created_at, Date).label("group_date"),
+                SubmissionAssignment.title.label("context_label"),
             )
             .select_from(StoredFile)
             .join(Tenant, Tenant.id == StoredFile.tenant_id)
@@ -212,6 +256,13 @@ class StoredFileRepository:
                 StoredFile.created_at.label("created_at"),
                 StoredFile.scan_status.label("scan_status"),
                 StoredFile.tags.label("tags"),
+                StoredFile.sharpness_score.label("sharpness_score"),
+                StoredFile.exposure_score.label("exposure_score"),
+                StoredFile.perceptual_hash.label("perceptual_hash"),
+                StoredFile.face_quality_score.label("face_quality_score"),
+                StoredFile.face_analyzed_at.label("face_analyzed_at"),
+                StoredFile.width.label("width"),
+                StoredFile.height.label("height"),
                 literal("gallery_upload").label("source"),
                 GalleryImage.id.label("ref_id"),
                 cast(null(), PG_UUID(as_uuid=True)).label("ref_public_id"),
@@ -220,10 +271,15 @@ class StoredFileRepository:
                 cast(null(), BigInteger).label("upload_id"),
                 cast(null(), PG_UUID(as_uuid=True)).label("upload_public_id"),
                 literal("Direkt hochgeladen").label("origin_tag"),
+                func.coalesce(Event.event_date, cast(StoredFile.created_at, Date)).label("group_date"),
+                Event.title.label("context_label"),
             )
             .select_from(StoredFile)
             .join(Tenant, Tenant.id == StoredFile.tenant_id)
             .join(GalleryImage, GalleryImage.stored_file_id == StoredFile.id)
+            # Outer join: most gallery uploads have no Termin at all, and those must still
+            # be listed (group_date/context_label just fall back to created_at/None then).
+            .outerjoin(Event, Event.id == GalleryImage.event_id)
             .where(*tenant_filter)
         )
 
@@ -301,11 +357,47 @@ class StoredFileRepository:
             "created_at": union_query.c.created_at,
             "original_name": union_query.c.original_name,
             "file_size_bytes": union_query.c.file_size_bytes,
+            "sharpness_score": union_query.c.sharpness_score,
+            "exposure_score": union_query.c.exposure_score,
+            "face_quality_score": union_query.c.face_quality_score,
+            "group_date": union_query.c.group_date,
         }.get(sort_by, union_query.c.created_at)
         order = sort_column.asc() if sort_dir == "asc" else sort_column.desc()
         query = query.order_by(order, union_query.c.id.desc()).offset(skip).limit(limit)
 
         return list(db.execute(query).all())
+
+    def tenant_photo_analysis_progress(self, db: Session, tenant_id: int) -> Row:
+        """Counts behind the tenant-wide "Foto-Analyse läuft - X von Y Bildern bewertet"
+        progress bar. Built from the same files-overview union list_tenant_files itself
+        pages through (not a raw StoredFile scan) so the denominator matches exactly what
+        the Fotos page lists - a tenant logo or PDF export, e.g., is an image row but never
+        a "Foto" here."""
+        branches = self._files_overview_branches(tenant_id)
+        union_query = union_all(*branches.values()).subquery("files_overview")
+        query = select(
+            func.count().label("total"),
+            func.count().filter(union_query.c.face_analyzed_at.is_not(None)).label("analyzed"),
+        ).where(
+            union_query.c.scan_status != "infected",
+            union_query.c.mime_type.like("image/%"),
+        )
+        return db.execute(query).one()
+
+    def tenant_file_stats(self, db: Session, tenant_id: int) -> Row:
+        """Counts/bytes behind the Dateien page's stat cards - same union as
+        list_tenant_files (not storage_service's admin-only, per-origin-table breakdown) so
+        these numbers always match what the Fotos/Dateien pages actually list."""
+        branches = self._files_overview_branches(tenant_id)
+        union_query = union_all(*branches.values()).subquery("files_overview")
+        is_image = union_query.c.mime_type.like("image/%")
+        is_document = or_(union_query.c.mime_type.is_(None), union_query.c.mime_type.notlike("image/%"))
+        query = select(
+            func.count().filter(is_image).label("photo_count"),
+            func.count().filter(is_document).label("document_count"),
+            func.coalesce(func.sum(union_query.c.file_size_bytes), 0).label("total_bytes"),
+        ).where(union_query.c.scan_status != "infected")
+        return db.execute(query).one()
 
     def get_file_overview_row(self, db: Session, tenant_id: int, stored_file_id: int) -> Row | None:
         """Single files-overview row (source/ref_label/ref_date/origin_tag/tags) for the

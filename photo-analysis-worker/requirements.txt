@@ -1,0 +1,4 @@
+opencv-python-headless==5.0.0.93
+numpy==2.5.3
+SQLAlchemy==2.0.40
+psycopg[binary]==3.2.6

@@ -3,23 +3,27 @@ from __future__ import annotations
 import hashlib
 import uuid
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import date, datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Iterator
 
 from fastapi import HTTPException, UploadFile
 from PIL import Image
-from sqlalchemy import func, select, text
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.orm import Session
 
 from app import scanner
 from app.core.config import settings
-from app.models import AppUser, GalleryImage, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolImage, StoredFile
+from app.core.cycle_utils import get_cycle_year
+from app.models import AppUser, Event, GalleryImage, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolImage, StoredFile
+from app.models.entities import CycleConfig, PhotoAlbum, PhotoAlbumItem, PhotoAnalysisJob, SubmissionAssignment
 from app.repositories.file_repository import ProtocolImageRepository, StoredFileRepository
-from app.schemas.files import FileOverviewItem, StoredFileMetadata
+from app.schemas.files import FileAlbumRef, FileOverviewItem, FileStats, PhotoAnalysisProgress, SimilarityGroup, StoredFileMetadata
 from app.schemas.protocol import ProtocolImageRead
 from app.services import public_id_service
+from app.services.photo_quality import compute_exposure_score, compute_sharpness_score
+from app.services.photo_similarity import MAX_GROUPING_IMAGES, GroupableImage, group_similar_images
 from app.services.upload_pipeline import (
     ALLOWED_IMAGE_MIME_TYPES,
     MAX_UPLOAD_BYTES,
@@ -27,6 +31,8 @@ from app.services.upload_pipeline import (
     PDF_MIME_TYPE,
     WORD_IMPORT_ALLOWED_MIME_TYPES,
     WORD_IMPORT_MIME_TYPE,
+    _closest_perceptual_match,
+    _compute_perceptual_hash,
     _content_matches_mime,
     _sniff_image_mime,
     _sniff_word_import_mime,
@@ -61,6 +67,14 @@ def _tenant_protocol_image_upload_lock(db: Session, tenant_id: int) -> Iterator[
         yield
     finally:
         db.execute(text("SELECT pg_advisory_unlock(:ns, :tenant_id)"), {"ns": _PROTOCOL_IMAGE_QUOTA_LOCK_NAMESPACE, "tenant_id": tenant_id})
+
+
+# Phase 3: cap on how many images a single photo_analysis_job can queue. The worker
+# processes one job at a time (see photo-analysis-worker/app/worker.py), so an
+# unreasonably large job would monopolize it and starve every other tenant's queued jobs
+# behind it - narrower than MAX_GROUPING_IMAGES since this work is genuinely slower
+# per-image (face detection) even though it doesn't block a request the way Phase 2 does.
+MAX_ANALYSIS_JOB_IMAGES = 2000
 
 
 def _extract_image_metadata(content: bytes) -> tuple[int | None, int | None, datetime | None, str | None]:
@@ -169,14 +183,17 @@ class FileService:
         original_path = _safe_storage_path(storage_root, stored_file.storage_path)
         if not original_path.exists():
             return None
-        thumbnail_bytes = generate_thumbnail_bytes(original_path.read_bytes())
-        if thumbnail_bytes is None:
+        generated = generate_thumbnail_bytes(original_path.read_bytes())
+        if generated is None:
             return None
+        thumbnail_bytes, width, height = generated
 
         Path(thumbnail_root).mkdir(parents=True, exist_ok=True)
         thumbnail_path = Path(thumbnail_root).resolve() / f"{stored_file.id}.jpg"
         thumbnail_path.write_bytes(thumbnail_bytes)
         stored_file.thumbnail_path = thumbnail_path.name
+        stored_file.width = width
+        stored_file.height = height
         db.add(stored_file)
         db.commit()
         return thumbnail_path
@@ -230,50 +247,299 @@ class FileService:
             sort_dir=sort_dir,
             file_ids=file_ids,
         )
-        items: list[FileOverviewItem] = []
-        for row in rows:
-            is_image = bool(row.mime_type and row.mime_type.startswith("image/"))
-            if row.source == "submission_upload":
-                content_url = f"/api/submission-uploads/{row.upload_public_id}/files/{row.public_id}/content"
-                thumbnail_url = (
-                    f"/api/submission-uploads/{row.upload_public_id}/files/{row.public_id}/thumbnail" if is_image else None
-                )
-                tags_url = f"/api/submission-uploads/{row.upload_public_id}/files/{row.public_id}/tags"
-                metadata_url = f"/api/submission-uploads/{row.upload_public_id}/files/{row.public_id}/metadata"
-                ref_href = f"/submission-assignments/{row.ref_id}" if row.ref_id is not None else None
-            elif row.source == "protocol_image":
-                content_url = self.build_content_url(row.public_id)
-                thumbnail_url = self.build_thumbnail_url(row.public_id) if is_image else None
-                tags_url = self.build_tags_url(row.public_id)
-                metadata_url = self.build_metadata_url(row.public_id)
-                ref_href = f"/protocols/{row.ref_public_id}" if row.ref_public_id is not None else None
-            else:  # word_import / gallery_upload - no dedicated per-document frontend route to link to
-                content_url = self.build_content_url(row.public_id)
-                thumbnail_url = self.build_thumbnail_url(row.public_id) if is_image else None
-                tags_url = self.build_tags_url(row.public_id)
-                metadata_url = self.build_metadata_url(row.public_id)
-                ref_href = None
-            items.append(
-                FileOverviewItem(
-                    id=row.public_id,
-                    original_name=row.original_name,
-                    mime_type=row.mime_type,
-                    file_size_bytes=row.file_size_bytes,
-                    created_at=row.created_at,
-                    source=row.source,
-                    is_image=is_image,
-                    content_url=content_url,
-                    thumbnail_url=thumbnail_url,
-                    tags_url=tags_url,
-                    metadata_url=metadata_url,
-                    ref_label=row.ref_label,
-                    ref_date=row.ref_date,
-                    ref_href=ref_href,
-                    tags=list(row.tags or []),
-                    origin_tag=row.origin_tag,
+        return [self._build_overview_item(row) for row in rows]
+
+    def analysis_progress(self, db: Session, tenant_id: int) -> PhotoAnalysisProgress:
+        """Backs the Fotos page's tenant-wide "Foto-Analyse läuft - X von Y Bildern
+        bewertet" progress bar and the "Analyse läuft · N Bilder" pill."""
+        counts = self.stored_file_repository.tenant_photo_analysis_progress(db, tenant_id)
+        active_jobs = list(
+            db.scalars(
+                select(PhotoAnalysisJob).where(
+                    PhotoAnalysisJob.tenant_id == tenant_id,
+                    PhotoAnalysisJob.status.in_(["queued", "running"]),
                 )
             )
-        return items
+        )
+        active_job_image_count = sum(len(job.stored_file_ids) for job in active_jobs)
+        return PhotoAnalysisProgress(
+            total_images=counts.total,
+            analyzed_images=counts.analyzed,
+            pending_images=counts.total - counts.analyzed,
+            active_jobs=len(active_jobs),
+            active_job_image_count=active_job_image_count,
+        )
+
+    def file_stats(self, db: Session, tenant_id: int) -> FileStats:
+        """Backs the Dateien page's Dokumente/Fotos/Speicher stat cards."""
+        counts = self.stored_file_repository.tenant_file_stats(db, tenant_id)
+        return FileStats(
+            document_count=counts.document_count,
+            photo_count=counts.photo_count,
+            total_bytes=int(counts.total_bytes),
+        )
+
+    def attach_album_context(self, db: Session, tenant_id: int, items: list[FileOverviewItem]) -> None:
+        """Fills item.albums (and, since is_best has no meaning outside an album, the
+        unscoped item.is_best = "best-of in at least one album") for a page of items - one
+        extra query per page, mirroring the album-scoped best-of lookup list_files already
+        does when an album_id filter is given."""
+        if not items:
+            return
+        items_by_id = {item.id: item for item in items}
+        rows = db.execute(
+            select(PhotoAlbumItem.file_id, PhotoAlbumItem.is_best, PhotoAlbum.id, PhotoAlbum.name, PhotoAlbum.kind)
+            .join(PhotoAlbum, PhotoAlbum.id == PhotoAlbumItem.album_id)
+            .where(PhotoAlbum.tenant_id == tenant_id, PhotoAlbumItem.file_id.in_(items_by_id.keys()))
+        ).all()
+        for file_id, is_best, album_id, album_name, album_kind in rows:
+            item = items_by_id.get(file_id)
+            if item is None:
+                continue
+            item.albums.append(FileAlbumRef(id=album_id, name=album_name, kind=album_kind, is_best=is_best))
+        for item in items:
+            if item.albums:
+                item.is_best = any(album.is_best for album in item.albums)
+
+    def _build_overview_item(self, row) -> FileOverviewItem:
+        is_image = bool(row.mime_type and row.mime_type.startswith("image/"))
+        if row.source == "submission_upload":
+            content_url = f"/api/submission-uploads/{row.upload_public_id}/files/{row.public_id}/content"
+            thumbnail_url = (
+                f"/api/submission-uploads/{row.upload_public_id}/files/{row.public_id}/thumbnail" if is_image else None
+            )
+            tags_url = f"/api/submission-uploads/{row.upload_public_id}/files/{row.public_id}/tags"
+            metadata_url = f"/api/submission-uploads/{row.upload_public_id}/files/{row.public_id}/metadata"
+            ref_href = f"/submission-assignments/{row.ref_id}" if row.ref_id is not None else None
+        elif row.source == "protocol_image":
+            content_url = self.build_content_url(row.public_id)
+            thumbnail_url = self.build_thumbnail_url(row.public_id) if is_image else None
+            tags_url = self.build_tags_url(row.public_id)
+            metadata_url = self.build_metadata_url(row.public_id)
+            ref_href = f"/protocols/{row.ref_public_id}" if row.ref_public_id is not None else None
+        else:  # word_import / gallery_upload - no dedicated per-document frontend route to link to
+            content_url = self.build_content_url(row.public_id)
+            thumbnail_url = self.build_thumbnail_url(row.public_id) if is_image else None
+            tags_url = self.build_tags_url(row.public_id)
+            metadata_url = self.build_metadata_url(row.public_id)
+            ref_href = None
+        return FileOverviewItem(
+            id=row.public_id,
+            original_name=row.original_name,
+            mime_type=row.mime_type,
+            file_size_bytes=row.file_size_bytes,
+            created_at=row.created_at,
+            source=row.source,
+            is_image=is_image,
+            content_url=content_url,
+            thumbnail_url=thumbnail_url,
+            tags_url=tags_url,
+            metadata_url=metadata_url,
+            ref_label=row.ref_label,
+            ref_date=row.ref_date,
+            ref_href=ref_href,
+            tags=list(row.tags or []),
+            origin_tag=row.origin_tag,
+            sharpness_score=row.sharpness_score,
+            exposure_score=row.exposure_score,
+            face_quality_score=row.face_quality_score,
+            face_analyzed_at=row.face_analyzed_at,
+            width=row.width,
+            height=row.height,
+            group_date=row.group_date,
+            context_label=row.context_label,
+        )
+
+    def group_similar_gallery_images(
+        self,
+        db: Session,
+        tenant_id: int,
+        *,
+        source: str | None = None,
+        search: str | None = None,
+        tags: list[str] | None = None,
+        file_ids: list[uuid.UUID] | None = None,
+        min_size: int = 1,
+    ) -> list[SimilarityGroup]:
+        """Photo-culling Phase 2: clusters the tenant's images (same filters as list_tenant_files,
+        always only_images) by perceptual-hash similarity and ranks each cluster by the Phase 1
+        quality scores - see photo_similarity.py for why this can run synchronously instead of
+        needing the async worker later phases will need. group_similar_images() also returns
+        singleton "groups" (an image with nothing similar to it) per its own docstring;
+        min_size lets a caller that only cares about actual near-duplicate series (the
+        "Ähnliche" tab) filter those out without re-deriving the grouping itself."""
+        rows = self.stored_file_repository.list_tenant_files(
+            db,
+            tenant_id,
+            skip=0,
+            limit=MAX_GROUPING_IMAGES + 1,
+            source=source,
+            only_images=True,
+            search=search,
+            tags=tags,
+            file_ids=file_ids,
+        )
+        if len(rows) > MAX_GROUPING_IMAGES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Zu viele Bilder für die Gruppierung ausgewählt (max. {MAX_GROUPING_IMAGES}) - Filter eingrenzen (z.B. Album, Tag oder Suche).",
+            )
+
+        rows_by_id = {row.id: row for row in rows}
+        groupable = [
+            GroupableImage(
+                id=row.id,
+                perceptual_hash=row.perceptual_hash,
+                sharpness_score=row.sharpness_score,
+                exposure_score=row.exposure_score,
+            )
+            for row in rows
+        ]
+        groups = group_similar_images(groupable)
+        return [
+            SimilarityGroup(
+                best_id=rows_by_id[group[0].id].public_id,
+                images=[self._build_overview_item(rows_by_id[image.id]) for image in group],
+            )
+            for group in groups
+            if len(group) >= min_size
+        ]
+
+    def create_analysis_job(
+        self,
+        db: Session,
+        tenant_id: int,
+        *,
+        source: str | None = None,
+        search: str | None = None,
+        tags: list[str] | None = None,
+        file_ids: list[uuid.UUID] | None = None,
+        requested_by: int | None = None,
+    ) -> PhotoAnalysisJob:
+        """Photo-culling Phase 3: queues the (filtered) images for photo-analysis-worker to
+        score. Same filter shape as group_similar_gallery_images, but this only writes a
+        queued row - the actual face-detection work happens out of process, later, in the
+        separate worker container (see that container's README for why)."""
+        rows = self.stored_file_repository.list_tenant_files(
+            db,
+            tenant_id,
+            skip=0,
+            limit=MAX_ANALYSIS_JOB_IMAGES + 1,
+            source=source,
+            only_images=True,
+            search=search,
+            tags=tags,
+            file_ids=file_ids,
+        )
+        if len(rows) > MAX_ANALYSIS_JOB_IMAGES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Zu viele Bilder für einen Analyse-Auftrag ausgewählt (max. {MAX_ANALYSIS_JOB_IMAGES}) - Filter eingrenzen (z.B. Album, Tag oder Suche).",
+            )
+        if not rows:
+            raise HTTPException(status_code=400, detail="Keine Bilder für diesen Filter gefunden.")
+
+        job = PhotoAnalysisJob(
+            tenant_id=tenant_id,
+            stored_file_ids=[row.id for row in rows],
+            requested_by=requested_by,
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        return job
+
+    def get_analysis_job(self, db: Session, tenant_id: int, job_id: uuid.UUID) -> PhotoAnalysisJob:
+        job = db.get(PhotoAnalysisJob, job_id)
+        if job is None or job.tenant_id != tenant_id:
+            raise HTTPException(status_code=404, detail="Analyse-Auftrag nicht gefunden")
+        return job
+
+    def create_pending_analysis_jobs(self, db: Session) -> list[PhotoAnalysisJob]:
+        """Automatic off-peak counterpart to the manual "Gesichtsqualität analysieren"
+        button (create_analysis_job): one job per tenant that has at least one clean image
+        not yet analyzed and no job already queued/running - called from main.py's
+        photo_analysis_auto_queue_loop. Skips a tenant with an in-flight job rather than
+        piling on a second one; it'll be picked up again next loop iteration once that job
+        finishes and still leaves unanalyzed images.
+
+        Filters on face_analyzed_at, not face_quality_score - the worker legitimately
+        writes a NULL score when no face is detected, so face_quality_score IS NULL means
+        either "not analyzed yet" or "analyzed, no face found"; using it here would
+        re-queue every faceless photo forever."""
+        tenants_with_active_jobs = set(
+            db.scalars(select(PhotoAnalysisJob.tenant_id).where(PhotoAnalysisJob.status.in_(["queued", "running"])))
+        )
+        pending_tenant_ids = db.scalars(
+            select(StoredFile.tenant_id)
+            .where(
+                StoredFile.mime_type.like("image/%"),
+                StoredFile.scan_status == "clean",
+                StoredFile.face_analyzed_at.is_(None),
+            )
+            .distinct()
+        ).all()
+
+        created: list[PhotoAnalysisJob] = []
+        for tenant_id in pending_tenant_ids:
+            if tenant_id in tenants_with_active_jobs:
+                continue
+            stored_file_ids = list(
+                db.scalars(
+                    select(StoredFile.id)
+                    .where(
+                        StoredFile.tenant_id == tenant_id,
+                        StoredFile.mime_type.like("image/%"),
+                        StoredFile.scan_status == "clean",
+                        StoredFile.face_analyzed_at.is_(None),
+                    )
+                    .limit(MAX_ANALYSIS_JOB_IMAGES)
+                )
+            )
+            if not stored_file_ids:
+                continue
+            job = PhotoAnalysisJob(tenant_id=tenant_id, stored_file_ids=stored_file_ids, requested_by=None)
+            db.add(job)
+            created.append(job)
+
+        if created:
+            db.commit()
+            for job in created:
+                db.refresh(job)
+        return created
+
+    def backfill_missing_quality_scores(self, db: Session, *, limit: int = MAX_ANALYSIS_JOB_IMAGES) -> int:
+        """Phase 1 (sharpness_score/exposure_score) is computed inline for protocol-image
+        and gallery uploads (see save_protocol_image/save_gallery_uploads above), but the
+        abgabebox-backend submission-upload path never computes it - that service runs as
+        the separate, minimally-privileged hocx_abgabebox role and doesn't import this
+        module (see sql/baseline_schema.sql). Called from main.py's
+        photo_quality_backfill_loop to fill it in afterwards, from here, for any clean image
+        still missing either score regardless of source. Returns the number of files
+        updated."""
+        pending = list(
+            db.scalars(
+                select(StoredFile)
+                .where(
+                    StoredFile.mime_type.like("image/%"),
+                    StoredFile.scan_status == "clean",
+                    (StoredFile.sharpness_score.is_(None)) | (StoredFile.exposure_score.is_(None)),
+                )
+                .limit(limit)
+            )
+        )
+        updated = 0
+        for stored_file in pending:
+            file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
+            if not file_path.exists():
+                continue
+            content = file_path.read_bytes()
+            stored_file.sharpness_score = compute_sharpness_score(content)
+            stored_file.exposure_score = compute_exposure_score(content)
+            updated += 1
+        if updated:
+            db.commit()
+        return updated
 
     def list_distinct_tags(self, db: Session, tenant_id: int, *, query: str | None = None, limit: int = MAX_TAG_SUGGESTIONS) -> list[str]:
         """Every tag currently in use by this tenant's files (custom + auto origin tags),
@@ -404,6 +670,7 @@ class FileService:
                 storage_subdir_parts=(f"tenant-{tenant_id}", f"block-{protocol_element_block.id}"),
                 enable_perceptual_dedupe=True,
                 enable_thumbnail=True,
+                capture_quality_scores=True,
                 created_by=created_by,
                 stored_file_repository=self.stored_file_repository,
             )
@@ -441,6 +708,11 @@ class FileService:
         files: list[tuple[str, bytes]],
         tags: list[str],
         created_by: int | None,
+        upload_event_id: int | None = None,
+        upload_assignment: SubmissionAssignment | None = None,
+        upload_element_ref: str | None = None,
+        upload_element_label: str | None = None,
+        upload_cycle_config: CycleConfig | None = None,
     ) -> tuple[list[FileOverviewItem], list[str]]:
         """Persists a batch of images uploaded directly through the "Dateien"/"Fotos" gallery
         upload window (route already expanded any .zip into individual (filename, bytes)
@@ -452,14 +724,25 @@ class FileService:
         "Fotos" grid. Scans the whole batch concurrently up front via scanner.scan_many()
         rather than one blocking scan_bytes() call per file. One bad file never aborts the
         whole batch - problems are collected into `errors` and returned alongside whatever did
-        succeed."""
+        succeed.
+
+        The upload_* kwargs are the optional Termin/Abgabe-Element/Zyklus target picker on
+        the upload window - at most one of upload_event_id, (upload_assignment +
+        upload_element_ref) or upload_cycle_config is ever set by a caller (see
+        upload_gallery_images), and files land in the matching auto-album(s) once the whole
+        batch is saved (see the end of this method). upload_cycle_config resolves each
+        file's own EXIF capture date to a period independently (see the loop below) since a
+        multi-file batch can span more than one Periode; the other two targets apply to
+        every file in the batch alike."""
         self.ensure_storage()
         normalized_tags = _normalize_tags(tags)
+        upload_event = db.get(Event, upload_event_id) if upload_event_id is not None else None
         scan_statuses = await scanner.scan_many(
             [content for _filename, content in files], host=settings.clamav_host, port=settings.clamav_port
         )
 
         items: list[FileOverviewItem] = []
+        item_taken_at: dict[uuid.UUID, datetime | None] = {}
         errors: list[str] = []
         for (filename, content), scan_status in zip(files, scan_statuses):
             label = filename or "Bild"
@@ -475,6 +758,7 @@ class FileService:
                     storage_subdir_parts=(f"tenant-{tenant_id}", "gallery"),
                     enable_perceptual_dedupe=True,
                     enable_thumbnail=True,
+                    capture_quality_scores=True,
                     created_by=created_by,
                     tags=normalized_tags,
                     too_large_message=f"zu gross (maximal {MAX_UPLOAD_BYTES // 1024 // 1024} MB)",
@@ -487,11 +771,19 @@ class FileService:
                 continue
 
             stored_file = result.stored_file
-            db.add(GalleryImage(tenant_id=tenant_id, stored_file_id=stored_file.id, created_by=created_by))
+            db.add(
+                GalleryImage(
+                    tenant_id=tenant_id, stored_file_id=stored_file.id, event_id=upload_event_id, created_by=created_by
+                )
+            )
             db.flush()
 
             if result.duplicate_warning is not None:
                 errors.append(f"{label}: Hinweis - ähnelt einem bereits im Mandanten hochgeladenen Bild")
+
+            if upload_cycle_config is not None:
+                _, _, taken_at, _ = _extract_image_metadata(content)
+                item_taken_at[stored_file.public_id] = taken_at
 
             items.append(
                 FileOverviewItem(
@@ -511,10 +803,52 @@ class FileService:
                     ref_href=None,
                     tags=list(stored_file.tags or []),
                     origin_tag="Direkt hochgeladen",
+                    sharpness_score=stored_file.sharpness_score,
+                    exposure_score=stored_file.exposure_score,
+                    face_quality_score=stored_file.face_quality_score,
+                    face_analyzed_at=stored_file.face_analyzed_at,
+                    width=stored_file.width,
+                    height=stored_file.height,
+                    group_date=upload_event.event_date if upload_event is not None else stored_file.created_at.date(),
+                    context_label=upload_event.title if upload_event is not None else None,
                 )
             )
 
         db.commit()
+
+        if items:
+            # Deferred import: photo_album_service reuses SubmissionService's element-ref
+            # helpers, and importing it at module level here would form an import cycle
+            # (file_service -> photo_album_service -> submission_service -> file_service,
+            # for submission_service's own _safe_storage_path import).
+            from app.services import photo_album_service
+
+            if upload_cycle_config is not None:
+                groups: dict[int, list[uuid.UUID]] = {}
+                for item in items:
+                    taken_at = item_taken_at.get(item.id)
+                    on_date = taken_at.date() if taken_at is not None else date.today()
+                    cycle_year = get_cycle_year(on_date, upload_cycle_config.reset_month, upload_cycle_config.reset_day)
+                    groups.setdefault(cycle_year, []).append(item.id)
+                for cycle_year, file_ids in groups.items():
+                    album = photo_album_service.get_or_create_cycle_album(
+                        db, tenant_id=tenant_id, cycle_config=upload_cycle_config, cycle_year=cycle_year
+                    )
+                    photo_album_service.add_items(db, album, file_ids)
+                    db.commit()
+                    photo_album_service.recompute_best_of(db, self, album)
+            elif upload_event_id is not None or (upload_assignment is not None and upload_element_ref is not None):
+                photo_album_service.assign_uploaded_files(
+                    db,
+                    self,
+                    tenant_id=tenant_id,
+                    stored_file_public_ids=[item.id for item in items],
+                    event_id=upload_event_id,
+                    assignment=upload_assignment,
+                    element_ref=upload_element_ref,
+                    element_label=upload_element_label,
+                )
+
         return items, errors
 
     def save_word_import_document(
@@ -608,6 +942,62 @@ class FileService:
             thumbnail_path = _safe_storage_path(settings.thumbnail_root, stored_file.thumbnail_path)
             if thumbnail_path.exists():
                 thumbnail_path.unlink()
+
+    def delete_gallery_images(
+        self, db: Session, tenant_id: int, file_ids: list[uuid.UUID]
+    ) -> tuple[list[uuid.UUID], list[str]]:
+        """Bulk hard-delete for the Fotos page's multi-select "Löschen" action and the
+        "Ähnliche" tab's "Nur beste behalten" - gallery uploads only. Protocol images,
+        word-import source documents and submission uploads each have their own deletion
+        semantics this must not bypass (a dedicated permission-checked route, or a soft-
+        delete owned by the abgabebox sync), so any id resolving to one of those sources is
+        reported back as an error instead of deleted - same partial-success shape as
+        save_gallery_uploads' (items, errors) return. Caller commits; PhotoAlbumItem rows
+        for the deleted files must already be gone (see photo_album_service.
+        drop_items_for_files) before this runs, since GalleryImage.stored_file_id is
+        ON DELETE RESTRICT and photo_album_item.file_id has no FK at all to catch it."""
+        rows = self.stored_file_repository.list_tenant_files(db, tenant_id, file_ids=file_ids, limit=max(len(file_ids), 1))
+        rows_by_public_id = {row.public_id: row for row in rows}
+        deleted: list[uuid.UUID] = []
+        errors: list[str] = []
+        for file_id in file_ids:
+            row = rows_by_public_id.get(file_id)
+            if row is None:
+                errors.append(f"{file_id}: nicht gefunden")
+                continue
+            if row.source != "gallery_upload":
+                errors.append(f"{row.original_name}: kann von hier aus nicht gelöscht werden (Quelle: {row.origin_tag})")
+                continue
+            stored_file = self.stored_file_repository.get(db, row.id)
+            if stored_file is None:
+                errors.append(f"{row.original_name}: nicht gefunden")
+                continue
+            db.execute(delete(GalleryImage).where(GalleryImage.stored_file_id == stored_file.id))
+            self.delete_stored_file(db, stored_file)
+            deleted.append(file_id)
+        return deleted, errors
+
+    def bulk_update_tags(
+        self, db: Session, tenant_id: int, file_ids: list[uuid.UUID], add_tags: list[str], remove_tags: list[str]
+    ) -> int:
+        """Backs the Fotos page's multi-select "Tags hinzufügen" bulk action. Returns the
+        number of files actually changed (a file already carrying every add_tag and none of
+        remove_tags is left untouched)."""
+        rows = self.stored_file_repository.list_tenant_files(db, tenant_id, file_ids=file_ids, limit=max(len(file_ids), 1))
+        add = set(_normalize_tags(add_tags))
+        remove = set(_normalize_tags(remove_tags))
+        updated = 0
+        for row in rows:
+            stored_file = self.stored_file_repository.get(db, row.id)
+            if stored_file is None:
+                continue
+            next_tags = _normalize_tags(list((set(stored_file.tags or []) | add) - remove))
+            if next_tags != list(stored_file.tags or []):
+                stored_file.tags = next_tags
+                db.add(stored_file)
+                updated += 1
+        db.commit()
+        return updated
 
     def get_stored_file(self, db: Session, stored_file_id: int, *, tenant_id: int | None = None) -> StoredFile | None:
         # tenant_id is optional only for callers that already did their own equivalent

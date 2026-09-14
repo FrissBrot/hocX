@@ -60,6 +60,7 @@ jobs:
           POSTGRES_DB: hocx_ci
           APP_DB_PASSWORD: ci-migration-check-dummy-app-password
           ABGABEBOX_DB_PASSWORD: ci-migration-check-dummy-abgabebox-password
+          PHOTO_WORKER_DB_PASSWORD: ci-migration-check-dummy-photo-worker-password
           AUTH_SECRET: ci-migration-check-dummy-secret-0123456789
           ADMIN_AUTH_SECRET: ci-migration-check-dummy-admin-secret-0123456789
         run: python3 -m alembic upgrade head
@@ -124,6 +125,7 @@ jobs:
           POSTGRES_DB: hocx_ci
           APP_DB_PASSWORD: ci-backend-tests-dummy-app-password
           ABGABEBOX_DB_PASSWORD: ci-backend-tests-dummy-abgabebox-password
+          PHOTO_WORKER_DB_PASSWORD: ci-backend-tests-dummy-photo-worker-password
           AUTH_SECRET: ci-backend-tests-dummy-secret-0123456789
           ADMIN_AUTH_SECRET: ci-backend-tests-dummy-admin-secret-0123456789
         run: python3 -m alembic -x seed_demo=true upgrade head
@@ -208,6 +210,45 @@ jobs:
           # LATEX_TEMPLATE_ROOT, so any real path works - absolute to match that job's
           # reasoning for the same class of variable rather than for a concrete need here.
           ABGABEBOX_STORAGE_ROOT: ${{ github.workspace }}/storage/abgabebox-uploads
+        run: python3 -m pytest tests/ -v --cov=app --cov-report=term-missing
+
+  photo-analysis-worker-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install photo-analysis-worker dependencies
+        run: pip install -r photo-analysis-worker/requirements-dev.txt
+
+      # Same pinned, hash-verified download as the Dockerfile/Dockerfile.test - see their
+      # comments. This job's tests are pure computation (no DB), so unlike
+      # abgabebox-backend-tests above this needs no Postgres service/migration step.
+      - name: Download face detection model
+        env:
+          YUNET_MODEL_URL: https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2026may.onnx
+          YUNET_MODEL_SHA256: ebafce4e3c118d6554634be5c27ab333b4c047a9a8c3faf1d7cf93101c22f0f0
+        run: |
+          set -euo pipefail
+          mkdir -p "${{ github.workspace }}/models"
+          python3 -c "
+          import hashlib, os, urllib.request
+          url, expected_sha256 = os.environ['YUNET_MODEL_URL'], os.environ['YUNET_MODEL_SHA256']
+          data = urllib.request.urlopen(url, timeout=30).read()
+          actual_sha256 = hashlib.sha256(data).hexdigest()
+          assert actual_sha256 == expected_sha256, f'YuNet model SHA-256 mismatch: expected {expected_sha256}, got {actual_sha256}'
+          open('${{ github.workspace }}/models/face_detection_yunet.onnx', 'wb').write(data)
+          "
+
+      - name: Run pytest
+        working-directory: photo-analysis-worker
+        env:
+          PHOTO_WORKER_MODEL_PATH: ${{ github.workspace }}/models/face_detection_yunet.onnx
         run: python3 -m pytest tests/ -v --cov=app --cov-report=term-missing
 
   frontend-build:
@@ -319,6 +360,13 @@ jobs:
         run: |
           echo "## pip-audit: abgabebox-backend/requirements.txt" >> "$GITHUB_STEP_SUMMARY"
           pip-audit -r abgabebox-backend/requirements.txt -f markdown >> "$GITHUB_STEP_SUMMARY" || true
+
+      # Audit photo-analysis-worker Python dependencies, same non-blocking policy.
+      - name: Audit photo-analysis-worker/requirements.txt (pip-audit)
+        continue-on-error: true
+        run: |
+          echo "## pip-audit: photo-analysis-worker/requirements.txt" >> "$GITHUB_STEP_SUMMARY"
+          pip-audit -r photo-analysis-worker/requirements.txt -f markdown >> "$GITHUB_STEP_SUMMARY" || true
 
       # Audit frontend Node dependencies. Known high-severity Next.js finding
       # is tracked separately, so this warns via the summary instead of

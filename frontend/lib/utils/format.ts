@@ -103,6 +103,41 @@ export function formatDateTime(input: string | null | undefined) {
   }).format(parsed);
 }
 
+export function formatWeekdayDate(input: string | null | undefined) {
+  if (!input) {
+    return "";
+  }
+  const [datePart] = input.split("T");
+  const [year, month, day] = datePart.split("-").map(Number);
+  const parsed = year && month && day ? new Date(Date.UTC(year, month - 1, day)) : new Date(input);
+  if (Number.isNaN(parsed.getTime())) {
+    return formatDate(input);
+  }
+  return new Intl.DateTimeFormat("de-CH", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: year && month && day ? "UTC" : APP_TIME_ZONE,
+  }).format(parsed);
+}
+
+export function formatTime(input: string | null | undefined) {
+  if (!input) {
+    return "";
+  }
+  const parsed = new Date(input);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+  return new Intl.DateTimeFormat("de-CH", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone: APP_TIME_ZONE,
+  }).format(parsed);
+}
+
 export function formatFileSize(bytes: number | null | undefined) {
   if (bytes === null || bytes === undefined || Number.isNaN(bytes)) {
     return "";

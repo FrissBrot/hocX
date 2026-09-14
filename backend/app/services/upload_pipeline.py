@@ -36,6 +36,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models import StoredFile
 from app.repositories.file_repository import StoredFileRepository
+from app.services.photo_quality import compute_exposure_score, compute_sharpness_score
 
 ALLOWED_IMAGE_MIME_TYPES = {
     "image/jpeg",
@@ -207,19 +208,24 @@ def _closest_perceptual_match(perceptual_hash: str | None, candidates: list[tupl
     return best_id
 
 
-def generate_thumbnail_bytes(content: bytes) -> bytes | None:
-    """Downscaled JPEG preview for the "Dateien" grid. Returns None for content PIL can't
-    decode (e.g. a truncated file that still passed the magic-byte check) - callers fall
-    back to serving/linking the original in that case."""
+def generate_thumbnail_bytes(content: bytes) -> tuple[bytes, int, int] | None:
+    """Downscaled JPEG preview for the "Dateien" grid, plus the original's (width, height) -
+    read here for free since exif_transpose() already decodes the full image, sparing
+    callers a second PIL decode just to learn the dimensions (see StoredFile.width/height).
+    Dimensions are taken post-transpose so they match what's actually rendered (a portrait
+    phone photo with a rotation EXIF tag reports portrait, not its sensor's landscape byte
+    layout). Returns None for content PIL can't decode (e.g. a truncated file that still
+    passed the magic-byte check) - callers fall back to serving/linking the original then."""
     try:
         with Image.open(io.BytesIO(content)) as image:
             image = ImageOps.exif_transpose(image)  # respect camera rotation metadata
+            width, height = image.size
             image.thumbnail((THUMBNAIL_MAX_DIMENSION, THUMBNAIL_MAX_DIMENSION))
             if image.mode not in ("RGB", "L"):
                 image = image.convert("RGB")
             buffer = io.BytesIO()
             image.save(buffer, format="JPEG", quality=THUMBNAIL_JPEG_QUALITY)
-            return buffer.getvalue()
+            return buffer.getvalue(), width, height
     except Exception:
         return None
 
@@ -243,6 +249,7 @@ def ingest_file(
     enable_perceptual_dedupe: bool,
     enable_thumbnail: bool,
     created_by: int | None,
+    capture_quality_scores: bool = False,
     tags: list[str] | None = None,
     too_large_message: str | None = None,
     unsupported_format_message: str = "Dateiformat wird nicht unterstützt",
@@ -303,13 +310,20 @@ def ingest_file(
     )
     stored_file = repo.create(db, stored_file)  # add + flush, caller commits
 
+    if capture_quality_scores:
+        stored_file.sharpness_score = compute_sharpness_score(content)
+        stored_file.exposure_score = compute_exposure_score(content)
+
     if enable_thumbnail:
-        thumbnail_bytes = generate_thumbnail_bytes(content)
-        if thumbnail_bytes is not None:
+        generated = generate_thumbnail_bytes(content)
+        if generated is not None:
+            thumbnail_bytes, width, height = generated
             thumbnail_root = Path(settings.thumbnail_root)
             thumbnail_root.mkdir(parents=True, exist_ok=True)
             thumbnail_target_path = thumbnail_root.resolve() / f"{stored_file.id}.jpg"
             thumbnail_target_path.write_bytes(thumbnail_bytes)
             stored_file.thumbnail_path = thumbnail_target_path.name
+            stored_file.width = width
+            stored_file.height = height
 
     return UploadPipelineResult(stored_file=stored_file, duplicate_warning=duplicate_warning)

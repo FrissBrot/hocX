@@ -4,8 +4,8 @@ from typing import Annotated, Literal
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.dialects.postgresql import insert
-from app.models.entities import PhotoAlbum, PhotoAlbumItem
-from app.schemas.files import PhotoAlbumCreate, PhotoAlbumRead, PhotoAlbumItemsUpdate
+from app.models.entities import CycleConfig, Event, PhotoAlbum, PhotoAlbumItem, SubmissionAssignment
+from app.schemas.files import PhotoAlbumCreate, PhotoAlbumItemBestUpdate, PhotoAlbumRead, PhotoAlbumItemsUpdate
 from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
@@ -15,15 +15,31 @@ from app.core.db import get_db
 from app.core.config import settings
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
 from app.models import ProtocolElementBlock, ProtocolImage, StoredFile
-from app.schemas.files import FileOverviewItem, FileOverviewSource, GalleryUploadResult, StoredFileMetadata, StoredFileTagsUpdate
+from app.schemas.files import (
+    FileBulkDelete,
+    FileBulkDeleteResult,
+    FileBulkTagsUpdate,
+    FileOverviewItem,
+    FileOverviewSource,
+    FileStats,
+    GalleryUploadResult,
+    PhotoAnalysisJobCreate,
+    PhotoAnalysisJobRead,
+    PhotoAnalysisProgress,
+    SimilarityGroup,
+    StoredFileMetadata,
+    StoredFileTagsUpdate,
+)
 from app.schemas.protocol import ProtocolImageRead
-from app.services import public_id_service
+from app.services import photo_album_service, public_id_service
 from app.services.access_service import AccessService
 from app.services.file_service import MAX_UPLOAD_BYTES, MAX_ZIP_TOTAL_BYTES, FileService, _safe_storage_path, extract_image_files_from_zip
+from app.services.submission_service import SubmissionService, _element_ref, _parse_element_ref
 
 router = APIRouter()
 service = FileService()
 access_service = AccessService()
+submission_service = SubmissionService()
 
 # Ganzer Batch (Summe aller akzeptierten Dateien eines Upload-Requests, ausserhalb von
 # ZIPs - deren eigener Grenzwert ist MAX_ZIP_TOTAL_BYTES): grösszügiger als eine einzelne
@@ -56,7 +72,9 @@ def list_files(
     exclude_images: bool = Query(default=False),
     search: str | None = Query(default=None),
     tags: list[str] | None = Query(default=None),
-    sort_by: Literal["created_at", "original_name", "file_size_bytes"] = Query(default="created_at"),
+    sort_by: Literal[
+        "created_at", "original_name", "file_size_bytes", "sharpness_score", "exposure_score", "face_quality_score", "group_date"
+    ] = Query(default="created_at"),
     sort_dir: Literal["asc", "desc"] = Query(default="desc"),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
@@ -70,10 +88,13 @@ def list_files(
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     file_ids = None
+    best_by_id: dict[uuid.UUID, bool] = {}
     if album_id is not None:
         _get_album(db, user, album_id)
-        file_ids = list(db.scalars(select(PhotoAlbumItem.file_id).where(PhotoAlbumItem.album_id == album_id)))
-    return service.list_tenant_files(
+        item_rows = list(db.execute(select(PhotoAlbumItem.file_id, PhotoAlbumItem.is_best).where(PhotoAlbumItem.album_id == album_id)))
+        file_ids = [row.file_id for row in item_rows]
+        best_by_id = {row.file_id: row.is_best for row in item_rows}
+    items = service.list_tenant_files(
         db,
         user.current_tenant_id,
         skip=skip,
@@ -87,6 +108,19 @@ def list_files(
         sort_dir=sort_dir,
         file_ids=file_ids,
     )
+    if album_id is not None:
+        for item in items:
+            item.is_best = best_by_id.get(item.id, False)
+        # Best-of first within an album, otherwise the caller's own sort/pagination as-is -
+        # this only re-orders the (already album-scoped, at most PAGE_SIZE-large) page
+        # itself, it doesn't change what page skip/limit fetch.
+        items.sort(key=lambda item: not item.is_best)
+    else:
+        # Unscoped view: is_best/albums aren't tied to one album, so they're filled in
+        # separately here rather than by list_tenant_files itself (see
+        # FileService.attach_album_context).
+        service.attach_album_context(db, user.current_tenant_id, items)
+    return items
 
 
 @router.get("/files/tags", response_model=list[str])
@@ -105,10 +139,115 @@ def list_file_tags(
     return service.list_distinct_tags(db, user.current_tenant_id, query=query, limit=limit)
 
 
+@router.get("/files/analysis-progress", response_model=PhotoAnalysisProgress)
+def get_analysis_progress(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Tenant-wide summary behind the Fotos page's "Foto-Analyse läuft" progress bar and
+    the "Analyse läuft · N Bilder" pill."""
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    return service.analysis_progress(db, user.current_tenant_id)
+
+
+@router.get("/files/stats", response_model=FileStats)
+def get_file_stats(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Backs the Dateien page's Dokumente/Fotos/Speicher stat cards."""
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    return service.file_stats(db, user.current_tenant_id)
+
+
+@router.get("/files/similarity-groups", response_model=list[SimilarityGroup])
+def list_similarity_groups(
+    source: FileOverviewSource | None = Query(default=None),
+    album_id: uuid.UUID | None = Query(default=None),
+    search: str | None = Query(default=None),
+    tags: list[str] | None = Query(default=None),
+    min_size: int = Query(default=1, ge=1),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Photo-culling Phase 2: clustert die (per Filter eingegrenzten) Bilder des Mandanten
+    nach visueller Ähnlichkeit (Perceptual Hash) und markiert pro Gruppe das nach Schärfe/
+    Belichtung beste Bild. Gleiche Filter wie GET /files, aber immer nur Bilder und ohne
+    Pagination - siehe FileService.group_similar_gallery_images für die Grössenbeschränkung.
+    min_size=2 (die "Ähnliche"-Tab im Frontend) blendet Einzelbilder ohne ähnliches
+    Gegenstück aus - der Default 1 behält das bisherige Verhalten für andere Aufrufer bei."""
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    file_ids = None
+    if album_id is not None:
+        _get_album(db, user, album_id)
+        file_ids = list(db.scalars(select(PhotoAlbumItem.file_id).where(PhotoAlbumItem.album_id == album_id)))
+    return service.group_similar_gallery_images(
+        db,
+        user.current_tenant_id,
+        source=source,
+        search=search,
+        tags=tags,
+        file_ids=file_ids,
+        min_size=min_size,
+    )
+
+
+def _job_to_read(job) -> PhotoAnalysisJobRead:
+    return PhotoAnalysisJobRead(
+        id=job.id,
+        status=job.status,
+        image_count=len(job.stored_file_ids),
+        created_at=job.created_at,
+        started_at=job.started_at,
+        finished_at=job.finished_at,
+        error=job.error,
+    )
+
+
+@router.post("/files/analysis-jobs", response_model=PhotoAnalysisJobRead, status_code=status.HTTP_201_CREATED)
+def create_analysis_job(
+    payload: PhotoAnalysisJobCreate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Photo-culling Phase 3: queues a batch of (filtered) images for the separate
+    photo-analysis-worker container to score. Returns immediately with status "queued" -
+    poll GET .../{id} for progress."""
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    job = service.create_analysis_job(
+        db,
+        user.current_tenant_id,
+        source=payload.source,
+        search=payload.search,
+        tags=payload.tags,
+        file_ids=payload.file_ids,
+        requested_by=user.user_id,
+    )
+    return _job_to_read(job)
+
+
+@router.get("/files/analysis-jobs/{job_id}", response_model=PhotoAnalysisJobRead)
+def get_analysis_job(job_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    job = service.get_analysis_job(db, user.current_tenant_id, job_id)
+    return _job_to_read(job)
+
+
 @router.post("/files/gallery-uploads", response_model=GalleryUploadResult, status_code=status.HTTP_201_CREATED)
 async def upload_gallery_images(
     files: list[UploadFile] = File(...),
     tags: str | None = Form(default=None),
+    # Optional target picker: at most one of event_id, (submission_assignment_id +
+    # submission_element_ref) or cycle_config_id - the batch then lands in that Termin's/
+    # Abgabe-Element's/Zyklus' auto-album(s) too (see FileService.save_gallery_uploads).
+    event_id: uuid.UUID | None = Form(default=None),
+    submission_assignment_id: uuid.UUID | None = Form(default=None),
+    submission_element_ref: str | None = Form(default=None),
+    cycle_config_id: uuid.UUID | None = Form(default=None),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -125,6 +264,46 @@ async def upload_gallery_images(
             status_code=413,
             detail=f"Zu viele Dateien in einem Batch (maximal {MAX_GALLERY_UPLOAD_BATCH_FILES})",
         )
+
+    if sum([event_id is not None, submission_assignment_id is not None, cycle_config_id is not None]) > 1:
+        raise HTTPException(status_code=422, detail="Nur ein Zielbezug (Termin, Abgabe-Element oder Zyklus) gleichzeitig erlaubt")
+    if (submission_assignment_id is None) != (submission_element_ref is None):
+        raise HTTPException(status_code=422, detail="Abgabe und Abgabe-Element muessen zusammen angegeben werden")
+
+    upload_event_id: int | None = None
+    upload_assignment: SubmissionAssignment | None = None
+    upload_element_label: str | None = None
+    upload_cycle_config: CycleConfig | None = None
+
+    if event_id is not None:
+        upload_event_id = public_id_service.resolve_internal_id(db, Event, event_id, tenant_id=user.current_tenant_id)
+        if upload_event_id is None:
+            raise HTTPException(status_code=404, detail="Termin nicht gefunden")
+    elif submission_assignment_id is not None:
+        assignment_id = public_id_service.resolve_internal_id(db, SubmissionAssignment, submission_assignment_id, tenant_id=user.current_tenant_id)
+        if assignment_id is None:
+            raise HTTPException(status_code=404, detail="Abgabe nicht gefunden")
+        upload_assignment = db.get(SubmissionAssignment, assignment_id)
+        try:
+            parsed_event_id, parsed_list_entry_id = _parse_element_ref(db, submission_element_ref)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Ungueltige Abgabe-Element-Referenz") from None
+        # _parse_element_ref resolves the event/list-entry public id without a tenant
+        # filter (see its docstring) - only trust it once it's confirmed as one of *this*
+        # (already tenant-scoped) assignment's own elements, otherwise a writer could point
+        # event_id at another tenant's event and leak this upload into that tenant's Zyklus
+        # album.
+        elements = submission_service._resolve_raw_elements(db, upload_assignment)
+        match = next((e for e in elements if e["event_id"] == parsed_event_id and e["list_entry_id"] == parsed_list_entry_id), None)
+        if match is None:
+            raise HTTPException(status_code=404, detail="Abgabe-Element nicht gefunden")
+        upload_event_id = match["event_id"]
+        upload_element_label = match["label"]
+    elif cycle_config_id is not None:
+        cycle_config_id_internal = public_id_service.resolve_internal_id(db, CycleConfig, cycle_config_id, tenant_id=user.current_tenant_id)
+        if cycle_config_id_internal is None:
+            raise HTTPException(status_code=404, detail="Zyklus nicht gefunden")
+        upload_cycle_config = db.get(CycleConfig, cycle_config_id_internal)
 
     tag_list = [tag.strip() for tag in (tags or "").split(",") if tag.strip()]
 
@@ -159,6 +338,11 @@ async def upload_gallery_images(
         files=file_payloads,
         tags=tag_list,
         created_by=user.user_id,
+        upload_event_id=upload_event_id,
+        upload_assignment=upload_assignment,
+        upload_element_ref=submission_element_ref,
+        upload_element_label=upload_element_label,
+        upload_cycle_config=upload_cycle_config,
     )
     return GalleryUploadResult(items=items, errors=errors + save_errors)
 
@@ -258,7 +442,10 @@ def get_stored_file_content(
         media_type=stored_file.mime_type,
         filename=stored_file.original_name,
         content_disposition_type="inline" if is_inline_safe else "attachment",
-        headers={"X-Content-Type-Options": "nosniff"},
+        # A stored file's bytes never change after upload (a re-upload creates a new id), so the
+        # browser cache can keep this for a long time - saves refetching originals opened again
+        # from the Fotos viewer/lightbox within the same session.
+        headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=604800, immutable"},
     )
 
 
@@ -317,7 +504,9 @@ def get_stored_file_thumbnail(
     return FileResponse(
         path=thumbnail_path,
         media_type="image/jpeg",
-        headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=86400"},
+        # Same immutability as get_stored_file_content above - once generated, a thumbnail never
+        # changes for a given stored_file id, so it's safe to cache far longer than a day.
+        headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=604800, immutable"},
     )
 
 
@@ -332,8 +521,19 @@ def _get_album(db: Session, user: CurrentUser, album_id: uuid.UUID):
 @router.get("/files/albums", response_model=list[PhotoAlbumRead])
 def list_albums(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     require_writer(user)
-    return [PhotoAlbumRead(id=a.id, name=a.name) for a in db.scalars(
-        select(PhotoAlbum).where(PhotoAlbum.tenant_id == user.current_tenant_id).order_by(PhotoAlbum.created_at.desc(), PhotoAlbum.id.desc()))]
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    return [
+        PhotoAlbumRead(
+            id=entry.album.id,
+            name=entry.album.name,
+            kind=entry.album.kind,
+            photo_count=entry.photo_count,
+            best_of_count=entry.best_of_count,
+            cover_thumbnail_urls=entry.cover_thumbnail_urls,
+        )
+        for entry in photo_album_service.list_albums_with_stats(db, service, user.current_tenant_id)
+    ]
 
 
 @router.post("/files/albums", response_model=PhotoAlbumRead, status_code=201)
@@ -344,16 +544,16 @@ def create_album(payload: PhotoAlbumCreate, db: Session = Depends(get_db), user:
     name = payload.name.strip()
     if not name or len(name) > 120:
         raise HTTPException(status_code=422, detail="Albumname muss zwischen 1 und 120 Zeichen lang sein")
-    album = PhotoAlbum(tenant_id=user.current_tenant_id, name=name)
+    album = PhotoAlbum(tenant_id=user.current_tenant_id, name=name, kind="manual")
     db.add(album)
     db.commit()
     db.refresh(album)
-    return PhotoAlbumRead(id=album.id, name=album.name)
+    return PhotoAlbumRead(id=album.id, name=album.name, kind=album.kind)
 
 
 @router.post("/files/albums/{album_id}/items", status_code=204)
 def add_album_items(album_id: uuid.UUID, payload: PhotoAlbumItemsUpdate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    _get_album(db, user, album_id)
+    album = _get_album(db, user, album_id)
     ids = set(payload.file_ids)
     if not ids or len(ids) > 200:
         raise HTTPException(status_code=422, detail="Bitte 1 bis 200 Fotos auswählen")
@@ -362,3 +562,77 @@ def add_album_items(album_id: uuid.UUID, payload: PhotoAlbumItemsUpdate, db: Ses
         raise HTTPException(status_code=404, detail="Foto nicht gefunden")
     db.execute(insert(PhotoAlbumItem).values([{"album_id": album_id, "file_id": file_id} for file_id in ids]).on_conflict_do_nothing())
     db.commit()
+    photo_album_service.recompute_best_of(db, service, album)
+
+
+@router.patch("/files/albums/{album_id}/items/{file_id}/best", status_code=204)
+def set_album_item_best(
+    album_id: uuid.UUID,
+    file_id: uuid.UUID,
+    payload: PhotoAlbumItemBestUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Manually pins a photo in/out of its album's best-of ("Stern") selection, or (with
+    best_override: null) hands it back to the automatic ranking - see
+    photo_album_service.recompute_best_of."""
+    album = _get_album(db, user, album_id)
+    try:
+        photo_album_service.set_best_override(db, service, album, file_id, payload.best_override)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Foto ist nicht in diesem Album") from None
+
+
+@router.patch("/files/{file_id}/best", status_code=204)
+def set_file_best_everywhere(
+    file_id: uuid.UUID,
+    payload: PhotoAlbumItemBestUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Best-of toggle from the unscoped "Alle Fotos" view (no album in context) - applies
+    to every album this tenant's photo belongs to, since is_best lives on PhotoAlbumItem,
+    not the photo itself. See set_album_item_best for the album-scoped equivalent."""
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    touched = photo_album_service.set_best_override_everywhere(
+        db, service, user.current_tenant_id, file_id, payload.best_override
+    )
+    if touched == 0:
+        raise HTTPException(
+            status_code=422, detail="Dieses Foto gehört zu keinem Album – Best-of ist nur innerhalb eines Albums möglich."
+        )
+
+
+@router.post("/files/bulk-delete", response_model=FileBulkDeleteResult)
+def bulk_delete_files(payload: FileBulkDelete, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Multi-select "Löschen" auf der Fotos-Seite und "Nur beste behalten" im Ähnliche-Tab -
+    löscht endgültig, nur Direkt-Uploads (siehe FileService.delete_gallery_images für die
+    Begründung; andere Quellen werden als Fehler zurückgemeldet statt gelöscht)."""
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    ids = list(dict.fromkeys(payload.file_ids))
+    if not ids or len(ids) > 200:
+        raise HTTPException(status_code=422, detail="Bitte 1 bis 200 Dateien auswählen")
+    touched_album_ids = photo_album_service.drop_items_for_files(db, ids)
+    deleted, errors = service.delete_gallery_images(db, user.current_tenant_id, ids)
+    db.commit()
+    for album_id in touched_album_ids:
+        album = db.get(PhotoAlbum, album_id)
+        if album is not None:
+            photo_album_service.recompute_best_of(db, service, album)
+    return FileBulkDeleteResult(deleted_ids=deleted, errors=errors)
+
+
+@router.post("/files/bulk-tags", status_code=204)
+def bulk_update_file_tags(payload: FileBulkTagsUpdate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Multi-select "Tags hinzufügen" auf der Fotos-Seite."""
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    ids = list(dict.fromkeys(payload.file_ids))
+    if not ids or len(ids) > 200:
+        raise HTTPException(status_code=422, detail="Bitte 1 bis 200 Dateien auswählen")
+    service.bulk_update_tags(db, user.current_tenant_id, ids, payload.add_tags, payload.remove_tags)

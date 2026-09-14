@@ -221,7 +221,9 @@ def get_submission_file_thumbnail(
     return FileResponse(
         path=thumbnail_path,
         media_type="image/jpeg",
-        headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=86400"},
+        # Immutable per file id (see get_stored_file_thumbnail in routes/files.py) - safe to
+        # cache far longer than a day.
+        headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=604800, immutable"},
     )
 
 

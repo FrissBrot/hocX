@@ -1,0 +1,26 @@
+FROM python:3.13-slim
+
+WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+
+COPY requirements-dev.txt requirements.txt ./
+RUN pip install --no-cache-dir -r requirements-dev.txt
+
+# Same pinned, hash-verified download as the real Dockerfile - see its comment. Duplicated
+# rather than shared via a build stage since it's three lines and keeping this file
+# standalone/readable matters more here than avoiding the duplication.
+ARG YUNET_MODEL_URL=https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2026may.onnx
+ARG YUNET_MODEL_SHA256=ebafce4e3c118d6554634be5c27ab333b4c047a9a8c3faf1d7cf93101c22f0f0
+RUN mkdir -p /app/models && python3 -c "\
+import hashlib, sys, urllib.request; \
+url, expected_sha256 = sys.argv[1], sys.argv[2]; \
+data = urllib.request.urlopen(url, timeout=30).read(); \
+actual_sha256 = hashlib.sha256(data).hexdigest(); \
+assert actual_sha256 == expected_sha256, f'YuNet model SHA-256 mismatch: expected {expected_sha256}, got {actual_sha256}'; \
+open('/app/models/face_detection_yunet.onnx', 'wb').write(data)" \
+    "$YUNET_MODEL_URL" "$YUNET_MODEL_SHA256"
+
+COPY . .
+CMD ["python3", "-m", "pytest", "tests/", "-v"]

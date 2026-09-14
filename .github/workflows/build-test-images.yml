@@ -55,6 +55,8 @@ jobs:
             context: ./abgabebox-frontend
           - name: docs
             context: ./docs-site
+          - name: photo-analysis-worker
+            context: ./photo-analysis-worker
     steps:
       - name: Checkout
         uses: actions/checkout@v4

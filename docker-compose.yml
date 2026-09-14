@@ -134,6 +134,9 @@ services:
       THUMBNAIL_ROOT: /app/storage-local/thumbnails
       ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
       ABGABEBOX_DB_PASSWORD: ${ABGABEBOX_DB_PASSWORD}
+      # Migration 0067 creates the hocx_photo_worker role (see photo-analysis-worker/) -
+      # needed here too since this service's `command` below runs `alembic upgrade head`.
+      PHOTO_WORKER_DB_PASSWORD: ${PHOTO_WORKER_DB_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
       # `env_file: .env` below always loads the *literal* .env file, regardless of which
       # --env-file was passed to `docker compose` (e2e/tests pass a different one) - only
@@ -283,6 +286,43 @@ services:
       - "traefik.http.middlewares.word-import-ratelimit.ratelimit.period=1m"
       # 150 MB - matches MAX_WORD_IMPORT_BATCH_BYTES in routes/word_import.py
       - "traefik.http.middlewares.word-import-body-limit.buffering.maxRequestBodyBytes=157286400"
+
+  # Photo-culling Phase 3: scores face quality for photo_analysis_job batches. Its own
+  # container/resource budget rather than living inside `backend` - see
+  # photo-analysis-worker/README.md for why (OpenCV/ONNX inference is meaningfully
+  # heavier per-request than anything else backend does, on a host that's already tight
+  # on headroom - see docker-compose.release.yml's backend mem_limit history).
+  photo-analysis-worker:
+    build:
+      context: ./photo-analysis-worker
+    restart: unless-stopped
+    mem_limit: 1280m
+    cpus: 1.5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      PHOTO_WORKER_DATABASE_URL: ${PHOTO_WORKER_DATABASE_URL}
+      STORAGE_ROOT: /app/storage
+    depends_on:
+      # Waits for the real healthcheck, not just "container started" - backend's `command`
+      # runs `alembic upgrade head` before uvicorn, so healthy here means the
+      # photo_analysis_job/stored_file.face_quality_score schema already exists.
+      backend:
+        condition: service_healthy
+    volumes:
+      # Only the code subdirectory, not all of /app - mounting the whole thing would shadow
+      # /app/models/face_detection_yunet.onnx, which only exists baked into the built image
+      # (see the Dockerfile), not in the source tree.
+      - ./photo-analysis-worker/app:/app/app
+      # Read-only: this worker only ever needs to read the original upload bytes, never
+      # write to them.
+      - ${HOCX_STORAGE_PATH:-./storage}:/app/storage:ro
 
   frontend:
     build:

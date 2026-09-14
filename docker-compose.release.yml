@@ -99,6 +99,9 @@ services:
       ADMIN_AUTH_SECRET_FILE: /run/secrets/admin_auth_secret
       INITIAL_ADMIN_PASSWORD_FILE: /run/secrets/initial_admin_password
       ABGABEBOX_DB_PASSWORD_FILE: /run/secrets/abgabebox_db_password
+      # Migration 0067 creates the hocx_photo_worker role (see photo-analysis-worker/) -
+      # needed here too since this service's image entrypoint runs `alembic upgrade head`.
+      PHOTO_WORKER_DB_PASSWORD_FILE: /run/secrets/photo_worker_db_password
       PYTHONPATH: /app
       STORAGE_ROOT: /app/storage
       LATEX_TEMPLATE_ROOT: /app/storage/latex_templates
@@ -115,6 +118,10 @@ services:
       REDIS_URL: redis://redis:6379/0
       TRAEFIK_DYNAMIC_CONFIG_DIR: /app/traefik_dynamic
       DOMAIN_HEALTH_CHECK_INTERVAL_MINUTES: ${DOMAIN_HEALTH_CHECK_INTERVAL_MINUTES:-30}
+      PHOTO_ANALYSIS_AUTO_QUEUE_INTERVAL_MINUTES: ${PHOTO_ANALYSIS_AUTO_QUEUE_INTERVAL_MINUTES:-30}
+      PHOTO_ANALYSIS_AUTO_QUEUE_START_HOUR: ${PHOTO_ANALYSIS_AUTO_QUEUE_START_HOUR:-1}
+      PHOTO_ANALYSIS_AUTO_QUEUE_END_HOUR: ${PHOTO_ANALYSIS_AUTO_QUEUE_END_HOUR:-6}
+      PHOTO_ANALYSIS_AUTO_QUEUE_MAX_LOAD_FACTOR: ${PHOTO_ANALYSIS_AUTO_QUEUE_MAX_LOAD_FACTOR:-0.7}
       ABGABEBOX_RESCAN_INTERVAL_MINUTES: ${ABGABEBOX_RESCAN_INTERVAL_MINUTES:-15}
       WORD_IMPORT_RESCAN_INTERVAL_MINUTES: ${WORD_IMPORT_RESCAN_INTERVAL_MINUTES:-15}
       EXPORT_CLEANUP_INTERVAL_MINUTES: ${EXPORT_CLEANUP_INTERVAL_MINUTES:-1440}
@@ -144,6 +151,7 @@ services:
       - admin_auth_secret
       - initial_admin_password
       - abgabebox_db_password
+      - photo_worker_db_password
     depends_on:
       db:
         condition: service_healthy
@@ -248,6 +256,38 @@ services:
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-word-import-ratelimit.ratelimit.burst=10"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-word-import-ratelimit.ratelimit.period=1m"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-word-import-body-limit.buffering.maxRequestBodyBytes=157286400"
+
+  # Photo-culling Phase 3: scores face quality for photo_analysis_job batches. Own
+  # container/resource budget, not inside `backend` - see photo-analysis-worker/README.md.
+  # No exposed port, no Traefik labels - this never serves HTTP, only polls Postgres.
+  photo-analysis-worker:
+    image: ${HOCX_PHOTO_ANALYSIS_WORKER_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-photo-analysis-worker:${HOCX_VERSION}}
+    restart: unless-stopped
+    mem_limit: 1280m
+    cpus: 1.5
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,mode=1777
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      PHOTO_WORKER_DATABASE_URL_FILE: /run/secrets/photo_worker_database_url
+      STORAGE_ROOT: /app/storage
+    secrets:
+      - photo_worker_database_url
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - ${HOCX_STORAGE_PATH:-./storage}:/app/storage:ro
 
   frontend:
     image: ${HOCX_FRONTEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-frontend:${HOCX_VERSION}}
@@ -511,6 +551,10 @@ secrets:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/abgabebox_db_password
   abgabebox_database_url:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/abgabebox_database_url
+  photo_worker_db_password:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/photo_worker_db_password
+  photo_worker_database_url:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/photo_worker_database_url
   friendly_captcha_api_key:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/friendly_captcha_api_key
   abgabebox_captcha_session_secret:

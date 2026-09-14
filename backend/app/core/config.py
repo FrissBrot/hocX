@@ -80,6 +80,33 @@ class Settings(BaseSettings):
     # table_snapshot_service.run_due_cycle_snapshots). Daily is enough - a cycle boundary
     # is crossed at most once a year per config, and the loop self-heals a missed day.
     cycle_snapshot_check_interval_minutes: int = 1440
+    # Photo-culling Phase 3 auto-queue (main.py's photo_analysis_auto_queue_loop): how
+    # often to check whether it's a good time to queue unanalyzed images, and the UTC hour
+    # window ("night" by default - this is a rough quiet-hours gate, not a precise
+    # schedule, so no timezone library is pulled in for it; operators far from UTC should
+    # adjust these two hours) it's allowed to actually do so in. start > end wraps past
+    # midnight (e.g. 22/5 means 22:00-05:00 UTC).
+    photo_analysis_auto_queue_interval_minutes: int = 30
+    photo_analysis_auto_queue_start_hour: int = 1
+    photo_analysis_auto_queue_end_hour: int = 6
+    # Additional safety gate independent of the time window: skip this run if the host's
+    # 1-minute load average is already above cpu_count * this factor. os.getloadavg()
+    # reads /proc/loadavg, which reflects the whole Docker host, not just this container -
+    # exactly the shared-host signal this needs, not a container-local one.
+    photo_analysis_auto_queue_max_load_factor: float = 0.7
+    # Photo-culling Phase 1 backfill (main.py's photo_quality_backfill_loop): sharpness/
+    # exposure scores are computed inline for protocol-image/gallery uploads, but the
+    # abgabebox-backend submission-upload path runs as a separate, minimally-privileged
+    # process (see sql/baseline_schema.sql's hocx_abgabebox grants) that never computes
+    # them - this loop fills them in afterwards from the trusted backend instead. Cheap
+    # per-image (see photo_quality.py's module docstring), so unlike Phase 3 this doesn't
+    # need an off-peak time window.
+    photo_quality_backfill_interval_minutes: int = 15
+    # Auto-album sync (main.py's photo_album_sync_loop): folds newly-submitted (and newly
+    # removed) abgabebox submission files into their Zyklus/Abgabe/Abgabe-Element albums -
+    # same reason as the backfill above, this can't happen inline in the restricted
+    # abgabebox-backend request path.
+    photo_album_sync_interval_minutes: int = 15
     # Mirrors the abgabebox subapp's ABGABEBOX_TENANT_STORAGE_QUOTA_MB - protocol-image
     # uploads had only a per-file limit (MAX_UPLOAD_BYTES), no per-tenant total at all
     # (audit finding, 2026-08-25), a real risk given this app's two prior disk-full

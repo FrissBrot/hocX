@@ -203,6 +203,10 @@ def test_upload_gallery_images_route_accepts_mixed_batch_of_image_and_zip(db):
                 _upload_file(zip_bytes, "album.zip", "application/zip"),
             ],
             tags="Lager, Sommer",
+            event_id=None,
+            submission_assignment_id=None,
+            submission_element_ref=None,
+            cycle_config_id=None,
             db=db,
             user=writer,
         )

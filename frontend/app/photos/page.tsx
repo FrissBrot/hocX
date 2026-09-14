@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { FilesView } from "@/components/files/files-view";
+import { PhotosView } from "@/components/photos/photos-view";
 import { AppShell } from "@/components/ui/app-shell";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { FileOverviewItem } from "@/types/api";
@@ -13,12 +13,17 @@ export default async function PhotosPage() {
     redirect("/");
   }
 
-  const photos = await backendFetchWithSession<FileOverviewItem[]>("/api/files?only_images=true");
+  // Fetched here (matching PhotosView's own default filters/sort) so the first page of
+  // photos - and the <img> requests for their thumbnails - are already in the server-rendered
+  // HTML instead of only starting after the client mounts and fires its own request.
+  const photos = await backendFetchWithSession<FileOverviewItem[]>(
+    "/api/files?only_images=true&sort_by=group_date&sort_dir=desc"
+  );
 
   return (
     <AppShell initialSession={session}>
       <section className="panel">
-        <FilesView mode="photos" initialItems={photos ?? []} />
+        <PhotosView initialItems={photos ?? []} />
       </section>
     </AppShell>
   );

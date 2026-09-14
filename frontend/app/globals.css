@@ -6170,6 +6170,48 @@ input[type="radio"] {
 
 .files-sort-select {
   min-width: 180px;
+  max-width: 220px;
+}
+
+/* A <select> has no intrinsic width of its own in a flex row (see .files-sort-select
+   above needing its own max-width) - without a cap here it stretches to fill the row,
+   forcing the next flex item (tags/count) onto its own line even though there's plenty
+   of horizontal room, which is what pushed this whole toolbar into one control per row
+   instead of the mockup's single compact filter bar. */
+.list-filter-row {
+  row-gap: 10px;
+}
+
+/* .list-filter-row's own justify-content:space-between spreads a handful of controls
+   across the full row width (fine for its original two-item use elsewhere) - the Fotos/
+   Dateien toolbar instead wants tabs/search/sort/tags clustered together on the left,
+   like the mockup's compact single-bar toolbar, so this modifier overrides just that. */
+.list-filter-row-compact {
+  justify-content: flex-start;
+  gap: 12px;
+}
+
+.list-filter-count {
+  margin-left: auto;
+}
+
+.list-filter-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 1 260px;
+  min-width: 200px;
+}
+
+.list-filter-tags .tag-input-wrap {
+  flex: 1;
+}
+
+/* Tighter page-level rhythm for Fotos/Dateien specifically - the shared .grid utility's
+   18px gap (used app-wide) left a lot of empty space between the header/toolbar/progress
+   bar/gallery sections compared to the mockup's denser layout. */
+.grid-tight {
+  gap: 10px;
 }
 
 .files-tag-filter {
@@ -6182,6 +6224,7 @@ input[type="radio"] {
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--muted);
+  white-space: nowrap;
 }
 
 /* Gallery upload modal (components/files/files-view.tsx GalleryUploadModal) */
@@ -6402,6 +6445,71 @@ input[type="radio"] {
   background: var(--surface-2);
   border-color: var(--border);
   color: var(--text);
+}
+
+.quality-info-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+.quality-info-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  /* Custom property, not a literal `background` - the base `button` rule's hover state
+     reads var(--button-hover-bg, var(--button-bg)), so a variant that sets `background`
+     directly instead leaves --button-bg at its button-wide default (--primary) and hover
+     suddenly jumps to that instead of darkening this button's own resting color (the
+     "dark mode hover bug" - see the comment above the base `button:hover` rule). */
+  --button-bg: var(--surface-2);
+  background: var(--button-bg);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.quality-info-toggle:hover {
+  color: var(--text);
+  border-color: var(--text);
+}
+
+.quality-info-tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: var(--z-popover);
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 190px;
+  padding: 10px 12px;
+  background: var(--panel-solid);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  font-size: 0.82rem;
+  color: var(--text);
+  pointer-events: none;
+}
+
+.quality-info-wrapper:hover .quality-info-tooltip,
+.quality-info-wrapper:focus-within .quality-info-tooltip {
+  display: flex;
+}
+
+.quality-info-tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.quality-info-tooltip-row strong {
+  font-weight: 600;
+  color: var(--muted);
 }
 
 .segment-control {
@@ -11879,3 +11987,650 @@ input[type="radio"] {
 }
 .connectivity-status-error { border-color: #d1495b; }
 .connectivity-status button { border: 0; background: transparent; color: inherit; text-decoration: underline; cursor: pointer; }
+
+/* ── Fotos: date-grouped grid, tiles, viewer, bulk actions, progress, series, albums ─── */
+
+.photo-date-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.photo-date-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.photo-date-weekday {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.photo-date-context,
+.photo-date-count {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* Masonry via CSS multi-column, not CSS grid: each tile keeps its photo's natural aspect
+   ratio (no forced square crop) and cards flow top-to-bottom per column, so a portrait and
+   a landscape shot end up different heights side by side, matching the mockup's staggered
+   look - a real `grid-template-rows: masonry` isn't broadly supported yet. */
+.photo-grid {
+  columns: 180px;
+  column-gap: 6px;
+}
+
+.photo-tile {
+  position: relative;
+  break-inside: avoid;
+  margin-bottom: 6px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--border);
+}
+
+.photo-tile-preview {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  cursor: zoom-in;
+  line-height: 0;
+  /* Tiles with a known aspect-ratio (see PhotoTile) get this box sized to the photo's real
+     dimensions before the thumbnail request even lands - the shimmer below just fills that
+     already-correctly-sized slot instead of a collapsed one, so nothing in the column below
+     jumps once the image arrives. */
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--border) 60%, transparent 40%) 0%,
+    color-mix(in srgb, var(--border) 100%, transparent 0%) 40px,
+    color-mix(in srgb, var(--border) 60%, transparent 40%) 80px
+  );
+  background-size: 200px 100%;
+  animation: subm-shimmer 1.3s ease-in-out infinite;
+}
+
+.photo-tile-preview-loaded {
+  animation: none;
+  background: none;
+}
+
+.photo-tile-img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Scoped to .photo-tile-preview's own img rather than the bare .photo-tile-img class - the
+   album-picker grid (photos-view.tsx's onSelectPhoto branch) reuses .photo-tile-img on a
+   plain <img> with no "loaded" state to ever flip this back to visible. */
+.photo-tile-preview .photo-tile-img {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.photo-tile-preview-loaded .photo-tile-img {
+  opacity: 1;
+}
+
+/* Only set on tiles with known width/height (aspect-ratio applied inline on
+   .photo-tile-preview) - fills that pre-reserved box exactly, so cropping only ever kicks
+   in on a real mismatch, never as a side effect of the placeholder sizing itself. */
+.photo-tile-img-fitted {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .photo-tile-preview {
+    animation: none;
+  }
+}
+
+.photo-tile-selected {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.photo-tile-select {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  background: rgba(16, 24, 40, 0.22);
+  backdrop-filter: blur(2px);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.photo-tile:hover .photo-tile-select,
+.photo-tile-select:focus-visible,
+.photo-tile-select-checked {
+  opacity: 1;
+}
+
+.photo-tile-select-checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.photo-tile-badge {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(16, 24, 40, 0.82);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.photo-bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel-solid);
+}
+
+.photo-bulk-bar select {
+  min-width: 160px;
+}
+
+.photo-bulk-bar-tagging {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-basis: 100%;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.photo-analysis-progress {
+  display: grid;
+  gap: 6px;
+}
+
+.photo-analysis-progress-label {
+  font-size: 0.85rem;
+}
+
+.photo-analysis-bar {
+  display: flex;
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--border);
+}
+
+.photo-analysis-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+/* Photo detail viewer - forced dark chrome in both site themes, so it needs its own
+   fixed palette rather than the --panel/--text tokens (which flip with [data-theme]). */
+.photo-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-popover);
+  display: flex;
+  flex-direction: column;
+  color-scheme: dark;
+  --pv-bg: #0a0a0c;
+  --pv-panel: #121214;
+  --pv-text: #f2f4f8;
+  --pv-muted: #97989e;
+  --pv-border: #232326;
+  background: var(--pv-bg);
+  color: var(--pv-text);
+}
+
+.photo-viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--pv-border);
+  background: var(--pv-panel);
+}
+
+.photo-viewer-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.photo-viewer-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 50%;
+  border: none;
+  background: color-mix(in srgb, #fff 8%, transparent);
+  color: var(--pv-text);
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.photo-viewer-close:hover {
+  background: color-mix(in srgb, #fff 16%, transparent);
+}
+
+.photo-viewer-title {
+  font-weight: 700;
+  font-size: 1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.photo-viewer-subtitle {
+  font-size: 0.82rem;
+  color: var(--pv-muted);
+}
+
+.photo-viewer-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.photo-viewer-actions .pill {
+  width: auto;
+  min-height: 30px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  background: color-mix(in srgb, #fff 10%, transparent);
+  border-color: color-mix(in srgb, #fff 16%, transparent);
+  color: var(--pv-text);
+  cursor: pointer;
+}
+
+.photo-viewer-pill-accent {
+  background: color-mix(in srgb, var(--warning-fg) 32%, transparent);
+  border-color: color-mix(in srgb, var(--warning-fg) 55%, transparent);
+  color: var(--warning-fg);
+}
+
+.photo-viewer-pill-solid {
+  background: #fff;
+  border-color: #fff;
+  color: #14181f;
+}
+
+.photo-viewer-pill-solid:hover {
+  background: color-mix(in srgb, #fff 88%, transparent);
+}
+
+.photo-viewer-body {
+  display: grid;
+  grid-template-columns: 1fr 400px;
+  gap: 1px;
+  flex: 1;
+  min-height: 0;
+  background: var(--pv-bg);
+}
+
+@media (max-width: 860px) {
+  .photo-viewer-body {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+}
+
+.photo-viewer-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: 12px;
+  overflow: hidden;
+  background: var(--pv-bg);
+}
+
+.photo-viewer-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.photo-viewer-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: color-mix(in srgb, #fff 7%, transparent);
+  color: var(--pv-text);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.65;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.photo-viewer-nav:hover {
+  opacity: 1;
+  background: color-mix(in srgb, #fff 16%, transparent);
+}
+
+.photo-viewer-nav-prev { left: 8px; }
+.photo-viewer-nav-next { right: 8px; }
+
+.photo-viewer-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 24px;
+  overflow-y: auto;
+  background: var(--pv-panel);
+}
+
+.photo-viewer-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.photo-viewer-section-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--pv-muted);
+}
+
+.photo-meter-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.photo-meter-label-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+}
+
+.photo-meter-label {
+  color: var(--pv-muted);
+}
+
+.photo-meter-value {
+  font-weight: 600;
+}
+
+.photo-meter-bar {
+  display: flex;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, #fff 10%, transparent);
+}
+
+.photo-meter-fill {
+  height: 100%;
+  background: var(--accent-strong, #5b8def);
+}
+
+.photo-meter-fill-sharpness { background: var(--info-fg); }
+.photo-meter-fill-exposure { background: var(--warning-fg); }
+.photo-meter-fill-face { background: var(--success-fg); }
+
+.photo-viewer-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px 24px;
+  margin: 0;
+}
+
+.photo-viewer-details > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.photo-viewer-details dt {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--pv-muted);
+}
+
+.photo-viewer-details dd {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.photo-viewer-sidebar .tag-input-field {
+  background: transparent;
+  border: none;
+  padding: 0;
+  gap: 8px;
+  min-height: 0;
+}
+
+.photo-viewer-sidebar .tag-chip {
+  background: color-mix(in srgb, #fff 10%, transparent);
+  border: 1px solid var(--pv-border);
+  color: var(--pv-text);
+}
+
+.photo-viewer-sidebar .tag-input-text {
+  flex: 0 0 auto;
+  width: 68px;
+  min-height: 28px;
+  border: 1px dashed var(--pv-border);
+  border-radius: 999px;
+  padding: 0 12px;
+  color: var(--pv-muted);
+  text-align: center;
+  font-size: 0.82rem;
+  transition: width 0.15s ease, text-align 0.15s ease;
+}
+
+.photo-viewer-sidebar .tag-input-text:focus {
+  width: 160px;
+  text-align: left;
+  border-style: solid;
+  color: var(--pv-text);
+}
+
+.photo-viewer-sidebar .tag-input-text::placeholder {
+  color: var(--pv-muted);
+}
+
+.photo-viewer-sidebar .tag-input-dropdown {
+  background: var(--pv-panel);
+  border-color: var(--pv-border);
+}
+
+.photo-viewer-sidebar .tag-input-option {
+  color: var(--pv-text);
+}
+
+/* Ähnliche (similarity series review) */
+
+.photo-series-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--panel-solid);
+}
+
+.photo-series-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.photo-series-title {
+  font-weight: 700;
+}
+
+.photo-series-count {
+  font-size: 0.85rem;
+}
+
+.photo-series-hint {
+  font-size: 0.82rem;
+}
+
+.photo-series-strip {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.photo-series-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 0 0 150px;
+}
+
+.photo-series-thumb-wrap {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 2px solid transparent;
+}
+
+.photo-series-thumb-wrap img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photo-series-item-best .photo-series-thumb-wrap {
+  border-color: var(--success);
+}
+
+.photo-series-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--success-bg);
+  color: var(--success-fg);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.photo-series-caption {
+  font-size: 0.78rem;
+}
+
+/* Alben tab */
+
+.album-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.album-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  text-align: left;
+  cursor: pointer;
+}
+
+.album-cover {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  aspect-ratio: 1;
+  background: var(--border);
+}
+
+.album-cover-cell {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.album-cover-empty {
+  background: var(--accent-soft);
+}
+
+.album-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px 14px;
+}
+
+.album-card-name {
+  font-weight: 700;
+}
+
+.album-card-stats,
+.album-card-kind {
+  font-size: 0.82rem;
+}
+
+/* Dateien table */
+
+.files-table-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

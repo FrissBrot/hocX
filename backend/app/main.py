@@ -1,5 +1,7 @@
 import asyncio
+import os
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exception_handlers import http_exception_handler
@@ -23,6 +25,7 @@ from app.services.document_template_service import DocumentTemplateService
 from app.services.export_service import ExportService
 from app.services.file_service import FileService
 from app.services.isolated_parse import warm_up_pool as warm_up_word_import_parse_pool
+from app.services import photo_album_service
 from app.services.table_snapshot_service import TableSnapshotService, run_due_cycle_snapshots
 
 
@@ -261,6 +264,78 @@ async def cycle_snapshot_loop() -> None:
     )
 
 
+def _photo_analysis_auto_queue_window_is_open() -> bool:
+    hour = datetime.now(timezone.utc).hour
+    start, end = settings.photo_analysis_auto_queue_start_hour, settings.photo_analysis_auto_queue_end_hour
+    if start <= end:
+        return start <= hour < end
+    return hour >= start or hour < end  # window wraps past midnight, e.g. 22..5
+
+
+def _host_load_is_low() -> bool:
+    try:
+        load_1min, _, _ = os.getloadavg()
+    except OSError:
+        # Not available on this platform (e.g. Windows) - don't block automatic queuing on
+        # a check that can't run; the request-path/worker resource limits are the actual
+        # backstop against overload either way.
+        return True
+    cpu_count = os.cpu_count() or 1
+    return load_1min <= cpu_count * settings.photo_analysis_auto_queue_max_load_factor
+
+
+async def photo_analysis_auto_queue_loop() -> None:
+    """Automatically queues Phase 3 (face-quality) analysis for images nobody has manually
+    requested it for yet (see FileService.create_pending_analysis_jobs), but only during a
+    configured low-traffic UTC hour window and only when the host doesn't already look
+    busy - this work competes with live request traffic and the dedicated worker container
+    for the same constrained host (see photo-analysis-worker/README.md), so it must never
+    fire just because it's due. Every-worker-but-advisory-locked like the other loops, but
+    the window/load gate has to run *before* even trying the lock (skip the tick entirely
+    rather than acquire-then-no-op), so this keeps its own loop instead of going through
+    run_advisory_locked_loop - lock id still comes from the shared BACKGROUND_LOCK_IDS
+    ledger like every other loop's, though, so it can't silently collide with one of them."""
+    interval_seconds = settings.photo_analysis_auto_queue_interval_minutes * 60
+    lock_id = BACKGROUND_LOCK_IDS["photo_analysis_auto_queue"]
+    file_service = FileService()
+    while True:
+        if _photo_analysis_auto_queue_window_is_open() and _host_load_is_low():
+            with SessionLocal() as db:
+                acquired = db.execute(text("SELECT pg_try_advisory_lock(:lock_id)"), {"lock_id": lock_id}).scalar()
+                if acquired:
+                    try:
+                        file_service.create_pending_analysis_jobs(db)
+                    finally:
+                        db.execute(text("SELECT pg_advisory_unlock(:lock_id)"), {"lock_id": lock_id})
+        await asyncio.sleep(interval_seconds)
+
+
+async def photo_quality_backfill_loop() -> None:
+    """Fills in sharpness_score/exposure_score for images the abgabebox submission-upload
+    path never computes them for (see FileService.backfill_missing_quality_scores) - cheap
+    enough per image that this runs continuously, not just in an off-peak window like
+    photo_analysis_auto_queue_loop. Same every-worker-but-advisory-locked pattern."""
+    file_service = FileService()
+    await run_advisory_locked_loop(
+        lock_id=BACKGROUND_LOCK_IDS["photo_quality_backfill"],
+        interval_seconds=settings.photo_quality_backfill_interval_minutes * 60,
+        task=file_service.backfill_missing_quality_scores,
+    )
+
+
+async def photo_album_sync_loop() -> None:
+    """Folds newly-submitted (and newly removed) abgabebox submission files into their
+    Zyklus/Abgabe/Abgabe-Element albums - see photo_album_service.sync_submission_uploads
+    for why this can't happen inline in that public upload request. Same every-worker-but-
+    advisory-locked pattern as the loops above."""
+    file_service = FileService()
+    await run_advisory_locked_loop(
+        lock_id=BACKGROUND_LOCK_IDS["photo_album_sync"],
+        interval_seconds=settings.photo_album_sync_interval_minutes * 60,
+        task=lambda db: photo_album_service.sync_submission_uploads(db, file_service),
+    )
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     FileService().ensure_storage()
@@ -276,8 +351,14 @@ async def lifespan(_: FastAPI):
     export_cleanup_task = asyncio.create_task(export_cleanup_loop())
     log_cleanup_task = asyncio.create_task(log_cleanup_loop())
     cycle_snapshot_task = asyncio.create_task(cycle_snapshot_loop())
+    photo_analysis_auto_queue_task = asyncio.create_task(photo_analysis_auto_queue_loop())
+    photo_quality_backfill_task = asyncio.create_task(photo_quality_backfill_loop())
+    photo_album_sync_task = asyncio.create_task(photo_album_sync_loop())
     yield
     health_check_task.cancel()
+    photo_analysis_auto_queue_task.cancel()
+    photo_quality_backfill_task.cancel()
+    photo_album_sync_task.cancel()
     rescan_task.cancel()
     upload_pipeline_rescan_task.cancel()
     export_cleanup_task.cancel()

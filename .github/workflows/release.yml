@@ -96,6 +96,7 @@ jobs:
           - abgabebox-backend
           - abgabebox-frontend
           - docs
+          - photo-analysis-worker
     steps:
       - name: Lowercase image owner
         run: echo "OWNER_LC=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"

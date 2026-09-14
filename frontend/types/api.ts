@@ -147,6 +147,15 @@ export type SubmissionFile = {
 
 export type FileOverviewSource = "protocol_image" | "word_import" | "submission_upload" | "gallery_upload";
 
+export type PhotoAlbumKind = "manual" | "cycle" | "submission" | "submission_element";
+
+export type FileAlbumRef = {
+  id: string;
+  name: string;
+  kind: PhotoAlbumKind;
+  is_best: boolean;
+};
+
 export type FileOverviewItem = {
   id: string;
   original_name: string;
@@ -164,6 +173,70 @@ export type FileOverviewItem = {
   ref_href: string | null;
   tags: string[];
   origin_tag: string;
+  sharpness_score: number | null;
+  exposure_score: number | null;
+  face_quality_score: number | null;
+  // Set once the worker has processed this file, regardless of whether a face was found -
+  // face_quality_score alone can't express "analyzed, no face" (both are null then).
+  face_analyzed_at: string | null;
+  // Original pixel dimensions - lets the Fotos gallery reserve each tile's correct
+  // aspect-ratio box before the thumbnail has loaded. Null for non-images and for images
+  // uploaded before this field existed whose thumbnail hasn't been regenerated since.
+  width: number | null;
+  height: number | null;
+  // The photo's logical date for the Fotos page's date-group headers.
+  group_date: string | null;
+  // Short context label for that date group's header (protocol/word-import/submission/
+  // event) - null when there's nothing more specific than the plain date.
+  context_label: string | null;
+  // Every album this file belongs to (only populated on the unscoped GET /files listing).
+  albums: FileAlbumRef[];
+  // Best-of ("Stern") state: within the album this item was fetched for when scoped by
+  // album_id, otherwise "best-of in at least one album" (null if in no album at all).
+  is_best: boolean | null;
+};
+
+export type PhotoAlbum = {
+  id: string;
+  name: string;
+  kind: PhotoAlbumKind;
+  photo_count: number;
+  best_of_count: number;
+  cover_thumbnail_urls: string[];
+};
+
+export type SimilarityGroup = {
+  best_id: string;
+  images: FileOverviewItem[];
+};
+
+export type PhotoAnalysisProgress = {
+  total_images: number;
+  analyzed_images: number;
+  pending_images: number;
+  active_jobs: number;
+  active_job_image_count: number;
+};
+
+export type FileStats = {
+  document_count: number;
+  photo_count: number;
+  total_bytes: number;
+};
+
+export type FileBulkDeleteResult = {
+  deleted_ids: string[];
+  errors: string[];
+};
+
+export type PhotoAnalysisJob = {
+  id: string;
+  status: "queued" | "running" | "done" | "failed";
+  image_count: number;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  error: string | null;
 };
 
 export type StoredFileMetadata = {

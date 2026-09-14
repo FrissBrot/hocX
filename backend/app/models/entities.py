@@ -880,7 +880,29 @@ class StoredFile(Base, TimestampMixin):
     file_size_bytes: Mapped[int | None] = mapped_column(BigInteger)
     checksum_sha256: Mapped[str | None] = mapped_column(Text)
     perceptual_hash: Mapped[str | None] = mapped_column(Text)
+    # Laplacian-variance sharpness and clipped-histogram exposure estimates (see
+    # photo_quality.py) - relative ranking signals for the photo-culling "beste Bilder
+    # vorschlagen" feature, not an absolute/universal quality bar. None for non-image
+    # files and images PIL couldn't decode.
+    sharpness_score: Mapped[float | None] = mapped_column(Float)
+    exposure_score: Mapped[float | None] = mapped_column(Float)
+    # Phase 3 (photo_analysis_job/photo-analysis-worker) - sharpness/exposure of the best
+    # detected face region, not the whole image. None if no face was detected, the file
+    # isn't an image, or it hasn't been analyzed yet.
+    face_quality_score: Mapped[float | None] = mapped_column(Float)
+    # Set by the worker once it has processed the file, regardless of whether a face was
+    # found - face_quality_score alone can't express "analyzed, no face" vs. "not analyzed
+    # yet" since both leave that column NULL.
+    face_analyzed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     thumbnail_path: Mapped[str | None] = mapped_column(Text)
+    # Original pixel dimensions, captured alongside thumbnail generation (see
+    # _generate_thumbnail_bytes/ensure_thumbnail in file_service.py) so the Fotos gallery's
+    # masonry grid can reserve each tile's correct aspect-ratio box before the image itself
+    # has loaded, instead of the layout jumping as each thumbnail comes in. None for
+    # non-images, files PIL couldn't decode, and files uploaded before this column existed
+    # whose thumbnail was never regenerated since.
+    width: Mapped[int | None] = mapped_column(Integer)
+    height: Mapped[int | None] = mapped_column(Integer)
     scan_status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'clean'"))
     # User-assigned tags for the "Dateien" overview page's filter/editor - separate from the
     # auto-derived "origin tag" (which protocol/word-import/submission this file came from,
@@ -996,12 +1018,17 @@ class GalleryImage(Base, TimestampMixin):
     __tablename__ = "gallery_image"
     __table_args__ = (
         Index("idx_gallery_image_tenant", "tenant_id"),
+        Index("idx_gallery_image_event", "event_id"),
         Index("idx_gallery_image_stored_file", "stored_file_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     stored_file_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("stored_file.id", ondelete="RESTRICT"), nullable=False)
+    # The Termin the uploader optionally targeted in GalleryUploadModal, kept around (it
+    # used to be discarded once the file landed in that Termin's auto-album) so the Fotos
+    # page's date-grouped headers can show which Termin/Zyklus a given date belongs to.
+    event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("event.id", ondelete="SET NULL"))
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
 
 
@@ -1249,11 +1276,27 @@ class SystemErrorLog(Base):
 
 
 class PhotoAlbum(Base, TimestampMixin):
+    """`kind` distinguishes an admin-created album ("manual") from the three auto-generated
+    kinds this table also holds (see photo_album_service.py): one per Zyklus+Periode
+    ("cycle"), one per Abgabe ("submission"), one per Abgabe-Element ("submission_element").
+    Exactly one of (cycle_config_id, cycle_year) / submission_assignment_id (+ optionally
+    submission_element_ref) is set, matching `kind` - see migration 0068's
+    ck_photo_album_kind_fields, enforced in Postgres rather than just in Python since
+    get_or_create_*_album()'s uniqueness guarantee (the partial unique indexes from that
+    same migration) depends on it."""
+
     __tablename__ = "photo_album"
 
     id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'manual'"))
+    cycle_config_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("cycle_config.id", ondelete="CASCADE"))
+    cycle_year: Mapped[int | None] = mapped_column(SmallInteger)
+    submission_assignment_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("submission_assignment.id", ondelete="CASCADE"))
+    # "event-<public_id>" / "entry-<public_id>", same format as SubmissionUploadLog.element_ref
+    # (see submission_service.py's _element_ref) - only set when kind == "submission_element".
+    submission_element_ref: Mapped[str | None] = mapped_column(Text)
 
 
 class PhotoAlbumItem(Base):
@@ -1262,3 +1305,32 @@ class PhotoAlbumItem(Base):
     album_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("photo_album.id", ondelete="CASCADE"), primary_key=True)
     # Overview IDs cover both StoredFile and SubmissionUploadFile.
     file_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
+    # Current resolved best-of ("Stern") state - auto-recomputed (see
+    # photo_album_service.recompute_best_of) except where best_override pins it.
+    is_best: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"), default=False)
+    # A user's manual "immer im Best-of" / "nie im Best-of" pick, surviving future
+    # recomputes. NULL = automatically managed (the common case).
+    best_override: Mapped[str | None] = mapped_column(Text)
+
+
+class PhotoAnalysisJob(Base, TimestampMixin):
+    """Phase 3 of the photo-culling feature: a batch of stored_file rows queued for the
+    separate photo-analysis-worker container to score (currently: face_quality_score).
+    Written/read here by the backend (hocx_app); the worker itself connects as the
+    separate, minimally-privileged hocx_photo_worker role (see migration 0067) and only
+    ever transitions status/started_at/finished_at/error on a row it already sees."""
+
+    __tablename__ = "photo_analysis_job"
+    __table_args__ = (
+        Index("idx_photo_analysis_job_tenant", "tenant_id"),
+        Index("idx_photo_analysis_job_status_created", "status", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()"))
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'queued'"))
+    stored_file_ids: Mapped[list[int]] = mapped_column(JSONB, nullable=False)
+    requested_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    error: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
