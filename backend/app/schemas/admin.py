@@ -169,6 +169,48 @@ class SystemErrorLogFilterOptions(BaseModel):
     sources: list[str]
 
 
+UploadPipelineSource = Literal["protocol_image", "gallery_upload", "word_import", "submission_upload"]
+
+
+class UploadPipelineFileRead(BaseModel):
+    id: uuid.UUID
+    tenant_id: uuid.UUID
+    tenant_name: str
+    original_name: str
+    mime_type: str | None = None
+    file_size_bytes: int | None = None
+    source: UploadPipelineSource
+    origin_tag: str
+    scan_status: str
+    created_at: datetime
+
+
+class UploadPipelineStatusPage(BaseModel):
+    items: list[UploadPipelineFileRead]
+    total: int
+
+
+class UploadPipelineSummaryEntry(BaseModel):
+    source: UploadPipelineSource
+    scan_status: str
+    count: int
+
+
+class AbgabeboxQuarantineEntry(BaseModel):
+    tenant_id: uuid.UUID | None = None
+    tenant_name: str | None = None
+    assignment_id: int | None = None
+    file_name: str
+    age_seconds: int
+    file_size_bytes: int
+
+
+class UploadPipelineOverview(BaseModel):
+    summary: list[UploadPipelineSummaryEntry]
+    files: UploadPipelineStatusPage
+    abgabebox_quarantine: list[AbgabeboxQuarantineEntry]
+
+
 TenantCleanupCategory = Literal[
     "protocols", "list_entries", "lists_full", "events", "todos", "participants", "documents"
 ]

@@ -390,9 +390,9 @@ def create_protocols(db, tenant: Tenant, template: Template, events: list[Event]
 def create_gallery(db, tenant: Tenant, leader: AppUser, photo_paths: list[Path]) -> None:
     file_service = FileService()
     payloads = [(p.name, p.read_bytes()) for p in photo_paths]
-    items, errors = file_service.save_gallery_uploads(
+    items, errors = asyncio.run(file_service.save_gallery_uploads(
         db, tenant_id=tenant.id, files=payloads, tags=["Sommerlager"], created_by=leader.id,
-    )
+    ))
     if errors:
         log(f"Gallery upload warnings: {errors}")
     db.flush()

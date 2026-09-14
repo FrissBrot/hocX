@@ -1,6 +1,7 @@
 """Automatic off-peak queuing for Phase 3 (face-quality) analysis:
 main.py's window/load gates and FileService.create_pending_analysis_jobs."""
 
+import asyncio
 import io
 from datetime import datetime, timezone
 
@@ -103,8 +104,8 @@ def test_host_load_is_low_defaults_to_true_when_getloadavg_unavailable(monkeypat
 def test_create_pending_analysis_jobs_queues_one_job_per_tenant_with_unanalyzed_images(db):
     tenant_a = make_tenant(db)
     tenant_b = make_tenant(db)
-    service.save_gallery_uploads(db, tenant_id=tenant_a.id, files=[("a.png", _png_bytes())], tags=[], created_by=None)
-    service.save_gallery_uploads(db, tenant_id=tenant_b.id, files=[("b.png", _png_bytes())], tags=[], created_by=None)
+    asyncio.run(service.save_gallery_uploads(db, tenant_id=tenant_a.id, files=[("a.png", _png_bytes())], tags=[], created_by=None))
+    asyncio.run(service.save_gallery_uploads(db, tenant_id=tenant_b.id, files=[("b.png", _png_bytes())], tags=[], created_by=None))
     db.commit()
     _mark_clean(db, tenant_a.id)
     _mark_clean(db, tenant_b.id)
@@ -122,7 +123,7 @@ def test_create_pending_analysis_jobs_queues_one_job_per_tenant_with_unanalyzed_
 
 def test_create_pending_analysis_jobs_skips_a_tenant_with_an_already_active_job(db):
     tenant = make_tenant(db)
-    service.save_gallery_uploads(db, tenant_id=tenant.id, files=[("a.png", _png_bytes())], tags=[], created_by=None)
+    asyncio.run(service.save_gallery_uploads(db, tenant_id=tenant.id, files=[("a.png", _png_bytes())], tags=[], created_by=None))
     db.commit()
     _mark_clean(db, tenant.id)
     service.create_analysis_job(db, tenant.id)  # first sweep queues it
@@ -135,7 +136,7 @@ def test_create_pending_analysis_jobs_skips_a_tenant_with_an_already_active_job(
 
 def test_create_pending_analysis_jobs_finds_nothing_once_everything_is_already_scored(db):
     tenant = make_tenant(db)
-    items, _errors = service.save_gallery_uploads(db, tenant_id=tenant.id, files=[("a.png", _png_bytes())], tags=[], created_by=None)
+    items, _errors = asyncio.run(service.save_gallery_uploads(db, tenant_id=tenant.id, files=[("a.png", _png_bytes())], tags=[], created_by=None))
     db.commit()
     _mark_clean(db, tenant.id)
     stored_file_id = service.stored_file_repository.get_by_public_id(db, items[0].id, tenant_id=tenant.id).id
@@ -158,7 +159,7 @@ def test_create_pending_analysis_jobs_never_requeues_a_photo_with_no_detected_fa
     photo is analyzed (face_analyzed_at set) but has no face (face_quality_score still
     None), and must not be picked up again."""
     tenant = make_tenant(db)
-    items, _errors = service.save_gallery_uploads(db, tenant_id=tenant.id, files=[("a.png", _png_bytes())], tags=[], created_by=None)
+    items, _errors = asyncio.run(service.save_gallery_uploads(db, tenant_id=tenant.id, files=[("a.png", _png_bytes())], tags=[], created_by=None))
     db.commit()
     _mark_clean(db, tenant.id)
     stored_file_id = service.stored_file_repository.get_by_public_id(db, items[0].id, tenant_id=tenant.id).id

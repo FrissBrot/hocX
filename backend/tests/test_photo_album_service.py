@@ -1,6 +1,7 @@
 """Tests for photo_album_service.py: auto-album resolution (one per Zyklus+Periode, one per
 Abgabe, one per Abgabe-Element) and the best-of ("Stern") ranking within an album."""
 
+import asyncio
 import io
 import random
 from datetime import date
@@ -42,7 +43,7 @@ def _upload_images(db, tenant_id: int, count: int) -> list:
     past the pending-AV-scan gate the way test_photo_analysis_auto_queue.py does - there's
     no ClamAV in this test environment."""
     files = [(f"bild-{i}.png", _noise_png_bytes(i)) for i in range(count)]
-    items, errors = service.save_gallery_uploads(db, tenant_id=tenant_id, files=files, tags=[], created_by=None)
+    items, errors = asyncio.run(service.save_gallery_uploads(db, tenant_id=tenant_id, files=files, tags=[], created_by=None))
     assert errors == []
     db.execute(text("UPDATE stored_file SET scan_status = 'clean' WHERE tenant_id = :tenant_id"), {"tenant_id": tenant_id})
     db.commit()

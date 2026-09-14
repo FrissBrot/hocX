@@ -418,6 +418,47 @@ export type SystemErrorLogFilterOptions = {
   sources: string[];
 };
 
+export type UploadPipelineSource = "protocol_image" | "gallery_upload" | "word_import" | "submission_upload";
+
+export type UploadPipelineFileEntry = {
+  id: string;
+  tenant_id: string;
+  tenant_name: string;
+  original_name: string;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  source: UploadPipelineSource;
+  origin_tag: string;
+  scan_status: string;
+  created_at: string;
+};
+
+export type UploadPipelineStatusPage = {
+  items: UploadPipelineFileEntry[];
+  total: number;
+};
+
+export type UploadPipelineSummaryEntry = {
+  source: UploadPipelineSource;
+  scan_status: string;
+  count: number;
+};
+
+export type AbgabeboxQuarantineEntry = {
+  tenant_id: string | null;
+  tenant_name: string | null;
+  assignment_id: number | null;
+  file_name: string;
+  age_seconds: number;
+  file_size_bytes: number;
+};
+
+export type UploadPipelineOverview = {
+  summary: UploadPipelineSummaryEntry[];
+  files: UploadPipelineStatusPage;
+  abgabebox_quarantine: AbgabeboxQuarantineEntry[];
+};
+
 export type PlatformAdminSummary = {
   id: string;
   email: string;

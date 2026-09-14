@@ -4,6 +4,7 @@ PATCH /files/{file_id}/best). delete_gallery_images only ever hard-deletes galle
 uploads - protocol images, word-import source documents and submission uploads each have
 their own deletion semantics this must not bypass (see the function's docstring)."""
 
+import asyncio
 import io
 import uuid
 from datetime import date
@@ -45,7 +46,7 @@ def _png_bytes(color=(10, 20, 30)) -> bytes:
 
 
 def _upload_gallery_image(db, tenant_id: int, name: str = "a.png"):
-    items, errors = service.save_gallery_uploads(db, tenant_id=tenant_id, files=[(name, _png_bytes())], tags=[], created_by=None)
+    items, errors = asyncio.run(service.save_gallery_uploads(db, tenant_id=tenant_id, files=[(name, _png_bytes())], tags=[], created_by=None))
     assert errors == []
     db.commit()
     return items[0]

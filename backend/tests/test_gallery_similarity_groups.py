@@ -4,6 +4,7 @@ actual save_gallery_uploads call, so this exercises the real perceptual_hash/sha
 exposure values rather than hand-picked ones (see test_photo_similarity.py for the pure
 clustering-logic unit tests)."""
 
+import asyncio
 import io
 
 import pytest
@@ -51,7 +52,7 @@ def _upload_and_group(db, tenant_id: int, files: list[tuple[str, bytes]]):
     # Bild"-Hinweise here (that's the tenant-wide perceptual-hash duplicate warning this
     # test's near-identical burst shots are expected to trigger) - every file still gets
     # stored, which is what `items`'s length asserts below.
-    items, _errors = service.save_gallery_uploads(db, tenant_id=tenant_id, files=files, tags=[], created_by=None)
+    items, _errors = asyncio.run(service.save_gallery_uploads(db, tenant_id=tenant_id, files=files, tags=[], created_by=None))
     assert len(items) == len(files)
     db.commit()
     return service.group_similar_gallery_images(db, tenant_id)
@@ -83,8 +84,8 @@ def test_group_similar_gallery_images_scopes_to_the_given_tenant_only(db):
     tenant_b = make_tenant(db)
     content = _circle_png_bytes(100, 75, 50)
 
-    service.save_gallery_uploads(db, tenant_id=tenant_a.id, files=[("a.png", content)], tags=[], created_by=None)
-    service.save_gallery_uploads(db, tenant_id=tenant_b.id, files=[("b.png", content)], tags=[], created_by=None)
+    asyncio.run(service.save_gallery_uploads(db, tenant_id=tenant_a.id, files=[("a.png", content)], tags=[], created_by=None))
+    asyncio.run(service.save_gallery_uploads(db, tenant_id=tenant_b.id, files=[("b.png", content)], tags=[], created_by=None))
     db.commit()
 
     groups_a = service.group_similar_gallery_images(db, tenant_a.id)
@@ -102,9 +103,9 @@ def test_min_size_excludes_singleton_groups(db):
     sharp = _circle_png_bytes(100, 75, 50)
     blurred = _blurred(sharp, radius=6)
     different = _circle_png_bytes(40, 110, 45)
-    items, _errors = service.save_gallery_uploads(
+    items, _errors = asyncio.run(service.save_gallery_uploads(
         db, tenant_id=tenant.id, files=[("sharp.png", sharp), ("blurred.png", blurred), ("different.png", different)], tags=[], created_by=None
-    )
+    ))
     assert len(items) == 3
     db.commit()
 

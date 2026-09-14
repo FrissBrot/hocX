@@ -4,6 +4,7 @@ queued files) lives in a separate container/codebase - see photo-analysis-worker
 these tests only cover the backend side of the job queue: a job is created "queued" with
 the right file ids and stays that way until the (out-of-process) worker moves it along."""
 
+import asyncio
 import io
 
 import pytest
@@ -36,9 +37,9 @@ service = FileService()
 
 def test_create_analysis_job_queues_every_matching_image(db):
     tenant = make_tenant(db)
-    service.save_gallery_uploads(
+    asyncio.run(service.save_gallery_uploads(
         db, tenant_id=tenant.id, files=[("a.png", _png_bytes((10, 20, 30))), ("b.png", _png_bytes((200, 30, 40)))], tags=[], created_by=None
-    )
+    ))
     db.commit()
 
     job = service.create_analysis_job(db, tenant.id)
@@ -59,7 +60,7 @@ def test_create_analysis_job_rejects_when_nothing_matches(db):
 
 def test_create_analysis_job_rejects_above_the_size_cap(db, monkeypatch):
     tenant = make_tenant(db)
-    service.save_gallery_uploads(db, tenant_id=tenant.id, files=[("a.png", _png_bytes())], tags=[], created_by=None)
+    asyncio.run(service.save_gallery_uploads(db, tenant_id=tenant.id, files=[("a.png", _png_bytes())], tags=[], created_by=None))
     db.commit()
     monkeypatch.setattr("app.services.file_service.MAX_ANALYSIS_JOB_IMAGES", 0)
 
@@ -73,7 +74,7 @@ def test_create_analysis_job_rejects_above_the_size_cap(db, monkeypatch):
 def test_get_analysis_job_is_scoped_to_its_own_tenant(db):
     tenant_a = make_tenant(db)
     tenant_b = make_tenant(db)
-    service.save_gallery_uploads(db, tenant_id=tenant_a.id, files=[("a.png", _png_bytes())], tags=[], created_by=None)
+    asyncio.run(service.save_gallery_uploads(db, tenant_id=tenant_a.id, files=[("a.png", _png_bytes())], tags=[], created_by=None))
     db.commit()
     job = service.create_analysis_job(db, tenant_a.id)
 
@@ -96,7 +97,7 @@ def test_create_analysis_job_route_requires_an_active_tenant(db):
 
 def test_create_analysis_job_route_returns_a_queued_job(db):
     tenant = make_tenant(db)
-    service.save_gallery_uploads(db, tenant_id=tenant.id, files=[("a.png", _png_bytes())], tags=[], created_by=None)
+    asyncio.run(service.save_gallery_uploads(db, tenant_id=tenant.id, files=[("a.png", _png_bytes())], tags=[], created_by=None))
     db.commit()
     user = make_current_user(tenant_id=tenant.id, role="writer")
 
