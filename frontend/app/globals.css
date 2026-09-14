@@ -11959,6 +11959,10 @@ input[type="radio"] {
   color: var(--muted);
 }
 
+/* Masonry via CSS multi-column, not CSS grid: each tile keeps its photo's natural aspect
+   ratio (no forced square crop) and cards flow top-to-bottom per column, so a portrait and
+   a landscape shot end up different heights side by side, matching the mockup's staggered
+   look - a real `grid-template-rows: masonry` isn't broadly supported yet. */
 .photo-grid {
   columns: 180px;
   column-gap: 6px;
