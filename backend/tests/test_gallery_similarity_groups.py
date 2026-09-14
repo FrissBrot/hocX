@@ -91,3 +91,26 @@ def test_group_similar_gallery_images_scopes_to_the_given_tenant_only(db):
 
     assert len(groups_a) == 1
     assert [image.original_name for image in groups_a[0].images] == ["a.png"]
+
+
+def test_min_size_excludes_singleton_groups(db):
+    """group_similar_images() legitimately returns a singleton "group" for an image with
+    nothing similar to it - the frontend's "Ähnliche" tab only wants actual near-duplicate
+    series, so min_size=2 must filter those out (the default min_size=1 keeps today's
+    behavior for other callers)."""
+    tenant = make_tenant(db)
+    sharp = _circle_png_bytes(100, 75, 50)
+    blurred = _blurred(sharp, radius=6)
+    different = _circle_png_bytes(40, 110, 45)
+    items, _errors = service.save_gallery_uploads(
+        db, tenant_id=tenant.id, files=[("sharp.png", sharp), ("blurred.png", blurred), ("different.png", different)], tags=[], created_by=None
+    )
+    assert len(items) == 3
+    db.commit()
+
+    all_groups = service.group_similar_gallery_images(db, tenant.id, min_size=1)
+    assert len(all_groups) == 2
+
+    multi_only = service.group_similar_gallery_images(db, tenant.id, min_size=2)
+    assert len(multi_only) == 1
+    assert len(multi_only[0].images) == 2

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { FileOverviewItem } from "@/types/api";
@@ -20,8 +20,6 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: routerPushMock }),
 }));
 
-// jsdom has no real IntersectionObserver - fake one so the "load more" sentinel can be
-// triggered deterministically instead of depending on real scroll/layout.
 class FakeIntersectionObserver implements IntersectionObserver {
   static instances: FakeIntersectionObserver[] = [];
   readonly root = null;
@@ -37,9 +35,6 @@ class FakeIntersectionObserver implements IntersectionObserver {
   takeRecords(): IntersectionObserverEntry[] {
     return [];
   }
-  trigger(isIntersecting: boolean) {
-    this.callback([{ isIntersecting } as IntersectionObserverEntry], this);
-  }
 }
 
 import { FilesView } from "./files-view";
@@ -48,37 +43,40 @@ function makeItem(overrides: Partial<FileOverviewItem> = {}): FileOverviewItem {
   const id = overrides.id ?? `file-${Math.random().toString(36).slice(2)}`;
   return {
     id,
-    original_name: "urlaubsfoto.jpg",
-    mime_type: "image/jpeg",
+    original_name: "bericht.pdf",
+    mime_type: "application/pdf",
     file_size_bytes: 12_345,
     created_at: "2026-08-01T10:00:00Z",
-    source: "gallery_upload",
-    is_image: true,
-    content_url: `/api/stored-files/${id}`,
-    thumbnail_url: `/api/stored-files/${id}/thumbnail`,
+    source: "word_import",
+    is_image: false,
+    content_url: `/api/stored-files/${id}/content`,
+    thumbnail_url: null,
     tags_url: `/api/stored-files/${id}/tags`,
     metadata_url: `/api/stored-files/${id}/metadata`,
-    ref_label: "",
+    ref_label: "1. Hock",
     ref_date: null,
     ref_href: null,
     tags: [],
-    origin_tag: "Galerie",
+    origin_tag: "Word-Import: 1. Hock",
     sharpness_score: null,
     exposure_score: null,
     face_quality_score: null,
+    face_analyzed_at: null,
+    group_date: "2026-08-01",
+    context_label: "1. Hock",
+    albums: [],
+    is_best: null,
     ...overrides,
   };
 }
 
-describe("FilesView (Fotos gallery)", () => {
+describe("FilesView (Dateien)", () => {
   beforeEach(() => {
     browserApiFetchMock.mockReset();
     routerPushMock.mockReset();
     showToastMock.mockReset();
     FakeIntersectionObserver.instances = [];
     vi.stubGlobal("IntersectionObserver", FakeIntersectionObserver);
-    // Every mount fetches the tag-suggestions list; resolve it for every test unless
-    // a test overrides this first call itself.
     browserApiFetchMock.mockResolvedValue([]);
   });
 
@@ -87,111 +85,52 @@ describe("FilesView (Fotos gallery)", () => {
     vi.restoreAllMocks();
   });
 
-  it("shows only all photos and albums tabs", () => {
-    render(<FilesView mode="photos" initialItems={[]} />);
-    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Alle Fotos", "Alben"]);
-  });
-
-  it("shows a quality-focused sort selector for photos, not the files name/size options", () => {
-    render(<FilesView mode="photos" initialItems={[]} />);
-    expect(screen.getByText("Schärfe (am schärfsten zuerst)")).toBeInTheDocument();
-    expect(screen.getByText("Gesichtsqualität (am besten zuerst)")).toBeInTheDocument();
-    expect(screen.queryByText("Name (A-Z)")).not.toBeInTheDocument();
-    expect(screen.queryByText(/Grösse/)).not.toBeInTheDocument();
-  });
-
-  it("creates a persistent album and opens its photos", async () => {
-    browserApiFetchMock.mockImplementation((url: string, options?: { method?: string }) => {
-      if (url === "/api/files/albums" && options?.method === "POST") {
-        return Promise.resolve({ id: "album-1", name: "Sommerlager" });
-      }
+  it("renders the stat cards", async () => {
+    browserApiFetchMock.mockImplementation((url: string) => {
+      if (url === "/api/files/stats") return Promise.resolve({ document_count: 48, photo_count: 266, total_bytes: 1_900_000_000 });
       return Promise.resolve([]);
     });
-    render(<FilesView mode="photos" initialItems={[]} />);
-    fireEvent.click(screen.getByRole("tab", { name: "Alben" }));
-    fireEvent.click(screen.getByRole("button", { name: "+ Album erstellen" }));
-    fireEvent.change(screen.getByLabelText("Albumname"), { target: { value: "Sommerlager" } });
-    fireEvent.click(screen.getByRole("button", { name: "Album erstellen" }));
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Sommerlager" })).toBeInTheDocument());
-    await waitFor(() => expect(browserApiFetchMock.mock.calls.some(([url]) => url.includes("album_id=album-1") && url.includes("sort_by=created_at") && url.includes("sort_dir=desc"))).toBe(true));
+    render(<FilesView initialItems={[]} />);
+
+    expect(await screen.findByText("Dokumente")).toBeInTheDocument();
+    expect(await screen.findByText("48")).toBeInTheDocument();
+    expect(screen.getByText("Fotos")).toBeInTheDocument();
+    expect(screen.getByText("266")).toBeInTheDocument();
+    expect(screen.getByText("Speicher")).toBeInTheDocument();
   });
 
-  it("renders each photo's <img> with the thumbnail URL and native lazy loading", () => {
+  it("renders each file as a table row with name/source badge/size", () => {
+    const item = makeItem({ id: "a1", original_name: "1. Hock vom 14.10.2026.docx", source: "word_import" });
+    render(<FilesView initialItems={[item]} />);
+
+    expect(screen.getByRole("table")).toBeInTheDocument();
+    expect(screen.getByText("1. Hock vom 14.10.2026.docx")).toBeInTheDocument();
+    expect(screen.getByText("Word-Import", { selector: ".badge" })).toBeInTheDocument();
+  });
+
+  it("offers a Download link pointing at the file's content URL", () => {
     const item = makeItem({ id: "a1" });
-    render(<FilesView mode="photos" initialItems={[item]} />);
+    render(<FilesView initialItems={[item]} />);
 
-    const img = screen.getByAltText("urlaubsfoto.jpg") as HTMLImageElement;
-    expect(img.getAttribute("loading")).toBe("lazy");
-    expect(img.getAttribute("decoding")).toBe("async");
-    expect(img.src).toContain("/api/stored-files/a1/thumbnail");
+    const link = screen.getByRole("link", { name: "Download" }) as HTMLAnchorElement;
+    expect(link.getAttribute("href")).toContain("/api/stored-files/a1/content");
   });
 
-  it("falls back to the full-size content URL when no thumbnail exists yet", () => {
-    const item = makeItem({ id: "b2", thumbnail_url: null });
-    render(<FilesView mode="photos" initialItems={[item]} />);
-
-    const img = screen.getByAltText("urlaubsfoto.jpg") as HTMLImageElement;
-    expect(img.src).toContain("/api/stored-files/b2");
-    expect(img.src).not.toContain("thumbnail");
+  it("shows an empty state when there are no files", () => {
+    render(<FilesView initialItems={[]} />);
+    expect(screen.getByText("Keine Dateien gefunden.")).toBeInTheDocument();
   });
 
-  it("shows the analysis status tooltip with per-category scores/pending state on hover", async () => {
-    browserApiFetchMock.mockResolvedValue(null);
-    const item = makeItem({ id: "q1", sharpness_score: 8.7, exposure_score: 0.92, face_quality_score: null });
-    render(<FilesView mode="photos" initialItems={[item]} />);
-    fireEvent.click(screen.getByAltText("urlaubsfoto.jpg").closest("button")!);
-
-    await screen.findByRole("button", { name: "Analyse-Status" });
-
-    // A CSS-only hover tooltip (shown via :hover/:focus-within, see globals.css) rather
-    // than a click-toggled panel - the content is always in the DOM, visibility is purely
-    // CSS, so there's nothing to simulate hover for here beyond asserting it's present.
-    expect(screen.getByText("Schärfe")).toBeInTheDocument();
-    expect(screen.getByText("8.7")).toBeInTheDocument();
-    expect(screen.getByText("92%")).toBeInTheDocument();
-    expect(screen.getByText("Ausstehend")).toBeInTheDocument();
-  });
-
-  it("does not render an <img> for non-image files (icon tile instead)", () => {
-    const item = makeItem({ id: "c3", is_image: false, original_name: "bericht.pdf", mime_type: "application/pdf" });
-    render(<FilesView mode="files" initialItems={[item]} />);
-
-    expect(screen.queryByAltText("bericht.pdf")).not.toBeInTheDocument();
-    expect(screen.getByText("PDF")).toBeInTheDocument();
-  });
-
-  it("shows a load-more sentinel once a full page has loaded, and paginates via manual click", async () => {
+  it("shows a load-more sentinel once a full page has loaded", () => {
     const fullPage = Array.from({ length: 60 }, (_, i) => makeItem({ id: `page1-${i}` }));
-    const secondPage = [makeItem({ id: "page2-0" })];
-
-    render(<FilesView mode="photos" initialItems={fullPage} />);
+    render(<FilesView initialItems={fullPage} />);
 
     expect(screen.getByText(/Mehr laden/)).toBeInTheDocument();
-
-    browserApiFetchMock.mockResolvedValueOnce(secondPage);
-    fireEvent.click(screen.getByText(/Mehr laden/));
-
-    await waitFor(() => expect(screen.getAllByRole("img")).toHaveLength(61));
-    const [calledUrl] = browserApiFetchMock.mock.calls.at(-1)!;
-    expect(calledUrl).toContain("skip=60");
-  });
-
-  it("auto-loads the next page once the sentinel scrolls into view (infinite scroll)", async () => {
-    const fullPage = Array.from({ length: 60 }, (_, i) => makeItem({ id: `p1-${i}` }));
-    const secondPage = [makeItem({ id: "p2-0" })];
-
-    render(<FilesView mode="photos" initialItems={fullPage} />);
-    expect(FakeIntersectionObserver.instances.length).toBeGreaterThan(0);
-
-    browserApiFetchMock.mockResolvedValueOnce(secondPage);
-    FakeIntersectionObserver.instances.at(-1)!.trigger(true);
-
-    await waitFor(() => expect(screen.getAllByRole("img")).toHaveLength(61));
   });
 
   it("hides the load-more sentinel once a short page indicates there is nothing left", () => {
     const shortPage = [makeItem({ id: "only-one" })];
-    render(<FilesView mode="photos" initialItems={shortPage} />);
+    render(<FilesView initialItems={shortPage} />);
 
     expect(screen.queryByText(/Mehr laden/)).not.toBeInTheDocument();
   });

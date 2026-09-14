@@ -411,3 +411,130 @@ def test_get_stored_file_metadata_uploaded_by_name_is_none_without_created_by(db
 
     assert metadata is not None
     assert metadata.uploaded_by_name is None
+
+
+def test_list_tenant_files_protocol_image_group_date_and_context_label(db):
+    tenant = make_tenant(db)
+    protocol, _stored_file = _make_protocol_image(db, tenant.id)
+
+    items = service.list_tenant_files(db, tenant.id)
+
+    assert len(items) == 1
+    assert items[0].group_date == protocol.protocol_date
+    assert items[0].context_label == "Protokoll 7/2026 · Test Block"
+
+
+def test_list_tenant_files_word_import_group_date_and_context_label(db):
+    tenant = make_tenant(db)
+    document, stored_file = _make_word_import_document(db, tenant.id, display_name="1. Hock vom 14.10.2026.docx")
+    assert document.protocol_date is None  # not every imported doc has a recognized date
+
+    items = service.list_tenant_files(db, tenant.id)
+
+    assert len(items) == 1
+    assert items[0].group_date == stored_file.created_at.date()
+    assert items[0].context_label == document.display_name
+
+    document.protocol_date = date(2026, 10, 14)
+    db.commit()
+
+    items = service.list_tenant_files(db, tenant.id)
+    assert items[0].group_date == date(2026, 10, 14)
+
+
+def test_list_tenant_files_submission_upload_group_date_and_context_label(db):
+    tenant = make_tenant(db)
+    assignment, _upload, stored_file = _make_submission_upload_file(db, tenant.id)
+
+    items = service.list_tenant_files(db, tenant.id)
+
+    assert len(items) == 1
+    assert items[0].group_date == stored_file.created_at.date()
+    assert items[0].context_label == assignment.title
+
+
+def test_list_tenant_files_gallery_upload_without_event_falls_back_to_created_at_and_no_context(db):
+    tenant = make_tenant(db)
+    stored_file = _make_gallery_image(db, tenant.id)
+
+    items = service.list_tenant_files(db, tenant.id)
+
+    assert len(items) == 1
+    assert items[0].group_date == stored_file.created_at.date()
+    assert items[0].context_label is None
+
+
+def test_list_tenant_files_gallery_upload_with_event_uses_event_date_and_title(db):
+    """Regression for the outer join in _files_overview_branches' gallery branch: an
+    event-less gallery upload must still list (covered above), and one *with* an event
+    must pick up that event's date/title instead of falling back to created_at."""
+    from app.models.entities import GalleryImage
+
+    from tests.factories import make_event
+
+    tenant = make_tenant(db)
+    event = make_event(db, tenant.id, title="Sommerlager", event_date=date(2026, 7, 10))
+    stored_file = StoredFile(
+        tenant_id=tenant.id, original_name="lager.png", mime_type="image/png",
+        storage_path="uploads/tenant-x/gallery/lager.png", scan_status="clean",
+    )
+    db.add(stored_file)
+    db.flush()
+    db.add(GalleryImage(tenant_id=tenant.id, stored_file_id=stored_file.id, event_id=event.id))
+    db.flush()
+
+    items = service.list_tenant_files(db, tenant.id)
+
+    assert len(items) == 1
+    assert items[0].group_date == event.event_date
+    assert items[0].context_label == "Sommerlager"
+
+
+def test_list_tenant_files_face_analyzed_at_reflects_the_column(db):
+    tenant = make_tenant(db)
+    stored_file = _make_gallery_image(db, tenant.id)
+
+    items = service.list_tenant_files(db, tenant.id)
+    assert items[0].face_analyzed_at is None
+
+    from datetime import datetime, timezone
+
+    stored_file.face_analyzed_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    db.commit()
+
+    items = service.list_tenant_files(db, tenant.id)
+    assert items[0].face_analyzed_at == stored_file.face_analyzed_at
+
+
+def test_attach_album_context_fills_albums_and_unscoped_is_best(db):
+    from app.models.entities import PhotoAlbum, PhotoAlbumItem
+    from app.services import photo_album_service
+
+    tenant = make_tenant(db)
+    stored_file = _make_gallery_image(db, tenant.id)
+    other_stored_file = _make_gallery_image(db, tenant.id)
+    other_stored_file.original_name = "andere.png"
+    album = PhotoAlbum(tenant_id=tenant.id, name="Ferien", kind="manual")
+    db.add(album)
+    db.flush()
+    photo_album_service.add_items(db, album, [stored_file.public_id])
+    db.execute(
+        PhotoAlbumItem.__table__.update()
+        .where(PhotoAlbumItem.album_id == album.id, PhotoAlbumItem.file_id == stored_file.public_id)
+        .values(is_best=True)
+    )
+    db.commit()
+
+    items = service.list_tenant_files(db, tenant.id)
+    service.attach_album_context(db, tenant.id, items)
+
+    by_id = {item.id: item for item in items}
+    in_album = by_id[stored_file.public_id]
+    assert len(in_album.albums) == 1
+    assert in_album.albums[0].name == "Ferien"
+    assert in_album.albums[0].is_best is True
+    assert in_album.is_best is True
+
+    not_in_album = by_id[other_stored_file.public_id]
+    assert not_in_album.albums == []
+    assert not_in_album.is_best is None

@@ -16,11 +16,16 @@ from app.core.config import settings
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
 from app.models import ProtocolElementBlock, ProtocolImage, StoredFile
 from app.schemas.files import (
+    FileBulkDelete,
+    FileBulkDeleteResult,
+    FileBulkTagsUpdate,
     FileOverviewItem,
     FileOverviewSource,
+    FileStats,
     GalleryUploadResult,
     PhotoAnalysisJobCreate,
     PhotoAnalysisJobRead,
+    PhotoAnalysisProgress,
     SimilarityGroup,
     StoredFileMetadata,
     StoredFileTagsUpdate,
@@ -68,7 +73,7 @@ def list_files(
     search: str | None = Query(default=None),
     tags: list[str] | None = Query(default=None),
     sort_by: Literal[
-        "created_at", "original_name", "file_size_bytes", "sharpness_score", "exposure_score", "face_quality_score"
+        "created_at", "original_name", "file_size_bytes", "sharpness_score", "exposure_score", "face_quality_score", "group_date"
     ] = Query(default="created_at"),
     sort_dir: Literal["asc", "desc"] = Query(default="desc"),
     db: Session = Depends(get_db),
@@ -110,6 +115,11 @@ def list_files(
         # this only re-orders the (already album-scoped, at most PAGE_SIZE-large) page
         # itself, it doesn't change what page skip/limit fetch.
         items.sort(key=lambda item: not item.is_best)
+    else:
+        # Unscoped view: is_best/albums aren't tied to one album, so they're filled in
+        # separately here rather than by list_tenant_files itself (see
+        # FileService.attach_album_context).
+        service.attach_album_context(db, user.current_tenant_id, items)
     return items
 
 
@@ -129,19 +139,41 @@ def list_file_tags(
     return service.list_distinct_tags(db, user.current_tenant_id, query=query, limit=limit)
 
 
+@router.get("/files/analysis-progress", response_model=PhotoAnalysisProgress)
+def get_analysis_progress(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Tenant-wide summary behind the Fotos page's "Foto-Analyse läuft" progress bar and
+    the "Analyse läuft · N Bilder" pill."""
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    return service.analysis_progress(db, user.current_tenant_id)
+
+
+@router.get("/files/stats", response_model=FileStats)
+def get_file_stats(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Backs the Dateien page's Dokumente/Fotos/Speicher stat cards."""
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    return service.file_stats(db, user.current_tenant_id)
+
+
 @router.get("/files/similarity-groups", response_model=list[SimilarityGroup])
 def list_similarity_groups(
     source: FileOverviewSource | None = Query(default=None),
     album_id: uuid.UUID | None = Query(default=None),
     search: str | None = Query(default=None),
     tags: list[str] | None = Query(default=None),
+    min_size: int = Query(default=1, ge=1),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     """Photo-culling Phase 2: clustert die (per Filter eingegrenzten) Bilder des Mandanten
     nach visueller Ähnlichkeit (Perceptual Hash) und markiert pro Gruppe das nach Schärfe/
     Belichtung beste Bild. Gleiche Filter wie GET /files, aber immer nur Bilder und ohne
-    Pagination - siehe FileService.group_similar_gallery_images für die Grössenbeschränkung."""
+    Pagination - siehe FileService.group_similar_gallery_images für die Grössenbeschränkung.
+    min_size=2 (die "Ähnliche"-Tab im Frontend) blendet Einzelbilder ohne ähnliches
+    Gegenstück aus - der Default 1 behält das bisherige Verhalten für andere Aufrufer bei."""
     require_writer(user)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
@@ -156,6 +188,7 @@ def list_similarity_groups(
         search=search,
         tags=tags,
         file_ids=file_ids,
+        min_size=min_size,
     )
 
 
@@ -483,8 +516,19 @@ def _get_album(db: Session, user: CurrentUser, album_id: uuid.UUID):
 @router.get("/files/albums", response_model=list[PhotoAlbumRead])
 def list_albums(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     require_writer(user)
-    return [PhotoAlbumRead(id=a.id, name=a.name, kind=a.kind) for a in db.scalars(
-        select(PhotoAlbum).where(PhotoAlbum.tenant_id == user.current_tenant_id).order_by(PhotoAlbum.created_at.desc(), PhotoAlbum.id.desc()))]
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    return [
+        PhotoAlbumRead(
+            id=entry.album.id,
+            name=entry.album.name,
+            kind=entry.album.kind,
+            photo_count=entry.photo_count,
+            best_of_count=entry.best_of_count,
+            cover_thumbnail_urls=entry.cover_thumbnail_urls,
+        )
+        for entry in photo_album_service.list_albums_with_stats(db, service, user.current_tenant_id)
+    ]
 
 
 @router.post("/files/albums", response_model=PhotoAlbumRead, status_code=201)
@@ -532,3 +576,58 @@ def set_album_item_best(
         photo_album_service.set_best_override(db, service, album, file_id, payload.best_override)
     except KeyError:
         raise HTTPException(status_code=404, detail="Foto ist nicht in diesem Album") from None
+
+
+@router.patch("/files/{file_id}/best", status_code=204)
+def set_file_best_everywhere(
+    file_id: uuid.UUID,
+    payload: PhotoAlbumItemBestUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Best-of toggle from the unscoped "Alle Fotos" view (no album in context) - applies
+    to every album this tenant's photo belongs to, since is_best lives on PhotoAlbumItem,
+    not the photo itself. See set_album_item_best for the album-scoped equivalent."""
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    touched = photo_album_service.set_best_override_everywhere(
+        db, service, user.current_tenant_id, file_id, payload.best_override
+    )
+    if touched == 0:
+        raise HTTPException(
+            status_code=422, detail="Dieses Foto gehört zu keinem Album – Best-of ist nur innerhalb eines Albums möglich."
+        )
+
+
+@router.post("/files/bulk-delete", response_model=FileBulkDeleteResult)
+def bulk_delete_files(payload: FileBulkDelete, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Multi-select "Löschen" auf der Fotos-Seite und "Nur beste behalten" im Ähnliche-Tab -
+    löscht endgültig, nur Direkt-Uploads (siehe FileService.delete_gallery_images für die
+    Begründung; andere Quellen werden als Fehler zurückgemeldet statt gelöscht)."""
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    ids = list(dict.fromkeys(payload.file_ids))
+    if not ids or len(ids) > 200:
+        raise HTTPException(status_code=422, detail="Bitte 1 bis 200 Dateien auswählen")
+    touched_album_ids = photo_album_service.drop_items_for_files(db, ids)
+    deleted, errors = service.delete_gallery_images(db, user.current_tenant_id, ids)
+    db.commit()
+    for album_id in touched_album_ids:
+        album = db.get(PhotoAlbum, album_id)
+        if album is not None:
+            photo_album_service.recompute_best_of(db, service, album)
+    return FileBulkDeleteResult(deleted_ids=deleted, errors=errors)
+
+
+@router.post("/files/bulk-tags", status_code=204)
+def bulk_update_file_tags(payload: FileBulkTagsUpdate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Multi-select "Tags hinzufügen" auf der Fotos-Seite."""
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    ids = list(dict.fromkeys(payload.file_ids))
+    if not ids or len(ids) > 200:
+        raise HTTPException(status_code=422, detail="Bitte 1 bis 200 Dateien auswählen")
+    service.bulk_update_tags(db, user.current_tenant_id, ids, payload.add_tags, payload.remove_tags)

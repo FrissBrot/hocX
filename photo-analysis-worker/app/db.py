@@ -68,9 +68,12 @@ def fetch_files(engine: Engine, stored_file_ids: list[int]) -> list[dict]:
 
 
 def write_face_quality_score(engine: Engine, stored_file_id: int, score: float | None) -> None:
+    # face_analyzed_at is set alongside the score even when score is None (no face found) -
+    # it's the only way to tell "analyzed, no face" apart from "not analyzed yet", since
+    # both leave face_quality_score itself NULL.
     with engine.begin() as conn:
         conn.execute(
-            text("UPDATE stored_file SET face_quality_score = :score WHERE id = :id"),
+            text("UPDATE stored_file SET face_quality_score = :score, face_analyzed_at = NOW() WHERE id = :id"),
             {"score": score, "id": stored_file_id},
         )
 

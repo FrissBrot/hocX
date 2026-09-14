@@ -885,6 +885,10 @@ class StoredFile(Base, TimestampMixin):
     # detected face region, not the whole image. None if no face was detected, the file
     # isn't an image, or it hasn't been analyzed yet.
     face_quality_score: Mapped[float | None] = mapped_column(Float)
+    # Set by the worker once it has processed the file, regardless of whether a face was
+    # found - face_quality_score alone can't express "analyzed, no face" vs. "not analyzed
+    # yet" since both leave that column NULL.
+    face_analyzed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     thumbnail_path: Mapped[str | None] = mapped_column(Text)
     scan_status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'clean'"))
     # User-assigned tags for the "Dateien" overview page's filter/editor - separate from the
@@ -999,11 +1003,18 @@ class GalleryImage(Base, TimestampMixin):
     Exists as its own join table (rather than a boolean/enum column on StoredFile) purely to
     follow that same "one join table per origin" convention the other three branches use."""
     __tablename__ = "gallery_image"
-    __table_args__ = (Index("idx_gallery_image_tenant", "tenant_id"),)
+    __table_args__ = (
+        Index("idx_gallery_image_tenant", "tenant_id"),
+        Index("idx_gallery_image_event", "event_id"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     stored_file_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("stored_file.id", ondelete="RESTRICT"), nullable=False)
+    # The Termin the uploader optionally targeted in GalleryUploadModal, kept around (it
+    # used to be discarded once the file landed in that Termin's auto-album) so the Fotos
+    # page's date-grouped headers can show which Termin/Zyklus a given date belongs to.
+    event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("event.id", ondelete="SET NULL"))
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
 
 

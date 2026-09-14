@@ -18,9 +18,10 @@ functions below:
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass, field
 from datetime import date
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -128,6 +129,132 @@ def add_items(db: Session, album: PhotoAlbum, file_ids: list[uuid.UUID]) -> None
         .values([{"album_id": album.id, "file_id": file_id} for file_id in file_ids])
         .on_conflict_do_nothing()
     )
+
+
+@dataclass
+class AlbumWithStats:
+    """album + on-the-fly stats/cover art for the Alben tab - see list_albums_with_stats.
+    Never stored on PhotoAlbum itself: unlike is_best (which needs recompute_best_of's
+    scoring logic), these are cheap aggregates that would just need invalidating on every
+    upload/sync tick if cached, so they're always derived fresh instead."""
+
+    album: PhotoAlbum
+    photo_count: int
+    best_of_count: int
+    cover_thumbnail_urls: list[str] = field(default_factory=list)
+
+
+def list_albums_with_stats(db: Session, file_service, tenant_id: int) -> list[AlbumWithStats]:
+    """Every album for this tenant plus its item/best-of counts and up to 4 cover
+    thumbnails (best-of items first, then newest) - backs the Alben tab's cards."""
+    albums = list(
+        db.scalars(
+            select(PhotoAlbum)
+            .where(PhotoAlbum.tenant_id == tenant_id)
+            .order_by(PhotoAlbum.created_at.desc(), PhotoAlbum.id.desc())
+        )
+    )
+    if not albums:
+        return []
+    album_ids = [album.id for album in albums]
+
+    count_rows = db.execute(
+        select(
+            PhotoAlbumItem.album_id,
+            func.count().label("photo_count"),
+            func.count().filter(PhotoAlbumItem.is_best).label("best_of_count"),
+        )
+        .where(PhotoAlbumItem.album_id.in_(album_ids))
+        .group_by(PhotoAlbumItem.album_id)
+    ).all()
+    counts_by_album = {row.album_id: row for row in count_rows}
+
+    # file_id is StoredFile.public_id in practice for every origin (see
+    # StoredFileRepository._files_overview_branches - all four branches label
+    # StoredFile.public_id as "public_id"/FileOverviewItem.id, which is what add_items is
+    # always called with), even though the column carries no FK (kept loose so a future
+    # origin type isn't forced to mint a StoredFile row just to be albumable).
+    ranked = (
+        select(
+            PhotoAlbumItem.album_id,
+            PhotoAlbumItem.file_id,
+            func.row_number()
+            .over(
+                partition_by=PhotoAlbumItem.album_id,
+                order_by=[PhotoAlbumItem.is_best.desc(), StoredFile.created_at.desc()],
+            )
+            .label("rn"),
+        )
+        .select_from(PhotoAlbumItem)
+        .join(StoredFile, StoredFile.public_id == PhotoAlbumItem.file_id)
+        .where(PhotoAlbumItem.album_id.in_(album_ids))
+        .subquery()
+    )
+    cover_rows = db.execute(select(ranked.c.album_id, ranked.c.file_id).where(ranked.c.rn <= 4)).all()
+    cover_ids_by_album: dict[uuid.UUID, list[uuid.UUID]] = {}
+    all_cover_ids: list[uuid.UUID] = []
+    for album_id, file_id in cover_rows:
+        cover_ids_by_album.setdefault(album_id, []).append(file_id)
+        all_cover_ids.append(file_id)
+
+    # Resolved through file_service (not a hand-built /api/stored-files/.../thumbnail URL)
+    # since a submission-upload image's thumbnail lives at a different URL shape - see
+    # FileService._build_overview_item.
+    thumbnail_by_id: dict[uuid.UUID, str] = {}
+    if all_cover_ids:
+        for item in file_service.list_tenant_files(db, tenant_id, file_ids=all_cover_ids, limit=len(all_cover_ids)):
+            thumbnail_by_id[item.id] = item.thumbnail_url or item.content_url
+
+    results = []
+    for album in albums:
+        count_row = counts_by_album.get(album.id)
+        cover_ids = cover_ids_by_album.get(album.id, [])
+        results.append(
+            AlbumWithStats(
+                album=album,
+                photo_count=count_row.photo_count if count_row else 0,
+                best_of_count=count_row.best_of_count if count_row else 0,
+                cover_thumbnail_urls=[thumbnail_by_id[i] for i in cover_ids if i in thumbnail_by_id],
+            )
+        )
+    return results
+
+
+def set_best_override_everywhere(db: Session, file_service, tenant_id: int, file_id: uuid.UUID, override: str | None) -> int:
+    """Best-of toggle from the unscoped "Alle Fotos" view (no single album in context) -
+    is_best lives on PhotoAlbumItem, not on the photo itself, so this applies the override
+    to every album (within this tenant) the photo belongs to. Returns the number of albums
+    touched - 0 means the photo is in no album, which the route turns into a 422."""
+    items = list(
+        db.scalars(
+            select(PhotoAlbumItem)
+            .join(PhotoAlbum, PhotoAlbum.id == PhotoAlbumItem.album_id)
+            .where(PhotoAlbum.tenant_id == tenant_id, PhotoAlbumItem.file_id == file_id)
+        )
+    )
+    albums: dict[uuid.UUID, PhotoAlbum] = {}
+    for item in items:
+        item.best_override = override
+        if item.album_id not in albums:
+            albums[item.album_id] = db.get(PhotoAlbum, item.album_id)
+    db.flush()
+    for album in albums.values():
+        recompute_best_of(db, file_service, album)
+    return len(albums)
+
+
+def drop_items_for_files(db: Session, file_ids: list[uuid.UUID]) -> set[uuid.UUID]:
+    """Removes every PhotoAlbumItem row for the given files - photo_album_item.file_id has
+    no FK constraint, so deleting a StoredFile leaves these orphaned unless a caller cleans
+    them up explicitly (mirrors the exact pattern sync_submission_uploads already uses for
+    files removed upstream). Returns the set of album ids that lost at least one item, so
+    the caller can recompute_best_of on each afterward."""
+    if not file_ids:
+        return set()
+    touched_album_ids = set(db.scalars(select(PhotoAlbumItem.album_id).where(PhotoAlbumItem.file_id.in_(file_ids))))
+    db.execute(delete(PhotoAlbumItem).where(PhotoAlbumItem.file_id.in_(file_ids)))
+    db.flush()
+    return touched_album_ids
 
 
 def get_or_create_cycle_album(db: Session, *, tenant_id: int, cycle_config: CycleConfig, cycle_year: int) -> PhotoAlbum:

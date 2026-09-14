@@ -182,3 +182,128 @@ def test_recompute_best_of_excludes_severely_underexposed_photos(db):
     rows = {row.file_id: row.is_best for row in db.query(PhotoAlbumItem).filter_by(album_id=album.id)}
     assert rows[items[2].id] is False
     assert rows[items[3].id] is True
+
+
+def test_list_albums_with_stats_reports_counts_and_up_to_four_covers(db):
+    tenant = make_tenant(db)
+    items = _upload_images(db, tenant.id, 6)
+    album = PhotoAlbum(tenant_id=tenant.id, name="Test", kind="manual")
+    db.add(album)
+    db.flush()
+    photo_album_service.add_items(db, album, [item.id for item in items])
+    db.commit()
+    for index, item in enumerate(items):
+        _set_scores(db, item.id, sharpness=(index + 1) * 100, exposure=1.0)
+    photo_album_service.recompute_best_of(db, service, album)
+
+    entries = photo_album_service.list_albums_with_stats(db, service, tenant.id)
+
+    entry = next(e for e in entries if e.album.id == album.id)
+    assert entry.photo_count == 6
+    # BEST_OF_FRACTION=0.15 of 6 -> round(0.9) = 1 slot starred.
+    assert entry.best_of_count == 1
+    assert len(entry.cover_thumbnail_urls) == 4
+    assert len(set(entry.cover_thumbnail_urls)) == 4
+
+
+def test_list_albums_with_stats_reports_zero_for_an_empty_album(db):
+    tenant = make_tenant(db)
+    album = PhotoAlbum(tenant_id=tenant.id, name="Leer", kind="manual")
+    db.add(album)
+    db.commit()
+
+    entries = photo_album_service.list_albums_with_stats(db, service, tenant.id)
+
+    entry = next(e for e in entries if e.album.id == album.id)
+    assert entry.photo_count == 0
+    assert entry.best_of_count == 0
+    assert entry.cover_thumbnail_urls == []
+
+
+def test_list_albums_with_stats_scopes_to_the_given_tenant_only(db):
+    tenant_a = make_tenant(db)
+    tenant_b = make_tenant(db)
+    PhotoAlbum(tenant_id=tenant_a.id, name="A", kind="manual")
+    album_b = PhotoAlbum(tenant_id=tenant_b.id, name="B", kind="manual")
+    db.add(album_b)
+    db.commit()
+
+    entries = photo_album_service.list_albums_with_stats(db, service, tenant_a.id)
+
+    assert all(e.album.tenant_id == tenant_a.id for e in entries)
+    assert album_b.id not in {e.album.id for e in entries}
+
+
+def test_drop_items_for_files_removes_rows_and_returns_touched_album_ids(db):
+    tenant = make_tenant(db)
+    items = _upload_images(db, tenant.id, 3)
+    album = PhotoAlbum(tenant_id=tenant.id, name="Test", kind="manual")
+    db.add(album)
+    db.flush()
+    photo_album_service.add_items(db, album, [item.id for item in items])
+    db.commit()
+
+    touched = photo_album_service.drop_items_for_files(db, [items[0].id])
+    db.commit()
+
+    assert touched == {album.id}
+    remaining = {row.file_id for row in db.query(PhotoAlbumItem).filter_by(album_id=album.id)}
+    assert items[0].id not in remaining
+    assert {items[1].id, items[2].id} == remaining
+
+
+def test_drop_items_for_files_with_no_matching_rows_returns_empty_set(db):
+    tenant = make_tenant(db)
+    items = _upload_images(db, tenant.id, 1)
+
+    touched = photo_album_service.drop_items_for_files(db, [items[0].id])
+
+    assert touched == set()
+
+
+def test_set_best_override_everywhere_applies_to_every_album_the_photo_is_in(db):
+    """Best-of toggle from the unscoped "Alle Fotos" view (no single album in context) -
+    is_best lives on PhotoAlbumItem, so pinning it must reach every album containing the
+    photo, not just one."""
+    tenant = make_tenant(db)
+    items = _upload_images(db, tenant.id, 3)
+    photo = items[0]
+    album_1 = PhotoAlbum(tenant_id=tenant.id, name="Erstes", kind="manual")
+    album_2 = PhotoAlbum(tenant_id=tenant.id, name="Zweites", kind="manual")
+    db.add_all([album_1, album_2])
+    db.flush()
+    photo_album_service.add_items(db, album_1, [item.id for item in items])
+    photo_album_service.add_items(db, album_2, [photo.id])
+    db.commit()
+
+    touched = photo_album_service.set_best_override_everywhere(db, service, tenant.id, photo.id, "include")
+
+    assert touched == 2
+    is_best_by_album = {
+        row.album_id: row.is_best for row in db.query(PhotoAlbumItem).filter_by(file_id=photo.id)
+    }
+    assert is_best_by_album == {album_1.id: True, album_2.id: True}
+
+
+def test_set_best_override_everywhere_returns_zero_when_photo_is_in_no_album(db):
+    tenant = make_tenant(db)
+    items = _upload_images(db, tenant.id, 1)
+
+    touched = photo_album_service.set_best_override_everywhere(db, service, tenant.id, items[0].id, "include")
+
+    assert touched == 0
+
+
+def test_set_best_override_everywhere_is_scoped_to_the_given_tenant(db):
+    tenant_a = make_tenant(db)
+    tenant_b = make_tenant(db)
+    items_a = _upload_images(db, tenant_a.id, 1)
+    album_b = PhotoAlbum(tenant_id=tenant_b.id, name="B", kind="manual")
+    db.add(album_b)
+    db.commit()
+
+    # A photo id that happens to exist (in another tenant's album) must not be reachable
+    # through tenant_a's scope.
+    touched = photo_album_service.set_best_override_everywhere(db, service, tenant_b.id, items_a[0].id, "include")
+
+    assert touched == 0

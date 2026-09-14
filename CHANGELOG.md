@@ -30,6 +30,15 @@ gemergten Fixes/Hardening-Massnahmen auf `main` die folgenden neuen Funktionen.
   auf "Historische Daten verwenden" umgestellt werden - die Zeile zeigt dann die
   eingefrorenen Werte des Zyklus, in den das jeweilige Protokoll fällt, statt immer
   die aktuellen Live-Daten des verknüpften Listeneintrags.
+- **Fotos/Dateien-Neugestaltung**: eigenständige "Fotos"-Seite mit nach Datum
+  gruppierter Galerie (inkl. Zyklus-/Termin-/Protokoll-Kontext je Datumsgruppe),
+  Mehrfachauswahl mit Sammelaktionen (Album, Tags, Best-of, Löschen), ein
+  Vollbild-Fotobetrachter mit Analyse-Kennzahlen (Schärfe/Belichtung/
+  Gesichtsqualität), ein mandantenweiter Analyse-Fortschrittsbalken, ein
+  "Ähnliche"-Tab zur Serien-Bereinigung ("Nur beste behalten") sowie ein
+  "Alben"-Tab mit Cover-Collage und Foto-/Best-of-Zahlen pro Album. Die
+  "Dateien"-Seite zeigt jetzt Dokumente/Fotos/Speicher-Kennzahlen und eine
+  Tabellenansicht statt der bisherigen Kachelliste.
 
 ## [1.0.0] - 2026-08-27
 

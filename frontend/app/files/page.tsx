@@ -18,7 +18,7 @@ export default async function FilesPage() {
   return (
     <AppShell initialSession={session}>
       <section className="panel">
-        <FilesView mode="files" initialItems={files ?? []} />
+        <FilesView initialItems={files ?? []} />
       </section>
     </AppShell>
   );

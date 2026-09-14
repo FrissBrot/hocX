@@ -15,16 +15,16 @@ from uuid import uuid4
 import imagehash
 from fastapi import HTTPException, UploadFile
 from PIL import Image, ImageOps
-from sqlalchemy import func, select, text
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.orm import Session
 
 from app import scanner
 from app.core.config import settings
 from app.core.cycle_utils import get_cycle_year
-from app.models import AppUser, GalleryImage, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolImage, StoredFile
-from app.models.entities import CycleConfig, PhotoAnalysisJob, SubmissionAssignment
+from app.models import AppUser, Event, GalleryImage, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolImage, StoredFile
+from app.models.entities import CycleConfig, PhotoAlbum, PhotoAlbumItem, PhotoAnalysisJob, SubmissionAssignment
 from app.repositories.file_repository import ProtocolImageRepository, StoredFileRepository
-from app.schemas.files import FileOverviewItem, SimilarityGroup, StoredFileMetadata
+from app.schemas.files import FileAlbumRef, FileOverviewItem, FileStats, PhotoAnalysisProgress, SimilarityGroup, StoredFileMetadata
 from app.schemas.protocol import ProtocolImageRead
 from app.services import public_id_service
 from app.services.photo_quality import compute_exposure_score, compute_sharpness_score
@@ -415,6 +415,58 @@ class FileService:
         )
         return [self._build_overview_item(row) for row in rows]
 
+    def analysis_progress(self, db: Session, tenant_id: int) -> PhotoAnalysisProgress:
+        """Backs the Fotos page's tenant-wide "Foto-Analyse läuft - X von Y Bildern
+        bewertet" progress bar and the "Analyse läuft · N Bilder" pill."""
+        counts = self.stored_file_repository.tenant_photo_analysis_progress(db, tenant_id)
+        active_jobs = list(
+            db.scalars(
+                select(PhotoAnalysisJob).where(
+                    PhotoAnalysisJob.tenant_id == tenant_id,
+                    PhotoAnalysisJob.status.in_(["queued", "running"]),
+                )
+            )
+        )
+        active_job_image_count = sum(len(job.stored_file_ids) for job in active_jobs)
+        return PhotoAnalysisProgress(
+            total_images=counts.total,
+            analyzed_images=counts.analyzed,
+            pending_images=counts.total - counts.analyzed,
+            active_jobs=len(active_jobs),
+            active_job_image_count=active_job_image_count,
+        )
+
+    def file_stats(self, db: Session, tenant_id: int) -> FileStats:
+        """Backs the Dateien page's Dokumente/Fotos/Speicher stat cards."""
+        counts = self.stored_file_repository.tenant_file_stats(db, tenant_id)
+        return FileStats(
+            document_count=counts.document_count,
+            photo_count=counts.photo_count,
+            total_bytes=int(counts.total_bytes),
+        )
+
+    def attach_album_context(self, db: Session, tenant_id: int, items: list[FileOverviewItem]) -> None:
+        """Fills item.albums (and, since is_best has no meaning outside an album, the
+        unscoped item.is_best = "best-of in at least one album") for a page of items - one
+        extra query per page, mirroring the album-scoped best-of lookup list_files already
+        does when an album_id filter is given."""
+        if not items:
+            return
+        items_by_id = {item.id: item for item in items}
+        rows = db.execute(
+            select(PhotoAlbumItem.file_id, PhotoAlbumItem.is_best, PhotoAlbum.id, PhotoAlbum.name, PhotoAlbum.kind)
+            .join(PhotoAlbum, PhotoAlbum.id == PhotoAlbumItem.album_id)
+            .where(PhotoAlbum.tenant_id == tenant_id, PhotoAlbumItem.file_id.in_(items_by_id.keys()))
+        ).all()
+        for file_id, is_best, album_id, album_name, album_kind in rows:
+            item = items_by_id.get(file_id)
+            if item is None:
+                continue
+            item.albums.append(FileAlbumRef(id=album_id, name=album_name, kind=album_kind, is_best=is_best))
+        for item in items:
+            if item.albums:
+                item.is_best = any(album.is_best for album in item.albums)
+
     def _build_overview_item(self, row) -> FileOverviewItem:
         is_image = bool(row.mime_type and row.mime_type.startswith("image/"))
         if row.source == "submission_upload":
@@ -457,6 +509,9 @@ class FileService:
             sharpness_score=row.sharpness_score,
             exposure_score=row.exposure_score,
             face_quality_score=row.face_quality_score,
+            face_analyzed_at=row.face_analyzed_at,
+            group_date=row.group_date,
+            context_label=row.context_label,
         )
 
     def group_similar_gallery_images(
@@ -468,11 +523,15 @@ class FileService:
         search: str | None = None,
         tags: list[str] | None = None,
         file_ids: list[uuid.UUID] | None = None,
+        min_size: int = 1,
     ) -> list[SimilarityGroup]:
         """Photo-culling Phase 2: clusters the tenant's images (same filters as list_tenant_files,
         always only_images) by perceptual-hash similarity and ranks each cluster by the Phase 1
         quality scores - see photo_similarity.py for why this can run synchronously instead of
-        needing the async worker later phases will need."""
+        needing the async worker later phases will need. group_similar_images() also returns
+        singleton "groups" (an image with nothing similar to it) per its own docstring;
+        min_size lets a caller that only cares about actual near-duplicate series (the
+        "Ähnliche" tab) filter those out without re-deriving the grouping itself."""
         rows = self.stored_file_repository.list_tenant_files(
             db,
             tenant_id,
@@ -507,6 +566,7 @@ class FileService:
                 images=[self._build_overview_item(rows_by_id[image.id]) for image in group],
             )
             for group in groups
+            if len(group) >= min_size
         ]
 
     def create_analysis_job(
@@ -562,10 +622,15 @@ class FileService:
     def create_pending_analysis_jobs(self, db: Session) -> list[PhotoAnalysisJob]:
         """Automatic off-peak counterpart to the manual "Gesichtsqualität analysieren"
         button (create_analysis_job): one job per tenant that has at least one clean image
-        without a face_quality_score yet and no job already queued/running - called from
-        main.py's photo_analysis_auto_queue_loop. Skips a tenant with an in-flight job
-        rather than piling on a second one; it'll be picked up again next loop iteration
-        once that job finishes and still leaves unanalyzed images."""
+        not yet analyzed and no job already queued/running - called from main.py's
+        photo_analysis_auto_queue_loop. Skips a tenant with an in-flight job rather than
+        piling on a second one; it'll be picked up again next loop iteration once that job
+        finishes and still leaves unanalyzed images.
+
+        Filters on face_analyzed_at, not face_quality_score - the worker legitimately
+        writes a NULL score when no face is detected, so face_quality_score IS NULL means
+        either "not analyzed yet" or "analyzed, no face found"; using it here would
+        re-queue every faceless photo forever."""
         tenants_with_active_jobs = set(
             db.scalars(select(PhotoAnalysisJob.tenant_id).where(PhotoAnalysisJob.status.in_(["queued", "running"])))
         )
@@ -574,7 +639,7 @@ class FileService:
             .where(
                 StoredFile.mime_type.like("image/%"),
                 StoredFile.scan_status == "clean",
-                StoredFile.face_quality_score.is_(None),
+                StoredFile.face_analyzed_at.is_(None),
             )
             .distinct()
         ).all()
@@ -590,7 +655,7 @@ class FileService:
                         StoredFile.tenant_id == tenant_id,
                         StoredFile.mime_type.like("image/%"),
                         StoredFile.scan_status == "clean",
-                        StoredFile.face_quality_score.is_(None),
+                        StoredFile.face_analyzed_at.is_(None),
                     )
                     .limit(MAX_ANALYSIS_JOB_IMAGES)
                 )
@@ -866,6 +931,7 @@ class FileService:
         storage_dir = Path(settings.upload_root) / f"tenant-{tenant_id}" / "gallery"
         storage_dir.mkdir(parents=True, exist_ok=True)
         tenant_hashes = self.stored_file_repository.list_tenant_image_hashes(db, tenant_id)
+        upload_event = db.get(Event, upload_event_id) if upload_event_id is not None else None
 
         items: list[FileOverviewItem] = []
         item_taken_at: dict[uuid.UUID, datetime | None] = {}
@@ -918,7 +984,11 @@ class FileService:
                 thumbnail_target_path.write_bytes(thumbnail_bytes)
                 stored_file.thumbnail_path = thumbnail_target_path.name
 
-            db.add(GalleryImage(tenant_id=tenant_id, stored_file_id=stored_file.id, created_by=created_by))
+            db.add(
+                GalleryImage(
+                    tenant_id=tenant_id, stored_file_id=stored_file.id, event_id=upload_event_id, created_by=created_by
+                )
+            )
             db.flush()
 
             if perceptual_hash is not None:
@@ -951,6 +1021,9 @@ class FileService:
                     sharpness_score=stored_file.sharpness_score,
                     exposure_score=stored_file.exposure_score,
                     face_quality_score=stored_file.face_quality_score,
+                    face_analyzed_at=stored_file.face_analyzed_at,
+                    group_date=upload_event.event_date if upload_event is not None else stored_file.created_at.date(),
+                    context_label=upload_event.title if upload_event is not None else None,
                 )
             )
 
@@ -1121,6 +1194,62 @@ class FileService:
             thumbnail_path = _safe_storage_path(settings.thumbnail_root, stored_file.thumbnail_path)
             if thumbnail_path.exists():
                 thumbnail_path.unlink()
+
+    def delete_gallery_images(
+        self, db: Session, tenant_id: int, file_ids: list[uuid.UUID]
+    ) -> tuple[list[uuid.UUID], list[str]]:
+        """Bulk hard-delete for the Fotos page's multi-select "Löschen" action and the
+        "Ähnliche" tab's "Nur beste behalten" - gallery uploads only. Protocol images,
+        word-import source documents and submission uploads each have their own deletion
+        semantics this must not bypass (a dedicated permission-checked route, or a soft-
+        delete owned by the abgabebox sync), so any id resolving to one of those sources is
+        reported back as an error instead of deleted - same partial-success shape as
+        save_gallery_uploads' (items, errors) return. Caller commits; PhotoAlbumItem rows
+        for the deleted files must already be gone (see photo_album_service.
+        drop_items_for_files) before this runs, since GalleryImage.stored_file_id is
+        ON DELETE RESTRICT and photo_album_item.file_id has no FK at all to catch it."""
+        rows = self.stored_file_repository.list_tenant_files(db, tenant_id, file_ids=file_ids, limit=max(len(file_ids), 1))
+        rows_by_public_id = {row.public_id: row for row in rows}
+        deleted: list[uuid.UUID] = []
+        errors: list[str] = []
+        for file_id in file_ids:
+            row = rows_by_public_id.get(file_id)
+            if row is None:
+                errors.append(f"{file_id}: nicht gefunden")
+                continue
+            if row.source != "gallery_upload":
+                errors.append(f"{row.original_name}: kann von hier aus nicht gelöscht werden (Quelle: {row.origin_tag})")
+                continue
+            stored_file = self.stored_file_repository.get(db, row.id)
+            if stored_file is None:
+                errors.append(f"{row.original_name}: nicht gefunden")
+                continue
+            db.execute(delete(GalleryImage).where(GalleryImage.stored_file_id == stored_file.id))
+            self.delete_stored_file(db, stored_file)
+            deleted.append(file_id)
+        return deleted, errors
+
+    def bulk_update_tags(
+        self, db: Session, tenant_id: int, file_ids: list[uuid.UUID], add_tags: list[str], remove_tags: list[str]
+    ) -> int:
+        """Backs the Fotos page's multi-select "Tags hinzufügen" bulk action. Returns the
+        number of files actually changed (a file already carrying every add_tag and none of
+        remove_tags is left untouched)."""
+        rows = self.stored_file_repository.list_tenant_files(db, tenant_id, file_ids=file_ids, limit=max(len(file_ids), 1))
+        add = set(_normalize_tags(add_tags))
+        remove = set(_normalize_tags(remove_tags))
+        updated = 0
+        for row in rows:
+            stored_file = self.stored_file_repository.get(db, row.id)
+            if stored_file is None:
+                continue
+            next_tags = _normalize_tags(list((set(stored_file.tags or []) | add) - remove))
+            if next_tags != list(stored_file.tags or []):
+                stored_file.tags = next_tags
+                db.add(stored_file)
+                updated += 1
+        db.commit()
+        return updated
 
     def get_stored_file(self, db: Session, stored_file_id: int, *, tenant_id: int | None = None) -> StoredFile | None:
         # tenant_id is optional only for callers that already did their own equivalent

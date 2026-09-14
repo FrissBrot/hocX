@@ -36,6 +36,9 @@ def _process_job(engine, detector, job: dict) -> None:
             image_bytes = path.read_bytes()
         except OSError as exc:
             logger.warning("job %s: could not read %s: %s", job["id"], path, exc)
+            # Mark it analyzed anyway (no score) - otherwise a file missing from disk gets
+            # re-queued and re-attempted by every future off-peak run, forever.
+            write_face_quality_score(engine, file_row["id"], None)
             continue
         score = score_face_quality(detector, image_bytes)
         write_face_quality_score(engine, file_row["id"], score)

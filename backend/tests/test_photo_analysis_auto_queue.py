@@ -139,7 +139,32 @@ def test_create_pending_analysis_jobs_finds_nothing_once_everything_is_already_s
     db.commit()
     _mark_clean(db, tenant.id)
     stored_file_id = service.stored_file_repository.get_by_public_id(db, items[0].id, tenant_id=tenant.id).id
-    service.stored_file_repository.get(db, stored_file_id).face_quality_score = 42.0
+    stored_file = service.stored_file_repository.get(db, stored_file_id)
+    stored_file.face_quality_score = 42.0
+    stored_file.face_analyzed_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    db.commit()
+
+    created = service.create_pending_analysis_jobs(db)
+
+    assert tenant.id not in {job.tenant_id for job in created}
+
+
+def test_create_pending_analysis_jobs_never_requeues_a_photo_with_no_detected_face(db):
+    """Regression for the bug this feature's face_analyzed_at column fixes: the worker
+    legitimately writes face_quality_score=None when no face is found (see
+    photo-analysis-worker/app/worker.py), so face_quality_score alone can never
+    distinguish "not analyzed yet" from "analyzed, no face" - using it as the auto-queue's
+    predicate re-queued every faceless photo forever. face_analyzed_at is the fix; this
+    photo is analyzed (face_analyzed_at set) but has no face (face_quality_score still
+    None), and must not be picked up again."""
+    tenant = make_tenant(db)
+    items, _errors = service.save_gallery_uploads(db, tenant_id=tenant.id, files=[("a.png", _png_bytes())], tags=[], created_by=None)
+    db.commit()
+    _mark_clean(db, tenant.id)
+    stored_file_id = service.stored_file_repository.get_by_public_id(db, items[0].id, tenant_id=tenant.id).id
+    stored_file = service.stored_file_repository.get(db, stored_file_id)
+    assert stored_file.face_quality_score is None
+    stored_file.face_analyzed_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
     db.commit()
 
     created = service.create_pending_analysis_jobs(db)
