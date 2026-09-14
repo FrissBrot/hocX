@@ -35,6 +35,7 @@ from app.schemas.admin import (
     TenantCleanupRequest,
     TenantCloneRequest,
     TenantImportResult,
+    UploadPipelineOverview,
 )
 from app.schemas.mfa import (
     PasskeyRegistrationComplete,
@@ -48,6 +49,7 @@ from app.schemas.storage import StorageUsageRead
 from app.schemas.user import TenantUpdate, UserCreate, UserRead, UserUpdate
 from app.services.admin_domain_service import AdminDomainService
 from app.services.admin_error_log_service import AdminErrorLogService
+from app.services.admin_upload_pipeline_status_service import AdminUploadPipelineStatusService
 from app.services.admin_tenant_service import AdminTenantService
 from app.services.admin_tenant_user_service import AdminTenantUserService
 from app.services.admin_mfa_service import AdminMfaService
@@ -73,6 +75,7 @@ clone_service = TenantCloneService()
 cleanup_service = TenantCleanupService()
 domain_service = AdminDomainService()
 error_log_service = AdminErrorLogService()
+upload_pipeline_status_service = AdminUploadPipelineStatusService()
 export_service = TenantExportService()
 import_service = TenantImportService()
 storage_service = StorageService()
@@ -172,6 +175,27 @@ def error_log_filter_options(
     current_admin: CurrentAdmin = Depends(require_admin_owner),
 ):
     return error_log_service.filter_options(db)
+
+
+@router.get("/upload-pipeline-status", response_model=UploadPipelineOverview)
+def get_upload_pipeline_status(
+    tenant_id: uuid.UUID | None = None,
+    source: str | None = None,
+    scan_status: str | None = None,
+    limit: int = Query(50, gt=0),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_owner),
+):
+    internal_tenant_id = _resolve_tenant_id(db, tenant_id) if tenant_id is not None else None
+    return upload_pipeline_status_service.get_overview(
+        db,
+        tenant_id=internal_tenant_id,
+        source=source,
+        scan_status=scan_status,
+        limit=min(limit, 200),
+        offset=offset,
+    )
 
 
 @router.post("/tenants", response_model=AdminTenantRead, status_code=201)

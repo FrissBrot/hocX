@@ -153,7 +153,7 @@ async def upload_gallery_images(
         file_payloads.append((name, content))
         batch_bytes += len(content)
 
-    items, save_errors = service.save_gallery_uploads(
+    items, save_errors = await service.save_gallery_uploads(
         db,
         tenant_id=user.current_tenant_id,
         files=file_payloads,

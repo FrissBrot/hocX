@@ -1,0 +1,50 @@
+"""One shared skeleton for every periodic background maintenance loop main.py's lifespan
+starts, plus a single ledger of their Postgres advisory-lock ids.
+
+Before this module, each loop hand-rolled the same
+while True: with SessionLocal(): pg_try_advisory_lock/finally pg_advisory_unlock/sleep
+block with its own copy-pasted lock id literal. That copy-pasting caused a real incident
+(2026-09-10): cycle_snapshot_loop's block was copied from protocol_image_rescan_loop and the
+lock id was never changed, so the two loops silently shared one lock and starved each other
+every tick instead of both running. Collecting every id in BACKGROUND_LOCK_IDS with a
+uniqueness assertion below turns that class of bug into an import-time failure instead of a
+silent production incident."""
+
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Callable
+
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+from app.core.db import SessionLocal
+
+BACKGROUND_LOCK_IDS: dict[str, int] = {
+    "domain_health_check": 202600003,
+    "abgabebox_rescan": 202600005,
+    # Replaces the three formerly-separate word_import/gallery_upload/protocol_image rescan
+    # loops (old ids 202600006/202600008/202600010) - they now share one consolidated sweep,
+    # see FileService.rescan_pending_internal_files.
+    "upload_pipeline_rescan": 202600006,
+    "export_cleanup": 202600007,
+    "log_cleanup": 202600009,
+    "cycle_snapshot": 202600011,
+}
+assert len(BACKGROUND_LOCK_IDS) == len(set(BACKGROUND_LOCK_IDS.values())), "duplicate background lock id in BACKGROUND_LOCK_IDS"
+
+
+async def run_advisory_locked_loop(*, lock_id: int, interval_seconds: float, task: Callable[[Session], object]) -> None:
+    """Runs task(db) forever, once per interval_seconds tick, at most once across every
+    uvicorn worker (there's no single-instance process in this deployment) - a worker that
+    doesn't win the Postgres advisory lock for a given tick just skips it rather than racing
+    the worker that did."""
+    while True:
+        with SessionLocal() as db:
+            acquired = db.execute(text("SELECT pg_try_advisory_lock(:lock_id)"), {"lock_id": lock_id}).scalar()
+            if acquired:
+                try:
+                    task(db)
+                finally:
+                    db.execute(text("SELECT pg_advisory_unlock(:lock_id)"), {"lock_id": lock_id})
+        await asyncio.sleep(interval_seconds)

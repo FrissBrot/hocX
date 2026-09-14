@@ -94,8 +94,10 @@ def test_save_gallery_uploads_stores_image_with_tags_and_creates_gallery_image_r
     tenant = make_tenant(db)
     content = _png_bytes((30, 60, 90))
 
-    items, errors = service.save_gallery_uploads(
-        db, tenant_id=tenant.id, files=[("strand.png", content)], tags=["Sommerlager", " Sommerlager ", ""], created_by=None,
+    items, errors = asyncio.run(
+        service.save_gallery_uploads(
+            db, tenant_id=tenant.id, files=[("strand.png", content)], tags=["Sommerlager", " Sommerlager ", ""], created_by=None,
+        )
     )
 
     assert errors == []
@@ -117,8 +119,10 @@ def test_save_gallery_uploads_stores_image_with_tags_and_creates_gallery_image_r
 def test_save_gallery_uploads_rejects_non_image_content(db):
     tenant = make_tenant(db)
 
-    items, errors = service.save_gallery_uploads(
-        db, tenant_id=tenant.id, files=[("bericht.txt", b"das ist kein bild")], tags=[], created_by=None,
+    items, errors = asyncio.run(
+        service.save_gallery_uploads(
+            db, tenant_id=tenant.id, files=[("bericht.txt", b"das ist kein bild")], tags=[], created_by=None,
+        )
     )
 
     assert items == []
@@ -130,8 +134,10 @@ def test_save_gallery_uploads_rejects_oversized_file(db, monkeypatch):
     tenant = make_tenant(db)
     monkeypatch.setattr(file_service_module, "MAX_UPLOAD_BYTES", 10)
 
-    items, errors = service.save_gallery_uploads(
-        db, tenant_id=tenant.id, files=[("strand.png", _png_bytes())], tags=[], created_by=None,
+    items, errors = asyncio.run(
+        service.save_gallery_uploads(
+            db, tenant_id=tenant.id, files=[("strand.png", _png_bytes())], tags=[], created_by=None,
+        )
     )
 
     assert items == []
@@ -142,8 +148,10 @@ def test_save_gallery_uploads_rejects_infected_file_without_storing_it(db, monke
     tenant = make_tenant(db)
     monkeypatch.setattr(file_service_module.scanner, "scan_bytes", lambda content, host, port: "infected")
 
-    items, errors = service.save_gallery_uploads(
-        db, tenant_id=tenant.id, files=[("strand.png", _png_bytes())], tags=[], created_by=None,
+    items, errors = asyncio.run(
+        service.save_gallery_uploads(
+            db, tenant_id=tenant.id, files=[("strand.png", _png_bytes())], tags=[], created_by=None,
+        )
     )
 
     assert items == []
@@ -155,12 +163,14 @@ def test_save_gallery_uploads_rejects_infected_file_without_storing_it(db, monke
 def test_save_gallery_uploads_does_not_abort_batch_on_one_bad_file(db):
     tenant = make_tenant(db)
 
-    items, errors = service.save_gallery_uploads(
-        db,
-        tenant_id=tenant.id,
-        files=[("gut.png", _png_bytes((1, 2, 3))), ("schlecht.txt", b"kein bild")],
-        tags=["Lager"],
-        created_by=None,
+    items, errors = asyncio.run(
+        service.save_gallery_uploads(
+            db,
+            tenant_id=tenant.id,
+            files=[("gut.png", _png_bytes((1, 2, 3))), ("schlecht.txt", b"kein bild")],
+            tags=["Lager"],
+            created_by=None,
+        )
     )
 
     assert len(items) == 1

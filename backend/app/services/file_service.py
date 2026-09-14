@@ -1,20 +1,15 @@
 from __future__ import annotations
 
 import hashlib
-import io
 import uuid
-import zipfile
-import zlib
-from collections.abc import Callable
 from contextlib import contextmanager
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 from typing import Iterator
-from uuid import uuid4
 
-import imagehash
 from fastapi import HTTPException, UploadFile
-from PIL import Image, ImageOps
+from PIL import Image
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
@@ -25,6 +20,21 @@ from app.repositories.file_repository import ProtocolImageRepository, StoredFile
 from app.schemas.files import FileOverviewItem, StoredFileMetadata
 from app.schemas.protocol import ProtocolImageRead
 from app.services import public_id_service
+from app.services.upload_pipeline import (
+    ALLOWED_IMAGE_MIME_TYPES,
+    MAX_UPLOAD_BYTES,
+    MAX_ZIP_TOTAL_BYTES,
+    PDF_MIME_TYPE,
+    WORD_IMPORT_ALLOWED_MIME_TYPES,
+    WORD_IMPORT_MIME_TYPE,
+    _content_matches_mime,
+    _sniff_image_mime,
+    _sniff_word_import_mime,
+    extract_image_files_from_zip,
+    extract_word_import_files_from_zip,
+    generate_thumbnail_bytes,
+    ingest_file,
+)
 
 # Max number of tags a suggestion query returns to the frontend's autocomplete dropdown.
 MAX_TAG_SUGGESTIONS = 50
@@ -33,7 +43,6 @@ MAX_TAG_SUGGESTIONS = 50
 MAX_TAGS_PER_FILE = 30
 MAX_TAG_LENGTH = 60
 
-MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
 # Distinct namespace (paired with tenant_id as the advisory lock's two int32 keys) from
 # the fixed single-bigint lock ids main.py's background loops use (202600xxx range).
 _PROTOCOL_IMAGE_QUOTA_LOCK_NAMESPACE = 909100001
@@ -52,172 +61,6 @@ def _tenant_protocol_image_upload_lock(db: Session, tenant_id: int) -> Iterator[
         yield
     finally:
         db.execute(text("SELECT pg_advisory_unlock(:ns, :tenant_id)"), {"ns": _PROTOCOL_IMAGE_QUOTA_LOCK_NAMESPACE, "tenant_id": tenant_id})
-ALLOWED_IMAGE_MIME_TYPES = {
-    "image/jpeg",
-    "image/png",
-    "image/gif",
-    "image/webp",
-    "image/bmp",
-    "image/tiff",
-}
-WORD_IMPORT_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-PDF_MIME_TYPE = "application/pdf"
-WORD_IMPORT_ALLOWED_MIME_TYPES = {WORD_IMPORT_MIME_TYPE, PDF_MIME_TYPE}
-# ZIP-Uploads für den Import: Einträge werden nur im Arbeitsspeicher entpackt (nie auf
-# Platte geschrieben) und einzeln per Magic-Bytes geprüft - Limits gegen Zip-Bomben.
-MAX_ZIP_ENTRIES = 300
-MAX_ZIP_TOTAL_BYTES = 100 * 1024 * 1024  # 100 MB kombinierte entpackte Grösse
-# Hamming-Distanz (von 64 Bit) zweier pHashes, ab der zwei Bilder als "wahrscheinlich
-# dasselbe Motiv" gelten - empirischer Richtwert, bei Bedarf anhand echter Fehlalarme
-# nachjustieren.
-PERCEPTUAL_DUPLICATE_THRESHOLD = 5
-
-# Vorschaubilder fuer die "Dateien"-Uebersicht: klein genug, dass ein Grid mit vielen
-# Kacheln fluessig laedt, aber noch erkennbar - die Originaldatei wird nur beim Klick
-# ins Lightbox (volle Aufloesung) nachgeladen.
-THUMBNAIL_MAX_DIMENSION = 480
-THUMBNAIL_JPEG_QUALITY = 78
-
-
-# SECURITY: the client-sent Content-Type header (file.content_type) is fully attacker
-# controlled and must never be trusted on its own - a file with a forged image mime type
-# could smuggle arbitrary content into storage. Check the actual file signature (magic
-# bytes) against the claimed mime type before persisting anything.
-def _content_matches_mime(content: bytes, mime: str) -> bool:
-    head = content[:16]
-    if mime == "image/jpeg":
-        return head.startswith(b"\xff\xd8\xff")
-    if mime == "image/png":
-        return head.startswith(b"\x89PNG\r\n\x1a\n")
-    if mime == "image/gif":
-        return head.startswith((b"GIF87a", b"GIF89a"))
-    if mime == "image/webp":
-        return head.startswith(b"RIFF") and content[8:12] == b"WEBP"
-    if mime == "image/bmp":
-        return head.startswith(b"BM")
-    if mime == "image/tiff":
-        return head.startswith(b"II*\x00") or head.startswith(b"MM\x00*")
-    if mime == WORD_IMPORT_MIME_TYPE:
-        return head.startswith(b"PK\x03\x04")  # .docx is a ZIP archive
-    if mime == PDF_MIME_TYPE:
-        return head.startswith(b"%PDF-")
-    return False
-
-
-def _sniff_word_import_mime(content: bytes) -> str | None:
-    """Determines the real file type from content bytes alone (never the client-supplied
-    filename/Content-Type, see _content_matches_mime above) - returns None for anything
-    that isn't one of the two formats the word-import tool understands."""
-    for mime in WORD_IMPORT_ALLOWED_MIME_TYPES:
-        if _content_matches_mime(content, mime):
-            return mime
-    return None
-
-
-def _sniff_image_mime(content: bytes) -> str | None:
-    """Same idea as _sniff_word_import_mime, for the gallery upload window - returns None
-    for anything whose magic bytes don't match one of ALLOWED_IMAGE_MIME_TYPES."""
-    for mime in ALLOWED_IMAGE_MIME_TYPES:
-        if _content_matches_mime(content, mime):
-            return mime
-    return None
-
-
-def _extract_matching_files_from_zip(
-    content: bytes, *, sniff: Callable[[bytes], str | None], empty_message: str
-) -> tuple[list[tuple[str, bytes]], list[str]]:
-    """Unpacks a ZIP upload entirely in memory: only entries `sniff` recognizes by magic
-    bytes (never the entry name) are kept and returned. Everything else (folders, junk like
-    __MACOSX/.DS_Store, files of the wrong type) is silently skipped - nothing from the
-    archive other than the matched entries ever touches disk, so there is nothing left to
-    clean up afterwards. Entry count/size are capped to guard against zip bombs (declared,
-    not actual, size - sufficient here since uploads require an authenticated writer, not
-    an anonymous endpoint). Shared by extract_word_import_files_from_zip and
-    extract_image_files_from_zip below - only what counts as a match differs."""
-    try:
-        archive = zipfile.ZipFile(io.BytesIO(content))
-    except zipfile.BadZipFile:
-        return [], ["ZIP-Datei ist beschädigt oder ungültig"]
-
-    entries = [info for info in archive.infolist() if not info.is_dir()]
-    matched: list[tuple[str, bytes]] = []
-    notes: list[str] = []
-    total_bytes = 0
-    for info in entries[:MAX_ZIP_ENTRIES]:
-        name = Path(info.filename).name
-        if not name or name.startswith("."):
-            continue
-        if info.file_size > MAX_UPLOAD_BYTES:
-            notes.append(f"{name}: zu gross, übersprungen")
-            continue
-        total_bytes += info.file_size
-        if total_bytes > MAX_ZIP_TOTAL_BYTES:
-            notes.append("ZIP-Inhalt zu gross - restliche Dateien wurden ignoriert")
-            break
-        try:
-            entry_bytes = archive.read(info)
-        except (zipfile.BadZipFile, zlib.error, OSError):
-            # A single corrupt entry (CRC mismatch, truncated data) previously aborted
-            # the whole upload with an unhandled 500 instead of a clean partial-success
-            # response, unlike every other per-entry issue here (oversized, wrong mime),
-            # which is skipped with a note (audit finding, 2026-08-25).
-            notes.append(f"{name}: beschädigter ZIP-Eintrag, übersprungen")
-            continue
-        if sniff(entry_bytes) is None:
-            continue
-        matched.append((name, entry_bytes))
-
-    if len(entries) > MAX_ZIP_ENTRIES:
-        notes.append(f"ZIP enthält mehr als {MAX_ZIP_ENTRIES} Dateien - restliche wurden ignoriert")
-    if not matched and not notes:
-        notes.append(empty_message)
-    return matched, notes
-
-
-def extract_word_import_files_from_zip(content: bytes) -> tuple[list[tuple[str, bytes]], list[str]]:
-    """ZIP upload for the word-import queue - keeps only entries that are genuinely a .docx
-    or .pdf, see _extract_matching_files_from_zip above."""
-    return _extract_matching_files_from_zip(
-        content, sniff=_sniff_word_import_mime, empty_message="ZIP enthält keine Word- oder PDF-Dateien"
-    )
-
-
-def extract_image_files_from_zip(content: bytes) -> tuple[list[tuple[str, bytes]], list[str]]:
-    """ZIP upload for the gallery upload window - keeps only entries that are genuinely an
-    image, see _extract_matching_files_from_zip above."""
-    return _extract_matching_files_from_zip(
-        content, sniff=_sniff_image_mime, empty_message="ZIP enthält keine Bilddateien"
-    )
-
-
-def _compute_perceptual_hash(content: bytes, mime: str) -> str | None:
-    """DCT-based perceptual hash (pHash) for the tenant-wide "sieht aus wie ein bereits
-    hochgeladenes Bild"-Warnung. Returns None for non-image mime types or content PIL can't
-    decode (e.g. a truncated file that still happened to pass the magic-byte check)."""
-    if mime not in ALLOWED_IMAGE_MIME_TYPES:
-        return None
-    try:
-        with Image.open(io.BytesIO(content)) as image:
-            return str(imagehash.phash(image))
-    except Exception:
-        return None
-
-
-def _generate_thumbnail_bytes(content: bytes) -> bytes | None:
-    """Downscaled JPEG preview for the "Dateien" grid. Returns None for content PIL can't
-    decode (e.g. a truncated file that still passed the magic-byte check) - callers fall
-    back to serving/linking the original in that case."""
-    try:
-        with Image.open(io.BytesIO(content)) as image:
-            image = ImageOps.exif_transpose(image)  # respect camera rotation metadata
-            image.thumbnail((THUMBNAIL_MAX_DIMENSION, THUMBNAIL_MAX_DIMENSION))
-            if image.mode not in ("RGB", "L"):
-                image = image.convert("RGB")
-            buffer = io.BytesIO()
-            image.save(buffer, format="JPEG", quality=THUMBNAIL_JPEG_QUALITY)
-            return buffer.getvalue()
-    except Exception:
-        return None
 
 
 def _extract_image_metadata(content: bytes) -> tuple[int | None, int | None, datetime | None, str | None]:
@@ -226,7 +69,7 @@ def _extract_image_metadata(content: bytes) -> tuple[int | None, int | None, dat
     location data about where a user was, not something this feature needs to expose.
     Returns all-None for non-images or content PIL can't decode."""
     try:
-        with Image.open(io.BytesIO(content)) as image:
+        with Image.open(BytesIO(content)) as image:
             width, height = image.size
             taken_at: datetime | None = None
             camera: str | None = None
@@ -260,21 +103,6 @@ def _normalize_tags(tags: list[str]) -> list[str]:
         if len(seen) >= MAX_TAGS_PER_FILE:
             break
     return list(seen.keys())
-
-
-def _closest_perceptual_match(perceptual_hash: str | None, candidates: list[tuple[int, str]]) -> int | None:
-    """Returns the stored_file_id of the closest candidate within PERCEPTUAL_DUPLICATE_THRESHOLD,
-    or None if there's no hash to compare or nothing close enough."""
-    if perceptual_hash is None:
-        return None
-    this_hash = imagehash.hex_to_hash(perceptual_hash)
-    best_id: int | None = None
-    best_distance = PERCEPTUAL_DUPLICATE_THRESHOLD + 1
-    for candidate_id, candidate_hash in candidates:
-        distance = this_hash - imagehash.hex_to_hash(candidate_hash)
-        if distance <= PERCEPTUAL_DUPLICATE_THRESHOLD and distance < best_distance:
-            best_id, best_distance = candidate_id, distance
-    return best_id
 
 
 def _safe_storage_path(storage_root: str, relative_path: str) -> Path:
@@ -341,7 +169,7 @@ class FileService:
         original_path = _safe_storage_path(storage_root, stored_file.storage_path)
         if not original_path.exists():
             return None
-        thumbnail_bytes = _generate_thumbnail_bytes(original_path.read_bytes())
+        thumbnail_bytes = generate_thumbnail_bytes(original_path.read_bytes())
         if thumbnail_bytes is None:
             return None
 
@@ -536,23 +364,12 @@ class FileService:
         # Unlike word-import documents and abgabebox uploads, protocol images were never
         # scanned at all (audit finding, 2026-08-25) - scan_status defaulted to "clean" in
         # the DB, so the image was treated as already-verified even though it never was.
-        # Same convention as save_word_import_document: scan before anything touches disk,
-        # reject outright on 'infected', fail-open + mark 'pending' (blocked from download
-        # by get_stored_file_content until the periodic rescan resolves it) if ClamAV is
-        # unreachable.
-        scan_status = scanner.scan_bytes(content, host=settings.clamav_host, port=settings.clamav_port)
-        if scan_status == "infected":
-            raise HTTPException(status_code=400, detail="Datei wurde von der Virenprüfung als infiziert erkannt und wurde nicht gespeichert")
+        # scan_many() (not scan_bytes()) even for this single file: this method runs on the
+        # request's event loop, and a direct scan_bytes() call would block the whole uvicorn
+        # worker for every tenant until ClamAV answers (up to 30s on timeout).
+        scan_status = (await scanner.scan_many([content], host=settings.clamav_host, port=settings.clamav_port))[0]
 
-        suffix = Path(file.filename or "").suffix.lower() or ".bin"
         tenant_id = self._resolve_tenant_id(db, protocol_element_block.id)
-
-        perceptual_hash = _compute_perceptual_hash(content, mime)
-        duplicate_warning: str | None = None
-        if perceptual_hash is not None:
-            tenant_hashes = self.stored_file_repository.list_tenant_image_hashes(db, tenant_id)
-            if _closest_perceptual_match(perceptual_hash, tenant_hashes) is not None:
-                duplicate_warning = "Hinweis: Dieses Bild ähnelt einem bereits im Mandanten hochgeladenen Bild."
 
         # No per-tenant total quota existed at all before this fix (audit finding,
         # 2026-08-25) - only the per-file MAX_UPLOAD_BYTES check above. Quota check and
@@ -576,37 +393,21 @@ class FileService:
                     detail=f"Speicherlimit für Protokollbilder erreicht (max. {settings.protocol_image_storage_quota_mb} MB pro Mandant)",
                 )
 
-            storage_dir = Path(settings.upload_root) / f"tenant-{tenant_id}" / f"block-{protocol_element_block.id}"
-            storage_dir.mkdir(parents=True, exist_ok=True)
-            generated_name = f"{uuid4().hex}{suffix}"
-            target_path = storage_dir / generated_name
-            target_path.write_bytes(content)
-
-            relative_path = target_path.relative_to(settings.storage_root)
-            stored_file = StoredFile(
+            result = ingest_file(
+                db,
                 tenant_id=tenant_id,
-                original_name=file.filename or generated_name,
-                mime_type=mime,
-                storage_path=str(relative_path),
-                latex_path=None,
-                file_size_bytes=len(content),
-                checksum_sha256=checksum,
-                perceptual_hash=perceptual_hash,
-                thumbnail_path=None,
-                created_by=created_by,
+                content=content,
+                original_filename=file.filename or "bild",
                 scan_status=scan_status,
+                sniff=lambda c: mime if _content_matches_mime(c, mime) else None,
+                max_bytes=MAX_UPLOAD_BYTES,
+                storage_subdir_parts=(f"tenant-{tenant_id}", f"block-{protocol_element_block.id}"),
+                enable_perceptual_dedupe=True,
+                enable_thumbnail=True,
+                created_by=created_by,
+                stored_file_repository=self.stored_file_repository,
             )
-            stored_file = self.stored_file_repository.create(db, stored_file)
-
-            # Thumbnail is keyed by stored_file.id (see ensure_thumbnail), so it's generated after
-            # the insert/flush above instead of before it.
-            thumbnail_bytes = _generate_thumbnail_bytes(content)
-            if thumbnail_bytes is not None:
-                thumbnail_root = Path(settings.thumbnail_root)
-                thumbnail_root.mkdir(parents=True, exist_ok=True)
-                thumbnail_target_path = thumbnail_root.resolve() / f"{stored_file.id}.jpg"
-                thumbnail_target_path.write_bytes(thumbnail_bytes)
-                stored_file.thumbnail_path = thumbnail_target_path.name
+            stored_file = result.stored_file
 
             protocol_image = ProtocolImage(
                 protocol_element_block_id=protocol_element_block.id,
@@ -629,10 +430,10 @@ class FileService:
             mime_type=stored_file.mime_type,
             file_size_bytes=stored_file.file_size_bytes,
             content_url=self.build_content_url(stored_file.public_id),
-            duplicate_warning=duplicate_warning,
+            duplicate_warning=result.duplicate_warning,
         )
 
-    def save_gallery_uploads(
+    async def save_gallery_uploads(
         self,
         db: Session,
         *,
@@ -644,74 +445,52 @@ class FileService:
         """Persists a batch of images uploaded directly through the "Dateien"/"Fotos" gallery
         upload window (route already expanded any .zip into individual (filename, bytes)
         entries via extract_image_files_from_zip - only genuine images ever reach here). Runs
-        the same pipeline as every other upload path in this file: magic-byte content
-        verification (never the client-supplied filename/Content-Type), a size cap, a ClamAV
-        scan before anything is written to disk (see save_word_import_document's SECURITY
-        comment - same reasoning applies here, these files are served back to every
-        writer/admin of the tenant), a checksum + tenant-wide perceptual-hash duplicate check
-        (same "sieht aus wie ein bereits hochgeladenes Bild" warning as protocol images), and
-        thumbnail generation for the "Fotos" grid. One bad file never aborts the whole batch -
-        problems are collected into `errors` and returned alongside whatever did succeed."""
+        the same upload_pipeline.ingest_file() every internal upload path shares: magic-byte
+        content verification (never the client-supplied filename/Content-Type), a size cap, a
+        checksum + tenant-wide perceptual-hash duplicate check (same "sieht aus wie ein bereits
+        hochgeladenes Bild" warning as protocol images), and thumbnail generation for the
+        "Fotos" grid. Scans the whole batch concurrently up front via scanner.scan_many()
+        rather than one blocking scan_bytes() call per file. One bad file never aborts the
+        whole batch - problems are collected into `errors` and returned alongside whatever did
+        succeed."""
         self.ensure_storage()
         normalized_tags = _normalize_tags(tags)
-        storage_dir = Path(settings.upload_root) / f"tenant-{tenant_id}" / "gallery"
-        storage_dir.mkdir(parents=True, exist_ok=True)
-        tenant_hashes = self.stored_file_repository.list_tenant_image_hashes(db, tenant_id)
+        scan_statuses = await scanner.scan_many(
+            [content for _filename, content in files], host=settings.clamav_host, port=settings.clamav_port
+        )
 
         items: list[FileOverviewItem] = []
         errors: list[str] = []
-        for filename, content in files:
+        for (filename, content), scan_status in zip(files, scan_statuses):
             label = filename or "Bild"
-            if len(content) > MAX_UPLOAD_BYTES:
-                errors.append(f"{label}: zu gross (maximal {MAX_UPLOAD_BYTES // 1024 // 1024} MB)")
+            try:
+                result = ingest_file(
+                    db,
+                    tenant_id=tenant_id,
+                    content=content,
+                    original_filename=filename or "bild",
+                    scan_status=scan_status,
+                    sniff=_sniff_image_mime,
+                    max_bytes=MAX_UPLOAD_BYTES,
+                    storage_subdir_parts=(f"tenant-{tenant_id}", "gallery"),
+                    enable_perceptual_dedupe=True,
+                    enable_thumbnail=True,
+                    created_by=created_by,
+                    tags=normalized_tags,
+                    too_large_message=f"zu gross (maximal {MAX_UPLOAD_BYTES // 1024 // 1024} MB)",
+                    unsupported_format_message="kein unterstütztes Bildformat",
+                    infected_message="wurde von der Virenprüfung als infiziert erkannt und wurde nicht gespeichert",
+                    stored_file_repository=self.stored_file_repository,
+                )
+            except HTTPException as exc:
+                errors.append(f"{label}: {exc.detail}")
                 continue
-            mime = _sniff_image_mime(content)
-            if mime is None:
-                errors.append(f"{label}: kein unterstütztes Bildformat")
-                continue
 
-            scan_status = scanner.scan_bytes(content, host=settings.clamav_host, port=settings.clamav_port)
-            if scan_status == "infected":
-                errors.append(f"{label}: wurde von der Virenprüfung als infiziert erkannt und wurde nicht gespeichert")
-                continue
-
-            checksum = hashlib.sha256(content).hexdigest()
-            perceptual_hash = _compute_perceptual_hash(content, mime)
-            duplicate_id = _closest_perceptual_match(perceptual_hash, tenant_hashes)
-
-            suffix = Path(filename).suffix.lower() or ".bin"
-            target_path = storage_dir / f"{uuid4().hex}{suffix}"
-            target_path.write_bytes(content)
-            relative_path = target_path.relative_to(settings.storage_root)
-
-            stored_file = StoredFile(
-                tenant_id=tenant_id,
-                original_name=filename or target_path.name,
-                mime_type=mime,
-                storage_path=str(relative_path),
-                file_size_bytes=len(content),
-                checksum_sha256=checksum,
-                perceptual_hash=perceptual_hash,
-                tags=normalized_tags,
-                created_by=created_by,
-                scan_status=scan_status,
-            )
-            stored_file = self.stored_file_repository.create(db, stored_file)
-
-            thumbnail_bytes = _generate_thumbnail_bytes(content)
-            if thumbnail_bytes is not None:
-                thumbnail_root = Path(settings.thumbnail_root)
-                thumbnail_root.mkdir(parents=True, exist_ok=True)
-                thumbnail_target_path = thumbnail_root.resolve() / f"{stored_file.id}.jpg"
-                thumbnail_target_path.write_bytes(thumbnail_bytes)
-                stored_file.thumbnail_path = thumbnail_target_path.name
-
+            stored_file = result.stored_file
             db.add(GalleryImage(tenant_id=tenant_id, stored_file_id=stored_file.id, created_by=created_by))
             db.flush()
 
-            if perceptual_hash is not None:
-                tenant_hashes.append((stored_file.id, perceptual_hash))
-            if duplicate_id is not None:
+            if result.duplicate_warning is not None:
                 errors.append(f"{label}: Hinweis - ähnelt einem bereits im Mandanten hochgeladenen Bild")
 
             items.append(
@@ -747,13 +526,12 @@ class FileService:
         content: bytes,
         created_by: int | None = None,
     ) -> StoredFile:
+        """Stays a plain synchronous method (unlike save_protocol_image/save_gallery_uploads):
+        its caller, WordImportQueueService.ingest(), itself runs inside run_in_threadpool()
+        (see routes/word_import.py) because analyze() is a long, synchronous parse - there is
+        no event loop to block here in the first place, so the plain blocking scanner.scan_bytes()
+        is the right tool, not scan_many()."""
         self.ensure_storage()
-
-        if len(content) > MAX_UPLOAD_BYTES:
-            raise HTTPException(status_code=413, detail=f"Datei zu gross. Maximum {MAX_UPLOAD_BYTES // 1024 // 1024} MB")
-        mime = _sniff_word_import_mime(content)
-        if mime is None:
-            raise HTTPException(status_code=400, detail="Datei ist keine gültige .docx- oder .pdf-Datei")
 
         # SECURITY: scan before anything ever touches disk - an uploaded .docx/.pdf is
         # opened later by every writer/admin of the tenant via "Original-Dokument öffnen"
@@ -762,77 +540,39 @@ class FileService:
         # (nothing is written, no StoredFile row created). 'pending' (ClamAV unreachable)
         # still gets stored - fail-open, same convention as the abgabebox scanner - but is
         # blocked from download until the periodic rescan sweep resolves it, see
-        # get_stored_file_content() in routes/files.py and rescan_pending_word_import_files()
+        # get_stored_file_content() in routes/files.py and rescan_pending_internal_files()
         # below.
         scan_status = scanner.scan_bytes(content, host=settings.clamav_host, port=settings.clamav_port)
-        if scan_status == "infected":
-            raise HTTPException(status_code=400, detail=f"Datei '{filename}' wurde von der Virenprüfung als infiziert erkannt und wurde nicht gespeichert")
 
-        suffix = ".pdf" if mime == PDF_MIME_TYPE else ".docx"
-        storage_dir = Path(settings.upload_root) / "word-imports" / f"tenant-{tenant_id}"
-        storage_dir.mkdir(parents=True, exist_ok=True)
-        target_path = storage_dir / f"{uuid4().hex}{suffix}"
-
-        checksum = hashlib.sha256(content).hexdigest()
-        target_path.write_bytes(content)
-
-        relative_path = target_path.relative_to(settings.storage_root)
-        stored_file = StoredFile(
+        result = ingest_file(
+            db,
             tenant_id=tenant_id,
-            original_name=filename,
-            mime_type=mime,
-            storage_path=str(relative_path),
-            latex_path=None,
-            file_size_bytes=len(content),
-            checksum_sha256=checksum,
-            created_by=created_by,
+            content=content,
+            original_filename=filename,
             scan_status=scan_status,
+            sniff=_sniff_word_import_mime,
+            max_bytes=MAX_UPLOAD_BYTES,
+            storage_subdir_parts=("word-imports", f"tenant-{tenant_id}"),
+            enable_perceptual_dedupe=False,
+            enable_thumbnail=False,
+            created_by=created_by,
+            too_large_message=f"Datei zu gross. Maximum {MAX_UPLOAD_BYTES // 1024 // 1024} MB",
+            unsupported_format_message="Datei ist keine gültige .docx- oder .pdf-Datei",
+            infected_message=f"Datei '{filename}' wurde von der Virenprüfung als infiziert erkannt und wurde nicht gespeichert",
+            stored_file_repository=self.stored_file_repository,
         )
-        return self.stored_file_repository.create(db, stored_file)
+        return result.stored_file
 
-    def rescan_pending_word_import_files(self, db: Session) -> dict:
-        """Periodic sweep (see main.py's word_import_rescan_loop) for word-import
-        StoredFile rows still marked 'pending' because ClamAV was unreachable at upload
-        time - same fail-open + rescan convention as the abgabebox scanner
-        (submission_service.py's rescan_all_pending), but simpler here: word-import files
-        are never quarantined into a separate directory (they're written to their final
-        path directly, see save_word_import_document), so a clean/infected verdict is
-        just a status flip, no file move needed."""
-        pending = self.stored_file_repository.list_pending_word_import_files(db)
-        results = {"scanned": len(pending), "clean": 0, "infected": 0, "still_pending": 0}
-        for stored_file in pending:
-            file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
-            result = scanner.scan_file(file_path, host=settings.clamav_host, port=settings.clamav_port)
-            if result == "pending":
-                results["still_pending"] += 1
-                continue
-            self.stored_file_repository.update_scan_status(db, stored_file, scan_status=result)
-            results["clean" if result == "clean" else "infected"] += 1
-        db.commit()
-        return results
-
-    def rescan_pending_gallery_uploads(self, db: Session) -> dict:
-        """Periodic sweep (see main.py's gallery_upload_rescan_loop) for gallery-upload
-        StoredFile rows still marked 'pending' because ClamAV was unreachable at upload
-        time - same convention as rescan_pending_word_import_files above."""
-        pending = self.stored_file_repository.list_pending_gallery_upload_files(db)
-        results = {"scanned": len(pending), "clean": 0, "infected": 0, "still_pending": 0}
-        for stored_file in pending:
-            file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
-            result = scanner.scan_file(file_path, host=settings.clamav_host, port=settings.clamav_port)
-            if result == "pending":
-                results["still_pending"] += 1
-                continue
-            self.stored_file_repository.update_scan_status(db, stored_file, scan_status=result)
-            results["clean" if result == "clean" else "infected"] += 1
-        db.commit()
-        return results
-
-    def rescan_pending_protocol_images(self, db: Session) -> dict:
-        """Periodic sweep for protocol-image StoredFile rows still marked 'pending'
-        because ClamAV was unreachable at upload time - same fail-open + rescan
-        convention as rescan_pending_word_import_files above."""
-        pending = self.stored_file_repository.list_pending_protocol_images(db)
+    def rescan_pending_internal_files(self, db: Session) -> dict:
+        """Periodic sweep (see main.py's upload_pipeline_rescan_loop) for the three internal
+        upload paths' StoredFile rows still marked 'pending' because ClamAV was unreachable at
+        upload time - fail-open + rescan convention shared with the abgabebox scanner
+        (submission_service.py's rescan_all_pending, handled by its own, separate
+        abgabebox_rescan_loop since it also has to move files out of quarantine). None of the
+        three internal paths ever quarantine into a separate directory (they're written to
+        their final path directly), so a clean/infected verdict here is just a status flip, no
+        file move needed."""
+        pending = self.stored_file_repository.list_pending_internal_files(db)
         results = {"scanned": len(pending), "clean": 0, "infected": 0, "still_pending": 0}
         for stored_file in pending:
             file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)

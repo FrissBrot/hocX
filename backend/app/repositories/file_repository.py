@@ -17,6 +17,7 @@ from app.models import (
     SubmissionAssignment,
     SubmissionUpload,
     SubmissionUploadFile,
+    Tenant,
     WordImportDocument,
 )
 from app.services import public_id_service
@@ -47,29 +48,29 @@ class StoredFileRepository:
     def delete(self, db: Session, stored_file: StoredFile) -> None:
         db.delete(stored_file)
 
-    def list_pending_word_import_files(self, db: Session) -> list[StoredFile]:
-        """Word-import documents are stored under a fixed 'word-imports/' path prefix
-        (see FileService.save_word_import_document) - that's used here instead of a join
-        to WordImportDocument so a file still mid-analyze (not yet turned into a
-        WordImportDocument row) is picked up too."""
-        return list(
-            db.execute(
-                select(StoredFile).where(
-                    StoredFile.scan_status == "pending",
-                    StoredFile.storage_path.like("uploads/word-imports/%"),
-                )
-            ).scalars()
-        )
+    def list_pending_internal_files(self, db: Session) -> list[StoredFile]:
+        """Pending-scan StoredFile rows from any of the three internal upload paths
+        (protocol image, gallery upload, word import) - joined through their respective
+        origin table's stored_file_id (all three indexed) rather than a storage_path prefix
+        match. Safe to join rather than match by path: each of the three save_* methods
+        creates the StoredFile row and its origin row in the same transaction and commits
+        them together (see FileService.save_gallery_uploads/save_word_import_document), so
+        there's no window where a committed, pending StoredFile row of these three kinds
+        exists without its origin row yet.
 
-    def list_pending_gallery_upload_files(self, db: Session) -> list[StoredFile]:
-        """Same idea as list_pending_word_import_files above, for gallery uploads (see
-        FileService.save_gallery_uploads) - matched by their fixed storage path prefix
-        rather than a join to gallery_image, so a row still mid-insert is picked up too."""
+        Deliberately excludes submission_upload (abgabebox) - those still-pending files sit
+        in abgabebox-backend's quarantine directory and need SubmissionService's own
+        move-from-quarantine handling, not this generic status flip; see
+        SubmissionService.rescan_all_pending / main.py's abgabebox_rescan_loop."""
         return list(
             db.execute(
                 select(StoredFile).where(
                     StoredFile.scan_status == "pending",
-                    StoredFile.storage_path.like("uploads/tenant-%/gallery/%"),
+                    or_(
+                        StoredFile.id.in_(select(ProtocolImage.stored_file_id)),
+                        StoredFile.id.in_(select(GalleryImage.stored_file_id)),
+                        StoredFile.id.in_(select(WordImportDocument.stored_file_id)),
+                    ),
                 )
             ).scalars()
         )
@@ -91,17 +92,22 @@ class StoredFileRepository:
             query = query.where(StoredFile.id != exclude_stored_file_id)
         return list(db.execute(query).all())
 
-    def _files_overview_branches(self, tenant_id: int):
-        """The three differently-joined SELECTs behind list_tenant_files/list_tag_sources,
-        each labelling an `origin_tag` expression - a human-readable "where did this come
-        from" string (protocol+block, word-import document, submission assignment) that
+    def _files_overview_branches(self, tenant_id: int | None):
+        """The four differently-joined SELECTs behind list_tenant_files/list_tag_sources
+        (tenant_id given) and the admin cross-tenant upload-pipeline-status view (tenant_id
+        None), each labelling an `origin_tag` expression - a human-readable "where did this
+        come from" string (protocol+block, word-import document, submission assignment) that
         behaves as an extra, non-editable tag: filterable the same way as `tags` but always
         computed fresh from the live relation instead of stored, so it never goes stale if
         e.g. a protocol number or assignment title is renamed later."""
+        tenant_filter = (StoredFile.tenant_id == tenant_id,) if tenant_id is not None else ()
         protocol_branch = (
             select(
                 StoredFile.id.label("id"),
                 StoredFile.public_id.label("public_id"),
+                StoredFile.tenant_id.label("tenant_id"),
+                Tenant.public_id.label("tenant_public_id"),
+                Tenant.name.label("tenant_name"),
                 StoredFile.original_name.label("original_name"),
                 StoredFile.mime_type.label("mime_type"),
                 StoredFile.file_size_bytes.label("file_size_bytes"),
@@ -127,17 +133,21 @@ class StoredFileRepository:
                 ).label("origin_tag"),
             )
             .select_from(StoredFile)
+            .join(Tenant, Tenant.id == StoredFile.tenant_id)
             .join(ProtocolImage, ProtocolImage.stored_file_id == StoredFile.id)
             .join(ProtocolElementBlock, ProtocolElementBlock.id == ProtocolImage.protocol_element_block_id)
             .join(ProtocolElement, ProtocolElement.id == ProtocolElementBlock.protocol_element_id)
             .join(Protocol, Protocol.id == ProtocolElement.protocol_id)
-            .where(StoredFile.tenant_id == tenant_id)
+            .where(*tenant_filter)
         )
 
         word_import_branch = (
             select(
                 StoredFile.id.label("id"),
                 StoredFile.public_id.label("public_id"),
+                StoredFile.tenant_id.label("tenant_id"),
+                Tenant.public_id.label("tenant_public_id"),
+                Tenant.name.label("tenant_name"),
                 StoredFile.original_name.label("original_name"),
                 StoredFile.mime_type.label("mime_type"),
                 StoredFile.file_size_bytes.label("file_size_bytes"),
@@ -154,14 +164,18 @@ class StoredFileRepository:
                 func.concat("Word-Import: ", WordImportDocument.display_name).label("origin_tag"),
             )
             .select_from(StoredFile)
+            .join(Tenant, Tenant.id == StoredFile.tenant_id)
             .join(WordImportDocument, WordImportDocument.stored_file_id == StoredFile.id)
-            .where(StoredFile.tenant_id == tenant_id)
+            .where(*tenant_filter)
         )
 
         submission_branch = (
             select(
                 StoredFile.id.label("id"),
                 StoredFile.public_id.label("public_id"),
+                StoredFile.tenant_id.label("tenant_id"),
+                Tenant.public_id.label("tenant_public_id"),
+                Tenant.name.label("tenant_name"),
                 StoredFile.original_name.label("original_name"),
                 StoredFile.mime_type.label("mime_type"),
                 StoredFile.file_size_bytes.label("file_size_bytes"),
@@ -178,16 +192,20 @@ class StoredFileRepository:
                 func.concat("Abgabe: ", SubmissionAssignment.title).label("origin_tag"),
             )
             .select_from(StoredFile)
+            .join(Tenant, Tenant.id == StoredFile.tenant_id)
             .join(SubmissionUploadFile, SubmissionUploadFile.stored_file_id == StoredFile.id)
             .join(SubmissionUpload, SubmissionUpload.id == SubmissionUploadFile.upload_id)
             .join(SubmissionAssignment, SubmissionAssignment.id == SubmissionUpload.assignment_id)
-            .where(StoredFile.tenant_id == tenant_id, SubmissionUploadFile.delete_comment.is_(None))
+            .where(*tenant_filter, SubmissionUploadFile.delete_comment.is_(None))
         )
 
         gallery_branch = (
             select(
                 StoredFile.id.label("id"),
                 StoredFile.public_id.label("public_id"),
+                StoredFile.tenant_id.label("tenant_id"),
+                Tenant.public_id.label("tenant_public_id"),
+                Tenant.name.label("tenant_name"),
                 StoredFile.original_name.label("original_name"),
                 StoredFile.mime_type.label("mime_type"),
                 StoredFile.file_size_bytes.label("file_size_bytes"),
@@ -204,8 +222,9 @@ class StoredFileRepository:
                 literal("Direkt hochgeladen").label("origin_tag"),
             )
             .select_from(StoredFile)
+            .join(Tenant, Tenant.id == StoredFile.tenant_id)
             .join(GalleryImage, GalleryImage.stored_file_id == StoredFile.id)
-            .where(StoredFile.tenant_id == tenant_id)
+            .where(*tenant_filter)
         )
 
         return {
@@ -310,6 +329,48 @@ class StoredFileRepository:
         )
         return list(db.execute(query).all())
 
+    def list_pipeline_status(
+        self,
+        db: Session,
+        *,
+        tenant_id: int | None = None,
+        source: str | None = None,
+        scan_status: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[Row], int]:
+        """Admin cross-tenant view of every internally-tracked upload (the four
+        _files_overview_branches origins) with its current scan_status - backs the
+        platform-admin "Datei-Pipeline" overview. Unlike list_tenant_files, this deliberately
+        does NOT exclude infected files - surfacing exactly those is the point of an admin
+        problem view - and is unscoped by default rather than requiring a tenant_id."""
+        branches = self._files_overview_branches(tenant_id)
+        selected = [branch for key, branch in branches.items() if source is None or source == key]
+        union_query = union_all(*selected).subquery("upload_pipeline_status")
+
+        query = select(union_query)
+        if scan_status is not None:
+            query = query.where(union_query.c.scan_status == scan_status)
+
+        total = db.execute(select(func.count()).select_from(query.subquery())).scalar_one()
+        rows = list(
+            db.execute(
+                query.order_by(union_query.c.created_at.desc(), union_query.c.id.desc()).offset(offset).limit(limit)
+            ).all()
+        )
+        return rows, total
+
+    def count_pipeline_status_summary(self, db: Session, *, tenant_id: int | None = None) -> list[Row]:
+        """(source, scan_status, count) across every internally-tracked upload - backs the
+        admin overview's badge counts. Unpaginated by design: a handful of source x
+        scan_status combinations, not one row per file."""
+        branches = self._files_overview_branches(tenant_id)
+        union_query = union_all(*branches.values()).subquery("upload_pipeline_status")
+        query = select(union_query.c.source, union_query.c.scan_status, func.count().label("count")).group_by(
+            union_query.c.source, union_query.c.scan_status
+        )
+        return list(db.execute(query).all())
+
     def update_tags(self, db: Session, stored_file: StoredFile, tags: list[str]) -> StoredFile:
         stored_file.tags = tags
         db.add(stored_file)
@@ -317,19 +378,6 @@ class StoredFileRepository:
         db.refresh(stored_file)
         return stored_file
 
-    def list_pending_protocol_images(self, db: Session) -> list[StoredFile]:
-        # Joined through ProtocolImage rather than a path prefix (unlike
-        # list_pending_word_import_files) - a protocol image's StoredFile and its
-        # ProtocolImage row are always created together in the same call
-        # (FileService.save_protocol_image), so there's no "not yet linked" gap to worry
-        # about here.
-        return list(
-            db.execute(
-                select(StoredFile)
-                .join(ProtocolImage, ProtocolImage.stored_file_id == StoredFile.id)
-                .where(StoredFile.scan_status == "pending")
-            ).scalars()
-        )
 
 
 class ProtocolImageRepository:

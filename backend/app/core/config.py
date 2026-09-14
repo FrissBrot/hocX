@@ -60,8 +60,12 @@ class Settings(BaseSettings):
     traefik_dynamic_config_dir: str = "/app/traefik_dynamic"
     domain_health_check_interval_minutes: int = 30
     abgabebox_rescan_interval_minutes: int = 15
-    word_import_rescan_interval_minutes: int = 15
-    gallery_upload_rescan_interval_minutes: int = 15
+    # Shared by the three internal upload paths (protocol image, gallery upload, word
+    # import) - one consolidated rescan loop instead of the three that previously existed
+    # separately (word_import_rescan_interval_minutes/gallery_upload_rescan_interval_minutes,
+    # with protocol images reusing the word-import setting for lack of their own). See
+    # FileService.rescan_pending_internal_files / app.core.background_loops.
+    upload_pipeline_rescan_interval_minutes: int = 15
     export_cleanup_interval_minutes: int = 1440
     export_retention_days: int = 30
     # Retention sweep for audit_log/system_error_log (audit finding, 2026-08-26: neither

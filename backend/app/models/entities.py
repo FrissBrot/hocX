@@ -861,6 +861,11 @@ class StoredFile(Base, TimestampMixin):
         Index("idx_stored_file_tenant", "tenant_id"),
         Index("idx_stored_file_tags_gin", "tags", postgresql_using="gin"),
         Index("idx_stored_file_created_by", "created_by"),
+        Index(
+            "idx_stored_file_scan_status_pending",
+            "scan_status",
+            postgresql_where=text("scan_status <> 'clean'"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -989,7 +994,10 @@ class GalleryImage(Base, TimestampMixin):
     Exists as its own join table (rather than a boolean/enum column on StoredFile) purely to
     follow that same "one join table per origin" convention the other three branches use."""
     __tablename__ = "gallery_image"
-    __table_args__ = (Index("idx_gallery_image_tenant", "tenant_id"),)
+    __table_args__ = (
+        Index("idx_gallery_image_tenant", "tenant_id"),
+        Index("idx_gallery_image_stored_file", "stored_file_id"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)

@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 
 from app.api.routes import admin, admin_auth, auth, collaboration_ws, cycle_configs, document_templates, events, exports, files, finance, fines, lists, participants, protocol_elements, protocols, statistics, storage, submission_assignments, table_snapshots, tag_config, templates, tenants, todos, users, word_import
+from app.core.background_loops import BACKGROUND_LOCK_IDS, run_advisory_locked_loop
 from app.core.db import SessionLocal
 from app.core.config import settings
 from app.core.error_log import best_effort_actor_from_request, record_system_error
@@ -176,90 +177,38 @@ async def domain_health_check_loop() -> None:
     """Re-checks active custom domains on an interval. Runs in every uvicorn worker (there's no
     single-instance process in this deployment), so each tick is guarded by a Postgres advisory
     lock - only the worker that acquires it does the check, the other(s) skip that tick."""
-    interval_seconds = settings.domain_health_check_interval_minutes * 60
-    while True:
-        with SessionLocal() as db:
-            acquired = db.execute(text("SELECT pg_try_advisory_lock(202600003)")).scalar()
-            if acquired:
-                try:
-                    domain_health_check_service.run_health_check(db)
-                finally:
-                    db.execute(text("SELECT pg_advisory_unlock(202600003)"))
-        await asyncio.sleep(interval_seconds)
+    await run_advisory_locked_loop(
+        lock_id=BACKGROUND_LOCK_IDS["domain_health_check"],
+        interval_seconds=settings.domain_health_check_interval_minutes * 60,
+        task=domain_health_check_service.run_health_check,
+    )
 
 
 async def abgabebox_rescan_loop() -> None:
     """Periodic sweep for submission_upload files stuck in scan_status='pending' (ClamAV was
     unreachable at upload time - see abgabebox-backend/app/scanner.py's fail-open comment).
-    Same every-worker-but-advisory-locked pattern as domain_health_check_loop above."""
-    interval_seconds = settings.abgabebox_rescan_interval_minutes * 60
-    submission_service = SubmissionService()
-    while True:
-        with SessionLocal() as db:
-            acquired = db.execute(text("SELECT pg_try_advisory_lock(202600005)")).scalar()
-            if acquired:
-                try:
-                    submission_service.rescan_all_pending(db)
-                finally:
-                    db.execute(text("SELECT pg_advisory_unlock(202600005)"))
-        await asyncio.sleep(interval_seconds)
+    Same every-worker-but-advisory-locked pattern as domain_health_check_loop above. Stays
+    separate from upload_pipeline_rescan_loop below - unlike the three internal upload paths,
+    abgabebox files that are still pending sit in a quarantine directory the restricted
+    abgabebox DB role can't itself move them out of, so this needs SubmissionService's own
+    move-from-quarantine logic, not FileService's."""
+    await run_advisory_locked_loop(
+        lock_id=BACKGROUND_LOCK_IDS["abgabebox_rescan"],
+        interval_seconds=settings.abgabebox_rescan_interval_minutes * 60,
+        task=SubmissionService().rescan_all_pending,
+    )
 
 
-async def word_import_rescan_loop() -> None:
-    """Periodic sweep for word-import StoredFile rows stuck in scan_status='pending'
-    (ClamAV was unreachable at upload time - see file_service.py's save_word_import_document).
-    Same every-worker-but-advisory-locked pattern as abgabebox_rescan_loop above."""
-    interval_seconds = settings.word_import_rescan_interval_minutes * 60
-    file_service = FileService()
-    while True:
-        with SessionLocal() as db:
-            acquired = db.execute(text("SELECT pg_try_advisory_lock(202600006)")).scalar()
-            if acquired:
-                try:
-                    file_service.rescan_pending_word_import_files(db)
-                finally:
-                    db.execute(text("SELECT pg_advisory_unlock(202600006)"))
-        await asyncio.sleep(interval_seconds)
-
-
-async def gallery_upload_rescan_loop() -> None:
-    """Periodic sweep for gallery-upload StoredFile rows stuck in scan_status='pending'
-    (ClamAV was unreachable at upload time - see file_service.py's save_gallery_uploads).
-    Same every-worker-but-advisory-locked pattern as word_import_rescan_loop above."""
-    interval_seconds = settings.gallery_upload_rescan_interval_minutes * 60
-    file_service = FileService()
-    while True:
-        with SessionLocal() as db:
-            acquired = db.execute(text("SELECT pg_try_advisory_lock(202600008)")).scalar()
-            if acquired:
-                try:
-                    file_service.rescan_pending_gallery_uploads(db)
-                finally:
-                    db.execute(text("SELECT pg_advisory_unlock(202600008)"))
-        await asyncio.sleep(interval_seconds)
-
-
-async def protocol_image_rescan_loop() -> None:
-    """Periodic sweep for protocol-image StoredFile rows stuck in scan_status='pending'
-    (ClamAV was unreachable at upload time - see file_service.py's save_protocol_image,
-    which previously never scanned protocol images at all). Same every-worker-but-
-    advisory-locked pattern as the loops above; reuses word_import_rescan_interval_minutes
-    rather than adding a dedicated setting for what is the same fail-open-then-rescan
-    convention applied to a second file type."""
-    interval_seconds = settings.word_import_rescan_interval_minutes * 60
-    file_service = FileService()
-    while True:
-        with SessionLocal() as db:
-            # Distinct lock id (202600010) from gallery_upload_rescan_loop's 202600008 above -
-            # both loops run concurrently in the same worker and must not share one advisory
-            # lock, or whichever loop wins it would starve the other every interval.
-            acquired = db.execute(text("SELECT pg_try_advisory_lock(202600010)")).scalar()
-            if acquired:
-                try:
-                    file_service.rescan_pending_protocol_images(db)
-                finally:
-                    db.execute(text("SELECT pg_advisory_unlock(202600010)"))
-        await asyncio.sleep(interval_seconds)
+async def upload_pipeline_rescan_loop() -> None:
+    """Periodic sweep for the three internal upload paths' (protocol image, gallery upload,
+    word import) StoredFile rows stuck in scan_status='pending' (ClamAV was unreachable at
+    upload time). One consolidated loop instead of three near-identical ones - see
+    FileService.rescan_pending_internal_files and the upload-pipeline unification plan."""
+    await run_advisory_locked_loop(
+        lock_id=BACKGROUND_LOCK_IDS["upload_pipeline_rescan"],
+        interval_seconds=settings.upload_pipeline_rescan_interval_minutes * 60,
+        task=FileService().rescan_pending_internal_files,
+    )
 
 
 async def export_cleanup_loop() -> None:
@@ -269,36 +218,30 @@ async def export_cleanup_loop() -> None:
     writes a brand-new uuid-suffixed file and never reuses an old one, so without this the
     directory grows unbounded on repeated re-exports. Same every-worker-but-advisory-locked
     pattern as the loops above."""
-    interval_seconds = settings.export_cleanup_interval_minutes * 60
     export_service = ExportService()
-    while True:
-        with SessionLocal() as db:
-            acquired = db.execute(text("SELECT pg_try_advisory_lock(202600007)")).scalar()
-            if acquired:
-                try:
-                    export_service.cleanup_old_generated_exports()
-                finally:
-                    db.execute(text("SELECT pg_advisory_unlock(202600007)"))
-        await asyncio.sleep(interval_seconds)
+    await run_advisory_locked_loop(
+        lock_id=BACKGROUND_LOCK_IDS["export_cleanup"],
+        interval_seconds=settings.export_cleanup_interval_minutes * 60,
+        task=lambda _db: export_service.cleanup_old_generated_exports(),
+    )
 
 
 async def log_cleanup_loop() -> None:
     """Periodic retention sweep for audit_log/system_error_log (audit finding, 2026-08-26:
     neither table had any cleanup, both grew unbounded forever - unlike the export cleanup
     loop above, which already existed). Same every-worker-but-advisory-locked pattern."""
-    interval_seconds = settings.log_cleanup_interval_minutes * 60
     audit_service = AuditService()
     error_log_service = AdminErrorLogService()
-    while True:
-        with SessionLocal() as db:
-            acquired = db.execute(text("SELECT pg_try_advisory_lock(202600009)")).scalar()
-            if acquired:
-                try:
-                    audit_service.cleanup_old_entries(db, retention_days=settings.audit_log_retention_days)
-                    error_log_service.cleanup_old_entries(db, retention_days=settings.error_log_retention_days)
-                finally:
-                    db.execute(text("SELECT pg_advisory_unlock(202600009)"))
-        await asyncio.sleep(interval_seconds)
+
+    def _cleanup(db) -> None:
+        audit_service.cleanup_old_entries(db, retention_days=settings.audit_log_retention_days)
+        error_log_service.cleanup_old_entries(db, retention_days=settings.error_log_retention_days)
+
+    await run_advisory_locked_loop(
+        lock_id=BACKGROUND_LOCK_IDS["log_cleanup"],
+        interval_seconds=settings.log_cleanup_interval_minutes * 60,
+        task=_cleanup,
+    )
 
 
 async def cycle_snapshot_loop() -> None:
@@ -306,24 +249,16 @@ async def cycle_snapshot_loop() -> None:
     CycleConfig, creates a table_snapshot for the most recently completed cycle if one
     doesn't exist yet (see table_snapshot_service.run_due_cycle_snapshots for the
     idempotent/self-healing boundary-crossing logic). Same every-worker-but-advisory-
-    locked pattern as the loops above.
-
-    Bug found 2026-09-10: this used to share lock id 202600010 with
-    protocol_image_rescan_loop above (copy-paste from that loop's block, lock id never
-    changed) - both loops run concurrently in the same worker, so whichever one won the
-    lock in a given tick silently starved the other for that tick instead of both running.
-    202600011 here is distinct from every lock id in this file."""
-    interval_seconds = settings.cycle_snapshot_check_interval_minutes * 60
+    locked pattern as the loops above - lock id comes from the shared BACKGROUND_LOCK_IDS
+    ledger (see app.core.background_loops), which is exactly what a 2026-09-10 incident
+    (this loop's lock id copy-pasted from protocol_image_rescan_loop, never changed,
+    silently starving one of the two loops every tick) argued for."""
     snapshot_service = TableSnapshotService()
-    while True:
-        with SessionLocal() as db:
-            acquired = db.execute(text("SELECT pg_try_advisory_lock(202600011)")).scalar()
-            if acquired:
-                try:
-                    run_due_cycle_snapshots(db, snapshot_service)
-                finally:
-                    db.execute(text("SELECT pg_advisory_unlock(202600011)"))
-        await asyncio.sleep(interval_seconds)
+    await run_advisory_locked_loop(
+        lock_id=BACKGROUND_LOCK_IDS["cycle_snapshot"],
+        interval_seconds=settings.cycle_snapshot_check_interval_minutes * 60,
+        task=lambda db: run_due_cycle_snapshots(db, snapshot_service),
+    )
 
 
 @asynccontextmanager
@@ -337,18 +272,14 @@ async def lifespan(_: FastAPI):
     ensure_traefik_dynamic_config()
     health_check_task = asyncio.create_task(domain_health_check_loop())
     rescan_task = asyncio.create_task(abgabebox_rescan_loop())
-    word_import_rescan_task = asyncio.create_task(word_import_rescan_loop())
-    gallery_upload_rescan_task = asyncio.create_task(gallery_upload_rescan_loop())
-    protocol_image_rescan_task = asyncio.create_task(protocol_image_rescan_loop())
+    upload_pipeline_rescan_task = asyncio.create_task(upload_pipeline_rescan_loop())
     export_cleanup_task = asyncio.create_task(export_cleanup_loop())
     log_cleanup_task = asyncio.create_task(log_cleanup_loop())
     cycle_snapshot_task = asyncio.create_task(cycle_snapshot_loop())
     yield
     health_check_task.cancel()
     rescan_task.cancel()
-    word_import_rescan_task.cancel()
-    gallery_upload_rescan_task.cancel()
-    protocol_image_rescan_task.cancel()
+    upload_pipeline_rescan_task.cancel()
     export_cleanup_task.cancel()
     log_cleanup_task.cancel()
     cycle_snapshot_task.cancel()

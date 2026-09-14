@@ -17,6 +17,7 @@ const navLinks = [
   { href: "/admin/users", label: "Benutzer" },
   { href: "/admin/domains", label: "Domains" },
   { href: "/admin/error-logs", label: "Fehlerprotokoll" },
+  { href: "/admin/upload-pipeline", label: "Datei-Pipeline" },
   { href: "/admin/admins", label: "Admin-Accounts" },
   { href: "/admin/sso", label: "SSO" },
   { href: "/admin/security", label: "Sicherheit" },

@@ -1,0 +1,315 @@
+"""Shared core of every internal (non-abgabebox) upload path: protocol images, gallery
+uploads, word-import documents. Each of the three FileService.save_* methods differs only in
+where it decides to write the file, whether it wants perceptual-hash dedupe/a thumbnail, and
+what its own caller-specific pre-checks are (protocol images check an exact per-block
+duplicate before scanning; nothing else does) - everything past "I have validated,
+already-scanned bytes and know where they go" is identical, and lives here as ingest_file().
+
+Deliberately NOT shared with abgabebox-backend (see the upload-pipeline unification plan) -
+that service stays fully isolated behind its own restricted Postgres role and never imports
+main-backend code, so this module has no dependents there.
+
+scan_status is always passed in by the caller rather than computed here: save_protocol_image
+and save_gallery_uploads run on the request's event loop and need the non-blocking
+scanner.scan_many() (awaited before calling ingest_file); save_word_import_document runs
+inside a run_in_threadpool() worker thread with no event loop of its own and calls the plain
+blocking scanner.scan_bytes() directly. Keeping the scan itself out of ingest_file lets it stay
+a plain synchronous function usable from both contexts, instead of forcing a sync/async bridge
+(e.g. asyncio.run()) onto the already-threadpooled word-import path for no benefit."""
+
+from __future__ import annotations
+
+import hashlib
+import io
+import zipfile
+import zlib
+from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
+from uuid import uuid4
+
+import imagehash
+from fastapi import HTTPException
+from PIL import Image, ImageOps
+from sqlalchemy.orm import Session
+
+from app.core.config import settings
+from app.models import StoredFile
+from app.repositories.file_repository import StoredFileRepository
+
+ALLOWED_IMAGE_MIME_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    "image/bmp",
+    "image/tiff",
+}
+WORD_IMPORT_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+PDF_MIME_TYPE = "application/pdf"
+WORD_IMPORT_ALLOWED_MIME_TYPES = {WORD_IMPORT_MIME_TYPE, PDF_MIME_TYPE}
+
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
+
+# ZIP-Uploads (Galerie/Word-Import): Einträge werden nur im Arbeitsspeicher entpackt (nie auf
+# Platte geschrieben) und einzeln per Magic-Bytes geprüft - Limits gegen Zip-Bomben.
+MAX_ZIP_ENTRIES = 300
+MAX_ZIP_TOTAL_BYTES = 100 * 1024 * 1024  # 100 MB kombinierte entpackte Grösse
+
+# Hamming-Distanz (von 64 Bit) zweier pHashes, ab der zwei Bilder als "wahrscheinlich
+# dasselbe Motiv" gelten - empirischer Richtwert, bei Bedarf anhand echter Fehlalarme
+# nachjustieren.
+PERCEPTUAL_DUPLICATE_THRESHOLD = 5
+
+# Vorschaubilder fuer die "Dateien"-Uebersicht: klein genug, dass ein Grid mit vielen
+# Kacheln fluessig laedt, aber noch erkennbar - die Originaldatei wird nur beim Klick
+# ins Lightbox (volle Aufloesung) nachgeladen.
+THUMBNAIL_MAX_DIMENSION = 480
+THUMBNAIL_JPEG_QUALITY = 78
+
+
+# SECURITY: the client-sent Content-Type header is fully attacker-controlled and must never be
+# trusted on its own - a file with a forged image mime type could smuggle arbitrary content
+# into storage. Check the actual file signature (magic bytes) against the claimed mime type
+# before persisting anything.
+def _content_matches_mime(content: bytes, mime: str) -> bool:
+    head = content[:16]
+    if mime == "image/jpeg":
+        return head.startswith(b"\xff\xd8\xff")
+    if mime == "image/png":
+        return head.startswith(b"\x89PNG\r\n\x1a\n")
+    if mime == "image/gif":
+        return head.startswith((b"GIF87a", b"GIF89a"))
+    if mime == "image/webp":
+        return head.startswith(b"RIFF") and content[8:12] == b"WEBP"
+    if mime == "image/bmp":
+        return head.startswith(b"BM")
+    if mime == "image/tiff":
+        return head.startswith(b"II*\x00") or head.startswith(b"MM\x00*")
+    if mime == WORD_IMPORT_MIME_TYPE:
+        return head.startswith(b"PK\x03\x04")  # .docx is a ZIP archive
+    if mime == PDF_MIME_TYPE:
+        return head.startswith(b"%PDF-")
+    return False
+
+
+def _sniff_word_import_mime(content: bytes) -> str | None:
+    """Determines the real file type from content bytes alone (never the client-supplied
+    filename/Content-Type, see _content_matches_mime above) - returns None for anything
+    that isn't one of the two formats the word-import tool understands."""
+    for mime in WORD_IMPORT_ALLOWED_MIME_TYPES:
+        if _content_matches_mime(content, mime):
+            return mime
+    return None
+
+
+def _sniff_image_mime(content: bytes) -> str | None:
+    """Same idea as _sniff_word_import_mime, for the gallery upload window - returns None
+    for anything whose magic bytes don't match one of ALLOWED_IMAGE_MIME_TYPES."""
+    for mime in ALLOWED_IMAGE_MIME_TYPES:
+        if _content_matches_mime(content, mime):
+            return mime
+    return None
+
+
+def _extract_matching_files_from_zip(
+    content: bytes, *, sniff: Callable[[bytes], str | None], empty_message: str
+) -> tuple[list[tuple[str, bytes]], list[str]]:
+    """Unpacks a ZIP upload entirely in memory: only entries `sniff` recognizes by magic
+    bytes (never the entry name) are kept and returned. Everything else (folders, junk like
+    __MACOSX/.DS_Store, files of the wrong type) is silently skipped - nothing from the
+    archive other than the matched entries ever touches disk, so there is nothing left to
+    clean up afterwards. Entry count/size are capped to guard against zip bombs (declared,
+    not actual, size - sufficient here since uploads require an authenticated writer, not
+    an anonymous endpoint). Shared by extract_word_import_files_from_zip and
+    extract_image_files_from_zip below - only what counts as a match differs."""
+    try:
+        archive = zipfile.ZipFile(io.BytesIO(content))
+    except zipfile.BadZipFile:
+        return [], ["ZIP-Datei ist beschädigt oder ungültig"]
+
+    entries = [info for info in archive.infolist() if not info.is_dir()]
+    matched: list[tuple[str, bytes]] = []
+    notes: list[str] = []
+    total_bytes = 0
+    for info in entries[:MAX_ZIP_ENTRIES]:
+        name = Path(info.filename).name
+        if not name or name.startswith("."):
+            continue
+        if info.file_size > MAX_UPLOAD_BYTES:
+            notes.append(f"{name}: zu gross, übersprungen")
+            continue
+        total_bytes += info.file_size
+        if total_bytes > MAX_ZIP_TOTAL_BYTES:
+            notes.append("ZIP-Inhalt zu gross - restliche Dateien wurden ignoriert")
+            break
+        try:
+            entry_bytes = archive.read(info)
+        except (zipfile.BadZipFile, zlib.error, OSError):
+            # A single corrupt entry (CRC mismatch, truncated data) previously aborted
+            # the whole upload with an unhandled 500 instead of a clean partial-success
+            # response, unlike every other per-entry issue here (oversized, wrong mime),
+            # which is skipped with a note (audit finding, 2026-08-25).
+            notes.append(f"{name}: beschädigter ZIP-Eintrag, übersprungen")
+            continue
+        if sniff(entry_bytes) is None:
+            continue
+        matched.append((name, entry_bytes))
+
+    if len(entries) > MAX_ZIP_ENTRIES:
+        notes.append(f"ZIP enthält mehr als {MAX_ZIP_ENTRIES} Dateien - restliche wurden ignoriert")
+    if not matched and not notes:
+        notes.append(empty_message)
+    return matched, notes
+
+
+def extract_word_import_files_from_zip(content: bytes) -> tuple[list[tuple[str, bytes]], list[str]]:
+    """ZIP upload for the word-import queue - keeps only entries that are genuinely a .docx
+    or .pdf, see _extract_matching_files_from_zip above."""
+    return _extract_matching_files_from_zip(
+        content, sniff=_sniff_word_import_mime, empty_message="ZIP enthält keine Word- oder PDF-Dateien"
+    )
+
+
+def extract_image_files_from_zip(content: bytes) -> tuple[list[tuple[str, bytes]], list[str]]:
+    """ZIP upload for the gallery upload window - keeps only entries that are genuinely an
+    image, see _extract_matching_files_from_zip above."""
+    return _extract_matching_files_from_zip(
+        content, sniff=_sniff_image_mime, empty_message="ZIP enthält keine Bilddateien"
+    )
+
+
+def _compute_perceptual_hash(content: bytes, mime: str) -> str | None:
+    """DCT-based perceptual hash (pHash) for the tenant-wide "sieht aus wie ein bereits
+    hochgeladenes Bild"-Warnung. Returns None for non-image mime types or content PIL can't
+    decode (e.g. a truncated file that still happened to pass the magic-byte check)."""
+    if mime not in ALLOWED_IMAGE_MIME_TYPES:
+        return None
+    try:
+        with Image.open(io.BytesIO(content)) as image:
+            return str(imagehash.phash(image))
+    except Exception:
+        return None
+
+
+def _closest_perceptual_match(perceptual_hash: str | None, candidates: list[tuple[int, str]]) -> int | None:
+    """Returns the stored_file_id of the closest candidate within PERCEPTUAL_DUPLICATE_THRESHOLD,
+    or None if there's no hash to compare or nothing close enough."""
+    if perceptual_hash is None:
+        return None
+    this_hash = imagehash.hex_to_hash(perceptual_hash)
+    best_id: int | None = None
+    best_distance = PERCEPTUAL_DUPLICATE_THRESHOLD + 1
+    for candidate_id, candidate_hash in candidates:
+        distance = this_hash - imagehash.hex_to_hash(candidate_hash)
+        if distance <= PERCEPTUAL_DUPLICATE_THRESHOLD and distance < best_distance:
+            best_id, best_distance = candidate_id, distance
+    return best_id
+
+
+def generate_thumbnail_bytes(content: bytes) -> bytes | None:
+    """Downscaled JPEG preview for the "Dateien" grid. Returns None for content PIL can't
+    decode (e.g. a truncated file that still passed the magic-byte check) - callers fall
+    back to serving/linking the original in that case."""
+    try:
+        with Image.open(io.BytesIO(content)) as image:
+            image = ImageOps.exif_transpose(image)  # respect camera rotation metadata
+            image.thumbnail((THUMBNAIL_MAX_DIMENSION, THUMBNAIL_MAX_DIMENSION))
+            if image.mode not in ("RGB", "L"):
+                image = image.convert("RGB")
+            buffer = io.BytesIO()
+            image.save(buffer, format="JPEG", quality=THUMBNAIL_JPEG_QUALITY)
+            return buffer.getvalue()
+    except Exception:
+        return None
+
+
+@dataclass(frozen=True)
+class UploadPipelineResult:
+    stored_file: StoredFile
+    duplicate_warning: str | None
+
+
+def ingest_file(
+    db: Session,
+    *,
+    tenant_id: int,
+    content: bytes,
+    original_filename: str,
+    scan_status: str,
+    sniff: Callable[[bytes], str | None],
+    max_bytes: int,
+    storage_subdir_parts: tuple[str, ...],
+    enable_perceptual_dedupe: bool,
+    enable_thumbnail: bool,
+    created_by: int | None,
+    tags: list[str] | None = None,
+    too_large_message: str | None = None,
+    unsupported_format_message: str = "Dateiformat wird nicht unterstützt",
+    infected_message: str = "Datei wurde von der Virenprüfung als infiziert erkannt und wurde nicht gespeichert",
+    stored_file_repository: StoredFileRepository | None = None,
+) -> UploadPipelineResult:
+    """Validate -> (caller already scanned; here we only act on the verdict) -> write under
+    upload_root/storage_subdir_parts/<uuid4><suffix> -> checksum -> optional pHash dedupe
+    warning -> optional thumbnail -> StoredFile row. Flushes but does not commit - the caller
+    attaches its own origin row (ProtocolImage/GalleryImage/WordImportDocument) in the same
+    transaction and commits once, together.
+
+    Every check here re-validates from scratch even when a caller (e.g. save_protocol_image's
+    own pre-read Content-Type check) has already ruled out the same failure by a different
+    route - harmless redundancy, not a behavior change, and it's what lets every upload path
+    share this one function instead of trusting caller-specific bookkeeping."""
+    repo = stored_file_repository or StoredFileRepository()
+
+    if len(content) > max_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=too_large_message or f"Datei zu gross. Maximum {max_bytes // 1024 // 1024} MB",
+        )
+    mime = sniff(content)
+    if mime is None:
+        raise HTTPException(status_code=400, detail=unsupported_format_message)
+    if scan_status == "infected":
+        raise HTTPException(status_code=400, detail=infected_message)
+
+    suffix = Path(original_filename).suffix.lower() or ".bin"
+    storage_dir = Path(settings.upload_root).joinpath(*storage_subdir_parts)
+    storage_dir.mkdir(parents=True, exist_ok=True)
+    target_path = storage_dir / f"{uuid4().hex}{suffix}"
+    target_path.write_bytes(content)
+    relative_path = target_path.relative_to(settings.storage_root)
+
+    checksum = hashlib.sha256(content).hexdigest()
+    perceptual_hash: str | None = None
+    duplicate_warning: str | None = None
+    if enable_perceptual_dedupe:
+        perceptual_hash = _compute_perceptual_hash(content, mime)
+        if perceptual_hash is not None:
+            tenant_hashes = repo.list_tenant_image_hashes(db, tenant_id)
+            if _closest_perceptual_match(perceptual_hash, tenant_hashes) is not None:
+                duplicate_warning = "Hinweis: Dieses Bild ähnelt einem bereits im Mandanten hochgeladenen Bild."
+
+    stored_file = StoredFile(
+        tenant_id=tenant_id,
+        original_name=original_filename,
+        mime_type=mime,
+        storage_path=str(relative_path),
+        file_size_bytes=len(content),
+        checksum_sha256=checksum,
+        perceptual_hash=perceptual_hash,
+        tags=tags or [],
+        created_by=created_by,
+        scan_status=scan_status,
+    )
+    stored_file = repo.create(db, stored_file)  # add + flush, caller commits
+
+    if enable_thumbnail:
+        thumbnail_bytes = generate_thumbnail_bytes(content)
+        if thumbnail_bytes is not None:
+            thumbnail_root = Path(settings.thumbnail_root)
+            thumbnail_root.mkdir(parents=True, exist_ok=True)
+            thumbnail_target_path = thumbnail_root.resolve() / f"{stored_file.id}.jpg"
+            thumbnail_target_path.write_bytes(thumbnail_bytes)
+            stored_file.thumbnail_path = thumbnail_target_path.name
+
+    return UploadPipelineResult(stored_file=stored_file, duplicate_warning=duplicate_warning)
