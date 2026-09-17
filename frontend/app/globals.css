@@ -12069,7 +12069,7 @@ input[type="radio"] {
 /* Nextcloud-Memories-style feedback: the photo shrinks slightly into the tile once
    selected, revealing the tile's own rounded background behind it. */
 .photo-tile-selected .photo-tile-img {
-  transform: scale(0.86);
+  transform: scale(0.94);
   border-radius: var(--radius-md);
 }
 
@@ -12123,11 +12123,11 @@ input[type="radio"] {
   min-height: 0;
   padding: 0;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.95);
-  background: rgba(16, 24, 40, 0.22);
+  border: 2px solid var(--panel-solid);
+  background: color-mix(in srgb, var(--panel-solid) 70%, transparent 30%);
   backdrop-filter: blur(2px);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
-  color: #fff;
+  box-shadow: 0 1px 4px rgba(16, 24, 40, 0.3);
+  color: var(--text);
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.12s ease;
@@ -12142,6 +12142,7 @@ input[type="radio"] {
 .photo-tile-select-checked {
   background: var(--accent);
   border-color: var(--accent);
+  color: #fff;
 }
 
 .photo-tile-badge {
