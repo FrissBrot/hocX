@@ -1,4 +1,5 @@
 import uuid
+from urllib.parse import urlparse
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -36,6 +37,15 @@ def _expected_origin(request: Request) -> str:
     if host.startswith("localhost") or host.startswith("127.0.0.1"):
         return f"http://{host}"
     return f"https://{host}"
+
+
+def _request_hostname(request: Request) -> str | None:
+    """See admin.py's identical helper: request.url.hostname is wrong whenever this request
+    arrived through the frontend's own /api/* rewrite proxy, which overwrites Host with its
+    own upstream target instead of preserving the browser's original one - reuses
+    _expected_origin's own header-derived value (the Origin header, unaffected by that
+    proxy hop) instead (audit fix, 2026-09-17)."""
+    return urlparse(_expected_origin(request)).hostname
 
 
 @router.get("", response_model=list[UserRead])
@@ -86,7 +96,7 @@ def get_my_mfa(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    return mfa_service.get_self_overview(db, user, request.url.hostname)
+    return mfa_service.get_self_overview(db, user, _request_hostname(request))
 
 
 @router.patch("/me/mfa/preferred-method", response_model=UserMfaRead)
@@ -100,7 +110,7 @@ def patch_my_preferred_mfa_method(
         db,
         user,
         factor_type=payload.factor_type,
-        request_host=request.url.hostname,
+        request_host=_request_hostname(request),
     )
 
 
@@ -128,7 +138,7 @@ def complete_my_totp_enrollment(
         label=payload.label,
     )
     issue_session_cookie(response, user.user_id, user.current_tenant_id, mfa_verified=True)
-    return mfa_service.get_self_overview(db, user, request.url.hostname)
+    return mfa_service.get_self_overview(db, user, _request_hostname(request))
 
 
 @router.post("/me/mfa/passkeys/start", response_model=PasskeyRegistrationStartRead)
@@ -140,7 +150,7 @@ def start_my_passkey_registration(
     return mfa_service.start_self_passkey_registration(
         db,
         user,
-        request_host=request.url.hostname,
+        request_host=_request_hostname(request),
         request_origin=_expected_origin(request),
     )
 
@@ -161,7 +171,7 @@ def complete_my_passkey_registration(
         credential=payload.credential,
     )
     issue_session_cookie(response, user.user_id, user.current_tenant_id, mfa_verified=True)
-    return mfa_service.get_self_overview(db, user, request.url.hostname)
+    return mfa_service.get_self_overview(db, user, _request_hostname(request))
 
 
 @router.delete("/me/mfa/factors/{factor_id}", response_model=UserMfaRead)
@@ -175,7 +185,7 @@ def delete_my_mfa_factor(
     if internal_factor_id is None:
         raise HTTPException(status_code=404, detail="MFA factor not found")
     result = mfa_service.delete_self_factor(db, user, internal_factor_id)
-    return result.model_copy(update={"can_add_passkey_here": mfa_service.can_add_passkey_here(request.url.hostname)})
+    return result.model_copy(update={"can_add_passkey_here": mfa_service.can_add_passkey_here(_request_hostname(request))})
 
 
 @router.post("/me/password", response_model=UserRead)

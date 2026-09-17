@@ -47,6 +47,38 @@ async function authenticate(email: string, file: string) {
   return context;
 }
 
+// Platform-admin equivalent of authenticate() above - same setup_required/verification_required
+// dance, but against /api/admin/auth/* (AdminAuthService/AdminMfaService) rather than
+// /api/auth/* (AuthService/MfaService). Kept as its own function rather than a parameterized
+// version of authenticate(): the two response shapes (AdminSessionRead vs. the tenant login's
+// session/user shape) already differ enough that sharing one function would need as much
+// branching as just having two.
+async function authenticateAdmin(email: string, file: string) {
+  const context = await request.newContext({ baseURL: process.env.PLAYWRIGHT_BASE_URL });
+  const response = await context.post("/api/admin/auth/login", { data: { email, password: process.env.E2E_USER_PASSWORD ?? "ChangeMe123!" } });
+  expect(response.ok(), await response.text()).toBeTruthy();
+  const body = await response.json();
+
+  if (body.mfa?.status === "setup_required") {
+    const start = await context.post("/api/admin/auth/mfa/totp/setup/start", { data: { ticket: body.mfa.ticket } });
+    expect(start.ok(), await start.text()).toBeTruthy();
+    const { flow_token, secret } = await start.json();
+    const complete = await context.post("/api/admin/auth/mfa/totp/setup/complete", {
+      data: { flow_token, code: currentTotpCode(secret, Date.now()) },
+    });
+    expect(complete.ok(), await complete.text()).toBeTruthy();
+  } else if (body.mfa) {
+    // Unlike the tenant flow above, no spec re-authenticates this same platform-admin
+    // account a second time within one run, so there's no remembered secret to answer a
+    // later "verification_required" with - see admin-mfa-lockout.spec.ts, which relies on
+    // this storageState staying valid for the whole run instead of logging in again.
+    throw new Error(`Unexpected admin MFA state for ${email}: ${body.mfa.status} (no remembered TOTP secret to answer it)`);
+  }
+
+  await context.storageState({ path: file });
+  return context;
+}
+
 setup("creates reproducible role and tenant sessions", async () => {
   // Default 45s (playwright.config.ts) can be too tight once the second admin.hocx.local
   // login below has to wait out a TOTP anti-replay window (up to 30s, see totp.ts).
@@ -55,6 +87,7 @@ setup("creates reproducible role and tenant sessions", async () => {
   await (await authenticate(process.env.E2E_USER_EMAIL ?? "admin@hocx.local", authFiles.admin)).dispose();
   await (await authenticate("writer@hocx.local", authFiles.writer)).dispose();
   await (await authenticate("reader@hocx.local", authFiles.reader)).dispose();
+  await (await authenticateAdmin("platform-admin@hocx.local", authFiles.platformAdmin)).dispose();
 
   const tenantContext = await authenticate(process.env.E2E_USER_EMAIL ?? "admin@hocx.local", authFiles.tenantTwo);
   const session = await (await tenantContext.get("/api/auth/session")).json();

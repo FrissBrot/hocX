@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.admin_security import CurrentAdmin
+from app.core.config import settings
 from app.core.rate_limit import check_account_lockout, enforce_rate_limit, record_failed_attempt
 from app.core.redis_client import get_redis_sync
 from app.core.secret_crypto import decrypt_secret, encrypt_secret
@@ -181,6 +182,14 @@ class AdminMfaService:
         )
 
     def _rp_id_for_request_host(self, request_host: str | None) -> str:
+        # Pinned to the fixed configured domain when there is one, same reasoning and same
+        # pattern as MfaService.rp_id_for_request_host (the tenant-user equivalent) already
+        # uses - independent of whatever this request's own derived host says, which is
+        # wrong whenever the request came in through the frontend's internal /api/* rewrite
+        # proxy (see admin.py's _request_hostname docstring). Only local dev/e2e (no
+        # traefik_domain configured) still falls through to request_host itself.
+        if settings.traefik_domain:
+            return settings.traefik_domain
         if not request_host:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Passkeys benötigen einen gültigen Hostnamen")
         return request_host

@@ -9,6 +9,13 @@ services:
       - "127.0.0.1:18000:8000"
     environment:
       TRAEFIK_DOMAIN: ""
+      # Default is 15 minutes (app/core/config.py) - far too slow for
+      # e2e/abgabebox-photo-album-sync.spec.ts to wait out. Shortened here only (never in
+      # docker-compose.yml/.dev.yml) so the real photo_album_sync_loop still ticks and
+      # folds a freshly-submitted Abgabebox photo into its Zyklus/Abgabe album within a
+      # test's timeout, instead of adding a synchronous "run it now" endpoint that
+      # wouldn't exist in production and wouldn't prove the actual background loop works.
+      PHOTO_ALBUM_SYNC_INTERVAL_MINUTES: "1"
   frontend:
     ports: !override
       - "127.0.0.1:13000:3000"
@@ -34,3 +41,13 @@ services:
       NEXT_PUBLIC_ABGABEBOX_API_URL: http://127.0.0.1:13001
       INTERNAL_ABGABEBOX_API_URL: http://abgabebox-backend:8000
       ABGABEBOX_API_PROXY_TARGET: http://abgabebox-backend:8000
+  # docker-compose.dev.yml gates clamav behind the "scan" profile (opt-in - the signature DB
+  # alone costs several hundred MB and clamd takes real time to become healthy), so it's
+  # normally absent from local dev. e2e needs it on unconditionally: without a reachable
+  # clamd, every upload's scan_status stays "pending" forever (see app/scanner.py) and
+  # photo_album_sync_loop's `StoredFile.scan_status == "clean"` filter never matches
+  # anything - e2e/abgabebox-photo-album-sync.spec.ts's whole chain depends on a real scan
+  # actually completing. Clearing the profile here (not in docker-compose.dev.yml) keeps
+  # local dev's opt-in default untouched.
+  clamav:
+    profiles: !override []

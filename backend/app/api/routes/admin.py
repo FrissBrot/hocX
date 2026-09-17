@@ -3,6 +3,7 @@ import tempfile
 import uuid
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
@@ -113,6 +114,21 @@ def _expected_origin(request: Request) -> str:
     if host.startswith("localhost") or host.startswith("127.0.0.1"):
         return f"http://{host}"
     return f"https://{host}"
+
+
+def _request_hostname(request: Request) -> str | None:
+    """WebAuthn's rp.id must match the browser's real page origin - request.url.hostname is
+    wrong whenever this request arrived through the frontend's own /api/* rewrite proxy
+    (next.config.mjs's rewrites()), which replaces the Host header with its own upstream
+    target (the backend container's internal hostname, e.g. "backend") rather than
+    preserving the browser's original one. Reuses _expected_origin's own header-derived
+    value (the Origin header the browser sends, which passes through that same proxy hop
+    unchanged, unlike Host) instead of computing a second, independently-diverging notion
+    of "the request's host" (audit fix, 2026-09-17 - this silently broke every admin
+    passkey registration ceremony: navigator.credentials.create() rejects a mismatched
+    rp.id with a SecurityError before ever reaching an authenticator, with no server-side
+    error to notice)."""
+    return urlparse(_expected_origin(request)).hostname
 
 
 @router.get("/tenants", response_model=AdminTenantPage)
@@ -688,7 +704,7 @@ def start_my_admin_passkey_registration(
     return admin_mfa_service.start_self_passkey_registration(
         db,
         current_admin,
-        request_host=request.url.hostname,
+        request_host=_request_hostname(request),
         request_origin=_expected_origin(request),
     )
 
