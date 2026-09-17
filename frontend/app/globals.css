@@ -12063,14 +12063,24 @@ input[type="radio"] {
   display: block;
   width: 100%;
   height: auto;
+  transition: transform 0.15s ease, border-radius 0.15s ease;
+}
+
+/* Nextcloud-Memories-style feedback: the photo shrinks slightly into the tile once
+   selected, revealing the tile's own rounded background behind it. */
+.photo-tile-selected .photo-tile-img {
+  transform: scale(0.86);
+  border-radius: var(--radius-md);
 }
 
 /* Scoped to .photo-tile-preview's own img rather than the bare .photo-tile-img class - the
    album-picker grid (photos-view.tsx's onSelectPhoto branch) reuses .photo-tile-img on a
-   plain <img> with no "loaded" state to ever flip this back to visible. */
+   plain <img> with no "loaded" state to ever flip this back to visible.
+   Repeats the transform/border-radius transition from .photo-tile-img above because this
+   selector is more specific and would otherwise replace that transition outright. */
 .photo-tile-preview .photo-tile-img {
   opacity: 0;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.2s ease, transform 0.15s ease, border-radius 0.15s ease;
 }
 
 .photo-tile-preview-loaded .photo-tile-img {
@@ -12089,6 +12099,10 @@ input[type="radio"] {
 @media (prefers-reduced-motion: reduce) {
   .photo-tile-preview {
     animation: none;
+  }
+
+  .photo-tile-img {
+    transition: none;
   }
 }
 
