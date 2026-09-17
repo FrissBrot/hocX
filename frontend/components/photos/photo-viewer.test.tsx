@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { FileOverviewItem } from "@/types/api";
@@ -53,6 +53,49 @@ describe("PhotoViewer", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps the thumbnail visible until the original is decoded", async () => {
+    let finishDecode!: () => void;
+    const original = { src: "", onload: null as (() => Promise<void>) | null, decode: vi.fn(() => new Promise<void>((resolve) => { finishDecode = resolve; })) };
+    vi.stubGlobal("Image", vi.fn(function () { return original; }));
+    const item = makeItem();
+    render(<PhotoViewer items={[item]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
+
+    expect(screen.getByRole("img")).toHaveAttribute("src", item.thumbnail_url);
+    expect(original.src).toBe(item.content_url);
+    const loading = original.onload!();
+    expect(screen.getByRole("img")).toHaveAttribute("src", item.thumbnail_url);
+    await act(async () => { finishDecode(); await loading; });
+    expect(screen.getByRole("img")).toHaveAttribute("src", item.content_url);
+  });
+
+  it("ignores an old decode after navigating and keeps the preview if decoding fails", async () => {
+    let finishDecode!: () => void;
+    const originals: { src: string; onload: (() => Promise<void>) | null; decode: () => Promise<void> }[] = [];
+    vi.stubGlobal("Image", vi.fn(function () {
+      const original = { src: "", onload: null, decode: vi.fn(() => new Promise<void>((resolve) => { finishDecode = resolve; })) };
+      originals.push(original);
+      return original;
+    }));
+    const items = [makeItem({ id: "a" }), makeItem({ id: "b" })];
+    const props = { items, onIndexChange: vi.fn(), onClose: vi.fn(), onToggleBest: vi.fn(), onTagsSaved: vi.fn() };
+    const { rerender } = render(<PhotoViewer {...props} index={0} />);
+    const loading = originals[0].onload!();
+    rerender(<PhotoViewer {...props} index={1} />);
+    expect(screen.getByRole("img")).toHaveAttribute("src", items[1].thumbnail_url);
+    await act(async () => { finishDecode(); await loading; });
+    expect(screen.getByRole("img")).toHaveAttribute("src", items[1].thumbnail_url);
+    originals[1].decode = () => Promise.reject(new Error("Invalid image"));
+    await act(async () => { await originals[1].onload!(); });
+    expect(screen.getByRole("img")).toHaveAttribute("src", items[1].thumbnail_url);
+  });
+
+  it("uses the original directly when no thumbnail exists", () => {
+    const item = makeItem({ thumbnail_url: null });
+    render(<PhotoViewer items={[item]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
+    expect(screen.getByRole("img")).toHaveAttribute("src", item.content_url);
   });
 
   it("shows formatted Schärfe/Belichtung values and 'Analyse ausstehend' for face quality when not yet analyzed", async () => {
