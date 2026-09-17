@@ -886,6 +886,12 @@ class StoredFile(Base, TimestampMixin):
     # files and images PIL couldn't decode.
     sharpness_score: Mapped[float | None] = mapped_column(Float)
     exposure_score: Mapped[float | None] = mapped_column(Float)
+    # Set by FileService.backfill_missing_quality_scores once it has attempted this file,
+    # regardless of whether that attempt could actually produce scores - a file missing
+    # from disk (or PIL-undecodable) otherwise left both scores NULL forever, so the same
+    # row kept matching that method's "still missing a score" query on every tick,
+    # indefinitely (audit fix, 2026-09-17). Same pattern as face_analyzed_at below.
+    quality_analyzed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Phase 3 (photo_analysis_job/photo-analysis-worker) - sharpness/exposure of the best
     # detected face region, not the whole image. None if no face was detected, the file
     # isn't an image, or it hasn't been analyzed yet.
@@ -1227,6 +1233,12 @@ class SubmissionUploadFile(Base, TimestampMixin):
     stored_file_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("stored_file.id", ondelete="RESTRICT"), nullable=False)
     sort_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     delete_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Set by photo_album_service.sync_submission_uploads once this file has been folded
+    # into its target album(s) - NULL means "not yet synced" (or synced before this column
+    # existed, in which case the next tick treats it as new; harmless, add_items is
+    # idempotent). Bounds that periodic sweep to new-since-last-tick rows instead of
+    # re-scanning every clean image submission ever uploaded on every tick, forever.
+    album_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class SubmissionUploadLog(Base):

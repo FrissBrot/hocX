@@ -158,7 +158,7 @@ class TableSnapshotService:
 
         Every identity is re-resolved from a live row or an existing snapshot, so a
         reconstructed row always carries the same id/public_id it has everywhere else in
-        the system - see _resolve_list_definition_identity/_resolve_list_entry_identity.
+        the system - see _resolve_list_definition_identity/_resolve_list_entry_identities_batch.
         Raises ReconstructionIdentityError if the list or any entry can't be resolved:
         reconstruction can only edit or drop already-known rows, never fabricate one.
         """
@@ -171,16 +171,17 @@ class TableSnapshotService:
 
         definition_row = {**definition_identity, "tenant_id": tenant_id, **definition_values}
 
+        entry_identities = _resolve_list_entry_identities_batch(
+            db,
+            public_ids=[payload.get("public_id") for payload in entry_payloads if payload.get("public_id")],
+            list_definition_internal_id=list_internal_id,
+            cycle_config_id=cycle_config.id,
+            tenant_id=tenant_id,
+        )
         entry_rows: list[dict[str, Any]] = []
         for payload in entry_payloads:
             entry_public_id = payload.get("public_id")
-            entry_identity = _resolve_list_entry_identity(
-                db,
-                public_id=entry_public_id,
-                list_definition_internal_id=list_internal_id,
-                cycle_config_id=cycle_config.id,
-                tenant_id=tenant_id,
-            )
+            entry_identity = entry_identities.get(entry_public_id) if entry_public_id else None
             if entry_identity is None:
                 raise ReconstructionIdentityError(f"Unknown list entry {entry_public_id}")
             entry_rows.append({
@@ -355,22 +356,40 @@ def _resolve_list_definition_identity(
     return None
 
 
-def _resolve_list_entry_identity(
-    db: Session, *, public_id: str | None, list_definition_internal_id: int, tenant_id: int, cycle_config_id: int
-) -> dict[str, Any] | None:
-    """Same idea as _resolve_list_definition_identity, for one list_entry - scoped to
-    the already-resolved list_definition_internal_id (which is itself tenant-verified),
-    so no separate tenant filter is needed on ListEntry (it has no tenant_id column)."""
-    if not public_id:
-        return None
-    live = db.scalar(select(ListEntry).where(ListEntry.public_id == public_id, ListEntry.list_definition_id == list_definition_internal_id))
-    if live is not None:
-        return {
-            "id": live.id,
-            "public_id": str(live.public_id),
-            "created_at": live.created_at.isoformat(),
-            "updated_at": live.updated_at.isoformat(),
+def _resolve_list_entry_identities_batch(
+    db: Session, *, public_ids: list[str], list_definition_internal_id: int, tenant_id: int, cycle_config_id: int
+) -> dict[str, dict[str, Any]]:
+    """Batched counterpart to _resolve_list_definition_identity, for every requested
+    list_entry at once - scoped to the already-resolved list_definition_internal_id
+    (itself tenant-verified), so no separate tenant filter is needed on ListEntry (it has
+    no tenant_id column). Returns {public_id: {id, public_id, created_at, updated_at}} for
+    every id resolvable via a live row or an existing table_snapshot("list_entry") row for
+    this cycle_config; a requested id absent from the result was resolvable in neither.
+
+    Resolves every id in at most one live query plus one full pass over this
+    cycle_config's list_entry snapshots, instead of a query and a full snapshot-array
+    rescan per entry (audit fix, 2026-09-17: reconstructing a list whose live rows are
+    gone - the common case, that's the whole point of reconstruction - used to cost
+    O(entries x existing snapshot rows), since the previous per-entry version re-ran both
+    the query and the linear scan from scratch for every single entry)."""
+    resolved: dict[str, dict[str, Any]] = {}
+    remaining = set(public_ids)
+    if not remaining:
+        return resolved
+
+    live_rows = db.scalars(
+        select(ListEntry).where(ListEntry.public_id.in_(remaining), ListEntry.list_definition_id == list_definition_internal_id)
+    )
+    for entry in live_rows:
+        pid = str(entry.public_id)
+        resolved[pid] = {
+            "id": entry.id, "public_id": pid,
+            "created_at": entry.created_at.isoformat(), "updated_at": entry.updated_at.isoformat(),
         }
+    remaining -= resolved.keys()
+    if not remaining:
+        return resolved
+
     other_snapshots = db.scalars(
         select(TableSnapshot).where(
             TableSnapshot.tenant_id == tenant_id,
@@ -380,9 +399,13 @@ def _resolve_list_entry_identity(
     )
     for snap in other_snapshots:
         for row in snap.snapshot_json:
-            if row.get("public_id") == public_id and row.get("list_definition_id") == list_definition_internal_id:
-                return {"id": row["id"], "public_id": row["public_id"], "created_at": row.get("created_at"), "updated_at": row.get("updated_at")}
-    return None
+            pid = row.get("public_id")
+            if pid in remaining and row.get("list_definition_id") == list_definition_internal_id:
+                resolved[pid] = {"id": row["id"], "public_id": row["public_id"], "created_at": row.get("created_at"), "updated_at": row.get("updated_at")}
+        remaining -= resolved.keys()
+        if not remaining:
+            break
+    return resolved
 
 
 def _upsert_snapshot_rows(

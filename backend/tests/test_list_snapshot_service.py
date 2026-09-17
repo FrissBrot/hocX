@@ -6,6 +6,7 @@ from app.models import ListEntry, TableSnapshot
 from app.schemas.list_definition import ListDefinitionUpdate, ListEntryCreate, ListEntryUpdate
 from app.services import list_snapshot_service, public_id_service
 from app.services.list_service import ListService
+from app.services.list_snapshot_service import ListSnapshotCache
 
 from tests.factories import (
     make_cycle_config,
@@ -119,6 +120,69 @@ def test_compute_row_list_snapshot_for_protocol_uses_historical_table_snapshot(d
     assert snapshot["entry_exists"] is True
     assert snapshot["column_one_value"]["text_value"] == "historical value"
     assert snapshot["synced_version"] == 3
+
+
+def test_compute_row_list_snapshot_for_protocol_historical_branch_reuses_a_shared_cache(db, monkeypatch):
+    """Regression test (2026-09-17 audit fix): compute_row_list_snapshot_for_protocol
+    accepted a `cache` param but never forwarded it into
+    _compute_row_list_snapshot_from_table_snapshot, so every historical-sourced row in a
+    refresh-all-blocks pass (freeze_list_snapshots_for_protocol, which builds exactly one
+    shared cache for this reason) re-queried both TableSnapshot rows from scratch. Two
+    entries under the same list/cycle sharing one cache must only hit the DB for those two
+    TableSnapshot rows once between them, not once each."""
+    tenant = make_tenant(db)
+    definition = make_list_definition(db, tenant.id)
+    entry_a = make_list_entry(db, definition.id, column_one_value={"text_value": "a"})
+    entry_b = make_list_entry(db, definition.id, column_one_value={"text_value": "b"})
+    cycle_config, protocol = _protocol_with_cycle(db, tenant.id, protocol_date=date(2024, 6, 1))
+
+    db.add(TableSnapshot(
+        tenant_id=tenant.id, cycle_config_id=cycle_config.id, cycle_year=2024, table_name="list_definition",
+        snapshot_json=[{
+            "id": definition.id, "public_id": str(definition.public_id), "content_version": 1,
+            "column_one_title": definition.column_one_title, "column_one_value_type": definition.column_one_value_type,
+            "column_two_title": definition.column_two_title, "column_two_value_type": definition.column_two_value_type,
+        }],
+        row_count=1,
+    ))
+    db.add(TableSnapshot(
+        tenant_id=tenant.id, cycle_config_id=cycle_config.id, cycle_year=2024, table_name="list_entry",
+        snapshot_json=[
+            {"id": entry_a.id, "public_id": str(entry_a.public_id), "list_definition_id": definition.id,
+             "column_one_value_json": {"text_value": "hist-a"}, "column_two_value_json": {}},
+            {"id": entry_b.id, "public_id": str(entry_b.public_id), "list_definition_id": definition.id,
+             "column_one_value_json": {"text_value": "hist-b"}, "column_two_value_json": {}},
+        ],
+        row_count=2,
+    ))
+    db.flush()
+
+    cache = ListSnapshotCache()
+    original_get = ListSnapshotCache.get_table_snapshot
+    call_count = {"n": 0}
+
+    def _counting_get(self, *args, **kwargs):
+        call_count["n"] += 1
+        return original_get(self, *args, **kwargs)
+
+    monkeypatch.setattr(ListSnapshotCache, "get_table_snapshot", _counting_get)
+
+    snapshot_a = list_snapshot_service.compute_row_list_snapshot_for_protocol(
+        db, list_definition_id=definition.id, list_entry_id=entry_a.id, tenant_id=tenant.id,
+        value_source="historical", protocol=protocol, cache=cache,
+    )
+    snapshot_b = list_snapshot_service.compute_row_list_snapshot_for_protocol(
+        db, list_definition_id=definition.id, list_entry_id=entry_b.id, tenant_id=tenant.id,
+        value_source="historical", protocol=protocol, cache=cache,
+    )
+
+    assert snapshot_a["column_one_value"]["text_value"] == "hist-a"
+    assert snapshot_b["column_one_value"]["text_value"] == "hist-b"
+    # 2 calls into the cache method per compute (list_definition + list_entry lookups) x 2
+    # computes = 4 *calls*, but only the first call for each table_name actually queries -
+    # the cache dict itself proves that: exactly 2 entries (one per table_name), not 4.
+    assert call_count["n"] == 4
+    assert len(cache.table_snapshots) == 2
 
 
 def test_compute_row_list_snapshot_for_protocol_falls_back_to_live_when_cycle_has_no_snapshot(db):

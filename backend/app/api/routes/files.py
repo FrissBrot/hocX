@@ -87,13 +87,8 @@ def list_files(
     require_writer(user)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
-    file_ids = None
-    best_by_id: dict[uuid.UUID, bool] = {}
     if album_id is not None:
         _get_album(db, user, album_id)
-        item_rows = list(db.execute(select(PhotoAlbumItem.file_id, PhotoAlbumItem.is_best).where(PhotoAlbumItem.album_id == album_id)))
-        file_ids = [row.file_id for row in item_rows]
-        best_by_id = {row.file_id: row.is_best for row in item_rows}
     items = service.list_tenant_files(
         db,
         user.current_tenant_id,
@@ -106,9 +101,22 @@ def list_files(
         tags=tags,
         sort_by=sort_by,
         sort_dir=sort_dir,
-        file_ids=file_ids,
+        album_id=album_id,
     )
     if album_id is not None:
+        # is_best fetched only for this page's items (at most `limit`), not the whole
+        # album - the query itself is now scoped by a JOIN on album_id (see
+        # StoredFileRepository.list_tenant_files), not a pre-fetched id list, so there's
+        # no reason to also pre-fetch every member's is_best up front (audit fix,
+        # 2026-09-17 - same over-fetch this whole route used to have for file_ids).
+        page_ids = [item.id for item in items]
+        best_by_id: dict[uuid.UUID, bool] = dict(
+            db.execute(
+                select(PhotoAlbumItem.file_id, PhotoAlbumItem.is_best).where(
+                    PhotoAlbumItem.album_id == album_id, PhotoAlbumItem.file_id.in_(page_ids)
+                )
+            ).all()
+        ) if page_ids else {}
         for item in items:
             item.is_best = best_by_id.get(item.id, False)
         # Best-of first within an album, otherwise the caller's own sort/pagination as-is -

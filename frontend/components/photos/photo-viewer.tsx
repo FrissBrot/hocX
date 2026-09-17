@@ -80,6 +80,14 @@ export function PhotoViewer({
   const dimensions = metadata?.width && metadata?.height ? `${metadata.width} × ${metadata.height} px` : null;
   const bezugParts = [item.albums[0]?.name, item.context_label].filter(Boolean);
 
+  // Same SSR guard ui/lightbox-image.tsx already has for its own createPortal call -
+  // this component was missing it (audit fix, 2026-09-17). In practice PhotoViewer is
+  // only ever mounted once client-side state opens it, so this is a defensive safety net
+  // rather than a bug hit today, not a reason to skip it.
+  if (typeof document === "undefined") {
+    return null;
+  }
+
   return createPortal(
     <div className="photo-viewer" role="dialog" aria-modal="true" aria-label={item.original_name}>
       <div className="photo-viewer-header">
@@ -169,7 +177,7 @@ export function PhotoViewer({
                   <dd>{dimensions}</dd>
                 </div>
               )}
-              {item.file_size_bytes ? (
+              {item.file_size_bytes !== null && item.file_size_bytes !== undefined ? (
                 <div>
                   <dt>Grösse</dt>
                   <dd>{formatFileSize(item.file_size_bytes)}</dd>

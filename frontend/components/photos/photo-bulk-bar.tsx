@@ -79,7 +79,13 @@ export function PhotoBulkBar({
       );
       const failed = results.filter((result) => result.status === "rejected").length;
       if (failed > 0) showToast(`${failed} Foto(s) gehören zu keinem Album - Best-of nicht möglich.`, "info");
-      showToast(bestOverride === "include" ? "Zu Best-of hinzugefügt." : "Aus Best-of entfernt.", "success");
+      // Only claim success if at least one update actually went through - previously this
+      // fired unconditionally, so selecting only photos outside an album showed both "0
+      // möglich" and "hinzugefügt" toasts back to back, falsely telling the user the
+      // action succeeded when nothing did (audit fix, 2026-09-17).
+      if (failed < selectedIds.length) {
+        showToast(bestOverride === "include" ? "Zu Best-of hinzugefügt." : "Aus Best-of entfernt.", "success");
+      }
       onDone();
     } finally {
       setBusy(false);

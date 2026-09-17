@@ -28,6 +28,29 @@ class ListSnapshotCache:
 
     definitions: dict[int, ListDefinition | None] = field(default_factory=dict)
     entries: dict[int, list[ListEntry]] = field(default_factory=dict)
+    # (cycle_config_id, cycle_year, table_name) -> TableSnapshot|None. Added alongside the
+    # live-row caches above (audit fix, 2026-09-17) so compute_row_list_snapshot_for_
+    # protocol's "historical" branch can actually benefit from a cache the caller passed
+    # in - it used to accept `cache` but never forward it to
+    # _compute_row_list_snapshot_from_table_snapshot, so every historical-sourced row in a
+    # refresh-all pass re-queried both TableSnapshot rows from scratch even when the
+    # caller had gone out of its way to build a shared cache specifically to avoid that.
+    table_snapshots: dict[tuple[int, int, str], TableSnapshot | None] = field(default_factory=dict)
+
+    def get_table_snapshot(
+        self, db: Session, *, tenant_id: int, cycle_config_id: int, cycle_year: int, table_name: str
+    ) -> TableSnapshot | None:
+        key = (cycle_config_id, cycle_year, table_name)
+        if key not in self.table_snapshots:
+            self.table_snapshots[key] = db.scalar(
+                select(TableSnapshot).where(
+                    TableSnapshot.tenant_id == tenant_id,
+                    TableSnapshot.cycle_config_id == cycle_config_id,
+                    TableSnapshot.cycle_year == cycle_year,
+                    TableSnapshot.table_name == table_name,
+                )
+            )
+        return self.table_snapshots[key]
 
     def get_definition(self, db: Session, list_definition_id: int, tenant_id: int) -> ListDefinition | None:
         if list_definition_id not in self.definitions:
@@ -135,7 +158,8 @@ def compute_row_list_snapshot(
 
 
 def _compute_row_list_snapshot_from_table_snapshot(
-    db: Session, *, tenant_id: int, cycle_config_id: int, cycle_year: int, list_definition_id: int, list_entry_id: int
+    db: Session, *, tenant_id: int, cycle_config_id: int, cycle_year: int, list_definition_id: int, list_entry_id: int,
+    cache: ListSnapshotCache | None = None,
 ) -> dict[str, Any] | None:
     """Same return shape as compute_row_list_snapshot, resolved from a frozen
     table_snapshot (see app/services/table_snapshot_service.py) for
@@ -144,15 +168,28 @@ def _compute_row_list_snapshot_from_table_snapshot(
     TableSnapshot's model docstring). Returns None (not a dict) if that cycle has no
     list_definition snapshot at all yet, so the caller can fall back to live data -
     entry_exists=False is reserved for "the list has a snapshot but this entry wasn't in
-    it", a real, distinct answer from "no historical data exists for this cycle at all"."""
-    definition_snapshot = db.scalar(
-        select(TableSnapshot).where(
-            TableSnapshot.tenant_id == tenant_id,
-            TableSnapshot.cycle_config_id == cycle_config_id,
-            TableSnapshot.cycle_year == cycle_year,
-            TableSnapshot.table_name == "list_definition",
+    it", a real, distinct answer from "no historical data exists for this cycle at all".
+
+    cache, when given, memoizes the two TableSnapshot lookups the same way
+    ListSnapshotCache already memoizes live ListDefinition/ListEntry lookups - see
+    compute_row_list_snapshot_for_protocol, whose refresh-all-blocks caller builds one
+    cache and expects every row in the pass to share it (audit fix, 2026-09-17)."""
+
+    def _lookup(table_name: str) -> TableSnapshot | None:
+        if cache is not None:
+            return cache.get_table_snapshot(
+                db, tenant_id=tenant_id, cycle_config_id=cycle_config_id, cycle_year=cycle_year, table_name=table_name
+            )
+        return db.scalar(
+            select(TableSnapshot).where(
+                TableSnapshot.tenant_id == tenant_id,
+                TableSnapshot.cycle_config_id == cycle_config_id,
+                TableSnapshot.cycle_year == cycle_year,
+                TableSnapshot.table_name == table_name,
+            )
         )
-    )
+
+    definition_snapshot = _lookup("list_definition")
     if definition_snapshot is None:
         return None
     def_row = next((r for r in definition_snapshot.snapshot_json if r.get("id") == list_definition_id), None)
@@ -165,14 +202,7 @@ def _compute_row_list_snapshot_from_table_snapshot(
         "column_two_title": def_row.get("column_two_title"),
         "column_two_value_type": def_row.get("column_two_value_type"),
     }
-    entry_snapshot = db.scalar(
-        select(TableSnapshot).where(
-            TableSnapshot.tenant_id == tenant_id,
-            TableSnapshot.cycle_config_id == cycle_config_id,
-            TableSnapshot.cycle_year == cycle_year,
-            TableSnapshot.table_name == "list_entry",
-        )
-    )
+    entry_snapshot = _lookup("list_entry")
     entry_row = next(
         (r for r in (entry_snapshot.snapshot_json if entry_snapshot else []) if r.get("id") == list_entry_id),
         None,
@@ -219,6 +249,7 @@ def compute_row_list_snapshot_for_protocol(
                 cycle_year=cycle_year,
                 list_definition_id=list_definition_id,
                 list_entry_id=list_entry_id,
+                cache=cache,
             )
             if historical is not None:
                 return historical

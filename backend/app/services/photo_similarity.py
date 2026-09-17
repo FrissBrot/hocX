@@ -14,13 +14,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.services.photo_quality import composite_quality_score
+import imagehash
 
-# Same "close enough to be a near-duplicate" threshold as file_service.py's tenant-wide
+from app.services.photo_quality import composite_quality_score
+from app.services.upload_pipeline import PERCEPTUAL_DUPLICATE_THRESHOLD
+
+# Same "close enough to be a near-duplicate" threshold as upload_pipeline.py's tenant-wide
 # duplicate-upload warning - one definition of "similar" across the feature rather than two
-# independently-tuned ones. Not imported from there to avoid a circular import (file_service
-# imports this module, not the other way around).
-SIMILARITY_HAMMING_THRESHOLD = 5
+# independently-tuned ones (audit fix, 2026-09-17: this used to be its own separately-
+# tuned SIMILARITY_HAMMING_THRESHOLD constant, despite the module docstring already
+# claiming they were unified - no circular import actually blocks this: upload_pipeline.py
+# has no reason to import this module back).
+SIMILARITY_HAMMING_THRESHOLD = PERCEPTUAL_DUPLICATE_THRESHOLD
 
 # Safety cap for the synchronous grouping endpoint/service method - protects the shared,
 # memory-constrained backend container from an unbounded O(n^2) computation blocking one of
@@ -35,10 +40,6 @@ class GroupableImage:
     sharpness_score: float | None
     exposure_score: float | None
     face_quality_score: float | None = None
-
-
-def _hamming_distance(hash_a: int, hash_b: int) -> int:
-    return bin(hash_a ^ hash_b).count("1")
 
 
 def _quality_rank(image: GroupableImage) -> float:
@@ -77,10 +78,14 @@ def group_similar_images(images: list[GroupableImage]) -> list[list[GroupableIma
         if root_a != root_b:
             parent[root_b] = root_a
 
-    hashed = [(image, int(image.perceptual_hash, 16)) for image in images if image.perceptual_hash]
+    # Same imagehash.hex_to_hash + `-` distance upload_pipeline.py's own duplicate check
+    # uses (audit fix, 2026-09-17: this used to parse the hex string as a raw int and XOR
+    # it by hand instead - a second, independent hash-distance implementation that would
+    # break differently than upload_pipeline's if the stored hash format ever changed).
+    hashed = [(image, imagehash.hex_to_hash(image.perceptual_hash)) for image in images if image.perceptual_hash]
     for i, (image_a, hash_a) in enumerate(hashed):
         for image_b, hash_b in hashed[i + 1 :]:
-            if _hamming_distance(hash_a, hash_b) <= SIMILARITY_HAMMING_THRESHOLD:
+            if (hash_a - hash_b) <= SIMILARITY_HAMMING_THRESHOLD:
                 union(image_a.id, image_b.id)
 
     groups: dict[int, list[GroupableImage]] = {}

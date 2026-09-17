@@ -21,7 +21,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import date
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -381,14 +381,18 @@ def assign_uploaded_files(
 def sync_submission_uploads(db: Session, file_service) -> None:
     """Periodic counterpart to assign_uploaded_files() for the abgabebox submission-upload
     path - see the module docstring for why this can't run inline in that request. Scans
-    every non-deleted, clean, image submission_upload_file each tick (same
-    scan-everything-every-tick style as FileService.create_pending_analysis_jobs); adding an
-    already-present file_id to an album is a no-op (add_items is ON CONFLICT DO NOTHING), so
-    re-scanning previously-synced files each run is safe, just a bit of wasted work at
-    scale. Also drops files from every album (and any best-of star they held) once they're
-    soft-deleted (delete_comment set) from their submission."""
+    only clean, image submission_upload_file rows not yet reflected in albums
+    (album_synced_at IS NULL) each tick, rather than every such row that ever existed
+    (audit fix, 2026-09-17 - the unbounded scan cost used to grow with the tenant's total
+    historical submission-photo volume, forever, even on a tick with zero new uploads).
+    Adding an already-present file_id to an album is a no-op (add_items is ON CONFLICT DO
+    NOTHING) and album_synced_at is stamped on every row this tick actually looked at
+    (success or not - see the docstring on the UPDATE below), so a row is never
+    re-processed once handled. Also drops files from every album (and any best-of star
+    they held) once they're soft-deleted (delete_comment set) from their submission."""
     rows = db.execute(
         select(
+            SubmissionUploadFile.id,
             StoredFile.public_id,
             StoredFile.tenant_id,
             SubmissionUpload.assignment_id,
@@ -399,17 +403,22 @@ def sync_submission_uploads(db: Session, file_service) -> None:
         .select_from(SubmissionUploadFile)
         .join(StoredFile, StoredFile.id == SubmissionUploadFile.stored_file_id)
         .join(SubmissionUpload, SubmissionUpload.id == SubmissionUploadFile.upload_id)
-        .where(StoredFile.mime_type.like("image/%"), StoredFile.scan_status == "clean")
+        .where(
+            StoredFile.mime_type.like("image/%"),
+            StoredFile.scan_status == "clean",
+            SubmissionUploadFile.album_synced_at.is_(None),
+        )
     ).all()
     if not rows:
         return
 
+    processed_ids: list[int] = [row.id for row in rows]
     active_by_target: dict[tuple[int, int, int | None, int | None], list[uuid.UUID]] = {}
     removed_ids: set[uuid.UUID] = set()
     assignment_ids: set[int] = set()
     event_ids: set[int] = set()
     list_entry_ids: set[int] = set()
-    for public_id, tenant_id, assignment_id, event_id, list_entry_id, delete_comment in rows:
+    for _row_id, public_id, tenant_id, assignment_id, event_id, list_entry_id, delete_comment in rows:
         if delete_comment is not None:
             removed_ids.add(public_id)
             continue
@@ -470,6 +479,17 @@ def sync_submission_uploads(db: Session, file_service) -> None:
             album = db.get(PhotoAlbum, album_id)
             if album is not None:
                 touched[album.id] = album
+
+    # Stamp every row this tick looked at as synced, whether it landed in an album, was
+    # removed, or (an assignment missing from `assignments`, e.g. deleted mid-flight) was
+    # silently skipped by the `continue` above - an unstampable row would otherwise be
+    # re-selected and re-attempted forever, defeating the point of the album_synced_at
+    # filter. Safe to do even for a row whose write didn't happen yet: add_items/delete
+    # above are flushed (not committed) in the same transaction as this UPDATE, and
+    # everything commits together right after.
+    db.execute(
+        update(SubmissionUploadFile).where(SubmissionUploadFile.id.in_(processed_ids)).values(album_synced_at=func.now())
+    )
 
     db.commit()
     for album in touched.values():

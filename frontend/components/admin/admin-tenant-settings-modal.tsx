@@ -10,7 +10,7 @@ import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
 import { formatFileSize } from "@/lib/utils/format";
-import { CATEGORY_COLORS, formatPercent } from "@/components/storage/storage-usage-view";
+import { StorageBreakdown } from "@/components/storage/storage-usage-view";
 import { AdminTenantSummary, AdminTenantUser, AdminUserPage, StorageUsageRead, TenantCleanupCategory, TenantCleanupCounts, UserSummary } from "@/types/api";
 
 type Props = {
@@ -526,53 +526,10 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
               <div className="grid">
                 {storageUsage ? (
                   <>
-                    <div className="storage-usage-bar">
-                      {storageUsage.categories
-                        .filter((c) => c.bytes > 0)
-                        .map((category) => (
-                          <div
-                            key={category.key}
-                            className="storage-usage-segment"
-                            style={{
-                              width: `${(category.bytes / Math.max(storageUsage.total_bytes, storageUsage.quota_bytes ?? 0, 1)) * 100}%`,
-                              background: CATEGORY_COLORS[category.key]
-                            }}
-                            title={`${category.label}: ${formatFileSize(category.bytes)}`}
-                          />
-                        ))}
-                    </div>
-                    <div className="table-shell">
-                      <table className="data-table">
-                        <thead>
-                          <tr>
-                            <th>Kategorie</th>
-                            <th>Grösse</th>
-                            <th>Anteil</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {storageUsage.categories
-                            .filter((c) => c.bytes > 0)
-                            .map((category) => (
-                              <tr key={category.key}>
-                                <td>
-                                  <span className="storage-legend-dot" style={{ background: CATEGORY_COLORS[category.key] }} />
-                                  {category.label}
-                                </td>
-                                <td>{formatFileSize(category.bytes)}</td>
-                                <td className="muted">{formatPercent(category.bytes, storageUsage.total_bytes)}</td>
-                              </tr>
-                            ))}
-                          {storageUsage.categories.every((c) => c.bytes === 0) && (
-                            <tr>
-                              <td colSpan={3} className="muted">
-                                Noch keine Dateien vorhanden.
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
+                    {/* Shared with the tenant-facing Speicher page (audit fix,
+                        2026-09-17) - this used to hand-roll its own bar/table with a
+                        divergent quota denominator and no free-space segment. */}
+                    <StorageBreakdown {...storageUsage} />
                     <div className="muted">Gesamt belegt: {formatFileSize(storageUsage.total_bytes)}</div>
                   </>
                 ) : (

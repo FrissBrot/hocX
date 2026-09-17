@@ -5,7 +5,7 @@ conftest.py), since hocx_photo_worker has no INSERT grant at all on stored_file/
 photo_analysis_job and only column-level SELECT/UPDATE on stored_file.
 """
 
-from app.db import build_engine, claim_next_job, fetch_files, finish_job, write_face_quality_score
+from app.db import build_engine, claim_next_job, fetch_files, finish_job, write_face_quality_score, write_face_quality_scores_batch
 
 
 def test_write_face_quality_score_sets_both_the_score_and_face_analyzed_at(make_tenant, make_stored_file, fetch_stored_file):
@@ -34,6 +34,38 @@ def test_write_face_quality_score_with_no_detected_face_still_marks_it_analyzed(
     row = fetch_stored_file(stored_file_id)
     assert row["face_quality_score"] is None
     assert row["face_analyzed_at"] is not None
+
+
+def test_write_face_quality_scores_batch_writes_every_row_in_one_call(make_tenant, make_stored_file, fetch_stored_file):
+    """Regression test (audit fix, 2026-09-17): _process_job used to call
+    write_face_quality_score once per file (one round-trip transaction each); this
+    batched form must produce the identical end state - every file's own score and
+    face_analyzed_at set - from one call."""
+    tenant_id = make_tenant()
+    scored_id = make_stored_file(tenant_id)
+    no_face_id = make_stored_file(tenant_id)
+    engine = build_engine()
+
+    write_face_quality_scores_batch(engine, [(scored_id, 6.5), (no_face_id, None)])
+
+    scored_row = fetch_stored_file(scored_id)
+    assert scored_row["face_quality_score"] == 6.5
+    assert scored_row["face_analyzed_at"] is not None
+
+    no_face_row = fetch_stored_file(no_face_id)
+    assert no_face_row["face_quality_score"] is None
+    assert no_face_row["face_analyzed_at"] is not None
+
+
+def test_write_face_quality_scores_batch_with_empty_results_is_a_noop(make_tenant, make_stored_file, fetch_stored_file):
+    tenant_id = make_tenant()
+    stored_file_id = make_stored_file(tenant_id)
+    engine = build_engine()
+
+    write_face_quality_scores_batch(engine, [])
+
+    row = fetch_stored_file(stored_file_id)
+    assert row["face_analyzed_at"] is None
 
 
 def test_fetch_files_returns_only_the_requested_ids_with_the_narrow_column_set(make_tenant, make_stored_file):

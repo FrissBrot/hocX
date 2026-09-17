@@ -21,6 +21,9 @@ from app.models import (
     Tenant,
     WordImportDocument,
 )
+# Not re-exported from app.models (the package __init__) like the others above - imported
+# straight from .entities instead, same convention photo_album_service.py already uses.
+from app.models.entities import PhotoAlbumItem
 from app.services import public_id_service
 
 # Cap for the "list every tag/origin-tag currently in use" suggestion query - this app is
@@ -279,6 +282,7 @@ class StoredFileRepository:
         sort_by: str = "created_at",
         sort_dir: str = "desc",
         file_ids: list[uuid.UUID] | None = None,
+        album_id: uuid.UUID | None = None,
     ) -> list[Row]:
         """Every "Dateien"/"Fotos" the tenant has produced by uploading something - protocol
         images, the raw .docx/.pdf a word-import was read from, abgabebox submission uploads,
@@ -288,12 +292,26 @@ class StoredFileRepository:
         (mutually exclusive in practice - the UI never sets both). Deliberately excludes
         tenant logo and generated PDF exports (protocol_export_cache): neither is something a
         user "hochgeladen" hat, see project memory for this feature.
-        """
+
+        album_id scopes to one album via a JOIN against photo_album_item, rather than the
+        caller pre-fetching every one of that album's file ids into Python and passing them
+        through file_ids' IN-list (audit fix, 2026-09-17: browsing an album via infinite
+        scroll used to resend that album's *entire* member-id list as a bind-parameter list
+        on every single page request - a 10k-photo album sent a 10k-UUID list per 60-item
+        page). file_ids stays available for every other caller of this method (an
+        already-known, typically small/bounded id set - recompute_best_of, cover-photo
+        lookups, bulk-action targets), which genuinely needs an explicit id list rather
+        than an album join."""
         branches = self._files_overview_branches(tenant_id)
         selected = [branch for key, branch in branches.items() if source is None or source == key]
         union_query = union_all(*selected).subquery("files_overview")
 
-        query = select(union_query).where(union_query.c.scan_status != "infected")
+        query = select(union_query).select_from(union_query).where(union_query.c.scan_status != "infected")
+        if album_id is not None:
+            query = query.join(
+                PhotoAlbumItem,
+                and_(PhotoAlbumItem.file_id == union_query.c.public_id, PhotoAlbumItem.album_id == album_id),
+            )
         if file_ids is not None:
             query = query.where(union_query.c.public_id.in_(file_ids))
         if only_images:

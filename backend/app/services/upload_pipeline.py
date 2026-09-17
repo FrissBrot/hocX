@@ -37,7 +37,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models import StoredFile, Tenant
 from app.repositories.file_repository import StoredFileRepository
-from app.services.photo_quality import compute_exposure_score, compute_sharpness_score
+from app.services.photo_quality import compute_quality_scores
 
 ALLOWED_IMAGE_MIME_TYPES = {
     "image/jpeg",
@@ -296,6 +296,7 @@ def ingest_file(
     unsupported_format_message: str = "Dateiformat wird nicht unterstützt",
     infected_message: str = "Datei wurde von der Virenprüfung als infiziert erkannt und wurde nicht gespeichert",
     stored_file_repository: StoredFileRepository | None = None,
+    tenant_hashes: list[tuple[int, str]] | None = None,
 ) -> UploadPipelineResult:
     """Validate -> (caller already scanned; here we only act on the verdict) -> write under
     upload_root/storage_subdir_parts/<uuid4><suffix> -> checksum -> optional pHash dedupe
@@ -306,7 +307,17 @@ def ingest_file(
     Every check here re-validates from scratch even when a caller (e.g. save_protocol_image's
     own pre-read Content-Type check) has already ruled out the same failure by a different
     route - harmless redundancy, not a behavior change, and it's what lets every upload path
-    share this one function instead of trusting caller-specific bookkeeping."""
+    share this one function instead of trusting caller-specific bookkeeping.
+
+    tenant_hashes lets a caller ingesting a whole batch in a loop (save_gallery_uploads)
+    fetch the tenant's existing perceptual-hash list once up front and pass the same list
+    into every call, instead of this function re-querying it per file (audit fix,
+    2026-09-17: a 300-image ZIP into a tenant with 20k already-hashed images used to
+    re-fetch and re-scan that ~20k-row list 300 times). This function appends each newly
+    computed hash to the list it's given, so later files in the same batch still catch
+    duplicates of earlier files in that same batch, not just pre-existing ones. A caller
+    that ingests one file at a time (save_protocol_image, save_word_import_document)
+    leaves this None and gets the previous per-call query behavior."""
     repo = stored_file_repository or StoredFileRepository()
 
     if len(content) > max_bytes:
@@ -335,8 +346,8 @@ def ingest_file(
     if enable_perceptual_dedupe:
         perceptual_hash = _compute_perceptual_hash(content, mime)
         if perceptual_hash is not None:
-            tenant_hashes = repo.list_tenant_image_hashes(db, tenant_id)
-            if _closest_perceptual_match(perceptual_hash, tenant_hashes) is not None:
+            candidates = tenant_hashes if tenant_hashes is not None else repo.list_tenant_image_hashes(db, tenant_id)
+            if _closest_perceptual_match(perceptual_hash, candidates) is not None:
                 duplicate_warning = "Hinweis: Dieses Bild ähnelt einem bereits im Mandanten hochgeladenen Bild."
 
     stored_file = StoredFile(
@@ -353,9 +364,11 @@ def ingest_file(
     )
     stored_file = repo.create(db, stored_file)  # add + flush, caller commits
 
+    if tenant_hashes is not None and perceptual_hash is not None:
+        tenant_hashes.append((stored_file.id, perceptual_hash))
+
     if capture_quality_scores:
-        stored_file.sharpness_score = compute_sharpness_score(content)
-        stored_file.exposure_score = compute_exposure_score(content)
+        stored_file.sharpness_score, stored_file.exposure_score = compute_quality_scores(content)
 
     if enable_thumbnail:
         generated = generate_thumbnail_bytes(content)

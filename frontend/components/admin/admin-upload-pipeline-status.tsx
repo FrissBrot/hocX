@@ -6,7 +6,9 @@ import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Pagination } from "@/components/ui/pagination";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { SOURCE_LABEL } from "@/components/files/file-detail-modal";
 import { browserApiFetch } from "@/lib/api/client";
+import { formatDateTime, formatFileSize } from "@/lib/utils/format";
 import {
   AdminTenantSummary,
   UploadPipelineFileEntry,
@@ -26,12 +28,11 @@ const PAGE_SIZE = 50;
 // has to manually refresh would defeat the point of the view.
 const POLL_INTERVAL_MS = 15_000;
 
-const SOURCE_LABELS: Record<UploadPipelineSource, string> = {
-  protocol_image: "Protokollbild",
-  gallery_upload: "Galerie",
-  word_import: "Word-Import",
-  submission_upload: "Abgabe",
-};
+// Reuses file-detail-modal.tsx's per-item source label - audit fix, 2026-09-17: this used
+// to be its own independently-maintained copy ("Protokollbild" here vs. "Protokoll"
+// there), so the same file was labelled differently in the admin pipeline table than in
+// the tenant-facing file detail view.
+const SOURCE_LABELS = SOURCE_LABEL;
 
 const SCAN_STATUS_LABELS: Record<string, string> = {
   clean: "Sauber",
@@ -51,13 +52,6 @@ function scanStatusVariant(status: string): BadgeVariant {
 
 function scanStatusLabel(status: string): string {
   return SCAN_STATUS_LABELS[status] ?? status;
-}
-
-function formatBytes(bytes: number | null): string {
-  if (bytes === null) return "—";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function formatAge(seconds: number): string {
@@ -197,7 +191,7 @@ export function AdminUploadPipelineStatus({ initialOverview, tenants }: Props) {
                 <td>{entry.tenant_name ?? <span className="muted">Unbekannt</span>}</td>
                 <td className="muted">{entry.assignment_id ?? "—"}</td>
                 <td>{entry.file_name}</td>
-                <td className="muted">{formatBytes(entry.file_size_bytes)}</td>
+                <td className="muted">{formatFileSize(entry.file_size_bytes)}</td>
                 <td>
                   <Badge variant="warning">{formatAge(entry.age_seconds)}</Badge>
                 </td>
@@ -213,11 +207,11 @@ export function AdminUploadPipelineStatus({ initialOverview, tenants }: Props) {
 function FileRow({ item }: { item: UploadPipelineFileEntry }) {
   return (
     <tr>
-      <td className="muted">{new Date(item.created_at).toLocaleString("de-CH")}</td>
+      <td className="muted">{formatDateTime(item.created_at)}</td>
       <td>{item.tenant_name}</td>
       <td>{item.origin_tag}</td>
       <td>{item.original_name}</td>
-      <td className="muted">{formatBytes(item.file_size_bytes)}</td>
+      <td className="muted">{formatFileSize(item.file_size_bytes)}</td>
       <td>
         <Badge variant={scanStatusVariant(item.scan_status)}>{scanStatusLabel(item.scan_status)}</Badge>
       </td>

@@ -78,6 +78,41 @@ def write_face_quality_score(engine: Engine, stored_file_id: int, score: float |
         )
 
 
+def write_face_quality_scores_batch(engine: Engine, results: list[tuple[int, float | None]]) -> None:
+    """Same write as write_face_quality_score, but for every file in a job at once in one
+    UPDATE/transaction instead of one connection-checkout+BEGIN/COMMIT cycle per file
+    (audit fix, 2026-09-17) - a job can queue up to MAX_ANALYSIS_JOB_IMAGES=2000 files
+    (backend/app/services/file_service.py), so _process_job used to cost up to 2000
+    separate round trips per job, on the resource-constrained dedicated worker container.
+    Explicit ::bigint/::double precision casts on every VALUES row avoid Postgres
+    misinferring the score column's type when every file in a job has no detected face
+    (score=None for every row, which would otherwise leave nothing typed as float)."""
+    if not results:
+        return
+    # CAST(...) rather than a trailing ::type directly after the bind parameter - some
+    # SQLAlchemy text() versions misparse ":name::type" (the adjacent colons), leaving the
+    # placeholder un-substituted and sent to Postgres literally.
+    values_clause = ", ".join(
+        f"(CAST(:id_{i} AS BIGINT), CAST(:score_{i} AS DOUBLE PRECISION))" for i in range(len(results))
+    )
+    params: dict[str, object] = {}
+    for i, (stored_file_id, score) in enumerate(results):
+        params[f"id_{i}"] = stored_file_id
+        params[f"score_{i}"] = score
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                f"""
+                UPDATE stored_file AS sf
+                SET face_quality_score = v.score, face_analyzed_at = NOW()
+                FROM (VALUES {values_clause}) AS v(id, score)
+                WHERE sf.id = v.id
+                """
+            ),
+            params,
+        )
+
+
 def finish_job(engine: Engine, job_id, *, status: str, error: str | None = None) -> None:
     with engine.begin() as conn:
         conn.execute(

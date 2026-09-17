@@ -50,10 +50,15 @@ class StorageService:
         def scoped(query):
             return query if tenant_id is None else query.where(StoredFile.tenant_id == tenant_id)
 
+        # submission_upload folded in here (audit fix, 2026-09-17) - it joins on
+        # stored_file_id exactly like the other three, so it never needed its own
+        # hand-written copy of this query shape below. export stays separate: it's the
+        # only category that joins on a different column (generated_file_id).
         joins: dict[str, type] = {
             "protocol_image": ProtocolImage,
             "word_import": WordImportDocument,
             "gallery_upload": GalleryImage,
+            "submission_upload": SubmissionUploadFile,
         }
         for key, model in joins.items():
             query = scoped(
@@ -63,14 +68,6 @@ class StorageService:
                 .group_by(StoredFile.tenant_id)
             )
             add(db.execute(query).all(), key)
-
-        submission_query = scoped(
-            select(StoredFile.tenant_id, func.coalesce(func.sum(StoredFile.file_size_bytes), 0))
-            .select_from(StoredFile)
-            .join(SubmissionUploadFile, SubmissionUploadFile.stored_file_id == StoredFile.id)
-            .group_by(StoredFile.tenant_id)
-        )
-        add(db.execute(submission_query).all(), "submission_upload")
 
         export_query = scoped(
             select(StoredFile.tenant_id, func.coalesce(func.sum(StoredFile.file_size_bytes), 0))

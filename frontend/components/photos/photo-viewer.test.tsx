@@ -64,6 +64,13 @@ describe("PhotoViewer", () => {
     expect(screen.getByText("Analyse ausstehend")).toBeInTheDocument();
   });
 
+  it("shows '0 Bytes' instead of hiding the Grösse row for a 0-byte file (audit fix, 2026-09-17)", () => {
+    const item = makeItem({ file_size_bytes: 0 });
+    render(<PhotoViewer items={[item]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
+
+    expect(screen.getByText("Grösse")).toBeInTheDocument();
+  });
+
   it("shows 'Kein Gesicht erkannt' once analyzed with no detected face", () => {
     const item = makeItem({ face_analyzed_at: "2026-07-10T09:00:00Z", face_quality_score: null });
     render(<PhotoViewer items={[item]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);

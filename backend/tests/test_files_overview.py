@@ -10,7 +10,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.api.routes import files as files_routes
-from app.models.entities import StoredFile, SubmissionAssignment, SubmissionUpload, SubmissionUploadFile, WordImportDocument
+from app.models.entities import PhotoAlbum, PhotoAlbumItem, StoredFile, SubmissionAssignment, SubmissionUpload, SubmissionUploadFile, WordImportDocument
 from app.services.file_service import FileService
 from tests.factories import (
     make_app_user,
@@ -275,6 +275,41 @@ def test_list_files_route_requires_writer_role(db):
             sort_by="created_at", sort_dir="desc", db=db, user=reader,
         )
     assert exc_info.value.status_code == 403
+
+
+def test_list_files_route_scopes_to_an_album_via_join_and_sorts_best_of_first(db):
+    """Regression coverage (audit fix, 2026-09-17): album-scoped listing now joins
+    photo_album_item by album_id in the DB query (StoredFileRepository.list_tenant_files'
+    album_id param) instead of the route pre-fetching every member id into Python and
+    passing it through file_ids' IN-list - covers both that the join correctly excludes
+    non-members and that is_best still gets attached/sorted correctly, now fetched only
+    for the returned page instead of the whole album."""
+    tenant = make_tenant(db)
+    writer = make_current_user(tenant.id, role="writer")
+    in_album_not_best = _make_gallery_image(db, tenant.id)
+    in_album_best = _make_gallery_image(db, tenant.id)
+    not_in_album = _make_gallery_image(db, tenant.id)
+
+    album = PhotoAlbum(tenant_id=tenant.id, name="Sommerlager", kind="manual")
+    db.add(album)
+    db.flush()
+    db.add_all([
+        PhotoAlbumItem(album_id=album.id, file_id=in_album_not_best.public_id, is_best=False),
+        PhotoAlbumItem(album_id=album.id, file_id=in_album_best.public_id, is_best=True),
+    ])
+    db.commit()
+
+    items = files_routes.list_files(
+        skip=0, limit=60, source=None, only_images=False, exclude_images=False, search=None, tags=None,
+        sort_by="created_at", sort_dir="desc", db=db, user=writer, album_id=album.id,
+    )
+
+    returned_ids = {item.id for item in items}
+    assert returned_ids == {in_album_not_best.public_id, in_album_best.public_id}
+    assert not_in_album.public_id not in returned_ids
+    assert items[0].id == in_album_best.public_id
+    assert items[0].is_best is True
+    assert items[1].is_best is False
 
 
 @pytest.mark.parametrize("album_filter", [{}, {"album_id": None}], ids=["omitted-album", "explicit-none"])

@@ -132,6 +132,52 @@ def test_reconstruct_list_period_creates_gap_snapshot_from_live_data(db):
     assert entry_snapshot.snapshot_json[0]["column_one_value_json"] == {"text_value": "reconstructed"}
 
 
+def test_reconstruct_list_period_resolves_multiple_entries_from_mixed_live_and_snapshot_sources(db):
+    """Regression coverage for the batched entry-identity resolver (audit fix,
+    2026-09-17, replacing a per-entry query+full-snapshot-scan with one live query plus
+    one snapshot pass for every entry together) - exercises both of its resolution paths
+    in one call: one entry still exists live, the other only survives in an older
+    snapshot (its live row was deleted after that snapshot was taken)."""
+    tenant = make_tenant(db)
+    cycle_config = make_cycle_config(db, tenant.id)
+    definition = make_list_definition(db, tenant.id, name="Mixed List")
+    still_live_entry = make_list_entry(db, definition.id, sort_index=0, column_one_value={"text_value": "live"})
+    gone_entry = make_list_entry(db, definition.id, sort_index=1, column_one_value={"text_value": "will be deleted"})
+
+    # An older snapshot captures gone_entry before it's deleted from the live table.
+    TableSnapshotService().create_snapshot(db, tenant_id=tenant.id, cycle_config=cycle_config, cycle_year=2019)
+    gone_entry_public_id = str(gone_entry.public_id)
+    db.delete(gone_entry)
+    db.commit()
+
+    TableSnapshotService().reconstruct_list_period(
+        db,
+        tenant_id=tenant.id,
+        cycle_config=cycle_config,
+        cycle_year=2020,
+        list_public_id=str(definition.public_id),
+        definition_values={
+            "name": definition.name, "description": None,
+            "column_one_title": definition.column_one_title, "column_one_value_type": definition.column_one_value_type,
+            "column_two_title": definition.column_two_title, "column_two_value_type": definition.column_two_value_type,
+            "is_active": True,
+        },
+        entry_payloads=[
+            {"public_id": str(still_live_entry.public_id), "sort_index": 0, "column_one_value_json": {"text_value": "live"}, "column_two_value_json": {}},
+            {"public_id": gone_entry_public_id, "sort_index": 1, "column_one_value_json": {"text_value": "restored"}, "column_two_value_json": {}},
+        ],
+        edited_by=1,
+    )
+
+    entry_snapshot = db.query(TableSnapshot).filter_by(
+        tenant_id=tenant.id, cycle_config_id=cycle_config.id, cycle_year=2020, table_name="list_entry"
+    ).one()
+    ids_by_public_id = {row["public_id"]: row["id"] for row in entry_snapshot.snapshot_json}
+    assert entry_snapshot.row_count == 2
+    assert ids_by_public_id[str(still_live_entry.public_id)] == still_live_entry.id
+    assert ids_by_public_id[gone_entry_public_id] == gone_entry.id
+
+
 def test_reconstruct_list_period_does_not_disturb_other_lists_in_same_period(db):
     tenant = make_tenant(db)
     cycle_config = make_cycle_config(db, tenant.id)

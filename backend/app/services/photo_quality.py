@@ -40,25 +40,11 @@ def _load_grayscale_array(content: bytes) -> np.ndarray | None:
         return None
 
 
-def compute_sharpness_score(content: bytes) -> float | None:
-    """Laplacian-variance blur estimate: a sharp image has a lot of high-frequency edge
-    energy, a blurred/out-of-focus one doesn't. Unbounded, higher is sharper. Returns None
-    for content PIL can't decode (mirrors _generate_thumbnail_bytes's convention in
-    file_service.py)."""
-    gray = _load_grayscale_array(content)
-    if gray is None:
-        return None
+def _sharpness_from_array(gray: np.ndarray) -> float:
     return float(ndimage.laplace(gray).var())
 
 
-def compute_exposure_score(content: bytes) -> float | None:
-    """1.0 = no clipped shadows/highlights at all, 0.0 = the whole image is crushed black
-    or blown-out white. Simple clipped-pixel-fraction metric rather than a full histogram
-    model - "is this frame too dark/too bright to be usable" is the question, not a
-    photometric exposure analysis. Returns None for content PIL can't decode."""
-    gray = _load_grayscale_array(content)
-    if gray is None:
-        return None
+def _exposure_from_array(gray: np.ndarray) -> float | None:
     total_pixels = gray.size
     if total_pixels == 0:
         return None
@@ -66,6 +52,47 @@ def compute_exposure_score(content: bytes) -> float | None:
     clipped_highlights = float(np.count_nonzero(gray >= 255 - _CLIPPED_BIN_WIDTH))
     clipped_fraction = (clipped_shadows + clipped_highlights) / total_pixels
     return max(0.0, 1.0 - clipped_fraction)
+
+
+def compute_sharpness_score(content: bytes) -> float | None:
+    """Laplacian-variance blur estimate: a sharp image has a lot of high-frequency edge
+    energy, a blurred/out-of-focus one doesn't. Unbounded, higher is sharper. Returns None
+    for content PIL can't decode (mirrors _generate_thumbnail_bytes's convention in
+    file_service.py). Prefer compute_quality_scores() when both this and
+    compute_exposure_score are needed for the same content - it decodes once instead of
+    twice."""
+    gray = _load_grayscale_array(content)
+    if gray is None:
+        return None
+    return _sharpness_from_array(gray)
+
+
+def compute_exposure_score(content: bytes) -> float | None:
+    """1.0 = no clipped shadows/highlights at all, 0.0 = the whole image is crushed black
+    or blown-out white. Simple clipped-pixel-fraction metric rather than a full histogram
+    model - "is this frame too dark/too bright to be usable" is the question, not a
+    photometric exposure analysis. Returns None for content PIL can't decode. Prefer
+    compute_quality_scores() when both this and compute_sharpness_score are needed for the
+    same content - it decodes once instead of twice."""
+    gray = _load_grayscale_array(content)
+    if gray is None:
+        return None
+    return _exposure_from_array(gray)
+
+
+def compute_quality_scores(content: bytes) -> tuple[float | None, float | None]:
+    """(sharpness, exposure) together, decoding the image once instead of twice (audit
+    fix, 2026-09-17): every real caller needs both scores for the same content right after
+    each other (upload_pipeline.ingest_file, file_service.backfill_missing_quality_scores),
+    but compute_sharpness_score/compute_exposure_score each independently called
+    _load_grayscale_array on the same bytes - a full PIL decode + EXIF-transpose + resize,
+    done twice for no reason. The two individual functions stay available (and this
+    delegates its own decode to the same _load_grayscale_array) for callers that
+    genuinely only need one score, and so existing direct tests of each keep working."""
+    gray = _load_grayscale_array(content)
+    if gray is None:
+        return None, None
+    return _sharpness_from_array(gray), _exposure_from_array(gray)
 
 
 def composite_quality_score(

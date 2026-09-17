@@ -344,7 +344,10 @@ export type AdminTenantPage = {
   total: number;
 };
 
-export type StorageCategoryKey = "protocol_image" | "word_import" | "submission_upload" | "gallery_upload" | "export" | "other";
+// FileOverviewSource's 4 members plus the two storage-only categories (a generated PDF
+// export and the catch-all "everything else" bucket - see storage_service.py's docstring)
+// - derived rather than redeclared for the same reason as UploadPipelineSource above.
+export type StorageCategoryKey = FileOverviewSource | "export" | "other";
 
 export type StorageCategoryUsage = {
   key: StorageCategoryKey;
@@ -418,7 +421,11 @@ export type SystemErrorLogFilterOptions = {
   sources: string[];
 };
 
-export type UploadPipelineSource = "protocol_image" | "gallery_upload" | "word_import" | "submission_upload";
+// Same backend upload-source enum as FileOverviewSource - reused rather than redeclared
+// with its own member order (audit fix, 2026-09-17: a fifth source added to one but not
+// the other used to compile fine on both sides, and the un-updated view would silently
+// fall through its `?? entry.source` fallback and show the raw enum string instead).
+export type UploadPipelineSource = FileOverviewSource;
 
 export type UploadPipelineFileEntry = {
   id: string;

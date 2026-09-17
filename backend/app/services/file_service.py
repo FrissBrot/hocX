@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import uuid
 from contextlib import contextmanager
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Iterator
@@ -22,7 +22,7 @@ from app.repositories.file_repository import ProtocolImageRepository, StoredFile
 from app.schemas.files import FileAlbumRef, FileOverviewItem, FileStats, PhotoAnalysisProgress, SimilarityGroup, StoredFileMetadata
 from app.schemas.protocol import ProtocolImageRead
 from app.services import public_id_service
-from app.services.photo_quality import compute_exposure_score, compute_sharpness_score
+from app.services.photo_quality import compute_quality_scores
 from app.services.photo_similarity import MAX_GROUPING_IMAGES, GroupableImage, group_similar_images
 from app.services.upload_pipeline import (
     ALLOWED_IMAGE_MIME_TYPES,
@@ -244,6 +244,7 @@ class FileService:
         sort_by: str = "created_at",
         sort_dir: str = "desc",
         file_ids: list[uuid.UUID] | None = None,
+        album_id: uuid.UUID | None = None,
     ) -> list[FileOverviewItem]:
         rows = self.stored_file_repository.list_tenant_files(
             db,
@@ -258,6 +259,7 @@ class FileService:
             sort_by=sort_by,
             sort_dir=sort_dir,
             file_ids=file_ids,
+            album_id=album_id,
         )
         return [self._build_overview_item(row) for row in rows]
 
@@ -528,15 +530,23 @@ class FileService:
         the separate, minimally-privileged hocx_abgabebox role and doesn't import this
         module (see sql/baseline_schema.sql). Called from main.py's
         photo_quality_backfill_loop to fill it in afterwards, from here, for any clean image
-        still missing either score regardless of source. Returns the number of files
-        updated."""
+        never yet attempted (quality_analyzed_at IS NULL) regardless of source. Returns the
+        number of files updated.
+
+        A file whose disk content is missing still gets quality_analyzed_at stamped (audit
+        fix, 2026-09-17) even though no score could be computed - previously such a row
+        was silently `continue`d past with both scores left NULL, so the exact same
+        unfixable row matched this method's query and was re-attempted on every future
+        tick, forever, same failure class as photo-analysis-worker's face-quality
+        equivalent (see that worker's comment on writing a NULL score deliberately, for
+        the same reason)."""
         pending = list(
             db.scalars(
                 select(StoredFile)
                 .where(
                     StoredFile.mime_type.like("image/%"),
                     StoredFile.scan_status == "clean",
-                    (StoredFile.sharpness_score.is_(None)) | (StoredFile.exposure_score.is_(None)),
+                    StoredFile.quality_analyzed_at.is_(None),
                 )
                 .limit(limit)
             )
@@ -544,13 +554,12 @@ class FileService:
         updated = 0
         for stored_file in pending:
             file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
-            if not file_path.exists():
-                continue
-            content = file_path.read_bytes()
-            stored_file.sharpness_score = compute_sharpness_score(content)
-            stored_file.exposure_score = compute_exposure_score(content)
-            updated += 1
-        if updated:
+            if file_path.exists():
+                content = file_path.read_bytes()
+                stored_file.sharpness_score, stored_file.exposure_score = compute_quality_scores(content)
+                updated += 1
+            stored_file.quality_analyzed_at = datetime.now(UTC)
+        if pending:
             db.commit()
         return updated
 
@@ -754,6 +763,13 @@ class FileService:
             [content for _filename, content in files], host=settings.clamav_host, port=settings.clamav_port
         )
 
+        # Fetched once and passed into every ingest_file() call below instead of letting
+        # each call re-query it (audit fix, 2026-09-17 - see ingest_file's tenant_hashes
+        # docstring) - ingest_file appends each newly-hashed file to this same list, so a
+        # duplicate within this batch (not just against pre-existing uploads) still gets
+        # caught for whichever file in the batch comes after it.
+        tenant_hashes = self.stored_file_repository.list_tenant_image_hashes(db, tenant_id)
+
         items: list[FileOverviewItem] = []
         item_taken_at: dict[uuid.UUID, datetime | None] = {}
         errors: list[str] = []
@@ -778,6 +794,7 @@ class FileService:
                     unsupported_format_message="kein unterstütztes Bildformat",
                     infected_message="wurde von der Virenprüfung als infiziert erkannt und wurde nicht gespeichert",
                     stored_file_repository=self.stored_file_repository,
+                    tenant_hashes=tenant_hashes,
                 )
             except HTTPException as exc:
                 errors.append(f"{label}: {exc.detail}")
@@ -837,19 +854,30 @@ class FileService:
             from app.services import photo_album_service
 
             if upload_cycle_config is not None:
+                # Group by cycle_year (a multi-file batch can span more than one Periode -
+                # see the docstring), keeping one representative on_date per group so each
+                # group can route through assign_uploaded_files' cycle_config/fallback_date
+                # branch below instead of hand-rolling the same
+                # get_or_create_cycle_album/add_items/commit/recompute_best_of sequence
+                # here a second time (audit fix, 2026-09-17 - that branch had no caller at
+                # all before this, while this method reimplemented its exact logic inline).
                 groups: dict[int, list[uuid.UUID]] = {}
+                representative_date_by_year: dict[int, date] = {}
                 for item in items:
                     taken_at = item_taken_at.get(item.id)
                     on_date = taken_at.date() if taken_at is not None else date.today()
                     cycle_year = get_cycle_year(on_date, upload_cycle_config.reset_month, upload_cycle_config.reset_day)
                     groups.setdefault(cycle_year, []).append(item.id)
+                    representative_date_by_year.setdefault(cycle_year, on_date)
                 for cycle_year, file_ids in groups.items():
-                    album = photo_album_service.get_or_create_cycle_album(
-                        db, tenant_id=tenant_id, cycle_config=upload_cycle_config, cycle_year=cycle_year
+                    photo_album_service.assign_uploaded_files(
+                        db,
+                        self,
+                        tenant_id=tenant_id,
+                        stored_file_public_ids=file_ids,
+                        cycle_config=upload_cycle_config,
+                        fallback_date=representative_date_by_year[cycle_year],
                     )
-                    photo_album_service.add_items(db, album, file_ids)
-                    db.commit()
-                    photo_album_service.recompute_best_of(db, self, album)
             elif upload_event_id is not None or (upload_assignment is not None and upload_element_ref is not None):
                 photo_album_service.assign_uploaded_files(
                     db,

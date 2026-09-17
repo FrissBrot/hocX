@@ -12,7 +12,7 @@ import os
 import time
 from pathlib import Path
 
-from app.db import build_engine, claim_next_job, fetch_files, finish_job, write_face_quality_score
+from app.db import build_engine, claim_next_job, fetch_files, finish_job, write_face_quality_scores_batch
 from app.face_quality import load_detector, score_face_quality
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -30,6 +30,9 @@ def _process_job(engine, detector, job: dict) -> None:
     logger.info("job %s: processing %d files (tenant %s)", job["id"], len(stored_file_ids), job["tenant_id"])
     files = fetch_files(engine, stored_file_ids)
     scored = 0
+    # Accumulated and written in one batched UPDATE after the loop instead of one
+    # transaction per file (audit fix, 2026-09-17 - see write_face_quality_scores_batch).
+    results: list[tuple[int, float | None]] = []
     for file_row in files:
         path = STORAGE_ROOT / file_row["storage_path"]
         try:
@@ -38,11 +41,12 @@ def _process_job(engine, detector, job: dict) -> None:
             logger.warning("job %s: could not read %s: %s", job["id"], path, exc)
             # Mark it analyzed anyway (no score) - otherwise a file missing from disk gets
             # re-queued and re-attempted by every future off-peak run, forever.
-            write_face_quality_score(engine, file_row["id"], None)
+            results.append((file_row["id"], None))
             continue
         score = score_face_quality(detector, image_bytes)
-        write_face_quality_score(engine, file_row["id"], score)
+        results.append((file_row["id"], score))
         scored += 1
+    write_face_quality_scores_batch(engine, results)
     logger.info("job %s: scored %d/%d files", job["id"], scored, len(files))
     finish_job(engine, job["id"], status="done")
 

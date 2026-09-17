@@ -7,7 +7,7 @@ import io
 import numpy as np
 from PIL import Image, ImageFilter
 
-from app.services.photo_quality import compute_exposure_score, compute_sharpness_score
+from app.services.photo_quality import compute_exposure_score, compute_quality_scores, compute_sharpness_score
 
 
 def _png_bytes(image: Image.Image) -> bytes:
@@ -56,3 +56,19 @@ def test_exposure_score_penalizes_clipped_highlights_and_shadows():
 
 def test_exposure_score_is_none_for_undecodable_content():
     assert compute_exposure_score(b"not an image") is None
+
+
+def test_compute_quality_scores_matches_the_individual_functions():
+    """compute_quality_scores decodes once instead of twice (audit fix, 2026-09-17) but
+    must agree exactly with calling both individual functions separately."""
+    sharp = _checkerboard()
+    content = _png_bytes(sharp)
+
+    sharpness, exposure = compute_quality_scores(content)
+
+    assert sharpness == compute_sharpness_score(content)
+    assert exposure == compute_exposure_score(content)
+
+
+def test_compute_quality_scores_is_none_none_for_undecodable_content():
+    assert compute_quality_scores(b"not an image") == (None, None)

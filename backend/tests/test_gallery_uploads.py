@@ -11,12 +11,15 @@ from fastapi import HTTPException, UploadFile
 from PIL import Image
 from starlette.datastructures import Headers
 
+from datetime import date
+
 from app.api.routes import files as files_routes
-from app.models.entities import GalleryImage, StoredFile
+from app.core.cycle_utils import get_cycle_year
+from app.models.entities import GalleryImage, PhotoAlbum, PhotoAlbumItem, StoredFile
 from app.services import file_service as file_service_module
 from app.services import public_id_service
 from app.services.file_service import FileService, extract_image_files_from_zip
-from tests.factories import make_current_user, make_tenant
+from tests.factories import make_current_user, make_cycle_config, make_tenant
 
 
 @pytest.fixture(autouse=True)
@@ -114,6 +117,55 @@ def test_save_gallery_uploads_stores_image_with_tags_and_creates_gallery_image_r
     gallery_row = db.query(GalleryImage).filter_by(stored_file_id=stored_file.id).one_or_none()
     assert gallery_row is not None
     assert gallery_row.tenant_id == tenant.id
+
+
+def test_save_gallery_uploads_with_a_cycle_config_target_files_photos_into_the_cycle_album(db):
+    """Regression coverage (audit fix, 2026-09-17): the cycle_config upload target used to
+    hand-roll get_or_create_cycle_album/add_items/commit/recompute_best_of inline instead
+    of routing through photo_album_service.assign_uploaded_files' (previously dead)
+    cycle_config/fallback_date branch - this exercises that path end-to-end rather than
+    just unit-testing the two pieces in isolation."""
+    tenant = make_tenant(db)
+    cycle_config = make_cycle_config(db, tenant.id, name="Biber", reset_month=12, reset_day=31)
+    content = _png_bytes((5, 15, 25))
+
+    items, errors = asyncio.run(
+        service.save_gallery_uploads(
+            db, tenant_id=tenant.id, files=[("lager.png", content)], tags=[], created_by=None,
+            upload_cycle_config=cycle_config,
+        )
+    )
+
+    assert errors == []
+    assert len(items) == 1
+    stored_file = public_id_service.get_by_public_id(db, StoredFile, items[0].id)
+
+    expected_cycle_year = get_cycle_year(date.today(), cycle_config.reset_month, cycle_config.reset_day)
+    album = db.query(PhotoAlbum).filter_by(tenant_id=tenant.id, kind="cycle", cycle_config_id=cycle_config.id, cycle_year=expected_cycle_year).one()
+    item_row = db.query(PhotoAlbumItem).filter_by(album_id=album.id, file_id=stored_file.public_id).one_or_none()
+    assert item_row is not None
+
+
+def test_save_gallery_uploads_flags_a_duplicate_within_the_same_batch(db):
+    """Regression coverage (audit fix, 2026-09-17): ingest_file's tenant_hashes batching
+    appends each newly-hashed file to the shared list save_gallery_uploads passes in, so a
+    near-duplicate pair uploaded together in one ZIP/batch is still caught against each
+    other, not just against files that already existed before this batch started. A
+    flat-color image is a degenerate case for perceptual hashing - two of them (even
+    different colors) hash near-identically, which is exactly what's wanted here: two
+    files with no pre-existing tenant history, similar only to each other."""
+    tenant = make_tenant(db)
+    first = _png_bytes((10, 10, 10))
+    second = _png_bytes((12, 12, 12))
+
+    items, errors = asyncio.run(
+        service.save_gallery_uploads(
+            db, tenant_id=tenant.id, files=[("a.png", first), ("b.png", second)], tags=[], created_by=None,
+        )
+    )
+
+    assert len(items) == 2
+    assert any("ähnelt einem bereits im Mandanten hochgeladenen Bild" in error for error in errors)
 
 
 def test_save_gallery_uploads_rejects_non_image_content(db):
