@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { FileOverviewItem } from "@/types/api";
@@ -32,6 +32,7 @@ class FakeIntersectionObserver implements IntersectionObserver {
   constructor(private callback: IntersectionObserverCallback) {
     FakeIntersectionObserver.instances.push(this);
   }
+  intersect() { this.callback([{ isIntersecting: true, intersectionRatio: 1 } as IntersectionObserverEntry], this); }
   observe() {}
   unobserve() {}
   disconnect() {}
@@ -128,6 +129,7 @@ describe("PhotosView", () => {
     expect(screen.queryByRole("status", { name: "Fotos werden geladen" })).not.toBeInTheDocument();
     expect(image.parentElement).toHaveStyle({ aspectRatio: "1.3333333333333333" });
     expect(image.parentElement).not.toHaveClass("photo-tile-preview-loaded");
+    act(() => FakeIntersectionObserver.instances.forEach((observer) => observer.intersect()));
     fireEvent.load(image);
     expect(image.parentElement).toHaveClass("photo-tile-preview-loaded");
   });

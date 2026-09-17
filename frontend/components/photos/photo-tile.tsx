@@ -1,24 +1,47 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { browserApiBaseUrl } from "@/lib/api/client";
 import { FileOverviewItem } from "@/types/api";
 
 export function PhotoTile({
   item,
   selected,
-  priority = false,
   onOpen,
   onToggleSelect,
 }: {
   item: FileOverviewItem;
   selected: boolean;
-  priority?: boolean;
   onOpen: () => void;
   onToggleSelect: () => void;
 }) {
-  const [loaded, setLoaded] = useState(false);
+  const previewRef = useRef<HTMLButtonElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
+  const [requestedUrl, setRequestedUrl] = useState<string | null>(null);
+  const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
   const thumbnailUrl = item.thumbnail_url ? `${browserApiBaseUrl}${item.thumbnail_url}` : `${browserApiBaseUrl}${item.content_url}`;
+  const requested = requestedUrl === thumbnailUrl;
+  const loaded = loadedUrl === thumbnailUrl;
+
+  useEffect(() => {
+    const preview = previewRef.current;
+    if (!preview) return;
+    // No src until the placeholder actually enters the viewport. Native lazy loading
+    // can prefetch images several screens away; rootMargin: 0 prevents that here.
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting && entry.intersectionRatio > 0)) {
+        setRequestedUrl(thumbnailUrl);
+        observer.disconnect();
+      }
+    }, { rootMargin: "0px", threshold: 0 });
+    observer.observe(preview);
+    return () => observer.disconnect();
+  }, [thumbnailUrl]);
+
+  useEffect(() => {
+    const image = imageRef.current;
+    if (requested && image?.complete && image.naturalWidth > 0) setLoadedUrl(thumbnailUrl);
+  }, [requested, thumbnailUrl]);
   // Reserve space even for older photos whose dimensions are not yet known.
   const aspectRatio = item.width && item.height ? item.width / item.height : 4 / 3;
 
@@ -26,18 +49,19 @@ export function PhotoTile({
     <div className={`photo-tile${selected ? " photo-tile-selected" : ""}`}>
       <button
         type="button"
+        ref={previewRef}
         className={`photo-tile-preview${loaded ? " photo-tile-preview-loaded" : ""}`}
         style={{ aspectRatio }}
         onClick={onOpen}
       >
         <img
+          ref={imageRef}
           alt={item.original_name}
-          src={thumbnailUrl}
-          loading={priority ? "eager" : "lazy"}
-          fetchPriority={priority ? "high" : "auto"}
+          src={requested ? thumbnailUrl : undefined}
+          loading="lazy"
           decoding="async"
           className="photo-tile-img photo-tile-img-fitted"
-          onLoad={() => setLoaded(true)}
+          onLoad={() => { if (requested) setLoadedUrl(thumbnailUrl); }}
         />
       </button>
       <button
