@@ -211,6 +211,88 @@ def test_run_due_cycle_snapshots_creates_snapshot_for_just_ended_cycle(db):
     assert snapshot.row_count == 1
 
 
+def test_run_due_cycle_snapshots_does_not_backfill_a_brand_new_config(db):
+    """A CycleConfig with no snapshot history yet only ever gets the single
+    immediately-preceding cycle, even though the walk-backward catch-up logic exists -
+    otherwise every brand-new config (the overwhelmingly common case: set up once per
+    tenant, typically for a group that already has years of pre-existing list data) would
+    immediately get flooded with several "historical" snapshots that are really just
+    today's data relabeled as older years, since there is nothing else to draw from."""
+    tenant = make_tenant(db)
+    cycle_config = make_cycle_config(db, tenant.id, reset_month=12, reset_day=31)
+    make_list_definition(db, tenant.id)
+
+    run_due_cycle_snapshots(db, TableSnapshotService())
+
+    expected_latest = get_cycle_year(date.today(), 12, 31) - 1
+    written_years = {
+        row.cycle_year
+        for row in db.query(TableSnapshot).filter_by(tenant_id=tenant.id, cycle_config_id=cycle_config.id, table_name="list_definition")
+    }
+    assert written_years == {expected_latest}
+
+
+def test_run_due_cycle_snapshots_catches_up_a_bounded_number_of_missed_cycles_for_an_established_config(db, monkeypatch):
+    """Regression test (2026-09-17 audit fix): previously this only ever looked exactly
+    one cycle back (current_cycle_year - 1), so once a second cycle boundary passed
+    without the loop running (a real outage spanning >1 boundary, not just the single-day
+    gaps it already tolerated), the older missed cycle could never be reached again -
+    current_cycle_year - 1 always points at whatever cycle *just* ended, never further
+    back. For a CycleConfig that already has at least one snapshot from an earlier tick
+    (i.e. this isn't brand new - see the sibling "does_not_backfill_a_brand_new_config"
+    test), it now walks backward while a cycle is missing, bounded by
+    MAX_CYCLE_SNAPSHOT_CATCH_UP."""
+    import app.services.table_snapshot_service as svc
+
+    monkeypatch.setattr(svc, "MAX_CYCLE_SNAPSHOT_CATCH_UP", 3)
+    tenant = make_tenant(db)
+    cycle_config = make_cycle_config(db, tenant.id, reset_month=12, reset_day=31)
+    make_list_definition(db, tenant.id)
+    service = TableSnapshotService()
+    expected_latest = get_cycle_year(date.today(), 12, 31) - 1
+
+    # Simulate "this config ran successfully a long time ago" - one old snapshot exists,
+    # then a gap of several missed boundaries (bigger than the bound) opens up before the
+    # loop runs again.
+    service.create_snapshot(db, tenant_id=tenant.id, cycle_config=cycle_config, cycle_year=expected_latest - 5)
+
+    run_due_cycle_snapshots(db, service)
+
+    written_years = {
+        row.cycle_year
+        for row in db.query(TableSnapshot).filter_by(tenant_id=tenant.id, cycle_config_id=cycle_config.id, table_name="list_definition")
+    }
+    # The 3 most recent missing cycles get backfilled (bounded catch-up); the gap between
+    # them and the old pre-existing snapshot is left alone, same as a longer real outage
+    # always leaves an older, unreachable gap under this bounded design.
+    assert written_years == {expected_latest, expected_latest - 1, expected_latest - 2, expected_latest - 5}
+
+
+def test_run_due_cycle_snapshots_stops_at_the_first_already_complete_cycle(db):
+    """The backward walk must stop as soon as it finds a cycle that's already fully
+    snapshotted, not keep going for MAX_CYCLE_SNAPSHOT_CATCH_UP cycles regardless -
+    otherwise a tenant that's been running this loop successfully for years would get its
+    older, already-complete cycles re-touched (still idempotent/no-op per table, but
+    pointless extra work) on every single tick forever."""
+    tenant = make_tenant(db)
+    cycle_config = make_cycle_config(db, tenant.id, reset_month=12, reset_day=31)
+    make_list_definition(db, tenant.id)
+    service = TableSnapshotService()
+    expected_latest = get_cycle_year(date.today(), 12, 31) - 1
+
+    # Simulate "already caught up": every table already has a snapshot for the
+    # immediately-preceding cycle.
+    service.create_snapshot(db, tenant_id=tenant.id, cycle_config=cycle_config, cycle_year=expected_latest)
+
+    run_due_cycle_snapshots(db, service)
+
+    written_years = {
+        row.cycle_year
+        for row in db.query(TableSnapshot).filter_by(tenant_id=tenant.id, cycle_config_id=cycle_config.id, table_name="list_definition")
+    }
+    assert written_years == {expected_latest}
+
+
 def test_run_due_cycle_snapshots_is_idempotent(db):
     tenant = make_tenant(db)
     make_cycle_config(db, tenant.id)

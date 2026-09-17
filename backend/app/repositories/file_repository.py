@@ -80,6 +80,16 @@ class StoredFileRepository:
         stored_file.scan_status = scan_status
         db.add(stored_file)
 
+    def total_bytes_for_tenant(self, db: Session, tenant_id: int) -> int:
+        """SUM(file_size_bytes) across every stored_file this tenant owns, regardless of
+        origin - the same number storage_service.py's per-category breakdown reconciles
+        to, used here as the single cheap check upload_pipeline.ingest_file needs before
+        accepting a new file against Tenant.storage_quota_bytes."""
+        return int(
+            db.scalar(select(func.coalesce(func.sum(StoredFile.file_size_bytes), 0)).where(StoredFile.tenant_id == tenant_id))
+            or 0
+        )
+
     def list_tenant_image_hashes(self, db: Session, tenant_id: int, *, exclude_stored_file_id: int | None = None) -> list[tuple[int, str]]:
         """(id, perceptual_hash) for every image already hashed in this tenant - used for the
         mandanten-wide "sieht aus wie ein bereits hochgeladenes Bild" warning. Tenant-scoped
@@ -92,6 +102,38 @@ class StoredFileRepository:
         if exclude_stored_file_id is not None:
             query = query.where(StoredFile.id != exclude_stored_file_id)
         return list(db.execute(query).all())
+
+    @staticmethod
+    def _shared_file_overview_columns() -> list:
+        """The 18-column prefix every branch of _files_overview_branches shares - factored
+        out (audit fix, 2026-09-17) so column position is enforced structurally instead of
+        by four independently hand-maintained copies. That matters because union_all below
+        matches columns *positionally*, not by label: before this, adding a column to
+        StoredFile meant editing four 18-line blocks by hand, and getting three of four
+        right raised nothing - Postgres just silently misaligned the odd one out (e.g. a
+        future `width` landing in another branch's `height` slot). Returns a fresh list of
+        label expressions on every call rather than one shared list, so each of the four
+        callers gets its own independent SQLAlchemy construct."""
+        return [
+            StoredFile.id.label("id"),
+            StoredFile.public_id.label("public_id"),
+            StoredFile.tenant_id.label("tenant_id"),
+            Tenant.public_id.label("tenant_public_id"),
+            Tenant.name.label("tenant_name"),
+            StoredFile.original_name.label("original_name"),
+            StoredFile.mime_type.label("mime_type"),
+            StoredFile.file_size_bytes.label("file_size_bytes"),
+            StoredFile.created_at.label("created_at"),
+            StoredFile.scan_status.label("scan_status"),
+            StoredFile.tags.label("tags"),
+            StoredFile.sharpness_score.label("sharpness_score"),
+            StoredFile.exposure_score.label("exposure_score"),
+            StoredFile.perceptual_hash.label("perceptual_hash"),
+            StoredFile.face_quality_score.label("face_quality_score"),
+            StoredFile.face_analyzed_at.label("face_analyzed_at"),
+            StoredFile.width.label("width"),
+            StoredFile.height.label("height"),
+        ]
 
     def _files_overview_branches(self, tenant_id: int | None):
         """The four differently-joined SELECTs behind list_tenant_files/list_tag_sources
@@ -112,24 +154,7 @@ class StoredFileRepository:
         tenant_filter = (StoredFile.tenant_id == tenant_id,) if tenant_id is not None else ()
         protocol_branch = (
             select(
-                StoredFile.id.label("id"),
-                StoredFile.public_id.label("public_id"),
-                StoredFile.tenant_id.label("tenant_id"),
-                Tenant.public_id.label("tenant_public_id"),
-                Tenant.name.label("tenant_name"),
-                StoredFile.original_name.label("original_name"),
-                StoredFile.mime_type.label("mime_type"),
-                StoredFile.file_size_bytes.label("file_size_bytes"),
-                StoredFile.created_at.label("created_at"),
-                StoredFile.scan_status.label("scan_status"),
-                StoredFile.tags.label("tags"),
-                StoredFile.sharpness_score.label("sharpness_score"),
-                StoredFile.exposure_score.label("exposure_score"),
-                StoredFile.perceptual_hash.label("perceptual_hash"),
-                StoredFile.face_quality_score.label("face_quality_score"),
-                StoredFile.face_analyzed_at.label("face_analyzed_at"),
-                StoredFile.width.label("width"),
-                StoredFile.height.label("height"),
+                *self._shared_file_overview_columns(),
                 literal("protocol_image").label("source"),
                 Protocol.id.label("ref_id"),
                 Protocol.public_id.label("ref_public_id"),
@@ -169,24 +194,7 @@ class StoredFileRepository:
 
         word_import_branch = (
             select(
-                StoredFile.id.label("id"),
-                StoredFile.public_id.label("public_id"),
-                StoredFile.tenant_id.label("tenant_id"),
-                Tenant.public_id.label("tenant_public_id"),
-                Tenant.name.label("tenant_name"),
-                StoredFile.original_name.label("original_name"),
-                StoredFile.mime_type.label("mime_type"),
-                StoredFile.file_size_bytes.label("file_size_bytes"),
-                StoredFile.created_at.label("created_at"),
-                StoredFile.scan_status.label("scan_status"),
-                StoredFile.tags.label("tags"),
-                StoredFile.sharpness_score.label("sharpness_score"),
-                StoredFile.exposure_score.label("exposure_score"),
-                StoredFile.perceptual_hash.label("perceptual_hash"),
-                StoredFile.face_quality_score.label("face_quality_score"),
-                StoredFile.face_analyzed_at.label("face_analyzed_at"),
-                StoredFile.width.label("width"),
-                StoredFile.height.label("height"),
+                *self._shared_file_overview_columns(),
                 literal("word_import").label("source"),
                 WordImportDocument.id.label("ref_id"),
                 cast(null(), PG_UUID(as_uuid=True)).label("ref_public_id"),
@@ -206,24 +214,7 @@ class StoredFileRepository:
 
         submission_branch = (
             select(
-                StoredFile.id.label("id"),
-                StoredFile.public_id.label("public_id"),
-                StoredFile.tenant_id.label("tenant_id"),
-                Tenant.public_id.label("tenant_public_id"),
-                Tenant.name.label("tenant_name"),
-                StoredFile.original_name.label("original_name"),
-                StoredFile.mime_type.label("mime_type"),
-                StoredFile.file_size_bytes.label("file_size_bytes"),
-                StoredFile.created_at.label("created_at"),
-                StoredFile.scan_status.label("scan_status"),
-                StoredFile.tags.label("tags"),
-                StoredFile.sharpness_score.label("sharpness_score"),
-                StoredFile.exposure_score.label("exposure_score"),
-                StoredFile.perceptual_hash.label("perceptual_hash"),
-                StoredFile.face_quality_score.label("face_quality_score"),
-                StoredFile.face_analyzed_at.label("face_analyzed_at"),
-                StoredFile.width.label("width"),
-                StoredFile.height.label("height"),
+                *self._shared_file_overview_columns(),
                 literal("submission_upload").label("source"),
                 SubmissionAssignment.id.label("ref_id"),
                 cast(null(), PG_UUID(as_uuid=True)).label("ref_public_id"),
@@ -245,24 +236,7 @@ class StoredFileRepository:
 
         gallery_branch = (
             select(
-                StoredFile.id.label("id"),
-                StoredFile.public_id.label("public_id"),
-                StoredFile.tenant_id.label("tenant_id"),
-                Tenant.public_id.label("tenant_public_id"),
-                Tenant.name.label("tenant_name"),
-                StoredFile.original_name.label("original_name"),
-                StoredFile.mime_type.label("mime_type"),
-                StoredFile.file_size_bytes.label("file_size_bytes"),
-                StoredFile.created_at.label("created_at"),
-                StoredFile.scan_status.label("scan_status"),
-                StoredFile.tags.label("tags"),
-                StoredFile.sharpness_score.label("sharpness_score"),
-                StoredFile.exposure_score.label("exposure_score"),
-                StoredFile.perceptual_hash.label("perceptual_hash"),
-                StoredFile.face_quality_score.label("face_quality_score"),
-                StoredFile.face_analyzed_at.label("face_analyzed_at"),
-                StoredFile.width.label("width"),
-                StoredFile.height.label("height"),
+                *self._shared_file_overview_columns(),
                 literal("gallery_upload").label("source"),
                 GalleryImage.id.label("ref_id"),
                 cast(null(), PG_UUID(as_uuid=True)).label("ref_public_id"),

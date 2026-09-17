@@ -66,3 +66,25 @@ def compute_exposure_score(content: bytes) -> float | None:
     clipped_highlights = float(np.count_nonzero(gray >= 255 - _CLIPPED_BIN_WIDTH))
     clipped_fraction = (clipped_shadows + clipped_highlights) / total_pixels
     return max(0.0, 1.0 - clipped_fraction)
+
+
+def composite_quality_score(
+    sharpness: float | None, exposure: float | None, face_quality: float | None
+) -> float | None:
+    """The one "how good is this photo" ranking used everywhere a single number is
+    needed to pick a best image - album best-of/Stern selection (photo_album_service.py)
+    and near-duplicate-series best-pick (photo_similarity.py) both call this, rather than
+    each keeping its own formula (audit fix, 2026-09-17: they used to disagree - the
+    duplicate-series picker ignored face_quality_score entirely, so it could pick a
+    different "best" frame than the album picker for the same photos, and that picker's
+    choice drives a destructive delete).
+
+    Prefers face_quality (Phase 3, only present for images with a detected face) when
+    available, since it's the most informative signal; otherwise falls back to sharpness
+    scaled down by up to half for poor exposure, so an unscored-for-faces photo still
+    lands on a comparable scale to a scored one rather than always losing to it."""
+    if face_quality is not None:
+        return face_quality
+    if sharpness is not None and exposure is not None:
+        return sharpness * (0.5 + 0.5 * exposure)
+    return None

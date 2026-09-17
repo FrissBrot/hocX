@@ -38,6 +38,7 @@ from app.models.entities import (
     SubmissionUpload,
     SubmissionUploadFile,
 )
+from app.services.photo_quality import composite_quality_score
 from app.services.submission_service import SubmissionService, _element_ref
 
 # Best-of selection ("beste Bilder vorschlagen", see file_service.py's Phase 1/3 scoring
@@ -53,17 +54,6 @@ BEST_OF_MIN_SCORE_RATIO = 0.30
 # clipped shadows/highlights at all) - so an absolute floor here is meaningful: this
 # excludes a badly under/overexposed photo even if it's the sharpest thing in the album.
 BEST_OF_MIN_EXPOSURE = 0.35
-
-
-def _composite_score(sharpness: float | None, exposure: float | None, face_quality: float | None) -> float | None:
-    """Same combination score-face_quality.py's score_face_quality uses for a detected
-    face's crop (sharpness, scaled down by up to half for poor exposure) - reused here so a
-    photo with a detected face and one without land on a comparable scale."""
-    if face_quality is not None:
-        return face_quality
-    if sharpness is not None and exposure is not None:
-        return sharpness * (0.5 + 0.5 * exposure)
-    return None
 
 
 def recompute_best_of(db: Session, file_service, album: PhotoAlbum) -> None:
@@ -82,7 +72,7 @@ def recompute_best_of(db: Session, file_service, album: PhotoAlbum) -> None:
     scores: dict[uuid.UUID, float | None] = {}
     exposures: dict[uuid.UUID, float | None] = {}
     for item in overview_items:
-        scores[item.id] = _composite_score(item.sharpness_score, item.exposure_score, item.face_quality_score)
+        scores[item.id] = composite_quality_score(item.sharpness_score, item.exposure_score, item.face_quality_score)
         exposures[item.id] = item.exposure_score
 
     auto_slot_count = max(0, round(len(item_rows) * BEST_OF_FRACTION))

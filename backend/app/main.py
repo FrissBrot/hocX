@@ -290,24 +290,17 @@ async def photo_analysis_auto_queue_loop() -> None:
     configured low-traffic UTC hour window and only when the host doesn't already look
     busy - this work competes with live request traffic and the dedicated worker container
     for the same constrained host (see photo-analysis-worker/README.md), so it must never
-    fire just because it's due. Every-worker-but-advisory-locked like the other loops, but
-    the window/load gate has to run *before* even trying the lock (skip the tick entirely
-    rather than acquire-then-no-op), so this keeps its own loop instead of going through
-    run_advisory_locked_loop - lock id still comes from the shared BACKGROUND_LOCK_IDS
-    ledger like every other loop's, though, so it can't silently collide with one of them."""
-    interval_seconds = settings.photo_analysis_auto_queue_interval_minutes * 60
-    lock_id = BACKGROUND_LOCK_IDS["photo_analysis_auto_queue"]
+    fire just because it's due. Routes through run_advisory_locked_loop's should_run gate
+    (2026-09-17 audit fix) instead of hand-rolling its own lock/sleep loop - previously this
+    was the one loop that reimplemented that skeleton itself, which is exactly how it ended
+    up missing the to_thread offload and exception isolation every other loop has."""
     file_service = FileService()
-    while True:
-        if _photo_analysis_auto_queue_window_is_open() and _host_load_is_low():
-            with SessionLocal() as db:
-                acquired = db.execute(text("SELECT pg_try_advisory_lock(:lock_id)"), {"lock_id": lock_id}).scalar()
-                if acquired:
-                    try:
-                        file_service.create_pending_analysis_jobs(db)
-                    finally:
-                        db.execute(text("SELECT pg_advisory_unlock(:lock_id)"), {"lock_id": lock_id})
-        await asyncio.sleep(interval_seconds)
+    await run_advisory_locked_loop(
+        lock_id=BACKGROUND_LOCK_IDS["photo_analysis_auto_queue"],
+        interval_seconds=settings.photo_analysis_auto_queue_interval_minutes * 60,
+        task=file_service.create_pending_analysis_jobs,
+        should_run=lambda: _photo_analysis_auto_queue_window_is_open() and _host_load_is_low(),
+    )
 
 
 async def photo_quality_backfill_loop() -> None:

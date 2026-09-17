@@ -3,23 +3,9 @@
 import { useEffect, useState } from "react";
 
 import { TotpEnrollCard } from "@/components/security/totp-enroll-card";
-import { browserApiFetch } from "@/lib/api/client";
-import { browserSupportsPasskeys, createPasskeyCredential } from "@/lib/webauthn";
-import { useConfirm } from "@/contexts/confirm-context";
-import { useToast } from "@/contexts/toast-context";
-import { PasskeyRegistrationStart, TotpEnrollmentStart, UserMfaOverview } from "@/types/api";
-
-function formatDate(value: string | null) {
-  if (!value) return "Noch nie";
-  return new Intl.DateTimeFormat("de-CH", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
-function factorTypeLabel(type: "totp" | "webauthn") {
-  return type === "totp" ? "TOTP" : "Passkey";
-}
+import { useMfaEnrollment, formatMfaDate, mfaFactorTypeLabel } from "@/lib/hooks/use-mfa-enrollment";
+import { browserSupportsPasskeys } from "@/lib/webauthn";
+import { UserMfaOverview } from "@/types/api";
 
 function ShieldIcon({ className }: { className?: string }) {
   return (
@@ -68,15 +54,24 @@ type Props = {
 };
 
 export function AdminMfaSettings({ initialOverview }: Props) {
-  const showToast = useToast();
-  const confirm = useConfirm();
   const [overview, setOverview] = useState<UserMfaOverview>(initialOverview);
-  const [totpSetup, setTotpSetup] = useState<TotpEnrollmentStart | null>(null);
-  const [totpCode, setTotpCode] = useState("");
-  const [totpLabel, setTotpLabel] = useState("");
-  const [passkeyLabel, setPasskeyLabel] = useState("");
-  const [busyTotp, setBusyTotp] = useState(false);
-  const [busyPasskey, setBusyPasskey] = useState(false);
+  const {
+    totpSetup,
+    setTotpSetup,
+    totpCode,
+    setTotpCode,
+    totpLabel,
+    setTotpLabel,
+    passkeyLabel,
+    setPasskeyLabel,
+    busy,
+    startTotp,
+    completeTotp,
+    startPasskey,
+    deleteFactor,
+    hasTotpFactor,
+    hasPasskeyFactor,
+  } = useMfaEnrollment("/api/admin/mfa", overview, setOverview);
   // Starts false to match server-rendered markup, then flips after mount - calling
   // browserSupportsPasskeys() directly during render would read `window` on the server too
   // (this page renders immediately, unlike MfaProfilePanel which only ever mounts inside an
@@ -86,96 +81,6 @@ export function AdminMfaSettings({ initialOverview }: Props) {
   useEffect(() => {
     setPasskeysSupported(browserSupportsPasskeys());
   }, []);
-
-  async function startTotp() {
-    setBusyTotp(true);
-    try {
-      const result = await browserApiFetch<TotpEnrollmentStart>("/api/admin/mfa/totp/start", {
-        method: "POST",
-      });
-      setTotpSetup(result);
-      setTotpCode("");
-      setTotpLabel("");
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "TOTP-Setup konnte nicht gestartet werden", "error");
-    } finally {
-      setBusyTotp(false);
-    }
-  }
-
-  async function completeTotp() {
-    if (!totpSetup) return;
-    setBusyTotp(true);
-    try {
-      const next = await browserApiFetch<UserMfaOverview>("/api/admin/mfa/totp/complete", {
-        method: "POST",
-        body: JSON.stringify({
-          flow_token: totpSetup.flow_token,
-          code: totpCode,
-          label: totpLabel || null,
-        }),
-      });
-      setOverview(next);
-      setTotpSetup(null);
-      setTotpCode("");
-      setTotpLabel("");
-      showToast("TOTP erfolgreich eingerichtet", "success");
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "TOTP konnte nicht bestätigt werden", "error");
-    } finally {
-      setBusyTotp(false);
-    }
-  }
-
-  async function startPasskey() {
-    if (!passkeysSupported) {
-      showToast("Dieser Browser unterstützt keine Passkeys.", "error");
-      return;
-    }
-    setBusyPasskey(true);
-    try {
-      const start = await browserApiFetch<PasskeyRegistrationStart>("/api/admin/mfa/passkeys/start", {
-        method: "POST",
-      });
-      const credential = await createPasskeyCredential(start.public_key);
-      const next = await browserApiFetch<UserMfaOverview>("/api/admin/mfa/passkeys/complete", {
-        method: "POST",
-        body: JSON.stringify({
-          flow_token: start.flow_token,
-          label: passkeyLabel || null,
-          credential,
-        }),
-      });
-      setOverview(next);
-      setPasskeyLabel("");
-      showToast("Passkey erfolgreich eingerichtet", "success");
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "Passkey konnte nicht eingerichtet werden", "error");
-    } finally {
-      setBusyPasskey(false);
-    }
-  }
-
-  async function deleteFactor(factorId: string, label: string) {
-    const ok = await confirm({
-      message: `MFA-Faktor "${label}" wirklich entfernen?`,
-      tone: "danger",
-      confirmLabel: "Entfernen",
-    });
-    if (!ok) return;
-    try {
-      const next = await browserApiFetch<UserMfaOverview>(`/api/admin/mfa/factors/${factorId}`, {
-        method: "DELETE",
-      });
-      setOverview(next);
-      showToast("MFA-Faktor entfernt", "success");
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "MFA-Faktor konnte nicht entfernt werden", "error");
-    }
-  }
-
-  const hasTotpFactor = overview.factors.some((factor) => factor.factor_type === "totp");
-  const hasPasskeyFactor = overview.factors.some((factor) => factor.factor_type === "webauthn");
 
   return (
     <div className="grid">
@@ -224,7 +129,7 @@ export function AdminMfaSettings({ initialOverview }: Props) {
             Authenticator.
           </p>
           {!totpSetup ? (
-            <button type="button" className="button-inline" disabled={busyTotp} onClick={() => void startTotp()}>
+            <button type="button" className="button-inline" disabled={busy} onClick={() => void startTotp()}>
               TOTP einrichten
             </button>
           ) : (
@@ -236,7 +141,7 @@ export function AdminMfaSettings({ initialOverview }: Props) {
               onCodeChange={setTotpCode}
               onSubmit={() => void completeTotp()}
               onCancel={() => setTotpSetup(null)}
-              busy={busyTotp}
+              busy={busy}
             />
           )}
         </article>
@@ -268,8 +173,8 @@ export function AdminMfaSettings({ initialOverview }: Props) {
                   placeholder="z.B. YubiKey / MacBook Pro"
                 />
               </label>
-              <button type="button" className="button-inline" disabled={busyPasskey} onClick={() => void startPasskey()}>
-                {busyPasskey ? "Passkey wird vorbereitet…" : "Passkey hinzufügen"}
+              <button type="button" className="button-inline" disabled={busy} onClick={() => void startPasskey()}>
+                {busy ? "Passkey wird vorbereitet…" : "Passkey hinzufügen"}
               </button>
             </div>
           ) : (
@@ -294,10 +199,10 @@ export function AdminMfaSettings({ initialOverview }: Props) {
                   <div className="security-factor-main">
                     <div className="security-factor-row">
                       <strong>{factor.label}</strong>
-                      <span className="pill">{factorTypeLabel(factor.factor_type)}</span>
+                      <span className="pill">{mfaFactorTypeLabel(factor.factor_type)}</span>
                     </div>
-                    <div className="muted">Eingerichtet: {formatDate(factor.created_at)}</div>
-                    <div className="muted">Zuletzt verwendet: {formatDate(factor.last_used_at)}</div>
+                    <div className="muted">Eingerichtet: {formatMfaDate(factor.created_at)}</div>
+                    <div className="muted">Zuletzt verwendet: {formatMfaDate(factor.last_used_at)}</div>
                     {isLastFactor && <div className="muted">Letzter Faktor kann nicht entfernt werden.</div>}
                   </div>
                 </div>

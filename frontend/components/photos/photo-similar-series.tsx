@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
@@ -15,17 +15,25 @@ export function PhotoSimilarSeries({ search, tagFilter }: { search: string; tagF
   const [error, setError] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [busyGroup, setBusyGroup] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
 
   const tagKey = tagFilter.join(",");
 
   useEffect(() => {
+    const requestId = ++requestIdRef.current;
     const params = new URLSearchParams();
     params.set("min_size", "2");
     if (search.trim()) params.set("search", search.trim());
     tagFilter.forEach((tag) => params.append("tags", tag));
     browserApiFetch<SimilarityGroup[]>(`/api/files/similarity-groups?${params.toString()}`)
-      .then((data) => setGroups(data ?? []))
-      .catch(() => setError("Ähnliche Fotos konnten nicht geladen werden."));
+      .then((data) => {
+        if (requestIdRef.current !== requestId) return;
+        setGroups(data ?? []);
+      })
+      .catch(() => {
+        if (requestIdRef.current !== requestId) return;
+        setError("Ähnliche Fotos konnten nicht geladen werden.");
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, tagKey]);
 

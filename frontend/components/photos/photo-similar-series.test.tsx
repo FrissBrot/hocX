@@ -125,6 +125,50 @@ describe("PhotoSimilarSeries", () => {
     );
   });
 
+  it("ignores a stale similarity-groups response that resolves after a newer one (audit fix, 2026-09-17)", async () => {
+    // Regression test: unlike its sibling fetch effects elsewhere in the app, this one had
+    // no requestId/cancelled guard, so a slow response to an earlier search term could
+    // overwrite the result of a later, faster one - and the destructive "Nur beste
+    // behalten" button acts on whatever is currently rendered.
+    const staleBest = makeItem({ id: "stale-best", context_label: "STALE-LABEL" });
+    const staleGroup: SimilarityGroup = { best_id: staleBest.id, images: [staleBest, makeItem({ id: "stale-other" })] };
+    const freshBest = makeItem({ id: "fresh-best", context_label: "FRESH-LABEL" });
+    const freshGroup: SimilarityGroup = { best_id: freshBest.id, images: [freshBest, makeItem({ id: "fresh-other" })] };
+    let resolveStale: (value: SimilarityGroup[]) => void = () => {};
+    let resolveFresh: (value: SimilarityGroup[]) => void = () => {};
+    const stalePromise = new Promise<SimilarityGroup[]>((resolve) => {
+      resolveStale = resolve;
+    });
+    const freshPromise = new Promise<SimilarityGroup[]>((resolve) => {
+      resolveFresh = resolve;
+    });
+    let call = 0;
+    browserApiFetchMock.mockImplementation((url: string) => {
+      if (url.startsWith("/api/files/similarity-groups")) {
+        call += 1;
+        return call === 1 ? stalePromise : freshPromise;
+      }
+      return Promise.resolve(null);
+    });
+
+    const { rerender } = render(<PhotoSimilarSeries search="cam" tagFilter={[]} />);
+    rerender(<PhotoSimilarSeries search="camp2026" tagFilter={[]} />);
+
+    // The newer (second) request's response lands first; the older (first) request's
+    // stale response arrives after it - the opposite of request order, plausible under
+    // normal network jitter.
+    resolveFresh([freshGroup]);
+    await waitFor(() => expect(screen.queryByText(/FRESH-LABEL/)).not.toBeNull());
+    resolveStale([staleGroup]);
+
+    // Give the stale promise's .then a tick to run (and be ignored, if the fix holds)
+    // before asserting - without the fix, this is exactly where it would overwrite.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(screen.queryByText(/FRESH-LABEL/)).not.toBeNull();
+    expect(screen.queryByText(/STALE-LABEL/)).toBeNull();
+  });
+
   it("keeping the series just dismisses the card without any request", async () => {
     const group = makeGroup();
     browserApiFetchMock.mockImplementation((url: string) => {

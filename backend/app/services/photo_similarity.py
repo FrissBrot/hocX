@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.services.photo_quality import composite_quality_score
+
 # Same "close enough to be a near-duplicate" threshold as file_service.py's tenant-wide
 # duplicate-upload warning - one definition of "similar" across the feature rather than two
 # independently-tuned ones. Not imported from there to avoid a circular import (file_service
@@ -32,21 +34,24 @@ class GroupableImage:
     perceptual_hash: str | None
     sharpness_score: float | None
     exposure_score: float | None
+    face_quality_score: float | None = None
 
 
 def _hamming_distance(hash_a: int, hash_b: int) -> int:
     return bin(hash_a ^ hash_b).count("1")
 
 
-def _quality_rank(image: GroupableImage) -> tuple[float, float]:
-    """Sort key for picking the best image within a group: sharper first, better-exposed as
-    tiebreaker. Missing scores (images uploaded before Phase 1 existed) rank last rather than
-    raising - an unscored image just never outranks a scored one, though it can still be the
-    (only) image in its own singleton group."""
-    return (
-        image.sharpness_score if image.sharpness_score is not None else float("-inf"),
-        image.exposure_score if image.exposure_score is not None else float("-inf"),
-    )
+def _quality_rank(image: GroupableImage) -> float:
+    """Sort key for picking the best image within a group - the same composite_quality_score
+    used for album best-of/Stern selection (photo_album_service.py), so the "best" pick here
+    and there can't disagree for the same photo (audit fix, 2026-09-17: this used to be its
+    own sharpness/exposure-only tuple, silently ignoring face_quality_score even though the
+    "Nur beste behalten" button built on this ranking permanently deletes every other image
+    in the group). Missing scores rank last rather than raising - an unscored image just
+    never outranks a scored one, though it can still be the (only) image in its own
+    singleton group."""
+    score = composite_quality_score(image.sharpness_score, image.exposure_score, image.face_quality_score)
+    return score if score is not None else float("-inf")
 
 
 def group_similar_images(images: list[GroupableImage]) -> list[list[GroupableImage]]:

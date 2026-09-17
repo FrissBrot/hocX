@@ -31,10 +31,11 @@ from uuid import uuid4
 import imagehash
 from fastapi import HTTPException
 from PIL import Image, ImageOps
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models import StoredFile
+from app.models import StoredFile, Tenant
 from app.repositories.file_repository import StoredFileRepository
 from app.services.photo_quality import compute_exposure_score, compute_sharpness_score
 
@@ -230,6 +231,46 @@ def generate_thumbnail_bytes(content: bytes) -> tuple[bytes, int, int] | None:
         return None
 
 
+# Distinct namespace (paired with tenant_id as the two int32 advisory-lock keys) from
+# file_service.py's _PROTOCOL_IMAGE_QUOTA_LOCK_NAMESPACE and the background loops' fixed
+# single-bigint ids (202600xxx range) - guards the tenant-wide storage-quota check/write
+# race below.
+_TENANT_STORAGE_QUOTA_LOCK_NAMESPACE = 909100002
+
+
+def _enforce_tenant_storage_quota(db: Session, *, tenant_id: int, repo: StoredFileRepository, incoming_bytes: int) -> None:
+    """Rejects an upload that would push the tenant over its admin-configured
+    Tenant.storage_quota_bytes limit. Audit fix, 2026-09-17: this quota is computed and
+    displayed everywhere (storage_service.py, the Speicher admin page shows "Kontingent
+    überschritten") but was never actually enforced by any upload path - an admin's
+    configured limit had zero effect on whether uploads kept succeeding. A tenant with no
+    quota configured (quota_bytes is None, the default/common case) skips the check and
+    the lock below entirely, since there's nothing to enforce.
+
+    Guarded by a transaction-scoped Postgres advisory lock (pg_advisory_xact_lock) so two
+    near-simultaneous uploads for the same tenant can't both observe "under quota" before
+    either has actually written its bytes - the same TOCTOU class file_service.py's older,
+    narrower protocol_image_storage_quota_mb check already guards against. Transaction-
+    scoped rather than session-scoped: Postgres releases it automatically at this
+    Session's next commit or rollback, so unlike a session-scoped lock there is no manual
+    unlock call that could silently run on a different pooled connection than the one that
+    acquired it (see file_service.py's _tenant_protocol_image_upload_lock, fixed the same
+    way in this same audit round)."""
+    tenant = db.get(Tenant, tenant_id)
+    if tenant is None or tenant.storage_quota_bytes is None:
+        return
+    db.execute(
+        text("SELECT pg_advisory_xact_lock(:ns, :tenant_id)"),
+        {"ns": _TENANT_STORAGE_QUOTA_LOCK_NAMESPACE, "tenant_id": tenant_id},
+    )
+    current_bytes = repo.total_bytes_for_tenant(db, tenant_id)
+    if current_bytes + incoming_bytes > tenant.storage_quota_bytes:
+        raise HTTPException(
+            status_code=400,
+            detail="Speicherkontingent des Mandanten erreicht - Datei wurde nicht gespeichert.",
+        )
+
+
 @dataclass(frozen=True)
 class UploadPipelineResult:
     stored_file: StoredFile
@@ -278,6 +319,8 @@ def ingest_file(
         raise HTTPException(status_code=400, detail=unsupported_format_message)
     if scan_status == "infected":
         raise HTTPException(status_code=400, detail=infected_message)
+
+    _enforce_tenant_storage_quota(db, tenant_id=tenant_id, repo=repo, incoming_bytes=len(content))
 
     suffix = Path(original_filename).suffix.lower() or ".bin"
     storage_dir = Path(settings.upload_root).joinpath(*storage_subdir_parts)

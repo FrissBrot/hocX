@@ -20,6 +20,7 @@ from app.core.webauthn import (
     build_assertion_options,
     build_registration_options,
     generate_challenge,
+    passkey_factor_fields,
     register_credential,
     verify_assertion,
 )
@@ -562,15 +563,8 @@ class MfaService:
     ) -> UserMfaFactor:
         factor = UserMfaFactor(
             user_id=user.id,
-            factor_type="webauthn",
             label=(label or self._default_passkey_label(user)).strip() or self._default_passkey_label(user),
-            webauthn_credential_id=registered.credential_id,
-            webauthn_public_key_pem=registered.public_key_pem,
-            webauthn_sign_count=registered.sign_count,
-            webauthn_aaguid=registered.aaguid,
-            webauthn_rp_id=rp_id,
-            webauthn_transports_json=registered.transports,
-            last_used_at=datetime.now(UTC),
+            **passkey_factor_fields(registered, rp_id=rp_id),
         )
         db.add(factor)
         db.commit()

@@ -61,12 +61,24 @@ def _tenant_protocol_image_upload_lock(db: Session, tenant_id: int) -> Iterator[
     TOCTOU: two near-simultaneous uploads for the same tenant could otherwise both observe
     "under quota" before either has written its bytes). A Postgres advisory lock, not an
     in-process lock - this app runs multiple uvicorn workers (separate OS processes), and
-    Postgres is the one piece of state they all already share."""
-    db.execute(text("SELECT pg_advisory_lock(:ns, :tenant_id)"), {"ns": _PROTOCOL_IMAGE_QUOTA_LOCK_NAMESPACE, "tenant_id": tenant_id})
-    try:
-        yield
-    finally:
-        db.execute(text("SELECT pg_advisory_unlock(:ns, :tenant_id)"), {"ns": _PROTOCOL_IMAGE_QUOTA_LOCK_NAMESPACE, "tenant_id": tenant_id})
+    Postgres is the one piece of state they all already share.
+
+    Transaction-scoped (pg_advisory_xact_lock), not session-scoped - Postgres releases it
+    automatically when this Session's current transaction ends (commit or rollback), so
+    there is no manual unlock call to get wrong. Audit fix, 2026-09-17: this used to be a
+    session-scoped pg_advisory_lock paired with an explicit pg_advisory_unlock in a
+    `finally`, but save_protocol_image calls db.commit() *inside* this locked block -
+    Session.commit() checks the underlying DBAPI connection back into the pool, so the
+    `finally`'s unlock could then run on a *different* physical connection than the one
+    that acquired the lock. Postgres advisory-unlock is a silent no-op when the calling
+    connection doesn't hold the lock, so the lock stayed held forever on the now-idle,
+    pooled first connection - every later protocol-image upload for that tenant that
+    landed on a different connection would then block on pg_advisory_lock indefinitely.
+    The abgabebox sibling this was meant to mirror already used the transaction-scoped
+    form for exactly this reason; this module just picked the wrong one of the two safe
+    options."""
+    db.execute(text("SELECT pg_advisory_xact_lock(:ns, :tenant_id)"), {"ns": _PROTOCOL_IMAGE_QUOTA_LOCK_NAMESPACE, "tenant_id": tenant_id})
+    yield
 
 
 # Phase 3: cap on how many images a single photo_analysis_job can queue. The worker
@@ -392,6 +404,7 @@ class FileService:
                 perceptual_hash=row.perceptual_hash,
                 sharpness_score=row.sharpness_score,
                 exposure_score=row.exposure_score,
+                face_quality_score=row.face_quality_score,
             )
             for row in rows
         ]

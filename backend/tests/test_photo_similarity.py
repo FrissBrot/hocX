@@ -6,6 +6,7 @@ import time
 
 import pytest
 
+from app.services.photo_quality import composite_quality_score
 from app.services.photo_similarity import (
     MAX_GROUPING_IMAGES,
     GroupableImage,
@@ -44,7 +45,7 @@ def test_dissimilar_hashes_stay_in_separate_groups():
     assert len(groups) == 2
 
 
-def test_group_is_sorted_best_first_by_sharpness_then_exposure():
+def test_group_is_sorted_best_first_by_composite_quality_score():
     base = 0x1111_1111_1111_1111
     images = [
         GroupableImage(id=1, perceptual_hash=_hex_hash(base), sharpness_score=3.0, exposure_score=1.0),
@@ -56,6 +57,30 @@ def test_group_is_sorted_best_first_by_sharpness_then_exposure():
 
     assert len(groups) == 1
     assert [image.id for image in groups[0]] == [3, 2, 1]
+
+
+def test_group_ranking_uses_the_same_formula_as_album_best_of_selection():
+    """Regression test (2026-09-17 audit fix): _quality_rank used to be its own
+    (sharpness, exposure) tuple sort that silently ignored face_quality_score, so it could
+    disagree with photo_album_service.recompute_best_of's composite_quality_score-based
+    ranking for the same photos - and this ranking's pick drives the destructive "Nur
+    beste behalten" delete. Both now delegate to the one shared composite_quality_score
+    function (photo_quality.py), so two images with a tied composite score (one via a
+    high face_quality_score, one via sharpness*exposure landing on the same number) must
+    tie here too - not something a (sharpness, exposure) tuple sort could ever do, since
+    it never looks at face_quality_score at all."""
+    base = 0x5555_5555_5555_5555
+    images = [
+        # No detected face - composite_quality_score falls back to sharpness * (0.5 + 0.5 * exposure) = 10 * 0.6 = 6.0.
+        GroupableImage(id=1, perceptual_hash=_hex_hash(base), sharpness_score=10.0, exposure_score=0.2, face_quality_score=None),
+        # Detected face - composite_quality_score returns face_quality_score directly, tied at 6.0.
+        GroupableImage(id=2, perceptual_hash=_hex_hash(base), sharpness_score=999.0, exposure_score=0.01, face_quality_score=6.0),
+    ]
+
+    groups = group_similar_images(images)
+
+    assert {image.id for image in groups[0]} == {1, 2}
+    assert composite_quality_score(10.0, 0.2, None) == composite_quality_score(None, None, 6.0) == 6.0
 
 
 def test_images_without_a_perceptual_hash_never_join_a_group():

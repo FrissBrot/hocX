@@ -20,6 +20,7 @@ from app.core.webauthn import (
     WebauthnError,
     build_registration_options,
     generate_challenge,
+    passkey_factor_fields,
     register_credential,
 )
 from app.models import PlatformAdmin, UserMfaFactor
@@ -260,15 +261,8 @@ class AdminMfaService:
     ) -> UserMfaFactor:
         factor = UserMfaFactor(
             platform_admin_id=admin.id,
-            factor_type="webauthn",
             label=(label or self._default_passkey_label(admin)).strip() or self._default_passkey_label(admin),
-            webauthn_credential_id=registered.credential_id,
-            webauthn_public_key_pem=registered.public_key_pem,
-            webauthn_sign_count=registered.sign_count,
-            webauthn_aaguid=registered.aaguid,
-            webauthn_rp_id=rp_id,
-            webauthn_transports_json=registered.transports,
-            last_used_at=datetime.now(UTC),
+            **passkey_factor_fields(registered, rp_id=rp_id),
         )
         db.add(factor)
         db.commit()
@@ -288,6 +282,26 @@ class AdminMfaService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Platform-Administratoren müssen mindestens einen MFA-Faktor behalten",
             )
+        if factor.factor_type == "totp":
+            # Admin login only ever verifies TOTP - _build_pending_login always offers
+            # factor_type="totp" and verify_login_totp is the only verification endpoint,
+            # unlike MfaService's tenant-user login flow, which also accepts a webauthn
+            # factor. A passkey can therefore never be a platform admin's ONLY usable
+            # login factor: the check above (any factor at all) would happily let an admin
+            # delete their last TOTP factor while a passkey survives, leaving
+            # has_factors=True (so setup looks "done") but login unable to ever complete -
+            # a silent, permanent self-lockout with no recovery path (audit fix,
+            # 2026-09-17). So TOTP specifically must never drop to zero while any factor
+            # remains, regardless of how many passkeys exist alongside it.
+            remaining_totp = len(self._list_factors(db, actor.admin_id, factor_type="totp")) - 1
+            if remaining_totp == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        "Platform-Administratoren müssen mindestens eine Authenticator-App (TOTP) behalten - "
+                        "der Admin-Login akzeptiert aktuell keine Passkeys, ein Passkey allein würde dich aussperren"
+                    ),
+                )
         db.delete(factor)
         db.commit()
         return self.get_self_overview(db, actor)

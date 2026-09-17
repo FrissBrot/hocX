@@ -34,6 +34,7 @@ from sqlalchemy import select
 from app.core.secret_crypto import decrypt_secret, encrypt_secret
 from app.core.totp import generate_totp_secret
 from app.models.entities import (
+    Event,
     GalleryImage,
     Participant,
     Protocol,
@@ -52,6 +53,7 @@ from app.services.tenant_import_service import TenantImportService
 from tests.factories import (
     make_app_user,
     make_element_definition,
+    make_event,
     make_list_definition,
     make_list_entry,
     make_participant,
@@ -786,3 +788,50 @@ def test_export_import_roundtrip_recreates_gallery_image(db, monkeypatch, tmp_pa
     imported_gallery_image = db.scalar(select(GalleryImage).where(GalleryImage.tenant_id == new_tenant.id))
     assert imported_gallery_image is not None
     assert imported_gallery_image.stored_file_id == imported_stored_file.id
+
+
+def test_export_import_roundtrip_remaps_gallery_image_event_id(db, monkeypatch, tmp_path):
+    """Regression test (2026-09-17 audit fix): _import_gallery_images used to pass
+    event_id through unremapped, unlike every other imported table's event FK - since
+    event.id is a global sequence, that either crashes the import on a stray FK violation
+    or, worse, silently cross-links the imported photo to a same-numbered event belonging
+    to a completely different tenant. A second, unrelated tenant with its own event whose
+    internal id happens to be lower is created first here specifically so the source
+    tenant's event does NOT land on id 1, the way a bug that forgot to remap could
+    accidentally still "work" by coincidence in a near-empty test database."""
+    from app.core.config import settings
+    from app.services import tenant_import_service as import_svc_module
+
+    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
+    monkeypatch.setattr(import_svc_module.scanner, "scan_file", lambda path, host, port: "clean")
+
+    other_tenant = make_tenant(db, "Other Tenant")
+    make_event(db, other_tenant.id, title="Other Tenant's Event")
+
+    tenant_a = make_tenant(db, "Tenant A")
+    event = make_event(db, tenant_a.id, title="Tenant A's Event")
+    (tmp_path / "gallery").mkdir()
+    (tmp_path / "gallery" / "photo.png").write_bytes(b"fake-png-bytes")
+    stored_file = StoredFile(
+        tenant_id=tenant_a.id, original_name="photo.png", mime_type="image/png",
+        storage_path="gallery/photo.png", file_size_bytes=14,
+    )
+    db.add(stored_file)
+    db.flush()
+    db.add(GalleryImage(tenant_id=tenant_a.id, stored_file_id=stored_file.id, event_id=event.id))
+    db.flush()
+
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
+    try:
+        new_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
+    finally:
+        zip_path.unlink(missing_ok=True)
+
+    assert warnings == []
+    imported_event = db.scalar(select(Event).where(Event.tenant_id == new_tenant.id))
+    assert imported_event is not None
+    assert imported_event.id != event.id
+
+    imported_gallery_image = db.scalar(select(GalleryImage).where(GalleryImage.tenant_id == new_tenant.id))
+    assert imported_gallery_image is not None
+    assert imported_gallery_image.event_id == imported_event.id

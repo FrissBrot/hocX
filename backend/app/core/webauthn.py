@@ -4,6 +4,7 @@ import hashlib
 import json
 import secrets
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 from cryptography.exceptions import InvalidSignature
@@ -288,3 +289,29 @@ def _cose_public_key_to_pem(cose_raw: bytes) -> str:
         encoding=serialization.Encoding.PEM,
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
     ).decode("utf-8")
+
+
+def passkey_factor_fields(registered: RegisteredCredential, *, rp_id: str) -> dict[str, Any]:
+    """The RegisteredCredential -> UserMfaFactor column mapping shared by every place that
+    creates a passkey MFA factor - tenant-user self-service enrollment (mfa_service.py) and
+    platform-admin self-service enrollment (admin_mfa_service.py) used to each hand-write
+    this same 7-field mapping independently (audit fix, 2026-09-17: a future field added
+    here, e.g. for passkey-sync/backup-eligibility detection, could easily land in one
+    service's copy and be silently missing for the other's - platform admins are the
+    highest-privilege accounts in this system, so that's not a safe gap to leave).
+
+    Returns a plain field dict rather than constructing UserMfaFactor itself - this module
+    is deliberately model/ORM-agnostic (pure WebAuthn protocol/crypto logic, no
+    app.models or database import anywhere in it) - so callers spread this into their own
+    UserMfaFactor(...) call alongside whichever owner-specific fields differ between them
+    (user_id vs. platform_admin_id, the label)."""
+    return {
+        "factor_type": "webauthn",
+        "webauthn_credential_id": registered.credential_id,
+        "webauthn_public_key_pem": registered.public_key_pem,
+        "webauthn_sign_count": registered.sign_count,
+        "webauthn_aaguid": registered.aaguid,
+        "webauthn_rp_id": rp_id,
+        "webauthn_transports_json": registered.transports,
+        "last_used_at": datetime.now(UTC),
+    }

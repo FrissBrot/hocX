@@ -173,6 +173,39 @@ def test_delete_self_factor_blocks_removing_last_factor(db):
         assert exc.status_code == 409
 
 
+def test_delete_self_factor_blocks_removing_last_totp_even_with_a_passkey_remaining(db):
+    """Regression test (2026-09-17 audit fix): the old guard only counted factors overall,
+    so deleting the last TOTP factor while a passkey survived was allowed - but admin
+    login only ever verifies TOTP (see verify_login_totp / _build_pending_login, which
+    always offers factor_type="totp" and never a webauthn option), so that left the admin
+    with has_factors=True (setup looks "done") yet no way to ever complete a login again."""
+    admin = _make_admin(db, "admin-totp-plus-passkey@example.com")
+    actor = _actor_for(admin)
+    totp_factor = UserMfaFactor(
+        platform_admin_id=admin.id, factor_type="totp", label="Auth App",
+        secret_encrypted=encrypt_secret(generate_totp_secret()),
+    )
+    passkey_factor = UserMfaFactor(
+        platform_admin_id=admin.id, factor_type="webauthn", label="Passkey",
+        webauthn_credential_id="cred-id", webauthn_public_key_pem="public-key",
+    )
+    db.add_all([totp_factor, passkey_factor])
+    db.flush()
+    service = AdminMfaService()
+
+    try:
+        service.delete_self_factor(db, actor, totp_factor.id)
+        assert False, "expected delete_self_factor to block removing the last TOTP factor"
+    except HTTPException as exc:
+        assert exc.status_code == 409
+
+    # Deleting the passkey instead (TOTP stays) must still work - login remains possible.
+    overview = service.delete_self_factor(db, actor, passkey_factor.id)
+    assert overview.has_factors is True
+    assert len(overview.factors) == 1
+    assert overview.factors[0].factor_type == "totp"
+
+
 def test_delete_self_factor_unknown_id_returns_404(db):
     admin = _make_admin(db, "admin-unknown-factor@example.com")
     actor = _actor_for(admin)

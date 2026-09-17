@@ -24,6 +24,18 @@ from app.models.entities import CycleConfig, ListDefinition, ListEntry, TableSna
 from app.services.table_snapshot_config import SNAPSHOT_TABLES, TRANSITIVE_SNAPSHOT_SCOPE
 from app.services.tenant_transfer_common import row_to_dict
 
+# How many cycles run_due_cycle_snapshots will walk backward in one tick to catch up a
+# CycleConfig that's behind by more than one cycle - see that function's docstring. A
+# snapshot always captures whatever the live tables look like *today*, not a true
+# point-in-time record (there is no other source of historical data to draw from), so
+# this is already an approximation even for the single most-recently-ended cycle; kept
+# deliberately small (rather than large/unbounded) so a brand-new CycleConfig created for
+# a tenant with years of pre-existing list data doesn't flood the cycle picker with many
+# identical "historical" snapshots that are all really just today's data relabeled - 3
+# missed boundaries in a row is already a serious, rare operational outage (this
+# module's background loop runs daily), which is the actual scenario this catches up.
+MAX_CYCLE_SNAPSHOT_CATCH_UP = 3
+
 
 class ReconstructionIdentityError(ValueError):
     """Raised when a reconstruction payload references a row (by public_id) that can't
@@ -415,44 +427,62 @@ def _upsert_snapshot_rows(
 
 
 def run_due_cycle_snapshots(db: Session, service: TableSnapshotService) -> None:
-    """Daily-loop entry point (see main.py's cycle_snapshot_loop): for every
-    CycleConfig, snapshots the most recently *completed* cycle (current_cycle_year - 1)
-    if any table in SNAPSHOT_TABLES is missing a snapshot for it yet. Whether a table
-    already has one is checked directly against table_snapshot rather than tracked in a
-    separate marker column/table, so this both is idempotent and self-heals a missed
-    check day - as long as the gap wasn't longer than one full cycle, since this only
-    ever looks one cycle back. There is no manual catch-up trigger for a longer gap (this
-    is a historical-record feature, not a backup tool) - the cycle would simply stay
-    unsnapshotted until the next boundary.
+    """Daily-loop entry point (see main.py's cycle_snapshot_loop): for every CycleConfig,
+    snapshots the most recently *completed* cycle (current_cycle_year - 1) if any table in
+    SNAPSHOT_TABLES is missing a snapshot for it yet - same as always, so a brand-new
+    CycleConfig (even one set up for a group that's already run cycles for years before
+    adopting this system) still only ever gets that one cycle's worth of snapshots, not a
+    pile of extra ones that would all just be today's data relabeled as older years (there
+    is no other source of historical data to draw from, so a snapshot dated further back
+    than "the cycle that just ended" is already an approximation, not a real record of
+    that time).
 
-    Checked per-table, not just "does this cycle have any snapshot at all": otherwise a
-    table added to SNAPSHOT_TABLES after a cycle was already (even partially) snapshotted
-    would never get backfilled automatically - the loop would see the cycle as "done"
-    from its first snapshotted table onward and skip it forever. create_snapshot()
-    itself already skips any table that already has a snapshot, so calling it again here
-    only ever fills in what's missing - it never touches an admin's historical edits on
-    an already-snapshotted table.
+    If the CycleConfig already has at least one snapshot from some earlier tick, though,
+    this additionally walks further backward (bounded by MAX_CYCLE_SNAPSHOT_CATCH_UP,
+    stopping at the first cycle that's already fully snapshotted) to self-heal a real
+    operational outage spanning more than one cycle boundary - previously this only ever
+    looked exactly one cycle back regardless, so once a second boundary passed with the
+    loop down, the older missed cycle could never be reached again (audit fix,
+    2026-09-17): current_cycle_year - 1 always points at whichever cycle *just* ended,
+    never further, so it silently and permanently skipped it.
+
+    Whether a table already has a snapshot for a given cycle is checked directly against
+    table_snapshot rather than tracked in a separate marker column/table, so this is both
+    idempotent and self-heals a missed check day. Checked per-table, not just "does this
+    cycle have any snapshot at all": otherwise a table added to SNAPSHOT_TABLES after a
+    cycle was already (even partially) snapshotted would never get backfilled
+    automatically - the loop would see the cycle as "done" from its first snapshotted
+    table onward and skip it forever. create_snapshot() itself already skips any table
+    that already has a snapshot, so calling it again here only ever fills in what's
+    missing - it never touches an admin's historical edits on an already-snapshotted
+    table.
     """
     today = date.today()
     for cycle_config in db.scalars(select(CycleConfig)):
         current_cycle_year = get_cycle_year(today, cycle_config.reset_month, cycle_config.reset_day)
-        just_ended_cycle_year = current_cycle_year - 1
-        existing_tables = set(
-            db.scalars(
-                select(TableSnapshot.table_name).where(
-                    TableSnapshot.cycle_config_id == cycle_config.id,
-                    TableSnapshot.cycle_year == just_ended_cycle_year,
+        candidate_cycle_year = current_cycle_year - 1
+        has_prior_snapshot = (
+            db.scalar(select(TableSnapshot.id).where(TableSnapshot.cycle_config_id == cycle_config.id).limit(1)) is not None
+        )
+        max_cycles_this_tick = MAX_CYCLE_SNAPSHOT_CATCH_UP if has_prior_snapshot else 1
+        for _ in range(max_cycles_this_tick):
+            existing_tables = set(
+                db.scalars(
+                    select(TableSnapshot.table_name).where(
+                        TableSnapshot.cycle_config_id == cycle_config.id,
+                        TableSnapshot.cycle_year == candidate_cycle_year,
+                    )
                 )
             )
-        )
-        if existing_tables >= SNAPSHOT_TABLES.keys():
-            continue
-        service.create_snapshot(
-            db,
-            tenant_id=cycle_config.tenant_id,
-            cycle_config=cycle_config,
-            cycle_year=just_ended_cycle_year,
-        )
+            if existing_tables >= SNAPSHOT_TABLES.keys():
+                break
+            service.create_snapshot(
+                db,
+                tenant_id=cycle_config.tenant_id,
+                cycle_config=cycle_config,
+                cycle_year=candidate_cycle_year,
+            )
+            candidate_cycle_year -= 1
 
 
 def get_snapshot_row(

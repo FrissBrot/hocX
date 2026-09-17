@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { browserApiFetch } from "@/lib/api/client";
 import {
@@ -109,6 +109,12 @@ export function useHistoricalList(selectedListId: string | null): HistoricalList
   const [isLoading, setIsLoading] = useState(false);
   const [editUnlocked, setEditUnlocked] = useState(false);
   const [reconstructSource, setReconstructSource] = useState<{ kind: "live" | "snapshot"; cycleYear: number | null } | null>(null);
+  // Guards loadForList/loadDraftForList against a stale response landing after a newer
+  // one (e.g. clicking list A then quickly list C) - without this, whichever request
+  // happens to resolve last wins, which could silently show (and let an admin edit) the
+  // wrong list's frozen historical record. Shared between both loaders so switching
+  // between historical and reconstructing mode mid-flight also invalidates the other.
+  const requestIdRef = useRef(0);
 
   const refetchCycles = useCallback(() => {
     return browserApiFetch<TableSnapshotCycleSummary[]>("/api/table-snapshots/cycles")
@@ -123,6 +129,7 @@ export function useHistoricalList(selectedListId: string | null): HistoricalList
 
   const loadForList = useCallback(
     (cycleConfigId: string, cycleYear: number, listId: string | null) => {
+      const requestId = ++requestIdRef.current;
       if (!listId) {
         setDefinition(null);
         setEntries([]);
@@ -134,6 +141,7 @@ export function useHistoricalList(selectedListId: string | null): HistoricalList
         browserApiFetch<TableSnapshotRowsRead>(`/api/table-snapshots/${cycleConfigId}/${cycleYear}/list_entry`),
       ])
         .then(([definitionsRead, entriesRead]) => {
+          if (requestIdRef.current !== requestId) return;
           const definitionRow = definitionsRead.rows.find((row) => row.public_id === listId);
           if (!definitionRow) {
             setDefinition(null);
@@ -151,27 +159,34 @@ export function useHistoricalList(selectedListId: string | null): HistoricalList
           setEntries(mappedEntries);
           setIsEdited(definitionsRead.is_edited || entriesRead.is_edited);
         })
-        .finally(() => setIsLoading(false));
+        .finally(() => {
+          if (requestIdRef.current === requestId) setIsLoading(false);
+        });
     },
     []
   );
 
   const loadDraftForList = useCallback((cycleConfigId: string, cycleYear: number, listId: string) => {
+    const requestId = ++requestIdRef.current;
     setIsLoading(true);
     browserApiFetch<TableSnapshotListReconstructDraft>(
       `/api/table-snapshots/${cycleConfigId}/${cycleYear}/lists/${listId}/reconstruct-draft`
     )
       .then((draft) => {
+        if (requestIdRef.current !== requestId) return;
         setDefinition(mapDefinitionRow({ public_id: listId, ...draft.definition_values }));
         setEntries(draft.entries.map((row) => mapDraftEntry(row, listId)).sort((a, b) => a.sort_index - b.sort_index));
         setReconstructSource({ kind: draft.source, cycleYear: draft.source_cycle_year });
       })
       .catch(() => {
+        if (requestIdRef.current !== requestId) return;
         setDefinition(null);
         setEntries([]);
         setReconstructSource(null);
       })
-      .finally(() => setIsLoading(false));
+      .finally(() => {
+        if (requestIdRef.current === requestId) setIsLoading(false);
+      });
   }, []);
 
   const switchToHistorical = useCallback(
@@ -192,6 +207,7 @@ export function useHistoricalList(selectedListId: string | null): HistoricalList
   );
 
   const switchToLive = useCallback(() => {
+    requestIdRef.current++;
     setSelected(null);
     setMode("live");
     setDefinition(null);

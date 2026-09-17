@@ -38,3 +38,20 @@ def test_one_shot_startup_locks_in_main_do_not_collide_with_a_periodic_loop_or_e
 
     overlap = set(literal_ids) & set(BACKGROUND_LOCK_IDS.values())
     assert not overlap, f"main.py's one-shot startup lock id(s) collide with a periodic loop's: {sorted(overlap)}"
+
+
+def test_every_background_lock_id_key_referenced_in_main_is_defined():
+    """Regression test for a real bug (found 2026-09-17 audit): three loops
+    (photo_analysis_auto_queue_loop/photo_quality_backfill_loop/photo_album_sync_loop) read
+    BACKGROUND_LOCK_IDS["photo_analysis_auto_queue"] etc. from the moment they were written,
+    but the three matching dict entries were never added - each loop raised KeyError on its
+    very first tick, forever, with nothing but a swallowed asyncio warning to show for it.
+    Uniqueness-of-values (test_background_lock_ids_are_unique) doesn't catch a *missing* key,
+    only a duplicate one, so this checks the other direction: every symbolic key main.py
+    subscripts BACKGROUND_LOCK_IDS with must actually be defined."""
+    source = MAIN_PY.read_text(encoding="utf-8")
+    referenced_keys = set(re.findall(r'BACKGROUND_LOCK_IDS\["([^"]+)"\]', source))
+    assert referenced_keys, "expected to find symbolic BACKGROUND_LOCK_IDS[...] lookups in main.py"
+
+    missing = referenced_keys - set(BACKGROUND_LOCK_IDS.keys())
+    assert not missing, f"main.py references BACKGROUND_LOCK_IDS key(s) not defined in the dict: {sorted(missing)}"
