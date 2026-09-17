@@ -25,16 +25,9 @@ type Tab = "all" | "albums" | "similar";
 type Props = {
   albumId?: string;
   onSelectPhoto?: (item: FileOverviewItem) => void;
-  // Server-fetched first page (see app/photos/page.tsx), matching this component's own
-  // default filters/sort (only_images, group_date desc, no search/tags/album). Lets the
-  // initial paint - and the <img> requests for those thumbnails - happen with the server-
-  // rendered HTML instead of waiting for the client to mount and fire its own request.
-  // Never passed by the embedded (albumId/onSelectPhoto) call sites, which always fetch
-  // client-side.
-  initialItems?: FileOverviewItem[];
 };
 
-export function PhotosView({ albumId, onSelectPhoto, initialItems }: Props) {
+export function PhotosView({ albumId, onSelectPhoto }: Props) {
   const embedded = Boolean(albumId) || Boolean(onSelectPhoto);
   const showToast = useToast();
 
@@ -45,10 +38,10 @@ export function PhotosView({ albumId, onSelectPhoto, initialItems }: Props) {
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
   const [sortKey, setSortKey] = useState<SortKey>("group_date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const [items, setItems] = useState<FileOverviewItem[]>(initialItems ?? []);
-  const [hasMore, setHasMore] = useState((initialItems ?? []).length === PAGE_SIZE);
+  const [items, setItems] = useState<FileOverviewItem[]>([]);
+  const [hasMore, setHasMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [isReloading, setIsReloading] = useState(initialItems === undefined);
+  const [isReloading, setIsReloading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [analysisProgress, setAnalysisProgress] = useState<ProgressData | null>(null);
@@ -69,13 +62,8 @@ export function PhotosView({ albumId, onSelectPhoto, initialItems }: Props) {
   }
 
   useEffect(() => {
-    if (!didMountRef.current) {
-      didMountRef.current = true;
-      // The server already fetched exactly this default-filters page (see page.tsx) - skip
-      // the redundant refetch on mount. Embedded usages never get initialItems, so they
-      // always fall through and fetch client-side as before.
-      if (initialItems !== undefined) return;
-    }
+    const firstLoad = !didMountRef.current;
+    didMountRef.current = true;
     const requestId = ++requestIdRef.current;
     setIsReloading(true);
     const timer = setTimeout(async () => {
@@ -90,7 +78,7 @@ export function PhotosView({ albumId, onSelectPhoto, initialItems }: Props) {
       } finally {
         if (requestIdRef.current === requestId) setIsReloading(false);
       }
-    }, 250);
+    }, firstLoad ? 0 : 250);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, tagFilter.join(","), sortKey, sortDir, albumId]);
@@ -291,7 +279,15 @@ export function PhotosView({ albumId, onSelectPhoto, initialItems }: Props) {
             />
           )}
 
-          {items.length === 0 && !isReloading ? (
+          {items.length === 0 && isReloading ? (
+            <div className="photo-grid" role="status" aria-label="Fotos werden geladen">
+              {Array.from({ length: 18 }, (_, index) => (
+                <div key={index} className="photo-tile" aria-hidden="true">
+                  <div className="photo-tile-preview" style={{ aspectRatio: [4 / 3, 3 / 4, 1][index % 3] }} />
+                </div>
+              ))}
+            </div>
+          ) : items.length === 0 ? (
             <p className="muted">Keine Fotos gefunden.</p>
           ) : onSelectPhoto ? (
             <div className="photo-grid">

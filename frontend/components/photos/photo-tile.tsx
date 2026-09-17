@@ -19,18 +19,15 @@ export function PhotoTile({
 }) {
   const [loaded, setLoaded] = useState(false);
   const thumbnailUrl = item.thumbnail_url ? `${browserApiBaseUrl}${item.thumbnail_url}` : `${browserApiBaseUrl}${item.content_url}`;
-  // Known dimensions (see StoredFile.width/height) reserve the tile's exact box up front, so
-  // the masonry column never reflows once the thumbnail arrives - the placeholder already has
-  // the photo's real aspect ratio. Older files reprocessed before this field existed fall back
-  // to the CSS default (natural height:auto, see .photo-tile-img), so only those can still shift.
-  const aspectRatio = item.width && item.height ? item.width / item.height : undefined;
+  // Reserve space even for older photos whose dimensions are not yet known.
+  const aspectRatio = item.width && item.height ? item.width / item.height : 4 / 3;
 
   return (
     <div className={`photo-tile${selected ? " photo-tile-selected" : ""}`}>
       <button
         type="button"
         className={`photo-tile-preview${loaded ? " photo-tile-preview-loaded" : ""}`}
-        style={aspectRatio ? { aspectRatio } : undefined}
+        style={{ aspectRatio }}
         onClick={onOpen}
       >
         <img
@@ -39,7 +36,7 @@ export function PhotoTile({
           loading={priority ? "eager" : "lazy"}
           fetchPriority={priority ? "high" : "auto"}
           decoding="async"
-          className={aspectRatio ? "photo-tile-img photo-tile-img-fitted" : "photo-tile-img"}
+          className="photo-tile-img photo-tile-img-fitted"
           onLoad={() => setLoaded(true)}
         />
       </button>

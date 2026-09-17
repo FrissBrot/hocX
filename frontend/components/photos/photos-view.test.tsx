@@ -107,6 +107,31 @@ describe("PhotosView", () => {
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Alle Fotos", "Alben", "Ähnliche"]);
   });
 
+  it("renders controls and placeholders while photos are pending, then reveals each loaded image", async () => {
+    let resolvePhotos!: (items: FileOverviewItem[]) => void;
+    const pendingPhotos = new Promise<FileOverviewItem[]>((resolve) => { resolvePhotos = resolve; });
+    browserApiFetchMock.mockImplementation((url: string) => {
+      if (url.startsWith("/api/files?")) return pendingPhotos;
+      if (url === "/api/files/analysis-progress") return Promise.resolve(NO_PROGRESS);
+      return Promise.resolve([]);
+    });
+    render(<PhotosView />);
+
+    expect(screen.getByRole("heading", { name: "Fotos" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "+ Bilder hochladen" })).toBeEnabled();
+    expect(screen.getByRole("status", { name: "Fotos werden geladen" })).toBeInTheDocument();
+    expect(screen.queryByText("Keine Fotos gefunden.")).not.toBeInTheDocument();
+    await waitFor(() => expect(browserApiFetchMock).toHaveBeenCalledWith(expect.stringContaining("/api/files?")));
+
+    resolvePhotos([makeItem({ id: "pending" })]);
+    const image = await screen.findByRole("img", { name: "urlaubsfoto.jpg" });
+    expect(screen.queryByRole("status", { name: "Fotos werden geladen" })).not.toBeInTheDocument();
+    expect(image.parentElement).toHaveStyle({ aspectRatio: "1.3333333333333333" });
+    expect(image.parentElement).not.toHaveClass("photo-tile-preview-loaded");
+    fireEvent.load(image);
+    expect(image.parentElement).toHaveClass("photo-tile-preview-loaded");
+  });
+
   it("groups photos under a date header with weekday/date and count", async () => {
     const items = [
       makeItem({ id: "a", group_date: "2026-07-10" }),
