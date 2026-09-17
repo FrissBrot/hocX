@@ -20,6 +20,9 @@ if TYPE_CHECKING:
 PARSE_TIMEOUT_SECONDS = 20.0
 PARSE_MEMORY_LIMIT_BYTES = 512 * 1024 * 1024
 POOL_SIZE = 2
+# Native XML/PDF allocations need not be returned to the OS between documents.
+# Bound the lifetime so a long import batch cannot exhaust the worker's fixed cap.
+MAX_TASKS_PER_WORKER = 8
 # Bounds how long a request waits for a free worker slot itself, separate from
 # PARSE_TIMEOUT_SECONDS (which only bounds one already-running parse) - without this, a
 # burst of concurrent uploads across many tenants queued up behind a full POOL_SIZE=2 pool
@@ -86,6 +89,7 @@ class _Worker:
             target=_worker_loop, args=(self.task_queue, self.result_queue), daemon=True
         )
         self.process.start()
+        self.completed_tasks = 0
 
     def kill(self) -> None:
         self.process.terminate()
@@ -93,6 +97,9 @@ class _Worker:
         if self.process.is_alive():
             self.process.kill()
             self.process.join()
+        for queue in (self.task_queue, self.result_queue):
+            queue.cancel_join_thread()
+            queue.close()
 
 
 _pool: "queue_module.Queue[_Worker]" = queue_module.Queue()
@@ -147,7 +154,12 @@ def parse_document_isolated(raw_bytes: bytes) -> "ParsedDocx":
             "(möglicherweise beschädigt oder ungewöhnlich komplex)"
         )
 
-    _pool.put(worker)
+    worker.completed_tasks += 1
+    if status == "error" or worker.completed_tasks >= MAX_TASKS_PER_WORKER:
+        worker.kill()
+        _pool.put(_Worker())
+    else:
+        _pool.put(worker)
     if status == "error":
         raise ValueError(f"Datei konnte nicht gelesen werden: {payload}")
     return payload

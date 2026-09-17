@@ -26,6 +26,17 @@ nacheinander abarbeiten. Jeder bestätigte Import analysiert die restlichen, noc
 Dokumente in der Warteschlange automatisch neu, um deren Vorschläge zu verbessern –
 bereits vorgenommene manuelle Korrekturen bleiben dabei erhalten.
 
+## Historische Listen
+
+Bestätigte Listenwerte bleiben im importierten Protokoll gespeichert. Für abgeschlossene
+Zyklen ergänzt der Import außerdem fehlende Stände in der historischen Listenansicht.
+Entscheidend ist das bestätigte Protokolldatum, nicht das Upload-Datum.
+
+Wenn mehrere alte Protokolle denselben Zyklus betreffen, verwendet die automatisch
+ergänzte Historie den neuesten Protokollstand. Bereits vorhandene reguläre oder manuell
+bearbeitete historische Werte werden geschützt. Bei gleichem Datum bleibt der erste
+bestätigte Stand erhalten. Aktuelle Live-Listen werden dabei nicht verändert.
+
 ## Grenzen
 
 Der Import ist eine **Hilfestellung**, kein Automatismus ohne Kontrolle: Er ersetzt nicht

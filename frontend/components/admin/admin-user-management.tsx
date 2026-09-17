@@ -213,7 +213,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
         method: "POST",
         body: JSON.stringify({
           source_user_id: mergeSourceUserId,
-          target_user_id: Number(mergeTargetUserId),
+          target_user_id: mergeTargetUserId,
         }),
       });
       await fetchPage(offset, search);

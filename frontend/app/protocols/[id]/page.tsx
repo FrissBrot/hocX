@@ -42,37 +42,20 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
       `/api/templates/${protocol.template_id}/participants${participantsQuery}`
     ).then((v) => v ?? []),
   ]);
-  const linkedListIds = Array.from(
-    new Set(
-      elements.flatMap((element) =>
-        element.blocks.flatMap((block) => {
-          const cfg = (block.configuration_snapshot_json as Record<string, unknown> | null) ?? {};
-          const ids: number[] = [];
-          const linkedId = Number(cfg.linked_list_id ?? 0);
-          if (linkedId > 0) ids.push(linkedId);
-          const autoSrc = cfg.auto_source as Record<string, unknown> | null | undefined;
-          const autoListId = Number(autoSrc?.list_id ?? 0);
-          if (autoListId > 0) ids.push(autoListId);
-          // "Zeile aus Liste" rows link their own list independently of the block-level
-          // linked_list_id/auto_source above - previously missed here, which left
-          // listEntriesByDefinition without that list at all for such rows.
-          const rows = Array.isArray(cfg.rows) ? (cfg.rows as Record<string, unknown>[]) : [];
-          for (const row of rows) {
-            const rowListId = Number(row.linked_list_id ?? 0);
-            if (rowListId > 0) ids.push(rowListId);
-          }
-          return ids;
-        })
-      )
-    )
-  );
+  const listReferences = Object.assign({}, ...elements.flatMap((element) =>
+    element.blocks.map((block) => block.public_reference_ids?.lists ?? {})
+  )) as Record<string, string>;
   const listEntries = await Promise.all(
-    linkedListIds.map(async (listId) => ({
-      listId,
-      entries: (await backendFetchWithSession<StructuredListEntry[]>(`/api/lists/${listId}/entries`)) ?? [],
+    [...new Set(Object.values(listReferences))].map(async (publicId) => ({
+      publicId,
+      entries: (await backendFetchWithSession<StructuredListEntry[]>(`/api/lists/${publicId}/entries`)) ?? [],
     }))
   );
-  const initialListEntries = Object.fromEntries(listEntries.map((item) => [item.listId, item.entries]));
+  const entriesByPublicId = Object.fromEntries(listEntries.map((item) => [item.publicId, item.entries]));
+  const initialListEntries = {
+    ...entriesByPublicId,
+    ...Object.fromEntries(Object.entries(listReferences).map(([internalId, publicId]) => [internalId, entriesByPublicId[publicId]])),
+  };
   const todoBlocks = elements.flatMap((element) => element.blocks.filter((block) => block.element_type_code === "todo"));
   const todoLists = await Promise.all(
     todoBlocks.map(async (block) => ({
@@ -94,21 +77,20 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
 
   const financeAccounts = (await backendFetchWithSession<FinanceAccount[]>("/api/finance/accounts")) ?? [];
   // Pre-load transactions for finance blocks
-  const financeBlockAccountIds = Array.from(new Set(
-    elements.flatMap((element) =>
-      element.blocks
-        .filter((b) => b.element_type_code === "finance_balance" || b.element_type_code === "finance_transactions")
-        .map((b) => Number((b.configuration_snapshot_json as Record<string, unknown>)?.finance_account_id ?? 0))
-        .filter((id) => id > 0)
-    )
-  ));
+  const accountReferences = Object.assign({}, ...elements.flatMap((element) =>
+    element.blocks.map((block) => block.public_reference_ids?.finance_accounts ?? {})
+  )) as Record<string, string>;
   const financeTransactionsList = await Promise.all(
-    financeBlockAccountIds.map(async (accountId) => ({
-      accountId,
-      transactions: (await backendFetchWithSession<FinanceTransaction[]>(`/api/finance/accounts/${accountId}/transactions`)) ?? [],
+    [...new Set(Object.values(accountReferences))].map(async (publicId) => ({
+      publicId,
+      transactions: (await backendFetchWithSession<FinanceTransaction[]>(`/api/finance/accounts/${publicId}/transactions`)) ?? [],
     }))
   );
-  const initialFinanceTransactions = Object.fromEntries(financeTransactionsList.map((item) => [item.accountId, item.transactions]));
+  const transactionsByPublicId = Object.fromEntries(financeTransactionsList.map((item) => [item.publicId, item.transactions]));
+  const initialFinanceTransactions = {
+    ...transactionsByPublicId,
+    ...Object.fromEntries(Object.entries(accountReferences).map(([internalId, publicId]) => [internalId, transactionsByPublicId[publicId]])),
+  };
 
   return (
     <AppShell initialSession={session}>

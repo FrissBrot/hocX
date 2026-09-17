@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models import DocumentTemplate, DocumentTemplatePart, Protocol
+from app.services.document_template_config_ids import translate_part_ids
 from app.services.file_service import MAX_UPLOAD_BYTES, _safe_storage_path
 from app.repositories.document_template_repository import (
     DocumentTemplatePartRepository,
@@ -64,12 +65,19 @@ class DocumentTemplateService:
         self.repository = repository or DocumentTemplateRepository()
         self.part_repository = part_repository or DocumentTemplatePartRepository()
 
+    def _read_template(self, db: Session, template: DocumentTemplate) -> DocumentTemplateRead:
+        result = DocumentTemplateRead.model_validate(template)
+        result.configuration_json = translate_part_ids(
+            db, template.configuration_json, tenant_id=template.tenant_id, decode=False
+        )
+        return result
+
     def list_document_templates(self, db: Session, tenant_id: int) -> list[DocumentTemplateRead]:
-        return [DocumentTemplateRead.model_validate(item) for item in self.repository.list(db, tenant_id)]
+        return [self._read_template(db, item) for item in self.repository.list(db, tenant_id)]
 
     def get_document_template(self, db: Session, document_template_id: int) -> DocumentTemplateRead | None:
         template = self.repository.get(db, document_template_id)
-        return DocumentTemplateRead.model_validate(template) if template else None
+        return self._read_template(db, template) if template else None
 
     def _materialize_and_persist_path(self, db: Session, template: DocumentTemplate, *, is_new: bool) -> DocumentTemplate:
         """Runs filesystem materialization (mkdir/copy2/write_text) and persists the resulting
@@ -98,14 +106,14 @@ class DocumentTemplateService:
             version=payload.version,
             is_active=payload.is_active,
             is_default=payload.is_default,
-            configuration_json=payload.configuration_json,
+            configuration_json=translate_part_ids(db, payload.configuration_json, tenant_id=tenant_id, decode=True),
         )
         created = self.repository.create(db, entity)
         updated = self._materialize_and_persist_path(db, created, is_new=True)
         if updated.is_default:
             self._unset_other_defaults(db, updated.id, updated.tenant_id)
             updated = self.repository.get(db, updated.id)
-        return DocumentTemplateRead.model_validate(updated)
+        return self._read_template(db, updated)
 
     def ensure_default_template_for_tenant(self, db: Session, tenant_id: int, tenant_name: str | None = None) -> DocumentTemplate:
         existing = self.repository.list(db, tenant_id)
@@ -143,6 +151,10 @@ class DocumentTemplateService:
         if entity is None:
             return None
         values = payload.model_dump(exclude_unset=True)
+        if "configuration_json" in values:
+            values["configuration_json"] = translate_part_ids(
+                db, values["configuration_json"], tenant_id=entity.tenant_id, decode=True
+            )
         if values:
             updated = self.repository.update(db, entity, values)
         else:
@@ -151,7 +163,7 @@ class DocumentTemplateService:
         if updated.is_default:
             self._unset_other_defaults(db, updated.id, updated.tenant_id)
             updated = self.repository.get(db, updated.id)
-        return DocumentTemplateRead.model_validate(updated)
+        return self._read_template(db, updated)
 
     def delete_document_template(self, db: Session, document_template_id: int) -> bool:
         entity = self.repository.get(db, document_template_id)

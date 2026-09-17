@@ -206,7 +206,8 @@ def _collect_analysis_ids(
             event_ids.add(candidate.event_id)
         for field in text_mapping.form_fields:
             collect_form_field(field)
-        for fields in text_mapping.form_fields_by_target.values():
+        for key, fields in text_mapping.form_fields_by_target.items():
+            template_element_ids.add(int(key.split(":", 1)[0]))
             for field in fields:
                 collect_form_field(field)
 
@@ -299,6 +300,11 @@ def _encode_form_field(
     )
 
 
+def _encode_form_target_key(key: str, template_elements: dict[int, uuid.UUID]) -> str:
+    element_id, sort_index = key.split(":", 1)
+    return f"{_pub(template_elements, int(element_id), 'template_element')}:{sort_index}"
+
+
 def _encode_analysis(db: Session, analysis: WordImportAnalysis) -> PublicWordImportAnalysis:
     list_definition_ids, event_ids, participant_ids, template_element_ids, list_entry_ids, protocol_ids = (
         _collect_analysis_ids(analysis)
@@ -341,7 +347,9 @@ def _encode_analysis(db: Session, analysis: WordImportAnalysis) -> PublicWordImp
             is_form_block=tm.is_form_block,
             form_fields=[_encode_form_field(f, participants) for f in tm.form_fields],
             form_fields_by_target={
-                key: [_encode_form_field(f, participants) for f in fields]
+                _encode_form_target_key(key, template_elements): [
+                    _encode_form_field(f, participants) for f in fields
+                ]
                 for key, fields in tm.form_fields_by_target.items()
             },
             sync_target_field=tm.sync_target_field,
@@ -777,6 +785,30 @@ def _encode_commit_result(db: Session, result: WordImportCommitResult) -> Public
     )
 
 
+def _decode_table_roles(db: Session, tenant_id: int, table_roles: dict[int, dict]) -> dict[int, dict]:
+    """Translate public list UUIDs before passing table overrides to the service."""
+    decoded = {}
+    public_ids = {}
+    try:
+        for index, override in table_roles.items():
+            if not isinstance(override, dict):
+                raise ValueError("Expected a table mapping")
+            decoded[int(index)] = dict(override)
+            list_id = override.get("list_definition_id")
+            if list_id is not None:
+                public_ids[int(index)] = uuid.UUID(str(list_id))
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise HTTPException(status_code=400, detail="Ungültige Tabellen-Zuordnung") from exc
+    resolved = public_id_service.resolve_internal_ids(
+        db, ListDefinition, list(public_ids.values()), tenant_id=tenant_id
+    )
+    for index, public_id in public_ids.items():
+        if public_id not in resolved:
+            raise HTTPException(status_code=400, detail="Liste nicht gefunden")
+        decoded[index]["list_definition_id"] = resolved[public_id]
+    return decoded
+
+
 @router.post("/tools/word-import/analyze", response_model=PublicWordImportAnalysis)
 async def analyze_word_import(
     file: UploadFile = File(...),
@@ -796,7 +828,7 @@ async def analyze_word_import(
     table_role_overrides: dict[int, dict] = {}
     if table_roles_json:
         try:
-            table_role_overrides = {int(key): value for key, value in json.loads(table_roles_json).items()}
+            table_role_overrides = _decode_table_roles(db, user.current_tenant_id, json.loads(table_roles_json))
         except (ValueError, TypeError) as exc:
             raise HTTPException(status_code=400, detail="Ungültige Tabellen-Zuordnung") from exc
     try:
@@ -1061,7 +1093,8 @@ def reanalyze_word_import_document(
         raise HTTPException(status_code=404, detail="Dokument nicht gefunden")
     try:
         analysis = queue_service.reanalyze(
-            db, document=document, protocol_date=payload.protocol_date, table_role_overrides=payload.table_roles
+            db, document=document, protocol_date=payload.protocol_date,
+            table_role_overrides=_decode_table_roles(db, user.current_tenant_id, payload.table_roles),
         )
     except ValueError as exc:
         db.rollback()

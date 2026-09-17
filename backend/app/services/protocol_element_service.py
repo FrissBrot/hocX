@@ -14,6 +14,7 @@ from app.schemas.protocol import (
     ProtocolElementRead,
     ProtocolElementUpdate,
 )
+from app.services.snapshot_reference_ids import snapshot_reference_ids
 from app.services import public_id_service
 from app.services.responsible_label_service import resolve_display_section_titles_batch
 
@@ -83,6 +84,7 @@ class ProtocolElementService:
                     export_visible_snapshot=block.export_visible_snapshot,
                     latex_template_snapshot=block.latex_template_snapshot,
                     configuration_snapshot_json=config,
+                    public_reference_ids=snapshot_reference_ids(db, config, protocol_tenant_id),
                     text_content=row.text_content,
                     tracked_dirty=bool(row.tracked_dirty),
                     tracked_baseline_content=row.tracked_baseline_content,

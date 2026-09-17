@@ -15,7 +15,7 @@ export default async function TenantSettingsPage({ searchParams }: { searchParam
     redirect("/");
   }
 
-  const requestedId = tenantId ? Number(tenantId) : session.current_tenant?.id;
+  const requestedId = tenantId ? tenantId : session.current_tenant?.id;
   const tenant = manageableTenants.find((t) => t.id === requestedId) ?? manageableTenants[0];
 
   return (

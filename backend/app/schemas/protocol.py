@@ -140,6 +140,7 @@ class ProtocolElementBlockRead(BaseModel):
     export_visible_snapshot: bool
     latex_template_snapshot: str | None = None
     configuration_snapshot_json: dict
+    public_reference_ids: dict[str, dict[str, uuid.UUID]] = Field(default_factory=dict)
     text_content: str | None = None
     display_compiled_text: str | None = None
     display_snapshot_json: dict | None = None

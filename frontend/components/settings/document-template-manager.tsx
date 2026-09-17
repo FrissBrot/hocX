@@ -211,7 +211,7 @@ function buildTemplatePayload(form: TemplateFormState, tenantId: string | null) 
         font_parts: Object.fromEntries(
           ["font_regular", "font_bold", "font_italic", "font_bold_italic"]
             .filter((slot) => form[slot as keyof TemplateFormState])
-            .map((slot) => [slot, Number(form[slot as keyof TemplateFormState] as string)])
+            .map((slot) => [slot, form[slot as keyof TemplateFormState] as string])
         ),
       },
       presets: {
@@ -228,8 +228,8 @@ function buildTemplatePayload(form: TemplateFormState, tenantId: string | null) 
         orientation: form.orientation,
       },
       title_assets: {
-        header_image_part_id: form.title_header_image ? Number(form.title_header_image) : null,
-        footer_image_part_id: form.title_footer_image ? Number(form.title_footer_image) : null,
+        header_image_part_id: form.title_header_image ? form.title_header_image : null,
+        footer_image_part_id: form.title_footer_image ? form.title_footer_image : null,
       },
       title_text: {
         line1: form.title_text_line1,
@@ -245,7 +245,7 @@ function buildTemplatePayload(form: TemplateFormState, tenantId: string | null) 
           "element_form", "element_events", "element_bullet_list",
           "element_attendance", "element_session_date"]
           .filter((slot) => form[slot as keyof TemplateFormState])
-          .map((slot) => [slot, Number(form[slot as keyof TemplateFormState] as string)])
+          .map((slot) => [slot, form[slot as keyof TemplateFormState] as string])
       ),
     },
   };

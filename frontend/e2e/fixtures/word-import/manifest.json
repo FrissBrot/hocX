@@ -1,0 +1,114 @@
+[
+  {
+    "file": "german-date.docx",
+    "printedDate": "14.10.2023",
+    "protocolDate": "2023-10-14",
+    "cycleYear": 2023,
+    "rows": [
+      [
+        "Feuer",
+        "Herbst 2023"
+      ],
+      [
+        "Küche",
+        "Menü – Herbst 2023"
+      ]
+    ]
+  },
+  {
+    "file": "leap-day.docx",
+    "printedDate": "29.02.2024",
+    "protocolDate": "2024-02-29",
+    "cycleYear": 2023,
+    "rows": [
+      [
+        "Feuer",
+        "Schalttag 2024"
+      ],
+      [
+        "Küche",
+        "Menü – Schalttag 2024"
+      ]
+    ]
+  },
+  {
+    "file": "cycle-end.docx",
+    "printedDate": "31.07.2024",
+    "protocolDate": "2024-07-31",
+    "cycleYear": 2023,
+    "rows": [
+      [
+        "Feuer",
+        "Zyklusende 2024"
+      ],
+      [
+        "Küche",
+        "Menü – Zyklusende 2024"
+      ]
+    ]
+  },
+  {
+    "file": "cycle-start.docx",
+    "printedDate": "01.08.2024",
+    "protocolDate": "2024-08-01",
+    "cycleYear": 2024,
+    "rows": [
+      [
+        "Feuer",
+        "Zyklusbeginn 2024"
+      ],
+      [
+        "Küche",
+        "Menü – Zyklusbeginn 2024"
+      ]
+    ]
+  },
+  {
+    "file": "year-end.docx",
+    "printedDate": "31.12.2024",
+    "protocolDate": "2024-12-31",
+    "cycleYear": 2024,
+    "rows": [
+      [
+        "Feuer",
+        "Silvester 2024"
+      ],
+      [
+        "Küche",
+        "Menü – Silvester 2024"
+      ]
+    ]
+  },
+  {
+    "file": "year-start.docx",
+    "printedDate": "01.01.2025",
+    "protocolDate": "2025-01-01",
+    "cycleYear": 2024,
+    "rows": [
+      [
+        "Feuer",
+        "Neujahr 2025"
+      ],
+      [
+        "Küche",
+        "Menü – Neujahr 2025"
+      ]
+    ]
+  },
+  {
+    "file": "no-date.docx",
+    "printedDate": null,
+    "protocolDate": null,
+    "cycleYear": null,
+    "rows": [
+      [
+        "Feuer",
+        "Datum manuell"
+      ],
+      [
+        "Küche",
+        "Menü – Datum manuell"
+      ]
+    ]
+  }
+]

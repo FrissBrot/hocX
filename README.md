@@ -248,6 +248,9 @@ Für ein öffentliches Deployment müssen die DNS-Einträge vor dem ersten Start
 Server zeigen, damit Traefik die Let's-Encrypt-Zertifikate ohne fehlgeschlagene
 Autorisierungen beziehen kann.
 
+Die Import-Regressionen und ihre generierten Testdateien sind im
+[Import-Testbook](docs-site/docs/technik/import-testbook.md) dokumentiert.
+
 ## Lizenz
 
 Copyright © 2026 hocX Project. All rights reserved.

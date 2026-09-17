@@ -20,6 +20,7 @@ from app.schemas.protocol import (
     ProtocolTextUpdate,
 )
 from app.services import list_snapshot_service, public_id_service
+from app.services.snapshot_reference_ids import snapshot_reference_ids
 from app.services.autosave_service import AutosaveService
 from app.services.access_service import AccessService
 from app.services.collaboration_service import conflicting_lock_holder_sync, protocol_channel
@@ -86,6 +87,8 @@ def _ensure_block_not_locked_by_other(protocol_id: int, protocol_element_block_i
 
 
 def _block_to_read(db: Session, block) -> ProtocolElementBlockRead:
+    element = db.get(ProtocolElement, block.protocol_element_id)
+    protocol = db.get(Protocol, element.protocol_id)
     return ProtocolElementBlockRead(
         id=block.public_id,
         protocol_element_id=public_id_service.resolve_public_id(db, ProtocolElement, block.protocol_element_id),
@@ -112,6 +115,7 @@ def _block_to_read(db: Session, block) -> ProtocolElementBlockRead:
         export_visible_snapshot=block.export_visible_snapshot,
         latex_template_snapshot=block.latex_template_snapshot,
         configuration_snapshot_json=block.configuration_snapshot_json or {},
+        public_reference_ids=snapshot_reference_ids(db, block.configuration_snapshot_json or {}, protocol.tenant_id),
         text_content=None,
         display_compiled_text=None,
         display_snapshot_json={},

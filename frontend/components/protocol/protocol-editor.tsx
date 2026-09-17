@@ -478,10 +478,17 @@ export function ProtocolEditor({
     () => visibleElements.find((element) => element.id === selectedElementId) ?? null,
     [selectedElementId, visibleElements]
   );
-  const listDefinitionsById = useMemo(
-    () => new Map(lists.map((listDefinition) => [listDefinition.id, listDefinition])),
-    [lists]
-  );
+  const listPublicIds = useMemo(() => Object.assign({}, ...elements.flatMap((element) =>
+    element.blocks.map((block) => block.public_reference_ids?.lists ?? {})
+  )) as Record<string, string>, [elements]);
+  const listDefinitionsById = useMemo(() => {
+    const definitions = new Map(lists.map((definition) => [definition.id, definition]));
+    for (const [internalId, publicId] of Object.entries(listPublicIds)) {
+      const definition = definitions.get(publicId);
+      if (definition) definitions.set(internalId, definition);
+    }
+    return definitions;
+  }, [lists, listPublicIds]);
   const selectedElementIndex = useMemo(
     () => visibleElements.findIndex((element) => element.id === selectedElementId),
     [selectedElementId, visibleElements]
@@ -1360,7 +1367,8 @@ export function ProtocolEditor({
   // opening the popup so it always starts from the real current list state.
   async function refreshListEntries(listDefinitionId: string) {
     try {
-      const fresh = await browserApiFetch<StructuredListEntry[]>(`/api/lists/${listDefinitionId}/entries`);
+      const publicId = listPublicIds[listDefinitionId] ?? listDefinitionId;
+      const fresh = await browserApiFetch<StructuredListEntry[]>(`/api/lists/${publicId}/entries`);
       setListEntriesByDefinition((current) => ({ ...current, [listDefinitionId]: fresh }));
     } catch {
       // best-effort - popup falls back to whatever was cached
@@ -1374,7 +1382,8 @@ export function ProtocolEditor({
   ) {
     setStatus(protocolElementBlockId, "saving");
     try {
-      const created = await browserApiFetch<StructuredListEntry>(`/api/lists/${listDefinitionId}/entries`, {
+      const publicId = listPublicIds[listDefinitionId] ?? listDefinitionId;
+      const created = await browserApiFetch<StructuredListEntry>(`/api/lists/${publicId}/entries`, {
         method: "POST",
         body: JSON.stringify(payload),
       });

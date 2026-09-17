@@ -98,5 +98,6 @@ nav:
       - Deployment (Dev/Test/Prod): technik/deployment.md
       - Platform-Admin-Panel: technik/admin-panel.md
       - Mandanten Export/Import: technik/export-import.md
+      - Import-Testbook: technik/import-testbook.md
       - Sicherheit: technik/sicherheit.md
       - Bekannte offene Punkte: technik/offene-punkte.md

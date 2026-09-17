@@ -3365,7 +3365,7 @@ class WordImportService:
             cycle_cfg = db.get(CycleConfig, template.cycle_config_id)
             if cycle_cfg is not None:
                 cycle_year = get_cycle_year(payload.protocol_date, cycle_cfg.reset_month, cycle_cfg.reset_day)
-                cycle_assignments = [CycleAssignment(cycle_config_id=cycle_cfg.id, cycle_year=cycle_year)]
+                cycle_assignments = [CycleAssignment(cycle_config_id=cycle_cfg.public_id, cycle_year=cycle_year)]
 
         protocol_id = protocol_service.create_from_template(
             db,
@@ -4181,6 +4181,8 @@ class WordImportService:
             protocol_service.update_protocol(db, protocol_id, ProtocolUpdate(status="abgeschlossen"))
 
             if approved_list_commits:
+                from app.services.word_import_history_service import record_imported_list_history
+                history_rows_by_list: dict[int, list[dict]] = {}
                 blocks_by_list_id: dict[int, list[ProtocolElementBlock]] = {}
                 for block in db.execute(
                     select(ProtocolElementBlock)
@@ -4242,9 +4244,18 @@ class WordImportService:
                                 }
                             )
                         list_snapshot["entries"] = entries
+                        if block is target_blocks[0]:
+                            history_rows_by_list.setdefault(list_commit.list_definition_id, []).append(
+                                entries[target_index] if target_index is not None else entries[-1]
+                            )
                         config["list_snapshot"] = list_snapshot
                         block.configuration_snapshot_json = config
                         db.add(block)
+
+                record_imported_list_history(
+                    db, tenant_id=tenant_id, cycle_config_id=template.cycle_config_id if template else None,
+                    protocol_id=protocol_id, definitions=definitions_cache, rows_by_list=history_rows_by_list,
+                )
 
             if outcome_rows:
                 db.add_all(outcome_rows)

@@ -949,6 +949,9 @@ export function WordImportWizard({
   // the latest not-yet-sent draft so the unmount effect below can flush it immediately
   // instead of losing it when a pending debounce gets cancelled by navigating away.
   const isHydratingRef = useRef(false);
+  // Queue mode starts in "structure" before the document arrives. Do not save its
+  // empty initial state, including during StrictMode's initial cleanup.
+  const hydratedDocumentRef = useRef<string | null>(null);
   const pendingDraftRef = useRef<WordImportReviewDraft | null>(null);
   const draftTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const documentIdRef = useRef(documentId);
@@ -988,7 +991,7 @@ export function WordImportWizard({
   }
 
   useEffect(() => {
-    if (!documentId) return;
+    if (!documentId || hydratedDocumentRef.current !== documentId) return;
     if (isHydratingRef.current) {
       isHydratingRef.current = false;
       return;
@@ -1639,6 +1642,7 @@ export function WordImportWizard({
   }
 
   function applyAnalysis(result: WordImportAnalysis, draft?: WordImportReviewDraft | null) {
+    hydratedDocumentRef.current = documentId ?? null;
     // See draftGenerationRef's declaration - every applyAnalysis call starts a new
     // draft generation, invalidating any still-pending save scheduled before it. Also
     // drops any already-pending draft outright (not just its timer) - the autosave

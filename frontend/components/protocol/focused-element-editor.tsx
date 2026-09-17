@@ -3028,7 +3028,8 @@ export function FocusedElementEditor({
               )}
 
               {(elementType === "finance_balance" || elementType === "finance_transactions") && (() => {
-                const accountId = blockConfig.finance_account_id ? String(blockConfig.finance_account_id) : null;
+                const storedAccountId = blockConfig.finance_account_id ? String(blockConfig.finance_account_id) : null;
+                const accountId = storedAccountId ? block.public_reference_ids?.finance_accounts?.[storedAccountId] ?? storedAccountId : null;
                 const account = accountId ? availableAccounts.find((a) => a.id === accountId) ?? null : null;
                 const txAll = accountId != null ? (financeTransactions[accountId] ?? []) : [];
 

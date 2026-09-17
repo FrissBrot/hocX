@@ -663,9 +663,9 @@ function blockPayload(form: BlockFormState): ElementDefinitionBlock {
               row_config: field.row_config || {},
               auto_source_field: field.auto_source_field || null,
               template_value: field.template_value || "",
-              template_participant_id: field.template_participant_id ? Number(field.template_participant_id) : null,
-              template_participant_ids: (field.template_participant_ids ?? []).map((participantId) => Number(participantId)).filter(Boolean),
-              template_event_id: field.template_event_id ? Number(field.template_event_id) : null,
+              template_participant_id: field.template_participant_id ? field.template_participant_id : null,
+              template_participant_ids: (field.template_participant_ids ?? []).filter(Boolean),
+              template_event_id: field.template_event_id ? field.template_event_id : null,
               sort_index: (index + 1) * 10,
             }))
           : [],

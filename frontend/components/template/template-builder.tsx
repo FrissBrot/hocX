@@ -443,7 +443,7 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
           protocol_number_pattern: form.protocol_number_pattern || null,
           title_pattern: form.title_pattern || null,
           auto_create_next_protocol: form.auto_create_next_protocol,
-          cycle_config_id: form.cycle_config_id ? Number(form.cycle_config_id) : null,
+          cycle_config_id: form.cycle_config_id ? form.cycle_config_id : null,
           version: 1,
           status: "active",
           created_by: null
@@ -1244,14 +1244,14 @@ export function TemplateEditor({
           name: templateMeta.name,
           description: templateMeta.description || null,
           status: templateMeta.status,
-          next_event_id: templateMeta.next_event_id ? Number(templateMeta.next_event_id) : null,
-          last_event_id: templateMeta.last_event_id ? Number(templateMeta.last_event_id) : null,
+          next_event_id: templateMeta.next_event_id ? templateMeta.next_event_id : null,
+          last_event_id: templateMeta.last_event_id ? templateMeta.last_event_id : null,
           todo_due_event_tag: templateMeta.todo_due_event_tag || null,
           protocol_number_pattern: templateMeta.protocol_number_pattern || null,
           title_pattern: templateMeta.title_pattern || null,
           auto_create_next_protocol: templateMeta.auto_create_next_protocol,
-          cycle_config_id: templateMeta.cycle_config_id ? Number(templateMeta.cycle_config_id) : null,
-          document_template_id: templateMeta.document_template_id ? Number(templateMeta.document_template_id) : null,
+          cycle_config_id: templateMeta.cycle_config_id ? templateMeta.cycle_config_id : null,
+          document_template_id: templateMeta.document_template_id ? templateMeta.document_template_id : null,
         })
       });
       setTemplate(updated);
@@ -1291,7 +1291,7 @@ export function TemplateEditor({
           browserApiFetch<TemplateElement>(`/api/templates/${template.id}/elements`, {
             method: "POST",
             body: JSON.stringify({
-              element_definition_id: Number(elementDefinitionId),
+              element_definition_id: elementDefinitionId,
               sort_index: nextTemplateElementSortIndex(elements) + index * 10
             })
           })
