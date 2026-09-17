@@ -12332,6 +12332,37 @@ input[type="radio"] {
   object-fit: contain;
 }
 
+.photo-viewer-loading {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 30%);
+  pointer-events: none;
+}
+
+.photo-viewer-loading-spinner {
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid rgb(255 255 255 / 20%);
+  border-top-color: rgb(255 255 255 / 75%);
+  border-radius: 50%;
+  animation: photo-viewer-loading-spin 900ms linear infinite;
+}
+
+@keyframes photo-viewer-loading-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .photo-viewer-loading-spinner { animation: none; }
+}
+
 .photo-viewer-nav {
   position: absolute;
   top: 50%;

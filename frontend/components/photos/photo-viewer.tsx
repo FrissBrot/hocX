@@ -27,6 +27,8 @@ export function PhotoViewer({
   const fileUrl = `${browserApiBaseUrl}${item.content_url}`;
   const thumbnailUrl = item.thumbnail_url ? `${browserApiBaseUrl}${item.thumbnail_url}` : fileUrl;
   const [readyUrl, setReadyUrl] = useState<string | null>(null);
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const loadingOriginal = readyUrl !== fileUrl && failedUrl !== fileUrl;
   const [metadata, setMetadata] = useState<StoredFileMetadata | null>(null);
   const [tagsValue, setTagsValue] = useState(item.tags.join(","));
   const [saving, setSaving] = useState(false);
@@ -45,12 +47,17 @@ export function PhotoViewer({
         if (!cancelled) setReadyUrl(fileUrl);
       } catch {
         // Keep the thumbnail if the original cannot be decoded.
+        if (!cancelled) setFailedUrl(fileUrl);
       }
+    };
+    original.onerror = () => {
+      if (!cancelled) setFailedUrl(fileUrl);
     };
     original.src = fileUrl;
     return () => {
       cancelled = true;
       original.onload = null;
+      original.onerror = null;
     };
   }, [fileUrl, thumbnailUrl]);
 
@@ -142,7 +149,18 @@ export function PhotoViewer({
               ‹
             </button>
           )}
-          <img src={readyUrl === fileUrl ? fileUrl : thumbnailUrl} alt={item.original_name} className="photo-viewer-img" />
+          <img
+            src={readyUrl === fileUrl ? fileUrl : thumbnailUrl}
+            alt={item.original_name}
+            className="photo-viewer-img"
+            onLoad={() => { if (thumbnailUrl === fileUrl) setReadyUrl(fileUrl); }}
+            onError={() => { if (thumbnailUrl === fileUrl) setFailedUrl(fileUrl); }}
+          />
+          {loadingOriginal && (
+            <div className="photo-viewer-loading" role="status" aria-label="Originalbild wird geladen">
+              <span className="photo-viewer-loading-spinner" aria-hidden="true" />
+            </div>
+          )}
           {hasNext && (
             <button type="button" className="photo-viewer-nav photo-viewer-nav-next" aria-label="Nächstes Foto" onClick={() => onIndexChange(index + 1)}>
               ›

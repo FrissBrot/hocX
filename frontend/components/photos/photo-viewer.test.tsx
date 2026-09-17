@@ -65,10 +65,12 @@ describe("PhotoViewer", () => {
 
     expect(screen.getByRole("img")).toHaveAttribute("src", item.thumbnail_url);
     expect(original.src).toBe(item.content_url);
+    expect(screen.getByRole("status", { name: "Originalbild wird geladen" })).toBeInTheDocument();
     const loading = original.onload!();
     expect(screen.getByRole("img")).toHaveAttribute("src", item.thumbnail_url);
     await act(async () => { finishDecode(); await loading; });
     expect(screen.getByRole("img")).toHaveAttribute("src", item.content_url);
+    expect(screen.queryByRole("status", { name: "Originalbild wird geladen" })).not.toBeInTheDocument();
   });
 
   it("ignores an old decode after navigating and keeps the preview if decoding fails", async () => {
@@ -90,12 +92,16 @@ describe("PhotoViewer", () => {
     originals[1].decode = () => Promise.reject(new Error("Invalid image"));
     await act(async () => { await originals[1].onload!(); });
     expect(screen.getByRole("img")).toHaveAttribute("src", items[1].thumbnail_url);
+    expect(screen.queryByRole("status", { name: "Originalbild wird geladen" })).not.toBeInTheDocument();
   });
 
   it("uses the original directly when no thumbnail exists", () => {
     const item = makeItem({ thumbnail_url: null });
     render(<PhotoViewer items={[item]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
     expect(screen.getByRole("img")).toHaveAttribute("src", item.content_url);
+    expect(screen.getByRole("status", { name: "Originalbild wird geladen" })).toBeInTheDocument();
+    fireEvent.load(screen.getByRole("img"));
+    expect(screen.queryByRole("status", { name: "Originalbild wird geladen" })).not.toBeInTheDocument();
   });
 
   it("shows formatted Schärfe/Belichtung values and 'Analyse ausstehend' for face quality when not yet analyzed", async () => {
