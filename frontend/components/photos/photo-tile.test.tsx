@@ -30,7 +30,7 @@ afterEach(() => vi.unstubAllGlobals());
 afterEach(() => vi.restoreAllMocks());
 
 function renderTile() {
-  render(<PhotoTile item={item} selected={false} onOpen={vi.fn()} onToggleSelect={vi.fn()} />);
+  render(<PhotoTile item={item} selected={false} selectionMode={false} onOpen={vi.fn()} onToggleSelect={vi.fn()} />);
   intersect(0, true);
   return screen.getByRole("img").parentElement;
 }
@@ -55,10 +55,28 @@ it("does not treat a failed image request as a successfully loaded image", () =>
   expect(renderTile()).not.toHaveClass("photo-tile-preview-loaded");
 });
 
+it("opens the photo on click when nothing is selected", () => {
+  const onOpen = vi.fn();
+  const onToggleSelect = vi.fn();
+  render(<PhotoTile item={item} selected={false} selectionMode={false} onOpen={onOpen} onToggleSelect={onToggleSelect} />);
+  fireEvent.click(screen.getByRole("img").parentElement!);
+  expect(onOpen).toHaveBeenCalledTimes(1);
+  expect(onToggleSelect).not.toHaveBeenCalled();
+});
+
+it("toggles selection on click instead of opening once a selection is active", () => {
+  const onOpen = vi.fn();
+  const onToggleSelect = vi.fn();
+  render(<PhotoTile item={item} selected={false} selectionMode={true} onOpen={onOpen} onToggleSelect={onToggleSelect} />);
+  fireEvent.click(screen.getByRole("img").parentElement!);
+  expect(onToggleSelect).toHaveBeenCalledTimes(1);
+  expect(onOpen).not.toHaveBeenCalled();
+});
+
 it("starts requests only for visible tiles, preserving offscreen placeholders until scrolling", () => {
   render(<>
-    <PhotoTile item={item} selected={false} onOpen={vi.fn()} onToggleSelect={vi.fn()} />
-    <PhotoTile item={{ ...item, id: "photo-2", thumbnail_url: "/second.jpg" }} selected={false} onOpen={vi.fn()} onToggleSelect={vi.fn()} />
+    <PhotoTile item={item} selected={false} selectionMode={false} onOpen={vi.fn()} onToggleSelect={vi.fn()} />
+    <PhotoTile item={{ ...item, id: "photo-2", thumbnail_url: "/second.jpg" }} selected={false} selectionMode={false} onOpen={vi.fn()} onToggleSelect={vi.fn()} />
   </>);
   const images = screen.getAllByRole("img");
   expect(images[0]).not.toHaveAttribute("src");

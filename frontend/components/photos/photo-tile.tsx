@@ -7,11 +7,13 @@ import { FileOverviewItem } from "@/types/api";
 export function PhotoTile({
   item,
   selected,
+  selectionMode,
   onOpen,
   onToggleSelect,
 }: {
   item: FileOverviewItem;
   selected: boolean;
+  selectionMode: boolean;
   onOpen: () => void;
   onToggleSelect: () => void;
 }) {
@@ -52,7 +54,7 @@ export function PhotoTile({
         ref={previewRef}
         className={`photo-tile-preview${loaded ? " photo-tile-preview-loaded" : ""}`}
         style={{ aspectRatio }}
-        onClick={onOpen}
+        onClick={selectionMode ? onToggleSelect : onOpen}
       >
         <img
           ref={imageRef}

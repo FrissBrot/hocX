@@ -21,6 +21,7 @@ export function PhotoDateGroups({
   onToggleSelect: (id: string) => void;
 }) {
   const groups = useMemo(() => groupPhotosByDate(items), [items]);
+  const selectionMode = selectedIds.size > 0;
 
   if (!grouped) {
     return (
@@ -30,6 +31,7 @@ export function PhotoDateGroups({
             key={item.id}
             item={item}
             selected={selectedIds.has(item.id)}
+            selectionMode={selectionMode}
             onOpen={() => onOpen(item)}
             onToggleSelect={() => onToggleSelect(item.id)}
           />
@@ -55,6 +57,7 @@ export function PhotoDateGroups({
                 key={item.id}
                 item={item}
                 selected={selectedIds.has(item.id)}
+                selectionMode={selectionMode}
                 onOpen={() => onOpen(item)}
                 onToggleSelect={() => onToggleSelect(item.id)}
               />
