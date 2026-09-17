@@ -107,6 +107,38 @@ describe("PhotosView", () => {
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Alle Fotos", "Alben", "Ähnliche"]);
   });
 
+  it("preserves photos after a pagination failure, pauses automatic loading and retries the same page", async () => {
+    const items = Array.from({ length: 60 }, (_, index) => makeItem({ id: `photo-${index}` }));
+    mockFilesAndProgress([], NO_PROGRESS);
+    browserApiFetchMock.mockImplementation((url: string) => {
+      if (url === "/api/files/analysis-progress") return Promise.resolve(NO_PROGRESS);
+      if (url.startsWith("/api/files?")) return Promise.reject(new Error("Backend nicht erreichbar"));
+      return Promise.resolve([]);
+    });
+    render(<PhotosView initialItems={items} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mehr laden (60 geladen)" }));
+    const retry = await screen.findByRole("button", { name: "Erneut versuchen" });
+    expect(showToastMock).toHaveBeenCalledWith(expect.stringContaining("Weitere Fotos"), "error");
+    expect(screen.getAllByRole("checkbox")).toHaveLength(60);
+    const observerCount = FakeIntersectionObserver.instances.length;
+
+    fireEvent.click(screen.getAllByRole("checkbox")[0]);
+    expect(FakeIntersectionObserver.instances).toHaveLength(observerCount);
+
+    browserApiFetchMock.mockImplementation((url: string) => {
+      if (url.startsWith("/api/files?")) return Promise.resolve([makeItem({ id: "next-photo" })]);
+      return Promise.resolve([]);
+    });
+    fireEvent.click(retry);
+    await waitFor(() => expect(screen.getAllByRole("checkbox")).toHaveLength(61));
+    const pageRequests = browserApiFetchMock.mock.calls.filter(([url]) => url.startsWith("/api/files?"));
+    expect(pageRequests).toHaveLength(2);
+    expect(pageRequests[0][0]).toContain("skip=60");
+    expect(pageRequests[1][0]).toBe(pageRequests[0][0]);
+    expect(screen.queryByRole("button", { name: "Erneut versuchen" })).not.toBeInTheDocument();
+  });
+
   it("groups photos under a date header with weekday/date and count", async () => {
     const items = [
       makeItem({ id: "a", group_date: "2026-07-10" }),

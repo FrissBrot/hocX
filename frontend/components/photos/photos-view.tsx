@@ -48,6 +48,8 @@ export function PhotosView({ albumId, onSelectPhoto, initialItems }: Props) {
   const [items, setItems] = useState<FileOverviewItem[]>(initialItems ?? []);
   const [hasMore, setHasMore] = useState((initialItems ?? []).length === PAGE_SIZE);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadMoreFailed, setLoadMoreFailed] = useState(false);
+  const loadingMoreRef = useRef(false);
   const [isReloading, setIsReloading] = useState(initialItems === undefined);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
@@ -78,6 +80,7 @@ export function PhotosView({ albumId, onSelectPhoto, initialItems }: Props) {
     }
     const requestId = ++requestIdRef.current;
     setIsReloading(true);
+    setLoadMoreFailed(false);
     const timer = setTimeout(async () => {
       try {
         const next = await browserApiFetch<FileOverviewItem[]>(buildUrl(0));
@@ -100,20 +103,29 @@ export function PhotosView({ albumId, onSelectPhoto, initialItems }: Props) {
   }, []);
 
   async function loadMore() {
+    if (loadingMoreRef.current || isReloading || !hasMore) return;
     const requestId = requestIdRef.current;
+    loadingMoreRef.current = true;
     setIsLoadingMore(true);
+    setLoadMoreFailed(false);
     try {
       const next = await browserApiFetch<FileOverviewItem[]>(buildUrl(items.length));
       if (requestId !== requestIdRef.current) return;
       setItems((current) => [...current, ...(next ?? [])]);
       setHasMore((next ?? []).length === PAGE_SIZE);
+    } catch {
+      if (requestId === requestIdRef.current) {
+        setLoadMoreFailed(true);
+        showToast("Weitere Fotos konnten nicht geladen werden. Bitte erneut versuchen.", "error");
+      }
     } finally {
+      loadingMoreRef.current = false;
       setIsLoadingMore(false);
     }
   }
 
   const loadMoreSentinelRef = useInfiniteScroll({
-    hasMore: hasMore && tab === "all",
+    hasMore: hasMore && !loadMoreFailed && tab === "all",
     isLoading: isLoadingMore || isReloading,
     onLoadMore: () => void loadMore(),
   });
@@ -128,6 +140,7 @@ export function PhotosView({ albumId, onSelectPhoto, initialItems }: Props) {
         if (requestIdRef.current !== requestId) return;
         setItems(next ?? []);
         setHasMore((next ?? []).length === PAGE_SIZE);
+        setLoadMoreFailed(false);
         setSelectedIds(new Set());
       } catch {
         if (requestIdRef.current === requestId) showToast("Fotos konnten nicht neu geladen werden.", "error");
@@ -322,8 +335,8 @@ export function PhotosView({ albumId, onSelectPhoto, initialItems }: Props) {
           {hasMore && (
             <div className="load-more-row" ref={loadMoreSentinelRef}>
               {isLoadingMore ? <span className="muted">Lädt weitere Fotos…</span> : (
-                <button type="button" className="button-inline button-ghost" onClick={() => void loadMore()}>
-                  Mehr laden ({items.length} geladen)
+                <button type="button" className="button-inline button-ghost" disabled={isReloading} onClick={() => void loadMore()}>
+                  {loadMoreFailed ? "Erneut versuchen" : `Mehr laden (${items.length} geladen)`}
                 </button>
               )}
             </div>
