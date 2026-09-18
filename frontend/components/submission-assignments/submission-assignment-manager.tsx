@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 
 import { Badge, BadgeVariant } from "@/components/ui/badge";
+import { DataTable } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
@@ -685,31 +686,39 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
         </div>
       </div>
 
-      {/* Assignment list */}
-      {filteredAssignments.length === 0 ? (
-        <p className="muted record-list-empty">
-          {assignments.length === 0 ? "Noch keine Abgaben" : "Keine Treffer"}
-        </p>
-      ) : (
-        <div className="record-list">
+      <div className="status-row">
+        <span className="pill">{filteredAssignments.length} sichtbar</span>
+        <span className="pill">{assignments.length} gesamt</span>
+      </div>
+
+      <DataTable
+        className="data-table-lg"
+        columns={["Titel", "Quelle / Zeitraum", "Fortschritt", "Aktionen"]}
+        emptyMessage={assignments.length === 0 ? "Noch keine Abgaben" : "Keine Treffer"}
+      >
           {filteredAssignments.map((assignment) => (
-            <div
+            <tr
               key={assignment.id}
-              className="record-list-row"
+              className="table-row-clickable"
               onClick={() => void loadElements(assignment.id)}
             >
-              <span className="record-list-row-text">
-                <span className="record-list-row-title">{assignment.title}</span>
-                <span className="record-list-row-sub">{metaLine(assignment)}</span>
-              </span>
-              <div className="record-list-row-trailing">
+              <td className="table-cell-wrap">
+                <strong>{assignment.title}</strong>
+              </td>
+              <td className="table-cell-wrap">
+                <span className="muted">{metaLine(assignment)}</span>
+              </td>
+              <td>
                 <SummaryBar summary={summaries[assignment.id]} />
-                <div className="subm-row-actions">
+              </td>
+              <td>
+                <div className="table-actions table-actions-start">
                   <button
                     type="button"
                     className="subm-sidebar-icon-button"
                     onClick={(e) => { e.stopPropagation(); openEdit(assignment); }}
                     aria-label="Bearbeiten"
+                    title="Bearbeiten"
                   >
                     ✎
                   </button>
@@ -718,15 +727,15 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
                     className="subm-sidebar-icon-button subm-sidebar-icon-button-danger"
                     onClick={(e) => { e.stopPropagation(); void deleteAssignment(assignment.id); }}
                     aria-label="Löschen"
+                    title="Löschen"
                   >
                     ×
                   </button>
                 </div>
-              </div>
-            </div>
+              </td>
+            </tr>
           ))}
-        </div>
-      )}
+      </DataTable>
 
       {/* Assignment detail popup — participants + progress */}
       <Modal
