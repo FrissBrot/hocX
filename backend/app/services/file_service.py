@@ -697,6 +697,7 @@ class FileService:
                 storage_subdir_parts=(f"tenant-{tenant_id}", f"block-{protocol_element_block.id}"),
                 enable_perceptual_dedupe=True,
                 enable_thumbnail=True,
+                capture_quality_scores=True,
                 created_by=created_by,
                 stored_file_repository=self.stored_file_repository,
             )
@@ -795,6 +796,7 @@ class FileService:
                     storage_subdir_parts=(f"tenant-{tenant_id}", "gallery"),
                     enable_perceptual_dedupe=True,
                     enable_thumbnail=True,
+                    capture_quality_scores=True,
                     created_by=created_by,
                     tags=normalized_tags,
                     too_large_message=f"zu gross (maximal {MAX_UPLOAD_BYTES // 1024 // 1024} MB)",

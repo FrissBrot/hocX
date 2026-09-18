@@ -1,9 +1,9 @@
 """Boots the real ASGI app - including its actual `lifespan()`, not a bare `FastAPI()`
 stand-in with dependency overrides like every other route test in this suite (see
-tests/test_permission_routes.py) - and lets each of the nine background loops in
+tests/test_permission_routes.py) - and lets each of the ten background loops in
 app/main.py run its first tick for real.
 
-Why this exists: every one of those nine loops is a bare `asyncio.create_task(...)` that
+Why this exists: every one of those ten loops is a bare `asyncio.create_task(...)` that
 nothing ever awaits or inspects (see the `yield`/`.cancel()` pairs in `lifespan()`), so an
 exception raised the instant a loop's coroutine starts running is only ever an asyncio
 "Task exception was never retrieved" warning - never a failed test. That is exactly how
@@ -41,7 +41,7 @@ def test_background_loops_start_without_crashing(monkeypatch):
             # schedules onto *this* running loop - asyncio.all_tasks() from right here sees
             # them all, still pending (they haven't had a chance to run yet).
             tasks = [task for task in asyncio.all_tasks() if task is not asyncio.current_task()]
-            assert len(tasks) == 9, f"expected the 9 background loop tasks, found {len(tasks)}"
+            assert len(tasks) == 10, f"expected the 10 background loop tasks, found {len(tasks)}"
 
             # Give the event loop real wall-clock time to actually step each task once -
             # run_advisory_locked_loop (app/core/background_loops.py) does its first
