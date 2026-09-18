@@ -12038,6 +12038,8 @@ input[type="radio"] {
   width: 100%;
   padding: 0;
   border: none;
+  appearance: none;
+  -webkit-appearance: none;
   cursor: zoom-in;
   line-height: 0;
   /* Tiles with a known aspect-ratio (see PhotoTile) get this box sized to the photo's real
@@ -12067,10 +12069,18 @@ input[type="radio"] {
 }
 
 /* Nextcloud-Memories-style feedback: the photo shrinks slightly into the tile once
-   selected, revealing the tile's own rounded background behind it. */
+   selected, revealing the tile's own rounded background behind it. Hovering the tile
+   un-shrinks it again so a still-selected photo can be inspected at full size; this also
+   sidesteps a compositing artifact where the scaled layer's clip mask leaves a dark seam
+   against the tile's negative-offset outline while the transform is active. */
 .photo-tile-selected .photo-tile-img {
   transform: scale(0.94);
   border-radius: var(--radius-md);
+}
+
+.photo-tile-selected:hover .photo-tile-img {
+  transform: none;
+  border-radius: 0;
 }
 
 /* Scoped to .photo-tile-preview's own img rather than the bare .photo-tile-img class - the
