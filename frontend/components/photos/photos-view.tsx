@@ -260,9 +260,6 @@ export function PhotosView({ albumId, onSelectPhoto, initialItems }: Props) {
           </div>
         </>
       )}
-      {embedded && albumId && (
-        <button type="button" className="button-inline" onClick={() => setUploadModalOpen(true)}>+ Bilder hochladen</button>
-      )}
 
       {tab === "albums" && !embedded ? (
         <PhotoAlbums />
