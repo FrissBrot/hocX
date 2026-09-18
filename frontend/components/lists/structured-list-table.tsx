@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { Modal } from "@/components/ui/modal";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -35,6 +35,7 @@ type StructuredListTableProps = {
    * cycle's data and aren't something the guarded historical-edit API supports adding. */
   allowCreate?: boolean;
   fullWidth?: boolean;
+  heading?: ReactNode;
   emptyMessage?: string;
   groupByColumn?: "" | StructuredListDisplayColumn;
   sortByColumn?: "" | StructuredListDisplayColumn;
@@ -193,6 +194,7 @@ export function StructuredListTable({
   editable = true,
   allowCreate = true,
   fullWidth = false,
+  heading,
   emptyMessage = "Noch keine Eintraege.",
   groupByColumn = "",
   sortByColumn = "",
@@ -559,6 +561,24 @@ export function StructuredListTable({
 
   return (
     <>
+      {heading && (
+        <div className="structured-list-heading">
+          {heading}
+          {editable && allowCreate && (
+            <button
+              type="button"
+              className="button-inline"
+              disabled={showNewRow || creatingNewRow}
+              onClick={() => {
+                setShowNewRow(true);
+                setNewRowDraft(createNewRowDraft(definition));
+              }}
+            >
+              + Eintrag
+            </button>
+          )}
+        </div>
+      )}
       <div className={`event-table-wrap${fullWidth ? " structured-list-table-flat" : ""}`} style={fullWidth ? { width: "100%" } : undefined}>
         <table className="data-table event-table event-table-compact structured-list-table" style={fullWidth ? { width: "100%" } : undefined}>
           <thead>
@@ -587,7 +607,7 @@ export function StructuredListTable({
               </th>
               {editable ? (
                 <th className="event-column-actions" aria-label="Aktionen">
-                  {allowCreate && (
+                  {allowCreate && !heading && (
                   <button
                     type="button"
                     className="button-ghost button-icon"
