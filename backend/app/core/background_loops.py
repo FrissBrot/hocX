@@ -41,6 +41,7 @@ BACKGROUND_LOCK_IDS: dict[str, int] = {
     "photo_analysis_auto_queue": 202600012,
     "photo_quality_backfill": 202600013,
     "photo_album_sync": 202600014,
+    "gallery_upload_ingest": 202600015,
 }
 assert len(BACKGROUND_LOCK_IDS) == len(set(BACKGROUND_LOCK_IDS.values())), "duplicate background lock id in BACKGROUND_LOCK_IDS"
 

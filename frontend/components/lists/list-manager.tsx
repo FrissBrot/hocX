@@ -8,7 +8,6 @@ import { Modal } from "@/components/ui/modal";
 import { usePopoverDismiss } from "@/components/ui/popover";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
-import { SnapshotSwitcher } from "@/components/ui/snapshot-switcher";
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
@@ -424,18 +423,25 @@ export function ListManager({
 
   return (
     <div className="grid">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Listen</h1>
+          <p className="muted">Alle Listen dieses Mandanten.</p>
+        </div>
+        <button type="button" className="button-inline" onClick={openCreate}>Neue Liste</button>
+      </div>
       <div className="list-manager-layout">
 
         {/* Left sidebar */}
         <div className="list-manager-sidebar">
           <div className="list-manager-sidebar-header">
-            <h1 className="list-manager-sidebar-title">Listen</h1>
-            <button type="button" className="button-ghost button-icon" onClick={openCreate} title="Neue Liste" aria-label="Neue Liste">+</button>
+            <h2 className="list-manager-sidebar-title">Listen</h2>
+            <span className="pill">{lists.length} gesamt</span>
           </div>
-          {(lists.length > 5 || search) && <label className="field-stack list-manager-search">
-            <span className="sr-only">Listen suchen</span>
+          <label className="field-stack list-manager-search">
+            <span className="field-label">Suche</span>
             <SearchInput value={search} onChange={setSearch} placeholder="Listen suchen…" />
-          </label>}
+          </label>
 
           {/* List items — scrollable, fills available height */}
           <div className="list-manager-items">
@@ -458,26 +464,6 @@ export function ListManager({
                     <span className="list-manager-item-name">{definition.name}</span>
                     <span className="list-manager-item-count">{entryCount} {entryCount === 1 ? "Eintrag" : "Einträge"}</span>
                   </button>
-                    <div className="list-manager-item-actions">
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); openEdit(definition); }}
-                        title="Bearbeiten"
-                        aria-label={`${definition.name} bearbeiten`}
-                        className="list-manager-item-action"
-                      >
-                        ✎
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); void deleteDefinition(definition.id); }}
-                        title="Löschen"
-                        aria-label={`${definition.name} löschen`}
-                        className="list-manager-item-action list-manager-item-action-danger"
-                      >
-                        ✕
-                      </button>
-                    </div>
                 </div>
               );
             })}
@@ -489,21 +475,6 @@ export function ListManager({
         <div className="list-manager-content">
           {selectedList ? (
             <div className="grid">
-              <div className="list-manager-options">
-                  <SnapshotSwitcher
-                    mode={historical.mode}
-                    availableCycles={historical.availableCycles}
-                    cycleConfigId={historical.cycleConfigId}
-                    cycleYear={historical.cycleYear}
-                    onSwitchToLive={historical.switchToLive}
-                    onSwitchToHistorical={historical.switchToHistorical}
-                  />
-                  {isLive && landscapeTemplates.length > 0 && (
-                    <button type="button" className="button-inline button-ghost" onClick={() => { setExportListId(selectedListId ?? ""); setExportUrl(null); setExportModalOpen(true); }}>
-                      Export
-                    </button>
-                  )}
-              </div>
 
               {isHistorical && historical.cycleYear !== null && (
                 <HistoricalViewBanner
@@ -543,6 +514,43 @@ export function ListManager({
                         <p className="list-manager-description muted">Spalten: {displayedDefinition.column_one_title} · {displayedDefinition.column_two_title}</p>
                         {displayedDefinition.description && <p className="list-manager-description muted">{displayedDefinition.description}</p>}
                       </div>
+                    }
+                    headingActions={
+                      <>
+                  {historical.availableCycles.length > 0 && (
+                    <SearchableSelect
+                      options={[
+                        { id: "live", label: "Aktuell", cycle: null },
+                        ...historical.availableCycles.map((cycle) => ({
+                          id: `${cycle.cycle_config_id}:${cycle.cycle_year}`,
+                          label: `${cycle.cycle_config_name} ${cycle.cycle_year}${cycle.has_snapshot ? " (historisch)" : " (kein Snapshot)"}`,
+                          cycle,
+                        })),
+                      ]}
+                      getId={(option) => option.id}
+                      getLabel={(option) => option.label}
+                      value={isLive ? "live" : `${historical.cycleConfigId}:${historical.cycleYear}`}
+                      triggerProps={{ "aria-label": "Ansicht" }}
+                      onChange={(option) => {
+                        if (!option) return;
+                        if (option.cycle) {
+                          historical.switchToHistorical(option.cycle.cycle_config_id, option.cycle.cycle_year, option.cycle.has_snapshot);
+                        } else {
+                          historical.switchToLive();
+                        }
+                      }}
+                    />
+                  )}
+                  {isLive && landscapeTemplates.length > 0 && (
+                    <button type="button" className="button-inline button-ghost" onClick={() => { setExportListId(selectedListId ?? ""); setExportUrl(null); setExportModalOpen(true); }}>
+                      Export
+                    </button>
+                  )}
+                        {isLive && <>
+                        <button type="button" className="button-inline button-ghost" onClick={() => openEdit(selectedList)}>Bearbeiten</button>
+                        <button type="button" className="button-inline button-ghost" onClick={() => void deleteDefinition(selectedList.id)}>Liste löschen</button>
+                        </>}
+                      </>
                     }
                     entries={displayedEntries}
                     availableParticipants={availableParticipants}

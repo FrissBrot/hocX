@@ -1,10 +1,11 @@
 import uuid
+from pathlib import Path
 from typing import Annotated, Literal
 
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.dialects.postgresql import insert
-from app.models.entities import CycleConfig, Event, PhotoAlbum, PhotoAlbumItem, SubmissionAssignment
+from app.models.entities import CycleConfig, Event, GalleryUploadJob, PhotoAlbum, PhotoAlbumItem, SubmissionAssignment
 from app.schemas.files import PhotoAlbumCreate, PhotoAlbumItemBestUpdate, PhotoAlbumRead, PhotoAlbumItemsUpdate
 from sqlalchemy.orm import Session
 
@@ -22,7 +23,8 @@ from app.schemas.files import (
     FileOverviewItem,
     FileOverviewSource,
     FileStats,
-    GalleryUploadResult,
+    GalleryUploadJobDetail,
+    GalleryUploadJobRead,
     PhotoAnalysisJobCreate,
     PhotoAnalysisJobRead,
     PhotoAnalysisProgress,
@@ -33,33 +35,21 @@ from app.schemas.files import (
 from app.schemas.protocol import ProtocolImageRead
 from app.services import photo_album_service, public_id_service
 from app.services.access_service import AccessService
-from app.services.file_service import MAX_UPLOAD_BYTES, MAX_ZIP_TOTAL_BYTES, FileService, _safe_storage_path, extract_image_files_from_zip
+from app.services.file_service import MAX_UPLOAD_BYTES, FileService, _safe_storage_path
 from app.services.submission_service import SubmissionService, _element_ref, _parse_element_ref
+from app.services.upload_pipeline import GALLERY_ZIP_MAX_BYTES, stage_upload_to_disk
 
 router = APIRouter()
 service = FileService()
 access_service = AccessService()
 submission_service = SubmissionService()
 
-# Ganzer Batch (Summe aller akzeptierten Dateien eines Upload-Requests, ausserhalb von
-# ZIPs - deren eigener Grenzwert ist MAX_ZIP_TOTAL_BYTES): grösszügiger als eine einzelne
-# Datei, aber trotzdem endlich - selbes Limit-Muster wie beim Word-Import-Batch-Upload.
+# Ganzer Batch (Summe aller gestagten Dateien eines Upload-Requests): grösszügiger als eine
+# einzelne Datei, aber trotzdem endlich - selbes Limit-Muster wie beim Word-Import-Batch-
+# Upload. Bewusst gleich gross wie GALLERY_ZIP_MAX_BYTES (eine einzelne ZIP-Datei ist der
+# haeufigste Fall) statt eines eigenen, kleineren Werts.
 MAX_GALLERY_UPLOAD_BATCH_FILES = 50
-MAX_GALLERY_UPLOAD_BATCH_BYTES = 150 * 1024 * 1024
-
-
-async def _read_upload_within_limit(file: UploadFile, max_bytes: int) -> bytes | None:
-    """Rejects an oversized upload using Starlette's already-known `.size` (populated by
-    the multipart parser before the route runs) instead of buffering the whole thing into a
-    `bytes` object first just to measure it. Returns None if too large. Mirrors
-    word_import.py's helper of the same name - kept local rather than shared since routes
-    don't otherwise import each other's private helpers in this codebase."""
-    if file.size is not None and file.size > max_bytes:
-        return None
-    content = await file.read()
-    if len(content) > max_bytes:
-        return None
-    return content
+MAX_GALLERY_UPLOAD_BATCH_BYTES = GALLERY_ZIP_MAX_BYTES
 
 
 @router.get("/files", response_model=list[FileOverviewItem])
@@ -245,13 +235,28 @@ def get_analysis_job(job_id: uuid.UUID, db: Session = Depends(get_db), user: Cur
     return _job_to_read(job)
 
 
-@router.post("/files/gallery-uploads", response_model=GalleryUploadResult, status_code=status.HTTP_201_CREATED)
+def _gallery_upload_job_to_read(job: GalleryUploadJob) -> GalleryUploadJobRead:
+    return GalleryUploadJobRead(
+        id=job.id,
+        status=job.status,
+        total_files=job.total_files,
+        processed_files=job.processed_files,
+        imported_count=len(job.imported_file_ids),
+        error_count=len(job.errors),
+        created_at=job.created_at,
+        started_at=job.started_at,
+        finished_at=job.finished_at,
+        error=job.error,
+    )
+
+
+@router.post("/files/gallery-uploads", response_model=GalleryUploadJobRead, status_code=status.HTTP_201_CREATED)
 async def upload_gallery_images(
     files: list[UploadFile] = File(...),
     tags: str | None = Form(default=None),
     # Optional target picker: at most one of event_id, (submission_assignment_id +
     # submission_element_ref) or cycle_config_id - the batch then lands in that Termin's/
-    # Abgabe-Element's/Zyklus' auto-album(s) too (see FileService.save_gallery_uploads).
+    # Abgabe-Element's/Zyklus' auto-album(s) too (see FileService.process_pending_gallery_upload_jobs).
     event_id: uuid.UUID | None = Form(default=None),
     submission_assignment_id: uuid.UUID | None = Form(default=None),
     submission_element_ref: str | None = Form(default=None),
@@ -261,9 +266,13 @@ async def upload_gallery_images(
 ):
     """Direkter Bild-Upload fuer die "Fotos"-Galerie (nicht an ein Protokoll/Word-Import/
     Abgabe gebunden) - unterstuetzt einzelne Bilddateien und .zip-Archive, aus denen nur
-    Bilddateien uebernommen werden (siehe extract_image_files_from_zip), jeweils durch
-    dieselbe Pipeline wie jeder andere Upload in dieser App: Magic-Byte-Pruefung,
-    Grössenlimit, Virenscan (siehe FileService.save_gallery_uploads)."""
+    Bilddateien uebernommen werden (siehe iter_gallery_zip_entries). This request only
+    streams the raw upload(s) to disk and queues a gallery_upload_job - Magic-Byte-Pruefung,
+    Virenscan und das eigentliche Speichern laufen danach im Hintergrund (siehe
+    app/main.py's gallery_upload_ingest_loop und FileService.process_pending_gallery_upload_jobs),
+    damit ein mehrere GB grosses ZIP nicht die ganze Request-Laufzeit ueber im Speicher
+    gehalten werden muss und der Upload-Dialog sofort schliessen kann. Poll GET
+    .../gallery-upload-jobs/{id} fuer den Fortschritt."""
     require_writer(user)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
@@ -279,19 +288,21 @@ async def upload_gallery_images(
         raise HTTPException(status_code=422, detail="Abgabe und Abgabe-Element muessen zusammen angegeben werden")
 
     upload_event_id: int | None = None
-    upload_assignment: SubmissionAssignment | None = None
+    upload_assignment_id: int | None = None
     upload_element_label: str | None = None
-    upload_cycle_config: CycleConfig | None = None
+    upload_cycle_config_id: int | None = None
 
     if event_id is not None:
         upload_event_id = public_id_service.resolve_internal_id(db, Event, event_id, tenant_id=user.current_tenant_id)
         if upload_event_id is None:
             raise HTTPException(status_code=404, detail="Termin nicht gefunden")
     elif submission_assignment_id is not None:
-        assignment_id = public_id_service.resolve_internal_id(db, SubmissionAssignment, submission_assignment_id, tenant_id=user.current_tenant_id)
-        if assignment_id is None:
+        upload_assignment_id = public_id_service.resolve_internal_id(
+            db, SubmissionAssignment, submission_assignment_id, tenant_id=user.current_tenant_id
+        )
+        if upload_assignment_id is None:
             raise HTTPException(status_code=404, detail="Abgabe nicht gefunden")
-        upload_assignment = db.get(SubmissionAssignment, assignment_id)
+        upload_assignment = db.get(SubmissionAssignment, upload_assignment_id)
         try:
             parsed_event_id, parsed_list_entry_id = _parse_element_ref(db, submission_element_ref)
         except ValueError:
@@ -308,51 +319,106 @@ async def upload_gallery_images(
         upload_event_id = match["event_id"]
         upload_element_label = match["label"]
     elif cycle_config_id is not None:
-        cycle_config_id_internal = public_id_service.resolve_internal_id(db, CycleConfig, cycle_config_id, tenant_id=user.current_tenant_id)
-        if cycle_config_id_internal is None:
+        upload_cycle_config_id = public_id_service.resolve_internal_id(db, CycleConfig, cycle_config_id, tenant_id=user.current_tenant_id)
+        if upload_cycle_config_id is None:
             raise HTTPException(status_code=404, detail="Zyklus nicht gefunden")
-        upload_cycle_config = db.get(CycleConfig, cycle_config_id_internal)
 
     tag_list = [tag.strip() for tag in (tags or "").split(",") if tag.strip()]
 
-    file_payloads: list[tuple[str, bytes]] = []
-    errors: list[str] = []
+    # Computed per-request, not as a module-level constant - settings.upload_root must be
+    # read fresh each time (tests monkeypatch it; production has no reason to assume it's
+    # immutable after import either).
+    staging_dir = Path(settings.upload_root) / "_staging" / "gallery"
+    staged_paths: list[str] = []
     batch_bytes = 0
-    for file in files:
-        name = file.filename or ""
-        if batch_bytes > MAX_GALLERY_UPLOAD_BATCH_BYTES:
-            errors.append(f"{name or 'Datei'}: übersprungen - Gesamtgrösse des Batches überschritten")
-            continue
-        if name.lower().endswith(".zip"):
-            zip_bytes = await _read_upload_within_limit(file, MAX_ZIP_TOTAL_BYTES)
-            if zip_bytes is None:
-                errors.append(f"{name}: ZIP-Datei zu gross (maximal {MAX_ZIP_TOTAL_BYTES // 1024 // 1024} MB)")
-                continue
-            matched, notes = extract_image_files_from_zip(zip_bytes)
-            file_payloads.extend(matched)
-            batch_bytes += sum(len(content) for _, content in matched)
-            errors.extend(f"{name}: {note}" for note in notes)
-            continue
-        content = await _read_upload_within_limit(file, MAX_UPLOAD_BYTES)
-        if content is None:
-            errors.append(f"{name or 'Datei'}: zu gross (maximal {MAX_UPLOAD_BYTES // 1024 // 1024} MB)")
-            continue
-        file_payloads.append((name, content))
-        batch_bytes += len(content)
+    has_zip = False
+    try:
+        for file in files:
+            name = file.filename or ""
+            is_zip = name.lower().endswith(".zip")
+            has_zip = has_zip or is_zip
+            max_bytes = GALLERY_ZIP_MAX_BYTES if is_zip else MAX_UPLOAD_BYTES
+            staged_path = await stage_upload_to_disk(
+                file, target_dir=staging_dir, max_bytes=max_bytes, suffix=Path(name).suffix.lower() or ".bin"
+            )
+            batch_bytes += staged_path.stat().st_size
+            if batch_bytes > MAX_GALLERY_UPLOAD_BATCH_BYTES:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"Gesamtgrösse des Batches überschritten (maximal {MAX_GALLERY_UPLOAD_BATCH_BYTES // 1024 // 1024} MB)",
+                )
+            staged_paths.append(str(staged_path.relative_to(settings.storage_root)))
+    except HTTPException:
+        for relative_path in staged_paths:
+            (Path(settings.storage_root) / relative_path).unlink(missing_ok=True)
+        raise
 
-    items, save_errors = await service.save_gallery_uploads(
-        db,
+    if not staged_paths:
+        raise HTTPException(status_code=400, detail="Keine Dateien hochgeladen")
+
+    job = GalleryUploadJob(
         tenant_id=user.current_tenant_id,
-        files=file_payloads,
+        staged_paths=staged_paths,
         tags=tag_list,
-        created_by=user.user_id,
         upload_event_id=upload_event_id,
-        upload_assignment=upload_assignment,
+        upload_assignment_id=upload_assignment_id,
         upload_element_ref=submission_element_ref,
         upload_element_label=upload_element_label,
-        upload_cycle_config=upload_cycle_config,
+        upload_cycle_config_id=upload_cycle_config_id,
+        requested_by=user.user_id,
+        # A ZIP's matching entries are only known once the ingest loop opens it; a batch
+        # of individually-selected images (no ZIP at all) knows its count immediately.
+        total_files=None if has_zip else len(staged_paths),
     )
-    return GalleryUploadResult(items=items, errors=errors + save_errors)
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return _gallery_upload_job_to_read(job)
+
+
+@router.get("/files/gallery-upload-jobs", response_model=list[GalleryUploadJobRead])
+def list_gallery_upload_jobs(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Tenant-wide list of not-yet-finished gallery uploads, backing the "Bilder hochladen"
+    status bar - same tenant-wide-visibility idea as GET /files/analysis-progress (just a
+    list here, not one aggregated object), so the bar shows up for any writer in the tenant
+    (any tab, after a refresh, ...), not just whoever's browser sent the original request."""
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    jobs = db.scalars(
+        select(GalleryUploadJob)
+        .where(GalleryUploadJob.tenant_id == user.current_tenant_id, GalleryUploadJob.status.in_(["queued", "running"]))
+        .order_by(GalleryUploadJob.created_at)
+    )
+    return [_gallery_upload_job_to_read(job) for job in jobs]
+
+
+@router.get("/files/gallery-upload-jobs/{job_id}", response_model=GalleryUploadJobDetail)
+def get_gallery_upload_job(job_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Full result for one job - fetched once it's left the active listing above, so the
+    frontend can show the same (items, errors) summary the old synchronous response used
+    to return directly."""
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    job = db.get(GalleryUploadJob, job_id)
+    if job is None or job.tenant_id != user.current_tenant_id:
+        raise HTTPException(status_code=404, detail="Upload-Auftrag nicht gefunden")
+    imported_items = (
+        service.list_tenant_files(
+            db,
+            user.current_tenant_id,
+            file_ids=[uuid.UUID(file_id) for file_id in job.imported_file_ids],
+            limit=len(job.imported_file_ids),
+        )
+        if job.imported_file_ids
+        else []
+    )
+    return GalleryUploadJobDetail(
+        **_gallery_upload_job_to_read(job).model_dump(),
+        imported_items=imported_items,
+        errors=list(job.errors),
+    )
 
 
 @router.get("/protocol-element-blocks/{protocol_element_block_id}/images", response_model=list[ProtocolImageRead])

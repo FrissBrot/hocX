@@ -3,13 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 
 import { Modal } from "@/components/ui/modal";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { TagInput } from "@/components/ui/tag-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { formatDate, formatFileSize } from "@/lib/utils/format";
 import {
   CycleConfigSummary,
   EventSummary,
-  FileOverviewItem,
+  GalleryUploadJob,
   SubmissionAssignment,
   SubmissionElementStatusEntry,
 } from "@/types/api";
@@ -19,11 +20,14 @@ const GALLERY_UPLOAD_ACCEPT = "image/jpeg,image/png,image/gif,image/webp,image/b
 export function GalleryUploadModal({
   tagSuggestions,
   onClose,
-  onUploaded,
+  onQueued,
 }: {
   tagSuggestions: string[];
   onClose: () => void;
-  onUploaded: (items: FileOverviewItem[], errors: string[]) => void;
+  // Fires as soon as the raw upload is safely staged and a gallery_upload_job is queued -
+  // scanning/thumbnailing/import happen afterwards, in the background (see
+  // gallery-upload-progress.tsx), so this is not the final result.
+  onQueued: (job: GalleryUploadJob) => void;
 }) {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [tagsValue, setTagsValue] = useState("");
@@ -88,11 +92,19 @@ export function GalleryUploadModal({
         body.append("submission_element_ref", selectedElementRef);
       }
       if (targetKind === "cycle") body.append("cycle_config_id", selectedCycleConfigId);
-      const result = await browserApiFetch<{ items: FileOverviewItem[]; errors: string[] }>("/api/files/gallery-uploads", {
+      // Returns almost immediately once the upload is staged and a gallery_upload_job is
+      // queued - scanning/import happen afterwards in the background (see
+      // gallery-upload-progress.tsx), so this request only has to cover the raw byte
+      // transfer, not the full processing time.
+      const job = await browserApiFetch<GalleryUploadJob>("/api/files/gallery-uploads", {
         method: "POST",
         body,
+        // browserApiFetch's default 15s timeout is far too short for a multi-GB ZIP
+        // transfer - mirrors the same fix already applied to admin-tenant-management.tsx's
+        // import upload.
+        signal: AbortSignal.timeout(600_000),
       });
-      onUploaded(result?.items ?? [], result?.errors ?? []);
+      if (job) onQueued(job);
       onClose();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Upload fehlgeschlagen");
@@ -167,12 +179,14 @@ export function GalleryUploadModal({
           <label><input type="radio" name="upload-target" checked={targetKind === "none"} onChange={() => setTargetKind("none")} /> Kein Bezug</label>
           <label><input type="radio" name="upload-target" checked={targetKind === "event"} onChange={() => setTargetKind("event")} /> Termin</label>
           {targetKind === "event" && (
-            <select value={selectedEventId} onChange={(event) => setSelectedEventId(event.target.value)}>
-              <option value="">Termin wählen…</option>
-              {events.map((event) => (
-                <option key={event.id} value={event.id}>{event.title} ({formatDate(event.event_date)})</option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={events}
+              getId={(event) => event.id}
+              getLabel={(event) => `${event.title} (${formatDate(event.event_date)})`}
+              value={selectedEventId || null}
+              onChange={(event) => setSelectedEventId(event?.id ?? "")}
+              placeholder="Termin wählen…"
+            />
           )}
           <label>
             <input type="radio" name="upload-target" checked={targetKind === "submission_element"} onChange={() => setTargetKind("submission_element")} />
@@ -180,33 +194,36 @@ export function GalleryUploadModal({
           </label>
           {targetKind === "submission_element" && (
             <>
-              <select
-                value={selectedAssignmentId}
-                onChange={(event) => { setSelectedAssignmentId(event.target.value); setSelectedElementRef(""); }}
-              >
-                <option value="">Abgabe wählen…</option>
-                {assignments.map((assignment) => (
-                  <option key={assignment.id} value={assignment.id}>{assignment.title}</option>
-                ))}
-              </select>
+              <SearchableSelect
+                options={assignments}
+                getId={(assignment) => assignment.id}
+                getLabel={(assignment) => assignment.title}
+                value={selectedAssignmentId || null}
+                onChange={(assignment) => { setSelectedAssignmentId(assignment?.id ?? ""); setSelectedElementRef(""); }}
+                placeholder="Abgabe wählen…"
+              />
               {selectedAssignmentId && (
-                <select value={selectedElementRef} onChange={(event) => setSelectedElementRef(event.target.value)}>
-                  <option value="">Element wählen…</option>
-                  {elements.map((element) => (
-                    <option key={element.element_ref} value={element.element_ref}>{element.label}</option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  options={elements}
+                  getId={(element) => element.element_ref}
+                  getLabel={(element) => element.label}
+                  value={selectedElementRef || null}
+                  onChange={(element) => setSelectedElementRef(element?.element_ref ?? "")}
+                  placeholder="Element wählen…"
+                />
               )}
             </>
           )}
           <label><input type="radio" name="upload-target" checked={targetKind === "cycle"} onChange={() => setTargetKind("cycle")} /> Zyklus</label>
           {targetKind === "cycle" && (
-            <select value={selectedCycleConfigId} onChange={(event) => setSelectedCycleConfigId(event.target.value)}>
-              <option value="">Zyklus wählen…</option>
-              {cycleConfigs.map((cycleConfig) => (
-                <option key={cycleConfig.id} value={cycleConfig.id}>{cycleConfig.name}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={cycleConfigs}
+              getId={(cycleConfig) => cycleConfig.id}
+              getLabel={(cycleConfig) => cycleConfig.name}
+              value={selectedCycleConfigId || null}
+              onChange={(cycleConfig) => setSelectedCycleConfigId(cycleConfig?.id ?? "")}
+              placeholder="Zyklus wählen…"
+            />
           )}
         </div>
 

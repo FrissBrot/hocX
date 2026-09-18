@@ -109,11 +109,32 @@ class StoredFileTagsUpdate(BaseModel):
     tags: list[str]
 
 
-class GalleryUploadResult(BaseModel):
-    items: list[FileOverviewItem]
-    # Per-file problems (too large, no supported image format, infected, ZIP entries that
-    # weren't images, ...) - the batch still succeeds for every other file, so this is
-    # reported alongside `items` rather than raising.
+class GalleryUploadJobRead(BaseModel):
+    """Lightweight shape for the tenant-wide active-jobs listing the "Bilder hochladen"
+    status bar polls (GET /files/gallery-upload-jobs) - no per-file detail, just enough to
+    render a progress bar and know when to fetch the full GalleryUploadJobDetail."""
+
+    id: uuid.UUID
+    status: Literal["queued", "running", "done", "failed"]
+    # None until a ZIP has been opened and its matching entries counted (see
+    # FileService.process_pending_gallery_upload_jobs) - a batch of individually-selected images
+    # knows this immediately.
+    total_files: int | None
+    processed_files: int
+    imported_count: int
+    error_count: int
+    created_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
+    error: str | None
+
+
+class GalleryUploadJobDetail(GalleryUploadJobRead):
+    """Full result, fetched once a job has left the active listing (GET
+    /files/gallery-upload-jobs/{id}) - same (items, errors) shape the old synchronous
+    GalleryUploadResult response had, just arriving later."""
+
+    imported_items: list[FileOverviewItem]
     errors: list[str]
 
 
@@ -191,7 +212,7 @@ class FileBulkDelete(BaseModel):
 class FileBulkDeleteResult(BaseModel):
     deleted_ids: list[uuid.UUID]
     # Per-file reasons a requested id wasn't deleted (wrong source, not found, ...) - same
-    # partial-success shape as GalleryUploadResult.errors.
+    # partial-success shape as GalleryUploadJobDetail.errors.
     errors: list[str]
 
 

@@ -11868,8 +11868,8 @@ input[type="radio"] {
 /* ── Listen: sidebar + content split ── */
 .list-manager-layout {
   display: grid;
-  grid-template-columns: minmax(240px, 308px) minmax(0, 1fr);
-  gap: 26px;
+  grid-template-columns: minmax(220px, 270px) minmax(0, 1fr);
+  gap: 24px;
   align-items: start;
 }
 
@@ -11878,10 +11878,8 @@ input[type="radio"] {
 }
 
 .list-manager-sidebar {
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: var(--panel-solid);
-  padding: 18px;
+  border-right: 1px solid var(--border);
+  padding-right: 20px;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -11932,7 +11930,7 @@ input[type="radio"] {
   display: block;
   width: 100%;
   text-align: left;
-  padding: 12px 60px 12px 12px;
+  padding: 12px;
   border-radius: 8px;
   border: none;
   --button-bg: none;
@@ -12006,20 +12004,15 @@ input[type="radio"] {
 }
 
 .list-manager-content {
-  padding: 28px 30px;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: var(--panel-solid);
   min-width: 0;
 }
 
 .list-manager-title {
   margin: 0;
-  font-family: inherit;
-  font-size: 0.85rem;
+  font-family: "Canela", "Iowan Old Style", "Palatino Linotype", serif;
+  font-size: 1.5rem;
   font-weight: 600;
-  text-transform: uppercase;
-  color: var(--muted);
+  color: var(--text);
   letter-spacing: 0;
   overflow-wrap: anywhere;
 }
@@ -12047,6 +12040,7 @@ input[type="radio"] {
   justify-content: space-between;
   align-items: center;
   gap: 16px;
+  flex-wrap: wrap;
 }
 
 .structured-list-heading > div {
@@ -12057,35 +12051,24 @@ input[type="radio"] {
   flex-shrink: 0;
 }
 
-.list-manager-content .event-table-wrap {
-  border: 0;
-  border-radius: 0;
-}
-
 .list-manager-content .structured-list-table {
   table-layout: fixed;
 }
 
 .list-manager-content .structured-list-table th,
 .list-manager-content .structured-list-table td {
-  padding: 8px 4px;
-  border-bottom: 1px solid var(--border);
   white-space: normal;
   overflow-wrap: anywhere;
   vertical-align: middle;
 }
 
-.list-manager-content .structured-list-table tbody tr:last-child td {
-  border-bottom: 0;
-}
-
-.list-manager-content .structured-list-table th {
-  letter-spacing: 0;
-  font-size: 0.8rem;
-}
-
 .list-manager-content .structured-list-table .event-column-actions {
-  width: 36px;
+  width: 150px;
+}
+
+.list-manager-content .event-row-actions .button-inline {
+  white-space: nowrap;
+  overflow-wrap: normal;
 }
 
 .list-manager-content .event-row-actions .button-icon {
@@ -12096,15 +12079,8 @@ input[type="radio"] {
   border-radius: 6px;
 }
 
-@media (hover: hover) {
-  .list-manager-content .event-row-actions {
-    opacity: 0;
-  }
-
-  .list-manager-content tr:hover .event-row-actions,
-  .list-manager-content tr:focus-within .event-row-actions {
-    opacity: 1;
-  }
+.list-manager-content .event-row-actions {
+  justify-content: flex-start;
 }
 
 .list-manager-content .structured-list-table input,
@@ -12113,9 +12089,9 @@ input[type="radio"] {
 .list-manager-content .structured-list-table .structured-list-picker {
   width: 100%;
   max-width: 100%;
-  min-height: 28px;
-  padding: 3px 4px;
-  border-radius: 4px;
+  min-height: 36px;
+  padding: 7px 9px;
+  border-radius: 8px;
   font-size: 0.9rem;
 }
 
@@ -12127,17 +12103,19 @@ input[type="radio"] {
 }
 
 @media (max-width: 900px) {
-  .lists-page {
-    padding: 0;
-  }
-
   .list-manager-layout {
     grid-template-columns: minmax(0, 1fr);
     gap: 16px;
   }
 
-  .list-manager-content {
-    padding: 20px 16px;
+  .list-manager-sidebar {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    padding: 0 0 16px;
+  }
+
+  .list-manager-content .structured-list-table {
+    min-width: 540px;
   }
 
   .structured-list-heading {
@@ -12365,8 +12343,9 @@ input[type="radio"] {
   background: var(--panel-solid);
 }
 
-.photo-bulk-bar select {
+.photo-bulk-bar-album-select {
   min-width: 160px;
+  max-width: 220px;
 }
 
 .photo-bulk-bar-tagging {
@@ -12376,6 +12355,17 @@ input[type="radio"] {
   flex-basis: 100%;
   padding-top: 8px;
   border-top: 1px solid var(--border);
+}
+
+/* Without this, TagInput's own bordered/rounded box nests inside the already-
+   bordered .photo-bulk-bar, reading as two stacked frames right under the
+   border-top divider above - drop its box styling here since the divider
+   already separates this row from the buttons above. */
+.photo-bulk-bar-tagging .tag-input-field {
+  border: none;
+  background: transparent;
+  padding: 0;
+  min-height: 0;
 }
 
 .photo-analysis-progress {

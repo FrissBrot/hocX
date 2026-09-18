@@ -111,7 +111,10 @@ services:
     # docker-compose.release.yml.
     user: "0:0"
     restart: unless-stopped
-    mem_limit: 768m
+    # 768m -> 1024m: headroom for the gallery-upload background ingest loop (see
+    # app/main.py's gallery_upload_ingest_loop) - streaming/batched now, so no longer O(ZIP
+    # size), but still real per-batch work (ClamAV + PIL decodes) on top of normal traffic.
+    mem_limit: 1024m
     cpus: 1.5
     logging:
       driver: json-file
@@ -286,6 +289,21 @@ services:
       - "traefik.http.middlewares.word-import-ratelimit.ratelimit.period=1m"
       # 150 MB - matches MAX_WORD_IMPORT_BATCH_BYTES in routes/word_import.py
       - "traefik.http.middlewares.word-import-body-limit.buffering.maxRequestBodyBytes=157286400"
+      # Dedicated router for the gallery ("Bilder hochladen") upload endpoint specifically -
+      # supports ZIPs up to GALLERY_ZIP_MAX_BYTES (5 GiB, see upload_pipeline.py) now that
+      # the request only streams bytes to disk and queues a background job (see
+      # gallery_upload_ingest_loop) instead of holding the whole batch in memory. Falls
+      # through to the generic hocx-backend router (no body limit) for every other /api/
+      # files/* path, same scoping idea as hocx-word-import above.
+      - "traefik.http.routers.hocx-gallery-upload.rule=Host(`${TRAEFIK_DOMAIN}`) && Path(`/api/files/gallery-uploads`) && Method(`POST`)"
+      - "traefik.http.routers.hocx-gallery-upload.entrypoints=websecure"
+      - "traefik.http.routers.hocx-gallery-upload.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.hocx-gallery-upload.priority=200"
+      - "traefik.http.routers.hocx-gallery-upload.service=hocx-gallery-upload"
+      - "traefik.http.routers.hocx-gallery-upload.middlewares=gallery-upload-body-limit"
+      - "traefik.http.services.hocx-gallery-upload.loadbalancer.server.port=8000"
+      # 5 GiB + ~100 MiB slack for multipart/form-data overhead around the largest accepted ZIP
+      - "traefik.http.middlewares.gallery-upload-body-limit.buffering.maxRequestBodyBytes=5474304000"
 
   # Photo-culling Phase 3: scores face quality for photo_analysis_job batches. Its own
   # container/resource budget rather than living inside `backend` - see

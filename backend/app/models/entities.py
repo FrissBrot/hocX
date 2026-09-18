@@ -1346,3 +1346,54 @@ class PhotoAnalysisJob(Base, TimestampMixin):
     error: Mapped[str | None] = mapped_column(Text)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class GalleryUploadJob(Base, TimestampMixin):
+    """Backs the "Bilder hochladen" gallery upload window's async ingestion (see
+    app/main.py's gallery_upload_ingest_loop and FileService.process_pending_gallery_upload_jobs) -
+    the upload request only stages the raw file(s) to disk and creates this row; scanning,
+    ZIP extraction, thumbnailing and StoredFile/GalleryImage creation all happen later, off
+    the request's event loop, so a multi-GB ZIP doesn't have to be buffered or fully
+    processed before the upload dialog can close. Stays inside hocx_app (unlike
+    PhotoAnalysisJob, no separate worker/role - this reuses the backend's own ClamAV
+    connectivity and DB access)."""
+
+    __tablename__ = "gallery_upload_job"
+    __table_args__ = (Index("idx_gallery_upload_job_tenant_status", "tenant_id", "status"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()"))
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'queued'"))
+    # Storage-relative paths of the raw upload(s) staged by the request handler - see
+    # FileService.stage_gallery_upload.
+    staged_paths: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    tags: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    # At most one of these three targets is ever set - mirrors upload_gallery_images' own
+    # mutual-exclusion check.
+    upload_event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("event.id", ondelete="SET NULL"))
+    upload_assignment_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("submission_assignment.id", ondelete="SET NULL")
+    )
+    upload_element_ref: Mapped[str | None] = mapped_column(Text)
+    # Resolved once, at request time, from upload_assignment_id + upload_element_ref (see
+    # upload_gallery_images) - saves the ingest loop from re-resolving it via
+    # submission_service on every job it processes.
+    upload_element_label: Mapped[str | None] = mapped_column(Text)
+    upload_cycle_config_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("cycle_config.id", ondelete="SET NULL"))
+    requested_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    # Unknown until a ZIP is opened and its matching entries counted; known immediately for
+    # a batch of individually-selected images.
+    total_files: Mapped[int | None] = mapped_column(Integer)
+    processed_files: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    # StoredFile.public_id values (as str, not the internal bigint PhotoAnalysisJob.
+    # stored_file_ids uses) - this job's whole purpose downstream is building the
+    # FileOverviewItem list a job-detail response returns, which needs public ids anyway
+    # (see FileService.list_tenant_files' file_ids param).
+    imported_file_ids: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    # Per-file problems (too large, unsupported format, infected, corrupt ZIP entry, ...) -
+    # same partial-success shape the old synchronous route's GalleryUploadResult had.
+    errors: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    # Fatal/unexpected exception text, distinct from the per-file `errors` above.
+    error: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -8,6 +8,7 @@ import { FileDetailModal } from "./file-detail-modal";
 import { FileStatCards } from "./file-stat-cards";
 import { FilesTable } from "./files-table";
 import { FilterTabs } from "@/components/ui/filter-tabs";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
 import { TagInput } from "@/components/ui/tag-input";
 import { useToast } from "@/contexts/toast-context";
@@ -25,6 +26,17 @@ const SOURCE_OPTIONS: { value: SourceFilter; label: string }[] = [
   { value: "protocol_image", label: "Protokolle" },
   { value: "word_import", label: "Word-Import" },
   { value: "submission_upload", label: "Abgaben" },
+];
+
+type SortOption = { id: string; label: string; key: SortKey; dir: "asc" | "desc" };
+
+const SORT_OPTIONS: SortOption[] = [
+  { id: "created_at:desc", label: "Neueste zuerst", key: "created_at", dir: "desc" },
+  { id: "created_at:asc", label: "Älteste zuerst", key: "created_at", dir: "asc" },
+  { id: "original_name:asc", label: "Name (A-Z)", key: "original_name", dir: "asc" },
+  { id: "original_name:desc", label: "Name (Z-A)", key: "original_name", dir: "desc" },
+  { id: "file_size_bytes:desc", label: "Grösse (gross-klein)", key: "file_size_bytes", dir: "desc" },
+  { id: "file_size_bytes:asc", label: "Grösse (klein-gross)", key: "file_size_bytes", dir: "asc" },
 ];
 
 type Props = {
@@ -136,22 +148,18 @@ export function FilesView({ initialItems }: Props) {
         <div className="list-filter-search">
           <SearchInput value={search} onChange={setSearch} placeholder="Dateien durchsuchen" />
         </div>
-        <select
+        <SearchableSelect
           className="files-sort-select"
+          options={SORT_OPTIONS}
+          getId={(option) => option.id}
+          getLabel={(option) => option.label}
           value={`${sortKey}:${sortDir}`}
-          onChange={(event) => {
-            const [key, dir] = event.target.value.split(":") as [SortKey, "asc" | "desc"];
-            setSortKey(key);
-            setSortDir(dir);
+          onChange={(option) => {
+            if (!option) return;
+            setSortKey(option.key);
+            setSortDir(option.dir);
           }}
-        >
-          <option value="created_at:desc">Neueste zuerst</option>
-          <option value="created_at:asc">Älteste zuerst</option>
-          <option value="original_name:asc">Name (A-Z)</option>
-          <option value="original_name:desc">Name (Z-A)</option>
-          <option value="file_size_bytes:desc">Grösse (gross-klein)</option>
-          <option value="file_size_bytes:asc">Grösse (klein-gross)</option>
-        </select>
+        />
         <div className="list-filter-tags">
           <TagInput
             value={tagFilter.join(",")}

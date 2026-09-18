@@ -36,7 +36,7 @@ export default async function ListsPage() {
 
   return (
     <AppShell initialSession={session}>
-      <section className="lists-page">
+      <section className="panel lists-page">
         <ListManager
           initialLists={lists ?? []}
           initialEntriesByList={initialEntriesByList}

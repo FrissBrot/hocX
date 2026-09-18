@@ -37,14 +37,29 @@ test("uploading with a Zyklus target puts the photo in that cycle's auto-album",
     await expect(modal.locator(".gallery-upload-file-list")).toContainText("sample.png");
 
     await modal.getByRole("radio", { name: "Zyklus" }).check();
-    const cycleSelect = modal.locator("select");
-    await expect(cycleSelect.locator(`option[value="${cycleConfig.id}"]`)).toHaveCount(1);
-    await cycleSelect.selectOption(cycleConfig.id);
+    // The target picker is a SearchableSelect (mini-menu popover), not a native <select> -
+    // see gallery-upload-modal.tsx.
+    await modal.locator(".mini-menu-trigger").click();
+    await page.getByRole("option", { name: cycleName }).click();
 
     const uploaded = page.waitForResponse((r) => r.url().endsWith("/api/files/gallery-uploads") && r.request().method() === "POST");
     await page.getByRole("button", { name: "1 Bild hochladen" }).click();
     const uploadResponse = await uploaded;
     expect(uploadResponse.ok(), await uploadResponse.text()).toBeTruthy();
+    // The upload request only stages the file and queues a gallery_upload_job now (see
+    // upload_gallery_images) - actual ingestion/album-assignment happens afterwards, in the
+    // background (app/main.py's gallery_upload_ingest_loop), so wait for that job to finish
+    // before checking the album.
+    const job = await uploadResponse.json();
+    await expect
+      .poll(
+        async () => {
+          const detail = await request.get(`/api/files/gallery-upload-jobs/${job.id}`);
+          return (await detail.json()).status;
+        },
+        { timeout: 30_000 }
+      )
+      .toBe("done");
 
     await page.getByRole("tab", { name: "Alben" }).click();
     const albumCard = page.locator(".album-card", { hasText: cycleName });

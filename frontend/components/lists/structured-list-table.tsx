@@ -36,6 +36,7 @@ type StructuredListTableProps = {
   allowCreate?: boolean;
   fullWidth?: boolean;
   heading?: ReactNode;
+  headingActions?: ReactNode;
   emptyMessage?: string;
   groupByColumn?: "" | StructuredListDisplayColumn;
   sortByColumn?: "" | StructuredListDisplayColumn;
@@ -195,6 +196,7 @@ export function StructuredListTable({
   allowCreate = true,
   fullWidth = false,
   heading,
+  headingActions,
   emptyMessage = "Noch keine Eintraege.",
   groupByColumn = "",
   sortByColumn = "",
@@ -564,6 +566,8 @@ export function StructuredListTable({
       {heading && (
         <div className="structured-list-heading">
           {heading}
+          <div className="table-toolbar-actions">
+          {headingActions}
           {editable && allowCreate && (
             <button
               type="button"
@@ -574,13 +578,14 @@ export function StructuredListTable({
                 setNewRowDraft(createNewRowDraft(definition));
               }}
             >
-              + Eintrag
+              Neuer Eintrag
             </button>
           )}
+          </div>
         </div>
       )}
-      <div className={`event-table-wrap${fullWidth ? " structured-list-table-flat" : ""}`} style={fullWidth ? { width: "100%" } : undefined}>
-        <table className="data-table event-table event-table-compact structured-list-table" style={fullWidth ? { width: "100%" } : undefined}>
+      <div className={`${heading ? "table-shell" : "event-table-wrap"}${fullWidth ? " structured-list-table-flat" : ""}`} style={fullWidth ? { width: "100%" } : undefined}>
+        <table className={`data-table structured-list-table${heading ? " data-table-lg" : " event-table event-table-compact"}`} style={fullWidth ? { width: "100%" } : undefined}>
           <thead>
             <tr>
               <th
@@ -607,6 +612,7 @@ export function StructuredListTable({
               </th>
               {editable ? (
                 <th className="event-column-actions" aria-label="Aktionen">
+                  {heading ? "Aktionen" : null}
                   {allowCreate && !heading && (
                   <button
                     type="button"
@@ -748,12 +754,12 @@ export function StructuredListTable({
                               <div className="event-row-actions">
                                 <button
                                   type="button"
-                                  className="button-ghost button-icon button-icon-danger"
+                                  className={heading ? "button-inline button-danger" : "button-ghost button-icon button-icon-danger"}
                                   title="Listenzeile loeschen"
                                   aria-label="Listenzeile loeschen"
                                   onClick={() => void onDeleteEntry(entry.id)}
                                 >
-                                  x
+                                  {heading ? "Löschen" : "x"}
                                 </button>
                               </div>
                             </td>

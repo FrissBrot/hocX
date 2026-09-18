@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { GalleryUploadModal } from "./gallery-upload-modal";
+import { GalleryUploadProgress } from "./gallery-upload-progress";
 import { PhotoAlbums } from "./photo-albums";
 import { PhotoAnalysisProgress } from "./photo-analysis-progress";
 import { PhotoBulkBar } from "./photo-bulk-bar";
@@ -10,17 +11,28 @@ import { PhotoDateGroups } from "./photo-date-groups";
 import { PhotoSimilarSeries } from "./photo-similar-series";
 import { PhotoViewer } from "./photo-viewer";
 import { FilterTabs } from "@/components/ui/filter-tabs";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
 import { TagInput } from "@/components/ui/tag-input";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
-import { FileOverviewItem, PhotoAnalysisProgress as ProgressData } from "@/types/api";
+import { FileOverviewItem, GalleryUploadJobDetail, PhotoAnalysisProgress as ProgressData } from "@/types/api";
 
 const PAGE_SIZE = 60;
 
 type SortKey = "group_date" | "created_at" | "sharpness_score" | "exposure_score" | "face_quality_score";
 type Tab = "all" | "albums" | "similar";
+
+type SortOption = { id: string; label: string; key: SortKey; dir: "asc" | "desc" };
+
+const SORT_OPTIONS: SortOption[] = [
+  { id: "group_date:desc", label: "Neueste zuerst", key: "group_date", dir: "desc" },
+  { id: "group_date:asc", label: "Älteste zuerst", key: "group_date", dir: "asc" },
+  { id: "sharpness_score:desc", label: "Schärfe (am schärfsten zuerst)", key: "sharpness_score", dir: "desc" },
+  { id: "exposure_score:desc", label: "Belichtung (am besten zuerst)", key: "exposure_score", dir: "desc" },
+  { id: "face_quality_score:desc", label: "Gesichtsqualität (am besten zuerst)", key: "face_quality_score", dir: "desc" },
+];
 
 type Props = {
   albumId?: string;
@@ -132,6 +144,15 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
     });
   }
 
+  useEffect(() => {
+    if (selectedIds.size === 0 || viewerIndex !== null) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setSelectedIds(new Set());
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedIds.size, viewerIndex]);
+
   async function handleAlbumScopedToggleBest(item: FileOverviewItem) {
     if (!albumId) return;
     const nextOverride = item.is_best ? "exclude" : "include";
@@ -161,7 +182,15 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
     setTagSuggestions((current) => Array.from(new Set([...current, ...tags])).sort((a, b) => a.localeCompare(b)));
   }
 
-  function handleUploaded(uploaded: FileOverviewItem[], errors: string[]) {
+  function handleGalleryUploadQueued() {
+    // The actual result (imported items/errors) only arrives later, once the background
+    // job finishes - see handleGalleryUploadJobDone, wired to GalleryUploadProgress below.
+    showToast("Wird hochgeladen und im Hintergrund verarbeitet…", "info");
+  }
+
+  function handleGalleryUploadJobDone(job: GalleryUploadJobDetail) {
+    const uploaded = job.imported_items;
+    const errors = job.errors;
     if (uploaded.length > 0) {
       if (albumId) {
         void browserApiFetch(`/api/files/albums/${albumId}/items`, { method: "POST", body: JSON.stringify({ file_ids: uploaded.map((item) => item.id) }) })
@@ -174,6 +203,7 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
       showToast(uploaded.length === 1 ? "1 Bild hochgeladen." : `${uploaded.length} Bilder hochgeladen.`, "success");
     }
     if (errors.length > 0) showToast(errors.join(" · "), uploaded.length > 0 ? "info" : "error");
+    if (job.error) showToast(job.error, "error");
   }
 
   const grouped = sortKey === "group_date";
@@ -215,17 +245,18 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
               </div>
             )}
             {tab === "all" && !onSelectPhoto && (
-              <select className="files-sort-select" value={`${sortKey}:${sortDir}`} onChange={(event) => {
-                const [key, dir] = event.target.value.split(":") as [SortKey, "asc" | "desc"];
-                setSortKey(key);
-                setSortDir(dir);
-              }}>
-                <option value="group_date:desc">Neueste zuerst</option>
-                <option value="group_date:asc">Älteste zuerst</option>
-                <option value="sharpness_score:desc">Schärfe (am schärfsten zuerst)</option>
-                <option value="exposure_score:desc">Belichtung (am besten zuerst)</option>
-                <option value="face_quality_score:desc">Gesichtsqualität (am besten zuerst)</option>
-              </select>
+              <SearchableSelect
+                className="files-sort-select"
+                options={SORT_OPTIONS}
+                getId={(option) => option.id}
+                getLabel={(option) => option.label}
+                value={`${sortKey}:${sortDir}`}
+                onChange={(option) => {
+                  if (!option) return;
+                  setSortKey(option.key);
+                  setSortDir(option.dir);
+                }}
+              />
             )}
             {tab !== "albums" && (
               <div className="list-filter-tags">
@@ -246,23 +277,25 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
       ) : (
         <>
           {!embedded && <PhotoAnalysisProgress onUpdate={setAnalysisProgress} />}
+          {!embedded && <GalleryUploadProgress onJobDone={handleGalleryUploadJobDone} />}
           {embedded && (
             <div className="list-filter-row list-filter-row-compact">
               <div className="list-filter-search">
                 <SearchInput value={search} onChange={setSearch} placeholder="Fotos durchsuchen" />
               </div>
               {!onSelectPhoto && (
-                <select className="files-sort-select" value={`${sortKey}:${sortDir}`} onChange={(event) => {
-                  const [key, dir] = event.target.value.split(":") as [SortKey, "asc" | "desc"];
-                  setSortKey(key);
-                  setSortDir(dir);
-                }}>
-                  <option value="group_date:desc">Neueste zuerst</option>
-                  <option value="group_date:asc">Älteste zuerst</option>
-                  <option value="sharpness_score:desc">Schärfe (am schärfsten zuerst)</option>
-                  <option value="exposure_score:desc">Belichtung (am besten zuerst)</option>
-                  <option value="face_quality_score:desc">Gesichtsqualität (am besten zuerst)</option>
-                </select>
+                <SearchableSelect
+                  className="files-sort-select"
+                  options={SORT_OPTIONS}
+                  getId={(option) => option.id}
+                  getLabel={(option) => option.label}
+                  value={`${sortKey}:${sortDir}`}
+                  onChange={(option) => {
+                    if (!option) return;
+                    setSortKey(option.key);
+                    setSortDir(option.dir);
+                  }}
+                />
               )}
               <div className="list-filter-tags">
                 <TagInput value={tagFilter.join(",")} onChange={(value) => setTagFilter(value ? value.split(",").map((t) => t.trim()).filter(Boolean) : [])} suggestions={tagSuggestions} placeholder="Tag wählen oder eingeben…" />
@@ -339,7 +372,11 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
       )}
 
       {uploadModalOpen && (
-        <GalleryUploadModal tagSuggestions={tagSuggestions} onClose={() => setUploadModalOpen(false)} onUploaded={handleUploaded} />
+        <GalleryUploadModal
+          tagSuggestions={tagSuggestions}
+          onClose={() => setUploadModalOpen(false)}
+          onQueued={handleGalleryUploadQueued}
+        />
       )}
     </div>
   );
