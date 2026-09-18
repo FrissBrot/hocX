@@ -5,12 +5,6 @@ import { PhotoTile } from "./photo-tile";
 import { formatWeekdayDate } from "@/lib/utils/format";
 import { FileOverviewItem } from "@/types/api";
 
-// First rows are almost certainly already in the viewport on load, so they skip native lazy
-// loading and get fetched immediately instead of waiting for an intersection check. Both
-// branches below render `items` in the same order (groupPhotosByDate only buckets it into
-// contiguous date sections, see its own docstring), so this set lines up with either.
-const PRIORITY_IMAGE_COUNT = 12;
-
 export function PhotoDateGroups({
   items,
   grouped,
@@ -24,7 +18,7 @@ export function PhotoDateGroups({
   onOpen: (item: FileOverviewItem) => void;
   onToggleSelect: (id: string) => void;
 }) {
-  const priorityIds = new Set(items.slice(0, PRIORITY_IMAGE_COUNT).map((item) => item.id));
+  const selectionMode = selectedIds.size > 0;
 
   if (!grouped) {
     return (
@@ -34,7 +28,7 @@ export function PhotoDateGroups({
             key={item.id}
             item={item}
             selected={selectedIds.has(item.id)}
-            priority={priorityIds.has(item.id)}
+            selectionMode={selectionMode}
             onOpen={() => onOpen(item)}
             onToggleSelect={() => onToggleSelect(item.id)}
           />
@@ -62,7 +56,7 @@ export function PhotoDateGroups({
                 key={item.id}
                 item={item}
                 selected={selectedIds.has(item.id)}
-                priority={priorityIds.has(item.id)}
+                selectionMode={selectionMode}
                 onOpen={() => onOpen(item)}
                 onToggleSelect={() => onToggleSelect(item.id)}
               />

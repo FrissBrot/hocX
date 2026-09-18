@@ -24,6 +24,11 @@ export function PhotoViewer({
   onTagsSaved: (id: string, tags: string[]) => void;
 }) {
   const item = items[index];
+  const fileUrl = `${browserApiBaseUrl}${item.content_url}`;
+  const thumbnailUrl = item.thumbnail_url ? `${browserApiBaseUrl}${item.thumbnail_url}` : fileUrl;
+  const [readyUrl, setReadyUrl] = useState<string | null>(null);
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const loadingOriginal = readyUrl !== fileUrl && failedUrl !== fileUrl;
   const [metadata, setMetadata] = useState<StoredFileMetadata | null>(null);
   const [tagsValue, setTagsValue] = useState(item.tags.join(","));
   const [saving, setSaving] = useState(false);
@@ -31,6 +36,30 @@ export function PhotoViewer({
 
   const hasPrev = index > 0;
   const hasNext = index < items.length - 1;
+
+  useEffect(() => {
+    if (thumbnailUrl === fileUrl) return;
+    let cancelled = false;
+    const original = new Image();
+    original.onload = async () => {
+      try {
+        await original.decode();
+        if (!cancelled) setReadyUrl(fileUrl);
+      } catch {
+        // Keep the thumbnail if the original cannot be decoded.
+        if (!cancelled) setFailedUrl(fileUrl);
+      }
+    };
+    original.onerror = () => {
+      if (!cancelled) setFailedUrl(fileUrl);
+    };
+    original.src = fileUrl;
+    return () => {
+      cancelled = true;
+      original.onload = null;
+      original.onerror = null;
+    };
+  }, [fileUrl, thumbnailUrl]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -76,7 +105,6 @@ export function PhotoViewer({
     }, 500);
   }
 
-  const fileUrl = `${browserApiBaseUrl}${item.content_url}`;
   const dimensions = metadata?.width && metadata?.height ? `${metadata.width} × ${metadata.height} px` : null;
   const bezugParts = [item.albums[0]?.name, item.context_label].filter(Boolean);
 
@@ -113,7 +141,18 @@ export function PhotoViewer({
               ‹
             </button>
           )}
-          <img src={fileUrl} alt={item.original_name} className="photo-viewer-img" />
+          <img
+            src={readyUrl === fileUrl ? fileUrl : thumbnailUrl}
+            alt={item.original_name}
+            className="photo-viewer-img"
+            onLoad={() => { if (thumbnailUrl === fileUrl) setReadyUrl(fileUrl); }}
+            onError={() => { if (thumbnailUrl === fileUrl) setFailedUrl(fileUrl); }}
+          />
+          {loadingOriginal && (
+            <div className="photo-viewer-loading" role="status" aria-label="Originalbild wird geladen">
+              <span className="photo-viewer-loading-spinner" aria-hidden="true" />
+            </div>
+          )}
           {hasNext && (
             <button type="button" className="photo-viewer-nav photo-viewer-nav-next" aria-label="Nächstes Foto" onClick={() => onIndexChange(index + 1)}>
               ›

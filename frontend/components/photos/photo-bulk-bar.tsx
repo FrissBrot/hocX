@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { TagInput } from "@/components/ui/tag-input";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
@@ -114,12 +115,16 @@ export function PhotoBulkBar({
     <div className="photo-bulk-bar">
       <span className="pill">{selectedIds.length} ausgewählt</span>
       <div className="table-toolbar-actions">
-        <select value={selectedAlbumId} onChange={(event) => setSelectedAlbumId(event.target.value)} disabled={busy}>
-          <option value="">Album wählen…</option>
-          {albums.map((album) => (
-            <option key={album.id} value={album.id}>{album.name}</option>
-          ))}
-        </select>
+        <SearchableSelect
+          className="photo-bulk-bar-album-select"
+          options={albums}
+          getId={(album) => album.id}
+          getLabel={(album) => album.name}
+          value={selectedAlbumId || null}
+          onChange={(album) => setSelectedAlbumId(album?.id ?? "")}
+          nullLabel="Album wählen…"
+          disabled={busy}
+        />
         <button type="button" className="button-ghost button-inline" onClick={() => void addToAlbum()} disabled={busy || !selectedAlbumId}>
           Zu Album hinzufügen
         </button>
