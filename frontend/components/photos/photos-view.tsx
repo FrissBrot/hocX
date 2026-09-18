@@ -17,7 +17,7 @@ import { TagInput } from "@/components/ui/tag-input";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
-import { FileOverviewItem, GalleryUploadJobDetail, PhotoAnalysisProgress as ProgressData } from "@/types/api";
+import { FileOverviewItem, GalleryUploadJob, GalleryUploadJobDetail, PhotoAnalysisProgress as ProgressData } from "@/types/api";
 
 const PAGE_SIZE = 60;
 
@@ -53,10 +53,13 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
   const [items, setItems] = useState<FileOverviewItem[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadMoreFailed, setLoadMoreFailed] = useState(false);
+  const loadingMoreRef = useRef(false);
   const [isReloading, setIsReloading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [analysisProgress, setAnalysisProgress] = useState<ProgressData | null>(null);
+  const [galleryUploadJobs, setGalleryUploadJobs] = useState<GalleryUploadJob[]>([]);
   const requestIdRef = useRef(0);
   const didMountRef = useRef(false);
 
@@ -78,6 +81,7 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
     didMountRef.current = true;
     const requestId = ++requestIdRef.current;
     setIsReloading(true);
+    setLoadMoreFailed(false);
     const timer = setTimeout(async () => {
       try {
         const next = await browserApiFetch<FileOverviewItem[]>(buildUrl(0));
@@ -100,20 +104,29 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
   }, []);
 
   async function loadMore() {
+    if (loadingMoreRef.current || isReloading || !hasMore) return;
     const requestId = requestIdRef.current;
+    loadingMoreRef.current = true;
     setIsLoadingMore(true);
+    setLoadMoreFailed(false);
     try {
       const next = await browserApiFetch<FileOverviewItem[]>(buildUrl(items.length));
       if (requestId !== requestIdRef.current) return;
       setItems((current) => [...current, ...(next ?? [])]);
       setHasMore((next ?? []).length === PAGE_SIZE);
+    } catch {
+      if (requestId === requestIdRef.current) {
+        setLoadMoreFailed(true);
+        showToast("Weitere Fotos konnten nicht geladen werden. Bitte erneut versuchen.", "error");
+      }
     } finally {
+      loadingMoreRef.current = false;
       setIsLoadingMore(false);
     }
   }
 
   const loadMoreSentinelRef = useInfiniteScroll({
-    hasMore: hasMore && tab === "all",
+    hasMore: hasMore && !loadMoreFailed && tab === "all",
     isLoading: isLoadingMore || isReloading,
     onLoadMore: () => void loadMore(),
   });
@@ -128,6 +141,7 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
         if (requestIdRef.current !== requestId) return;
         setItems(next ?? []);
         setHasMore((next ?? []).length === PAGE_SIZE);
+        setLoadMoreFailed(false);
         setSelectedIds(new Set());
       } catch {
         if (requestIdRef.current === requestId) showToast("Fotos konnten nicht neu geladen werden.", "error");
@@ -224,6 +238,15 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
               {analysisProgress && analysisProgress.pending_images > 0 && (
                 <span className="pill">Analyse läuft · {analysisProgress.active_job_image_count || analysisProgress.pending_images} Bilder</span>
               )}
+              {galleryUploadJobs.length > 0 && (
+                <span className="pill">
+                  Galerie-Upload läuft · {galleryUploadJobs.reduce((sum, job) => sum + job.processed_files, 0)}
+                  {galleryUploadJobs.every((job) => job.total_files !== null)
+                    ? ` von ${galleryUploadJobs.reduce((sum, job) => sum + (job.total_files ?? 0), 0)}`
+                    : ""}{" "}
+                  Bildern
+                </span>
+              )}
               <button type="button" className="button-inline" onClick={() => setUploadModalOpen(true)}>
                 + Bilder hochladen
               </button>
@@ -266,9 +289,6 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
           </div>
         </>
       )}
-      {embedded && albumId && (
-        <button type="button" className="button-inline" onClick={() => setUploadModalOpen(true)}>+ Bilder hochladen</button>
-      )}
 
       {tab === "albums" && !embedded ? (
         <PhotoAlbums />
@@ -277,7 +297,7 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
       ) : (
         <>
           {!embedded && <PhotoAnalysisProgress onUpdate={setAnalysisProgress} />}
-          {!embedded && <GalleryUploadProgress onJobDone={handleGalleryUploadJobDone} />}
+          {!embedded && <GalleryUploadProgress onUpdate={setGalleryUploadJobs} onJobDone={handleGalleryUploadJobDone} />}
           {embedded && (
             <div className="list-filter-row list-filter-row-compact">
               <div className="list-filter-search">
@@ -351,8 +371,8 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
           {hasMore && (
             <div className="load-more-row" ref={loadMoreSentinelRef}>
               {isLoadingMore ? <span className="muted">Lädt weitere Fotos…</span> : (
-                <button type="button" className="button-inline button-ghost" onClick={() => void loadMore()}>
-                  Mehr laden ({items.length} geladen)
+                <button type="button" className="button-inline button-ghost" disabled={isReloading} onClick={() => void loadMore()}>
+                  {loadMoreFailed ? "Erneut versuchen" : `Mehr laden (${items.length} geladen)`}
                 </button>
               )}
             </div>

@@ -18,7 +18,7 @@ from app import scanner
 from app.core.config import settings
 from app.core.cycle_utils import get_cycle_year
 from app.models import AppUser, Event, GalleryImage, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolImage, StoredFile
-from app.models.entities import CycleConfig, PhotoAlbum, PhotoAlbumItem, PhotoAnalysisJob, SubmissionAssignment
+from app.models.entities import CycleConfig, GalleryUploadJob, PhotoAlbum, PhotoAlbumItem, PhotoAnalysisJob, SubmissionAssignment
 from app.repositories.file_repository import ProtocolImageRepository, StoredFileRepository
 from app.schemas.files import FileAlbumRef, FileOverviewItem, FileStats, PhotoAnalysisProgress, SimilarityGroup, StoredFileMetadata
 from app.schemas.protocol import ProtocolImageRead
@@ -697,7 +697,6 @@ class FileService:
                 storage_subdir_parts=(f"tenant-{tenant_id}", f"block-{protocol_element_block.id}"),
                 enable_perceptual_dedupe=True,
                 enable_thumbnail=True,
-                capture_quality_scores=True,
                 created_by=created_by,
                 stored_file_repository=self.stored_file_repository,
             )
@@ -796,7 +795,6 @@ class FileService:
                     storage_subdir_parts=(f"tenant-{tenant_id}", "gallery"),
                     enable_perceptual_dedupe=True,
                     enable_thumbnail=True,
-                    capture_quality_scores=True,
                     created_by=created_by,
                     tags=normalized_tags,
                     too_large_message=f"zu gross (maximal {MAX_UPLOAD_BYTES // 1024 // 1024} MB)",
@@ -959,7 +957,7 @@ class FileService:
             job.total_files = 0
             db.commit()
 
-        for relative_path in job.staged_paths:
+        for relative_path, original_filename in zip(job.staged_paths, job.original_filenames):
             staged_path = Path(settings.storage_root) / relative_path
             try:
                 if staged_path.suffix.lower() == ".zip":
@@ -970,7 +968,7 @@ class FileService:
                     await self._ingest_gallery_batch(
                         db,
                         job,
-                        [(staged_path.name, staged_path.read_bytes())],
+                        [(original_filename, staged_path.read_bytes())],
                         upload_assignment=upload_assignment,
                         upload_cycle_config=upload_cycle_config,
                     )

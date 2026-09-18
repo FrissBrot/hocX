@@ -106,9 +106,9 @@ def test_iter_gallery_zip_entries_reports_nothing_for_a_zip_with_no_images(tmp_p
 
     # Unlike the old in-memory extract_image_files_from_zip, the streaming generator
     # doesn't synthesize a friendly "ZIP enthält keine Bilddateien" note itself (it has no
-    # way to know "nothing matched" until fully drained) - the gallery_upload_job's own
-    # per-entry notes (both empty here, since non-image entries are silently skipped, same
-    # as before) are what the ingest loop surfaces to the user instead.
+    # way to know "nothing matched" until fully drained) - FileService._ingest_gallery_zip's
+    # own saw_anything check is what surfaces that message to the user instead (see
+    # test_gallery_upload_job_reports_a_zip_with_no_images below).
     assert matched == []
     assert notes == []
 
@@ -301,7 +301,12 @@ def test_upload_gallery_images_route_accepts_mixed_batch_of_image_and_zip(db):
     assert job.total_files == 3
     assert job.processed_files == 3
     assert len(job.imported_file_ids) == 3
-    assert job.errors == []
+    # Any two flat-color PNGs phash near-identically regardless of the actual color (a DCT
+    # of a uniform image has no frequency content past the DC term) - _png_bytes' fixtures
+    # trip the perceptual-duplicate hint against each other for that reason. That's an
+    # informational note, not a failure (all 3 still imported, asserted above) - only
+    # assert there's no real failure (too-large/unsupported-format/infected) message.
+    assert all("ähnelt" in error for error in job.errors)
 
     detail = files_routes.get_gallery_upload_job(queued.id, db=db, user=writer)
     assert all(item.source == "gallery_upload" for item in detail.imported_items)

@@ -330,6 +330,10 @@ async def upload_gallery_images(
     # immutable after import either).
     staging_dir = Path(settings.upload_root) / "_staging" / "gallery"
     staged_paths: list[str] = []
+    # Same order as staged_paths - stage_upload_to_disk writes under a randomized filename,
+    # so this is the only place a non-ZIP entry's real client-supplied name survives (a
+    # ZIP's own entries keep their in-archive names, see iter_gallery_zip_entries).
+    original_filenames: list[str] = []
     batch_bytes = 0
     has_zip = False
     try:
@@ -348,6 +352,7 @@ async def upload_gallery_images(
                     detail=f"Gesamtgrösse des Batches überschritten (maximal {MAX_GALLERY_UPLOAD_BATCH_BYTES // 1024 // 1024} MB)",
                 )
             staged_paths.append(str(staged_path.relative_to(settings.storage_root)))
+            original_filenames.append(name)
     except HTTPException:
         for relative_path in staged_paths:
             (Path(settings.storage_root) / relative_path).unlink(missing_ok=True)
@@ -359,6 +364,7 @@ async def upload_gallery_images(
     job = GalleryUploadJob(
         tenant_id=user.current_tenant_id,
         staged_paths=staged_paths,
+        original_filenames=original_filenames,
         tags=tag_list,
         upload_event_id=upload_event_id,
         upload_assignment_id=upload_assignment_id,

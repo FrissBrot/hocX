@@ -108,6 +108,39 @@ describe("PhotosView", () => {
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Alle Fotos", "Alben", "Ähnliche"]);
   });
 
+  it("preserves photos after a pagination failure, pauses automatic loading and retries the same page", async () => {
+    const items = Array.from({ length: 60 }, (_, index) => makeItem({ id: `photo-${index}` }));
+    mockFilesAndProgress([], NO_PROGRESS);
+    browserApiFetchMock.mockImplementation((url: string) => {
+      if (url === "/api/files/analysis-progress") return Promise.resolve(NO_PROGRESS);
+      if (url.startsWith("/api/files?")) return url.includes("skip=0") ? Promise.resolve(items) : Promise.reject(new Error("Backend nicht erreichbar"));
+      return Promise.resolve([]);
+    });
+    render(<PhotosView />);
+    await screen.findByRole("button", { name: "Mehr laden (60 geladen)" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Mehr laden (60 geladen)" }));
+    const retry = await screen.findByRole("button", { name: "Erneut versuchen" });
+    expect(showToastMock).toHaveBeenCalledWith(expect.stringContaining("Weitere Fotos"), "error");
+    expect(screen.getAllByRole("checkbox")).toHaveLength(60);
+    const observerCount = FakeIntersectionObserver.instances.length;
+
+    fireEvent.click(screen.getAllByRole("checkbox")[0]);
+    expect(FakeIntersectionObserver.instances).toHaveLength(observerCount);
+
+    browserApiFetchMock.mockImplementation((url: string) => {
+      if (url.startsWith("/api/files?")) return Promise.resolve([makeItem({ id: "next-photo" })]);
+      return Promise.resolve([]);
+    });
+    fireEvent.click(retry);
+    await waitFor(() => expect(screen.getAllByRole("checkbox")).toHaveLength(61));
+    const pageRequests = browserApiFetchMock.mock.calls.filter(([url]) => url.startsWith("/api/files?") && url.includes("skip=60"));
+    expect(pageRequests).toHaveLength(2);
+    expect(pageRequests[0][0]).toContain("skip=60");
+    expect(pageRequests[1][0]).toBe(pageRequests[0][0]);
+    expect(screen.queryByRole("button", { name: "Erneut versuchen" })).not.toBeInTheDocument();
+  });
+
   it("renders controls and placeholders while photos are pending, then reveals each loaded image", async () => {
     let resolvePhotos!: (items: FileOverviewItem[]) => void;
     const pendingPhotos = new Promise<FileOverviewItem[]>((resolve) => { resolvePhotos = resolve; });
@@ -158,7 +191,7 @@ describe("PhotosView", () => {
     await waitFor(() => expect(screen.getByText("2 ausgewählt")).toBeInTheDocument());
   });
 
-  it("hides the analysis progress bar once nothing is pending", async () => {
+  it("never renders the analysis progress bar text", async () => {
     mockFilesAndProgress([], NO_PROGRESS);
     render(<PhotosView />);
 
@@ -166,10 +199,11 @@ describe("PhotosView", () => {
     expect(screen.queryByText(/Foto-Analyse läuft/)).not.toBeInTheDocument();
   });
 
-  it("shows the analysis progress bar with the analyzed/total count while pending", async () => {
+  it("shows the analysis pill next to the page title while pending", async () => {
     mockFilesAndProgress([], { total_images: 30, analyzed_images: 19, pending_images: 11, active_jobs: 1, active_job_image_count: 11 });
     render(<PhotosView />);
 
-    expect(await screen.findByText(/19 von 30 Bildern bewertet/)).toBeInTheDocument();
+    expect(await screen.findByText(/Analyse läuft · 11 Bilder/)).toBeInTheDocument();
+    expect(screen.queryByText(/19 von 30 Bildern bewertet/)).not.toBeInTheDocument();
   });
 });

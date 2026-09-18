@@ -1365,8 +1365,12 @@ class GalleryUploadJob(Base, TimestampMixin):
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'queued'"))
     # Storage-relative paths of the raw upload(s) staged by the request handler - see
-    # FileService.stage_gallery_upload.
+    # upload_pipeline.stage_upload_to_disk. Filenames on disk are randomized
+    # (uuid4().hex + suffix), so original_filenames (same order) carries each one's real
+    # client-supplied name - used for a non-ZIP entry's StoredFile.original_name (a ZIP's
+    # own entries keep their in-archive names instead, see iter_gallery_zip_entries).
     staged_paths: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    original_filenames: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
     tags: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
     # At most one of these three targets is ever set - mirrors upload_gallery_images' own
     # mutual-exclusion check.

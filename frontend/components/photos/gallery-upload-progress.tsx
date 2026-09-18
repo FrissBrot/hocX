@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
 import { browserApiFetch } from "@/lib/api/client";
 import { GalleryUploadJob, GalleryUploadJobDetail } from "@/types/api";
@@ -8,14 +8,23 @@ import { GalleryUploadJob, GalleryUploadJobDetail } from "@/types/api";
 const POLL_INTERVAL_MS = 3000;
 
 // Polls /api/files/gallery-upload-jobs (tenant-wide, like PhotoAnalysisProgress polls
-// analysis-progress - so the bar shows up for any writer in the tenant, any tab, after a
+// analysis-progress - so the pill shows up for any writer in the tenant, any tab, after a
 // refresh, not just whoever's browser sent the original upload request) while at least one
-// job is queued/running, and renders a bar only then. A job that leaves this "active" list
-// has finished (done or failed) - tracked via previouslyActiveRef so each one is reported
-// to the parent exactly once, via a follow-up fetch of its full result.
-export function GalleryUploadProgress({ onJobDone }: { onJobDone?: (job: GalleryUploadJobDetail) => void }) {
-  const [activeJobs, setActiveJobs] = useState<GalleryUploadJob[]>([]);
+// job is queued/running. Headless, like PhotoAnalysisProgress - reports the active jobs up
+// via onUpdate for the parent's own "Galerie-Upload läuft" pill, renders nothing itself. A
+// job that leaves this "active" list has finished (done or failed) - tracked via
+// previouslyActiveRef so each one is reported to the parent exactly once, via a follow-up
+// fetch of its full result.
+export function GalleryUploadProgress({
+  onUpdate,
+  onJobDone,
+}: {
+  onUpdate?: (jobs: GalleryUploadJob[]) => void;
+  onJobDone?: (job: GalleryUploadJobDetail) => void;
+}) {
   const previouslyActiveRef = useRef<Set<string>>(new Set());
+  const onUpdateRef = useRef(onUpdate);
+  onUpdateRef.current = onUpdate;
   const onJobDoneRef = useRef(onJobDone);
   onJobDoneRef.current = onJobDone;
 
@@ -42,7 +51,7 @@ export function GalleryUploadProgress({ onJobDone }: { onJobDone?: (job: Gallery
         }
         previouslyActiveRef.current = stillActiveIds;
 
-        setActiveJobs(jobs);
+        onUpdateRef.current?.(jobs);
         if (jobs.length > 0) {
           timer = setTimeout(poll, POLL_INTERVAL_MS);
         }
@@ -59,24 +68,5 @@ export function GalleryUploadProgress({ onJobDone }: { onJobDone?: (job: Gallery
     };
   }, []);
 
-  if (activeJobs.length === 0) return null;
-
-  const processed = activeJobs.reduce((sum, job) => sum + job.processed_files, 0);
-  const knownTotal = activeJobs.every((job) => job.total_files !== null)
-    ? activeJobs.reduce((sum, job) => sum + (job.total_files ?? 0), 0)
-    : null;
-  const percent = knownTotal && knownTotal > 0 ? Math.round((processed / knownTotal) * 100) : null;
-
-  return (
-    <div className="photo-analysis-progress">
-      <span className="photo-analysis-progress-label muted">
-        {knownTotal !== null
-          ? `Galerie-Upload läuft – ${processed} von ${knownTotal} Bildern verarbeitet`
-          : `Galerie-Upload läuft – ${processed} Bilder verarbeitet…`}
-      </span>
-      <div className="photo-analysis-bar">
-        <div className="photo-analysis-bar-fill" style={{ width: `${percent ?? 30}%` }} />
-      </div>
-    </div>
-  );
+  return null;
 }

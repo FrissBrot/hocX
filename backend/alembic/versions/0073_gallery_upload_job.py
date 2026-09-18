@@ -25,6 +25,10 @@ def upgrade():
         # ZIP, or several individually-selected images) - the loop reads/extracts these
         # itself instead of the request handler passing decoded bytes.
         sa.Column("staged_paths", postgresql.JSONB(), nullable=False),
+        # Same order as staged_paths - filenames on disk are randomized, so this carries
+        # each one's real client-supplied name (used for a non-ZIP entry's
+        # StoredFile.original_name; a ZIP's own entries keep their in-archive names).
+        sa.Column("original_filenames", postgresql.JSONB(), nullable=False),
         sa.Column("tags", postgresql.JSONB(), nullable=False, server_default=sa.text("'[]'::jsonb")),
         # At most one of these three targets is ever set - see upload_gallery_images' own
         # mutual-exclusion check, unchanged by this migration.
