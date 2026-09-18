@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { GalleryUploadModal } from "./gallery-upload-modal";
+import { GalleryUploadProgress } from "./gallery-upload-progress";
 import { PhotoAlbums } from "./photo-albums";
 import { PhotoAnalysisProgress } from "./photo-analysis-progress";
 import { PhotoBulkBar } from "./photo-bulk-bar";
@@ -15,7 +16,7 @@ import { TagInput } from "@/components/ui/tag-input";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
-import { FileOverviewItem, PhotoAnalysisProgress as ProgressData } from "@/types/api";
+import { FileOverviewItem, GalleryUploadJob, GalleryUploadJobDetail, PhotoAnalysisProgress as ProgressData } from "@/types/api";
 
 const PAGE_SIZE = 60;
 
@@ -54,6 +55,7 @@ export function PhotosView({ albumId, onSelectPhoto, initialItems }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [analysisProgress, setAnalysisProgress] = useState<ProgressData | null>(null);
+  const [galleryUploadJobs, setGalleryUploadJobs] = useState<GalleryUploadJob[]>([]);
   const requestIdRef = useRef(0);
   const didMountRef = useRef(false);
 
@@ -186,7 +188,15 @@ export function PhotosView({ albumId, onSelectPhoto, initialItems }: Props) {
     setTagSuggestions((current) => Array.from(new Set([...current, ...tags])).sort((a, b) => a.localeCompare(b)));
   }
 
-  function handleUploaded(uploaded: FileOverviewItem[], errors: string[]) {
+  function handleGalleryUploadQueued() {
+    // The actual result (imported items/errors) only arrives later, once the background
+    // job finishes - see handleGalleryUploadJobDone, wired to GalleryUploadProgress below.
+    showToast("Wird hochgeladen und im Hintergrund verarbeitet…", "info");
+  }
+
+  function handleGalleryUploadJobDone(job: GalleryUploadJobDetail) {
+    const uploaded = job.imported_items;
+    const errors = job.errors;
     if (uploaded.length > 0) {
       if (albumId) {
         void browserApiFetch(`/api/files/albums/${albumId}/items`, { method: "POST", body: JSON.stringify({ file_ids: uploaded.map((item) => item.id) }) })
@@ -199,6 +209,7 @@ export function PhotosView({ albumId, onSelectPhoto, initialItems }: Props) {
       showToast(uploaded.length === 1 ? "1 Bild hochgeladen." : `${uploaded.length} Bilder hochgeladen.`, "success");
     }
     if (errors.length > 0) showToast(errors.join(" · "), uploaded.length > 0 ? "info" : "error");
+    if (job.error) showToast(job.error, "error");
   }
 
   const grouped = sortKey === "group_date";
@@ -218,6 +229,15 @@ export function PhotosView({ albumId, onSelectPhoto, initialItems }: Props) {
             <div className="table-toolbar-actions">
               {analysisProgress && analysisProgress.pending_images > 0 && (
                 <span className="pill">Analyse läuft · {analysisProgress.active_job_image_count || analysisProgress.pending_images} Bilder</span>
+              )}
+              {galleryUploadJobs.length > 0 && (
+                <span className="pill">
+                  Galerie-Upload läuft · {galleryUploadJobs.reduce((sum, job) => sum + job.processed_files, 0)}
+                  {galleryUploadJobs.every((job) => job.total_files !== null)
+                    ? ` von ${galleryUploadJobs.reduce((sum, job) => sum + (job.total_files ?? 0), 0)}`
+                    : ""}{" "}
+                  Bildern
+                </span>
               )}
               <button type="button" className="button-inline" onClick={() => setUploadModalOpen(true)}>
                 + Bilder hochladen
@@ -268,6 +288,7 @@ export function PhotosView({ albumId, onSelectPhoto, initialItems }: Props) {
       ) : (
         <>
           {!embedded && <PhotoAnalysisProgress onUpdate={setAnalysisProgress} />}
+          {!embedded && <GalleryUploadProgress onUpdate={setGalleryUploadJobs} onJobDone={handleGalleryUploadJobDone} />}
           {embedded && (
             <div className="list-filter-row list-filter-row-compact">
               <div className="list-filter-search">
@@ -353,7 +374,11 @@ export function PhotosView({ albumId, onSelectPhoto, initialItems }: Props) {
       )}
 
       {uploadModalOpen && (
-        <GalleryUploadModal tagSuggestions={tagSuggestions} onClose={() => setUploadModalOpen(false)} onUploaded={handleUploaded} />
+        <GalleryUploadModal
+          tagSuggestions={tagSuggestions}
+          onClose={() => setUploadModalOpen(false)}
+          onQueued={handleGalleryUploadQueued}
+        />
       )}
     </div>
   );
