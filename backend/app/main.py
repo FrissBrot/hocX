@@ -336,6 +336,21 @@ async def photo_album_sync_loop() -> None:
     )
 
 
+async def gallery_upload_ingest_loop() -> None:
+    """Processes queued gallery_upload_job rows (see FileService.process_pending_gallery_upload_jobs) -
+    scanning/thumbnailing/StoredFile-creation for the "Bilder hochladen" window, deferred
+    here so a multi-GB ZIP upload request only has to stream bytes to disk and return, not
+    hold the whole batch in memory. Runs continuously with a short interval (not gated to an
+    off-peak window like photo_analysis_auto_queue_loop) since this is a direct result of a
+    user action and should start within a few seconds of being queued."""
+    file_service = FileService()
+    await run_advisory_locked_loop(
+        lock_id=BACKGROUND_LOCK_IDS["gallery_upload_ingest"],
+        interval_seconds=5,
+        task=file_service.process_pending_gallery_upload_jobs,
+    )
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     FileService().ensure_storage()
@@ -354,11 +369,13 @@ async def lifespan(_: FastAPI):
     photo_analysis_auto_queue_task = asyncio.create_task(photo_analysis_auto_queue_loop())
     photo_quality_backfill_task = asyncio.create_task(photo_quality_backfill_loop())
     photo_album_sync_task = asyncio.create_task(photo_album_sync_loop())
+    gallery_upload_ingest_task = asyncio.create_task(gallery_upload_ingest_loop())
     yield
     health_check_task.cancel()
     photo_analysis_auto_queue_task.cancel()
     photo_quality_backfill_task.cancel()
     photo_album_sync_task.cancel()
+    gallery_upload_ingest_task.cancel()
     rescan_task.cancel()
     upload_pipeline_rescan_task.cancel()
     export_cleanup_task.cancel()

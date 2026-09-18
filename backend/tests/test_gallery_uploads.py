@@ -1,8 +1,9 @@
-"""Tests for the "Fotos" gallery upload window: extract_image_files_from_zip (only real
-images survive a .zip, everything else is silently skipped), FileService.save_gallery_uploads
+"""Tests for the "Fotos" gallery upload window: iter_gallery_zip_entries (only real images
+survive a .zip, everything else is silently skipped), FileService.save_gallery_uploads
 (magic-byte check, size cap, virus scan, tags, gallery_image row creation) and the
-POST /files/gallery-uploads route end-to-end (multipart with a plain image and a .zip mixed
-in one batch)."""
+POST /files/gallery-uploads route end-to-end (stages a plain image and a .zip mixed in one
+batch, queues a gallery_upload_job, then runs the background ingest loop's own task
+synchronously to exercise the whole path in one test)."""
 import asyncio
 import io
 
@@ -12,10 +13,11 @@ from PIL import Image
 from starlette.datastructures import Headers
 
 from app.api.routes import files as files_routes
-from app.models.entities import GalleryImage, StoredFile
+from app.models.entities import GalleryImage, GalleryUploadJob, StoredFile
 from app.services import file_service as file_service_module
 from app.services import public_id_service
-from app.services.file_service import FileService, extract_image_files_from_zip
+from app.services.file_service import FileService
+from app.services.upload_pipeline import iter_gallery_zip_entries
 from tests.factories import make_current_user, make_tenant
 
 
@@ -54,7 +56,20 @@ def _upload_file(content: bytes, filename: str, content_type: str = "application
 service = FileService()
 
 
-def test_extract_image_files_from_zip_keeps_only_images_and_skips_junk():
+def _drain_zip_entries(zip_bytes: bytes, tmp_path) -> tuple[list[tuple[str, bytes]], list[str]]:
+    """iter_gallery_zip_entries streams matches/notes off a ZIP staged on disk instead of
+    returning them as one (matched, notes) pair - this collects a generator's output into
+    that same shape so the tests below can assert on it the same way."""
+    zip_path = tmp_path / "upload.zip"
+    zip_path.write_bytes(zip_bytes)
+    matched: list[tuple[str, bytes]] = []
+    notes: list[str] = []
+    for item in iter_gallery_zip_entries(zip_path):
+        (notes if isinstance(item, str) else matched).append(item)
+    return matched, notes
+
+
+def test_iter_gallery_zip_entries_keeps_only_images_and_skips_junk(tmp_path):
     zip_bytes = _zip_of(
         {
             "urlaub/strand.png": _png_bytes((200, 100, 50)),
@@ -63,31 +78,36 @@ def test_extract_image_files_from_zip_keeps_only_images_and_skips_junk():
         }
     )
 
-    matched, notes = extract_image_files_from_zip(zip_bytes)
+    matched, notes = _drain_zip_entries(zip_bytes, tmp_path)
 
     matched_names = {name for name, _content in matched}
     assert matched_names == {"strand.png"}
     assert notes == []
 
 
-def test_extract_image_files_from_zip_sniffs_content_not_filename():
+def test_iter_gallery_zip_entries_sniffs_content_not_filename(tmp_path):
     """Same security convention as the word-import ZIP extractor: an entry's real type is
     decided by its magic bytes, never its filename - a mislabeled ".jpg" whose actual bytes
     are a PNG is still recognized (and a non-image entry named ".png" would be rejected)."""
     zip_bytes = _zip_of({"urlaub/berg.jpg": _png_bytes((10, 10, 10))})
 
-    matched, _notes = extract_image_files_from_zip(zip_bytes)
+    matched, _notes = _drain_zip_entries(zip_bytes, tmp_path)
 
     assert {name for name, _content in matched} == {"berg.jpg"}
 
 
-def test_extract_image_files_from_zip_reports_when_nothing_matches():
+def test_iter_gallery_zip_entries_reports_nothing_for_a_zip_with_no_images(tmp_path):
     zip_bytes = _zip_of({"bericht.docx": b"PK-artiges-aber-kein-bild", "readme.txt": b"hallo"})
 
-    matched, notes = extract_image_files_from_zip(zip_bytes)
+    matched, notes = _drain_zip_entries(zip_bytes, tmp_path)
 
+    # Unlike the old in-memory extract_image_files_from_zip, the streaming generator
+    # doesn't synthesize a friendly "ZIP enthält keine Bilddateien" note itself (it has no
+    # way to know "nothing matched" until fully drained) - FileService._ingest_gallery_zip's
+    # own saw_anything check is what surfaces that message to the user instead (see
+    # test_gallery_upload_job_reports_a_zip_with_no_images below).
     assert matched == []
-    assert notes == ["ZIP enthält keine Bilddateien"]
+    assert notes == []
 
 
 def test_save_gallery_uploads_stores_image_with_tags_and_creates_gallery_image_row(db):
@@ -192,11 +212,16 @@ def test_upload_gallery_images_route_requires_writer_role(db):
 
 
 def test_upload_gallery_images_route_accepts_mixed_batch_of_image_and_zip(db):
+    """The route now only stages the upload(s) to disk and queues a gallery_upload_job
+    (status "queued", total_files None since a ZIP is in the batch - see
+    upload_gallery_images) instead of ingesting inline - process_pending_gallery_upload_jobs
+    (the background loop's own task) is what actually scans/stores everything, run here
+    synchronously to exercise the whole path in one test."""
     tenant = make_tenant(db)
     writer = make_current_user(tenant.id, role="writer")
     zip_bytes = _zip_of({"a.png": _png_bytes((5, 5, 5)), "b.png": _png_bytes((250, 10, 10)), "notizen.txt": b"x"})
 
-    result = asyncio.run(
+    queued = asyncio.run(
         files_routes.upload_gallery_images(
             files=[
                 _upload_file(_png_bytes((1, 1, 1)), "einzelbild.png", "image/png"),
@@ -211,9 +236,53 @@ def test_upload_gallery_images_route_accepts_mixed_batch_of_image_and_zip(db):
             user=writer,
         )
     )
+    assert queued.status == "queued"
+    assert queued.total_files is None  # unknown upfront - the ZIP hasn't been opened yet
+    job = db.get(GalleryUploadJob, queued.id)
+    assert job is not None
+    assert len(job.staged_paths) == 2
 
-    assert len(result.items) == 3
-    assert all(item.source == "gallery_upload" for item in result.items)
-    assert all(item.tags == ["Lager", "Sommer"] for item in result.items)
-    names = {item.original_name for item in result.items}
+    service.process_pending_gallery_upload_jobs(db)
+
+    db.refresh(job)
+    assert job.status == "done"
+    assert job.total_files == 3
+    assert job.processed_files == 3
+    assert len(job.imported_file_ids) == 3
+    # Any two flat-color PNGs phash near-identically regardless of the actual color (a DCT
+    # of a uniform image has no frequency content past the DC term) - _png_bytes' fixtures
+    # trip the perceptual-duplicate hint against each other for that reason. That's an
+    # informational note, not a failure (all 3 still imported, asserted above) - only
+    # assert there's no real failure (too-large/unsupported-format/infected) message.
+    assert all("ähnelt" in error for error in job.errors)
+
+    detail = files_routes.get_gallery_upload_job(queued.id, db=db, user=writer)
+    assert all(item.source == "gallery_upload" for item in detail.imported_items)
+    assert all(item.tags == ["Lager", "Sommer"] for item in detail.imported_items)
+    names = {item.original_name for item in detail.imported_items}
     assert names == {"einzelbild.png", "a.png", "b.png"}
+
+
+def test_gallery_upload_job_reports_a_zip_with_no_images(db):
+    tenant = make_tenant(db)
+    writer = make_current_user(tenant.id, role="writer")
+    zip_bytes = _zip_of({"bericht.docx": b"PK-artiges-aber-kein-bild", "readme.txt": b"hallo"})
+
+    queued = asyncio.run(
+        files_routes.upload_gallery_images(
+            files=[_upload_file(zip_bytes, "leer.zip", "application/zip")],
+            tags=None,
+            event_id=None,
+            submission_assignment_id=None,
+            submission_element_ref=None,
+            cycle_config_id=None,
+            db=db,
+            user=writer,
+        )
+    )
+    service.process_pending_gallery_upload_jobs(db)
+
+    job = db.get(GalleryUploadJob, queued.id)
+    assert job.status == "done"
+    assert job.imported_file_ids == []
+    assert job.errors == ["ZIP enthält keine Bilddateien"]

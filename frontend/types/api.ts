@@ -239,6 +239,26 @@ export type PhotoAnalysisJob = {
   error: string | null;
 };
 
+export type GalleryUploadJob = {
+  id: string;
+  status: "queued" | "running" | "done" | "failed";
+  // null until a ZIP has been opened and its matching entries counted - see
+  // GalleryUploadModal/gallery-upload-progress.tsx.
+  total_files: number | null;
+  processed_files: number;
+  imported_count: number;
+  error_count: number;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  error: string | null;
+};
+
+export type GalleryUploadJobDetail = GalleryUploadJob & {
+  imported_items: FileOverviewItem[];
+  errors: string[];
+};
+
 export type StoredFileMetadata = {
   id: string;
   original_name: string;

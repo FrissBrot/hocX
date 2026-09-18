@@ -5,9 +5,9 @@ selection every album - auto or manually created - gets within it.
 Two very different call sites feed the same get_or_create_*_album()/recompute_best_of()
 functions below:
 
-- The "Fotos"-gallery upload window (files.py's upload_gallery_images), synchronously, in
-  the trusted hocx_app backend - a writer picked a Termin/Abgabe-Element/Zyklus for the
-  batch they're uploading right there.
+- The "Fotos"-gallery upload window (FileService.process_pending_gallery_upload_jobs, run by
+  app/main.py's gallery_upload_ingest_loop), directly, in the trusted hocx_app backend - a
+  writer picked a Termin/Abgabe-Element/Zyklus for the batch they're uploading right there.
 - The periodic sync_submission_uploads() sweep (main.py's photo_album_sync_loop), because
   the separate, minimally-privileged hocx_abgabebox role that writes submission uploads
   was never granted access to photo_album/photo_album_item (see sql/baseline_schema.sql) -

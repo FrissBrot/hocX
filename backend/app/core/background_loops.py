@@ -30,6 +30,10 @@ BACKGROUND_LOCK_IDS: dict[str, int] = {
     "export_cleanup": 202600007,
     "log_cleanup": 202600009,
     "cycle_snapshot": 202600011,
+    # 202600012-014 intentionally left free here (reserved by photo_analysis_auto_queue/
+    # photo_quality_backfill/photo_album_sync on version-1.1, not yet present on this
+    # branch) so this id stays collision-free whenever this branch catches up to that.
+    "gallery_upload_ingest": 202600015,
 }
 assert len(BACKGROUND_LOCK_IDS) == len(set(BACKGROUND_LOCK_IDS.values())), "duplicate background lock id in BACKGROUND_LOCK_IDS"
 

@@ -23,13 +23,13 @@ import hashlib
 import io
 import zipfile
 import zlib
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
 
 import imagehash
-from fastapi import HTTPException
+from fastapi import HTTPException, UploadFile
 from PIL import Image, ImageOps
 from sqlalchemy.orm import Session
 
@@ -55,6 +55,15 @@ MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
 # Platte geschrieben) und einzeln per Magic-Bytes geprüft - Limits gegen Zip-Bomben.
 MAX_ZIP_ENTRIES = 300
 MAX_ZIP_TOTAL_BYTES = 100 * 1024 * 1024  # 100 MB kombinierte entpackte Grösse
+
+# Galerie-ZIPs laufen (anders als Word-Import) nicht mehr inline im Request, sondern als
+# gallery_upload_job im Hintergrund (siehe FileService.process_pending_gallery_upload_jobs) und
+# werden Eintrag fuer Eintrag von der bereits auf Platte gestagten ZIP-Datei gelesen (siehe
+# iter_gallery_zip_entries unten) statt komplett im Arbeitsspeicher zu liegen - deshalb
+# koennen diese beiden Limits deutlich grosszuegiger sein als MAX_ZIP_TOTAL_BYTES/
+# MAX_ZIP_ENTRIES oben, ohne den frueheren In-Memory-Speicherdruck zurueckzubringen.
+GALLERY_ZIP_MAX_BYTES = 5 * 1024**3  # 5 GiB kombinierte entpackte Grösse
+GALLERY_ZIP_MAX_ENTRIES = 5000
 
 # Hamming-Distanz (von 64 Bit) zweier pHashes, ab der zwei Bilder als "wahrscheinlich
 # dasselbe Motiv" gelten - empirischer Richtwert, bei Bedarf anhand echter Fehlalarme
@@ -121,8 +130,8 @@ def _extract_matching_files_from_zip(
     archive other than the matched entries ever touches disk, so there is nothing left to
     clean up afterwards. Entry count/size are capped to guard against zip bombs (declared,
     not actual, size - sufficient here since uploads require an authenticated writer, not
-    an anonymous endpoint). Shared by extract_word_import_files_from_zip and
-    extract_image_files_from_zip below - only what counts as a match differs."""
+    an anonymous endpoint). Used by extract_word_import_files_from_zip below - the gallery
+    upload window's own ZIP handling instead streams off disk, see iter_gallery_zip_entries."""
     try:
         archive = zipfile.ZipFile(io.BytesIO(content))
     except zipfile.BadZipFile:
@@ -171,12 +180,84 @@ def extract_word_import_files_from_zip(content: bytes) -> tuple[list[tuple[str, 
     )
 
 
-def extract_image_files_from_zip(content: bytes) -> tuple[list[tuple[str, bytes]], list[str]]:
-    """ZIP upload for the gallery upload window - keeps only entries that are genuinely an
-    image, see _extract_matching_files_from_zip above."""
-    return _extract_matching_files_from_zip(
-        content, sniff=_sniff_image_mime, empty_message="ZIP enthält keine Bilddateien"
-    )
+def iter_gallery_zip_entries(path: Path) -> Iterator[tuple[str, bytes] | str]:
+    """ZIP upload for the gallery upload window (see FileService.process_pending_gallery_upload_jobs):
+    reads a ZIP already staged on disk and yields one matching (filename, content) image at
+    a time, or a plain str note for a skipped/oversized/corrupt entry (only genuine images,
+    by magic bytes not filename, ever match - folders/junk/wrong-type entries are silently
+    skipped, same as _extract_matching_files_from_zip's word-import counterpart). Callers
+    tell a match from a note with isinstance(item, tuple).
+
+    Deliberately not built on _extract_matching_files_from_zip: that helper takes the whole
+    ZIP as one `content: bytes` and returns one fully-materialized `matched` list, which is
+    exactly the "hold the whole batch in memory at once" cost this job exists to avoid.
+    zipfile.ZipFile(path) instead seeks/reads each entry from the file handle on demand, so
+    only one entry's decompressed bytes are ever live at a time - bounded by MAX_UPLOAD_BYTES
+    regardless of how large the ZIP itself is. Uses the much larger GALLERY_ZIP_MAX_BYTES/
+    GALLERY_ZIP_MAX_ENTRIES caps since there's no more per-request memory cost to guard
+    against, only a sane upper bound against zip bombs."""
+    try:
+        archive = zipfile.ZipFile(path)
+    except zipfile.BadZipFile:
+        yield "ZIP-Datei ist beschädigt oder ungültig"
+        return
+
+    entries = [info for info in archive.infolist() if not info.is_dir()]
+    total_bytes = 0
+    for info in entries[:GALLERY_ZIP_MAX_ENTRIES]:
+        name = Path(info.filename).name
+        if not name or name.startswith("."):
+            continue
+        if info.file_size > MAX_UPLOAD_BYTES:
+            yield f"{name}: zu gross, übersprungen"
+            continue
+        total_bytes += info.file_size
+        if total_bytes > GALLERY_ZIP_MAX_BYTES:
+            yield "ZIP-Inhalt zu gross - restliche Dateien wurden ignoriert"
+            return
+        try:
+            entry_bytes = archive.read(info)
+        except (zipfile.BadZipFile, zlib.error, OSError):
+            yield f"{name}: beschädigter ZIP-Eintrag, übersprungen"
+            continue
+        if _sniff_image_mime(entry_bytes) is None:
+            continue
+        yield (name, entry_bytes)
+
+    if len(entries) > GALLERY_ZIP_MAX_ENTRIES:
+        yield f"ZIP enthält mehr als {GALLERY_ZIP_MAX_ENTRIES} Dateien - restliche wurden ignoriert"
+
+
+STAGE_CHUNK_BYTES = 4 * 1024 * 1024  # 4 MB
+
+
+async def stage_upload_to_disk(file: UploadFile, *, target_dir: Path, max_bytes: int, suffix: str) -> Path:
+    """Streams an UploadFile straight to `target_dir` in fixed-size chunks instead of the
+    `content = await file.read()` every other upload path in this codebase uses - the one
+    thing that actually keeps a multi-GB gallery ZIP upload (see GALLERY_ZIP_MAX_BYTES)
+    from being held in a single in-memory `bytes` object. Aborts (deletes the partial file,
+    raises 413) as soon as the running byte count crosses max_bytes, rather than only
+    checking after the whole transfer finished.
+
+    target_dir must be a real, disk-backed directory (a subdirectory of settings.upload_root
+    - see FileService.ensure_storage), never the process's default tempfile location: the
+    release deployment mounts /tmp as RAM-backed tmpfs, which would silently turn this
+    streaming write back into an in-memory buffer."""
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_path = target_dir / f"{uuid4().hex}{suffix}"
+    written = 0
+    with target_path.open("wb") as handle:
+        while chunk := await file.read(STAGE_CHUNK_BYTES):
+            written += len(chunk)
+            if written > max_bytes:
+                handle.close()
+                target_path.unlink(missing_ok=True)
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"{file.filename or 'Datei'}: zu gross (maximal {max_bytes // 1024 // 1024} MB)",
+                )
+            handle.write(chunk)
+    return target_path
 
 
 def _compute_perceptual_hash(content: bytes, mime: str) -> str | None:

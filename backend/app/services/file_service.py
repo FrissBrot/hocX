@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import uuid
 from contextlib import contextmanager
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Iterator
@@ -17,7 +18,7 @@ from app import scanner
 from app.core.config import settings
 from app.core.cycle_utils import get_cycle_year
 from app.models import AppUser, Event, GalleryImage, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolImage, StoredFile
-from app.models.entities import CycleConfig, PhotoAlbum, PhotoAlbumItem, PhotoAnalysisJob, SubmissionAssignment
+from app.models.entities import CycleConfig, GalleryUploadJob, PhotoAlbum, PhotoAlbumItem, PhotoAnalysisJob, SubmissionAssignment
 from app.repositories.file_repository import ProtocolImageRepository, StoredFileRepository
 from app.schemas.files import FileAlbumRef, FileOverviewItem, FileStats, PhotoAnalysisProgress, SimilarityGroup, StoredFileMetadata
 from app.schemas.protocol import ProtocolImageRead
@@ -36,10 +37,10 @@ from app.services.upload_pipeline import (
     _content_matches_mime,
     _sniff_image_mime,
     _sniff_word_import_mime,
-    extract_image_files_from_zip,
     extract_word_import_files_from_zip,
     generate_thumbnail_bytes,
     ingest_file,
+    iter_gallery_zip_entries,
 )
 
 # Max number of tags a suggestion query returns to the frontend's autocomplete dropdown.
@@ -143,6 +144,10 @@ class FileService:
             settings.upload_root,
             settings.latex_template_root,
             settings.thumbnail_root,
+            # Gallery-upload staging area (see upload_pipeline.stage_upload_to_disk) - must
+            # stay under upload_root (the bind-mounted storage volume), never the process's
+            # default tempfile location, which is RAM-backed tmpfs in the release deployment.
+            Path(settings.upload_root) / "_staging" / "gallery",
         ]:
             Path(path).mkdir(parents=True, exist_ok=True)
 
@@ -713,10 +718,14 @@ class FileService:
         upload_element_label: str | None = None,
         upload_cycle_config: CycleConfig | None = None,
     ) -> tuple[list[FileOverviewItem], list[str]]:
-        """Persists a batch of images uploaded directly through the "Dateien"/"Fotos" gallery
-        upload window (route already expanded any .zip into individual (filename, bytes)
-        entries via extract_image_files_from_zip - only genuine images ever reach here). Runs
-        the same upload_pipeline.ingest_file() every internal upload path shares: magic-byte
+        """Persists a batch of already-decoded (filename, bytes) images for the "Dateien"/
+        "Fotos" gallery upload window - only genuine images (magic bytes, not filename)
+        should ever reach here; a .zip's entries are the caller's job to expand first (see
+        process_pending_gallery_upload_jobs/iter_gallery_zip_entries, which calls this once
+        per small batch of extracted entries rather than once for a whole ZIP - keeps this
+        method itself simple/synchronous-shaped and reusable as the plain bytes-in/items-out
+        fixture helper several other services' tests already use it as). Runs the same
+        upload_pipeline.ingest_file() every internal upload path shares: magic-byte
         content verification (never the client-supplied filename/Content-Type), a size cap, a
         checksum + tenant-wide perceptual-hash duplicate check (same "sieht aus wie ein bereits
         hochgeladenes Bild" warning as protocol images), and thumbnail generation for the
@@ -848,6 +857,160 @@ class FileService:
                 )
 
         return items, errors
+
+    # Images per save_gallery_uploads() call while working through a gallery_upload_job -
+    # bounds peak memory to roughly this many decoded images at once (each up to
+    # MAX_UPLOAD_BYTES), independent of the job's total size, instead of the old route's
+    # "decode the whole batch, then ingest all of it" shape.
+    GALLERY_INGEST_BATCH_SIZE = 20
+
+    def process_pending_gallery_upload_jobs(self, db: Session) -> None:
+        """Background-loop task (see app/main.py's gallery_upload_ingest_loop): works
+        through every currently-queued gallery_upload_job, oldest first, one at a time -
+        called under run_advisory_locked_loop's cluster-wide lock, which doubles as the
+        concurrency guard against two huge batches (each already up to GALLERY_ZIP_MAX_BYTES)
+        being processed at once. Runs plain synchronously - run_advisory_locked_loop calls
+        task(db) directly on the event loop here (no to_thread offload on this branch yet) -
+        _run_gallery_upload_job is async (it awaits save_gallery_uploads' scan_many), so
+        each job gets its own asyncio.run() here rather than this whole method being async
+        itself."""
+        while True:
+            job = db.scalars(
+                select(GalleryUploadJob).where(GalleryUploadJob.status == "queued").order_by(GalleryUploadJob.created_at).limit(1)
+            ).first()
+            if job is None:
+                return
+            job.status = "running"
+            job.started_at = datetime.now(UTC)
+            db.commit()
+            try:
+                asyncio.run(self._run_gallery_upload_job(db, job))
+            except Exception as exc:
+                db.rollback()
+                db.refresh(job)
+                # _run_gallery_upload_job already cleans up each staged file as it finishes
+                # with it, but an unexpected failure can abort partway through job.staged_paths
+                # - sweep whatever's left so a persistently-failing job doesn't leak staged
+                # files on disk forever (missing_ok since most will already be gone).
+                for relative_path in job.staged_paths:
+                    (Path(settings.storage_root) / relative_path).unlink(missing_ok=True)
+                job.status = "failed"
+                job.error = str(exc)
+                job.finished_at = datetime.now(UTC)
+                db.commit()
+            else:
+                job.status = "done"
+                job.finished_at = datetime.now(UTC)
+                db.commit()
+
+    async def _run_gallery_upload_job(self, db: Session, job: GalleryUploadJob) -> None:
+        upload_assignment = db.get(SubmissionAssignment, job.upload_assignment_id) if job.upload_assignment_id else None
+        upload_cycle_config = db.get(CycleConfig, job.upload_cycle_config_id) if job.upload_cycle_config_id else None
+
+        # total_files is None exactly when the batch contains at least one ZIP (see
+        # upload_gallery_images) - its matching entries aren't known until drained, so this
+        # job counts every file (ZIP entries and any plain images alongside it alike)
+        # incrementally instead of trusting the upfront count a pure-images batch gets.
+        counting_incrementally = job.total_files is None
+        if counting_incrementally:
+            job.total_files = 0
+            db.commit()
+
+        for relative_path, original_filename in zip(job.staged_paths, job.original_filenames):
+            staged_path = Path(settings.storage_root) / relative_path
+            try:
+                if staged_path.suffix.lower() == ".zip":
+                    await self._ingest_gallery_zip(
+                        db, job, staged_path, upload_assignment=upload_assignment, upload_cycle_config=upload_cycle_config
+                    )
+                else:
+                    await self._ingest_gallery_batch(
+                        db,
+                        job,
+                        [(original_filename, staged_path.read_bytes())],
+                        upload_assignment=upload_assignment,
+                        upload_cycle_config=upload_cycle_config,
+                    )
+                    if counting_incrementally:
+                        db.refresh(job)
+                        job.total_files += 1
+                        db.commit()
+            finally:
+                staged_path.unlink(missing_ok=True)
+
+    async def _ingest_gallery_zip(
+        self,
+        db: Session,
+        job: GalleryUploadJob,
+        staged_path: Path,
+        *,
+        upload_assignment: SubmissionAssignment | None,
+        upload_cycle_config: CycleConfig | None,
+    ) -> None:
+        """Streams staged_path via iter_gallery_zip_entries and ingests it in bounded
+        batches - see GALLERY_INGEST_BATCH_SIZE. A queued job's total_files starts at 0 (see
+        _run_gallery_upload_job's counting_incrementally) and grows here as matching entries
+        are discovered, one batch at a time, rather than only being known once the whole ZIP
+        is drained - otherwise the status bar's "X von Y" denominator would stay blank for
+        this job's entire (potentially long) run, exactly for the large-ZIP case this job
+        exists to handle well. Unlike the old in-memory extract_image_files_from_zip, the
+        streaming generator itself has no way to know upfront whether the ZIP will turn out
+        to contain zero images - saw_anything tracks that here instead, so a ZIP with no
+        images and no per-entry problems still gets one clear error rather than silently
+        importing nothing."""
+        batch: list[tuple[str, bytes]] = []
+        saw_anything = False
+        for item in iter_gallery_zip_entries(staged_path):
+            saw_anything = True
+            if isinstance(item, str):
+                job.errors = [*job.errors, item]
+                db.commit()
+                continue
+            batch.append(item)
+            if len(batch) >= self.GALLERY_INGEST_BATCH_SIZE:
+                db.refresh(job)
+                job.total_files += len(batch)
+                db.commit()
+                await self._ingest_gallery_batch(
+                    db, job, batch, upload_assignment=upload_assignment, upload_cycle_config=upload_cycle_config
+                )
+                batch = []
+        if batch:
+            db.refresh(job)
+            job.total_files += len(batch)
+            db.commit()
+            await self._ingest_gallery_batch(db, job, batch, upload_assignment=upload_assignment, upload_cycle_config=upload_cycle_config)
+        if not saw_anything:
+            db.refresh(job)
+            job.errors = [*job.errors, "ZIP enthält keine Bilddateien"]
+            db.commit()
+
+    async def _ingest_gallery_batch(
+        self,
+        db: Session,
+        job: GalleryUploadJob,
+        batch: list[tuple[str, bytes]],
+        *,
+        upload_assignment: SubmissionAssignment | None,
+        upload_cycle_config: CycleConfig | None,
+    ) -> None:
+        items, errors = await self.save_gallery_uploads(
+            db,
+            tenant_id=job.tenant_id,
+            files=batch,
+            tags=list(job.tags),
+            created_by=job.requested_by,
+            upload_event_id=job.upload_event_id,
+            upload_assignment=upload_assignment,
+            upload_element_ref=job.upload_element_ref,
+            upload_element_label=job.upload_element_label,
+            upload_cycle_config=upload_cycle_config,
+        )
+        db.refresh(job)
+        job.imported_file_ids = [*job.imported_file_ids, *(str(item.id) for item in items)]
+        job.errors = [*job.errors, *errors]
+        job.processed_files += len(batch)
+        db.commit()
 
     def save_word_import_document(
         self,

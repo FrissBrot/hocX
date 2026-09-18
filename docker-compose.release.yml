@@ -75,7 +75,11 @@ services:
     # processes every few seconds, which uvicorn kept respawning in a tight crash loop.
     # 768m/2 workers left far too little headroom per worker. Host was resized to 16GB/8
     # cores specifically to give this room.
-    mem_limit: 2048m
+    # 2048m -> 2560m: headroom for the gallery-upload background ingest loop (see
+    # app/main.py's gallery_upload_ingest_loop) - streaming/batched now, so no longer O(ZIP
+    # size), but still real per-batch work (ClamAV + PIL decodes) on top of normal traffic,
+    # on a host that already has a documented OOM history at the previous limit.
+    mem_limit: 2560m
     cpus: 3.0
     init: true
     read_only: true
@@ -256,6 +260,19 @@ services:
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-word-import-ratelimit.ratelimit.burst=10"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-word-import-ratelimit.ratelimit.period=1m"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-word-import-body-limit.buffering.maxRequestBodyBytes=157286400"
+      # Dedicated router for the gallery ("Bilder hochladen") upload endpoint - supports
+      # ZIPs up to GALLERY_ZIP_MAX_BYTES (5 GiB, see upload_pipeline.py) now that the
+      # request only streams bytes to disk and queues a background job (see
+      # gallery_upload_ingest_loop) instead of holding the whole batch in memory.
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-gallery-upload.rule=Host(`${TRAEFIK_DOMAIN}`) && Path(`/api/files/gallery-uploads`) && Method(`POST`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-gallery-upload.entrypoints=websecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-gallery-upload.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-gallery-upload.priority=200"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-gallery-upload.service=${ROUTER_PREFIX:-hocx}-gallery-upload"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-gallery-upload.middlewares=${ROUTER_PREFIX:-hocx}-gallery-upload-body-limit"
+      - "traefik.http.services.${ROUTER_PREFIX:-hocx}-gallery-upload.loadbalancer.server.port=8000"
+      # 5 GiB + ~100 MiB slack for multipart/form-data overhead around the largest accepted ZIP
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-gallery-upload-body-limit.buffering.maxRequestBodyBytes=5474304000"
 
   # Photo-culling Phase 3: scores face quality for photo_analysis_job batches. Own
   # container/resource budget, not inside `backend` - see photo-analysis-worker/README.md.
