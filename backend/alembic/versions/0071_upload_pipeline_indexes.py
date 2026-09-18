@@ -9,16 +9,16 @@ per-tenant scale the "Dateien" page queries at, but the new admin-panel aggregat
 across all tenants, so a partial index on the non-'clean' rows (pending/infected are always a
 small minority) keeps that query cheap without bloating the index with every clean row.
 
-Revision ID: 0066_upload_pipeline_indexes
-Revises: 0065_photo_albums
+Revision ID: 0071_upload_pipeline_indexes
+Revises: 0070_stored_file_dimensions
 Create Date: 2026-09-14
 """
 
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0066_upload_pipeline_indexes"
-down_revision = "0065_photo_albums"
+revision = "0071_upload_pipeline_indexes"
+down_revision = "0070_stored_file_dimensions"
 branch_labels = None
 depends_on = None
 
