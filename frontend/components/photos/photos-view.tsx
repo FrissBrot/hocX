@@ -280,10 +280,10 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
           )}
 
           {items.length === 0 && isReloading ? (
-            <div className="photo-grid" role="status" aria-label="Fotos werden geladen">
+            <div className="photo-loading-grid" role="status" aria-label="Fotos werden geladen">
               {Array.from({ length: 18 }, (_, index) => (
                 <div key={index} className="photo-tile" aria-hidden="true">
-                  <div className="photo-tile-preview" style={{ aspectRatio: [4 / 3, 3 / 4, 1][index % 3] }} />
+                  <div className="photo-tile-preview" style={{ aspectRatio: 4 / 3 }} />
                 </div>
               ))}
             </div>

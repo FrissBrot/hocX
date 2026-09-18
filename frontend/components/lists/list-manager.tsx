@@ -203,8 +203,6 @@ export function ListManager({
     }
   }
 
-  const [hoveredListId, setHoveredListId] = useState<string | null>(null);
-
   const filteredLists = useMemo(() => {
     const query = search.trim().toLowerCase();
     return lists
@@ -430,11 +428,14 @@ export function ListManager({
 
         {/* Left sidebar */}
         <div className="list-manager-sidebar">
-          <div className="list-manager-sidebar-title">Listen</div>
-          <label className="field-stack" style={{ marginBottom: 8 }}>
-            <span className="field-label">Suche</span>
+          <div className="list-manager-sidebar-header">
+            <h1 className="list-manager-sidebar-title">Listen</h1>
+            <button type="button" className="button-ghost button-icon" onClick={openCreate} title="Neue Liste" aria-label="Neue Liste">+</button>
+          </div>
+          {(lists.length > 5 || search) && <label className="field-stack list-manager-search">
+            <span className="sr-only">Listen suchen</span>
             <SearchInput value={search} onChange={setSearch} placeholder="Listen suchen…" />
-          </label>
+          </label>}
 
           {/* List items — scrollable, fills available height */}
           <div className="list-manager-items">
@@ -442,28 +443,27 @@ export function ListManager({
               <span className="muted" style={{ fontSize: "0.85rem", padding: "6px 4px", display: "block" }}>Keine Listen</span>
             ) : filteredLists.map((definition) => {
               const isSelected = selectedListId === definition.id;
-              const isHovered = hoveredListId === definition.id;
+              const entryCount = (entriesByList[definition.id] ?? []).length;
               return (
                 <div
                   key={definition.id}
                   className="list-manager-item-wrap"
-                  onMouseEnter={() => setHoveredListId(definition.id)}
-                  onMouseLeave={() => setHoveredListId(null)}
                 >
                   <button
                     type="button"
                     onClick={() => setSelectedListId(definition.id)}
                     className={`list-manager-item-button${isSelected ? " list-manager-item-button-active" : ""}`}
-                    style={{ paddingRight: isHovered && !isSelected ? 58 : 10 }}
+                    aria-pressed={isSelected}
                   >
-                    {definition.name}
+                    <span className="list-manager-item-name">{definition.name}</span>
+                    <span className="list-manager-item-count">{entryCount} {entryCount === 1 ? "Eintrag" : "Einträge"}</span>
                   </button>
-                  {isHovered && !isSelected && (
                     <div className="list-manager-item-actions">
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); openEdit(definition); }}
                         title="Bearbeiten"
+                        aria-label={`${definition.name} bearbeiten`}
                         className="list-manager-item-action"
                       >
                         ✎
@@ -472,35 +472,24 @@ export function ListManager({
                         type="button"
                         onClick={(e) => { e.stopPropagation(); void deleteDefinition(definition.id); }}
                         title="Löschen"
+                        aria-label={`${definition.name} löschen`}
                         className="list-manager-item-action list-manager-item-action-danger"
                       >
                         ✕
                       </button>
                     </div>
-                  )}
                 </div>
               );
             })}
           </div>
 
-          {/* New list button pinned at bottom */}
-          <button type="button" className="domain-add-trigger" onClick={openCreate} style={{ marginTop: 10 }}>
-            + Neue Liste
-          </button>
         </div>
 
         {/* Right: content */}
         <div className="list-manager-content">
           {selectedList ? (
             <div className="grid">
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-                <div>
-                  <h2 className="list-manager-title">{selectedList.name}</h2>
-                  {selectedList.description && (
-                    <p className="muted" style={{ margin: "3px 0 0", fontSize: "0.85rem" }}>{selectedList.description}</p>
-                  )}
-                </div>
-                <div className="table-toolbar-actions">
+              <div className="list-manager-options">
                   <SnapshotSwitcher
                     mode={historical.mode}
                     availableCycles={historical.availableCycles}
@@ -514,12 +503,6 @@ export function ListManager({
                       Export
                     </button>
                   )}
-                  {isLive && (
-                    <button type="button" className="button-inline button-ghost" onClick={() => openEdit(selectedList)}>
-                      Bearbeiten
-                    </button>
-                  )}
-                </div>
               </div>
 
               {isHistorical && historical.cycleYear !== null && (
@@ -552,7 +535,15 @@ export function ListManager({
               ) : (
                 displayedDefinition && (
                   <StructuredListTable
+                    key={`${selectedList.id}-${historical.mode}-${historical.cycleConfigId}-${historical.cycleYear}`}
                     definition={displayedDefinition}
+                    heading={
+                      <div>
+                        <h2 className="list-manager-title">{displayedDefinition.name}</h2>
+                        <p className="list-manager-description muted">Spalten: {displayedDefinition.column_one_title} · {displayedDefinition.column_two_title}</p>
+                        {displayedDefinition.description && <p className="list-manager-description muted">{displayedDefinition.description}</p>}
+                      </div>
+                    }
                     entries={displayedEntries}
                     availableParticipants={availableParticipants}
                     availableEvents={availableEvents}
