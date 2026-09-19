@@ -7,6 +7,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { FilterTabOption, FilterTabs } from "@/components/ui/filter-tabs";
 import { SearchInput } from "@/components/ui/search-input";
 import { TagInput } from "@/components/ui/tag-input";
+import { TodoEditModal } from "@/components/todos/todo-edit-modal";
 import { TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
 import { TodoDueMenu, DuePatch } from "@/components/todos/todo-due-menu";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -664,131 +665,25 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
         </form>
       </Modal>
 
-      <Modal
-        open={editingTodo !== null}
-        title={editingTodo?.task || "Todo"}
-        description={
-          editingTodo?.protocol_number
-            ? `${editingTodo.protocol_number}${editingTodo.protocol_title ? ` · ${editingTodo.protocol_title}` : ""}`
-            : undefined
-        }
+      {editingTodo && <TodoEditModal
+        key={editingTodo.id}
+        todo={editingTodo}
+        canEdit={canEdit}
+        participants={participants}
+        tagSuggestions={allTagSuggestions}
         onClose={() => setEditTodoId(null)}
-      >
-        {editingTodo && (
-          <div className="grid" style={{ gap: "var(--space-4)", minWidth: 320 }}>
-            {(() => {
-              const isDone = editingTodo.todo_status_code === "done" || editingTodo.todo_status_code === "cancelled";
-              const isAuto = !!editingTodo.submission_assignment_id;
-              return (
-                <label className="field-radio-option">
-                  <input
-                    type="checkbox"
-                    checked={isDone}
-                    disabled={!canEdit || isAuto || busy[editingTodo.id]}
-                    onChange={() => void cycleStatus(editingTodo)}
-                  />
-                  <div>
-                    <strong>Erledigt</strong>
-                    <div className="muted" style={{ fontSize: "var(--text-sm)" }}>
-                      {isAuto
-                        ? "Wird automatisch durch die Abgabe geschlossen."
-                        : "Markiert die Aufgabe als erledigt."}
-                    </div>
-                  </div>
-                </label>
-              );
-            })()}
-
-            <label className="field-stack">
-              <span className="field-label">Aufgabe</span>
-              <input
-                value={editingTodo.task}
-                disabled={!canEdit}
-                onChange={(e) => void updateTodoFields(editingTodo.id, { task: e.target.value })}
-              />
-            </label>
-
-            <label className="field-stack">
-              <span className="field-label">Tags</span>
-              <TagInput
-                value={(editingTodo.tags ?? []).join(",")}
-                onChange={(v) => void updateTodoFields(editingTodo.id, { tags: v ? v.split(",").map((t) => t.trim()).filter(Boolean) : [] })}
-                suggestions={allTagSuggestions}
-                placeholder="Tags…"
-                readOnly={!canEdit}
-              />
-            </label>
-
-            <label className="field-stack">
-              <span className="field-label">Zugewiesen an</span>
-              {participants.length > 0 ? (
-                <TodoAssigneeMenu
-                  label={editingTodo.assigned_participant_name ?? "Niemand"}
-                  participants={participants}
-                  activeId={editingTodo.assigned_participant_id}
-                  onChange={(option) => void updateTodoAssignee(editingTodo.id, option.id, option.id ? option.display_name : null)}
-                />
-              ) : (
-                <span className="muted">Keine Teilnehmer verfügbar</span>
-              )}
-            </label>
-
-            {editingTodo.protocol_id ? (
-              <label className="field-stack">
-                <span className="field-label">Fällig</span>
-                <TodoDueMenu
-                  todoId={editingTodo.id}
-                  label={
-                    editingTodo.resolved_due_label
-                      ? `${editingTodo.resolved_due_label}${editingTodo.resolved_due_date ? ` (${formatDate(editingTodo.resolved_due_date)})` : ""}`
-                      : editingTodo.resolved_due_date
-                      ? formatDate(editingTodo.resolved_due_date)
-                      : "—"
-                  }
-                  onApply={(patch) => void updateTodoDue(editingTodo.id, patch)}
-                />
-              </label>
-            ) : null}
-
-            {editingTodo.protocol_id ? (
-              <div className="info-note">
-                <span className="field-label">Aus Protokoll</span>
-                <div style={{ marginTop: "var(--space-2)" }}>
-                  <button
-                    type="button"
-                    className="todo-protocol-link"
-                    onClick={() => {
-                      const protocolId = editingTodo.protocol_id;
-                      setEditTodoId(null);
-                      router.push(`/protocols/${protocolId}`);
-                    }}
-                  >
-                    <span className="todo-protocol-num">{editingTodo.protocol_number}</span>
-                    {editingTodo.protocol_title ? <span className="todo-protocol-title">{editingTodo.protocol_title}</span> : null}
-                    {editingTodo.block_title ? <span className="todo-protocol-block">· {editingTodo.block_title}</span> : null}
-                  </button>
-                </div>
-              </div>
-            ) : editingTodo.reference_link ? (
-              <div className="info-note">
-                <span className="field-label">Quelle</span>
-                <div style={{ marginTop: "var(--space-2)" }}>
-                  {/^https?:\/\//i.test(editingTodo.reference_link) ? (
-                    <a href={editingTodo.reference_link} target="_blank" rel="noreferrer" className="todo-protocol-link">
-                      <span className="todo-protocol-num">Abgabebox</span>
-                      <span className="todo-protocol-block">↗</span>
-                    </a>
-                  ) : (
-                    <span className="todo-protocol-link">
-                      <span className="todo-protocol-num">Abgabebox</span>
-                    </span>
-                  )}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        )}
-      </Modal>
+        onSaved={(updated) => {
+          setTodos((prev) => ({
+            all: prev.all.map((t) => t.id === updated.id ? { ...t, ...updated } : t),
+            my: prev.my.map((t) => t.id === updated.id ? { ...t, ...updated } : t),
+          }));
+          setEditTodoId(null);
+        }}
+        onDeleted={() => {
+          setTodos((prev) => ({ all: prev.all.filter((t) => t.id !== editingTodo.id), my: prev.my.filter((t) => t.id !== editingTodo.id) }));
+          setEditTodoId(null);
+        }}
+      />}
 
       <Modal
         open={exportModalOpen}

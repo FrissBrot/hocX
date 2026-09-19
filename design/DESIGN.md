@@ -116,7 +116,7 @@ Dropdowns in einem `Modal` oder über anderen Ebenen brauchen die Portal-Ebene (
 | Klasse | Wofür |
 |---|---|
 | `button-primary` | Die **eine** Hauptaktion pro Ansicht/Modal (Speichern, Erstellen) |
-| `button-secondary` | Gleichrangige Aktion mit Rahmen (Standardbutton, „Neu", „Import") |
+| `button-secondary` | Gleichrangige Aktion mit Rahmen (z. B. „CSV-Import", Filter- und Zusatzaktionen) |
 | `button-ghost` | Nebenaktion ohne Gewicht (Abbrechen, Schliessen, Zurück) |
 | `button-danger` | Zerstörerische Aktion (Löschen) |
 | `button-toggle` / `-active` | Umschalter mit zwei Zuständen |
@@ -138,7 +138,7 @@ Native `<button>` ohne Klasse ist ein Primärbutton (globaler Stil). Immer `type
       <h1 className="page-title">Titel</h1>
       <p className="muted">Ein Satz, was man hier tut.</p>
     </div>
-    <button type="button" className="button-secondary">Neu</button>   {/* Hauptaktion der Seite rechts */}
+    <button type="button" className="button-primary">Neu</button>   {/* Hauptaktion der Seite rechts */}
   </div>
   {/* Filter: FilterTabs + SearchInput in .list-filter-row, dann DataTable */}
 </div>
@@ -158,7 +158,7 @@ Karten: `.panel` / `.card` / `.section-card` (Innenabstand kommt aus der Klasse,
 - Fehler: `useToast` oder `StatusBanner`, nicht rot eingefärbter Text per Inline-Style.
 - Pflichtfeld-Prüfung: Button `disabled`, solange ungültig (wie in den bestehenden Formularen).
 
-**Tabellen**: immer `DataTable` (+ `DataToolbar` für Titel/Aktionen). Zellen-Padding, Zeilenhöhe und Trennlinien kommen aus `.data-table`, nie pro Zelle überschreiben. Sortierbare Spalten über `columns[].sortable/onSort`. Zeilenaktionen: ≤2 direkt als `button-icon-soft`, mehr als 2 im `ActionMenu`. Leerer Zustand über `emptyMessage`.
+**Tabellen**: immer `DataTable` (+ `DataToolbar` für Titel/Aktionen). Zellen-Padding, Zeilenhöhe und Trennlinien kommen aus `.data-table`, nie pro Zelle überschreiben. Sortierbare Spalten über `columns[].sortable/onSort`. Zeilenaktionen: bis zu 2 direkt als Button (`button-danger` für Löschen, sonst `button-secondary`/`button-icon-soft`), mehr als 2 im `ActionMenu`. Leerer Zustand über `emptyMessage`.
 
 **Modals**: `Modal` mit `title`; Inhalt als Formular (oben) und `modal-actions` (unten). Kein zweites Modal im Modal: dafür `useConfirm`.
 
@@ -175,7 +175,7 @@ Karten: `.panel` / `.card` / `.section-card` (Innenabstand kommt aus der Klasse,
 1. Bestehenden Baustein (Abschnitt 4) oder eine ähnliche Seite suchen und **deren Struktur übernehmen**.
 2. Neue Optik als Klasse in `frontend/app/globals.css` (Tokens verwenden), Klassennamen mit Feature-Präfix (`finance-…`).
 3. `python3 scripts/check-design-rules.py` ausführen und alle Meldungen beheben.
-4. Typecheck `tsc --noEmit` und `vitest run` (Node ist auf dem Host nicht installiert, beides im Frontend-Container ausführen, z. B. `docker compose exec frontend npx tsc --noEmit`).
+4. Typecheck und Tests: auf dem Host gibt es kein Node, daher im Container: `docker compose exec frontend node_modules/.bin/tsc --noEmit` und `docker compose exec frontend node_modules/.bin/vitest run`.
 5. Bei sichtbaren Änderungen Light **und** Dark bei 1440 und 390 px ansehen (Playwright-Screenshot gegen den E2E-Stack, `scripts/e2e.sh up`).
 6. Token geändert → `./scripts/sync-design-tokens.sh`.
 
