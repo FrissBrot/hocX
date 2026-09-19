@@ -126,7 +126,13 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
     try {
       const next = await browserApiFetch<FileOverviewItem[]>(buildUrl(items.length));
       if (requestId !== requestIdRef.current) return;
-      setItems((current) => [...current, ...(next ?? [])]);
+      // Offset paging overlaps when rows are inserted above the cursor (e.g. a fresh upload
+      // sorts to the top and shifts everything down), so the next page can repeat items
+      // already shown - drop those, or React sees two children with the same key.
+      setItems((current) => {
+        const known = new Set(current.map((item) => item.id));
+        return [...current, ...(next ?? []).filter((item) => !known.has(item.id))];
+      });
       setHasMore((next ?? []).length === PAGE_SIZE);
     } catch {
       if (requestId === requestIdRef.current) {
