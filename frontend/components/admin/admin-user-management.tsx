@@ -380,7 +380,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
                         <tbody>
                           {userForm.memberships.map((membership) => (
                             <tr key={membership.tenant_id}>
-                              <td>{tenantNameById.get(membership.tenant_id) ?? `Tenant #${membership.tenant_id}`}</td>
+                              <td>{tenantNameById.get(membership.tenant_id) ?? "Unbekannter Mandant"}</td>
                               <td>
                                 <select value={membership.role_code} onChange={(event) => changeMembershipRole(membership.tenant_id, event.target.value)}>
                                   {ROLE_OPTIONS.map((r) => (

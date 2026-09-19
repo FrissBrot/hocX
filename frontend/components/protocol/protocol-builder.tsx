@@ -157,7 +157,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
     if (!ok) return;
     try {
       const deletedProtocol = protocols.find((protocol) => protocol.id === protocolId);
-      const deletedLabel = deletedProtocol?.title ?? deletedProtocol?.protocol_number ?? protocolId;
+      const deletedLabel = deletedProtocol?.title ?? deletedProtocol?.protocol_number ?? "Unbenannt";
       await browserApiFetch<{ message: string }>(`/api/protocols/${protocolId}`, { method: "DELETE" });
       setProtocols((current) => current.filter((protocol) => protocol.id !== protocolId));
       showToast(`Protokoll "${deletedLabel}" gelöscht`, "success");

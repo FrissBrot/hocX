@@ -233,9 +233,9 @@ function responsibilityConfigsEqual(left: ResponsibilityConfig, right: Responsib
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function participantName(participant: ParticipantSummary | undefined, mode: ResponsibleNameMode, fallbackId?: string) {
+function participantName(participant: ParticipantSummary | undefined, mode: ResponsibleNameMode) {
   if (!participant) {
-    return fallbackId ? `Teilnehmer ${fallbackId}` : "Unbekannt";
+    return "Unbekannter Teilnehmer";
   }
   if (mode === "first_name") {
     return participant.first_name?.trim() || participant.display_name;
@@ -254,7 +254,7 @@ function titleWithResponsibility(
   const responsibility = parseResponsibilityConfig(item.configuration_json);
   const mode = responsibility.name_display_mode || fallbackMode;
   const names = responsibility.assignments
-    .map((assignment) => participantName(participantsById.get(assignment.participant_id), mode, assignment.participant_id))
+    .map((assignment) => participantName(participantsById.get(assignment.participant_id), mode))
     .filter(Boolean);
   return names.length ? `${item.title} (${names.join(", ")})` : item.title;
 }
@@ -283,9 +283,9 @@ function rowOptionLabel(
   participantsById: Map<string, ParticipantSummary>,
   mode: ResponsibleNameMode
 ) {
-  const text = listTextValue(entry, meta.textColumn) || `Zeile ${entry.id}`;
+  const text = listTextValue(entry, meta.textColumn) || "Leere Zeile";
   const names = listParticipantIds(entry, meta.participantColumn, meta.participantValueType)
-    .map((participantId) => participantName(participantsById.get(participantId), mode, participantId))
+    .map((participantId) => participantName(participantsById.get(participantId), mode))
     .filter(Boolean);
   return names.length ? `${text} -> ${names.join(", ")}` : text;
 }
@@ -369,7 +369,7 @@ function blockDisplayLabel(block: TemplateElementBlock): string {
   if (title) {
     return title;
   }
-  return ELEMENT_TYPE_LABELS[block.element_type_id] ?? `Block #${block.id}`;
+  return ELEMENT_TYPE_LABELS[block.element_type_id] ?? "Block";
 }
 
 function blockBehaviorValues(block: TemplateElementBlock): Record<TemplateElementBehaviorField, boolean> {
@@ -466,7 +466,7 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
     });
     if (!ok) return;
     try {
-      const deletedName = templates.find((template) => template.id === templateId)?.name ?? templateId;
+      const deletedName = templates.find((template) => template.id === templateId)?.name ?? "Unbenannt";
       await browserApiFetch(`/api/templates/${templateId}`, { method: "DELETE" });
       setTemplates((current) => current.filter((template) => template.id !== templateId));
       showToast(`Vorlage "${deletedName}" gelöscht`, "success");
@@ -1171,11 +1171,11 @@ export function TemplateEditor({
       return "";
     }
     const listMeta = eligibleResponsibleLists.find((item) => item.definition.id === assignment.list_definition_id);
-    const listName = listMeta?.definition.name ?? `Liste ${assignment.list_definition_id}`;
+    const listName = listMeta?.definition.name ?? "Unbekannte Liste";
     const linkedEntry = listEntriesByListId[assignment.list_definition_id]?.find((entry) => entry.id === assignment.list_entry_id);
     const rowLabel = linkedEntry && listMeta
-      ? listTextValue(linkedEntry, listMeta.textColumn) || `Zeile ${assignment.list_entry_id}`
-      : `Zeile ${assignment.list_entry_id}`;
+      ? listTextValue(linkedEntry, listMeta.textColumn) || "Leere Zeile"
+      : "Unbekannte Zeile";
     return `${listName} · ${rowLabel}`;
   }
 
@@ -1212,8 +1212,7 @@ export function TemplateEditor({
         .map((participantId) =>
           participantName(
             participantsById.get(participantId),
-            responsibility.name_display_mode || responsibilityNameMode,
-            participantId
+            responsibility.name_display_mode || responsibilityNameMode
           )
         )
         .filter(Boolean)
@@ -1815,7 +1814,7 @@ export function TemplateEditor({
               <span className="pill">{eligibleResponsibleLists.length} passende Listen</span>
               {responsibilityAutoListId ? (
                 <span className="pill">
-                  Auto-Liste: {eligibleResponsibleLists.find((item) => String(item.definition.id) === responsibilityAutoListId)?.definition.name ?? responsibilityAutoListId}
+                  Auto-Liste: {eligibleResponsibleLists.find((item) => String(item.definition.id) === responsibilityAutoListId)?.definition.name ?? "Unbekannte Liste"}
                 </span>
               ) : null}
             </div>
@@ -1924,7 +1923,7 @@ export function TemplateEditor({
                           <div className="responsibility-card" key={`responsibility-${responsibilityModalElement.id}-${assignment.participant_id}`}>
                             <div className="responsibility-card-head">
                               <div>
-                                <strong>{participantName(participant, responsibilityNameMode, assignment.participant_id)}</strong>
+                                <strong>{participantName(participant, responsibilityNameMode)}</strong>
                                 <div className="muted">{sourceLabel}</div>
                               </div>
                               <div className="responsibility-card-actions">
@@ -2023,7 +2022,7 @@ export function TemplateEditor({
                             onChange={(event) => void toggleResponsibleParticipant(responsibilityModalElement.id, participant.id, event.target.checked)}
                           />
                           <div>
-                            <strong>{participantName(participant, responsibilityNameMode, participant.id)}</strong>
+                            <strong>{participantName(participant, responsibilityNameMode)}</strong>
                             <div className="muted">{participant.display_name}</div>
                             {linkedAssignment?.list_definition_id ? (
                               <div className="muted">{responsibilityLinkTooltip(linkedAssignment)}</div>

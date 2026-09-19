@@ -262,7 +262,7 @@ export function EventOverviewModal({
                       <span />
                     </div>
                     <div className="candidate-card-body">
-                      <div>{evt.title ?? `Termin ${evt.id}`}</div>
+                      <div>{evt.title ?? "Termin ohne Titel"}</div>
                       <div className="muted">
                         {evt.event_date}
                         {evt.tag ? ` · ${evt.tag}` : ""}

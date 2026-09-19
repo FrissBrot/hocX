@@ -141,7 +141,7 @@ export function WordImportQueueView({ templates, initialDocuments, initialTempla
         if (result.status === "rejected") {
           const id = selectedIds[index];
           failedIds.add(id);
-          const name = documents.find((doc) => doc.id === id)?.display_name ?? `Dokument #${id}`;
+          const name = documents.find((doc) => doc.id === id)?.display_name ?? "Dokument";
           errors.push(`${name}: ${result.reason instanceof Error ? result.reason.message : "Entfernen fehlgeschlagen"}`);
         }
       });

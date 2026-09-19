@@ -3332,7 +3332,7 @@ export function FocusedElementEditor({
           const evt = availableEvents.find((e) => e.id === eventId);
           return {
             id: `block-${b.id}`,
-            label: String(config.repeat_source_label ?? evt?.title ?? `Termin ${eventId}`),
+            label: String(config.repeat_source_label ?? evt?.title ?? "Unbekannter Termin"),
             sublabel: evt ? `${formatDate(evt.event_date)}${evt.tag ? ` · ${evt.tag}` : ""}` : undefined,
             checked: b.is_visible_snapshot,
             groupLabel: "Bereits vorhanden",

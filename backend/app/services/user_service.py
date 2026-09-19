@@ -57,7 +57,7 @@ def _resolve_memberships(db: Session, memberships: list[TenantMembershipWrite]) 
     for m in memberships:
         internal_id = id_map.get(m.tenant_id)
         if internal_id is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Tenant {m.tenant_id} not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
         resolved.append(_ResolvedMembership(tenant_id=internal_id, role_code=m.role_code, is_active=m.is_active))
     return resolved
 

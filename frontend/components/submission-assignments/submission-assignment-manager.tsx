@@ -796,7 +796,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
               <div className="subm-participant-list">
                 {elements.map((element, rowIndex) => {
                   const responsibleName = element.responsible_participant_id
-                    ? (availableParticipants.find((p) => p.id === element.responsible_participant_id)?.display_name ?? `#${element.responsible_participant_id}`)
+                    ? (availableParticipants.find((p) => p.id === element.responsible_participant_id)?.display_name ?? "Unbekannter Teilnehmer")
                     : null;
                   const displayName = responsibleName ?? element.label;
                   const hasFiles = element.files.length > 0;
@@ -868,7 +868,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
               ) : null}
               {elementModal.responsible_participant_id ? (() => {
                 const name = availableParticipants.find((p) => p.id === elementModal.responsible_participant_id)?.display_name
-                  ?? `#${elementModal.responsible_participant_id}`;
+                  ?? "Unbekannter Teilnehmer";
                 return (
                   <span className="subm-responsible">
                     <span className="subm-avatar">{initials(name)}</span>

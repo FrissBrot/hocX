@@ -412,7 +412,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
                 userForm.memberships.map((membership) => (
                   <div key={membership.tenant_id} className="selection-card membership-row">
                     <div>
-                      <strong>{tenantNameById.get(membership.tenant_id) ?? `Tenant #${membership.tenant_id}`}</strong>
+                      <strong>{tenantNameById.get(membership.tenant_id) ?? "Unbekannter Mandant"}</strong>
                       <div className="muted">{membership.role_code}</div>
                     </div>
                     <button type="button" className="button-inline button-danger" onClick={() => removeMembership(membership.tenant_id)}>

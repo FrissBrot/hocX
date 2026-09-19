@@ -203,7 +203,7 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
                 </button>
               </td>
               <td>{FINE_TYPE_LABEL[fine.fine_type] ?? fine.fine_type}</td>
-              <td>{account?.name ?? `Konto ${fine.account_id}`}</td>
+              <td>{account?.name ?? "Unbekanntes Konto"}</td>
               <td>{fine.amount.toFixed(2)} {cur}</td>
               <td>
                 <Badge variant={isCollected ? "success" : "neutral"}>{isCollected ? "Kassiert" : "Ausstehend"}</Badge>

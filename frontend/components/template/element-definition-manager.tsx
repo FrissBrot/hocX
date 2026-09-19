@@ -1033,7 +1033,7 @@ export function ElementDefinitionManager({
   function describeListEntry(entry: StructuredListEntry, definition: StructuredListDefinition): string {
     const colOne = describeListValue(entry.column_one_value as Record<string, unknown>, definition.column_one_value_type);
     const colTwo = describeListValue(entry.column_two_value as Record<string, unknown>, definition.column_two_value_type);
-    return [colOne, colTwo].filter(Boolean).join(" – ") || `Eintrag ${entry.id}`;
+    return [colOne, colTwo].filter(Boolean).join(" – ") || "Leerer Eintrag";
   }
 
   function tableRowPreviewValue(field: BlockFormState["table_fields"][number]): string {
@@ -1324,7 +1324,7 @@ export function ElementDefinitionManager({
     });
     if (!ok) return;
     try {
-      const deletedTitle = definitions.find((definition) => definition.id === definitionId)?.title ?? definitionId;
+      const deletedTitle = definitions.find((definition) => definition.id === definitionId)?.title ?? "Unbenannt";
       await browserApiFetch(`/api/element-definitions/${definitionId}`, { method: "DELETE" });
       const nextDefinitions = definitions.filter((definition) => definition.id !== definitionId);
       setDefinitions(nextDefinitions);
@@ -1807,7 +1807,6 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
           <tr key={definition.id} className={`table-row-clickable${selectedDefinitionId === definition.id ? " table-row-active" : ""}`} onClick={() => selectDefinition(definition)}>
             <td>
               <strong>{definition.title}</strong>
-              <div className="muted">Element #{definition.id}</div>
             </td>
             <td>{definition.blocks.length} {definition.blocks.length === 1 ? "Block" : "Blöcke"}</td>
             <td>
@@ -1917,7 +1916,6 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                   >
                     <td>
                       <strong>{blockDisplayName(block)}</strong>
-                      <div className="muted">Block #{block.id}</div>
                     </td>
                     <td>{optionLabel(elementTypeOptions, block.element_type_id)}</td>
                     <td>{block.block_title?.trim() ? block.block_title : "Kein Untertitel"}</td>

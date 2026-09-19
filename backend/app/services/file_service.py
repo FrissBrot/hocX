@@ -1322,7 +1322,7 @@ class FileService:
         for file_id in file_ids:
             row = rows_by_public_id.get(file_id)
             if row is None:
-                errors.append(f"{file_id}: nicht gefunden")
+                errors.append("Datei nicht gefunden")
                 continue
             if row.source != "gallery_upload":
                 errors.append(f"{row.original_name}: kann von hier aus nicht gelöscht werden (Quelle: {row.origin_tag})")

@@ -245,7 +245,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
     });
     if (!ok) return;
     try {
-      const deletedName = participants.find((participant) => participant.id === participantId)?.display_name ?? participantId;
+      const deletedName = participants.find((participant) => participant.id === participantId)?.display_name ?? "Unbenannt";
       await browserApiFetch(`/api/participants/${participantId}`, { method: "DELETE" });
       setParticipants((current) => current.filter((participant) => participant.id !== participantId));
       setSelectedParticipantIds((current) => current.filter((id) => id !== participantId));
