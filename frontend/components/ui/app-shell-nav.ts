@@ -52,7 +52,8 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
       links: [
         { href: "/participants", label: "Teilnehmer", icon: "participants" },
         { href: "/lists", label: "Stammlisten", icon: "lists" },
-        { href: "/files", label: "Dateien", icon: "files", match: ["/photos"] },
+        { href: "/photos", label: "Fotos", icon: "photos" },
+        { href: "/files", label: "Dateien", icon: "files" },
       ],
     });
   }

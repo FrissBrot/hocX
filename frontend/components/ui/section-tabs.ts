@@ -18,9 +18,3 @@ export const TEMPLATE_TABS: RouteTab[] = [
   { href: "/elements", label: "Elemente" },
   { href: "/settings", label: "Dokument-Layouts" },
 ];
-
-// Writer/admin-only section, same as the routes themselves.
-export const FILE_TABS: RouteTab[] = [
-  { href: "/files", label: "Dokumente" },
-  { href: "/photos", label: "Fotos" },
-];
