@@ -29,18 +29,17 @@ test("a public Abgabebox photo upload is folded into its Abgabe-Element auto-alb
   test.setTimeout(120_000);
   const api = await playwrightRequest.newContext({ baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: authFiles.admin });
   const suffix = `${Date.now()}`;
-  let tenantSlug: string | undefined;
   let assignmentId: string | undefined;
   let eventId: string | undefined;
 
   try {
-    const session = await (await api.get("/api/auth/session")).json();
-    tenantSlug = session.current_tenant.public_slug as string | null ?? undefined;
-    if (!tenantSlug) {
-      tenantSlug = `e2e-tenant-${suffix}`;
-      const slugged = await api.patch(`/api/tenants/${session.current_tenant.id}`, { multipart: { public_slug: tenantSlug } });
-      expect(slugged.ok(), await slugged.text()).toBeTruthy();
-    }
+    // The Abgabebox is reached via a link token (not the tenant slug) - every tenant has a
+    // default link, which new Abgaben are attached to automatically.
+    const linksResponse = await api.get("/api/submission-links");
+    expect(linksResponse.ok(), await linksResponse.text()).toBeTruthy();
+    const links = (await linksResponse.json()) as { token: string; is_default: boolean }[];
+    const linkToken = (links.find((link) => link.is_default) ?? links[0])?.token;
+    expect(linkToken, "tenant has no Abgabe link").toBeTruthy();
 
     const tag = `e2e-abgabe-${suffix}`;
     const createdEvent = await api.post("/api/events", {
@@ -76,14 +75,14 @@ test("a public Abgabebox photo upload is folded into its Abgabe-Element auto-alb
     try {
       const publicPage = await publicContext.newPage();
       const elementsResponse = await publicContext.request.get(
-        `/api/public/${tenantSlug}/assignments/${assignmentSlug}/elements`
+        `/api/public/${linkToken}/assignments/${assignmentSlug}/elements`
       );
       expect(elementsResponse.ok(), await elementsResponse.text()).toBeTruthy();
       const elements = await elementsResponse.json();
       expect(elements.length).toBeGreaterThan(0);
       const elementRef = elements[0].element_ref as string;
 
-      await publicPage.goto(`/${tenantSlug}/${assignmentSlug}/${elementRef}`);
+      await publicPage.goto(`/${linkToken}/${assignmentSlug}/${elementRef}`);
       await publicPage.waitForLoadState("networkidle");
       // A real filechooser interaction (via the visible drop-zone's own click handler),
       // not a direct setInputFiles() on the hidden #files input - see

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from app.core.config import settings
 from app import scanner
-from app.models import Event, ListDefinition, ListEntry, Participant, ProtocolTodo, StoredFile, SubmissionAssignment, SubmissionUpload, Tenant, TenantDomain
+from app.models import Event, ListDefinition, ListEntry, Participant, ProtocolTodo, StoredFile, SubmissionAssignment, SubmissionUpload
 from app.repositories.submission_repository import SubmissionRepository
 from app.schemas.submission import (
     SubmissionAssignmentCreate,
@@ -19,20 +19,8 @@ from app.schemas.submission import (
     SubmissionFileRead,
     SubmissionUploadLogEntry,
 )
-from app.services import public_id_service
+from app.services import public_id_service, submission_link_service
 from app.services.file_service import _safe_storage_path
-
-
-def _abgabebox_base_url(db: Session, tenant_id: int) -> str:
-    """Prefers the tenant's own verified Abgabebox domain, falls back to the shared default."""
-    domain_row = (
-        db.query(TenantDomain)
-        .filter(TenantDomain.tenant_id == tenant_id, TenantDomain.purpose == "abgabebox", TenantDomain.status == "active")
-        .one_or_none()
-    )
-    if domain_row is not None:
-        return f"https://{domain_row.domain}"
-    return settings.abgabebox_base_url
 
 
 def _move_from_quarantine(quarantine_rel_path: str, storage_root: str) -> str:
@@ -126,7 +114,9 @@ class SubmissionService:
         self.repository = repository or SubmissionRepository()
 
     def _assignment_read(self, assignment: SubmissionAssignment) -> SubmissionAssignmentRead:
-        return SubmissionAssignmentRead.model_validate(assignment)
+        read = SubmissionAssignmentRead.model_validate(assignment)
+        read.link_ids = [link.public_id for link in assignment.links]
+        return read
 
     def list_assignments(self, db: Session, *, tenant_id: int) -> list[SubmissionAssignmentRead]:
         return [self._assignment_read(item) for item in self.repository.list_assignments(db, tenant_id=tenant_id)]
@@ -140,8 +130,14 @@ class SubmissionService:
         self._validate_source_fields(payload)
         list_definition_id = self._resolve_list_definition_tenant(db, payload.list_definition_id, tenant_id=tenant_id)
         values = payload.model_dump()
+        link_ids = values.pop("link_ids")
         values["list_definition_id"] = list_definition_id
-        entity = SubmissionAssignment(tenant_id=tenant_id, **values)
+        links = (
+            submission_link_service.default_links(db, tenant_id)
+            if link_ids is None
+            else submission_link_service.resolve_links(db, link_ids, tenant_id=tenant_id)
+        )
+        entity = SubmissionAssignment(tenant_id=tenant_id, links=links, **values)
         created = self.repository.create_assignment(db, entity)
         return self._assignment_read(created)
 
@@ -152,7 +148,15 @@ class SubmissionService:
         if assignment is None:
             return None
         values = payload.model_dump(exclude_unset=True)
+        link_ids = values.pop("link_ids", None)
+        if link_ids is not None:
+            assignment.links = submission_link_service.resolve_links(db, link_ids, tenant_id=assignment.tenant_id)
         if not values:
+            if link_ids is not None:
+                db.add(assignment)
+                db.commit()
+                db.refresh(assignment)
+                self.refresh_todo_links(db, assignment)
             return self._assignment_read(assignment)
         if "list_definition_id" in values:
             values["list_definition_id"] = self._resolve_list_definition_tenant(
@@ -168,6 +172,8 @@ class SubmissionService:
         }
         self._validate_source_fields_dict(merged)
         updated = self.repository.update_assignment(db, assignment, values)
+        if link_ids is not None:
+            self.refresh_todo_links(db, updated)
         return self._assignment_read(updated)
 
     def _resolve_list_definition_tenant(self, db: Session, list_definition_public_id: uuid.UUID | None, *, tenant_id: int) -> int | None:
@@ -434,10 +440,9 @@ class SubmissionService:
                     pass
 
     def sync_submission_todos(self, db: Session, assignment: SubmissionAssignment) -> dict:
-        tenant = self.repository.get_tenant(db, assignment.tenant_id)
-        tenant_slug = tenant.public_slug if tenant else None
-        if not tenant_slug:
-            raise ValueError("Tenant hat keine öffentliche URL-Kennung (public_slug)")
+        link = submission_link_service.preferred_link(assignment)
+        if link is None:
+            raise ValueError("Die Abgabe ist über keinen Link erreichbar – bitte zuerst einen Link auswählen")
 
         raw_elements = self._resolve_raw_elements(db, assignment)
         existing = self.repository.list_todos_for_submission_assignment(db, assignment.id)
@@ -445,14 +450,14 @@ class SubmissionService:
 
         created = 0
         updated = 0
-        base_url = _abgabebox_base_url(db, assignment.tenant_id)
+        base_url = submission_link_service.abgabebox_base_url(db, assignment.tenant_id)
 
         for raw in raw_elements:
             participant_id = raw.get("responsible_participant_id")
             if not participant_id:
                 continue
             element_ref = _element_ref(event_public_id=raw["event_public_id"], list_entry_public_id=raw["list_entry_public_id"])
-            url = f"{base_url}/{tenant_slug}/{assignment.public_slug}/{element_ref}"
+            url = f"{submission_link_service.link_url(base_url, link)}/{assignment.public_slug}/{element_ref}"
             task = f"{assignment.title}: {raw['label']}"
             due_date = raw.get("window_end")
 
@@ -483,6 +488,24 @@ class SubmissionService:
 
         db.commit()
         return {"created": created, "updated": updated}
+
+    def refresh_todo_links(self, db: Session, assignment: SubmissionAssignment) -> None:
+        """Points the reference_link of the Abgabe's existing todos at the current preferred
+        link - called whenever the set of links (or a link's token) changes, so todos never
+        keep a dead URL. Unlike sync_submission_todos this never creates todos. No link left
+        = no reachable URL, so the reference is cleared."""
+        link = submission_link_service.preferred_link(assignment)
+        base_url = submission_link_service.abgabebox_base_url(db, assignment.tenant_id)
+        for todo in self.repository.list_todos_for_submission_assignment(db, assignment.id):
+            if not todo.element_ref:
+                continue
+            todo.reference_link = (
+                f"{submission_link_service.link_url(base_url, link)}/{assignment.public_slug}/{todo.element_ref}"
+                if link is not None
+                else None
+            )
+            db.add(todo)
+        db.commit()
 
     def get_upload_log(self, db: Session, *, assignment_id: int, element_ref: str) -> list[SubmissionUploadLogEntry]:
         rows = self.repository.list_upload_log(db, assignment_id=assignment_id, element_ref=element_ref)

@@ -18,12 +18,25 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 metadata = MetaData()
 
-tenant_table = Table(
-    "tenant",
+# submission_link/submission_assignment_link: der Zugang zur Abgabebox. Das Token in der URL ist
+# die Authentifizierung - darueber wird Mandant und die freigegebene Abgabenmenge bestimmt. Die
+# restricted Rolle darf nur (id, tenant_id, token) bzw. (assignment_id, link_id) lesen, nie
+# name/is_default/Zeitstempel, und nichts schreiben (siehe Migration 0075_submission_link).
+# Der Mandant selbst (tenant-Tabelle, public_slug) wird hier bewusst NICHT mehr gelesen - der
+# Mandanten-Slug ist keine Zugangsberechtigung mehr.
+submission_link_table = Table(
+    "submission_link",
     metadata,
     Column("id", BigInteger, primary_key=True),
-    Column("name", Text),
-    Column("public_slug", Text),
+    Column("tenant_id", BigInteger),
+    Column("token", Text),
+)
+
+submission_assignment_link_table = Table(
+    "submission_assignment_link",
+    metadata,
+    Column("assignment_id", BigInteger, primary_key=True),
+    Column("link_id", BigInteger, primary_key=True),
 )
 
 submission_assignment_table = Table(

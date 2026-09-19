@@ -15,36 +15,48 @@ from app.models import (
     list_entry_table,
     participant_table,
     stored_file_table,
+    submission_assignment_link_table,
     submission_assignment_table,
+    submission_link_table,
     submission_upload_file_table,
     submission_upload_log_table,
     submission_upload_table,
     system_error_log_table,
-    tenant_table,
 )
 
 
-def get_tenant_by_slug(db: Session, *, public_slug: str) -> dict | None:
-    row = db.execute(select(tenant_table).where(tenant_table.c.public_slug == public_slug)).mappings().first()
+def get_link_by_token(db: Session, *, token: str) -> dict | None:
+    """The one and only entry point into the public Abgabebox: a valid link token. Everything
+    else (tenant, reachable Abgaben) is derived from the returned link and nothing is reachable
+    without one."""
+    row = db.execute(select(submission_link_table).where(submission_link_table.c.token == token)).mappings().first()
     return dict(row) if row else None
 
 
-def list_active_assignments(db: Session, *, tenant_id: int) -> list[dict]:
+def _linked_to(link_id: int):
+    return submission_assignment_table.c.id.in_(
+        select(submission_assignment_link_table.c.assignment_id).where(submission_assignment_link_table.c.link_id == link_id)
+    )
+
+
+def list_active_assignments(db: Session, *, tenant_id: int, link_id: int) -> list[dict]:
     rows = db.execute(
         select(submission_assignment_table).where(
             submission_assignment_table.c.tenant_id == tenant_id,
             submission_assignment_table.c.is_active.is_(True),
+            _linked_to(link_id),
         )
     ).mappings()
     return [dict(row) for row in rows]
 
 
-def get_assignment_by_slug(db: Session, *, tenant_id: int, public_slug: str) -> dict | None:
+def get_assignment_by_slug(db: Session, *, tenant_id: int, link_id: int, public_slug: str) -> dict | None:
     row = db.execute(
         select(submission_assignment_table).where(
             submission_assignment_table.c.tenant_id == tenant_id,
             submission_assignment_table.c.public_slug == public_slug,
             submission_assignment_table.c.is_active.is_(True),
+            _linked_to(link_id),
         )
     ).mappings().first()
     return dict(row) if row else None

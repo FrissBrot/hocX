@@ -35,6 +35,7 @@ from app.models import (
     ProtocolTodo,
     StoredFile,
     SubmissionAssignment,
+    SubmissionLink,
     SubmissionUpload,
     SubmissionUploadFile,
     SubmissionUploadLog,
@@ -47,6 +48,8 @@ from app.models import (
     UserTemplateAccess,
     UserTenantRole,
 )
+from app.models.entities import submission_assignment_link_table
+from app.services import submission_link_service
 from app.services.document_template_service import DocumentTemplateService
 from app.services.file_service import _safe_storage_path
 from app.services.tenant_transfer_common import (
@@ -199,6 +202,7 @@ class TenantCloneService:
         submission_assignment_map = self._clone_submission_assignments(
             db, source.id, new_tenant.id, list_definition_map=list_definition_map
         )
+        self._clone_submission_links(db, source.id, new_tenant.id, submission_assignment_map=submission_assignment_map)
         submission_upload_map = self._clone_submission_uploads(
             db, submission_assignment_map=submission_assignment_map, event_map=event_map, list_entry_map=list_entry_map
         )
@@ -607,6 +611,45 @@ class TenantCloneService:
             id_map[row.id] = new_row.id
         db.commit()
         return id_map
+
+    def _clone_submission_links(
+        self, db: Session, source_tenant_id: int, new_tenant_id: int, *, submission_assignment_map: dict[int, int]
+    ) -> None:
+        """Same link names/default flag/Abgabe assignment as the source, but always with FRESH
+        tokens - a token is the credential for the source tenant's Abgabebox and must never
+        grant access to the clone's."""
+        source_links = db.scalars(
+            select(SubmissionLink).where(SubmissionLink.tenant_id == source_tenant_id).order_by(SubmissionLink.id)
+        ).all()
+        new_assignment_ids = list(submission_assignment_map.values())
+        if not source_links:
+            submission_link_service.attach_assignments(
+                db, submission_link_service.create_default_link(db, new_tenant_id, commit=False), new_assignment_ids
+            )
+            db.commit()
+            return
+        new_links: dict[int, SubmissionLink] = {}
+        for link in source_links:
+            new_link = SubmissionLink(
+                tenant_id=new_tenant_id, name=link.name, is_default=link.is_default, token=submission_link_service.generate_token()
+            )
+            db.add(new_link)
+            db.flush()
+            new_links[link.id] = new_link
+        rows = (
+            db.execute(
+                select(submission_assignment_link_table).where(
+                    submission_assignment_link_table.c.assignment_id.in_(submission_assignment_map.keys())
+                )
+            ).all()
+            if submission_assignment_map
+            else []
+        )
+        for assignment_id, link_id in rows:
+            submission_link_service.attach_assignments(
+                db, new_links[link_id], [submission_assignment_map[assignment_id]]
+            )
+        db.commit()
 
     def _clone_submission_uploads(
         self, db: Session, *, submission_assignment_map: dict[int, int], event_map: dict[int, int], list_entry_map: dict[int, int]

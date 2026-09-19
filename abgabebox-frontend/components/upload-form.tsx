@@ -7,7 +7,7 @@ import { publicApiUrl } from "@/lib/api";
 import { validateUploadFiles } from "@/lib/validate-upload";
 
 type Props = {
-  tenantSlug: string;
+  linkToken: string;
   assignmentSlug: string;
   elementRef: string;
   allowedFileTypes: string[];
@@ -17,7 +17,7 @@ type Props = {
   sitekey: string;
 };
 
-export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFileTypes, maxFiles, maxFileSizeMb, alreadyUploadedCount, sitekey }: Props) {
+export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileTypes, maxFiles, maxFileSizeMb, alreadyUploadedCount, sitekey }: Props) {
   const [files, setFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
   const [captchaSessionToken, setCaptchaSessionToken] = useState<string | null>(null);
@@ -95,7 +95,7 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
       formData.append("captcha_solution", solution);
       const response = await fetch(
         publicApiUrl(
-          `/api/public/${encodeURIComponent(tenantSlug)}/assignments/${encodeURIComponent(assignmentSlug)}/elements/${encodeURIComponent(elementRef)}/captcha-verify`
+          `/api/public/${encodeURIComponent(linkToken)}/assignments/${encodeURIComponent(assignmentSlug)}/elements/${encodeURIComponent(elementRef)}/captcha-verify`
         ),
         { method: "POST", body: formData }
       );
@@ -114,7 +114,7 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
       setCaptchaVerifying(false);
       requestFreshCaptcha();
     }
-  }, [tenantSlug, assignmentSlug, elementRef]);
+  }, [linkToken, assignmentSlug, elementRef]);
 
   // Kein Sitekey konfiguriert (lokale Entwicklung/Test-Stack ohne eigene FriendlyCaptcha-Keys) -
   // das Widget kann gar nicht laden, also direkt den Backend-Austausch anstossen; captcha.py
@@ -155,7 +155,7 @@ export function UploadForm({ tenantSlug, assignmentSlug, elementRef, allowedFile
       files.forEach((file) => formData.append("files", file));
       const response = await fetch(
         publicApiUrl(
-          `/api/public/${encodeURIComponent(tenantSlug)}/assignments/${encodeURIComponent(assignmentSlug)}/elements/${encodeURIComponent(elementRef)}/upload`
+          `/api/public/${encodeURIComponent(linkToken)}/assignments/${encodeURIComponent(assignmentSlug)}/elements/${encodeURIComponent(elementRef)}/upload`
         ),
         { method: "POST", body: formData }
       );

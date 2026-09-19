@@ -12,7 +12,7 @@
 // "Background worker error undefined" anzeigt (Verifizierung fehlgeschlagen).
 //
 // script-src braucht 'unsafe-inline': per echtem Playwright-Browser-Test (nicht nur `npm run
-// build`) festgestellt, dass der App Router auf dynamischen Seiten (z.B. /[tenantSlug]) selbst
+// build`) festgestellt, dass der App Router auf dynamischen Seiten (z.B. /[linkToken]) selbst
 // mehrere inline <script>-Tags fuer den RSC-Hydration-Payload einbettet (self.__next_f.push...),
 // unabhaengig vom eigenen App-Code. Ohne 'unsafe-inline' wurden diese von der CSP geblockt und
 // die Seite hydratisierte nie (kein Fehler im Server-Log, nur eine tote Seite im Browser) - der
@@ -26,7 +26,10 @@ const scriptSrc = ["'self'", "'unsafe-inline'", isDevelopment && "'unsafe-eval'"
 const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
-  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  // Die URL enthaelt das Link-Token, das selbst die Zugangsberechtigung ist - es darf weder als
+  // Referer an Dritte gelangen noch von Suchmaschinen indexiert werden.
+  { key: "Referrer-Policy", value: "no-referrer" },
+  { key: "X-Robots-Tag", value: "noindex, nofollow" },
   { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
   {
     key: "Content-Security-Policy",

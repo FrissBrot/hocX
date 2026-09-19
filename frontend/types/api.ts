@@ -125,8 +125,19 @@ export type SubmissionAssignment = {
   max_file_size_mb: number;
   sort_order: SubmissionSortOrder;
   responsible_participant_source: string | null;
+  link_ids: string[];
   created_at: string;
   updated_at: string;
+};
+
+export type SubmissionLink = {
+  id: string;
+  name: string;
+  is_default: boolean;
+  token: string;
+  url: string;
+  assignment_count: number;
+  created_at: string;
 };
 
 export type AssignmentSummary = {
@@ -369,10 +380,9 @@ export type AdminTenantPage = {
   total: number;
 };
 
-// FileOverviewSource's 4 members plus the two storage-only categories (a generated PDF
-// export and the catch-all "everything else" bucket - see storage_service.py's docstring)
-// - derived rather than redeclared for the same reason as UploadPipelineSource above.
-export type StorageCategoryKey = FileOverviewSource | "export" | "other";
+// User-facing groupings (see storage_service.py's docstring): uploaded images, other uploads,
+// generated PDF/LaTeX exports, and the catch-all "everything else" bucket.
+export type StorageCategoryKey = "photos" | "files" | "protocols" | "other";
 
 export type StorageCategoryUsage = {
   key: StorageCategoryKey;

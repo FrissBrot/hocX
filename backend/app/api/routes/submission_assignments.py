@@ -22,14 +22,19 @@ from app.schemas.submission import (
     SubmissionAssignmentRead,
     SubmissionAssignmentUpdate,
     SubmissionElementRead,
+    SubmissionLinkCreate,
+    SubmissionLinkRead,
+    SubmissionLinkUpdate,
     SubmissionUploadLogEntry,
 )
 from app.services import public_id_service
 from app.services.file_service import FileService, _safe_storage_path
+from app.services.submission_link_service import SubmissionLinkService
 from app.services.submission_service import SubmissionService
 
 router = APIRouter()
 service = SubmissionService()
+link_service = SubmissionLinkService()
 file_service = FileService()
 
 
@@ -38,6 +43,92 @@ def _get_assignment_or_404(db: Session, assignment_id: uuid.UUID, user: CurrentU
     if assignment is None:
         raise HTTPException(status_code=404, detail="Abgabe nicht gefunden")
     return assignment
+
+
+def _get_link_or_404(db: Session, link_id: uuid.UUID, user: CurrentUser):
+    link = link_service.get_link(db, link_id, tenant_id=user.current_tenant_id)
+    if link is None:
+        raise HTTPException(status_code=404, detail="Link nicht gefunden")
+    return link
+
+
+@router.get("/submission-links", response_model=list[SubmissionLinkRead])
+def list_links(
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_writer(user)
+    return link_service.list_links(db, tenant_id=user.current_tenant_id)
+
+
+@router.post("/submission-links", response_model=SubmissionLinkRead, status_code=status.HTTP_201_CREATED)
+def create_link(
+    payload: SubmissionLinkCreate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_writer(user)
+    try:
+        return link_service.create_link(db, payload, tenant_id=user.current_tenant_id)
+    except (SQLAlchemyError, ValueError) as exc:
+        db.rollback()
+        detail = str(exc) if isinstance(exc, ValueError) else "Link konnte nicht erstellt werden"
+        raise HTTPException(status_code=400, detail=detail) from exc
+
+
+@router.patch("/submission-links/{link_id}", response_model=SubmissionLinkRead)
+def patch_link(
+    link_id: uuid.UUID,
+    payload: SubmissionLinkUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_writer(user)
+    link = _get_link_or_404(db, link_id, user)
+    try:
+        return link_service.update_link(db, link, payload)
+    except (SQLAlchemyError, ValueError) as exc:
+        db.rollback()
+        detail = str(exc) if isinstance(exc, ValueError) else "Link konnte nicht aktualisiert werden"
+        raise HTTPException(status_code=400, detail=detail) from exc
+
+
+@router.post("/submission-links/{link_id}/regenerate", response_model=SubmissionLinkRead)
+def regenerate_link(
+    link_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Issues a new token - the old URL stops working immediately."""
+    require_writer(user)
+    link = _get_link_or_404(db, link_id, user)
+    try:
+        result = link_service.regenerate_token(db, link)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Link konnte nicht erneuert werden") from exc
+    for assignment in link_service.assignments_for_link(db, link):
+        service.refresh_todo_links(db, assignment)
+    return result
+
+
+@router.delete("/submission-links/{link_id}", response_model=dict[str, str])
+def delete_link(
+    link_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_writer(user)
+    link = _get_link_or_404(db, link_id, user)
+    affected = link_service.assignments_for_link(db, link)
+    try:
+        link_service.delete_link(db, link)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Link konnte nicht geloescht werden") from exc
+    for assignment in affected:
+        service.refresh_todo_links(db, assignment)
+    return {"message": "Link geloescht"}
 
 
 @router.get("/submission-assignments", response_model=list[SubmissionAssignmentRead])

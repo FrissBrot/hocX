@@ -176,24 +176,38 @@ def _exceeds_max_files_per_request(file_count: int) -> bool:
     return file_count > settings.max_files_per_upload_request
 
 
-def _get_tenant_or_404(db: Session, tenant_slug: str) -> dict:
-    tenant = repository.get_tenant_by_slug(db, public_slug=tenant_slug)
-    if tenant is None:
+# secrets.token_urlsafe(24) - 32 Zeichen URL-safe Base64. Grosszuegig begrenzt, damit ein
+# spaeter laengeres Token nicht sofort alle Links bricht; alles andere ist garantiert kein
+# Token und wird ohne DB-Zugriff abgelehnt.
+_LINK_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9_-]{16,128}$")
+
+
+def _get_tenant_or_404(db: Session, link_token: str) -> dict:
+    """Resolves the link token (the URL's only credential) to the tenant it belongs to. The
+    returned dict carries the link id too, so every later lookup is scoped to what THIS link may
+    reach - an unknown/malformed token and a token without any matching Abgabe both end in the
+    same 404, revealing nothing about which tenants or Abgaben exist."""
+    if not _LINK_TOKEN_PATTERN.fullmatch(link_token):
         raise NOT_FOUND
-    return tenant
+    link = repository.get_link_by_token(db, token=link_token)
+    if link is None:
+        raise NOT_FOUND
+    return {"id": link["tenant_id"], "link_id": link["id"]}
 
 
 def _get_assignment_or_404(db: Session, tenant: dict, assignment_slug: str) -> dict:
-    assignment = repository.get_assignment_by_slug(db, tenant_id=tenant["id"], public_slug=assignment_slug)
+    assignment = repository.get_assignment_by_slug(
+        db, tenant_id=tenant["id"], link_id=tenant["link_id"], public_slug=assignment_slug
+    )
     if assignment is None:
         raise NOT_FOUND
     return assignment
 
 
-@router.get("/public/{tenant_slug}/assignments", response_model=list[AssignmentPublic])
-def list_assignments(tenant_slug: str, db: Session = Depends(get_db)):
-    tenant = _get_tenant_or_404(db, tenant_slug)
-    assignments = repository.list_active_assignments(db, tenant_id=tenant["id"])
+@router.get("/public/{link_token}/assignments", response_model=list[AssignmentPublic])
+def list_assignments(link_token: str, db: Session = Depends(get_db)):
+    tenant = _get_tenant_or_404(db, link_token)
+    assignments = repository.list_active_assignments(db, tenant_id=tenant["id"], link_id=tenant["link_id"])
     open_assignments = []
     for assignment in assignments:
         if element_resolver.resolve_open_elements(db, assignment):
@@ -208,11 +222,11 @@ def list_assignments(tenant_slug: str, db: Session = Depends(get_db)):
 
 
 @router.get(
-    "/public/{tenant_slug}/assignments/{assignment_slug}",
+    "/public/{link_token}/assignments/{assignment_slug}",
     response_model=AssignmentDetailPublic,
 )
-def get_assignment(tenant_slug: str, assignment_slug: str, db: Session = Depends(get_db)):
-    tenant = _get_tenant_or_404(db, tenant_slug)
+def get_assignment(link_token: str, assignment_slug: str, db: Session = Depends(get_db)):
+    tenant = _get_tenant_or_404(db, link_token)
     assignment = _get_assignment_or_404(db, tenant, assignment_slug)
     return AssignmentDetailPublic(
         public_slug=assignment["public_slug"],
@@ -225,11 +239,11 @@ def get_assignment(tenant_slug: str, assignment_slug: str, db: Session = Depends
 
 
 @router.get(
-    "/public/{tenant_slug}/assignments/{assignment_slug}/elements",
+    "/public/{link_token}/assignments/{assignment_slug}/elements",
     response_model=list[ElementPublic],
 )
-def list_elements(tenant_slug: str, assignment_slug: str, db: Session = Depends(get_db)):
-    tenant = _get_tenant_or_404(db, tenant_slug)
+def list_elements(link_token: str, assignment_slug: str, db: Session = Depends(get_db)):
+    tenant = _get_tenant_or_404(db, link_token)
     assignment = _get_assignment_or_404(db, tenant, assignment_slug)
     elements = element_resolver.resolve_open_elements(db, assignment)
     return [
@@ -245,12 +259,12 @@ def list_elements(tenant_slug: str, assignment_slug: str, db: Session = Depends(
 
 
 @router.post(
-    "/public/{tenant_slug}/assignments/{assignment_slug}/elements/{element_ref}/captcha-verify",
+    "/public/{link_token}/assignments/{assignment_slug}/elements/{element_ref}/captcha-verify",
     response_model=CaptchaVerifyResult,
 )
 async def verify_captcha_for_element(
     request: Request,
-    tenant_slug: str,
+    link_token: str,
     assignment_slug: str,
     element_ref: str,
     captcha_solution: str = Form(...),
@@ -259,31 +273,31 @@ async def verify_captcha_for_element(
     """Called once when the upload page loads (widget solves automatically), not per upload -
     see upload() below, which accepts the resulting session token instead of a raw
     captcha_solution so a visitor doesn't have to pass the bot-check again for every file."""
-    tenant = _get_tenant_or_404(db, tenant_slug)
+    tenant = _get_tenant_or_404(db, link_token)
     assignment = _get_assignment_or_404(db, tenant, assignment_slug)
     element = element_resolver.resolve_single_element(db, assignment, element_ref)
     if element is None:
         raise HTTPException(status_code=400, detail="Element ist nicht (mehr) offen")
     if not await verify_captcha(captcha_solution):
         raise HTTPException(status_code=400, detail="Captcha ungueltig")
-    token = mint_captcha_session_token(tenant_slug, assignment_slug, element_ref, client_ip=_client_ip(request))
+    token = mint_captcha_session_token(link_token, assignment_slug, element_ref, client_ip=_client_ip(request))
     return CaptchaVerifyResult(session_token=token, expires_in_seconds=settings.captcha_session_ttl_minutes * 60)
 
 
 @router.post(
-    "/public/{tenant_slug}/assignments/{assignment_slug}/elements/{element_ref}/upload",
+    "/public/{link_token}/assignments/{assignment_slug}/elements/{element_ref}/upload",
     response_model=UploadResult,
 )
 async def upload(
     request: Request,
-    tenant_slug: str,
+    link_token: str,
     assignment_slug: str,
     element_ref: str,
     captcha_session_token: str = Form(...),
     files: list[UploadFile] = File(default_factory=list),
     db: Session = Depends(get_db),
 ):
-    tenant = _get_tenant_or_404(db, tenant_slug)
+    tenant = _get_tenant_or_404(db, link_token)
     assignment = _get_assignment_or_404(db, tenant, assignment_slug)
 
     def _log(status: str, error_message: str | None = None) -> None:
@@ -306,7 +320,7 @@ async def upload(
 
     # 401 statt 400: das Frontend unterscheidet daran "Sicherheitscheck abgelaufen, bitte neu
     # verifizieren" (Widget erneut ausloesen) von den echten Validierungsfehlern unten (400).
-    if not verify_captcha_session_token(captcha_session_token, tenant_slug, assignment_slug, element_ref, client_ip=_client_ip(request)):
+    if not verify_captcha_session_token(captcha_session_token, link_token, assignment_slug, element_ref, client_ip=_client_ip(request)):
         _log("captcha_failed", "Bot-Verifikation fehlgeschlagen oder Sicherheitscheck abgelaufen")
         raise HTTPException(status_code=401, detail="Sicherheitscheck abgelaufen - bitte kurz warten")
 

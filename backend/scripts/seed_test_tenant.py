@@ -62,6 +62,7 @@ from app.services.admin_tenant_service import AdminTenantService
 from app.services.file_service import FileService
 from app.services.list_service import ListService
 from app.services.protocol_service import ProtocolService
+from app.services import submission_link_service
 from app.services.submission_service import SubmissionService
 
 DEMO_TENANT_NAME = "Jubla Sonnenberg"
@@ -129,6 +130,7 @@ def create_tenant_and_users(db) -> tuple[Tenant, dict[str, AppUser]]:
     tenant = Tenant(name=DEMO_TENANT_NAME, public_slug=DEMO_TENANT_SLUG)
     db.add(tenant)
     db.flush()
+    submission_link_service.create_default_link(db, tenant.id, commit=False)
 
     password_hash = hash_password(DEMO_PASSWORD)
     users: dict[str, AppUser] = {}

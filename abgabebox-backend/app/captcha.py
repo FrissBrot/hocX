@@ -12,8 +12,8 @@ from app.config import is_dev_or_test_environment, settings
 _logger = logging.getLogger(__name__)
 
 
-def _session_scope(tenant_slug: str, assignment_slug: str, element_ref: str) -> str:
-    return f"{tenant_slug}:{assignment_slug}:{element_ref}"
+def _session_scope(link_token: str, assignment_slug: str, element_ref: str) -> str:
+    return f"{link_token}:{assignment_slug}:{element_ref}"
 
 
 def captcha_configured() -> bool:
@@ -92,10 +92,10 @@ def _ip_fingerprint(client_ip: str | None) -> str | None:
     return hashlib.sha256(f"{client_ip}|{settings.captcha_session_secret}".encode("utf-8")).hexdigest()
 
 
-def mint_captcha_session_token(tenant_slug: str, assignment_slug: str, element_ref: str, client_ip: str | None = None) -> str:
+def mint_captcha_session_token(link_token: str, assignment_slug: str, element_ref: str, client_ip: str | None = None) -> str:
     """Issued once after a real FriendlyCaptcha solve passes verify_captcha() below - lets the
     frontend prove "a human already passed the bot-check on this page" for subsequent uploads
-    without re-running the widget each time. Scoped to the exact tenant/assignment/element so a
+    without re-running the widget each time. Scoped to the exact link/assignment/element so a
     token minted for one upload page can't be replayed against another, and (client_ip) to the
     IP that solved the captcha - without that, this 120-minute-TTL bearer token was reusable
     from any number of different IPs, which quietly defeated the assumption that Traefik's
@@ -108,7 +108,7 @@ def mint_captcha_session_token(tenant_slug: str, assignment_slug: str, element_r
     now = datetime.now(UTC)
     payload = json.dumps(
         {
-            "scope": _session_scope(tenant_slug, assignment_slug, element_ref),
+            "scope": _session_scope(link_token, assignment_slug, element_ref),
             "exp": int((now + timedelta(minutes=settings.captcha_session_ttl_minutes)).timestamp()),
             "ip": _ip_fingerprint(client_ip),
         },
@@ -119,7 +119,7 @@ def mint_captcha_session_token(tenant_slug: str, assignment_slug: str, element_r
 
 
 def verify_captcha_session_token(
-    token: str, tenant_slug: str, assignment_slug: str, element_ref: str, client_ip: str | None = None
+    token: str, link_token: str, assignment_slug: str, element_ref: str, client_ip: str | None = None
 ) -> bool:
     if not captcha_enabled():
         # Kein FriendlyCaptcha konfiguriert -> nur in dev/test entfaellt der Sitzungs-Check
@@ -147,7 +147,7 @@ def verify_captcha_session_token(
         return False
     if data.get("ip") != _ip_fingerprint(client_ip):
         return False
-    if data.get("scope") != _session_scope(tenant_slug, assignment_slug, element_ref):
+    if data.get("scope") != _session_scope(link_token, assignment_slug, element_ref):
         return False
     return int(data.get("exp", 0)) >= int(datetime.now(UTC).timestamp())
 

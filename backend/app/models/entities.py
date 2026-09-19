@@ -8,6 +8,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    Column,
     Computed,
     Date,
     DateTime,
@@ -18,6 +19,7 @@ from sqlalchemy import (
     Numeric,
     PrimaryKeyConstraint,
     SmallInteger,
+    Table,
     Text,
     UniqueConstraint,
     text,
@@ -1191,6 +1193,51 @@ class SubmissionAssignment(Base, TimestampMixin, UpdatedAtMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
     sort_order: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'date'"))
     responsible_participant_source: Mapped[str | None] = mapped_column(Text)
+    # Ueber welche Abgabe-Links (SubmissionLink) diese Abgabe oeffentlich erreichbar ist. Ohne
+    # Link ist sie ueber die Abgabebox nicht erreichbar.
+    links: Mapped[list["SubmissionLink"]] = relationship(
+        "SubmissionLink",
+        secondary="submission_assignment_link",
+        order_by="SubmissionLink.id",
+        lazy="selectin",
+        passive_deletes=True,
+    )
+
+
+class SubmissionLink(Base, TimestampMixin, UpdatedAtMixin):
+    """Zugangslink zur oeffentlichen Abgabebox. `token` ist ein zufaelliger, nicht erratbarer
+    Wert, der selbst die Authentifizierung ist (Teil der URL: <abgabebox-domain>/<token>);
+    `name` ist nur die Klartext-Bezeichnung im Admin-Bereich.
+
+    Der Link legt den Mandanten fest (der separate abgabebox-backend-Service loest ueber das
+    Token den Mandanten und die freigegebenen Abgaben auf - der Mandanten-public_slug spielt
+    dort keine Rolle mehr). Die restricted Rolle hocx_abgabebox darf nur (id, tenant_id, token)
+    lesen, siehe Migration 0075_submission_link."""
+
+    __tablename__ = "submission_link"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "name", name="uq_submission_link_tenant_name"),
+        # Hoechstens ein Standard-Link je Mandant (wird beim Anlegen einer Abgabe vorausgewaehlt).
+        Index("uq_submission_link_tenant_default", "tenant_id", unique=True, postgresql_where=text("is_default")),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    token: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
+
+
+submission_assignment_link_table = Table(
+    "submission_assignment_link",
+    Base.metadata,
+    Column("assignment_id", BigInteger, ForeignKey("submission_assignment.id", ondelete="CASCADE"), primary_key=True),
+    Column("link_id", BigInteger, ForeignKey("submission_link.id", ondelete="CASCADE"), primary_key=True),
+    Index("idx_submission_assignment_link_link", "link_id"),
+)
 
 
 class SubmissionUpload(Base, TimestampMixin):

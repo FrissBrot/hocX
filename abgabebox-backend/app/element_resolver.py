@@ -18,9 +18,9 @@ from app import repository
 def _participant_initials(participant: dict) -> str:
     """Initialen statt vollem Namen.
 
-    Der Endpunkt, der diese Labels ausliefert, ist oeffentlich und
-    unauthentifiziert (GET /public/{tenant_slug}/assignments/{assignment_slug}/elements)
-    - Tenant- und Assignment-Slug koennen erraten oder anderweitig bekannt werden.
+    Der Endpunkt, der diese Labels ausliefert, hat kein Login - der Zugang ist allein der
+    Link-Token in der URL (GET /public/{link_token}/assignments/{assignment_slug}/elements),
+    und ein Link kann weitergegeben werden oder anderweitig bekannt werden.
     Damit dabei keine vollen Klarnamen von Vereinsmitgliedern (PII) preisgegeben
     werden, wird hier bewusst nur eine grobe, nicht eindeutig re-identifizierbare
     Kennung ("M.S.") zurueckgegeben statt des display_name.

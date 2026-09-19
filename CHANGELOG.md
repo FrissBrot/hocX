@@ -46,6 +46,19 @@ gemergten Fixes/Hardening-Massnahmen auf `main` die folgenden neuen Funktionen.
   "Alben"-Tab mit Cover-Collage und Foto-/Best-of-Zahlen pro Album. Die
   "Dateien"-Seite zeigt jetzt Dokumente/Fotos/Speicher-Kennzahlen und eine
   Tabellenansicht statt der bisherigen Kachelliste.
+- **Abgabe-Links**: Die öffentliche Abgabebox ist nur noch über einen Link mit zufälligem
+  Schlüssel erreichbar (`<abgabebox-domain>/<schlüssel>`), nicht mehr über den
+  Mandanten-Slug. Unter *Abgaben → Links* lassen sich beliebig viele Links mit Klarnamen
+  anlegen, umbenennen, als Standard festlegen, mit neuem Schlüssel versehen und löschen; im
+  Abgabe-Konfigurator wird gewählt, über welche Links eine Abgabe erreichbar ist. Jeder
+  Mandant startet mit einem Standard-Link, der bei neuen Abgaben vorausgewählt ist.
+  Die restricted DB-Rolle der Abgabebox darf dafür nur `id`, `tenant_id` und `token` der
+  Links sowie die Zuordnung Abgabe↔Link lesen (Migration `0075_submission_link`).
+  **Achtung beim Update:** Bestehende Mandanten erhalten automatisch einen Standard-Link, an
+  dem alle bisherigen Abgaben hängen - die alten Adressen mit Mandanten-Slug funktionieren
+  aber nicht mehr und müssen durch die neuen Links ersetzt werden. Die Umgebungsvariable
+  `DEFAULT_TENANT_SLUG` entfällt. Beim Klonen/Importieren eines Mandanten entstehen immer
+  neue Schlüssel (Tokens werden nie exportiert oder übernommen).
 
 ## [1.0.0] - 2026-08-27
 

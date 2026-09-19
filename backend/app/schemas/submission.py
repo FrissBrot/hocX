@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
-from typing import ClassVar, Literal
+from typing import Annotated, ClassVar, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 
 from app.models.entities import ListDefinition, Tenant
 from app.schemas.base import PublicIdModel
@@ -14,6 +14,8 @@ SubmissionElementStatus = Literal["open", "submitted", "closed"]
 SubmissionSortOrder = Literal["alphabetical", "date", "proximity"]
 
 SLUG_PATTERN = r"^[a-z0-9-]+$"
+
+LinkName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
 
 
 class SubmissionAssignmentBase(BaseModel):
@@ -34,6 +36,9 @@ class SubmissionAssignmentBase(BaseModel):
 
 class SubmissionAssignmentCreate(SubmissionAssignmentBase):
     public_slug: str = Field(pattern=SLUG_PATTERN)
+    # Ueber welche Links die Abgabe erreichbar ist. None = die Standard-Links des Mandanten
+    # (Verhalten fuer API-Clients ohne Link-Auswahl); [] = ueber keinen Link erreichbar.
+    link_ids: list[uuid.UUID] | None = None
 
 
 class SubmissionAssignmentUpdate(BaseModel):
@@ -51,6 +56,8 @@ class SubmissionAssignmentUpdate(BaseModel):
     max_file_size_mb: int | None = Field(default=None, ge=1, le=100)
     sort_order: SubmissionSortOrder | None = None
     responsible_participant_source: str | None = None
+    # None = Link-Zuordnung unveraendert lassen.
+    link_ids: list[uuid.UUID] | None = None
 
 
 class SubmissionAssignmentRead(PublicIdModel, SubmissionAssignmentBase):
@@ -59,8 +66,30 @@ class SubmissionAssignmentRead(PublicIdModel, SubmissionAssignmentBase):
     id: uuid.UUID
     tenant_id: uuid.UUID
     public_slug: str
+    link_ids: list[uuid.UUID] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
+
+
+class SubmissionLinkCreate(BaseModel):
+    name: LinkName
+    is_default: bool = False
+
+
+class SubmissionLinkUpdate(BaseModel):
+    name: LinkName | None = None
+    is_default: bool | None = None
+
+
+class SubmissionLinkRead(BaseModel):
+    id: uuid.UUID
+    name: str
+    is_default: bool
+    # Das Token ist selbst die Zugangsberechtigung - nur fuer Schreibberechtigte ausgeliefert.
+    token: str
+    url: str
+    assignment_count: int
+    created_at: datetime
 
 
 class SubmissionFileRead(BaseModel):

@@ -73,7 +73,7 @@ from app.models import (
     WordImportProfile,
     WordImportSuggestionOutcome,
 )
-from app.services import domain_verification_service, traefik_config_service
+from app.services import domain_verification_service, submission_link_service, traefik_config_service
 from app.services.document_template_service import DocumentTemplateService
 from app.services.tenant_transfer_common import (
     LOOKUP_COLUMNS,
@@ -219,6 +219,14 @@ class TenantImportService:
         self._restore_last_word_import_template(new_tenant, template_map)
         self._import_template_participants(template_map, participant_map)
         submission_assignment_map = self._import_submission_assignments(new_tenant.id, list_definition_map)
+        # Links (and their tokens) are never part of an export - they are credentials of the
+        # source tenant. The imported tenant gets a fresh default link with every imported Abgabe.
+        submission_link_service.attach_assignments(
+            self.db,
+            submission_link_service.create_default_link(self.db, new_tenant.id),
+            list(submission_assignment_map.values()),
+        )
+        self.db.commit()
         submission_upload_map = self._import_submission_uploads(submission_assignment_map, event_map, list_entry_map)
         self._import_submission_upload_logs(submission_assignment_map)
         stored_file_map = self._import_stored_files(new_tenant.id)

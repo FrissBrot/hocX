@@ -7,6 +7,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
+import { SubmissionLinkManager } from "@/components/submission-assignments/submission-link-manager";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -17,6 +18,7 @@ import {
   StructuredListDefinition,
   SubmissionAssignment,
   SubmissionElementStatusEntry,
+  SubmissionLink,
   SubmissionSortOrder,
   SubmissionSourceType,
   SubmissionUploadLogEntry,
@@ -82,6 +84,7 @@ const SINGLE_PARTICIPANT_EVENT_FIELDS: { field: string; label: string }[] = [
 
 type Props = {
   initialAssignments: SubmissionAssignment[];
+  initialLinks: SubmissionLink[];
   availableLists: StructuredListDefinition[];
   availableEvents: EventSummary[];
   availableParticipants: ParticipantSummary[];
@@ -102,6 +105,7 @@ type FormState = {
   max_file_size_mb: number;
   sort_order: SubmissionSortOrder;
   responsible_participant_source: string;
+  link_ids: string[];
 };
 
 const FILE_TYPE_GROUPS = [
@@ -125,6 +129,7 @@ const initialForm: FormState = {
   max_file_size_mb: 20,
   sort_order: "date",
   responsible_participant_source: "",
+  link_ids: [],
 };
 
 function slugify(title: string): string {
@@ -151,6 +156,7 @@ function formFromAssignment(assignment: SubmissionAssignment): FormState {
     max_file_size_mb: assignment.max_file_size_mb,
     sort_order: assignment.sort_order,
     responsible_participant_source: assignment.responsible_participant_source ?? "",
+    link_ids: assignment.link_ids,
   };
 }
 
@@ -319,10 +325,12 @@ function VerifiedIcon() {
   );
 }
 
-export function SubmissionAssignmentManager({ initialAssignments, availableLists, availableEvents, availableParticipants }: Props) {
+export function SubmissionAssignmentManager({ initialAssignments, initialLinks, availableLists, availableEvents, availableParticipants }: Props) {
   const showToast = useToast();
   const confirm = useConfirm();
   const [assignments, setAssignments] = useState(initialAssignments);
+  const [links, setLinks] = useState(initialLinks);
+  const [linksModalOpen, setLinksModalOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(initialForm);
@@ -383,8 +391,22 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
 
   function openCreate() {
     setEditingId(null);
-    setForm(initialForm);
+    // Default link(s) are preselected for a new Abgabe.
+    setForm({ ...initialForm, link_ids: links.filter((link) => link.is_default).map((link) => link.id) });
     setModalOpen(true);
+  }
+
+  function toggleLink(linkId: string) {
+    setForm((c) => ({
+      ...c,
+      link_ids: c.link_ids.includes(linkId) ? c.link_ids.filter((id) => id !== linkId) : [...c.link_ids, linkId],
+    }));
+  }
+
+  // A deleted link disappears from every Abgabe on the server (and from the edit form, if open).
+  function handleLinkRemoved(linkId: string) {
+    setAssignments((current) => current.map((a) => ({ ...a, link_ids: a.link_ids.filter((id) => id !== linkId) })));
+    setForm((c) => ({ ...c, link_ids: c.link_ids.filter((id) => id !== linkId) }));
   }
 
   function openEdit(assignment: SubmissionAssignment) {
@@ -492,6 +514,7 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
             max_file_size_mb: Number(form.max_file_size_mb),
             sort_order: form.sort_order,
             responsible_participant_source: form.responsible_participant_source || null,
+            link_ids: form.link_ids,
           }
         : {
             title: form.title,
@@ -508,6 +531,7 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
             max_file_size_mb: Number(form.max_file_size_mb),
             sort_order: form.sort_order,
             responsible_participant_source: form.responsible_participant_source || null,
+            link_ids: form.link_ids,
           };
 
     try {
@@ -673,6 +697,9 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
             <span className="subm-clamav-dot" />
             ClamAV {clamavStatus === "online" ? "Online" : clamavStatus === "offline" ? "Offline" : "…"}
           </span>
+          <button type="button" className="button-ghost" onClick={() => setLinksModalOpen(true)}>
+            Links ({links.length})
+          </button>
           <button type="button" className="button-inline subm-new-button" onClick={openCreate}>
             <PlusIcon /> Abgabe
           </button>
@@ -943,6 +970,16 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
         ) : null}
       </Modal>
 
+      {/* Links: Zugang zur öffentlichen Abgabebox */}
+      <Modal
+        open={linksModalOpen}
+        onClose={() => setLinksModalOpen(false)}
+        title="Abgabe-Links"
+        description="Über diese Links ist die öffentliche Abgabebox erreichbar."
+      >
+        <SubmissionLinkManager links={links} onLinksChange={setLinks} onLinkRemoved={handleLinkRemoved} />
+      </Modal>
+
       {/* Create/Edit Modal */}
       <Modal
         open={modalOpen}
@@ -975,6 +1012,30 @@ export function SubmissionAssignmentManager({ initialAssignments, availableLists
               placeholder="Optional"
             />
           </label>
+
+          <div className="field-stack">
+            <span className="field-label">Erreichbar über</span>
+            {links.length === 0 ? (
+              <span className="field-help">
+                Es gibt noch keinen Link – lege zuerst unter „Links“ einen an, sonst ist diese Abgabe nicht erreichbar.
+              </span>
+            ) : (
+              <>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, border: "1px solid var(--border)", borderRadius: 12, padding: "10px 14px" }}>
+                  {links.map((link) => (
+                    <label key={link.id} className="checkbox-line" style={{ margin: 0, minHeight: 0 }}>
+                      <input type="checkbox" checked={form.link_ids.includes(link.id)} onChange={() => toggleLink(link.id)} />
+                      {link.name}
+                      {link.is_default ? <span className="muted"> (Standard)</span> : null}
+                    </label>
+                  ))}
+                </div>
+                {form.link_ids.length === 0 ? (
+                  <span className="field-help">Kein Link ausgewählt – die Abgabe ist so über die Abgabebox nicht erreichbar.</span>
+                ) : null}
+              </>
+            )}
+          </div>
 
           <label className="field-stack">
             <span className="field-label">Verknüpfung</span>

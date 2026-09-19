@@ -25,6 +25,7 @@ from app.schemas.admin import AdminTenantCreate, AdminTenantPage, AdminTenantRea
 from app.schemas.user import TenantUpdate
 from app.services.document_template_service import DocumentTemplateService
 from app.services.file_service import _safe_storage_path
+from app.services import submission_link_service
 from app.services.storage_service import StorageService
 from app.services.tenant_service import apply_tenant_profile_image
 
@@ -103,6 +104,8 @@ class AdminTenantService:
         db.commit()
         db.refresh(tenant)
         self.document_template_service.ensure_default_template_for_tenant(db, tenant.id, tenant.name)
+        # Every new tenant starts with a default Abgabe link (preselected for new Abgaben).
+        submission_link_service.create_default_link(db, tenant.id)
         return self._read_model(db, tenant)
 
     async def update_tenant(
