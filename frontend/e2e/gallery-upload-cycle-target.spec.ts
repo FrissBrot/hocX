@@ -31,15 +31,17 @@ test("uploading with a Zyklus target puts the photo in that cycle's auto-album",
     // direct setInputFiles on the hidden input, not just this filechooser flow) - worth a
     // closer look outside this test's scope, but not this audit fix's regression.
     const fileChooserPromise = page.waitForEvent("filechooser");
-    await modal.getByText("Bilder oder ZIP-Dateien hierher ziehen").click();
+    await modal.getByText("Bilder hierher ziehen").click();
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(path.resolve("e2e/fixtures/photos/sample.png"));
     await expect(modal.locator(".gallery-upload-file-list")).toContainText("sample.png");
 
-    await modal.getByRole("radio", { name: "Zyklus" }).check();
-    // The target picker is a SearchableSelect (mini-menu popover), not a native <select> -
-    // see gallery-upload-modal.tsx.
-    await modal.locator(".mini-menu-trigger").click();
+    // Both pickers are SearchableSelects (mini-menu popovers), not native controls - see
+    // upload-target-fields.tsx: first the "Bezug" kind, which then reveals a second picker
+    // for the concrete Zyklus.
+    await modal.locator(".mini-menu-trigger").first().click();
+    await page.getByRole("option", { name: "Zyklus", exact: true }).click();
+    await modal.locator(".mini-menu-trigger").nth(1).click();
     await page.getByRole("option", { name: cycleName }).click();
 
     const uploaded = page.waitForResponse((r) => r.url().endsWith("/api/files/gallery-uploads") && r.request().method() === "POST");

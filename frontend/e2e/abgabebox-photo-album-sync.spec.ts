@@ -13,18 +13,14 @@ import { authFiles } from "./auth";
 // directly, never through the actual loop, and nothing anywhere drove a real public upload
 // into it. This is the one test that proves the whole chain at the app level.
 //
-// KNOWN BLOCKER (as of 2026-09-17, unresolved): this currently fails before it ever reaches
-// the album-sync assertions. upload-form.tsx's mount-time useEffect that auto-bypasses the
-// captcha widget in dev/test (`if (!sitekey) handleSolved(...)`) never actually fires in this
-// stack's abgabebox-frontend dev server - confirmed via isolated repro (goto + 15s wait, zero
-// network requests to .../captcha-verify), while other client interactions on the same page
-// (the drop-zone's onClick opening a filechooser) work fine, and the captcha-verify endpoint
-// itself answers correctly when called directly. Root cause not found - needs a real
-// browser/devtools session against this Next.js/Turbopack dev setup, not something diagnosable
-// blind from a CLI sandbox. Do not "fix" this test by working around the missing captcha
-// token (e.g. driving the upload via a raw API call instead of the real page) without
-// checking with whoever picks this up - that would quietly drop this test back to what
-// gap analysis already flagged as missing: real UI-level coverage of this exact flow.
+// Historical note (resolved): this used to fail before ever reaching the album-sync
+// assertions - upload-form.tsx's effects/handlers (the dev captcha auto-bypass, the drop-zone's
+// onChange) never ran, leaving "Abgeben" disabled. Root cause: abgabebox-frontend's `next dev`
+// rejected the HMR websocket from the 127.0.0.1 origin this stack uses (Next 16 blocks
+// cross-origin dev resources by default), so the page never hydrated - fixed by
+// allowedDevOrigins in abgabebox-frontend/next.config.mjs, same as frontend/next.config.mjs.
+// Do not work around a missing captcha token / file selection here (e.g. by driving the upload
+// via a raw API call) - the point of this test is real UI-level coverage of this exact flow.
 test("a public Abgabebox photo upload is folded into its Abgabe-Element auto-album", async ({ page, browser }) => {
   test.setTimeout(120_000);
   const api = await playwrightRequest.newContext({ baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: authFiles.admin });
@@ -98,14 +94,19 @@ test("a public Abgabebox photo upload is folded into its Abgabe-Element auto-alb
       await publicContext.close();
     }
 
-    // Stage 1: promote the upload out of quarantine (scan_status pending -> clean) via the
-    // same manual per-assignment trigger the Abgabebox admin screen itself uses - a real,
-    // already-existing feature, not something added for this test. Faster and more
-    // deterministic than waiting out abgabebox_rescan_loop's own interval.
+    // Stage 1: make sure the upload is out of quarantine (scan_status pending -> clean) via
+    // the same manual per-assignment trigger the Abgabebox admin screen itself uses - a real,
+    // already-existing feature, not something added for this test. The public upload already
+    // scans inline (abgabebox-backend's scan_many), so with ClamAV up the file is normally
+    // clean before this call and there is nothing left to promote (`clean` is then 0); the
+    // rescan only does work if clamd was still starting when the upload came in. Either way
+    // nothing may be left pending or infected afterwards - that, not `clean > 0`, is the
+    // order-independent precondition for the album sync below.
     const rescan = await api.post(`/api/submission-assignments/${assignmentId}/rescan-pending`);
     expect(rescan.ok(), await rescan.text()).toBeTruthy();
     const rescanResult = await rescan.json();
-    expect(rescanResult.clean).toBeGreaterThan(0);
+    expect(rescanResult.infected).toBe(0);
+    expect(rescanResult.still_pending, "ClamAV unreachable - upload stayed in quarantine").toBe(0);
 
     // Stage 2: photo_album_sync_loop has no manual trigger (see docker-compose.e2e.yml's
     // PHOTO_ALBUM_SYNC_INTERVAL_MINUTES override) - poll for the real background loop's own

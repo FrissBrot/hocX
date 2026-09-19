@@ -16,7 +16,19 @@ wait_for_url() {
   return 1
 }
 
+# abgabebox-backend runs as the non-root uid 5001 (abgabebox-backend/Dockerfile), while a
+# bind-mount source that doesn't exist yet gets created by Docker as root:root 755 - so the
+# public upload's very first quarantine write ("Datei konnte nicht gespeichert werden", HTTP
+# 500) failed. Create it up front, writable for that uid. This is only ever the throwaway e2e
+# scratch tree (removed again in stop_stack); real deployments get 5001-group ownership from
+# provision_deploy_user.sh / deploy.sh instead.
+prepare_abgabebox_storage() {
+  mkdir -p "$REPO_DIR/storage-e2e/abgabebox-uploads"
+  chmod 0777 "$REPO_DIR/storage-e2e/abgabebox-uploads"
+}
+
 start_stack() {
+  prepare_abgabebox_storage
   "${DC[@]}" up -d --build
   wait_for_url http://127.0.0.1:18000/api/health
   wait_for_url http://127.0.0.1:13000/login

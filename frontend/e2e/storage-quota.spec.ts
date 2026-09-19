@@ -30,15 +30,25 @@ test("rejects a gallery upload once the platform-admin-configured storage quota 
     const setQuota = await adminApi.patch(`/api/admin/tenants/${tenantId}/storage-quota`, { data: { quota_mb: 1 } });
     expect(setQuota.ok(), await setQuota.text()).toBeTruthy();
 
-    // The gallery-uploads endpoint always answers 201 for the batch as a whole - one bad
-    // file never aborts the request, it's reported in `errors` while `items` stays empty for
-    // it (see files.py's upload_gallery_images / file_service.py's save_gallery_uploads).
-    const rejected = await writerApi.post("/api/files/gallery-uploads", {
-      multipart: { files: { name: "sample-oversized.png", mimeType: "image/png", buffer: imageBuffer } },
-    });
-    expect(rejected.ok(), await rejected.text()).toBeTruthy();
-    const rejectedBody = await rejected.json();
-    expect(rejectedBody.items).toHaveLength(0);
+    // The gallery-uploads endpoint only stages the file and queues a gallery_upload_job
+    // (201) - the quota check itself happens when the background ingest loop processes it
+    // (file_service.py's save_gallery_uploads), and one bad file never fails the job as a
+    // whole: it ends "done" with the problem in the job detail's `errors` while
+    // `imported_items` stays empty for it.
+    const uploadOversized = async () => {
+      const response = await writerApi.post("/api/files/gallery-uploads", {
+        multipart: { files: { name: "sample-oversized.png", mimeType: "image/png", buffer: imageBuffer } },
+      });
+      expect(response.ok(), await response.text()).toBeTruthy();
+      const job = await response.json();
+      await expect
+        .poll(async () => (await (await writerApi.get(`/api/files/gallery-upload-jobs/${job.id}`)).json()).status, { timeout: 30_000 })
+        .toBe("done");
+      return (await writerApi.get(`/api/files/gallery-upload-jobs/${job.id}`)).json();
+    };
+
+    const rejectedBody = await uploadOversized();
+    expect(rejectedBody.imported_items).toHaveLength(0);
     expect(rejectedBody.errors.join(" ")).toContain("Speicherkontingent des Mandanten erreicht");
 
     // Lifting the quota again must let the identical upload through - proves this is real,
@@ -46,12 +56,8 @@ test("rejects a gallery upload once the platform-admin-configured storage quota 
     const liftQuota = await adminApi.patch(`/api/admin/tenants/${tenantId}/storage-quota`, { data: { quota_mb: null } });
     expect(liftQuota.ok(), await liftQuota.text()).toBeTruthy();
 
-    const accepted = await writerApi.post("/api/files/gallery-uploads", {
-      multipart: { files: { name: "sample-oversized.png", mimeType: "image/png", buffer: imageBuffer } },
-    });
-    expect(accepted.ok(), await accepted.text()).toBeTruthy();
-    const acceptedBody = await accepted.json();
-    expect(acceptedBody.items).toHaveLength(1);
+    const acceptedBody = await uploadOversized();
+    expect(acceptedBody.imported_items).toHaveLength(1);
   } finally {
     // Always restore "no quota" - a leftover 0-byte quota would break every other e2e spec
     // (and the shared demo tenant itself) that uploads anything here afterward.

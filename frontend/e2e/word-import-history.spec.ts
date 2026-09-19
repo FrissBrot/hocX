@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import cases from "./fixtures/word-import/manifest.json";
 import { api, seedImport, upload, reanalyze, commitPayload, expectHistoricalRows, type ImportSeed } from "./word-import.helpers";
 import { authFiles } from "./auth";
@@ -9,6 +9,15 @@ async function importFile(request: any, seed: ImportSeed, filename: string, over
   const analysis = await reanalyze(request, seed, documents[0].id, overrideDate);
   return api(request, "post", `/api/tools/word-import/documents/${documents[0].id}/commit`,
     commitPayload(seed, analysis, overrideDate ?? fixture.protocolDate!));
+}
+
+// The list sidebar button's accessible name is "<name> <n> Einträge" (name + entry-count
+// spans), so it can't be matched exactly by name alone, and the "Ansicht" picker is a
+// SearchableSelect (button + listbox), not a native <select>.
+async function openHistoricalView(page: Page, seed: ImportSeed) {
+  await page.getByRole("button", { name: seed.list.name }).click();
+  await page.getByRole("button", { name: "Ansicht", exact: true }).click();
+  await page.getByRole("option", { name: `${seed.cycle.name} 2023 (historisch)` }).click();
 }
 
 test.describe("Historical list import testbook", () => {
@@ -80,14 +89,12 @@ test.describe("Historical list import testbook", () => {
     const seed = await seedImport(request);
     await importFile(request, seed, "leap-day.docx");
     await page.goto("/lists");
-    await page.getByRole("button", { name: seed.list.name, exact: true }).click();
-    await page.getByRole("combobox", { name: /^Ansicht/ }).selectOption(`${seed.cycle.id}:2023:1`);
+    await openHistoricalView(page, seed);
     await expect(page.getByText("Schalttag 2024", { exact: true })).toBeVisible();
     await expect(page.getByText("Menü – Schalttag 2024", { exact: true })).toBeVisible();
     await expect(page.getByText("LIVE HEUTE", { exact: true })).toHaveCount(0);
     await page.reload();
-    await page.getByRole("button", { name: seed.list.name, exact: true }).click();
-    await page.getByRole("combobox", { name: /^Ansicht/ }).selectOption(`${seed.cycle.id}:2023:1`);
+    await openHistoricalView(page, seed);
     await expect(page.getByText("Schalttag 2024", { exact: true })).toBeVisible();
     const other = await browser.newContext({ storageState: authFiles.tenantTwo });
     try {

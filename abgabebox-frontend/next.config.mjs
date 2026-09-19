@@ -55,6 +55,13 @@ const apiProxyTarget = process.env.ABGABEBOX_API_PROXY_TARGET?.replace(/\/$/, ""
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
+  // Same reasoning as frontend/next.config.mjs: `next dev` only auto-allows "localhost" and
+  // its --hostname, but this repo's e2e stack reaches the dev server via 127.0.0.1. Without
+  // this the HMR websocket is rejected and the page never hydrates (markup renders, but
+  // upload-form.tsx's effects/handlers - e.g. the dev captcha auto-bypass and the file
+  // drop-zone's onChange - never run, leaving "Abgeben" permanently disabled). Has no effect
+  // outside dev.
+  allowedDevOrigins: ["127.0.0.1"],
   experimental: {
     staleTimes: {
       dynamic: 0,
