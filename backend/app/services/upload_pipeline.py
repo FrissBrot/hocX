@@ -30,7 +30,7 @@ from uuid import uuid4
 
 import imagehash
 from fastapi import HTTPException, UploadFile
-from PIL import Image, ImageOps
+from PIL import Image, ImageChops, ImageOps
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -314,9 +314,48 @@ def _compute_perceptual_hash(content: bytes, mime: str) -> str | None:
         return None
     try:
         with Image.open(io.BytesIO(content)) as image:
-            return str(imagehash.phash(image))
+            return str(perceptual_hash_of_image(image))
     except Exception:
         return None
+
+
+# Ein Rand gilt nur als "Letterbox", wenn er (fast) schwarz oder (fast) weiss ist - ein
+# dunkler Himmel in der Bildecke darf nicht als Rand weggeschnitten werden.
+_BORDER_COLOR_TOLERANCE = 24
+_BORDER_MIN_CONTENT_FRACTION = 0.4
+
+
+def _crop_uniform_border(image: Image.Image) -> Image.Image:
+    """Schneidet einen einfarbigen schwarzen/weissen Rand ab (Screenshots, Story-/Letterbox-
+    Exporte). Ohne das hasht ein und dasselbe Foto mit Rahmen voellig anders als das
+    Original (Hamming-Distanz ~20 statt <5), weil der pHash das Gesamtbild auf 32x32
+    herunterrechnet und der Rand einen grossen Teil davon einnimmt. Schneidet nichts ab,
+    wenn die vier Ecken nicht dieselbe Randfarbe haben oder weniger als
+    _BORDER_MIN_CONTENT_FRACTION der Flaeche als Inhalt uebrig bliebe."""
+    rgb = image.convert("RGB")
+    width, height = rgb.size
+    corners = [rgb.getpixel(xy) for xy in ((0, 0), (width - 1, 0), (0, height - 1), (width - 1, height - 1))]
+    background = corners[0]
+    if any(max(abs(a - b) for a, b in zip(corner, background)) > _BORDER_COLOR_TOLERANCE for corner in corners):
+        return rgb
+    if not (max(background) <= _BORDER_COLOR_TOLERANCE or min(background) >= 255 - _BORDER_COLOR_TOLERANCE):
+        return rgb
+    diff = ImageChops.difference(rgb, Image.new("RGB", rgb.size, background)).convert("L")
+    box = diff.point(lambda value: 255 if value > _BORDER_COLOR_TOLERANCE else 0).getbbox()
+    if box is None:
+        return rgb
+    if (box[2] - box[0]) * (box[3] - box[1]) < _BORDER_MIN_CONTENT_FRACTION * width * height:
+        return rgb
+    return rgb.crop(box)
+
+
+def perceptual_hash_of_image(image: Image.Image) -> imagehash.ImageHash:
+    """pHash of what the user actually sees: EXIF rotation applied (a phone photo's pixels
+    are stored sideways with an orientation tag - hashing them raw made the same photo
+    differ from its already-rotated PNG/screenshot copy by ~26 bits) and a uniform border
+    cropped off (see _crop_uniform_border). The single hash definition for both the upload
+    duplicate warning and the "Aehnliche" series grouping."""
+    return imagehash.phash(_crop_uniform_border(ImageOps.exif_transpose(image)))
 
 
 def _closest_perceptual_match(perceptual_hash: str | None, candidates: list[tuple[int, str]]) -> int | None:

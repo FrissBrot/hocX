@@ -152,3 +152,54 @@ def test_max_grouping_images_completes_in_well_under_a_second():
     elapsed = time.perf_counter() - started
 
     assert elapsed < 3.0
+
+
+def _photo_like_image(size=(240, 320)):
+    from PIL import Image, ImageDraw
+
+    image = Image.new("RGB", size, (70, 120, 200))
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((30, 60, 120, 250), fill=(200, 60, 40))
+    draw.ellipse((100, 20, 200, 120), fill=(240, 220, 90))
+    draw.rectangle((150, 180, 230, 300), fill=(30, 140, 60))
+    return image
+
+
+def test_perceptual_hash_ignores_exif_orientation():
+    from app.services.upload_pipeline import perceptual_hash_of_image
+
+    upright = _photo_like_image()
+    sideways = upright.rotate(90, expand=True)  # pixels stored sideways...
+    exif = sideways.getexif()
+    exif[274] = 6  # ...with "rotate 90 CW to display" tag (undoes the rotate above)
+    sideways.info["exif"] = exif.tobytes()
+    import io
+
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    sideways.save(buffer, format="JPEG", exif=exif.tobytes(), quality=95)
+    with Image.open(io.BytesIO(buffer.getvalue())) as reloaded:
+        assert perceptual_hash_of_image(reloaded) - perceptual_hash_of_image(upright) <= 5
+
+
+def test_perceptual_hash_ignores_black_letterbox_border():
+    from PIL import Image
+
+    from app.services.upload_pipeline import perceptual_hash_of_image
+
+    photo = _photo_like_image()
+    framed = Image.new("RGB", (photo.width + 90, photo.height + 140), (0, 0, 0))
+    framed.paste(photo, (30, 90))
+    assert perceptual_hash_of_image(framed) - perceptual_hash_of_image(photo) <= 5
+
+
+def test_perceptual_hash_keeps_dark_photos_uncropped():
+    from PIL import Image
+
+    from app.services.upload_pipeline import _crop_uniform_border
+
+    # Dark corners but bright content covering <40% of the frame must not be treated as border.
+    night = Image.new("RGB", (200, 200), (5, 5, 5))
+    night.paste((250, 250, 250), (80, 80, 120, 120))
+    assert _crop_uniform_border(night).size == (200, 200)

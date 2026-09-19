@@ -573,6 +573,11 @@ class FileService:
             if file_path.exists():
                 content = file_path.read_bytes()
                 stored_file.sharpness_score, stored_file.exposure_score = compute_quality_scores(content)
+                # Re-hash files that already carry a perceptual_hash (migration 0077 requeues
+                # them after the hash definition changed to EXIF-rotated + border-cropped) -
+                # never adds a hash to a file that had none (e.g. abgabebox submissions).
+                if stored_file.perceptual_hash is not None:
+                    stored_file.perceptual_hash = _compute_perceptual_hash(content, stored_file.mime_type) or stored_file.perceptual_hash
                 updated += 1
             stored_file.quality_analyzed_at = datetime.now(UTC)
         if pending:
