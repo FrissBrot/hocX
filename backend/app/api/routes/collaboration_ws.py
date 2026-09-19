@@ -48,7 +48,7 @@ def _authenticate(token: str | None) -> CurrentUser | None:
             token_iat = int(session_data.get("iat", 0))
             if int(user.session_revoke_at.timestamp()) > token_iat:
                 return None
-        current_user = build_current_user(db, user, session_data.get("tenant_id"), mfa_verified=bool(session_data.get("mfa")))
+        current_user = build_current_user(db, user, mfa_verified=bool(session_data.get("mfa")))
         # Mirrors get_optional_current_user's MFA enforcement (audit finding, 2026-08-25) -
         # without this, a user who becomes MFA-required (promoted to admin) or whose only
         # factor is administratively deleted keeps full read/write WebSocket access with

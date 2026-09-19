@@ -1,5 +1,3 @@
-import uuid
-
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
@@ -7,9 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.rate_limit import enforce_rate_limit
-from app.core.security import CurrentUser, get_current_user, get_optional_current_user
-from app.models import Tenant
-from app.services import public_id_service
+from app.core.security import CurrentUser, get_optional_current_user
 from app.schemas.mfa import (
     LoginResponse,
     MfaTicketRequest,
@@ -161,20 +157,6 @@ def session(request: Request, db: Session = Depends(get_db), user: CurrentUser |
             mfa_verified=user.mfa_verified,
         )
     return service.session(user, bridge_redirect_url)
-
-
-@router.post("/select-tenant/{tenant_id}", response_model=SessionRead)
-def select_tenant(
-    tenant_id: uuid.UUID,
-    response: Response,
-    request: Request,
-    db: Session = Depends(get_db),
-    user: CurrentUser = Depends(get_current_user),
-):
-    internal_id = public_id_service.resolve_internal_id(db, Tenant, tenant_id)
-    if internal_id is None:
-        raise HTTPException(status_code=404, detail="Tenant not found")
-    return service.select_tenant(db, response, user, internal_id, request_host=request.url.hostname)
 
 
 @router.get("/bridge")

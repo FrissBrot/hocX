@@ -196,8 +196,8 @@ test.describe("Abgabe-Links", () => {
   });
 
   test("LNK-07 links (and their tokens) are not accessible to another workspace's reader", async () => {
-    // authFiles.tenantTwo is the admin's session in its second workspace, where the seeded role
-    // is "reader" (see roles-and-tenants.spec.ts): link management is writer-only, so every
+    // authFiles.tenantTwo is the session of a reader account of the second workspace
+    // (see auth.setup.ts and roles-and-tenants.spec.ts): link management is writer-only, so every
     // call - including listing, which would expose the tokens - is refused with 403. The
     // cross-tenant id scoping itself (foreign link ids resolve to nothing) is covered at
     // service level by backend/tests/test_submission_links.py.

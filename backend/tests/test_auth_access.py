@@ -5,6 +5,7 @@ relies on. Covers: login success/failure, password hashing (salted, both directi
 session_revoke_at invalidation, and - the most important case given the IDOR history in
 this codebase - that a user's role/session in one tenant grants zero access to another
 tenant's resources via AccessService."""
+import json
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -12,6 +13,7 @@ import pytest
 from fastapi import HTTPException, Response
 
 from app.core.security import (
+    _sign_payload,
     create_session_token,
     get_optional_current_user,
     hash_password,
@@ -29,7 +31,6 @@ from tests.factories import (
     make_protocol,
     make_template,
     make_tenant,
-    make_user_tenant_role,
 )
 
 
@@ -57,8 +58,7 @@ def test_verify_password_rejects_malformed_hash():
 
 def test_login_succeeds_with_correct_password(db):
     tenant = make_tenant(db)
-    user = make_app_user(db, email="alice@example.com", password="correct-password")
-    make_user_tenant_role(db, user.id, tenant.id, role_code="writer")
+    user = make_app_user(db, email="alice@example.com", password="correct-password", tenant_id=tenant.id, role_code="writer")
 
     service = AuthService()
     response = Response()
@@ -76,8 +76,7 @@ def test_login_succeeds_with_correct_password(db):
 
 def test_login_fails_with_wrong_password(db):
     tenant = make_tenant(db)
-    user = make_app_user(db, email="bob@example.com", password="correct-password")
-    make_user_tenant_role(db, user.id, tenant.id, role_code="writer")
+    user = make_app_user(db, email="bob@example.com", password="correct-password", tenant_id=tenant.id, role_code="writer")
 
     service = AuthService()
     with pytest.raises(HTTPException) as exc_info:
@@ -94,8 +93,7 @@ def test_login_fails_for_unknown_email(db):
 
 def test_login_fails_for_inactive_user(db):
     tenant = make_tenant(db)
-    user = make_app_user(db, email="inactive@example.com", password="correct-password", is_active=False)
-    make_user_tenant_role(db, user.id, tenant.id, role_code="writer")
+    user = make_app_user(db, email="inactive@example.com", password="correct-password", is_active=False, tenant_id=tenant.id, role_code="writer")
 
     service = AuthService()
     with pytest.raises(HTTPException) as exc_info:
@@ -103,26 +101,16 @@ def test_login_fails_for_inactive_user(db):
     assert exc_info.value.status_code == 401
 
 
-def test_login_fails_without_any_tenant_membership(db):
-    make_app_user(db, email="orphan@example.com", password="correct-password")
-
-    service = AuthService()
-    with pytest.raises(HTTPException) as exc_info:
-        service.login(db, Response(), LoginRequest(email="orphan@example.com", password="correct-password"), request_host=None)
-    assert exc_info.value.status_code == 403
-
-
 # --- session_revoke_at --------------------------------------------------------------
 
 
 def test_session_token_issued_before_revoke_at_is_rejected(db):
     tenant = make_tenant(db)
-    user = make_app_user(db, email="carol@example.com", password="correct-password")
-    make_user_tenant_role(db, user.id, tenant.id, role_code="writer")
+    user = make_app_user(db, email="carol@example.com", password="correct-password", tenant_id=tenant.id, role_code="writer")
 
     # Mint a token, then simulate a later logout-everywhere by moving session_revoke_at
     # to *after* the token's issued-at timestamp.
-    token = create_session_token(user.id, tenant.id)
+    token = create_session_token(user.id)
     user.session_revoke_at = datetime.now(UTC) + timedelta(seconds=5)
     db.add(user)
     db.flush()
@@ -133,15 +121,14 @@ def test_session_token_issued_before_revoke_at_is_rejected(db):
 
 def test_session_token_issued_after_revoke_at_is_accepted(db):
     tenant = make_tenant(db)
-    user = make_app_user(db, email="dave@example.com", password="correct-password")
-    make_user_tenant_role(db, user.id, tenant.id, role_code="writer")
+    user = make_app_user(db, email="dave@example.com", password="correct-password", tenant_id=tenant.id, role_code="writer")
 
     # revoke_at in the past - a freshly issued token (iat "now") must still be valid.
     user.session_revoke_at = datetime.now(UTC) - timedelta(hours=1)
     db.add(user)
     db.flush()
 
-    token = create_session_token(user.id, tenant.id)
+    token = create_session_token(user.id)
     result = get_optional_current_user(request=None, db=db, session_cookie=token)
     assert result is not None
     assert result.user_id == user.id
@@ -149,28 +136,53 @@ def test_session_token_issued_after_revoke_at_is_accepted(db):
 
 def test_get_optional_current_user_rejects_tampered_token(db):
     tenant = make_tenant(db)
-    user = make_app_user(db, email="erin@example.com", password="correct-password")
-    make_user_tenant_role(db, user.id, tenant.id, role_code="writer")
+    user = make_app_user(db, email="erin@example.com", password="correct-password", tenant_id=tenant.id, role_code="writer")
 
-    token = create_session_token(user.id, tenant.id)
+    token = create_session_token(user.id)
     tampered = token[:-4] + ("AAAA" if not token.endswith("AAAA") else "BBBB")
     result = get_optional_current_user(request=None, db=db, session_cookie=tampered)
     assert result is None
 
 
-def test_session_is_rejected_after_last_tenant_membership_is_deactivated(db):
+def test_session_is_rejected_after_user_is_deactivated(db):
     tenant = make_tenant(db)
-    user = make_app_user(db, email="former-member@example.com", password="correct-password")
-    membership = make_user_tenant_role(db, user.id, tenant.id, role_code="reader")
-    token = create_session_token(user.id, tenant.id)
+    user = make_app_user(db, email="former-member@example.com", password="correct-password", tenant_id=tenant.id, role_code="reader")
+    token = create_session_token(user.id)
 
-    membership.is_active = False
-    db.add(membership)
+    user.is_active = False
+    db.add(user)
     db.flush()
 
-    # The cookie is still correctly signed, but without an active tenant/role it must not
-    # produce an authenticated session that sends the frontend into 403-only pages.
     assert get_optional_current_user(request=None, db=db, session_cookie=token) is None
+
+
+def test_session_always_resolves_to_the_users_own_tenant_and_role(db):
+    """A user belongs to exactly one tenant: neither a legacy "tenant_id" claim in an old
+    cookie (sessions issued before the single-tenant switch) nor anything else can point the
+    session at a different tenant."""
+    own_tenant = make_tenant(db, "Own")
+    other_tenant = make_tenant(db, "Other")
+    user = make_app_user(db, email="frank@example.com", tenant_id=own_tenant.id, role_code="writer")
+
+    legacy_payload = {"user_id": user.id, "tenant_id": other_tenant.id, "mfa": False}
+    now = int(datetime.now(UTC).timestamp())
+    legacy_token = _sign_payload(
+        json.dumps({**legacy_payload, "iat": now, "exp": now + 3600}, separators=(",", ":")).encode("utf-8")
+    )
+
+    result = get_optional_current_user(request=None, db=db, session_cookie=legacy_token)
+    assert result is not None
+    assert result.current_tenant_id == own_tenant.id
+    assert result.current_role == "writer"
+
+
+def test_admin_session_requires_mfa(db):
+    tenant = make_tenant(db)
+    user = make_app_user(db, email="gina@example.com", tenant_id=tenant.id, role_code="admin")
+
+    # An admin without a verified MFA factor gets no usable session at all.
+    assert get_optional_current_user(request=None, db=db, session_cookie=create_session_token(user.id)) is None
+    assert get_optional_current_user(request=None, db=db, session_cookie=create_session_token(user.id, mfa_verified=True)) is None
 
 
 # --- AccessService: cross-tenant isolation (the core IDOR-class check) -------------

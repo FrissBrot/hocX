@@ -2,7 +2,7 @@
 
 Three cumulative scopes, mirroring the three options in the admin panel:
 - "structure": config only - cycles, templates/forms, document templates, lists, finance
-  accounts, verified custom domains, and which users have which role in this tenant. No
+  accounts, verified custom domains, and the tenant's users with their role. No
   participants, events, or protocols.
 - "full": structure + all operational data - participants, events, protocols (with all
   their content), finance transactions/fines, todos. No Abgabebox (public upload box)
@@ -67,7 +67,6 @@ from app.models import (
     UserProtocolScroll,
     UserMfaFactor,
     UserTemplateAccess,
-    UserTenantRole,
     WordImportDocument,
     WordImportProfile,
     WordImportSuggestionOutcome,
@@ -75,7 +74,6 @@ from app.models import (
 from app.services.file_service import _safe_storage_path
 from app.services.tenant_transfer_common import (
     LOOKUP_COLUMNS,
-    REDACTED_PASSWORD_HASH_MARKER,
     USER_ID_COLUMNS,
     LookupCodeCache,
     UserEmailCache,
@@ -83,10 +81,11 @@ from app.services.tenant_transfer_common import (
 )
 
 # Bumped 1 -> 2: exported rows now include a public_id column (see build_row in
-# tenant_transfer_common.py, which drops it on import so each row gets a fresh UUIDv7) -
-# older exports remain readable in principle but importers should be explicit about the
-# format they were generated against.
-FORMAT_VERSION = 2
+# tenant_transfer_common.py, which drops it on import so each row gets a fresh UUIDv7).
+# Bumped 2 -> 3: users belong to exactly one tenant - app_user rows carry their role as
+# `role_id` (a role code) instead of a separate user_tenant_role table, and only the exported
+# tenant's own users are bundled. TenantImportService still reads version 2.
+FORMAT_VERSION = 3
 ExportScope = Literal["structure", "structure_lists", "full", "full_abgabebox"]
 
 
@@ -97,7 +96,7 @@ class TenantExportService:
             raise ValueError("Tenant not found")
 
         self._lookup_cache = LookupCodeCache(db)
-        self._user_cache = UserEmailCache(db)
+        self._user_cache = UserEmailCache(db, tenant_id=tenant_id)
         self._pending_files: list[tuple[Path, str]] = []
 
         tables: dict[str, Any] = {}
@@ -112,37 +111,22 @@ class TenantExportService:
         if scope in ("full", "full_abgabebox"):
             self._export_full(db, tenant_id, tables, include_abgabebox=scope == "full_abgabebox")
 
-        # Bundled last, once every USER_ID_COLUMNS lookup above has recorded which app_user
-        # ids actually got referenced. Deliberately not scoped by tenant_id (that column
-        # doesn't exist on app_user - it's a systemwide table), just by "was this user
-        # referenced anywhere in what we just exported".
-        #
-        # password_hash is only kept for users who are actual MEMBERS of the exported tenant
-        # (a user_tenant_role row for this tenant_id, collected below from the row already
-        # produced by _export_structure) - they're the real target audience of a tenant
-        # transfer, and it makes sense for their login to travel with them (see
-        # TenantImportService._import_app_users). Everyone else here is a pure metadata
-        # reference (e.g. created_by on a template/protocol/stored_file) with no membership
-        # in this tenant - their password_hash is replaced with an unusable placeholder so a
-        # tenant export (handed to a potentially different, untrusted installation) never
-        # bundles a foreign tenant's users' real credentials.
-        referenced_user_ids = self._user_cache.referenced_ids()
-        users = db.query(AppUser).filter(AppUser.id.in_(referenced_user_ids)).all() if referenced_user_ids else []
-        member_emails = {row["user_id"] for row in tables.get("user_tenant_role", []) if row.get("user_id")}
-        user_rows = []
-        for u in users:
-            row = row_to_dict(u)
-            if u.email not in member_emails:
-                row["password_hash"] = REDACTED_PASSWORD_HASH_MARKER
-            user_rows.append(row)
+        # The tenant's own users travel with it, password_hash included: a tenant transfer is a
+        # move/restore, and the members keep the login they already have (see
+        # TenantImportService._import_app_users). Every user belongs to exactly one tenant, so
+        # there is nobody else to bundle - references to any other tenant's user were already
+        # exported as NULL by UserEmailCache. The role is exported as a code (LOOKUP_COLUMNS);
+        # tenant_id is dropped, the import assigns the new tenant.
+        users = db.scalars(select(AppUser).where(AppUser.tenant_id == tenant_id).order_by(AppUser.id)).all()
+        user_rows = self._rows(users, "app_user")
+        for row in user_rows:
+            row.pop("tenant_id", None)
         tables["app_user"] = user_rows
 
-        # MFA belongs to the system-wide AppUser rather than directly to a tenant. Only
-        # factors of actual tenant members travel with a tenant export; metadata-only user
-        # references must not leak authentication credentials. TOTP ciphertext is tied to
-        # this installation's ADMIN_AUTH_SECRET, so export the plaintext secret and let the
+        # MFA belongs to the user rather than directly to the tenant. TOTP ciphertext is tied
+        # to this installation's ADMIN_AUTH_SECRET, so export the plaintext secret and let the
         # target installation encrypt it with its own key during import.
-        member_user_ids = {u.id for u in users if u.email in member_emails}
+        member_user_ids = {u.id for u in users}
         factors = (
             db.scalars(select(UserMfaFactor).where(UserMfaFactor.user_id.in_(member_user_ids))).all()
             if member_user_ids
@@ -253,9 +237,6 @@ class TenantExportService:
         )
         tables["finance_account"] = self._rows(
             db.scalars(select(FinanceAccount).where(FinanceAccount.tenant_id == tenant_id)).all(), "finance_account"
-        )
-        tables["user_tenant_role"] = self._rows(
-            db.scalars(select(UserTenantRole).where(UserTenantRole.tenant_id == tenant_id)).all(), "user_tenant_role"
         )
         # verification_token/status/verified_at travel unchanged (no LOOKUP_COLUMNS/
         # USER_ID_COLUMNS entry needed) - a tenant import is meant to reconstruct the source

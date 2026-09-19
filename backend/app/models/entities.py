@@ -123,7 +123,7 @@ class AppUser(Base, TimestampMixin, UpdatedAtMixin):
             "preferred_mfa_factor_type IN ('totp', 'webauthn')",
             name="ck_app_user_preferred_mfa_factor_type",
         ),
-        Index("idx_app_user_default_tenant", "default_tenant_id"),
+        Index("idx_app_user_tenant_role", "tenant_id", "role_id"),
         Index("idx_app_user_email", "email"),
     )
 
@@ -131,7 +131,10 @@ class AppUser(Base, TimestampMixin, UpdatedAtMixin):
     public_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
     )
-    default_tenant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="SET NULL"))
+    # A user belongs to exactly one tenant with exactly one role. Deleting the tenant deletes
+    # its users (every other FK into app_user is CASCADE or SET NULL, so this never blocks).
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    role_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("role.id", ondelete="RESTRICT"), nullable=False)
     first_name: Mapped[str] = mapped_column(Text, nullable=False)
     last_name: Mapped[str] = mapped_column(Text, nullable=False)
     display_name: Mapped[str] = mapped_column(Text, nullable=False)
@@ -211,31 +214,6 @@ class PlatformAdmin(Base, TimestampMixin, UpdatedAtMixin):
     # 'owner' = full read/write access, 'support' = read-only across the whole admin panel
     # (no create/update/delete on tenants, users, admins, domains, OIDC config, ...).
     role: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'owner'"))
-
-
-class UserRole(Base):
-    __tablename__ = "user_role"
-    __table_args__ = (
-        PrimaryKeyConstraint("user_id", "role_id", name="pk_user_role"),
-        Index("idx_user_role_role", "role_id"),
-    )
-
-    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False)
-    role_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("role.id", ondelete="RESTRICT"), nullable=False)
-
-
-class UserTenantRole(Base, TimestampMixin, UpdatedAtMixin):
-    __tablename__ = "user_tenant_role"
-    __table_args__ = (
-        PrimaryKeyConstraint("user_id", "tenant_id", name="pk_user_tenant_role"),
-        Index("idx_user_tenant_role_tenant", "tenant_id", "role_id"),
-        Index("idx_user_tenant_role_role", "role_id", "is_active"),
-    )
-
-    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False)
-    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
-    role_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("role.id", ondelete="RESTRICT"), nullable=False)
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
 
 
 class GroupEntity(Base, TimestampMixin, UpdatedAtMixin):

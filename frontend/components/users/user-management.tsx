@@ -7,46 +7,29 @@ import { MfaAdminModal } from "@/components/security/mfa-admin-modal";
 import { DataTable } from "@/components/ui/data-table";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
-import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
-import { TenantSummary, UserSummary } from "@/types/api";
-import {
-  addOrUpsertMembership,
-  buildTenantNameMap,
-  emptyUserForm,
-  removeMembershipEntry,
-  userFormToPayload,
-  UserFormState
-} from "@/components/users/user-form-shared";
+import { UserSummary } from "@/types/api";
+import { emptyUserForm, userFormToPayload, UserFormState } from "@/components/users/user-form-shared";
 
 type Props = {
   initialUsers: UserSummary[];
-  manageableTenants: TenantSummary[];
 };
 
-function buildInitialMemberships(user: UserSummary, manageableTenants: TenantSummary[]) {
-  const manageableIds = new Set(manageableTenants.map((tenant) => tenant.id));
-  return user.memberships
-    .filter((membership) => manageableIds.has(membership.tenant_id))
-    .map((membership) => ({
-      tenant_id: membership.tenant_id,
-      role_code: membership.role_code
-    }));
+function roleLabel(roleCode: string) {
+  return ROLE_OPTIONS.find((role) => role.code === roleCode)?.label ?? roleCode;
 }
 
-export function UserManagement({ initialUsers, manageableTenants }: Props) {
+export function UserManagement({ initialUsers }: Props) {
   const showToast = useToast();
   const confirm = useConfirm();
   const [users, setUsers] = useState(initialUsers);
   const [userTab, setUserTab] = useState<"active" | "nologin">("active");
   const [search, setSearch] = useState("");
   const [userModalOpen, setUserModalOpen] = useState(false);
-  const [userForm, setUserForm] = useState<UserFormState>(() =>
-    emptyUserForm(manageableTenants, { prefillMembership: true })
-  );
+  const [userForm, setUserForm] = useState<UserFormState>(() => emptyUserForm());
   const [formError, setFormError] = useState<string | null>(null);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [loginModalUser, setLoginModalUser] = useState<UserSummary | null>(null);
@@ -55,7 +38,6 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [mfaModalUser, setMfaModalUser] = useState<UserSummary | null>(null);
 
-  const tenantNameById = useMemo(() => buildTenantNameMap(manageableTenants), [manageableTenants]);
   const activeUsers = useMemo(() => users.filter((user) => user.login_enabled), [users]);
   const usersWithoutLogin = useMemo(() => users.filter((user) => !user.login_enabled), [users]);
   const tabUsers = userTab === "active" ? activeUsers : usersWithoutLogin;
@@ -65,20 +47,18 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
       if (!query) {
         return true;
       }
-      const membershipText = user.memberships.map((membership) => `${membership.tenant_name} ${membership.role_code}`).join(" ");
-      const haystack = `${user.display_name} ${user.first_name} ${user.last_name} ${user.email} ${membershipText}`.toLowerCase();
+      const haystack = `${user.display_name} ${user.first_name} ${user.last_name} ${user.email} ${roleLabel(user.role_code)}`.toLowerCase();
       return haystack.includes(query);
     });
   }, [search, tabUsers]);
 
   function openNewUser() {
-    setUserForm(emptyUserForm(manageableTenants));
+    setUserForm(emptyUserForm());
     setFormError(null);
     setUserModalOpen(true);
   }
 
   function openEditUser(user: UserSummary) {
-    const memberships = buildInitialMemberships(user, manageableTenants);
     setUserForm({
       id: user.id,
       first_name: user.first_name,
@@ -90,9 +70,8 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
       is_active: user.is_active,
       login_enabled: user.login_enabled,
       is_participant_account: user.is_participant_account,
-      memberships,
-      pickerTenantId: manageableTenants[0] ? String(manageableTenants[0].id) : "",
-      pickerRoleCode: "reader"
+      tenant_id: user.tenant_id,
+      role_code: user.role_code
     });
     setFormError(null);
     setUserModalOpen(true);
@@ -136,24 +115,6 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
     }
   }
 
-  function upsertMembership() {
-    if (!userForm.pickerTenantId) {
-      return;
-    }
-    const tenantId = userForm.pickerTenantId;
-    setUserForm((current) => ({
-      ...current,
-      memberships: addOrUpsertMembership(current.memberships, tenantId, current.pickerRoleCode, "upsert")
-    }));
-  }
-
-  function removeMembership(tenantId: string) {
-    setUserForm((current) => ({
-      ...current,
-      memberships: removeMembershipEntry(current.memberships, tenantId)
-    }));
-  }
-
   async function submitUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError(null);
@@ -185,7 +146,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
 
   async function deleteUser(userId: string, displayName: string) {
     const ok = await confirm({
-      message: `Benutzer "${displayName}" endgültig löschen? Der Zugriff auf alle Mandanten geht sofort verloren.`,
+      message: `Benutzer "${displayName}" endgültig löschen? Das Konto und der Zugriff gehen sofort verloren.`,
       tone: "danger",
     });
     if (!ok) return;
@@ -203,7 +164,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
       <div className="page-header">
         <div>
           <h1 className="page-title">Benutzer</h1>
-          <p className="muted">Systemweite Konten mit genau den Mandantenrollen, die du verwalten darfst.</p>
+          <p className="muted">Die Konten dieses Mandanten und ihre Rollen.</p>
         </div>
         <button type="button" className="button-secondary" onClick={openNewUser}>
           Neuer Benutzer
@@ -235,7 +196,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
       </div>
 
       {userTab === "active" ? (
-        <DataTable className="data-table-lg" columns={["Anzeigename", "Name", "E-Mail", "Rollen", "Aktionen"]}>
+        <DataTable className="data-table-lg" columns={["Anzeigename", "Name", "E-Mail", "Rolle", "Aktionen"]}>
           {visibleUsers.map((user) => (
             <tr key={user.id} className="table-row-clickable" onClick={() => openEditUser(user)}>
               <td>
@@ -244,15 +205,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
               <td>{user.first_name} {user.last_name}</td>
               <td>{user.email}</td>
               <td>
-                <div className="stack-tight">
-                  {user.memberships
-                    .filter((membership) => tenantNameById.has(membership.tenant_id))
-                    .map((membership) => (
-                      <span key={`${user.id}-${membership.tenant_id}`} className="pill">
-                        {membership.tenant_name}: {membership.role_code}
-                      </span>
-                    ))}
-                </div>
+                <span className="pill">{roleLabel(user.role_code)}</span>
               </td>
               <td>
                 <div className="table-actions table-actions-start">
@@ -282,7 +235,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
           ))}
         </DataTable>
       ) : (
-        <DataTable className="data-table-lg" columns={["Name", "E-Mail (Teilnehmer)", "Rollen", "Aktionen"]}>
+        <DataTable className="data-table-lg" columns={["Name", "E-Mail (Teilnehmer)", "Rolle", "Aktionen"]}>
           {visibleUsers.map((user) => (
             <tr key={user.id}>
               <td>
@@ -290,15 +243,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
               </td>
               <td>{user.email ?? <span className="muted">–</span>}</td>
               <td>
-                <div className="stack-tight">
-                  {user.memberships
-                    .filter((membership) => tenantNameById.has(membership.tenant_id))
-                    .map((membership) => (
-                      <span key={`${user.id}-${membership.tenant_id}`} className="pill">
-                        {membership.tenant_name}: {membership.role_code}
-                      </span>
-                    ))}
-                </div>
+                <span className="pill">{roleLabel(user.role_code)}</span>
               </td>
               <td>
                 <div className="table-actions table-actions-start">
@@ -319,7 +264,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
         open={userModalOpen}
         onClose={() => setUserModalOpen(false)}
         title={userForm.id ? "Benutzer bearbeiten" : "Benutzer erstellen"}
-        description="Kontodaten pflegen und Mandantenrollen gezielt einzeln zuweisen."
+        description="Kontodaten und Rolle pflegen."
         size="wide"
       >
         <form className="grid" onSubmit={submitUser}>
@@ -375,54 +320,16 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
             ) : null}
           </div>
 
-          <div className="grid">
-            <div className="field-label">Mandantenrollen</div>
-            <div className="role-picker">
-              <label className="field-stack">
-                <span className="field-label">Mandant</span>
-                <SearchableSelect
-                  options={manageableTenants}
-                  getId={(tenant) => String(tenant.id)}
-                  getLabel={(tenant) => tenant.name}
-                  value={userForm.pickerTenantId || null}
-                  onChange={(tenant) => setUserForm((current) => ({ ...current, pickerTenantId: tenant ? String(tenant.id) : "" }))}
-                />
-              </label>
-              <label className="field-stack">
-                <span className="field-label">Rolle</span>
-                <select value={userForm.pickerRoleCode} onChange={(event) => setUserForm((current) => ({ ...current, pickerRoleCode: event.target.value }))}>
-                  {ROLE_OPTIONS.map((r) => (
-                    <option key={r.code} value={r.code}>
-                      {r.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="role-picker-action">
-                <button type="button" className="button-secondary" onClick={upsertMembership} disabled={!userForm.pickerTenantId}>
-                  Rolle zuweisen
-                </button>
-              </div>
-            </div>
-
-            <div className="selection-list">
-              {userForm.memberships.length === 0 ? (
-                <div className="selection-card muted">Noch keine verwaltbaren Mandantenrollen zugewiesen.</div>
-              ) : (
-                userForm.memberships.map((membership) => (
-                  <div key={membership.tenant_id} className="selection-card membership-row">
-                    <div>
-                      <strong>{tenantNameById.get(membership.tenant_id) ?? "Unbekannter Mandant"}</strong>
-                      <div className="muted">{membership.role_code}</div>
-                    </div>
-                    <button type="button" className="button-secondary button-danger" onClick={() => removeMembership(membership.tenant_id)}>
-                      Entfernen
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+          <label className="field-stack">
+            <span className="field-label">Rolle</span>
+            <select value={userForm.role_code} onChange={(event) => setUserForm((current) => ({ ...current, role_code: event.target.value }))}>
+              {ROLE_OPTIONS.map((role) => (
+                <option key={role.code} value={role.code}>
+                  {role.label}
+                </option>
+              ))}
+            </select>
+          </label>
 
           {formError && (
             <div className="form-error-banner">{formError}</div>

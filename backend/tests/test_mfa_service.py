@@ -5,13 +5,12 @@ from app.core.security import build_current_user, create_session_token, get_opti
 from app.core.totp import current_totp_code, generate_totp_secret
 from app.models import UserMfaFactor
 from app.services.mfa_service import _ACCOUNT_TOTP_ATTEMPT_LIMIT, MfaService
-from tests.factories import make_app_user, make_tenant, make_user_tenant_role
+from tests.factories import make_app_user, make_tenant
 
 
 def test_session_without_mfa_flag_is_rejected_when_factor_exists(db):
     tenant = make_tenant(db)
-    user = make_app_user(db, email="mfa-user@example.com")
-    make_user_tenant_role(db, user.id, tenant.id, role_code="writer")
+    user = make_app_user(db, email="mfa-user@example.com", tenant_id=tenant.id, role_code="writer")
     db.add(
         UserMfaFactor(
             user_id=user.id,
@@ -22,26 +21,24 @@ def test_session_without_mfa_flag_is_rejected_when_factor_exists(db):
     )
     db.flush()
 
-    token = create_session_token(user.id, tenant.id, mfa_verified=False)
+    token = create_session_token(user.id, mfa_verified=False)
     assert get_optional_current_user(request=None, db=db, session_cookie=token) is None
 
 
 def test_admin_without_factor_session_is_rejected(db):
     tenant = make_tenant(db)
-    user = make_app_user(db, email="admin-no-mfa@example.com")
-    make_user_tenant_role(db, user.id, tenant.id, role_code="admin")
+    user = make_app_user(db, email="admin-no-mfa@example.com", tenant_id=tenant.id, role_code="admin")
 
-    token = create_session_token(user.id, tenant.id, mfa_verified=False)
+    token = create_session_token(user.id, mfa_verified=False)
     assert get_optional_current_user(request=None, db=db, session_cookie=token) is None
 
 
 def test_prepare_login_requires_setup_for_admin_without_factor(db):
     tenant = make_tenant(db)
-    user = make_app_user(db, email="setup-required@example.com")
-    make_user_tenant_role(db, user.id, tenant.id, role_code="admin")
+    user = make_app_user(db, email="setup-required@example.com", tenant_id=tenant.id, role_code="admin")
 
     service = MfaService()
-    current_user = build_current_user(db, user, tenant.id)
+    current_user = build_current_user(db, user)
     pending = service.prepare_login(db, user=user, current_user=current_user, request_host="app.example.com")
 
     assert pending is not None
@@ -51,8 +48,7 @@ def test_prepare_login_requires_setup_for_admin_without_factor(db):
 
 def test_verify_login_totp_completes_pending_ticket(db):
     tenant = make_tenant(db)
-    user = make_app_user(db, email="totp-login@example.com")
-    make_user_tenant_role(db, user.id, tenant.id, role_code="writer")
+    user = make_app_user(db, email="totp-login@example.com", tenant_id=tenant.id, role_code="writer")
     secret = generate_totp_secret()
     db.add(
         UserMfaFactor(
@@ -65,7 +61,7 @@ def test_verify_login_totp_completes_pending_ticket(db):
     db.flush()
 
     service = MfaService()
-    current_user = build_current_user(db, user, tenant.id)
+    current_user = build_current_user(db, user)
     pending = service.prepare_login(db, user=user, current_user=current_user, request_host="app.example.com")
     assert pending is not None
     assert pending.status == "verification_required"
@@ -78,9 +74,8 @@ def test_verify_login_totp_completes_pending_ticket(db):
 
 def test_prepare_login_uses_saved_default_method(db):
     tenant = make_tenant(db)
-    user = make_app_user(db, email="preferred-method@example.com")
+    user = make_app_user(db, email="preferred-method@example.com", tenant_id=tenant.id, role_code="writer")
     user.preferred_mfa_factor_type = "totp"
-    make_user_tenant_role(db, user.id, tenant.id, role_code="writer")
     db.add(
         UserMfaFactor(
             user_id=user.id,
@@ -100,7 +95,7 @@ def test_prepare_login_uses_saved_default_method(db):
     db.flush()
 
     service = MfaService()
-    current_user = build_current_user(db, user, tenant.id)
+    current_user = build_current_user(db, user)
     pending = service.prepare_login(db, user=user, current_user=current_user, request_host="app.example.com")
 
     assert pending is not None
@@ -110,8 +105,7 @@ def test_prepare_login_uses_saved_default_method(db):
 
 def test_set_self_preferred_method_updates_overview(db):
     tenant = make_tenant(db)
-    user = make_app_user(db, email="switch-preferred@example.com")
-    make_user_tenant_role(db, user.id, tenant.id, role_code="writer")
+    user = make_app_user(db, email="switch-preferred@example.com", tenant_id=tenant.id, role_code="writer")
     db.add(
         UserMfaFactor(
             user_id=user.id,
@@ -131,7 +125,7 @@ def test_set_self_preferred_method_updates_overview(db):
     db.flush()
 
     service = MfaService()
-    actor = build_current_user(db, user, tenant.id, mfa_verified=True)
+    actor = build_current_user(db, user, mfa_verified=True)
     overview = service.set_self_preferred_method(
         db,
         actor,
@@ -149,8 +143,7 @@ def test_verify_login_totp_locks_out_account_across_tickets(db):
     credentials mint unlimited tickets and get more guesses each time. Verifies the new
     account-level ceiling (keyed by user id, not ticket) actually caps guesses across tickets."""
     tenant = make_tenant(db)
-    user = make_app_user(db, email="totp-lockout@example.com")
-    make_user_tenant_role(db, user.id, tenant.id, role_code="writer")
+    user = make_app_user(db, email="totp-lockout@example.com", tenant_id=tenant.id, role_code="writer")
     secret = generate_totp_secret()
     db.add(
         UserMfaFactor(
@@ -163,7 +156,7 @@ def test_verify_login_totp_locks_out_account_across_tickets(db):
     db.flush()
 
     service = MfaService()
-    current_user = build_current_user(db, user, tenant.id)
+    current_user = build_current_user(db, user)
 
     for _ in range(_ACCOUNT_TOTP_ATTEMPT_LIMIT):
         pending = service.prepare_login(db, user=user, current_user=current_user, request_host="app.example.com")
@@ -185,8 +178,7 @@ def test_verify_login_totp_locks_out_account_across_tickets(db):
 
 def test_delete_self_factor_blocks_last_factor_for_required_user(db):
     tenant = make_tenant(db)
-    user = make_app_user(db, email="required-reset@example.com")
-    make_user_tenant_role(db, user.id, tenant.id, role_code="admin")
+    user = make_app_user(db, email="required-reset@example.com", tenant_id=tenant.id, role_code="admin")
     factor = UserMfaFactor(
         user_id=user.id,
         factor_type="totp",
@@ -197,7 +189,7 @@ def test_delete_self_factor_blocks_last_factor_for_required_user(db):
     db.flush()
 
     service = MfaService()
-    actor = build_current_user(db, user, tenant.id, mfa_verified=True)
+    actor = build_current_user(db, user, mfa_verified=True)
 
     try:
         service.delete_self_factor(db, actor, factor.id)

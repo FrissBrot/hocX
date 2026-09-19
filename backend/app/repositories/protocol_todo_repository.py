@@ -3,7 +3,7 @@ import uuid
 from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
-from app.models import ElementType, Event, Participant, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolTodo, Template, TemplateParticipant, TodoStatus, UserTenantRole
+from app.models import AppUser, ElementType, Event, Participant, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolTodo, Template, TemplateParticipant, TodoStatus
 from app.repositories.participant_repository import participant_eligible_on
 from app.services import public_id_service
 
@@ -226,17 +226,9 @@ class ProtocolTodoRepository:
     def user_allowed_for_tenant(self, db: Session, tenant_id: int, user_id: int) -> bool:
         """assigned_user_id is client-supplied and, unlike assigned_participant_id/
         due_event_id, was never validated at all - a writer could assign a todo to any
-        app_user.id, including one with no membership in this tenant (audit finding,
+        app_user.id, including one that belongs to another tenant (audit finding,
         2026-08-25)."""
-        return bool(
-            db.scalar(
-                select(func.count(UserTenantRole.user_id)).where(
-                    UserTenantRole.user_id == user_id,
-                    UserTenantRole.tenant_id == tenant_id,
-                    UserTenantRole.is_active.is_(True),
-                )
-            )
-        )
+        return bool(db.scalar(select(func.count(AppUser.id)).where(AppUser.id == user_id, AppUser.tenant_id == tenant_id)))
 
     def tenant_id_for_block(self, db: Session, protocol_element_block_id: int) -> int | None:
         """Resolves a block-scoped todo's tenant via its owning protocol - block-scoped

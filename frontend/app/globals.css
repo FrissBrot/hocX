@@ -126,35 +126,9 @@ pre {
   gap: var(--space-4);
 }
 
-.brand-lockup-trigger {
-  --button-hover-bg: var(--accent-soft);
-  width: 100%;
-  min-height: 0;
-  padding: 0;
-  border: 0;
-  --button-bg: transparent;
-  background: var(--button-bg);
-  color: var(--text);
-  border-radius: var(--radius-sm);
-  text-align: left;
-  transition: background var(--dur-base) ease;
-}
-
-.brand-lockup-trigger:hover {
-  --button-bg: var(--accent-soft);
-  background: var(--button-bg);
-  transform: none;
-}
-
 .brand-lockup-text {
   flex: 1;
   min-width: 0;
-}
-
-.brand-lockup-chevron {
-  flex-shrink: 0;
-  margin-left: auto;
-  color: var(--muted);
 }
 
 .brand-mark {
@@ -2901,10 +2875,6 @@ input[type="radio"] {
   gap: var(--space-3);
 }
 
-.selection-grid {
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-}
-
 .selection-card {
   display: grid;
   gap: var(--space-3);
@@ -2912,65 +2882,6 @@ input[type="radio"] {
   border-radius: var(--radius-xl);
   border: 1px solid var(--border);
   background: color-mix(in srgb, var(--panel-solid) 90%, transparent 10%);
-}
-
-.tenant-tile {
-  padding: 0;
-  overflow: hidden;
-}
-
-.tenant-tile-active {
-  border-color: color-mix(in srgb, var(--accent) 40%, transparent 60%);
-}
-
-.tenant-tile-grid {
-  grid-template-columns: repeat(auto-fill, minmax(170px, 200px));
-}
-
-.tenant-tile-image {
-  width: 100%;
-  height: 100px;
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: color-mix(in srgb, var(--accent) 18%, transparent 82%);
-  color: var(--text);
-  font-size: var(--text-3xl);
-  font-weight: 600;
-  overflow: hidden;
-}
-
-.tenant-tile-image img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.tenant-tile-body {
-  display: grid;
-  gap: var(--space-3);
-  padding: var(--space-3);
-}
-
-.tenant-tile-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-
-.tenant-tile-switch {
-  width: 100%;
-}
-
-.tenant-tile-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  border-top: 1px solid var(--border);
-  padding-top: var(--space-3);
 }
 
 .selection-card-checkbox {
@@ -3320,23 +3231,6 @@ input[type="radio"] {
   display: block;
   margin-top: var(--space-1);
   color: var(--muted);
-}
-
-.membership-row {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-}
-
-.role-picker {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(180px, 240px) auto;
-  gap: var(--space-4);
-  align-items: flex-end;
-}
-
-.role-picker-action {
-  display: flex;
-  align-items: flex-end;
 }
 
 .identity-button {
@@ -8667,11 +8561,6 @@ input[type="radio"] {
 
   .block-type-grid {
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  }
-
-  .role-picker,
-  .membership-row {
-    grid-template-columns: 1fr;
   }
 
   .modal-backdrop {

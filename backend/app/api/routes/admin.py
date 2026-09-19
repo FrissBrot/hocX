@@ -470,7 +470,7 @@ def list_tenant_users(
 
 
 @router.put("/tenants/{tenant_id}/users/{user_id}", response_model=AdminTenantUserRead)
-def grant_tenant_user_role(
+def set_tenant_user_role(
     tenant_id: uuid.UUID,
     user_id: uuid.UUID,
     payload: AdminTenantUserGrant,
@@ -480,19 +480,19 @@ def grant_tenant_user_role(
     internal_tenant_id = _resolve_tenant_id(db, tenant_id)
     internal_user_id = _resolve_user_id(db, user_id)
     try:
-        result = tenant_user_service.grant_or_update_role(db, internal_tenant_id, internal_user_id, payload.role_code)
+        result = tenant_user_service.set_role(db, internal_tenant_id, internal_user_id, payload.role_code)
     except SQLAlchemyError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Role could not be granted") from exc
+        raise HTTPException(status_code=400, detail="Role could not be changed") from exc
     audit.log(
-        db, action="admin.tenant_user_role_granted", actor_email=current_admin.email, tenant_id=internal_tenant_id,
+        db, action="admin.tenant_user_role_changed", actor_email=current_admin.email, tenant_id=internal_tenant_id,
         entity_type="user", entity_id=internal_user_id, details={"role_code": payload.role_code},
     )
     return result
 
 
 @router.delete("/tenants/{tenant_id}/users/{user_id}", status_code=204)
-def remove_tenant_user(
+def delete_tenant_user(
     tenant_id: uuid.UUID,
     user_id: uuid.UUID,
     db: Session = Depends(get_db),
@@ -501,14 +501,14 @@ def remove_tenant_user(
     internal_tenant_id = _resolve_tenant_id(db, tenant_id)
     internal_user_id = _resolve_user_id(db, user_id)
     try:
-        removed = tenant_user_service.remove_user(db, internal_tenant_id, internal_user_id)
+        removed = tenant_user_service.delete_user(db, internal_tenant_id, internal_user_id)
     except SQLAlchemyError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Membership could not be removed") from exc
+        raise HTTPException(status_code=400, detail="User could not be deleted") from exc
     if not removed:
-        raise HTTPException(status_code=404, detail="Membership not found")
+        raise HTTPException(status_code=404, detail="User not found in this tenant")
     audit.log(
-        db, action="admin.tenant_user_removed", actor_email=current_admin.email, tenant_id=internal_tenant_id,
+        db, action="admin.tenant_user_deleted", actor_email=current_admin.email, tenant_id=internal_tenant_id,
         entity_type="user", entity_id=internal_user_id,
     )
 

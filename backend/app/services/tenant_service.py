@@ -42,11 +42,8 @@ class TenantService:
         self.document_template_service = DocumentTemplateService()
 
     def _manageable_tenant_ids(self, actor: CurrentUser) -> set[int]:
-        return {
-            membership.tenant_id
-            for membership in actor.available_tenants
-            if membership.role_code == "admin" and membership.is_active
-        }
+        """The one tenant the actor administers (none unless they are an admin of it)."""
+        return {actor.current_tenant_id} if actor.current_role == "admin" else set()
 
     def _read_model(self, tenant: Tenant) -> TenantRead:
         return TenantRead(

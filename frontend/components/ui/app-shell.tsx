@@ -8,14 +8,13 @@ import { usePathname, useRouter } from "next/navigation";
 import { attemptBridgeRedirect } from "@/lib/bridge-redirect";
 import { browserApiFetch } from "@/lib/api/client";
 import { getRuntimeConfig } from "@/lib/runtime-config";
-import { SessionInfo, TenantMembership } from "@/types/api";
+import { SessionInfo } from "@/types/api";
 
 import { buildNav, formatRoleLabel, isNavLinkActive, NavLink } from "@/components/ui/app-shell-nav";
 import { NavIcon } from "@/components/ui/nav-icons";
 import { ToastProvider, useToast } from "@/contexts/toast-context";
 import { ConfirmProvider } from "@/contexts/confirm-context";
 import { ProfileModal } from "@/components/ui/profile-modal";
-import { TenantSelectorModal } from "@/components/ui/tenant-selector-modal";
 import { Menu, MenuDivider, MenuItem, Popover } from "@/components/ui/popover";
 import { ConnectivityStatus } from "@/components/ui/connectivity-status";
 import { CopyrightNotice } from "@/components/ui/copyright-notice";
@@ -64,13 +63,11 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
   const pathname = usePathname();
   const router = useRouter();
   const avatarTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const tenantPromptCheckedRef = useRef(false);
   const [themePreference, setThemePreference] = useState<"light" | "dark" | "auto">("auto");
   const [themeReady, setThemeReady] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [session, setSession] = useState<SessionInfo | null>(initialSession);
-  const [tenantModalOpen, setTenantModalOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [protocolExitAnimation, setProtocolExitAnimation] = useState(false);
   const [language, setLanguage] = useState("de");
@@ -167,24 +164,6 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
     };
   }, [initialSession, router]);
 
-  useEffect(() => {
-    if (!session || tenantPromptCheckedRef.current) {
-      return;
-    }
-    tenantPromptCheckedRef.current = true;
-    // Auf einer Mandanten-Custom-Domain ist der Mandant durch die Domain bereits festgelegt -
-    // dort macht ein "welcher Mandant?"-Popup keinen Sinn, nur auf der Hauptdomain zeigen.
-    const mainDomain = getRuntimeConfig().mainAppDomain;
-    const isMainDomain = !mainDomain || window.location.hostname === mainDomain;
-    const alreadyPrompted = window.sessionStorage.getItem("hocx-tenant-prompted");
-    const hasMultipleTenants = session.available_tenants.length > 1;
-    const hasNoDefault = session.user?.default_tenant_id == null;
-    if (isMainDomain && hasMultipleTenants && hasNoDefault && !alreadyPrompted) {
-      window.sessionStorage.setItem("hocx-tenant-prompted", "1");
-      setTenantModalOpen(true);
-    }
-  }, [session]);
-
   const activeCrumb = useMemo(() => {
     for (const group of navGroups) {
       for (const link of group.links) {
@@ -204,43 +183,6 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
     setThemePreference(nextTheme);
     window.localStorage.setItem("hocx-theme", nextTheme);
     document.documentElement.dataset.themePreference = nextTheme;
-  }
-
-  async function switchTenant(membership: TenantMembership) {
-    try {
-      const result = await browserApiFetch<SessionInfo>(`/api/auth/select-tenant/${membership.tenant_id}`, { method: "POST" });
-      setTenantModalOpen(false);
-      if (result.bridge_redirect_url && attemptBridgeRedirect(result.bridge_redirect_url)) {
-        return;
-      }
-      // Hard reload, not router.refresh() - a soft refresh only re-fetches server data, it doesn't
-      // reliably reset every client component's own state for the new tenant context, which is
-      // why the switch sometimes only visibly "took" after an extra click/navigation.
-      window.location.reload();
-    } catch {
-      showToast("Mandant konnte nicht gewechselt werden.", "error");
-    }
-  }
-
-  function openTenantSettings(membership: TenantMembership) {
-    setTenantModalOpen(false);
-    router.push(`/tenant-settings?tenantId=${membership.tenant_id}`);
-  }
-
-  async function setDefaultTenant(tenantId: string | null) {
-    // Optimistic update: the PATCH result already tells us the new value, no need
-    // to wait for a second round-trip (GET /api/auth/session) before the checkbox reacts.
-    setSession((current) => (current?.user ? { ...current, user: { ...current.user, default_tenant_id: tenantId } } : current));
-    try {
-      await browserApiFetch("/api/users/me", {
-        method: "PATCH",
-        body: JSON.stringify({ default_tenant_id: tenantId })
-      });
-    } catch {
-      // resync with the server if the update actually failed
-      const refreshed = await browserApiFetch<SessionInfo>("/api/auth/session");
-      setSession(refreshed);
-    }
   }
 
   async function saveProfile() {
@@ -295,16 +237,13 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
             }
           }}
         >
-          <button type="button" className="brand-lockup brand-lockup-trigger" onClick={() => setTenantModalOpen(true)}>
+          <div className="brand-lockup">
             <div className="brand-mark">hX</div>
             <div className="brand-lockup-text">
               <div className="sidebar-wordmark">hocX</div>
               <div className="sidebar-tenant-name">{tenantName}</div>
             </div>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" width={16} height={16} aria-hidden="true" className="brand-lockup-chevron">
-              <path d="M6 9l6 6 6-6" />
-            </svg>
-          </button>
+          </div>
           <nav className="sidebar-nav">
             {navGroups.map((group) => {
               const renderLink = (link: NavLink) => (
@@ -399,14 +338,6 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
                 >
                   Profil bearbeiten
                 </MenuItem>
-                <MenuItem
-                  onSelect={() => {
-                    setAvatarMenuOpen(false);
-                    setTenantModalOpen(true);
-                  }}
-                >
-                  Mandant wechseln
-                </MenuItem>
                 <MenuDivider />
                 <div className="menu-header menu-header-tight">Darstellung</div>
                 <MenuItem selected={themeReady && themePreference === "light"} onSelect={() => selectTheme("light")}>
@@ -434,15 +365,6 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
           <div className="shell-content">{children}</div>
         </div>
       </div>
-
-      <TenantSelectorModal
-        open={tenantModalOpen}
-        onClose={() => setTenantModalOpen(false)}
-        session={session}
-        onSelect={(membership) => void switchTenant(membership)}
-        onOpenSettings={openTenantSettings}
-        onSetDefault={(tenantId) => void setDefaultTenant(tenantId)}
-      />
 
       <ProfileModal
         open={profileModalOpen}

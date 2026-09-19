@@ -29,7 +29,6 @@ from app.models.entities import (
     TemplateParticipant,
     Tenant,
     TodoStatus,
-    UserTenantRole,
     WordImportProfile,
 )
 
@@ -188,8 +187,18 @@ def make_app_user(
     is_active: bool = True,
     first_name: str = "Test",
     last_name: str = "User",
+    *,
+    tenant_id: int | None = None,
+    role_code: str = "reader",
 ) -> AppUser:
+    """A user always belongs to exactly one tenant with one role. Without an explicit
+    tenant_id the user gets a fresh tenant of their own, so tests that don't care which tenant
+    they are in stay a one-liner."""
+    if tenant_id is None:
+        tenant_id = make_tenant(db, f"Tenant of {email}").id
     user = AppUser(
+        tenant_id=tenant_id,
+        role_id=role_id_by_code(db, role_code),
         email=email,
         password_hash=hash_password(password),
         first_name=first_name,
@@ -200,18 +209,6 @@ def make_app_user(
     db.add(user)
     db.flush()
     return user
-
-
-def make_user_tenant_role(db, user_id: int, tenant_id: int, role_code: str = "writer", is_active: bool = True) -> UserTenantRole:
-    membership = UserTenantRole(
-        user_id=user_id,
-        tenant_id=tenant_id,
-        role_id=role_id_by_code(db, role_code),
-        is_active=is_active,
-    )
-    db.add(membership)
-    db.flush()
-    return membership
 
 
 def make_current_user(tenant_id: int, role: str = "writer", user_id: int = 1) -> CurrentUser:
@@ -234,14 +231,11 @@ def make_current_user(tenant_id: int, role: str = "writer", user_id: int = 1) ->
         email="test@example.com",
         preferred_language="de",
         is_participant_account=False,
-        default_tenant_id=tenant_id,
-        default_tenant_public_id=uuid.uuid4(),
         current_tenant_id=tenant_id,
         current_tenant_public_id=uuid.uuid4(),
         current_tenant_name="Test Tenant",
         current_tenant_profile_image_path=None,
         current_role=role,
-        available_tenants=[],
     )
 
 

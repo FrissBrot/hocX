@@ -26,7 +26,7 @@ from app.core.webauthn import (
 )
 from app.core.config import settings
 from app.core.redis_client import get_redis_sync
-from app.models import AppUser, Role, UserMfaFactor, UserTenantRole
+from app.models import AppUser, Role, UserMfaFactor
 from app.schemas.mfa import (
     MfaFactorRead,
     MfaPendingLoginMethodRead,
@@ -94,20 +94,14 @@ class MfaService:
         return db.scalar(select(UserMfaFactor).where(UserMfaFactor.id == factor_id, UserMfaFactor.user_id == user_id))
 
     def user_requires_mfa(self, db: Session, user_id: int) -> bool:
-        admin_role_id = db.scalar(select(Role.id).where(Role.code == "admin"))
-        if admin_role_id is None:
-            return False
-        return (
+        """MFA is mandatory for tenant admins."""
+        return bool(
             db.scalar(
                 select(func.count())
-                .select_from(UserTenantRole)
-                .where(
-                    UserTenantRole.user_id == user_id,
-                    UserTenantRole.role_id == admin_role_id,
-                    UserTenantRole.is_active.is_(True),
-                )
+                .select_from(AppUser)
+                .join(Role, Role.id == AppUser.role_id)
+                .where(AppUser.id == user_id, Role.code == "admin")
             )
-            > 0
         )
 
     def can_add_passkey_here(self, request_host: str | None) -> bool:
@@ -199,19 +193,8 @@ class MfaService:
 
     def _managed_user(self, db: Session, actor: CurrentUser, user_id: int) -> AppUser:
         require_admin(actor)
-        manageable_ids = {
-            membership.user_id
-            for membership in db.scalars(
-                select(UserTenantRole).where(
-                    UserTenantRole.tenant_id == actor.current_tenant_id,
-                    UserTenantRole.is_active.is_(True),
-                )
-            )
-        }
-        if user_id not in manageable_ids:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         user = db.get(AppUser, user_id)
-        if user is None:
+        if user is None or user.tenant_id != actor.current_tenant_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         return user
 
@@ -589,7 +572,6 @@ class MfaService:
             "login_ticket",
             {
                 "user_id": user.id,
-                "tenant_id": current_user.current_tenant_id,
                 "request_host": request_host,
             },
         )
@@ -654,9 +636,7 @@ class MfaService:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Benutzerkonto ist nicht mehr aktiv")
         if (user.external_identity_json or {}).get("login_enabled") is False:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Login ist für dieses Konto deaktiviert")
-        current_user = build_current_user(db, user, flow.get("tenant_id"), mfa_verified=False)
-        if current_user.current_tenant_id is None:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenant membership assigned")
+        current_user = build_current_user(db, user, mfa_verified=False)
         return PendingLoginContext(user=user, current_user=current_user, request_host=flow.get("request_host"))
 
     def _consume_login_ticket(self, db: Session, ticket: str) -> PendingLoginContext:

@@ -2,13 +2,14 @@
 coverage despite this being where a critical bug was found and fixed: exporting a tenant
 used to bundle the REAL password_hash of users who were merely *referenced* (e.g. as
 Template.created_by) by the exported tenant but were not actually members of it, leaking
-another tenant's credentials to whoever received the export file (see
-REDACTED_PASSWORD_HASH_MARKER in tenant_transfer_common.py).
+another tenant's credentials to whoever received the export file. Users belong to exactly
+one tenant now, so the export only ever contains the exported tenant's own users.
 
 Covers:
-- export bundles real password_hash only for actual tenant members, and redacts it (with
-  REDACTED_PASSWORD_HASH_MARKER) for everyone else referenced only as metadata
-- foreign (cross-tenant) app_user references are exported by email, not by numeric id
+- export bundles the tenant's own users (real password_hash, role as a code) and never a
+  foreign tenant's user - a stray reference to one is exported as NULL
+- on import a same-email account of another tenant is never linked or touched
+- a version-2 archive (roles in a separate user_tenant_role table) still imports
 - roundtrip export -> import: core entities (template, protocol, participant) reappear
   under the new tenant with fresh ids, correctly relinked
 - import never touches a third, uninvolved tenant's data
@@ -32,13 +33,16 @@ import pytest
 from sqlalchemy import select
 
 from app.core.secret_crypto import decrypt_secret, encrypt_secret
+from app.core.security import hash_password
 from app.core.totp import generate_totp_secret
 from app.models.entities import (
+    AppUser,
     Event,
     GalleryImage,
     Participant,
     Protocol,
     ProtocolExportCache,
+    Role,
     StoredFile,
     Template,
     TenantDomain,
@@ -62,7 +66,6 @@ from tests.factories import (
     make_protocol_element_block,
     make_template,
     make_tenant,
-    make_user_tenant_role,
 )
 
 
@@ -71,18 +74,17 @@ def _read_manifest(zip_path: Path) -> dict:
         return json.loads(zf.read("manifest.json").decode("utf-8"))
 
 
-# --- export: password hash redaction / foreign reference handling -----------------------
+# --- export: own users only / foreign reference handling -----------------------
 
 
-def test_export_redacts_password_hash_for_non_member_but_keeps_it_for_member(db):
+def test_export_bundles_only_own_users_and_nulls_foreign_references(db):
     tenant_a = make_tenant(db, "Tenant A")
     tenant_foreign = make_tenant(db, "Tenant Foreign")
 
-    member = make_app_user(db, email="member@a.example", password="member-real-password")
-    make_user_tenant_role(db, member.id, tenant_a.id, role_code="writer")
-
-    foreign_creator = make_app_user(db, email="foreign@x.example", password="foreign-real-password")
-    make_user_tenant_role(db, foreign_creator.id, tenant_foreign.id, role_code="admin")
+    member = make_app_user(db, email="member@a.example", password="member-real-password", tenant_id=tenant_a.id, role_code="writer")
+    foreign_creator = make_app_user(
+        db, email="foreign@x.example", password="foreign-real-password", tenant_id=tenant_foreign.id, role_code="admin"
+    )
 
     template = make_template(db, tenant_a.id, name="Sitzungsprotokoll")
     template.created_by = foreign_creator.id
@@ -94,20 +96,19 @@ def test_export_redacts_password_hash_for_non_member_but_keeps_it_for_member(db)
         manifest = _read_manifest(zip_path)
         app_users = {row["email"]: row for row in manifest["tables"]["app_user"]}
 
-        # The actual tenant member's real hash must travel with the export (so they can log
-        # in on the target installation).
+        # The tenant's own user travels with real hash and role code (so they can log in on
+        # the target installation); the source's tenant id is dropped.
         assert app_users["member@a.example"]["password_hash"] == member.password_hash
-        assert app_users["member@a.example"]["password_hash"] != "REDACTED:not-a-tenant-member"
+        assert app_users["member@a.example"]["role_id"] == "writer"
+        assert "tenant_id" not in app_users["member@a.example"]
 
-        # The foreign user is only a metadata reference (created_by) - never a member of
-        # tenant_a - so their real credentials must NOT leave the installation.
-        assert app_users["foreign@x.example"]["password_hash"] == "REDACTED:not-a-tenant-member"
-        assert app_users["foreign@x.example"]["password_hash"] != foreign_creator.password_hash
-
-        # Foreign references are exported by email, never by the source installation's
-        # numeric id (which would be meaningless - or worse, collide - on the target).
-        template_row = manifest["tables"]["template"][0]
-        assert template_row["created_by"] == "foreign@x.example"
+        # Another tenant's user is not part of this export at all - neither credentials nor
+        # email - and a reference to them is exported as NULL, not as their email.
+        assert "foreign@x.example" not in app_users
+        assert "foreign@x.example" not in json.dumps(manifest)
+        assert manifest["tables"]["template"][0]["created_by"] is None
+        assert "user_tenant_role" not in manifest["tables"]
+        assert manifest["format_version"] == 3
     finally:
         zip_path.unlink(missing_ok=True)
 
@@ -156,8 +157,7 @@ def test_export_import_roundtrip_keeps_word_import_document_and_source_file(db, 
     monkeypatch.setattr(import_module.scanner, "scan_file", lambda *args, **kwargs: "clean")
 
     tenant = make_tenant(db, "Word Import Tenant")
-    creator = make_app_user(db, email="word-import@example.com")
-    make_user_tenant_role(db, creator.id, tenant.id, role_code="writer")
+    creator = make_app_user(db, email="word-import@example.com", tenant_id=tenant.id, role_code="writer")
     template = make_template(db, tenant.id, name="Importvorlage")
     protocol = make_protocol(db, tenant.id, template.id, protocol_number="WI-1")
     source_path = tmp_path / "word-imports" / "source.docx"
@@ -183,6 +183,10 @@ def test_export_import_roundtrip_keeps_word_import_document_and_source_file(db, 
     try:
         manifest = _read_manifest(zip_path)
         assert manifest["tables"]["word_import_document"][0]["original_filename"] == "Sitzung.docx"
+        # Fresh target installation: the source account (which lives in the source tenant)
+        # isn't there, so the import recreates it inside the new tenant.
+        db.delete(creator)
+        db.flush()
         new_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Word Import Tenant (Import)")
     finally:
         zip_path.unlink(missing_ok=True)
@@ -194,8 +198,10 @@ def test_export_import_roundtrip_keeps_word_import_document_and_source_file(db, 
     assert warnings == []
     assert imported.template_id == imported_template.id
     assert imported.protocol_id == imported_protocol.id
-    assert imported.created_by == creator.id
-    assert imported.imported_by == creator.id
+    restored_creator = db.scalar(select(AppUser).where(AppUser.email == "word-import@example.com"))
+    assert restored_creator.tenant_id == new_tenant.id
+    assert imported.created_by == restored_creator.id
+    assert imported.imported_by == restored_creator.id
     assert imported.analysis_snapshot_json == {"title": "Test"}
     assert imported.review_draft_json == {"approved": True}
     assert imported_file.original_name == "Sitzung.docx"
@@ -211,8 +217,7 @@ def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp
     monkeypatch.setattr(import_module.scanner, "scan_file", lambda *args, **kwargs: "clean")
 
     tenant = make_tenant(db, "Complete Backup")
-    user = make_app_user(db, email="backup@example.com")
-    make_user_tenant_role(db, user.id, tenant.id, role_code="admin")
+    user = make_app_user(db, email="backup@example.com", tenant_id=tenant.id, role_code="admin")
     template = make_template(db, tenant.id, name="Learned Template")
     protocol = make_protocol(db, tenant.id, template.id, protocol_number="BACKUP-1")
     generated_path = tmp_path / "exports" / "backup.pdf"
@@ -248,6 +253,9 @@ def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp
         assert len(manifest["tables"]["word_import_suggestion_outcome"]) == 1
         assert len(manifest["tables"]["protocol_export_cache"]) == 1
         assert manifest["tables"]["user_protocol_scroll"][0]["user_id"] == user.email
+        # Fresh target installation: the source account isn't there (see the word import test).
+        db.delete(user)
+        db.flush()
         imported_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Complete Backup (Import)")
     finally:
         zip_path.unlink(missing_ok=True)
@@ -257,7 +265,8 @@ def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp
     profile = db.scalar(select(WordImportProfile).where(WordImportProfile.tenant_id == imported_tenant.id))
     outcome = db.scalar(select(WordImportSuggestionOutcome).where(WordImportSuggestionOutcome.tenant_id == imported_tenant.id))
     cache = db.scalar(select(ProtocolExportCache).where(ProtocolExportCache.protocol_id == imported_protocol.id))
-    scroll = db.get(UserProtocolScroll, (user.id, imported_protocol.id))
+    restored_user = db.scalar(select(AppUser).where(AppUser.email == "backup@example.com"))
+    scroll = db.get(UserProtocolScroll, (restored_user.id, imported_protocol.id))
 
     assert warnings == []
     assert profile.template_id == imported_template.id
@@ -272,8 +281,7 @@ def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp
 
 def test_export_import_roundtrip_restores_all_member_mfa_factors(db):
     tenant = make_tenant(db, "MFA Tenant")
-    user = make_app_user(db, email="mfa-transfer@example.com")
-    make_user_tenant_role(db, user.id, tenant.id, role_code="admin")
+    user = make_app_user(db, email="mfa-transfer@example.com", tenant_id=tenant.id, role_code="admin")
     secret = generate_totp_secret()
     user.preferred_mfa_factor_type = "webauthn"
     db.add_all([
@@ -329,13 +337,14 @@ def test_export_import_roundtrip_restores_all_member_mfa_factors(db):
     assert imported_passkey.webauthn_transports_json == ["usb", "nfc"]
 
 
-def test_import_resolves_existing_target_user_by_email_instead_of_creating_duplicate(db):
-    """A created_by reference to a user who already has an account on the target
-    installation (matched by email) must resolve to that EXISTING account, not spawn a
-    second, unusable one with a random password."""
+def test_import_never_links_to_an_account_of_another_tenant_with_the_same_email(db):
+    """Importing into an installation where a same-email account already exists (here: the
+    source tenant's own user, since the test imports into the same database) must neither
+    link the new tenant's data to that account, move it, nor touch its credentials: it lives
+    in another tenant. The reference is dropped and reported."""
     tenant_a = make_tenant(db, "Tenant A")
-    creator = make_app_user(db, email="creator@shared.example", password="whatever")
-    make_user_tenant_role(db, creator.id, tenant_a.id, role_code="writer")
+    creator = make_app_user(db, email="creator@shared.example", password="whatever", tenant_id=tenant_a.id, role_code="writer")
+    original_hash = creator.password_hash
     template = make_template(db, tenant_a.id)
     template.created_by = creator.id
     db.add(template)
@@ -343,12 +352,74 @@ def test_import_resolves_existing_target_user_by_email_instead_of_creating_dupli
 
     zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
     try:
-        new_tenant, _warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
+        new_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
     finally:
         zip_path.unlink(missing_ok=True)
 
     imported_template = db.scalar(select(Template).where(Template.tenant_id == new_tenant.id))
-    assert imported_template.created_by == creator.id
+    assert imported_template.created_by is None
+    assert any("creator@shared.example" in warning and "anderen Mandanten" in warning for warning in warnings)
+    db.refresh(creator)
+    assert creator.tenant_id == tenant_a.id
+    assert creator.password_hash == original_hash
+    assert db.scalar(select(AppUser).where(AppUser.tenant_id == new_tenant.id)) is None
+
+
+def test_import_creates_the_exported_users_in_the_new_tenant_on_a_fresh_installation(db):
+    """The regular move/restore case: the exported email is unknown on the target, so the
+    account is created inside the new tenant with its role and original password hash and
+    references to it are relinked."""
+    tenant_a = make_tenant(db, "Tenant A")
+    creator = make_app_user(db, email="restorable@example.com", password="whatever", tenant_id=tenant_a.id, role_code="kassier")
+    template = make_template(db, tenant_a.id)
+    template.created_by = creator.id
+    db.add(template)
+    db.flush()
+
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
+    try:
+        # Simulate the fresh target installation: the source account isn't there.
+        db.delete(creator)
+        db.flush()
+        new_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
+    finally:
+        zip_path.unlink(missing_ok=True)
+
+    assert warnings == []
+    restored = db.scalar(select(AppUser).where(AppUser.email == "restorable@example.com"))
+    assert restored.tenant_id == new_tenant.id
+    assert restored.password_hash == creator.password_hash
+    assert db.get(Role, restored.role_id).code == "kassier"
+    imported_template = db.scalar(select(Template).where(Template.tenant_id == new_tenant.id))
+    assert imported_template.created_by == restored.id
+
+
+def test_import_reads_version_2_archives_with_a_separate_user_tenant_role_table(db, tmp_path):
+    archive = tmp_path / "v2.zip"
+    manifest = {
+        "format_version": 2,
+        "scope": "structure",
+        "tables": {
+            "tenant": {"id": 7, "name": "Old Tenant"},
+            "app_user": [
+                {"id": 1, "email": "v2-member@example.com", "first_name": "V", "last_name": "Two", "display_name": "V Two",
+                 "password_hash": hash_password("pw-v2-member"), "default_tenant_id": 7, "is_active": True},
+                {"id": 2, "email": "v2-metadata@example.com", "first_name": "M", "last_name": "Only", "display_name": "M Only",
+                 "password_hash": "REDACTED:not-a-tenant-member", "default_tenant_id": None, "is_active": True},
+            ],
+            "user_tenant_role": [{"user_id": "v2-member@example.com", "tenant_id": 7, "role_id": "admin", "is_active": True}],
+        },
+    }
+    with zipfile.ZipFile(archive, "w") as zf:
+        zf.writestr("manifest.json", json.dumps(manifest))
+
+    new_tenant, _warnings = TenantImportService().import_zip(db, archive, "Imported v2")
+
+    member = db.scalar(select(AppUser).where(AppUser.email == "v2-member@example.com"))
+    assert member.tenant_id == new_tenant.id
+    assert db.get(Role, member.role_id).code == "admin"
+    # A user that was only referenced as metadata was never a member: no tenant to put them in.
+    assert db.scalar(select(AppUser).where(AppUser.email == "v2-metadata@example.com")) is None
 
 
 # --- cross-tenant safety: an uninvolved third tenant is never touched -------------------

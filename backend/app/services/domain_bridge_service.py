@@ -8,32 +8,31 @@ from app.core.config import settings
 from app.core.redis_client import get_redis_sync
 from app.models import Tenant, TenantDomain
 
-_KEY_PREFIX = "domain_bridge:"
+# v2: the token carries only "user_id:mfa" now that a user belongs to exactly one tenant. The
+# prefix changed with the format so a still-live (60s TTL) pre-switch token, whose value is
+# "user_id:tenant_id[:mfa]", can never be misread as a v2 one.
+_KEY_PREFIX = "domain_bridge_v2:"
 _TTL_SECONDS = 60
 
 
-def create_bridge_token(user_id: int, tenant_id: int, *, mfa_verified: bool = False) -> str:
+def create_bridge_token(user_id: int, *, mfa_verified: bool = False) -> str:
     """Single-use, short-lived token used to hand a session off from the main domain to a
     tenant's custom domain (cookies aren't shared across unrelated domains)."""
     token = secrets.token_urlsafe(32)
     redis = get_redis_sync()
-    redis.set(f"{_KEY_PREFIX}{token}", f"{user_id}:{tenant_id}:{int(bool(mfa_verified))}", nx=True, ex=_TTL_SECONDS)
+    redis.set(f"{_KEY_PREFIX}{token}", f"{user_id}:{int(bool(mfa_verified))}", nx=True, ex=_TTL_SECONDS)
     return token
 
 
-def consume_bridge_token(token: str) -> tuple[int, int, bool] | None:
+def consume_bridge_token(token: str) -> tuple[int, bool] | None:
     """Atomically reads and deletes the token so it can never be replayed."""
     redis = get_redis_sync()
     value = redis.getdel(f"{_KEY_PREFIX}{token}")
     if value is None:
         return None
-    parts = value.split(":", 2)
     try:
-        if len(parts) == 2:
-            user_id_str, tenant_id_str = parts
-            return int(user_id_str), int(tenant_id_str), False
-        user_id_str, tenant_id_str, mfa_str = parts
-        return int(user_id_str), int(tenant_id_str), mfa_str == "1"
+        user_id_str, mfa_str = value.split(":", 1)
+        return int(user_id_str), mfa_str == "1"
     except (TypeError, ValueError):
         return None
 
@@ -42,22 +41,18 @@ def resolve_bridge_redirect(
     db: Session,
     request_host: str | None,
     user_id: int,
-    tenant_id: int | None,
+    tenant_id: int,
     *,
     mfa_verified: bool = False,
 ) -> str | None:
     """Returns the URL to send the browser to so its session ends up on whichever domain this
     tenant belongs on: their own healthy custom domain if they have one, otherwise the shared
     main domain. Returns None if the browser is already on that exact host - this is what makes
-    it safe to call on every request (login, tenant switch, and passive session polling alike):
-    it only ever redirects when the current host actually differs from the target, so a stable
-    session converges to zero further redirects instead of looping.
-
-    Symmetric by design - this is what makes switching tenants "just work" regardless of
-    direction: main → custom domain, custom domain → main (target tenant has none), or one
-    custom domain → another (switching between two domain-linked tenants).
+    it safe to call on every request (login and passive session polling alike): it only ever
+    redirects when the current host actually differs from the target, so a stable session
+    converges to zero further redirects instead of looping.
     """
-    if tenant_id is None or not settings.traefik_domain or request_host is None:
+    if not settings.traefik_domain or request_host is None:
         return None
 
     domain_row = (
@@ -75,7 +70,7 @@ def resolve_bridge_redirect(
     if request_host == target_host:
         return None
 
-    token = create_bridge_token(user_id, tenant_id, mfa_verified=mfa_verified)
+    token = create_bridge_token(user_id, mfa_verified=mfa_verified)
     return f"https://{target_host}/api/auth/bridge?token={token}"
 
 

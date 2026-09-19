@@ -53,7 +53,6 @@ from app.models.entities import (
     TemplateElementBlock,
     Tenant,
     UserMfaFactor,
-    UserTenantRole,
 )
 from app.schemas.list_definition import ListDefinitionCreate, ListEntryCreate
 from app.schemas.protocol import ProtocolCreateFromTemplate
@@ -117,11 +116,10 @@ def wipe_existing_tenant(db) -> None:
         log(f"Removing existing '{DEMO_TENANT_NAME}' (id={existing.id}) before reseeding")
         AdminTenantService().delete_tenant(db, existing.id)
 
-    # AppUser.default_tenant_id is ON DELETE SET NULL, not CASCADE (a person can belong to
-    # more than one tenant) - delete_tenant() above never removes the demo leaders
-    # themselves, just orphans them. Their emails are exclusive to this demo tenant
-    # (@demo.hocx.local), so it's safe to remove them outright rather than end up with
-    # duplicate-email failures on every re-run.
+    # delete_tenant() above cascades to the demo leaders (a user belongs to exactly one
+    # tenant). This only sweeps up strays that outlived it, e.g. from an interrupted run: their
+    # emails are exclusive to this demo tenant, so removing them outright avoids duplicate-email
+    # failures on every re-run.
     demo_emails = [f"{role_code}@{DEMO_TENANT_SLUG}.hocx.local" for _, _, role_code in LEADERS]
     db.query(AppUser).filter(AppUser.email.in_(demo_emails)).delete(synchronize_session=False)
 
@@ -136,7 +134,8 @@ def create_tenant_and_users(db) -> tuple[Tenant, dict[str, AppUser]]:
     users: dict[str, AppUser] = {}
     for first_name, last_name, role_code in LEADERS:
         user = AppUser(
-            default_tenant_id=tenant.id,
+            tenant_id=tenant.id,
+            role_id={"admin": ROLE_ADMIN, "writer": ROLE_WRITER, "reader": ROLE_READER, "kassier": ROLE_KASSIER}[role_code],
             first_name=first_name,
             last_name=last_name,
             display_name=f"{first_name} {last_name}",
@@ -146,8 +145,6 @@ def create_tenant_and_users(db) -> tuple[Tenant, dict[str, AppUser]]:
         )
         db.add(user)
         db.flush()
-        role_id = {"admin": ROLE_ADMIN, "writer": ROLE_WRITER, "reader": ROLE_READER, "kassier": ROLE_KASSIER}[role_code]
-        db.add(UserTenantRole(user_id=user.id, tenant_id=tenant.id, role_id=role_id, is_active=True))
         if DEMO_TOTP_SEED:
             db.add(UserMfaFactor(
                 user_id=user.id, factor_type="totp", label="Dev-Seed (DEMO_TOTP_SEED)",

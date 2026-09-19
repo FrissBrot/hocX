@@ -88,7 +88,6 @@ from tests.factories import (
     make_template,
     make_template_element,
     make_tenant,
-    make_user_tenant_role,
     make_word_import_profile,
 )
 
@@ -222,8 +221,7 @@ def _build_tenant_dataset(db, tenant: Tenant, suffix: str) -> dict:
     existing/local factories, prioritizing the tables delete_tenant's hand-rolled order
     explicitly deletes (protocol/submission_assignment/template) plus their RESTRICT-
     sensitive children, and the word_import_document gap this audit finding uncovered."""
-    user = make_app_user(db, email=f"user-{suffix}@example.com")
-    make_user_tenant_role(db, user.id, tenant.id)
+    user = make_app_user(db, email=f"user-{suffix}@example.com", tenant_id=tenant.id, role_code="writer")
 
     template = make_template(db, tenant.id, name=f"Template {suffix}")
     element_def = make_element_definition(db, tenant.id, f"Feld {suffix}", blocks=[{"type": "text"}])

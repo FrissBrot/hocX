@@ -428,7 +428,7 @@ def test_update_stored_file_tags_route_persists_for_writer_role(db):
 
 def test_get_stored_file_metadata_includes_uploader_display_name(db):
     tenant = make_tenant(db)
-    uploader = make_app_user(db, email="leiter@example.com", first_name="Anna", last_name="Muster")
+    uploader = make_app_user(db, email="leiter@example.com", first_name="Anna", last_name="Muster", tenant_id=tenant.id)
     _, stored_file = _make_protocol_image(db, tenant.id, created_by=uploader.id)
 
     metadata = service.get_stored_file_metadata(db, stored_file, "/app/storage", tenant.id)

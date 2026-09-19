@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import functools
 import logging
 import shutil
 from pathlib import Path
@@ -44,9 +45,6 @@ from app.models import (
     TemplateElementBlock,
     TemplateParticipant,
     Tenant,
-    UserProtocolAccess,
-    UserTemplateAccess,
-    UserTenantRole,
 )
 from app.models.entities import submission_assignment_link_table
 from app.services import submission_link_service
@@ -64,16 +62,29 @@ _ALWAYS_EXCLUDE = {"id", "public_id", "created_at", "updated_at"}
 _logger = logging.getLogger(__name__)
 
 
+@functools.lru_cache(maxsize=None)
+def _user_reference_columns(model: type) -> frozenset[str]:
+    """Columns of `model` that point at app_user (created_by, assigned_user_id, ...)."""
+    return frozenset(
+        column.key
+        for column in sa_inspect(model).columns
+        if any(fk.column.table.name == "app_user" for fk in column.foreign_keys)
+    )
+
+
 def _copy_row(source: Any, overrides: dict[str, Any] | None = None) -> Any:
     """Builds a new, unattached ORM instance with the same column values as `source`.
 
     `id`/`created_at`/`updated_at` are always dropped so the DB assigns fresh ones. JSONB/other
     mutable values are deep-copied so the new row never shares object identity with `source`.
+    References to users (created_by, participant.app_user_id, ...) are reset to NULL: a user
+    belongs to exactly one tenant, so a clone can never point at the source tenant's accounts.
     """
     model = type(source)
     mapper = sa_inspect(model)
+    user_columns = _user_reference_columns(model)
     values = {
-        column.key: copy.deepcopy(getattr(source, column.key))
+        column.key: None if column.key in user_columns else copy.deepcopy(getattr(source, column.key))
         for column in mapper.columns
         if column.key not in _ALWAYS_EXCLUDE
     }
@@ -88,6 +99,9 @@ class TenantCloneService:
     Known, deliberate limitations (disclosed rather than silently handled):
     - `ProtocolExportCache` (cached PDF/LaTeX exports) is never cloned — it is regeneratable.
     - `UserProtocolScroll` (per-user scroll position) is never cloned — ephemeral UI state.
+    - Users (and their per-user access rows) are never cloned: an account belongs to exactly
+      one tenant. Every reference to a user on cloned rows is reset to NULL, and the new
+      tenant starts without accounts - the platform admin creates them afterwards.
     - Cloned protocols keep pointing at the ORIGINAL tenant's `document_template_path_snapshot`
       directory (an immutable historical export artifact), it is not physically duplicated.
     - Only participant-ID references we know the shape of are remapped: `Event.*_ids`,
@@ -243,9 +257,6 @@ class TenantCloneService:
             protocol_map=protocol_map,
             submission_assignment_map=submission_assignment_map,
         )
-        self._clone_user_template_access(db, source.id, new_tenant.id, template_map=template_map)
-        self._clone_user_protocol_access(db, source.id, new_tenant.id, protocol_map=protocol_map)
-        self._clone_user_tenant_roles(db, source.id, new_tenant.id)
         return new_tenant
 
     # ── tenant base + physical files ───────────────────────────────────────
@@ -916,32 +927,4 @@ class TenantCloneService:
                 "submission_assignment_id": submission_assignment_map.get(row.submission_assignment_id) if row.submission_assignment_id else None,
             })
             db.add(new_row)
-        db.commit()
-
-    def _clone_user_template_access(self, db: Session, source_tenant_id: int, new_tenant_id: int, *, template_map: dict[int, int]) -> None:
-        if not template_map:
-            return
-        rows = db.scalars(select(UserTemplateAccess).where(UserTemplateAccess.tenant_id == source_tenant_id)).all()
-        for row in rows:
-            new_template_id = template_map.get(row.template_id)
-            if new_template_id is None:
-                continue
-            db.add(_copy_row(row, {"tenant_id": new_tenant_id, "template_id": new_template_id}))
-        db.commit()
-
-    def _clone_user_protocol_access(self, db: Session, source_tenant_id: int, new_tenant_id: int, *, protocol_map: dict[int, int]) -> None:
-        if not protocol_map:
-            return
-        rows = db.scalars(select(UserProtocolAccess).where(UserProtocolAccess.tenant_id == source_tenant_id)).all()
-        for row in rows:
-            new_protocol_id = protocol_map.get(row.protocol_id)
-            if new_protocol_id is None:
-                continue
-            db.add(_copy_row(row, {"tenant_id": new_tenant_id, "protocol_id": new_protocol_id}))
-        db.commit()
-
-    def _clone_user_tenant_roles(self, db: Session, source_tenant_id: int, new_tenant_id: int) -> None:
-        rows = db.scalars(select(UserTenantRole).where(UserTenantRole.tenant_id == source_tenant_id)).all()
-        for row in rows:
-            db.add(_copy_row(row, {"tenant_id": new_tenant_id}))
         db.commit()

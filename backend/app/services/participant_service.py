@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password
-from app.models import AppUser, ListDefinition, ListEntry, Participant, Role, Template, UserTenantRole
+from app.models import AppUser, ListDefinition, ListEntry, Participant, Role, Template
 from app.repositories.participant_repository import ParticipantRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.participant import ParticipantCreate, ParticipantImportResult, ParticipantUpdate
@@ -33,7 +33,8 @@ class ParticipantService:
     def _create_user_for_participant(self, db: Session, participant: Participant) -> AppUser:
         secret = secrets.token_urlsafe(24)
         user = AppUser(
-            default_tenant_id=participant.tenant_id,
+            tenant_id=participant.tenant_id,
+            role_id=self._reader_role_id(db),
             first_name=participant.first_name or participant.display_name,
             last_name=participant.last_name or "Participant",
             display_name=participant.display_name,
@@ -48,15 +49,6 @@ class ParticipantService:
             },
         )
         self.user_repository.create(db, user)
-        db.add(
-            UserTenantRole(
-                user_id=user.id,
-                tenant_id=participant.tenant_id,
-                role_id=self._reader_role_id(db),
-                is_active=True,
-            )
-        )
-        db.flush()
         return user
 
     def _ensure_linked_user(self, db: Session, participant: Participant) -> Participant:
@@ -133,16 +125,7 @@ class ParticipantService:
         app_user = self.user_repository.get(db, app_user_id)
         if app_user is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App user not found")
-        has_membership = bool(
-            db.scalar(
-                select(UserTenantRole.user_id).where(
-                    UserTenantRole.user_id == app_user_id,
-                    UserTenantRole.tenant_id == tenant_id,
-                    UserTenantRole.is_active.is_(True),
-                )
-            )
-        )
-        if not has_membership:
+        if app_user.tenant_id != tenant_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="App user does not belong to the current tenant",

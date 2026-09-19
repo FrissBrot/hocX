@@ -12,11 +12,9 @@ export type SessionInfo = {
     email: string;
     preferred_language: string;
     protocol_accordion_enabled: boolean;
-    default_tenant_id: string | null;
   } | null;
   current_tenant: TenantSummary | null;
   current_role: string | null;
-  available_tenants: TenantMembership[];
   bridge_redirect_url: string | null;
 };
 
@@ -318,15 +316,6 @@ export type PlatformOidcConfigPublic = { enabled: boolean; issuer_url: string };
 export type PlatformOidcConfigRead = { enabled: boolean; issuer_url: string; client_id: string; scopes: string };
 export type PlatformOidcConfigWrite = { enabled: boolean; issuer_url: string; client_id: string; client_secret: string; scopes: string };
 
-export type TenantMembership = {
-  tenant_id: string;
-  tenant_name: string;
-  tenant_profile_image_path: string | null;
-  tenant_profile_image_url: string | null;
-  role_code: string;
-  is_active: boolean;
-};
-
 export type UserSummary = {
   id: string;
   first_name: string;
@@ -336,8 +325,9 @@ export type UserSummary = {
   preferred_language: string;
   is_active: boolean;
   external_identity_json: Record<string, unknown>;
-  default_tenant_id: string | null;
-  memberships: TenantMembership[];
+  tenant_id: string;
+  tenant_name: string;
+  role_code: string;
   login_enabled: boolean;
   is_participant_account: boolean;
   created_at: string;

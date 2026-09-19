@@ -26,14 +26,16 @@ class AdminUserService:
         # q is applied BEFORE the offset/limit slice (audit A1, 2026-08-16): the admin
         # frontend's search box used to filter only the 50 already-fetched items of the
         # current page, so a match on page 3 was invisible while browsing page 1 - mirrors
-        # the same name/email/membership substring match the frontend used to do locally.
+        # the same name/email/tenant/role substring match the frontend used to do locally.
         all_users = self.user_service.list_all_users(db)
         if q:
             query = q.strip().lower()
             if query:
                 def _matches(user: UserRead) -> bool:
-                    membership_text = " ".join(f"{m.tenant_name} {m.role_code}" for m in user.memberships)
-                    haystack = f"{user.display_name} {user.first_name} {user.last_name} {user.email} {membership_text}".lower()
+                    haystack = (
+                        f"{user.display_name} {user.first_name} {user.last_name} {user.email} "
+                        f"{user.tenant_name} {user.role_code}"
+                    ).lower()
                     return query in haystack
 
                 all_users = [user for user in all_users if _matches(user)]

@@ -15,11 +15,14 @@ point outside the exported tenant's own row set entirely:
   static seed data, identical in every installation - but their numeric ids are not
   guaranteed stable across schema versions, so they are exported/imported by `code`,
   not by id (see LOOKUP_COLUMNS).
-- AppUser is a systemwide, cross-tenant table - a user_id from the source installation
-  means nothing on the target. These columns are exported/imported by email instead
-  (see USER_ID_COLUMNS); if no user with that email exists on the target, the column is
-  set to NULL (or, where NULL isn't allowed - e.g. user_tenant_role.user_id - the row is
-  skipped) and reported back to the admin as a warning rather than failing the import.
+- AppUser ids from the source installation mean nothing on the target. These columns are
+  exported/imported by email instead (see USER_ID_COLUMNS). A user belongs to exactly one
+  tenant, so only the exported tenant's own users are ever exported, and on import only the
+  accounts of the newly created tenant can be referenced (UserEmailCache.tenant_id) - never
+  a same-email account that happens to exist in another tenant of the target. If a reference
+  can't be resolved the column is set to NULL (or, where NULL isn't allowed - e.g.
+  user_template_access.user_id - the row is skipped) and reported back to the admin as a
+  warning rather than failing the import.
 """
 
 from __future__ import annotations
@@ -42,20 +45,16 @@ LOOKUP_COLUMNS: dict[str, dict[str, type]] = {
     "protocol_element_block": {"element_type_id": ElementType, "render_type_id": RenderType},
     "event": {"event_category_id": EventCategory},
     "protocol_todo": {"todo_status_id": TodoStatus},
-    "user_tenant_role": {"role_id": Role},
+    "app_user": {"role_id": Role},
 }
 
 REDACTED_PASSWORD_HASH_MARKER = "REDACTED:not-a-tenant-member"
-"""Placeholder written into app_user.password_hash by TenantExportService for exported
-users who are only referenced as metadata (e.g. created_by on a template/protocol) but
-are NOT actual members of the exported tenant (no user_tenant_role row for it). A tenant
-export is meant to be handed to a completely different, potentially untrusted hocX
-installation - bundling a real password_hash for someone who isn't even part of the
-transferred tenant would leak their credentials to that installation's operators.
-TenantImportService recognizes this marker and, when it has to create a brand new
-account for such a row, generates a random unusable hash instead of ever writing this
-literal string to the password_hash column (which is NOT NULL and expects a real
-pbkdf2_sha256-formatted hash)."""
+"""Legacy (format_version 2) exports wrote this placeholder into app_user.password_hash for
+users who were only referenced as metadata (e.g. created_by) but were not members of the
+exported tenant. Exports no longer contain such users at all (every exported user is a member
+of the exported tenant), but TenantImportService still recognizes the marker in old archives
+and generates a random unusable hash instead of ever writing this literal string to the
+password_hash column."""
 
 USER_ID_COLUMNS: dict[str, list[str]] = {
     "participant": ["app_user_id"],
@@ -69,10 +68,9 @@ USER_ID_COLUMNS: dict[str, list[str]] = {
     "user_template_access": ["user_id"],
     "user_protocol_access": ["user_id"],
     "user_protocol_scroll": ["user_id"],
-    "user_tenant_role": ["user_id"],
 }
 # user_id is part of the primary key on user_template_access/user_protocol_access/
-# user_tenant_role - it can never be NULL, so TenantImportService drops those rows
+# user_protocol_scroll - it can never be NULL, so TenantImportService drops those rows
 # entirely (with a warning) rather than nulling the column out when a target user
 # can't be resolved by email.
 
@@ -186,30 +184,35 @@ class LookupCodeCache:
 class UserEmailCache:
     """Resolves app_user ids <-> emails, caching one query per set of ids/emails looked up.
 
-    Export also uses this to track *which* app_user ids got referenced anywhere in the
-    export (every USER_ID_COLUMNS lookup goes through `email_for`) - `referenced_ids()`
-    is then used to bundle the actual AppUser rows (see TenantExportService), so an
-    imported tenant's users can log in on the target immediately instead of the import
-    only ever linking to an account that has to already exist there.
+    When `tenant_id` is set, only that tenant's own users are ever resolved (both directions):
+    a user of any other tenant looks like "no such user". Export sets it to the exported
+    tenant, so a stray reference to a foreign tenant's user (e.g. created_by copied over by a
+    tenant clone) is exported as NULL instead of leaking that user's email; import sets it to
+    the newly created tenant once it exists, so a reference can never link to a same-email
+    account of another tenant of the target installation.
     """
 
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, *, tenant_id: int | None = None) -> None:
         self.db = db
-        self._email_by_id: dict[int, str] = {}
+        self.tenant_id = tenant_id
+        self._email_by_id: dict[int, str | None] = {}
         self._id_by_email: dict[str, int | None] = {}
-        self._referenced_ids: set[int] = set()
+
+    def _in_scope(self, user: AppUser | None) -> bool:
+        return user is not None and (self.tenant_id is None or user.tenant_id == self.tenant_id)
 
     def email_for(self, user_id: int | None) -> str | None:
         if user_id is None:
             return None
-        self._referenced_ids.add(user_id)
         if user_id not in self._email_by_id:
             user = self.db.get(AppUser, user_id)
-            self._email_by_id[user_id] = user.email if user is not None else None
+            self._email_by_id[user_id] = user.email if self._in_scope(user) else None
         return self._email_by_id[user_id]
 
-    def referenced_ids(self) -> set[int]:
-        return set(self._referenced_ids)
+    def email_exists(self, email: str) -> bool:
+        """Whether ANY account (of any tenant) already owns this email - for import's
+        "would creating this account collide" check, deliberately not scoped by tenant_id."""
+        return self.db.query(AppUser.id).filter(AppUser.email == email).first() is not None
 
     def set_id(self, email: str, user_id: int) -> None:
         """Used on import right after creating a brand new account (see
@@ -224,7 +227,7 @@ class UserEmailCache:
             return None
         if email not in self._id_by_email:
             user = self.db.query(AppUser).filter(AppUser.email == email).first()
-            self._id_by_email[email] = user.id if user is not None else None
+            self._id_by_email[email] = user.id if self._in_scope(user) else None
         return self._id_by_email[email]
 
 

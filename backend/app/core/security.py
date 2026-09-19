@@ -15,22 +15,11 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.db import get_db
-from app.models import AppUser, Role, Tenant, UserMfaFactor, UserTenantRole
-from app.services import public_id_service
+from app.models import AppUser, Role, Tenant, UserMfaFactor
 
 
 PASSWORD_SCHEME = "pbkdf2_sha256"
 PASSWORD_ITERATIONS = 600000
-
-
-@dataclass
-class TenantMembership:
-    tenant_id: int
-    tenant_public_id: uuid.UUID
-    tenant_name: str
-    tenant_profile_image_path: str | None
-    role_code: str
-    is_active: bool
 
 
 @dataclass
@@ -43,14 +32,13 @@ class CurrentUser:
     email: str
     preferred_language: str
     is_participant_account: bool
-    default_tenant_id: int | None
-    default_tenant_public_id: uuid.UUID | None
-    current_tenant_id: int | None
-    current_tenant_public_id: uuid.UUID | None
-    current_tenant_name: str | None
+    # A user belongs to exactly one tenant with exactly one role (app_user.tenant_id/role_id);
+    # the "current_" prefix is historical from when a session could switch between tenants.
+    current_tenant_id: int
+    current_tenant_public_id: uuid.UUID
+    current_tenant_name: str
     current_tenant_profile_image_path: str | None
-    current_role: str | None
-    available_tenants: list[TenantMembership]
+    current_role: str
     protocol_accordion_enabled: bool = True
     mfa_verified: bool = False
 
@@ -92,12 +80,11 @@ def _sign_payload(payload: bytes) -> str:
     return base64.urlsafe_b64encode(payload).decode("utf-8") + "." + base64.urlsafe_b64encode(signature).decode("utf-8")
 
 
-def create_session_token(user_id: int, tenant_id: int | None, *, mfa_verified: bool = False) -> str:
+def create_session_token(user_id: int, *, mfa_verified: bool = False) -> str:
     now = datetime.now(UTC)
     payload = json.dumps(
         {
             "user_id": user_id,
-            "tenant_id": tenant_id,
             "mfa": bool(mfa_verified),
             "iat": int(now.timestamp()),
             "exp": int((now + timedelta(hours=settings.auth_session_ttl_hours)).timestamp()),
@@ -107,11 +94,13 @@ def create_session_token(user_id: int, tenant_id: int | None, *, mfa_verified: b
     return _sign_payload(payload)
 
 
-def issue_session_cookie(response: Response, user_id: int, tenant_id: int | None, *, mfa_verified: bool = False) -> None:
+def issue_session_cookie(response: Response, user_id: int, *, mfa_verified: bool = False) -> None:
     """Mints a fresh session token and sets it as a host-only cookie on the response - shared by
-    login, select-tenant and the cross-domain login bridge so all three stay consistent. (OIDC
-    is admin-panel-only now - see platform_oidc_service.py / issue_admin_session_cookie.)"""
-    token = create_session_token(user_id, tenant_id, mfa_verified=mfa_verified)
+    login and the cross-domain login bridge so both stay consistent. (OIDC is admin-panel-only
+    now - see platform_oidc_service.py / issue_admin_session_cookie.) Sessions issued before
+    the single-tenant switch carry an extra "tenant_id" claim, which parse_session_token simply
+    ignores."""
+    token = create_session_token(user_id, mfa_verified=mfa_verified)
     response.set_cookie(
         key=settings.auth_session_cookie,
         value=token,
@@ -145,45 +134,10 @@ def parse_session_token(token: str | None) -> dict | None:
     return data
 
 
-def _load_memberships(db: Session, user_id: int) -> list[TenantMembership]:
-    rows = db.execute(
-        select(UserTenantRole, Tenant, Role)
-        .join(Tenant, Tenant.id == UserTenantRole.tenant_id)
-        .join(Role, Role.id == UserTenantRole.role_id)
-        .where(UserTenantRole.user_id == user_id, UserTenantRole.is_active.is_(True))
-        .order_by(Tenant.name.asc(), Tenant.id.asc())
-    ).all()
-    return [
-        TenantMembership(
-            tenant_id=tenant.id,
-            tenant_public_id=tenant.public_id,
-            tenant_name=tenant.name,
-            tenant_profile_image_path=tenant.profile_image_path,
-            role_code=role.code,
-            is_active=membership.is_active,
-        )
-        for membership, tenant, role in rows
-    ]
-
-
-def build_current_user(db: Session, user: AppUser, selected_tenant_id: int | None, *, mfa_verified: bool = False) -> CurrentUser:
-    memberships = _load_memberships(db, user.id)
-
-    current_membership = None
-    if selected_tenant_id is not None:
-        current_membership = next((membership for membership in memberships if membership.tenant_id == selected_tenant_id), None)
-    if current_membership is None and user.default_tenant_id is not None:
-        current_membership = next((membership for membership in memberships if membership.tenant_id == user.default_tenant_id), None)
-    if current_membership is None and memberships:
-        current_membership = memberships[0]
-
-    default_tenant_public_id = None
-    if user.default_tenant_id is not None:
-        default_tenant_public_id = next(
-            (m.tenant_public_id for m in memberships if m.tenant_id == user.default_tenant_id),
-            None,
-        ) or public_id_service.resolve_public_id(db, Tenant, user.default_tenant_id)
-
+def build_current_user(db: Session, user: AppUser, *, mfa_verified: bool = False) -> CurrentUser:
+    tenant, role = db.execute(
+        select(Tenant, Role).where(Tenant.id == user.tenant_id, Role.id == user.role_id)
+    ).one()
     return CurrentUser(
         user_id=user.id,
         user_public_id=user.public_id,
@@ -194,20 +148,11 @@ def build_current_user(db: Session, user: AppUser, selected_tenant_id: int | Non
         preferred_language=user.preferred_language,
         protocol_accordion_enabled=(user.external_identity_json or {}).get("protocol_accordion_enabled", True) is not False,
         is_participant_account=(user.external_identity_json or {}).get("source") == "participant_auto",
-        default_tenant_id=user.default_tenant_id,
-        default_tenant_public_id=default_tenant_public_id,
-        # current_membership is only ever None here if the user has zero active tenant
-        # roles at all (a matching default_tenant_id membership, if active, was already
-        # picked up above) - falling back to the possibly-stale default_tenant_id in that
-        # case let login() succeed with a non-None current_tenant_id and an empty
-        # current_role, a "phantom tenant" state that only every endpoint's separate
-        # current_role check happens to make harmless today (audit finding, 2026-08-25).
-        current_tenant_id=current_membership.tenant_id if current_membership else None,
-        current_tenant_public_id=current_membership.tenant_public_id if current_membership else None,
-        current_tenant_name=current_membership.tenant_name if current_membership else None,
-        current_tenant_profile_image_path=current_membership.tenant_profile_image_path if current_membership else None,
-        current_role=current_membership.role_code if current_membership else None,
-        available_tenants=memberships,
+        current_tenant_id=tenant.id,
+        current_tenant_public_id=tenant.public_id,
+        current_tenant_name=tenant.name,
+        current_tenant_profile_image_path=tenant.profile_image_path,
+        current_role=role.code,
         mfa_verified=mfa_verified,
     )
 
@@ -223,7 +168,7 @@ def _has_active_mfa_factor(db: Session, user_id: int) -> bool:
 
 
 def _requires_mfa(user: CurrentUser) -> bool:
-    return any(membership.role_code == "admin" and membership.is_active for membership in user.available_tenants)
+    return user.current_role == "admin"
 
 
 def get_optional_current_user(
@@ -242,15 +187,7 @@ def get_optional_current_user(
         token_iat = int(session_data.get("iat", 0))
         if int(user.session_revoke_at.timestamp()) > token_iat:
             return None
-    current_user = build_current_user(db, user, session_data.get("tenant_id"), mfa_verified=bool(session_data.get("mfa")))
-    # A signed cookie can outlive the user's last active tenant membership.  Such a user has
-    # no usable application session: every protected route rejects the missing role, while
-    # /auth/session previously still reported authenticated=True.  In the frontend that made
-    # /login redirect to the dashboard, whose initial data requests then all failed with 403.
-    # Treat the stale cookie as unauthenticated so the user can log in again (or see the normal
-    # "no tenant membership" login error) instead of being trapped in that phantom session.
-    if current_user.current_tenant_id is None or current_user.current_role is None:
-        return None
+    current_user = build_current_user(db, user, mfa_verified=bool(session_data.get("mfa")))
     has_mfa_factor = _has_active_mfa_factor(db, user.id)
     if has_mfa_factor and not current_user.mfa_verified:
         return None

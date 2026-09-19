@@ -3,8 +3,8 @@
 ## Anmelden
 
 Jeder Verein (Mandant) hat einen eigenen Zugang. Die Anmeldung erfolgt unter `/login`
-mit E-Mail-Adresse und Passwort. Ist ein Benutzer Mitglied mehrerer Vereine, kann er
-nach dem Login zwischen den Mandanten wechseln.
+mit E-Mail-Adresse und Passwort. Jedes Konto gehört genau einem Verein, einen
+Mandantenwechsel gibt es nicht.
 
 ## Typischer Ablauf
 

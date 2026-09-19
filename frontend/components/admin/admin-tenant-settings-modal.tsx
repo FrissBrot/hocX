@@ -4,14 +4,13 @@ import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 
 import { MfaAdminModal } from "@/components/security/mfa-admin-modal";
 import { Modal } from "@/components/ui/modal";
-import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Tabs } from "@/components/ui/tabs";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
 import { formatFileSize } from "@/lib/utils/format";
 import { StorageBreakdown } from "@/components/storage/storage-usage-view";
-import { AdminTenantSummary, AdminTenantUser, AdminUserPage, StorageUsageRead, TenantCleanupCategory, TenantCleanupCounts, UserSummary } from "@/types/api";
+import { AdminTenantSummary, AdminTenantUser, StorageUsageRead, TenantCleanupCategory, TenantCleanupCounts } from "@/types/api";
 
 type Props = {
   open: boolean;
@@ -81,10 +80,6 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
 
   const [tenantUsers, setTenantUsers] = useState<AdminTenantUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
-  const [allUsers, setAllUsers] = useState<UserSummary[]>([]);
-  const [addUserId, setAddUserId] = useState("");
-  const [addUserRole, setAddUserRole] = useState("reader");
-  const [addUserBusy, setAddUserBusy] = useState(false);
   const [mfaModalUser, setMfaModalUser] = useState<AdminTenantUser | null>(null);
 
   const [cleanupCounts, setCleanupCounts] = useState<TenantCleanupCounts | null>(null);
@@ -111,10 +106,6 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     });
 
     void loadTenantUsers(tenant.id);
-    // No limit param -> full (unpaginated) list, needed here for the "add user" picker.
-    browserApiFetch<AdminUserPage>("/api/admin/users")
-      .then((result) => setAllUsers(result.items))
-      .catch(() => setAllUsers([]));
 
     setCleanupSelected(new Set());
     setCleanupConfirmName("");
@@ -279,41 +270,20 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     if (!tenant) return;
     if (
       !(await confirm({
-        message: `Zugriff von "${displayName}" auf diesen Mandanten entfernen? Der Benutzer-Account selbst bleibt bestehen.`,
+        message: `Benutzer "${displayName}" endgültig löschen? Das Konto gehört nur zu diesem Mandanten und ist danach weg.`,
         tone: "danger",
-        confirmLabel: "Entfernen"
+        confirmLabel: "Löschen"
       }))
     )
       return;
     try {
       await browserApiFetch(`/api/admin/tenants/${tenant.id}/users/${userId}`, { method: "DELETE" });
       setTenantUsers((current) => current.filter((u) => u.user_id !== userId));
-      showToast("Zugriff entfernt", "success");
+      showToast("Benutzer gelöscht", "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Zugriff konnte nicht entfernt werden", "error");
+      showToast(error instanceof Error ? error.message : "Benutzer konnte nicht gelöscht werden", "error");
     }
   }
-
-  async function addUser(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!tenant || !addUserId) return;
-    setAddUserBusy(true);
-    try {
-      const granted = await browserApiFetch<AdminTenantUser>(`/api/admin/tenants/${tenant.id}/users/${addUserId}`, {
-        method: "PUT",
-        body: JSON.stringify({ role_code: addUserRole })
-      });
-      setTenantUsers((current) => [...current.filter((u) => u.user_id !== granted.user_id), granted].sort((a, b) => a.display_name.localeCompare(b.display_name)));
-      setAddUserId("");
-      showToast("Benutzer hinzugefügt", "success");
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "Benutzer konnte nicht hinzugefügt werden", "error");
-    } finally {
-      setAddUserBusy(false);
-    }
-  }
-
-  const availableToAdd = allUsers.filter((u) => !tenantUsers.some((tu) => tu.user_id === u.id));
 
   if (!tenant) {
     return null;
@@ -407,47 +377,17 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                           </td>
                           <td>
                             <button type="button" className="button-secondary button-ghost" onClick={() => removeUser(u.user_id, u.display_name)}>
-                              Entfernen
+                              Löschen
                             </button>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                  {!usersLoading && tenantUsers.length === 0 && <div className="table-empty muted">Keine Benutzer mit Zugriff auf diesen Mandanten.</div>}
+                  {!usersLoading && tenantUsers.length === 0 && <div className="table-empty muted">Dieser Mandant hat noch keine Benutzer.</div>}
                 </div>
+                <p className="muted">Jedes Konto gehört genau einem Mandanten. Neue Benutzer legst du unter „Benutzer“ an und wählst dort den Mandanten.</p>
 
-                <div className="card">
-                  <div className="eyebrow">Benutzer hinzufügen</div>
-                  <form className="role-picker" onSubmit={addUser}>
-                    <label className="field-stack">
-                      <span className="field-label">Bestehender Benutzer</span>
-                      <SearchableSelect
-                        options={availableToAdd}
-                        getId={(u) => String(u.id)}
-                        getLabel={(u) => `${u.display_name} (${u.email})`}
-                        value={addUserId || null}
-                        onChange={(u) => setAddUserId(u ? String(u.id) : "")}
-                        placeholder="Auswählen…"
-                      />
-                    </label>
-                    <label className="field-stack">
-                      <span className="field-label">Rolle</span>
-                      <select value={addUserRole} onChange={(event) => setAddUserRole(event.target.value)}>
-                        {ROLE_OPTIONS.map((r) => (
-                          <option key={r.code} value={r.code}>
-                            {r.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <div className="role-picker-action">
-                      <button type="submit" className="button-secondary" disabled={!addUserId || addUserBusy}>
-                        Hinzufügen
-                      </button>
-                    </div>
-                  </form>
-                </div>
               </div>
             )
           },

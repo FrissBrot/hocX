@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.rate_limit import check_account_lockout, record_failed_attempt
 from app.core.security import CurrentUser, DUMMY_PASSWORD_HASH, build_current_user, issue_session_cookie, verify_password
-from app.models import AppUser, Tenant
+from app.models import AppUser
 from app.schemas.mfa import (
     LoginResponse,
     MfaTicketRequest,
@@ -20,8 +20,8 @@ from app.schemas.mfa import (
     TotpEnrollmentStartRead,
     TotpLoginVerifyRequest,
 )
-from app.schemas.user import LoginRequest, SessionRead, SessionUserRead, TenantMembershipRead, TenantRead
-from app.services import domain_bridge_service, public_id_service
+from app.schemas.user import LoginRequest, SessionRead, SessionUserRead, TenantRead
+from app.services import domain_bridge_service
 from app.services.audit_service import AuditService
 from app.services.mfa_service import MfaService
 from app.services.tenant_service import build_tenant_profile_image_url
@@ -53,12 +53,7 @@ class AuthService:
         if (user.external_identity_json or {}).get("login_enabled") is False:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Login is disabled for this account")
 
-        requested_tenant_id: int | None = None
-        if payload.tenant_id is not None:
-            requested_tenant_id = public_id_service.resolve_internal_id(db, Tenant, payload.tenant_id)
-        current_user = build_current_user(db, user, requested_tenant_id)
-        if current_user.current_tenant_id is None:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenant membership assigned")
+        current_user = build_current_user(db, user)
 
         pending_mfa = self.mfa_service.prepare_login(
             db,
@@ -69,14 +64,7 @@ class AuthService:
         if pending_mfa is not None:
             return LoginResponse(authenticated=False, mfa=pending_mfa)
 
-        return self._finish_login(
-            db,
-            response,
-            user=user,
-            tenant_id=current_user.current_tenant_id,
-            request_host=request_host,
-            mfa_verified=False,
-        )
+        return self._finish_login(db, response, user=user, request_host=request_host, mfa_verified=False)
 
     def logout(self, db: Session, response: Response, user: CurrentUser | None) -> dict[str, str]:
         response.delete_cookie(settings.auth_session_cookie, path="/")
@@ -101,38 +89,14 @@ class AuthService:
         pair = domain_bridge_service.consume_bridge_token(token)
         if pair is None:
             return False
-        user_id, tenant_id, mfa_verified = pair
+        user_id, mfa_verified = pair
 
         user = db.get(AppUser, user_id)
         if user is None or not user.is_active:
             return False
-        current_user = build_current_user(db, user, tenant_id, mfa_verified=mfa_verified)
-        if current_user.current_tenant_id != tenant_id:
-            return False
 
-        issue_session_cookie(response, user_id, tenant_id, mfa_verified=mfa_verified)
+        issue_session_cookie(response, user_id, mfa_verified=mfa_verified)
         return True
-
-    def select_tenant(
-        self, db: Session, response: Response, user: CurrentUser, tenant_id: int, request_host: str | None = None
-    ) -> SessionRead:
-        if all(membership.tenant_id != tenant_id for membership in user.available_tenants):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant not assigned to current user")
-
-        db_user = db.get(AppUser, user.user_id)
-        refreshed = build_current_user(db, db_user, tenant_id, mfa_verified=user.mfa_verified) if db_user else None
-        if refreshed is None or refreshed.current_tenant_id != tenant_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant switch failed")
-
-        issue_session_cookie(response, user.user_id, tenant_id, mfa_verified=user.mfa_verified)
-        bridge_redirect_url = domain_bridge_service.resolve_bridge_redirect(
-            db,
-            request_host,
-            user.user_id,
-            tenant_id,
-            mfa_verified=user.mfa_verified,
-        )
-        return self.session(refreshed, bridge_redirect_url)
 
     def verify_login_totp(
         self, db: Session, response: Response, payload: TotpLoginVerifyRequest
@@ -142,7 +106,6 @@ class AuthService:
             db,
             response,
             user=context.user,
-            tenant_id=context.current_user.current_tenant_id,
             request_host=context.request_host,
             mfa_verified=True,
         )
@@ -166,7 +129,6 @@ class AuthService:
             db,
             response,
             user=context.user,
-            tenant_id=context.current_user.current_tenant_id,
             request_host=context.request_host,
             mfa_verified=True,
         )
@@ -202,7 +164,6 @@ class AuthService:
             db,
             response,
             user=context.user,
-            tenant_id=context.current_user.current_tenant_id,
             request_host=context.request_host,
             mfa_verified=True,
         )
@@ -237,7 +198,6 @@ class AuthService:
             db,
             response,
             user=context.user,
-            tenant_id=context.current_user.current_tenant_id,
             request_host=context.request_host,
             mfa_verified=True,
         )
@@ -246,14 +206,12 @@ class AuthService:
         if user is None:
             return SessionRead(authenticated=False)
 
-        current_tenant = None
-        if user.current_tenant_id is not None and user.current_tenant_name is not None:
-            current_tenant = TenantRead(
-                id=user.current_tenant_public_id,
-                name=user.current_tenant_name,
-                profile_image_path=user.current_tenant_profile_image_path,
-                profile_image_url=build_tenant_profile_image_url(user.current_tenant_public_id, user.current_tenant_profile_image_path),
-            )
+        current_tenant = TenantRead(
+            id=user.current_tenant_public_id,
+            name=user.current_tenant_name,
+            profile_image_path=user.current_tenant_profile_image_path,
+            profile_image_url=build_tenant_profile_image_url(user.current_tenant_public_id, user.current_tenant_profile_image_path),
+        )
 
         return SessionRead(
             authenticated=True,
@@ -266,21 +224,9 @@ class AuthService:
                 email=user.email,
                 preferred_language=user.preferred_language,
                 protocol_accordion_enabled=user.protocol_accordion_enabled,
-                default_tenant_id=user.default_tenant_public_id,
             ),
             current_tenant=current_tenant,
             current_role=user.current_role,
-            available_tenants=[
-                TenantMembershipRead(
-                    tenant_id=membership.tenant_public_id,
-                    tenant_name=membership.tenant_name,
-                    tenant_profile_image_path=membership.tenant_profile_image_path,
-                    tenant_profile_image_url=build_tenant_profile_image_url(membership.tenant_public_id, membership.tenant_profile_image_path),
-                    role_code=membership.role_code,
-                    is_active=membership.is_active,
-                )
-                for membership in user.available_tenants
-            ],
         )
 
     def _finish_login(
@@ -289,14 +235,11 @@ class AuthService:
         response: Response,
         *,
         user: AppUser,
-        tenant_id: int | None,
         request_host: str | None,
         mfa_verified: bool,
     ) -> LoginResponse:
-        current_user = build_current_user(db, user, tenant_id, mfa_verified=mfa_verified)
-        if current_user.current_tenant_id is None:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenant membership assigned")
-        issue_session_cookie(response, user.id, current_user.current_tenant_id, mfa_verified=mfa_verified)
+        current_user = build_current_user(db, user, mfa_verified=mfa_verified)
+        issue_session_cookie(response, user.id, mfa_verified=mfa_verified)
         _audit.log(db, action="user.login", actor=current_user)
         bridge_redirect_url = domain_bridge_service.resolve_bridge_redirect(
             db,

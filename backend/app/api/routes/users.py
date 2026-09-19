@@ -137,7 +137,7 @@ def complete_my_totp_enrollment(
         code=payload.code,
         label=payload.label,
     )
-    issue_session_cookie(response, user.user_id, user.current_tenant_id, mfa_verified=True)
+    issue_session_cookie(response, user.user_id, mfa_verified=True)
     return mfa_service.get_self_overview(db, user, _request_hostname(request))
 
 
@@ -170,7 +170,7 @@ def complete_my_passkey_registration(
         label=payload.label,
         credential=payload.credential,
     )
-    issue_session_cookie(response, user.user_id, user.current_tenant_id, mfa_verified=True)
+    issue_session_cookie(response, user.user_id, mfa_verified=True)
     return mfa_service.get_self_overview(db, user, _request_hostname(request))
 
 

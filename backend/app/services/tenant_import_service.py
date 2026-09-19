@@ -53,6 +53,7 @@ from app.models import (
     ProtocolImage,
     ProtocolText,
     ProtocolTodo,
+    Role,
     StoredFile,
     SubmissionAssignment,
     SubmissionUpload,
@@ -64,11 +65,10 @@ from app.models import (
     TemplateParticipant,
     Tenant,
     TenantDomain,
+    UserMfaFactor,
     UserProtocolAccess,
     UserProtocolScroll,
-    UserMfaFactor,
     UserTemplateAccess,
-    UserTenantRole,
     WordImportDocument,
     WordImportProfile,
     WordImportSuggestionOutcome,
@@ -89,7 +89,7 @@ from app.services.tenant_transfer_common import (
     remap_template_element_config,
 )
 
-SUPPORTED_FORMAT_VERSION = 2
+SUPPORTED_FORMAT_VERSIONS = {2, 3}  # 2: separate user_tenant_role table; 3: role on app_user
 
 # Zip-bomb guard, same idea as file_service.py's MAX_ZIP_ENTRIES/MAX_ZIP_TOTAL_BYTES for the
 # word-import ZIP upload, just scaled up: a full-tenant export can legitimately contain many
@@ -115,7 +115,7 @@ class TenantImportService:
             if not manifest_path.exists():
                 raise ValueError("Kein manifest.json im Archiv gefunden - kein gültiges hocX-Export-Archiv.")
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            if manifest.get("format_version") != SUPPORTED_FORMAT_VERSION:
+            if manifest.get("format_version") not in SUPPORTED_FORMAT_VERSIONS:
                 raise ValueError(f"Nicht unterstützte Export-Version: {manifest.get('format_version')!r}")
 
             self.db = db
@@ -179,14 +179,16 @@ class TenantImportService:
 
     def _warn_missing_user(self, table_name: str, email: str | None) -> None:
         if email is not None:
-            self.warnings.append(f"{table_name}: Benutzer '{email}' existiert auf dieser Installation nicht - Zeile übersprungen.")
+            self.warnings.append(f"{table_name}: Benutzer '{email}' existiert im importierten Mandanten nicht - Zeile übersprungen.")
 
     # ── pipeline ──────────────────────────────────────────────────────────
 
     def _run(self, new_name: str) -> Tenant:
         new_tenant = self._import_tenant_base(new_name)
         self._created_tenant_id = new_tenant.id
-        self._import_app_users(new_tenant.id, self.tables.get("tenant", {}).get("id"))
+        # From here on only the new tenant's own accounts can be referenced by email.
+        self.user_cache.tenant_id = new_tenant.id
+        self._import_app_users(new_tenant.id)
         self._import_user_mfa_factors()
         self._import_tenant_domains(new_tenant.id)
         group_map = self._import_simple(GroupEntity, self._t("group_entity"), "group_entity", {"tenant_id": new_tenant.id})
@@ -254,7 +256,6 @@ class TenantImportService:
         self._import_user_template_access(new_tenant.id, template_map)
         self._import_user_protocol_access(new_tenant.id, protocol_map)
         self._import_user_protocol_scrolls(protocol_map)
-        self._import_user_tenant_roles(new_tenant.id)
         return new_tenant
 
     # ── tenant base ───────────────────────────────────────────────────────
@@ -293,32 +294,47 @@ class TenantImportService:
         self.db.add(new_tenant)
         self.db.commit()
 
-    def _import_app_users(self, new_tenant_id: int, old_tenant_id: int | None) -> None:
-        """Creates a login-capable account (password_hash included) for every exported user
-        who doesn't already have one on this installation, matched by email - without this,
-        every USER_ID_COLUMNS reference below would resolve to nobody (or, before this
-        existed, silently link to a same-email account that was never actually created here,
-        so the imported tenant's users had no way to log in on the target at all). An account
-        that already exists by email is left completely untouched, including its password -
-        only a brand new account gets the source's password_hash."""
+    def _legacy_role_codes_by_email(self) -> dict[str, str] | None:
+        """format_version 2 kept roles in a separate user_tenant_role table (export scoped to
+        the exported tenant, user_id already an email, role_id already a code). None for
+        format_version 3+, where app_user rows carry their role themselves."""
+        if "user_tenant_role" not in self.tables:
+            return None
+        return {row["user_id"]: row["role_id"] for row in self._t("user_tenant_role") if row.get("user_id")}
+
+    def _import_app_users(self, new_tenant_id: int) -> None:
+        """Creates a login-capable account (password_hash included) in the new tenant for every
+        exported user, so the tenant's members can log in on the target immediately and every
+        USER_ID_COLUMNS reference below resolves.
+
+        A user belongs to exactly one tenant, so an email that already has an account on this
+        installation can NOT be linked to the new tenant: that account lives in another tenant.
+        It is left completely untouched (password included), reported as a warning, and every
+        reference to it resolves to nobody (UserEmailCache.tenant_id is the new tenant)."""
+        legacy_roles = self._legacy_role_codes_by_email()
         for row in self._t("app_user"):
             email = row.get("email")
-            if self.user_cache.id_for(email) is not None:
+            if self.user_cache.email_exists(email):
+                self.warnings.append(
+                    f"Benutzer '{email}' existiert auf dieser Installation bereits in einem anderen Mandanten - "
+                    "nicht übernommen, Verknüpfungen entfallen."
+                )
                 continue
-            old_default_tenant_id = row.get("default_tenant_id")
-            overrides: dict[str, Any] = {
-                "default_tenant_id": new_tenant_id if old_default_tenant_id is not None and old_default_tenant_id == old_tenant_id else None,
-            }
+            if legacy_roles is not None and email not in legacy_roles:
+                # Legacy export: an account that was only referenced as metadata (e.g. created_by),
+                # not a member of the exported tenant. There is no tenant to put it in.
+                continue
+            role_code = legacy_roles[email] if legacy_roles is not None else row.get("role_id")
+            try:
+                role_id = self.lookup_cache.id_for(Role, role_code)
+            except ValueError:
+                role_id = self.lookup_cache.id_for(Role, "reader")
+                self.warnings.append(f"Benutzer '{email}': Rolle {role_code!r} unbekannt - als 'reader' importiert.")
+            overrides: dict[str, Any] = {"tenant_id": new_tenant_id, "role_id": role_id}
             if row.get("password_hash") == REDACTED_PASSWORD_HASH_MARKER or not row.get("password_hash"):
-                # This row was only a metadata reference (e.g. created_by) in the exporting
-                # tenant, not an actual member of it - TenantExportService.export deliberately
-                # stripped its real password_hash before it ever left that installation (see
-                # REDACTED_PASSWORD_HASH_MARKER). Give the freshly created account a random,
-                # cryptographically secure, properly-hashed password instead: the column is
-                # NOT NULL so it can't be left empty, and reusing/forwarding a foreign hash
-                # would be exactly the leak the export-side redaction was meant to prevent.
-                # The account exists (so every USER_ID_COLUMNS reference below still resolves)
-                # but cannot log in until a tenant admin sets a real password (UserUpdate.password).
+                # Defensive: a (legacy) row without a real password hash still needs a
+                # NOT NULL, properly-hashed password - a random one, so the account can't be
+                # logged into until a tenant admin sets a real password (UserUpdate.password).
                 overrides["password_hash"] = hash_password(secrets.token_urlsafe(32))
             # DECISION (audit finding, evaluated deliberately - not left unnoticed): if this row
             # is a real member of the exported tenant, `overrides` above does NOT touch
@@ -964,15 +980,6 @@ class TenantImportService:
                 self._warn_missing_user("user_protocol_access", row.get("user_id"))
                 continue
             self.db.add(build_row(UserProtocolAccess, data, {"tenant_id": new_tenant_id, "protocol_id": new_protocol_id}))
-        self.db.commit()
-
-    def _import_user_tenant_roles(self, new_tenant_id: int) -> None:
-        for row in self._t("user_tenant_role"):
-            data = self._resolve_row("user_tenant_role", row)
-            if data.get("user_id") is None:
-                self._warn_missing_user("user_tenant_role", row.get("user_id"))
-                continue
-            self.db.add(build_row(UserTenantRole, data, {"tenant_id": new_tenant_id}))
         self.db.commit()
 
     def _import_user_protocol_scrolls(self, protocol_map: dict[int, int]) -> None:

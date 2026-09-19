@@ -26,8 +26,8 @@ test("tenant data cannot be read or changed from another workspace", async ({ re
   const other = await playwrightRequest.newContext({ baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: authFiles.tenantTwo });
   const items = await (await other.get("/api/todos")).json();
   expect(items.some((item: { id: string }) => item.id === todo.id)).toBeFalsy();
-  // authFiles.tenantTwo is admin@hocx.local's session in its *second* tenant, where the
-  // seeded membership is "reader" - patch_todo's require_writer(user) check runs before
+  // authFiles.tenantTwo is the session of a reader account that belongs to the *second* tenant
+  // (created in auth.setup.ts) - patch_todo's require_writer(user) check runs before
   // any tenant-ownership lookup, so an insufficient role there means 403, not 404. The
   // GET above already covers the tenant-boundary case (the cross-tenant todo genuinely
   // isn't in the list); this only additionally confirms cross-tenant + insufficient role

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models import (
+    AppUser,
     Participant,
     Protocol,
     StoredFile,
@@ -18,7 +19,6 @@ from app.models import (
     SubmissionUploadFile,
     Template,
     Tenant,
-    UserTenantRole,
     WordImportDocument,
 )
 from app.schemas.admin import AdminTenantCreate, AdminTenantPage, AdminTenantRead
@@ -48,12 +48,7 @@ class AdminTenantService:
             db.scalar(select(func.count(Participant.id)).where(Participant.tenant_id == tenant.id)) or 0
         )
         user_count = int(
-            db.scalar(
-                select(func.count(func.distinct(UserTenantRole.user_id))).where(
-                    UserTenantRole.tenant_id == tenant.id, UserTenantRole.is_active.is_(True)
-                )
-            )
-            or 0
+            db.scalar(select(func.count(AppUser.id)).where(AppUser.tenant_id == tenant.id, AppUser.is_active.is_(True))) or 0
         )
         # Single-tenant callers (get_tenant, create/update/clone/import) don't have a
         # prefetched totals dict - fall back to one query for just this tenant.

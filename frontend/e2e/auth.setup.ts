@@ -7,9 +7,10 @@ import { currentTotpCode, totpCounter, waitForNextTotpWindow } from "./totp";
 // authenticated (mfa_service.py's user_requires_mfa). The seeded demo accounts start
 // with zero factors, so an admin's first login comes back "setup_required"; a later
 // login for the *same* already-enrolled account (this file logs admin@hocx.local in
-// twice, for authFiles.admin and again for authFiles.tenantTwo) instead comes back
+// once for authFiles.admin) instead comes back
 // "verification_required" - remember each email's TOTP secret (and which 30s counter
 // it was last used for, so a later verify can wait out anti-replay) across calls.
+const tenantTwoEmail = "reader-regional@hocx.local";
 const totpFactors = new Map<string, { secret: string; lastCounter: number }>();
 
 async function authenticate(email: string, file: string) {
@@ -80,22 +81,38 @@ async function authenticateAdmin(email: string, file: string) {
 }
 
 setup("creates reproducible role and tenant sessions", async () => {
-  // Default 45s (playwright.config.ts) can be too tight once the second admin.hocx.local
-  // login below has to wait out a TOTP anti-replay window (up to 30s, see totp.ts).
+  // Default 45s (playwright.config.ts) can be too tight once the platform-admin login
+  // below has to wait out a TOTP anti-replay window (up to 30s, see totp.ts).
   setup.setTimeout(90_000);
   await fs.mkdir("e2e/.auth", { recursive: true });
   await (await authenticate(process.env.E2E_USER_EMAIL ?? "admin@hocx.local", authFiles.admin)).dispose();
   await (await authenticate("writer@hocx.local", authFiles.writer)).dispose();
   await (await authenticate("reader@hocx.local", authFiles.reader)).dispose();
-  await (await authenticateAdmin("platform-admin@hocx.local", authFiles.platformAdmin)).dispose();
+  const platformAdmin = await authenticateAdmin("platform-admin@hocx.local", authFiles.platformAdmin);
 
-  const tenantContext = await authenticate(process.env.E2E_USER_EMAIL ?? "admin@hocx.local", authFiles.tenantTwo);
+  // Jedes Konto gehört genau einem Mandanten, ein Konto mit "zweitem Mandanten" gibt es nicht
+  // mehr. Für die Mandantengrenz-Specs (authFiles.tenantTwo) legt das Platform-Admin-Panel darum
+  // einen Leser im zweiten Demo-Mandanten an (idempotent: existiert er schon, schlägt nur das
+  // Anlegen fehl und der Login darunter beweist, dass das Konto brauchbar ist).
+  const tenants = await (await platformAdmin.get("/api/admin/tenants")).json();
+  const regional = tenants.items.find((entry: { name: string }) => entry.name === "Regional Workspace");
+  expect(regional, "Demo-Mandant 'Regional Workspace' fehlt").toBeTruthy();
+  await platformAdmin.post("/api/admin/users", {
+    data: {
+      first_name: "Regional",
+      last_name: "Reader",
+      display_name: "Regional Reader",
+      email: tenantTwoEmail,
+      password: process.env.E2E_USER_PASSWORD ?? "ChangeMe123!",
+      tenant_id: regional.id,
+      role_code: "reader",
+    },
+  });
+  await platformAdmin.dispose();
+
+  const tenantContext = await authenticate(tenantTwoEmail, authFiles.tenantTwo);
   const session = await (await tenantContext.get("/api/auth/session")).json();
-  expect(session.available_tenants.length).toBeGreaterThan(1);
-  const secondTenant = session.available_tenants.find((entry: { tenant_id: string }) => entry.tenant_id !== session.current_tenant.id);
-  expect(secondTenant).toBeTruthy();
-  const selected = await tenantContext.post(`/api/auth/select-tenant/${secondTenant.tenant_id}`);
-  expect(selected.ok(), await selected.text()).toBeTruthy();
-  await tenantContext.storageState({ path: authFiles.tenantTwo });
+  expect(session.current_tenant.id).toBe(regional.id);
+  expect(session.current_role).toBe("reader");
   await tenantContext.dispose();
 });

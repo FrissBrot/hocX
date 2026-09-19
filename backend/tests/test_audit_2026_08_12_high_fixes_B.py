@@ -34,7 +34,6 @@ from tests.factories import (
     make_protocol_todo,
     make_template,
     make_tenant,
-    make_user_tenant_role,
 )
 
 participant_service = ParticipantService()
@@ -84,8 +83,7 @@ def test_h6_reader_can_now_reach_endpoint_for_own_participant(db):
     template1 = make_template(db, tenant.id, name="Template 1")
     template2 = make_template(db, tenant.id, name="Template 2")
 
-    reader_user = make_app_user(db, email="reader@example.com")
-    make_user_tenant_role(db, reader_user.id, tenant.id, role_code="reader")
+    reader_user = make_app_user(db, email="reader@example.com", tenant_id=tenant.id, role_code="reader")
     participant_reader = make_participant(db, tenant.id, display_name="Reader Participant")
     participant_reader.app_user_id = reader_user.id
     db.flush()
@@ -111,8 +109,7 @@ def test_h6_restricted_reader_scoped_when_querying_other_participant(db):
     template1 = make_template(db, tenant.id, name="Template 1")
     template2 = make_template(db, tenant.id, name="Template 2")
 
-    reader_user = make_app_user(db, email="reader2@example.com")
-    make_user_tenant_role(db, reader_user.id, tenant.id, role_code="reader")
+    reader_user = make_app_user(db, email="reader2@example.com", tenant_id=tenant.id, role_code="reader")
     participant_reader = make_participant(db, tenant.id, display_name="Reader Participant 2")
     participant_reader.app_user_id = reader_user.id
     db.flush()
@@ -141,8 +138,7 @@ def test_h6_unrestricted_reader_sees_full_list(db):
     # A reader with no participant link and no scoped UserTemplateAccess rows is an
     # "unrestricted reader" - full read access within their own tenant, same as every
     # other route using AccessService's restricted-reader pattern (fines.py, todos.py etc).
-    plain_reader_user = make_app_user(db, email="plain-reader@example.com")
-    make_user_tenant_role(db, plain_reader_user.id, tenant.id, role_code="reader")
+    plain_reader_user = make_app_user(db, email="plain-reader@example.com", tenant_id=tenant.id, role_code="reader")
     plain_reader_cu = make_current_user(tenant.id, role="reader", user_id=plain_reader_user.id)
 
     result = participants_route.list_participant_templates(participant_other.public_id, db=db, user=plain_reader_cu)

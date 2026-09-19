@@ -74,7 +74,6 @@ export default function LoginPage() {
   const [passkeyLabel, setPasskeyLabel] = useState("");
   const [appVersion, setAppVersion] = useState("");
   const [showMethodChooser, setShowMethodChooser] = useState(false);
-  const resolvedTenantPromise = useRef<Promise<ResolvedTenant | null>>(Promise.resolve(null));
   const autoStartedPasskeyTicketRef = useRef<string | null>(null);
   const totpDigitRefs = useRef<Array<HTMLInputElement | null>>([]);
 
@@ -116,13 +115,11 @@ export default function LoginPage() {
   useEffect(() => {
     const fromDomain = new URLSearchParams(window.location.search).get("from");
     if (!fromDomain) return;
-    const promise = browserApiFetch<ResolvedTenant>(`/api/auth/tenant-by-domain?domain=${encodeURIComponent(fromDomain)}`)
-      .then((tenant) => {
-        setResolvedTenant(tenant);
-        return tenant;
-      })
+    // Nur fuer das Branding der Login-Seite (Logo/Name des Mandanten der Domain); der Login selbst
+    // braucht keinen Mandanten mehr - jedes Konto gehoert genau einem.
+    browserApiFetch<ResolvedTenant>(`/api/auth/tenant-by-domain?domain=${encodeURIComponent(fromDomain)}`)
+      .then((tenant) => setResolvedTenant(tenant))
       .catch(() => null);
-    resolvedTenantPromise.current = promise;
   }, []);
 
   useEffect(() => {
@@ -219,10 +216,9 @@ export default function LoginPage() {
     setLoading(true);
     setStatusMsg("Anmeldung läuft…");
     try {
-      const tenant = await resolvedTenantPromise.current;
       const session = await browserApiFetch<LoginResponse>("/api/auth/login", {
         method: "POST",
-        body: JSON.stringify({ email, password, tenant_id: tenant?.tenant_id ?? null }),
+        body: JSON.stringify({ email, password }),
       });
       if (session.authenticated) {
         finishLogin(session);

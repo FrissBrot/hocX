@@ -19,24 +19,6 @@ class TenantRead(BaseModel):
     tag_config_json: dict[str, Any] = {}
 
 
-class TenantMembershipWrite(BaseModel):
-    tenant_id: uuid.UUID
-    role_code: str
-    is_active: bool = True
-
-
-class TenantMembershipRead(BaseModel):
-    # Built via explicit keyword construction (auth_service.session(), user_service.py) -
-    # not from_attributes, since it's assembled from a CurrentUser/TenantMembership
-    # dataclass, not an ORM row.
-    tenant_id: uuid.UUID
-    tenant_name: str
-    tenant_profile_image_path: str | None = None
-    tenant_profile_image_url: str | None = None
-    role_code: str
-    is_active: bool = True
-
-
 class UserBase(BaseModel):
     first_name: str
     last_name: str
@@ -45,12 +27,14 @@ class UserBase(BaseModel):
     preferred_language: str = "de"
     is_active: bool = True
     external_identity_json: dict[str, Any] = Field(default_factory=dict)
-    default_tenant_id: uuid.UUID | None = None
 
 
 class UserCreate(UserBase):
     password: str = Field(min_length=12)
-    memberships: list[TenantMembershipWrite] = Field(default_factory=list)
+    role_code: str = "reader"
+    # Only the platform-admin panel picks the tenant; a tenant admin always creates users in
+    # their own tenant (a differing tenant_id is rejected there).
+    tenant_id: uuid.UUID | None = None
     login_enabled: bool = True
 
 
@@ -63,14 +47,12 @@ class UserUpdate(BaseModel):
     is_active: bool | None = None
     password: str | None = Field(default=None, min_length=12)
     external_identity_json: dict[str, Any] | None = None
-    default_tenant_id: uuid.UUID | None = None
-    memberships: list[TenantMembershipWrite] | None = None
+    role_code: str | None = None
     login_enabled: bool | None = None
 
 
 class UserSelfUpdate(BaseModel):
     preferred_language: str | None = None
-    default_tenant_id: uuid.UUID | None = None
     protocol_accordion_enabled: bool | None = None
 
 
@@ -84,11 +66,12 @@ class UserPasswordChange(BaseModel):
 
 
 class UserRead(UserBase):
-    # Built via explicit keyword construction in user_service.py (memberships are a
-    # separately-queried list, not a plain ORM relationship) - id is set from the row's
-    # public_id there directly.
+    # Built via explicit keyword construction in user_service.py - id and tenant_id are set
+    # from the rows' public_id there directly.
     id: uuid.UUID
-    memberships: list[TenantMembershipRead] = Field(default_factory=list)
+    tenant_id: uuid.UUID
+    tenant_name: str
+    role_code: str
     login_enabled: bool = True
     is_participant_account: bool = False
     created_at: datetime
@@ -98,7 +81,6 @@ class UserRead(UserBase):
 class LoginRequest(BaseModel):
     email: str
     password: str
-    tenant_id: uuid.UUID | None = None
 
 
 class TenantByDomainRead(BaseModel):
@@ -115,7 +97,6 @@ class SessionUserRead(BaseModel):
     email: str
     preferred_language: str
     protocol_accordion_enabled: bool = True
-    default_tenant_id: uuid.UUID | None = None
 
 
 class SessionRead(BaseModel):
@@ -123,7 +104,6 @@ class SessionRead(BaseModel):
     user: SessionUserRead | None = None
     current_tenant: TenantRead | None = None
     current_role: str | None = None
-    available_tenants: list[TenantMembershipRead] = Field(default_factory=list)
     bridge_redirect_url: str | None = None
 
 

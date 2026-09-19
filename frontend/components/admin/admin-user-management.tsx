@@ -9,19 +9,11 @@ import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
-import { Tabs } from "@/components/ui/tabs";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
 import { AdminTenantSummary, AdminUserPage, UserSummary } from "@/types/api";
-import {
-  addOrUpsertMembership,
-  buildTenantNameMap,
-  emptyUserForm,
-  removeMembershipEntry,
-  userFormToPayload,
-  UserFormState
-} from "@/components/users/user-form-shared";
+import { emptyUserForm, userFormToPayload, UserFormState } from "@/components/users/user-form-shared";
 
 type Props = {
   initialPage: AdminUserPage;
@@ -29,6 +21,10 @@ type Props = {
 };
 
 const PAGE_SIZE = 50;
+
+function roleLabel(roleCode: string) {
+  return ROLE_OPTIONS.find((role) => role.code === roleCode)?.label ?? roleCode;
+}
 
 function isEligible(user: UserSummary) {
   // Nur Benutzer mit freigeschaltetem Login und echter (nicht automatisch generierter
@@ -46,7 +42,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
   const users = page.items;
   const [search, setSearch] = useState("");
   const [userModalOpen, setUserModalOpen] = useState(false);
-  const [userForm, setUserForm] = useState<UserFormState>(() => emptyUserForm(allTenants));
+  const [userForm, setUserForm] = useState<UserFormState>(() => emptyUserForm(allTenants[0]?.id ?? ""));
   const [formError, setFormError] = useState<string | null>(null);
   const [mergeModalOpen, setMergeModalOpen] = useState(false);
   const [mergeSourceUserId, setMergeSourceUserId] = useState<string | null>(null);
@@ -55,8 +51,6 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
   // The merge target can be any eligible user tenant-wide, not just one on the currently
   // displayed page, so it's loaded separately (unpaginated) when the merge modal opens.
   const [mergeCandidates, setMergeCandidates] = useState<UserSummary[]>([]);
-
-  const tenantNameById = useMemo(() => buildTenantNameMap(allTenants), [allTenants]);
 
   // eligibleUsers/visibleUsers: server now applies `search` before pagination (audit A1,
   // 2026-08-16 - fetchPage below sends it as `q`), so `page.items` is already the matching
@@ -100,13 +94,12 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
   }, [search]);
 
   function openNewUser() {
-    setUserForm(emptyUserForm(allTenants));
+    setUserForm(emptyUserForm(allTenants[0]?.id ?? ""));
     setFormError(null);
     setUserModalOpen(true);
   }
 
   function openEditUser(user: UserSummary) {
-    const remainingTenants = allTenants.filter((t) => !user.memberships.some((m) => m.tenant_id === t.id));
     setUserForm({
       id: user.id,
       first_name: user.first_name,
@@ -118,40 +111,12 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
       is_active: user.is_active,
       login_enabled: user.login_enabled,
       is_participant_account: user.is_participant_account,
-      memberships: user.memberships.map((membership) => ({ tenant_id: membership.tenant_id, role_code: membership.role_code })),
-      pickerTenantId: remainingTenants[0] ? String(remainingTenants[0].id) : "",
-      pickerRoleCode: "reader"
+      tenant_id: user.tenant_id,
+      role_code: user.role_code
     });
     setFormError(null);
     setUserModalOpen(true);
   }
-
-  function changeMembershipRole(tenantId: string, roleCode: string) {
-    setUserForm((current) => ({
-      ...current,
-      memberships: current.memberships.map((membership) =>
-        membership.tenant_id === tenantId ? { ...membership, role_code: roleCode } : membership
-      )
-    }));
-  }
-
-  function addMembership() {
-    if (!userForm.pickerTenantId) return;
-    const tenantId = userForm.pickerTenantId;
-    setUserForm((current) => ({
-      ...current,
-      memberships: addOrUpsertMembership(current.memberships, tenantId, current.pickerRoleCode, "add")
-    }));
-  }
-
-  function removeMembership(tenantId: string) {
-    setUserForm((current) => ({
-      ...current,
-      memberships: removeMembershipEntry(current.memberships, tenantId)
-    }));
-  }
-
-  const remainingTenantsToAdd = allTenants.filter((t) => !userForm.memberships.some((m) => m.tenant_id === t.id));
 
   async function submitUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -187,7 +152,8 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
     setMergeModalOpen(true);
     try {
       const result = await browserApiFetch<AdminUserPage>("/api/admin/users");
-      const eligible = result.items.filter(isEligible);
+      // Ein Konto gehört genau einem Mandanten - zusammenführen lässt sich nur innerhalb desselben.
+      const eligible = result.items.filter((candidate) => isEligible(candidate) && candidate.tenant_id === user.tenant_id);
       setMergeCandidates(eligible);
       const fallbackTarget = eligible.find((candidate) => candidate.id !== user.id);
       setMergeTargetUserId(fallbackTarget ? String(fallbackTarget.id) : "");
@@ -228,7 +194,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
     <div className="grid">
       <DataToolbar
         title="Benutzer"
-        description="Alle zentralen Benutzer über alle Mandanten hinweg."
+        description="Alle Benutzer über alle Mandanten hinweg. Jedes Konto gehört genau einem Mandanten."
         actions={
           <button type="button" className="button-secondary" onClick={openNewUser}>
             Neuer Benutzer
@@ -244,7 +210,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
       </article>
 
       <DataTable
-        columns={["Anzeigename", "E-Mail", "Mandantenrollen", "Login", "Aktionen"]}
+        columns={["Anzeigename", "E-Mail", "Mandant", "Rolle", "Login", "Aktionen"]}
         emptyMessage={loading ? "Wird geladen…" : "Keine Benutzer gefunden."}
       >
         {visibleUsers.map((user) => (
@@ -254,14 +220,9 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
               {user.is_participant_account ? <div className="muted">Teilnehmer-Konto</div> : null}
             </td>
             <td>{user.email}</td>
+            <td>{user.tenant_name}</td>
             <td>
-              <div className="stack-tight">
-                {user.memberships.map((membership) => (
-                  <span key={`${user.id}-${membership.tenant_id}`} className="pill">
-                    {membership.tenant_name}: {membership.role_code}
-                  </span>
-                ))}
-              </div>
+              <span className="pill">{roleLabel(user.role_code)}</span>
             </td>
             <td>{user.login_enabled ? "Aktiv" : "Deaktiviert"}</td>
             <td>
@@ -302,143 +263,88 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
         size="wide"
       >
         <form className="grid" onSubmit={submitUser} id="user-form">
-          <Tabs
-            tabs={[
-              {
-                id: "konto",
-                label: "Konto",
-                content: (
-                  <div className="grid">
-                    <div className="three-col">
-                      <label className="field-stack">
-                        <span className="field-label">Vorname</span>
-                        <input value={userForm.first_name} onChange={(event) => setUserForm((current) => ({ ...current, first_name: event.target.value }))} required />
-                      </label>
-                      <label className="field-stack">
-                        <span className="field-label">Nachname</span>
-                        <input value={userForm.last_name} onChange={(event) => setUserForm((current) => ({ ...current, last_name: event.target.value }))} required />
-                      </label>
-                      <label className="field-stack">
-                        <span className="field-label">Anzeigename</span>
-                        <input value={userForm.display_name} onChange={(event) => setUserForm((current) => ({ ...current, display_name: event.target.value }))} required />
-                      </label>
-                    </div>
+          <div className="three-col">
+            <label className="field-stack">
+              <span className="field-label">Vorname</span>
+              <input value={userForm.first_name} onChange={(event) => setUserForm((current) => ({ ...current, first_name: event.target.value }))} required />
+            </label>
+            <label className="field-stack">
+              <span className="field-label">Nachname</span>
+              <input value={userForm.last_name} onChange={(event) => setUserForm((current) => ({ ...current, last_name: event.target.value }))} required />
+            </label>
+            <label className="field-stack">
+              <span className="field-label">Anzeigename</span>
+              <input value={userForm.display_name} onChange={(event) => setUserForm((current) => ({ ...current, display_name: event.target.value }))} required />
+            </label>
+          </div>
 
-                    <div className="three-col">
-                      <label className="field-stack">
-                        <span className="field-label">E-Mail</span>
-                        <input value={userForm.email} onChange={(event) => setUserForm((current) => ({ ...current, email: event.target.value }))} required />
-                      </label>
-                      <label className="field-stack">
-                        <span className="field-label">{userForm.id ? "Neues Passwort" : "Passwort"}</span>
-                        <input type="password" autoComplete="new-password" value={userForm.password} onChange={(event) => setUserForm((current) => ({ ...current, password: event.target.value }))} required={!userForm.id} minLength={8} />
-                      </label>
-                      <label className="field-stack">
-                        <span className="field-label">Sprache</span>
-                        <select value={userForm.preferred_language} onChange={(event) => setUserForm((current) => ({ ...current, preferred_language: event.target.value }))}>
-                          <option value="de">Deutsch</option>
-                          <option value="en">English</option>
-                          <option value="fr">Français</option>
-                          <option value="it">Italiano</option>
-                        </select>
-                      </label>
-                      <label className="checkbox-line">
-                        <input type="checkbox" checked={userForm.is_active} onChange={(event) => setUserForm((current) => ({ ...current, is_active: event.target.checked }))} />
-                        Aktiv
-                      </label>
-                    </div>
+          <div className="three-col">
+            <label className="field-stack">
+              <span className="field-label">E-Mail</span>
+              <input value={userForm.email} onChange={(event) => setUserForm((current) => ({ ...current, email: event.target.value }))} required />
+            </label>
+            <label className="field-stack">
+              <span className="field-label">{userForm.id ? "Neues Passwort" : "Passwort"}</span>
+              <input type="password" autoComplete="new-password" value={userForm.password} onChange={(event) => setUserForm((current) => ({ ...current, password: event.target.value }))} required={!userForm.id} minLength={8} />
+            </label>
+            <label className="field-stack">
+              <span className="field-label">Sprache</span>
+              <select value={userForm.preferred_language} onChange={(event) => setUserForm((current) => ({ ...current, preferred_language: event.target.value }))}>
+                <option value="de">Deutsch</option>
+                <option value="en">English</option>
+                <option value="fr">Français</option>
+                <option value="it">Italiano</option>
+              </select>
+            </label>
+            <label className="checkbox-line">
+              <input type="checkbox" checked={userForm.is_active} onChange={(event) => setUserForm((current) => ({ ...current, is_active: event.target.checked }))} />
+              Aktiv
+            </label>
+          </div>
 
-                    <div className="two-col">
-                      <label className="checkbox-line">
-                        <input type="checkbox" checked={userForm.login_enabled} onChange={(event) => setUserForm((current) => ({ ...current, login_enabled: event.target.checked }))} />
-                        Login aktivieren
-                      </label>
-                      {userForm.is_participant_account ? (
-                        <div className="info-note">
-                          Dieses Konto wurde automatisch aus einem Teilnehmer erstellt. Für den ersten Login bitte Login aktivieren
-                          und ein neues Passwort setzen.
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                )
-              },
-              {
-                id: "rollen",
-                label: `Mandantenrollen (${userForm.memberships.length})`,
-                content: (
-                  <div className="grid">
-                    <div className="table-shell">
-                      <table className="data-table">
-                        <thead>
-                          <tr>
-                            <th>Mandant</th>
-                            <th>Rolle</th>
-                            <th>Aktion</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {userForm.memberships.map((membership) => (
-                            <tr key={membership.tenant_id}>
-                              <td>{tenantNameById.get(membership.tenant_id) ?? "Unbekannter Mandant"}</td>
-                              <td>
-                                <select value={membership.role_code} onChange={(event) => changeMembershipRole(membership.tenant_id, event.target.value)}>
-                                  {ROLE_OPTIONS.map((r) => (
-                                    <option key={r.code} value={r.code}>
-                                      {r.label}
-                                    </option>
-                                  ))}
-                                </select>
-                              </td>
-                              <td>
-                                <button type="button" className="button-secondary button-ghost" onClick={() => removeMembership(membership.tenant_id)}>
-                                  Entfernen
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      {userForm.memberships.length === 0 && <div className="table-empty muted">Noch keine Mandantenrollen zugewiesen.</div>}
-                    </div>
+          <div className="two-col">
+            <label className="checkbox-line">
+              <input type="checkbox" checked={userForm.login_enabled} onChange={(event) => setUserForm((current) => ({ ...current, login_enabled: event.target.checked }))} />
+              Login aktivieren
+            </label>
+            {userForm.is_participant_account ? (
+              <div className="info-note">
+                Dieses Konto wurde automatisch aus einem Teilnehmer erstellt. Für den ersten Login bitte Login aktivieren
+                und ein neues Passwort setzen.
+              </div>
+            ) : null}
+          </div>
 
-                    {remainingTenantsToAdd.length > 0 && (
-                      <div className="card">
-                        <div className="eyebrow">Mandant hinzufügen</div>
-                        <div className="role-picker">
-                          <label className="field-stack">
-                            <span className="field-label">Mandant</span>
-                            <SearchableSelect
-                              options={remainingTenantsToAdd}
-                              getId={(tenant) => String(tenant.id)}
-                              getLabel={(tenant) => tenant.name}
-                              value={userForm.pickerTenantId || null}
-                              onChange={(tenant) => setUserForm((current) => ({ ...current, pickerTenantId: tenant ? String(tenant.id) : "" }))}
-                            />
-                          </label>
-                          <label className="field-stack">
-                            <span className="field-label">Rolle</span>
-                            <select value={userForm.pickerRoleCode} onChange={(event) => setUserForm((current) => ({ ...current, pickerRoleCode: event.target.value }))}>
-                              {ROLE_OPTIONS.map((r) => (
-                                <option key={r.code} value={r.code}>
-                                  {r.label}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <div className="role-picker-action">
-                            <button type="button" className="button-secondary" onClick={addMembership}>
-                              Hinzufügen
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )
-              }
-            ]}
-          />
+          <div className="two-col">
+            {userForm.id ? (
+              <label className="field-stack">
+                <span className="field-label">Mandant</span>
+                <input value={users.find((user) => user.id === userForm.id)?.tenant_name ?? ""} readOnly />
+                <span className="field-help">Der Mandant eines Kontos steht fest und lässt sich nicht ändern.</span>
+              </label>
+            ) : (
+              <label className="field-stack">
+                <span className="field-label">Mandant</span>
+                <SearchableSelect
+                  options={allTenants}
+                  getId={(tenant) => String(tenant.id)}
+                  getLabel={(tenant) => tenant.name}
+                  value={userForm.tenant_id || null}
+                  onChange={(tenant) => setUserForm((current) => ({ ...current, tenant_id: tenant ? String(tenant.id) : "" }))}
+                />
+              </label>
+            )}
+            <label className="field-stack">
+              <span className="field-label">Rolle</span>
+              <select value={userForm.role_code} onChange={(event) => setUserForm((current) => ({ ...current, role_code: event.target.value }))}>
+                {ROLE_OPTIONS.map((role) => (
+                  <option key={role.code} value={role.code}>
+                    {role.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
 
           {formError && <div className="form-error-banner">{formError}</div>}
 
@@ -462,7 +368,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
         open={mergeModalOpen}
         onClose={() => setMergeModalOpen(false)}
         title="Benutzer zusammenführen"
-        description="Der Quellbenutzer wird in den Zielbenutzer gemergt (inkl. Mandantenrollen und Teilnehmer-Links) und danach gelöscht."
+        description="Der Quellbenutzer wird in den Zielbenutzer gemergt (inkl. Rolle und Teilnehmer-Links) und danach gelöscht. Möglich nur innerhalb desselben Mandanten."
       >
         <div className="grid">
           <label className="field-stack">

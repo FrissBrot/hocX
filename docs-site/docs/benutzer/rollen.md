@@ -1,7 +1,8 @@
 # Rollen & Berechtigungen
 
-Berechtigungen sind pro Mandant (Verein) vergeben – ein Benutzer kann in verschiedenen
-Vereinen unterschiedliche Rollen haben.
+Jedes Benutzerkonto gehört genau einem Mandanten (Verein) und hat dort genau eine Rolle.
+Wer in mehreren Vereinen arbeitet, braucht pro Verein ein eigenes Konto (mit eigener
+E-Mail-Adresse).
 
 | Rolle | Zugriff |
 |---|---|
@@ -26,8 +27,8 @@ Protokollbereich. Benötigt eine Person beide Rechte, muss sie derzeit `admin` s
 | Vorlagen, Zyklen und Tag-Konfiguration ändern | – | – | – | ✓ |
 | Benutzer, Rollen und Vereinseinstellungen verwalten | – | – | – | ✓ |
 
-Beim Zusammenführen zweier Benutzerkonten werden Rollen nur automatisch übernommen,
-wenn eine Rolle die andere vollständig umfasst. Die Kombination `writer` + `kassier`
+Zusammenführen lassen sich nur zwei Konten desselben Vereins. Dabei werden Rollen nur
+automatisch übernommen, wenn eine Rolle die andere vollständig umfasst. Die Kombination `writer` + `kassier`
 wird deshalb abgelehnt und muss vor dem Merge fachlich aufgelöst werden.
 
 ## Mandantenübergreifender Zugriff
