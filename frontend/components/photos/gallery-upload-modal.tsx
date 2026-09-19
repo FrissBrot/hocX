@@ -2,43 +2,35 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { findUploadRuleProblems, UploadTargetFields, useUploadTarget } from "@/components/files/upload-target-fields";
 import { Modal } from "@/components/ui/modal";
-import { SearchableSelect } from "@/components/ui/searchable-select";
 import { TagInput } from "@/components/ui/tag-input";
 import { browserApiFetch } from "@/lib/api/client";
-import { formatDate, formatFileSize } from "@/lib/utils/format";
-import {
-  CycleConfigSummary,
-  EventSummary,
-  GalleryUploadJob,
-  SubmissionAssignment,
-  SubmissionElementStatusEntry,
-} from "@/types/api";
+import { formatFileSize } from "@/lib/utils/format";
+import { GalleryUploadJob } from "@/types/api";
 
 const GALLERY_UPLOAD_ACCEPT = "image/jpeg,image/png,image/gif,image/webp,image/bmp,image/tiff,.zip";
 
-type TargetCategory = "none" | "event" | "submission_element" | "cycle";
-
-const TARGET_CATEGORY_OPTIONS: { id: TargetCategory; label: string }[] = [
-  { id: "none", label: "Kein Bezug" },
-  { id: "event", label: "Termin" },
-  { id: "submission_element", label: "Abgabe-Element" },
-  { id: "cycle", label: "Zyklus" },
-];
-
-function ImageIcon() {
+function UploadIcon() {
   return (
-    <svg className="gallery-upload-image-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <rect x="3" y="4" width="18" height="16" rx="3" stroke="currentColor" strokeWidth="1.6" />
-      <circle cx="9" cy="10" r="1.8" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M4.5 17.5 9 12.5l3 3.2 3.5-4.2 4 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 16V5m0 0-4 4m4-4 4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M5 15v2.5A1.5 1.5 0 0 0 6.5 19h11a1.5 1.5 0 0 0 1.5-1.5V15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="14" height="14">
+      <path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   );
 }
 
 function ZipIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" width="20" height="20">
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" width="22" height="22">
       <rect x="4" y="3" width="16" height="18" rx="2" stroke="currentColor" strokeWidth="1.5" />
       <path d="M11 3v2M13 5v2M11 7v2M13 9v2M11 11v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       <circle cx="12" cy="15.5" r="1.8" stroke="currentColor" strokeWidth="1.5" />
@@ -87,35 +79,15 @@ export function GalleryUploadModal({
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Optional target picker: land this batch straight in its Termin's/Abgabe-Element's/
-  // Zyklus' auto-album (see photo_album_service.py) instead of only the plain gallery.
-  const [targetKind, setTargetKind] = useState<TargetCategory>("none");
-  const [events, setEvents] = useState<EventSummary[]>([]);
-  const [assignments, setAssignments] = useState<SubmissionAssignment[]>([]);
-  const [cycleConfigs, setCycleConfigs] = useState<CycleConfigSummary[]>([]);
-  const [selectedEventId, setSelectedEventId] = useState("");
-  const [selectedAssignmentId, setSelectedAssignmentId] = useState("");
-  const [elements, setElements] = useState<SubmissionElementStatusEntry[]>([]);
-  const [selectedElementRef, setSelectedElementRef] = useState("");
-  const [selectedCycleConfigId, setSelectedCycleConfigId] = useState("");
-
-  useEffect(() => {
-    browserApiFetch<EventSummary[]>("/api/events").then((data) => setEvents(data ?? [])).catch(() => {});
-    browserApiFetch<SubmissionAssignment[]>("/api/submission-assignments").then((data) => setAssignments(data ?? [])).catch(() => {});
-    browserApiFetch<CycleConfigSummary[]>("/api/cycle-configs").then((data) => setCycleConfigs(data ?? [])).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (!selectedAssignmentId) {
-      setElements([]);
-      return;
-    }
-    browserApiFetch<SubmissionElementStatusEntry[]>(`/api/submission-assignments/${selectedAssignmentId}/elements`)
-      .then((data) => setElements(data ?? []))
-      .catch(() => setElements([]));
-  }, [selectedAssignmentId]);
+  // Zyklus' auto-album (see photo_album_service.py) instead of only the plain gallery. An
+  // Abgabe-Element also brings that Abgabe's file rules along (target.rules).
+  const target = useUploadTarget();
 
   function addFiles(fileList: FileList | File[]) {
-    setSelectedFiles((current) => [...current, ...Array.from(fileList)]);
+    // Copy now: an <input>'s FileList is live and gets emptied by the `value = ""` reset in
+    // onChange, which runs before React invokes the state updater below.
+    const added = Array.from(fileList);
+    setSelectedFiles((current) => [...current, ...added]);
     setError(null);
   }
 
@@ -123,27 +95,20 @@ export function GalleryUploadModal({
     setSelectedFiles((current) => current.filter((_, i) => i !== index));
   }
 
-  const targetIncomplete =
-    (targetKind === "event" && !selectedEventId) ||
-    (targetKind === "submission_element" && (!selectedAssignmentId || !selectedElementRef)) ||
-    (targetKind === "cycle" && !selectedCycleConfigId);
+  // A ZIP is only a carrier for images - the backend judges its entries once it opens it.
+  const ruleProblems = findUploadRuleProblems(selectedFiles, target.rules, true);
 
   const totalBytes = selectedFiles.reduce((sum, file) => sum + file.size, 0);
 
   async function handleUpload() {
-    if (selectedFiles.length === 0 || uploading || targetIncomplete) return;
+    if (selectedFiles.length === 0 || uploading || target.incomplete || ruleProblems.length > 0) return;
     setUploading(true);
     setError(null);
     try {
       const body = new FormData();
       selectedFiles.forEach((file) => body.append("files", file));
       body.append("tags", tagsValue);
-      if (targetKind === "event") body.append("event_id", selectedEventId);
-      if (targetKind === "submission_element") {
-        body.append("submission_assignment_id", selectedAssignmentId);
-        body.append("submission_element_ref", selectedElementRef);
-      }
-      if (targetKind === "cycle") body.append("cycle_config_id", selectedCycleConfigId);
+      target.appendTo(body);
       // Returns almost immediately once the upload is staged and a gallery_upload_job is
       // queued - scanning/import happen afterwards in the background (see
       // gallery-upload-progress.tsx), so this request only has to cover the raw byte
@@ -175,70 +140,7 @@ export function GalleryUploadModal({
     >
       <div className="gallery-upload">
         <div className="gallery-upload-scroll">
-          <div className="gallery-upload-fields">
-            <label>
-              Bezug
-              <SearchableSelect
-                options={TARGET_CATEGORY_OPTIONS}
-                getId={(option) => option.id}
-                getLabel={(option) => option.label}
-                value={targetKind}
-                onChange={(option) => setTargetKind(option?.id ?? "none")}
-              />
-            </label>
-            {targetKind === "event" && (
-              <label>
-                Termin
-                <SearchableSelect
-                  options={events}
-                  getId={(event) => event.id}
-                  getLabel={(event) => `${event.title} (${formatDate(event.event_date)})`}
-                  value={selectedEventId || null}
-                  onChange={(event) => setSelectedEventId(event?.id ?? "")}
-                  placeholder="Termin wählen…"
-                />
-              </label>
-            )}
-            {targetKind === "submission_element" && (
-              <label>
-                Abgabe
-                <SearchableSelect
-                  options={assignments}
-                  getId={(assignment) => assignment.id}
-                  getLabel={(assignment) => assignment.title}
-                  value={selectedAssignmentId || null}
-                  onChange={(assignment) => { setSelectedAssignmentId(assignment?.id ?? ""); setSelectedElementRef(""); }}
-                  placeholder="Abgabe wählen…"
-                />
-              </label>
-            )}
-            {targetKind === "cycle" && (
-              <label>
-                Zyklus
-                <SearchableSelect
-                  options={cycleConfigs}
-                  getId={(cycleConfig) => cycleConfig.id}
-                  getLabel={(cycleConfig) => cycleConfig.name}
-                  value={selectedCycleConfigId || null}
-                  onChange={(cycleConfig) => setSelectedCycleConfigId(cycleConfig?.id ?? "")}
-                  placeholder="Zyklus wählen…"
-                />
-              </label>
-            )}
-          </div>
-          {targetKind === "submission_element" && selectedAssignmentId && (
-            <label className="gallery-upload-tags">
-              <span className="gallery-upload-label">Abgabe-Element</span>
-              <SearchableSelect
-                options={elements}
-                getId={(element) => element.element_ref}
-                getLabel={(element) => element.label}
-                value={selectedElementRef || null}
-                onChange={(element) => setSelectedElementRef(element?.element_ref ?? "")}
-                placeholder="Element wählen…"
-              />
-            </label>
-          )}
+          <UploadTargetFields target={target} />
 
           <div
             className={`gallery-upload-dropzone${isDragging ? " gallery-upload-dropzone-active" : ""}`}
@@ -267,15 +169,26 @@ export function GalleryUploadModal({
                 event.target.value = "";
               }}
             />
-            <ImageIcon />
-            <p>Bilder hierher ziehen oder Dateien wählen</p>
-            <p className="muted">JPG, PNG, GIF, WebP, BMP, TIFF · ZIP-Archive</p>
+            <span className="gallery-upload-dropzone-badge">
+              <UploadIcon />
+            </span>
+            <p className="gallery-upload-dropzone-title">
+              {isDragging ? "Zum Hochladen loslassen" : "Bilder hierher ziehen"}
+            </p>
+            <p className="muted">
+              oder <span className="gallery-upload-browse">Dateien auswählen</span>
+            </p>
+            <div className="gallery-upload-formats" aria-label="Unterstützte Formate">
+              {["JPG", "PNG", "GIF", "WebP", "BMP", "TIFF", "ZIP"].map((format) => (
+                <span key={format}>{format}</span>
+              ))}
+            </div>
           </div>
 
           <div>
             <div className="gallery-upload-queue-heading">
-              <span>Warteschlange</span>
-              <span>
+              <span className="gallery-upload-label">Warteschlange</span>
+              <span className="gallery-upload-count">
                 {selectedFiles.length === 0
                   ? "Keine Datei gewählt"
                   : selectedFiles.length === 1
@@ -293,7 +206,7 @@ export function GalleryUploadModal({
                       {previews[index] ? (
                         <img src={previews[index] ?? undefined} alt="" />
                       ) : (
-                        <div style={{ display: "grid", placeItems: "center", height: "100%" }}>
+                        <div className="gallery-upload-thumbnail-fallback">
                           <ZipIcon />
                         </div>
                       )}
@@ -315,7 +228,7 @@ export function GalleryUploadModal({
                       disabled={uploading}
                       aria-label={`${file.name} entfernen`}
                     >
-                      ×
+                      <CloseIcon />
                     </button>
                   </li>
                 ))}
@@ -328,6 +241,7 @@ export function GalleryUploadModal({
             <TagInput value={tagsValue} onChange={setTagsValue} suggestions={tagSuggestions} placeholder="Tag hinzufügen…" />
           </div>
 
+          {ruleProblems.length > 0 && <p className="form-error-banner">{ruleProblems.join(" · ")}</p>}
           {error && <p className="form-error-banner">{error}</p>}
         </div>
 
@@ -344,7 +258,7 @@ export function GalleryUploadModal({
               type="button"
               className="button-inline"
               onClick={() => void handleUpload()}
-              disabled={uploading || selectedFiles.length === 0 || targetIncomplete}
+              disabled={uploading || selectedFiles.length === 0 || target.incomplete || ruleProblems.length > 0}
             >
               {uploading
                 ? "Lädt hoch…"

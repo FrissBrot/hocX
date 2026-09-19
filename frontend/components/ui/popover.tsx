@@ -31,7 +31,10 @@ export function computePopoverPosition(rect: DOMRect, align: Align, gap: number,
       : { top: rect.bottom + gap, maxHeight: spaceBelow }),
     ...(align === "end" ? { right: window.innerWidth - rect.right } : { left: rect.left }),
     minWidth: options?.minWidth ? Math.max(rect.width, options.minWidth) : rect.width,
-    zIndex: "var(--z-popover)",
+    // Above .modal-backdrop (1200) and .confirm-backdrop (1300): popovers opened from inside a
+    // modal (e.g. SearchableSelect in the upload dialog) are portaled to <body> and would
+    // otherwise sit underneath it.
+    zIndex: 1400,
     overflowY: "auto",
   };
 }
