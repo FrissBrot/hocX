@@ -9,13 +9,15 @@ eine separate Plattform-Administration und eine mit MkDocs gebaute Dokumentation
 
 ## Funktionsumfang
 
-- Mandanten, Benutzer und mandantenspezifische Rollen
+- Mandanten mit eigenen Benutzern und Rollen (jedes Konto gehört genau einem Mandanten)
 - Sitzungsplanung, Veranstaltungen und Teilnehmendenverwaltung
 - konfigurierbare Protokoll- und Dokumentvorlagen
 - kollaborative Protokollbearbeitung mit Autosave, Präsenz und Konfliktbehandlung
 - Aufgaben, strukturierte Listen, Finanzen, Bussen und Statistiken
 - Word-, PDF- und ZIP-Import sowie PDF-/Dokumentexport
-- öffentliche Abgabebox mit optionalem Virenscan und CAPTCHA
+- öffentliche Abgabebox mit Zugang über Abgabe-Links, optionalem Virenscan und CAPTCHA
+- Fotos-Galerie und Dateiverwaltung mit ZIP-Upload, Tags, Qualitätsanalyse, Serien-Bereinigung und automatischen Alben
+- Speicherkontingente pro Mandant
 - lokale Anmeldung, MFA und getrennte Plattform-Admin-Sitzungen
 - vollständiger Mandantenexport und -import für Transfers und Backups
 - mandantenspezifisches Branding und eigene Domains
@@ -27,7 +29,7 @@ eine separate Plattform-Administration und eine mit MkDocs gebaute Dokumentation
 | Frontend | Next.js 16, React 19, TypeScript |
 | Backend | FastAPI, SQLAlchemy 2, Alembic |
 | Daten | PostgreSQL 16, Redis, lokaler oder gemounteter Dateispeicher |
-| Betrieb | Docker Compose, Traefik, optional ClamAV |
+| Betrieb | Docker Compose, Traefik, optional ClamAV, Foto-Analyse-Worker |
 | Tests | Pytest, Vitest, Smoke- und Release-Checks |
 
 ## Repository-Struktur
@@ -37,6 +39,8 @@ frontend/              Hauptanwendung und Plattform-Admin-UI
 backend/               API, Geschäftslogik und Alembic-Migrationen
 abgabebox-frontend/    öffentliche Upload-Oberfläche
 abgabebox-backend/     eingeschränkte API der Abgabebox
+photo-analysis-worker/ Worker für Gesichts-/Fotoqualitätsanalyse
+design/                Design-Tokens und verbindliche Design-Regeln
 docs-site/             MkDocs-Dokumentation
 infra/traefik/         statische und dynamische Traefik-Konfiguration
 scripts/               Entwicklung, Deployment, Backups und Verifikation
@@ -164,6 +168,9 @@ E2E-Dateispeicher. Für die beiden Vitest-Befehle muss der Entwicklungs-Stack la
 ./scripts/test.sh frontend
 ./scripts/test.sh abgabebox-frontend
 ./scripts/test.sh e2e
+
+# Design-Regeln (Tokens, Komponenten), läuft auch in der CI
+python3 scripts/check-design-rules.py
 ```
 
 Die Browser-Suite verwendet Playwright und prüft aktuell Anmeldung, Ablehnung falscher
@@ -216,7 +223,7 @@ Release-Images promotet.
 
 Anwendungsrollen gelten immer innerhalb eines Mandanten:
 
-- `admin`: vollständige Verwaltung im ausgewählten Mandanten
+- `admin`: vollständige Verwaltung der Konten und Daten des eigenen Mandanten
 - `writer`: Arbeit im Protokollbereich ohne strukturelle Administration
 - `reader`: Lesezugriff und PDF-Export
 - `kassier`: Lesezugriff plus Verwaltung von Finanzen und Bussen

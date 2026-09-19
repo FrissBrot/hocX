@@ -6,11 +6,11 @@ Versionierung nach [SemVer](https://semver.org/lang/de/). Die Beta-Historie
 ist der erste offiziell unterstützte Stand und muss keine älteren
 Installationen aktualisieren können.
 
-## [1.1.0] - Unveröffentlicht
+## [1.1.0] - 2026-09-19
 
-**Status: in Erprobung/QA auf dem Testhost - noch nicht als Release promotet und ohne
-Veröffentlichungsdatum.** Diese Version enthält zusätzlich zu allen seit 1.0.0
-gemergten Fixes/Hardening-Massnahmen auf `main` die folgenden neuen Funktionen.
+Zweite stabile Version. Sie enthält alle seit 1.0.0 gemergten Fixes und
+Hardening-Massnahmen sowie die unten aufgeführten neuen Funktionen. Vor dem Update bitte die
+mit **Achtung beim Update** markierten Punkte lesen (Migrationen `0064` bis `0078`).
 
 ### Geändert
 
@@ -42,6 +42,23 @@ gemergten Fixes/Hardening-Massnahmen auf `main` die folgenden neuen Funktionen.
     vorher bereinigen oder mit `alembic -x single_tenant_resolution=auto upgrade head` je Konto
     die Mitgliedschaft des Standard-Mandanten (sonst die höchste Rolle) behalten und die
     übrigen verwerfen. `-x seed_demo=true` (Dev/E2E/CI) löst automatisch auf.
+
+- **Navigation neu gegliedert**: Die Seitenleiste ist in Dashboard / Arbeiten / Stammdaten /
+  Konfiguration / Administration gruppiert, die Einzel-Gruppe "Tools" entfällt (`/tools`
+  leitet auf die Import-Warteschlange um). Zusammengehörige Seiten (Dashboard + Statistiken,
+  Konten + Bussen, Vorlagen + Elemente + Dokument-Layouts, Dokumente + Fotos) haben eine
+  Tab-Leiste. Routen und Rollenprüfungen bleiben unverändert.
+- **Einheitliches Design-System**: Gemeinsame Design-Tokens (`design/tokens.css`) für Hauptapp
+  und Abgabebox, verbindliche Regeln in `design/DESIGN.md` und ein Prüfskript
+  (`scripts/check-design-rules.py`), das in der CI läuft. Überarbeitet wurden unter anderem
+  Todo-Editor, Konto-Dialog, Benutzer-Bearbeitung, Listen-Seitenleiste, Abgaben-Zuordnungen
+  und alle Tabellen (gemeinsame maximale Breite).
+- **Einheitliche Upload-Pipeline**: Protokollbilder, Galerie- und Word-Import-Uploads teilen
+  sich Virenprüfung, Prüfsumme und Vorschaubilder sowie eine gemeinsame Nachprüfungsschleife.
+  Die Lock-IDs aller Hintergrundschleifen liegen zentral in `app.core.background_loops`.
+  Im Platform-Admin-Panel zeigt die neue Seite "Datei-Pipeline" den Prüfstatus je Datei.
+- Dateien-, Vorschau- und Tag-URLs verwenden durchgängig die öffentliche UUID statt interner
+  Zahlen-IDs.
 
 ### Hinzugefügt
 
@@ -90,6 +107,41 @@ gemergten Fixes/Hardening-Massnahmen auf `main` die folgenden neuen Funktionen.
   aber nicht mehr und müssen durch die neuen Links ersetzt werden. Die Umgebungsvariable
   `DEFAULT_TENANT_SLUG` entfällt. Beim Klonen/Importieren eines Mandanten entstehen immer
   neue Schlüssel (Tokens werden nie exportiert oder übernommen).
+
+- **Foto-Auswahl und Qualitätsanalyse**: Schärfe und Belichtung werden bei jedem Upload
+  berechnet, die Gesichtsqualität übernimmt der neue Dienst `photo-analysis-worker`
+  (automatisch ausserhalb der Stosszeiten und nur bei geringer Serverlast). Ähnliche Fotos
+  werden per Perceptual Hash zu Serien gruppiert (nach EXIF-Drehung und Randbeschnitt);
+  "Nur beste behalten" räumt Serien auf. Migrationen `0066`-`0072`, `0076`, `0077`.
+- **Automatische Foto-Alben**: Pro Zyklus, Abgabe und Abgabe-Element entsteht automatisch ein
+  Album mit Best-of-Auswahl ("Stern"), die sich von Hand ergänzen oder ausschliessen lässt.
+  Uploads aus der Abgabebox werden periodisch einsortiert.
+- **Asynchrone Galerie-Uploads**: Bild-Uploads und ZIP-Archive bis 5 GB werden nur noch auf
+  die Platte gestreamt und im Hintergrund verarbeitet; der Dialog schliesst sich sofort, ein
+  Fortschrittsbalken zeigt den Stand (Migration `0073`). Dafür gibt es einen eigenen
+  Traefik-Router ohne Standard-Grössenlimit. **Achtung beim Update:** Traefik-Konfiguration
+  und Backend-Speicherlimit (`mem_limit`) aus den mitgelieferten Compose-Dateien übernehmen.
+- **Demo-Mandant**: Jedes Test-Deployment (nie Prod) legt einen vollständig befüllten
+  Demo-Mandanten "Jubla Sonnenberg" an (Teilnehmende, Termine, Protokolle, Fotos, Abgabe);
+  ein fester TOTP-Seed für Demo-Konten ist konfigurierbar.
+
+### Behoben
+
+- Die Audit-Runde über `v1.0.0..1.1` hat 13 kritische und mehrere mittlere/niedrige Befunde
+  ergeben, alle sind behoben. Wichtigste Punkte:
+  - Drei Hintergrundschleifen der Foto-Funktionen starteten wegen fehlender Lock-IDs nie;
+    fehlerhafte Durchläufe beenden eine Schleife nicht mehr dauerhaft und blockieren die
+    Event-Loop nicht mehr.
+  - Das Speicherkontingent wird jetzt beim Upload verbindlich durchgesetzt (race-frei).
+  - Beim Tenant-Import wird `GalleryImage.event_id` korrekt umgeschrieben, sodass importierte
+    Fotos nicht mehr fremden Terminen zugeordnet werden.
+  - Ein Platform-Admin kann seinen letzten TOTP-Faktor nicht mehr löschen (Aussperr-Schutz).
+  - Veraltete Antworten überschreiben in der Serien-Bereinigung und in historischen Listen
+    keine neueren mehr.
+  - Zyklus-Snapshots holen verpasste Zyklen nach; die Auswahl des "besten Fotos" ist in
+    Serien-Bereinigung und Alben identisch.
+  - Diverse Performance-Verbesserungen (Album-Sync, Hash-Abgleich, Snapshot-Rekonstruktion).
+- Migration `0067`: Downgrade scheiterte, solange die Rolle noch Berechtigungen hielt.
 
 ## [1.0.0] - 2026-08-27
 
