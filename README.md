@@ -251,6 +251,9 @@ Autorisierungen beziehen kann.
 Die Import-Regressionen und ihre generierten Testdateien sind im
 [Import-Testbook](docs-site/docs/technik/import-testbook.md) dokumentiert.
 
+Die Prüfungen für den Zugang zur Abgabebox per Link stehen im
+[Abgabe-Links-Testbook](docs-site/docs/technik/abgabe-links-testbook.md).
+
 ## Lizenz
 
 Copyright © 2026 hocX Project. All rights reserved.
