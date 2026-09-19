@@ -10,7 +10,7 @@ import { browserApiFetch } from "@/lib/api/client";
 import { getRuntimeConfig } from "@/lib/runtime-config";
 import { SessionInfo, TenantMembership } from "@/types/api";
 
-import { buildNav, formatRoleLabel } from "@/components/ui/app-shell-nav";
+import { buildNav, formatRoleLabel, isNavLinkActive, NavLink } from "@/components/ui/app-shell-nav";
 import { NavIcon } from "@/components/ui/nav-icons";
 import { ToastProvider, useToast } from "@/contexts/toast-context";
 import { ConfirmProvider } from "@/contexts/confirm-context";
@@ -79,7 +79,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
 
   const navGroups = useMemo(() => buildNav(session), [session]);
   const activeNavGroup = useMemo(
-    () => navGroups.find((group) => group.links.some((link) => pathname === link.href || pathname.startsWith(`${link.href}/`)))?.title ?? null,
+    () => navGroups.find((group) => group.links.some((link) => isNavLinkActive(link, pathname)))?.title ?? null,
     [navGroups, pathname]
   );
   const [expandedNavGroup, setExpandedNavGroup] = useState<string | null>(null);
@@ -188,12 +188,12 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
   const activeCrumb = useMemo(() => {
     for (const group of navGroups) {
       for (const link of group.links) {
-        if (pathname === link.href || pathname.startsWith(`${link.href}/`)) {
+        if (isNavLinkActive(link, pathname)) {
           return { group: group.title, label: link.label };
         }
       }
     }
-    return { group: "Übersicht", label: "Dashboard" };
+    return { group: null, label: "Dashboard" };
   }, [navGroups, pathname]);
 
   const tenantName = session?.current_tenant?.name ?? "Mandant";
@@ -307,6 +307,24 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
           </button>
           <nav className="sidebar-nav">
             {navGroups.map((group) => {
+              const renderLink = (link: NavLink) => (
+                <Link
+                  href={link.href as Route}
+                  key={link.href}
+                  className={isNavLinkActive(link, pathname) ? "nav-link nav-link-active" : "nav-link"}
+                  onClick={() => setMobileNavOpen(false)}
+                >
+                  <NavIcon name={link.icon} className="nav-link-icon" />
+                  <span className="nav-link-label">{link.label}</span>
+                </Link>
+              );
+              if (group.title === null) {
+                return (
+                  <div className="nav-links" key="ungrouped">
+                    {group.links.map(renderLink)}
+                  </div>
+                );
+              }
               const isExpanded = expandedNavGroup === group.title;
               return (
                 <div className={`nav-group${isExpanded ? " nav-group-expanded" : ""}`} key={group.title}>
@@ -321,24 +339,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
                       <path d="M9 18l6-6-6-6" />
                     </svg>
                   </button>
-                  {isExpanded && (
-                    <div className="nav-links">
-                      {group.links.map((link) => {
-                        const isActive = pathname === link.href || pathname.startsWith(`${link.href}/`);
-                        return (
-                          <Link
-                            href={link.href as Route}
-                            key={link.href}
-                            className={isActive ? "nav-link nav-link-active" : "nav-link"}
-                            onClick={() => setMobileNavOpen(false)}
-                          >
-                            <NavIcon name={link.icon} className="nav-link-icon" />
-                            <span className="nav-link-label">{link.label}</span>
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  )}
+                  {isExpanded && <div className="nav-links">{group.links.map(renderLink)}</div>}
                 </div>
               );
             })}
@@ -375,8 +376,12 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
               </button>
             </div>
             <div className="topbar-breadcrumb">
-              <span className="topbar-breadcrumb-group">{activeCrumb.group}</span>
-              <span className="topbar-breadcrumb-sep">/</span>
+              {activeCrumb.group ? (
+                <>
+                  <span className="topbar-breadcrumb-group">{activeCrumb.group}</span>
+                  <span className="topbar-breadcrumb-sep">/</span>
+                </>
+              ) : null}
               <span className="topbar-breadcrumb-page">{activeCrumb.label}</span>
             </div>
             <Popover open={avatarMenuOpen} onOpenChange={setAvatarMenuOpen} anchorRef={avatarTriggerRef} align="start">

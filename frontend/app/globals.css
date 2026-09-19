@@ -2805,6 +2805,16 @@ input[type="radio"] {
   border-bottom-color: var(--accent);
 }
 
+.route-tabs {
+  margin-bottom: 18px;
+}
+
+.route-tabs .tabs-trigger {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
 .tabs-panel {
   display: grid;
   gap: 16px;

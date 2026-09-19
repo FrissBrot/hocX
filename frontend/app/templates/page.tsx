@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/ui/app-shell";
+import { RouteTabs } from "@/components/ui/route-tabs";
+import { TEMPLATE_TABS } from "@/components/ui/section-tabs";
 import { TemplateBuilder } from "@/components/template/template-builder";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { CycleConfigSummary, TemplateSummary } from "@/types/api";
@@ -17,6 +19,7 @@ export default async function TemplatesPage() {
 
   return (
     <AppShell initialSession={session}>
+      <RouteTabs tabs={TEMPLATE_TABS} activeHref="/templates" />
       <section className="panel">
         <TemplateBuilder initialTemplates={data ?? []} availableCycleConfigs={cycleConfigs ?? []} />
       </section>
