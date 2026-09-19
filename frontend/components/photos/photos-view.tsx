@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { GalleryUploadModal } from "./gallery-upload-modal";
 import { GalleryUploadProgress } from "./gallery-upload-progress";
+import { mergeNewItems } from "./merge-new-items";
 import { PhotoAlbums } from "./photo-albums";
 import { PhotoAnalysisProgress } from "./photo-analysis-progress";
 import { PhotoBulkBar } from "./photo-bulk-bar";
@@ -22,6 +23,7 @@ import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { FileOverviewItem, GalleryUploadJob, GalleryUploadJobDetail, PhotoAnalysisProgress as ProgressData } from "@/types/api";
 
 const PAGE_SIZE = 60;
+const SYNC_INTERVAL_MS = 15000;
 
 type SortKey = "group_date" | "created_at" | "sharpness_score" | "exposure_score" | "face_quality_score";
 type Tab = "all" | "albums" | "similar";
@@ -66,6 +68,11 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
   const [galleryUploadJobs, setGalleryUploadJobs] = useState<GalleryUploadJob[]>([]);
   const requestIdRef = useRef(0);
   const didMountRef = useRef(false);
+  const viewerOpenRef = useRef(false);
+  viewerOpenRef.current = viewerIndex !== null;
+  const isReloadingRef = useRef(true);
+  isReloadingRef.current = isReloading;
+  const syncNewItemsRef = useRef<() => Promise<void>>(async () => {});
 
   // The whole page is one big dropzone; not while another dialog/viewer is on top, and not in
   // the embedded variants (album picker etc.), which have no upload of their own.
@@ -169,6 +176,37 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
     })();
   }
 
+  // Silent background sync: fetches the first page with the current filters and adds only the
+  // items that aren't shown yet (see mergeNewItems) - no skeleton, no list replacement, no
+  // toast, selection and scroll position stay as they are. Skipped while something else is
+  // touching the list; the viewer works on an index into `items`, so nothing may be inserted
+  // in front of it while it's open. The next tick picks up whatever was missed.
+  async function syncNewItems() {
+    if (isReloadingRef.current || loadingMoreRef.current || viewerOpenRef.current) return;
+    const requestId = requestIdRef.current;
+    try {
+      const latest = await browserApiFetch<FileOverviewItem[]>(buildUrl(0));
+      if (!latest || requestIdRef.current !== requestId || loadingMoreRef.current || viewerOpenRef.current) return;
+      setItems((current) => mergeNewItems(current, latest));
+    } catch {
+      // Transient - the next tick tries again; a background sync has no error UI.
+    }
+  }
+  syncNewItemsRef.current = syncNewItems;
+
+  useEffect(() => {
+    if (tab !== "all") return;
+    const tick = () => {
+      if (document.visibilityState === "visible") void syncNewItemsRef.current();
+    };
+    const timer = setInterval(tick, SYNC_INTERVAL_MS);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", tick);
+    };
+  }, [tab]);
+
   function toggleSelect(id: string) {
     setSelectedIds((current) => {
       const next = new Set(current);
@@ -228,10 +266,10 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
     if (uploaded.length > 0) {
       if (albumId) {
         void browserApiFetch(`/api/files/albums/${albumId}/items`, { method: "POST", body: JSON.stringify({ file_ids: uploaded.map((item) => item.id) }) })
-          .then(() => reload())
+          .then(() => syncNewItems())
           .catch(() => showToast("Bilder hochgeladen, aber Zuordnung zum Album fehlgeschlagen.", "error"));
       } else {
-        reload();
+        void syncNewItems();
       }
       setTagSuggestions((current) => Array.from(new Set([...current, ...uploaded.flatMap((item) => item.tags)])).sort((a, b) => a.localeCompare(b)));
       showToast(uploaded.length === 1 ? "1 Bild hochgeladen." : `${uploaded.length} Bilder hochgeladen.`, "success");
