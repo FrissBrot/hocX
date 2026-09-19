@@ -151,6 +151,9 @@ jobs:
           LATEX_TEMPLATE_ROOT: ${{ github.workspace }}/storage/latex_templates
           EXPORT_ROOT: ${{ github.workspace }}/storage/exports
           UPLOAD_ROOT: ${{ github.workspace }}/storage/uploads
+          # Defaults to /app/storage-local/thumbnails (same unwritable-on-a-runner problem
+          # as above) - only needs to be a writable absolute path, created on demand.
+          THUMBNAIL_ROOT: ${{ github.workspace }}/storage-local/thumbnails
         # No coverage threshold gate: per hocX.wiki/Bekannte-offene-Punkte, meaningful
         # domain/security test cases matter more than a bare percentage. This is purely
         # for visibility into which areas have no test coverage at all.
@@ -197,6 +200,7 @@ jobs:
           POSTGRES_DB: hocx_ci
           APP_DB_PASSWORD: ci-abgabebox-tests-app-password
           ABGABEBOX_DB_PASSWORD: ci-abgabebox-tests-password
+          PHOTO_WORKER_DB_PASSWORD: ci-abgabebox-tests-photo-worker-password
           AUTH_SECRET: ci-abgabebox-tests-dummy-secret-0123456789
           ADMIN_AUTH_SECRET: ci-abgabebox-tests-dummy-admin-secret-0123456789
         run: python3 -m alembic -x seed_demo=true upgrade head
@@ -216,6 +220,23 @@ jobs:
 
   photo-analysis-worker-tests:
     runs-on: ubuntu-latest
+    # tests/test_db.py/test_worker.py exercise the worker's restricted hocx_photo_worker
+    # role against a real, migrated schema (same as docker-compose.tests.yml's test-db),
+    # so this job needs Postgres + the backend migrations like abgabebox-backend-tests.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: hocx_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -225,12 +246,25 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install photo-analysis-worker dependencies
-        run: pip install -r photo-analysis-worker/requirements-dev.txt
+      - name: Install backend and photo-analysis-worker dependencies
+        run: |
+          pip install -r backend/requirements.txt
+          pip install -r photo-analysis-worker/requirements-dev.txt
+
+      - name: Prepare database schema and restricted photo-worker role
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+psycopg://ci:ci@localhost:5432/hocx_ci
+          POSTGRES_DB: hocx_ci
+          APP_DB_PASSWORD: ci-photo-worker-tests-app-password
+          ABGABEBOX_DB_PASSWORD: ci-photo-worker-tests-abgabebox-password
+          PHOTO_WORKER_DB_PASSWORD: ci-photo-worker-tests-password
+          AUTH_SECRET: ci-photo-worker-tests-dummy-secret-0123456789
+          ADMIN_AUTH_SECRET: ci-photo-worker-tests-dummy-admin-secret-0123456789
+        run: python3 -m alembic upgrade head
 
       # Same pinned, hash-verified download as the Dockerfile/Dockerfile.test - see their
-      # comments. This job's tests are pure computation (no DB), so unlike
-      # abgabebox-backend-tests above this needs no Postgres service/migration step.
+      # comments.
       - name: Download face detection model
         env:
           YUNET_MODEL_URL: https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2026may.onnx
@@ -251,6 +285,8 @@ jobs:
         working-directory: photo-analysis-worker
         env:
           PHOTO_WORKER_MODEL_PATH: ${{ github.workspace }}/models/face_detection_yunet.onnx
+          PHOTO_WORKER_DATABASE_URL: postgresql+psycopg://hocx_photo_worker:ci-photo-worker-tests-password@localhost:5432/hocx_ci
+          TEST_ADMIN_DATABASE_URL: postgresql+psycopg://hocx_app:ci-photo-worker-tests-app-password@localhost:5432/hocx_ci
         run: python3 -m pytest tests/ -v --cov=app --cov-report=term-missing
 
   frontend-build:
