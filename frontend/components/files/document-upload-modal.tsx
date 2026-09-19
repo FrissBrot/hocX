@@ -48,40 +48,48 @@ function DocumentIcon() {
   );
 }
 
+// Splits candidates into the ones a document upload takes and an error text for the rest
+// (null when nothing was rejected).
+function partitionDocuments(candidates: File[]): { accepted: File[]; error: string | null } {
+  const accepted = candidates.filter((file) => DOCUMENT_EXTENSIONS.includes(extensionOf(file.name)));
+  const rejected = candidates.filter((file) => !accepted.includes(file));
+  if (rejected.length === 0) return { accepted, error: null };
+  if (rejected.every((file) => IMAGE_EXTENSIONS.includes(extensionOf(file.name)))) {
+    return { accepted, error: "Bilder bitte über die Fotos-Seite hochladen." };
+  }
+  return { accepted, error: `Nicht unterstützt: ${rejected.map((file) => file.name).join(", ")}` };
+}
+
 export function DocumentUploadModal({
   tagSuggestions,
+  initialFiles,
   onClose,
   onUploaded,
 }: {
   tagSuggestions: string[];
+  // Files dropped onto the page before this dialog opened - they start out in the queue.
+  initialFiles?: File[];
   onClose: () => void;
   // Fires once at least one file was saved. Unlike the photo upload there is no background
   // job (a document is scanned and stored inside the request itself), so `result` is final -
   // it can still carry per-file `errors` for the files that were rejected.
   onUploaded: (result: DocumentUploadResult) => void;
 }) {
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [initial] = useState(() => partitionDocuments(initialFiles ?? []));
+  const [selectedFiles, setSelectedFiles] = useState<File[]>(initial.accepted);
   const [tagsValue, setTagsValue] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initial.error);
   const inputRef = useRef<HTMLInputElement>(null);
   const target = useUploadTarget();
 
   function addFiles(fileList: FileList | File[]) {
     // Copy now: an <input>'s FileList is live and gets emptied by the `value = ""` reset in
     // onChange, which runs before React invokes the state updater below.
-    const candidates = Array.from(fileList);
-    const accepted = candidates.filter((file) => DOCUMENT_EXTENSIONS.includes(extensionOf(file.name)));
-    const rejected = candidates.filter((file) => !accepted.includes(file));
+    const { accepted, error: rejectedError } = partitionDocuments(Array.from(fileList));
     setSelectedFiles((current) => [...current, ...accepted]);
-    if (rejected.length === 0) {
-      setError(null);
-    } else if (rejected.every((file) => IMAGE_EXTENSIONS.includes(extensionOf(file.name)))) {
-      setError("Bilder bitte über die Fotos-Seite hochladen.");
-    } else {
-      setError(`Nicht unterstützt: ${rejected.map((file) => file.name).join(", ")}`);
-    }
+    setError(rejectedError);
   }
 
   function removeFile(index: number) {

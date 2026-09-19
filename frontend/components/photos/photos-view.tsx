@@ -10,12 +10,14 @@ import { PhotoBulkBar } from "./photo-bulk-bar";
 import { PhotoDateGroups } from "./photo-date-groups";
 import { PhotoSimilarSeries } from "./photo-similar-series";
 import { PhotoViewer } from "./photo-viewer";
+import { FileDropOverlay } from "@/components/ui/file-drop-overlay";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
 import { TagInput } from "@/components/ui/tag-input";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
+import { useFileDrop } from "@/lib/hooks/use-file-drop";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { FileOverviewItem, GalleryUploadJob, GalleryUploadJobDetail, PhotoAnalysisProgress as ProgressData } from "@/types/api";
 
@@ -45,6 +47,8 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
 
   const [tab, setTab] = useState<Tab>("all");
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  // Files dropped onto the page - they open the upload dialog with these already queued.
+  const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
   const [search, setSearch] = useState("");
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
@@ -62,6 +66,16 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
   const [galleryUploadJobs, setGalleryUploadJobs] = useState<GalleryUploadJob[]>([]);
   const requestIdRef = useRef(0);
   const didMountRef = useRef(false);
+
+  // The whole page is one big dropzone; not while another dialog/viewer is on top, and not in
+  // the embedded variants (album picker etc.), which have no upload of their own.
+  const isFileDragging = useFileDrop(
+    (files) => {
+      setDroppedFiles(files);
+      setUploadModalOpen(true);
+    },
+    !embedded && !uploadModalOpen && viewerIndex === null,
+  );
 
   function buildUrl(skip: number) {
     const params = new URLSearchParams();
@@ -247,7 +261,10 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
                   Bildern
                 </span>
               )}
-              <button type="button" className="button-inline" onClick={() => setUploadModalOpen(true)}>
+              <button type="button" className="button-inline" onClick={() => {
+                setDroppedFiles([]);
+                setUploadModalOpen(true);
+              }}>
                 + Bilder hochladen
               </button>
             </div>
@@ -394,10 +411,13 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
       {uploadModalOpen && (
         <GalleryUploadModal
           tagSuggestions={tagSuggestions}
+          initialFiles={droppedFiles}
           onClose={() => setUploadModalOpen(false)}
           onQueued={handleGalleryUploadQueued}
         />
       )}
+
+      <FileDropOverlay active={isFileDragging} title="Zum Hochladen loslassen" hint="Bilder oder ZIP-Dateien - danach stellst du den Upload ein." />
     </div>
   );
 }

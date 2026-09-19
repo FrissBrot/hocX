@@ -8,12 +8,14 @@ import { DocumentUploadModal } from "./document-upload-modal";
 import { FileDetailModal } from "./file-detail-modal";
 import { FileStatCards } from "./file-stat-cards";
 import { FilesTable } from "./files-table";
+import { FileDropOverlay } from "@/components/ui/file-drop-overlay";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
 import { TagInput } from "@/components/ui/tag-input";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
+import { useFileDrop } from "@/lib/hooks/use-file-drop";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { DocumentUploadResult, FileOverviewItem, FileOverviewSource } from "@/types/api";
 
@@ -60,10 +62,21 @@ export function FilesView({ initialItems }: Props) {
   const [isReloading, setIsReloading] = useState(false);
   const [detailItem, setDetailItem] = useState<FileOverviewItem | null>(null);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  // Files dropped onto the page - they open the upload dialog with these already queued.
+  const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
   // Bumped after an upload so FileStatCards (which only fetches on mount) re-reads its counts.
   const [statsRefreshKey, setStatsRefreshKey] = useState(0);
   const didMountRef = useRef(false);
   const requestIdRef = useRef(0);
+
+  // The whole page is one big dropzone (not while a dialog is on top).
+  const isFileDragging = useFileDrop(
+    (files) => {
+      setDroppedFiles(files);
+      setUploadModalOpen(true);
+    },
+    !uploadModalOpen && detailItem === null,
+  );
 
   function buildUrl(skip: number) {
     const params = new URLSearchParams();
@@ -169,7 +182,10 @@ export function FilesView({ initialItems }: Props) {
           </p>
         </div>
         <div className="table-toolbar-actions">
-          <button type="button" className="button-inline" onClick={() => setUploadModalOpen(true)}>
+          <button type="button" className="button-inline" onClick={() => {
+              setDroppedFiles([]);
+              setUploadModalOpen(true);
+            }}>
             + Dateien hochladen
           </button>
         </div>
@@ -222,10 +238,13 @@ export function FilesView({ initialItems }: Props) {
       {uploadModalOpen && (
         <DocumentUploadModal
           tagSuggestions={tagSuggestions}
+          initialFiles={droppedFiles}
           onClose={() => setUploadModalOpen(false)}
           onUploaded={handleDocumentsUploaded}
         />
       )}
+
+      <FileDropOverlay active={isFileDragging} title="Zum Hochladen loslassen" hint="Danach stellst du den Upload ein." />
 
       {detailItem && (
         <FileDetailModal

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { FileOverviewItem } from "@/types/api";
@@ -145,5 +145,32 @@ describe("FilesView (Dateien)", () => {
 
     expect(screen.getByText("Dateien hochladen", { selector: "h2" })).toBeInTheDocument();
     expect(screen.getByText("Noch keine Dateien ausgewählt.")).toBeInTheDocument();
+  });
+
+  it("opens the upload window with the files dropped anywhere on the page already queued", () => {
+    render(<FilesView initialItems={[]} />);
+    const pdf = new File(["x"], "bericht.pdf", { type: "application/pdf" });
+    const photo = new File(["x"], "foto.jpg", { type: "image/jpeg" });
+
+    const drop = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, "dataTransfer", { value: { types: ["Files"], files: [pdf, photo] } });
+    act(() => {
+      window.dispatchEvent(drop);
+    });
+
+    expect(screen.getByText("Dateien hochladen", { selector: "h2" })).toBeInTheDocument();
+    expect(screen.getByText("bericht.pdf")).toBeInTheDocument();
+    expect(screen.queryByText("foto.jpg", { selector: ".gallery-upload-file-name" })).not.toBeInTheDocument();
+    expect(screen.getByText("Bilder bitte über die Fotos-Seite hochladen.")).toBeInTheDocument();
+  });
+
+  it("ignores drags that carry no files", () => {
+    render(<FilesView initialItems={[]} />);
+    const drop = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, "dataTransfer", { value: { types: ["text/plain"], files: [] } });
+    act(() => {
+      window.dispatchEvent(drop);
+    });
+    expect(screen.queryByText("Dateien hochladen", { selector: "h2" })).not.toBeInTheDocument();
   });
 });

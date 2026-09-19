@@ -60,17 +60,20 @@ function useFilePreviews(files: File[]): (string | null)[] {
 
 export function GalleryUploadModal({
   tagSuggestions,
+  initialFiles,
   onClose,
   onQueued,
 }: {
   tagSuggestions: string[];
+  // Files dropped onto the page before this dialog opened - they start out in the queue.
+  initialFiles?: File[];
   onClose: () => void;
   // Fires as soon as the raw upload is safely staged and a gallery_upload_job is queued -
   // scanning/thumbnailing/import happen afterwards, in the background (see
   // gallery-upload-progress.tsx), so this is not the final result.
   onQueued: (job: GalleryUploadJob) => void;
 }) {
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>(initialFiles ?? []);
   const previews = useFilePreviews(selectedFiles);
   const [tagsValue, setTagsValue] = useState("");
   const [isDragging, setIsDragging] = useState(false);
