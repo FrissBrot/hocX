@@ -118,9 +118,9 @@ const ICONS: Record<NavIconKey, (props: IconProps) => React.ReactElement> = {
   ),
   files: (props) => (
     <Icon {...props}>
-      <rect x="4" y="4.5" width="16" height="15" rx="2" />
-      <circle cx="9" cy="9.5" r="1.6" fill="currentColor" stroke="none" />
-      <path d="M5.2 16.5l4.3-4.6a1.4 1.4 0 012.05-.03l2.15 2.28a1.4 1.4 0 002.03-.02l2.3-2.43" />
+      <path d="M14 3.5H7.5a2 2 0 00-2 2v13a2 2 0 002 2h9a2 2 0 002-2V8l-4.5-4.5z" />
+      <path d="M14 3.5V8h4.5" />
+      <path d="M9 13h6M9 16.5h6" />
     </Icon>
   ),
   photos: (props) => (

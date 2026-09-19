@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 
 import { DocumentUploadModal } from "./document-upload-modal";
 import { FileDetailModal } from "./file-detail-modal";
-import { FileStatCards } from "./file-stat-cards";
 import { FilesTable } from "./files-table";
 import { FileDropOverlay } from "@/components/ui/file-drop-overlay";
 import { FilterTabs } from "@/components/ui/filter-tabs";
@@ -64,8 +63,6 @@ export function FilesView({ initialItems }: Props) {
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   // Files dropped onto the page - they open the upload dialog with these already queued.
   const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
-  // Bumped after an upload so FileStatCards (which only fetches on mount) re-reads its counts.
-  const [statsRefreshKey, setStatsRefreshKey] = useState(0);
   const didMountRef = useRef(false);
   const requestIdRef = useRef(0);
 
@@ -134,7 +131,6 @@ export function FilesView({ initialItems }: Props) {
   function handleDocumentsUploaded(result: DocumentUploadResult) {
     const uploaded = result.items;
     void reloadFromStart();
-    setStatsRefreshKey((current) => current + 1);
     setTagSuggestions((current) => Array.from(new Set([...current, ...uploaded.flatMap((item) => item.tags)])).sort((a, b) => a.localeCompare(b)));
     showToast(uploaded.length === 1 ? "1 Datei hochgeladen." : `${uploaded.length} Dateien hochgeladen.`, "success");
     if (result.errors.length > 0) showToast(result.errors.join(" · "), "info");
@@ -190,8 +186,6 @@ export function FilesView({ initialItems }: Props) {
           </button>
         </div>
       </div>
-
-      <FileStatCards refreshKey={statsRefreshKey} />
 
       <div className="list-filter-row list-filter-row-compact">
         <FilterTabs options={SOURCE_OPTIONS} value={sourceFilter} onChange={(value) => setSourceFilter(value as SourceFilter)} />

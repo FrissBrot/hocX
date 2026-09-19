@@ -87,20 +87,6 @@ describe("FilesView (Dateien)", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders the stat cards", async () => {
-    browserApiFetchMock.mockImplementation((url: string) => {
-      if (url === "/api/files/stats") return Promise.resolve({ document_count: 48, photo_count: 266, total_bytes: 1_900_000_000 });
-      return Promise.resolve([]);
-    });
-    render(<FilesView initialItems={[]} />);
-
-    expect(await screen.findByText("Dokumente")).toBeInTheDocument();
-    expect(await screen.findByText("48")).toBeInTheDocument();
-    expect(screen.getByText("Fotos")).toBeInTheDocument();
-    expect(screen.getByText("266")).toBeInTheDocument();
-    expect(screen.getByText("Speicher")).toBeInTheDocument();
-  });
-
   it("renders each file as a table row with name/source badge/size", () => {
     const item = makeItem({ id: "a1", original_name: "1. Hock vom 14.10.2026.docx", source: "word_import" });
     render(<FilesView initialItems={[item]} />);
