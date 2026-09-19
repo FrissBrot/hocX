@@ -30,7 +30,7 @@ export type DuePatch = {
 type Props = {
   todoId: string;
   label: string;
-  onApply: (patch: DuePatch) => void;
+  onApply: (patch: DuePatch, label: string) => void;
 };
 
 export function TodoDueMenu({ todoId, label, onApply }: Props) {
@@ -67,7 +67,8 @@ export function TodoDueMenu({ todoId, label, onApply }: Props) {
     : [];
 
   function pick(patch: DuePatch) {
-    onApply(patch);
+    const label = patch.due_event_id ? data?.events.find((event) => event.id === patch.due_event_id)?.title ?? "Termin" : patch.due_marker ? "Nächster Hock" : "Kein Enddatum";
+    onApply(patch, label);
     setOpen(false);
   }
 

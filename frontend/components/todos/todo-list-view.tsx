@@ -8,8 +8,6 @@ import { FilterTabOption, FilterTabs } from "@/components/ui/filter-tabs";
 import { SearchInput } from "@/components/ui/search-input";
 import { TagInput } from "@/components/ui/tag-input";
 import { TodoEditModal } from "@/components/todos/todo-edit-modal";
-import { TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
-import { TodoDueMenu, DuePatch } from "@/components/todos/todo-due-menu";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { TODO_STATUS } from "@/components/protocol/protocol-editor-shared";
 import { browserApiFetch } from "@/lib/api/client";
@@ -374,82 +372,6 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
       showToast(error instanceof Error ? error.message : "Todo konnte nicht erstellt werden", "error");
     } finally {
       setCreating(false);
-    }
-  }
-
-  async function updateTodoAssignee(todoId: string, participantId: string | null, participantName: string | null) {
-    const previous = [...todos.all, ...todos.my].find((t) => t.id === todoId) ?? null;
-    function applyUpdate(list: TodoListItem[]) {
-      return list.map((t) => t.id === todoId ? { ...t, assigned_participant_id: participantId, assigned_participant_name: participantName } : t);
-    }
-    setTodos((prev) => ({ all: applyUpdate(prev.all), my: applyUpdate(prev.my) }));
-    try {
-      await browserApiFetch(`/api/protocol-todos/${todoId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ assigned_participant_id: participantId }),
-      });
-    } catch (error) {
-      if (previous) {
-        const previousTodo = previous;
-        function restore(list: TodoListItem[]) {
-          return list.map((t) => (t.id === todoId ? previousTodo : t));
-        }
-        setTodos((prev) => ({ all: restore(prev.all), my: restore(prev.my) }));
-      }
-      showToast(error instanceof Error ? error.message : "Zuweisung konnte nicht gespeichert werden", "error");
-    }
-  }
-
-  async function updateTodoFields(todoId: string, patch: { task?: string; tags?: string[] }) {
-    const previous = [...todos.all, ...todos.my].find((t) => t.id === todoId) ?? null;
-    function applyUpdate(list: TodoListItem[]) {
-      return list.map((t) => (t.id === todoId ? { ...t, ...patch } : t));
-    }
-    setTodos((prev) => ({ all: applyUpdate(prev.all), my: applyUpdate(prev.my) }));
-    try {
-      await browserApiFetch(`/api/protocol-todos/${todoId}`, {
-        method: "PATCH",
-        body: JSON.stringify(patch),
-      });
-    } catch (error) {
-      if (previous) {
-        const previousTodo = previous;
-        function restore(list: TodoListItem[]) {
-          return list.map((t) => (t.id === todoId ? previousTodo : t));
-        }
-        setTodos((prev) => ({ all: restore(prev.all), my: restore(prev.my) }));
-      }
-      showToast(error instanceof Error ? error.message : "Todo konnte nicht gespeichert werden", "error");
-    }
-  }
-
-  async function updateTodoDue(todoId: string, patch: DuePatch) {
-    const previous = [...todos.all, ...todos.my].find((t) => t.id === todoId) ?? null;
-    try {
-      const updated = await browserApiFetch<TodoListItem>(`/api/protocol-todos/${todoId}`, {
-        method: "PATCH",
-        body: JSON.stringify(patch),
-      });
-      function applyUpdate(list: TodoListItem[]) {
-        return list.map((t) => t.id === todoId ? {
-          ...t,
-          due_date: updated?.due_date ?? patch.due_date ?? null,
-          due_event_id: updated?.due_event_id ?? patch.due_event_id ?? null,
-          due_marker: updated?.due_marker ?? patch.due_marker ?? null,
-          resolved_due_date: updated?.resolved_due_date ?? null,
-          resolved_due_label: updated?.resolved_due_label ?? null,
-        } : t);
-      }
-      setTodos((prev) => ({ all: applyUpdate(prev.all), my: applyUpdate(prev.my) }));
-    } catch (error) {
-      if (previous) {
-        const previousTodo = previous;
-        function restore(list: TodoListItem[]) {
-          return list.map((t) => (t.id === todoId ? previousTodo : t));
-        }
-        setTodos((prev) => ({ all: restore(prev.all), my: restore(prev.my) }));
-      }
-      showToast(error instanceof Error ? error.message : "Fälligkeitsdatum konnte nicht gespeichert werden", "error");
     }
   }
 
