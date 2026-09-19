@@ -283,7 +283,7 @@ export function UserManagement({ initialUsers }: Props) {
             </label>
           </div>
 
-          <div className="three-col">
+          <div className="two-col">
             <label className="field-stack">
               <span className="field-label">E-Mail</span>
               <input value={userForm.email} onChange={(event) => setUserForm((current) => ({ ...current, email: event.target.value }))} required />
@@ -292,51 +292,53 @@ export function UserManagement({ initialUsers }: Props) {
               <span className="field-label">{userForm.id ? "Neues Passwort" : "Passwort"}</span>
               <input type="password" autoComplete="new-password" value={userForm.password} onChange={(event) => setUserForm((current) => ({ ...current, password: event.target.value }))} required={!userForm.id} />
             </label>
-            <label className="field-stack">
-              <span className="field-label">Sprache</span>
-              <select value={userForm.preferred_language} onChange={(event) => setUserForm((current) => ({ ...current, preferred_language: event.target.value }))}>
-                <option value="de">Deutsch</option>
-                <option value="en">English</option>
-                <option value="fr">Français</option>
-                <option value="it">Italiano</option>
-              </select>
-            </label>
-            <label className="checkbox-line">
-              <input type="checkbox" checked={userForm.is_active} onChange={(event) => setUserForm((current) => ({ ...current, is_active: event.target.checked }))} />
-              Aktiv
-            </label>
+          </div>
+
+          <div className="field-stack" role="radiogroup" aria-label="Rolle">
+            <span className="field-label">Rolle</span>
+            <div className="role-picker">
+              {ROLE_OPTIONS.map((role) => (
+                <label key={role.code} className="role-picker-option">
+                  <input
+                    type="radio"
+                    name="role_code"
+                    value={role.code}
+                    checked={userForm.role_code === role.code}
+                    onChange={(event) => setUserForm((current) => ({ ...current, role_code: event.target.value }))}
+                  />
+                  {role.label}
+                </label>
+              ))}
+            </div>
           </div>
 
           <div className="two-col">
-            <label className="checkbox-line">
+            <label className="field-radio-option">
+              <input type="checkbox" checked={userForm.is_active} onChange={(event) => setUserForm((current) => ({ ...current, is_active: event.target.checked }))} />
+              Aktiv
+            </label>
+            <label className="field-radio-option">
               <input type="checkbox" checked={userForm.login_enabled} onChange={(event) => setUserForm((current) => ({ ...current, login_enabled: event.target.checked }))} />
               Login aktivieren
             </label>
-            {userForm.is_participant_account ? (
-              <div className="info-note">
-                Dieses Konto wurde automatisch aus einem Teilnehmer erstellt. Fuer den ersten Login bitte Login aktivieren
-                und ein neues Passwort setzen.
-              </div>
-            ) : null}
           </div>
 
-          <label className="field-stack">
-            <span className="field-label">Rolle</span>
-            <select value={userForm.role_code} onChange={(event) => setUserForm((current) => ({ ...current, role_code: event.target.value }))}>
-              {ROLE_OPTIONS.map((role) => (
-                <option key={role.code} value={role.code}>
-                  {role.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          {userForm.is_participant_account ? (
+            <div className="info-note">
+              Dieses Konto wurde automatisch aus einem Teilnehmer erstellt. Fuer den ersten Login bitte Login aktivieren
+              und ein neues Passwort setzen.
+            </div>
+          ) : null}
 
           {formError && (
             <div className="form-error-banner">{formError}</div>
           )}
 
-          <div className="table-actions table-actions-start">
-            <button type="submit" className="button-secondary">
+          <div className="modal-actions">
+            <button type="button" className="button-ghost" onClick={() => setUserModalOpen(false)}>
+              Abbrechen
+            </button>
+            <button type="submit" className="button-primary">
               Speichern
             </button>
           </div>
