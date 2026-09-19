@@ -9143,7 +9143,47 @@ input[type="radio"] {
 .finance-amount-pos { color: var(--success); }
 .finance-amount-neg { color: var(--danger); }
 
-/* Finance form (inhalt des Modal) */
+/* Konto-Dialog */
+.finance-account-modal {
+  width: min(560px, 100%);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-overlay);
+}
+
+.finance-account-modal .modal-header h2 {
+  font-size: var(--text-xl);
+}
+
+.finance-account-modal .modal-header .muted {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.finance-account-modal .finance-form-modal input,
+.finance-account-modal .finance-form-modal textarea {
+  background: var(--panel-solid);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-base);
+}
+
+.finance-account-modal textarea {
+  resize: vertical;
+}
+
+.finance-account-modal .modal-actions {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .finance-account-modal {
+    padding: var(--space-4);
+  }
+}
+
+/* Finance form (Inhalt des Modal) */
 .finance-form-modal {
   display: grid;
   gap: var(--space-4);

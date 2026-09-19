@@ -103,7 +103,7 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
   }
 
   async function saveAccount() {
-    if (!accountDraft.name.trim()) return;
+    if (savingAccount || !accountDraft.name.trim()) return;
     setSavingAccount(true);
     try {
       if (editingAccount) {
@@ -241,11 +241,17 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
         )}
 
         {canWrite && (
-          <Modal open={showAccountForm} title={editingAccount ? "Konto bearbeiten" : "Neues Konto"} onClose={() => setShowAccountForm(false)}>
-            <div className="finance-form-modal">
+          <Modal
+            open={showAccountForm}
+            title={editingAccount ? "Konto bearbeiten" : "Neues Konto"}
+            description="Verwalte Einnahmen und Ausgaben in einem eigenen Konto."
+            className="finance-account-modal"
+            onClose={() => setShowAccountForm(false)}
+          >
+            <form className="grid finance-form-modal" onSubmit={(event) => { event.preventDefault(); void saveAccount(); }}>
               <label className="field-stack">
                 <span className="field-label">Name</span>
-                <input value={accountDraft.name} onChange={(e) => setAccountDraft((d) => ({ ...d, name: e.target.value }))} placeholder="z. B. Vereinskasse" autoFocus />
+                <input value={accountDraft.name} onChange={(e) => setAccountDraft((d) => ({ ...d, name: e.target.value }))} placeholder="z. B. Vereinskasse" required autoFocus />
               </label>
               <label className="field-stack">
                 <span className="field-label">Währungsbezeichnung</span>
@@ -253,15 +259,15 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
               </label>
               <label className="field-stack">
                 <span className="field-label">Beschreibung (optional)</span>
-                <input value={accountDraft.description} onChange={(e) => setAccountDraft((d) => ({ ...d, description: e.target.value }))} placeholder="Beschreibung…" />
+                <textarea rows={3} value={accountDraft.description} onChange={(e) => setAccountDraft((d) => ({ ...d, description: e.target.value }))} placeholder="Beschreibung…" />
               </label>
-              <div className="finance-form-actions">
-                <button type="button" className="button-secondary" onClick={() => setShowAccountForm(false)}>Abbrechen</button>
-                <button type="button" className="button-secondary" onClick={() => void saveAccount()} disabled={savingAccount || !accountDraft.name.trim()}>
+              <div className="modal-actions">
+                <button type="button" className="button-ghost" onClick={() => setShowAccountForm(false)}>Abbrechen</button>
+                <button type="submit" className="button-primary" disabled={savingAccount || !accountDraft.name.trim()}>
                   {savingAccount ? "Speichern…" : "Speichern"}
                 </button>
               </div>
-            </div>
+            </form>
           </Modal>
         )}
       </aside>

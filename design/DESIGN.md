@@ -33,6 +33,7 @@ Quelle ist `design/tokens.css`. Nach jeder Änderung: `./scripts/sync-design-tok
 | Fokus | `--focus-ring` (Felder) · `--focus-ring-color` (Outline) | Abschnitt 8 |
 | Bewegung | `--dur-fast` 120 · `-base` 160 · `-slow` 240 ms, `--ease-out` | Kein `0.15s` |
 | Ebenen | `--z-dropdown` < `--z-sticky` < `--z-flyout` < `--z-popover` < `--z-overlay` < `--z-modal` < `--z-confirm` < `--z-portal` < `--z-fullscreen` < `--z-menu` < `--z-toast` | Lokales Stapeln (0–5) darf literal bleiben, alles darüber ist ein Token |
+| Tabellenbreite | `--table-max-width` 1200 px | Gemeinsame Maximalbreite für `.table-shell`, in beiden Themes gleich |
 | Breakpoints | `max-width: 640px` (Smartphone) · `900px`/`901px` (Tablet/Desktop) | Keine weiteren Werte. Media Queries können keine Variablen, daher hier festgelegt |
 
 **Neues Token** nur, wenn keine Stufe passt und der Wert an mehreren Stellen gebraucht wird: in `design/tokens.css` (Light **und** Dark), Sync ausführen, hier dokumentieren.
