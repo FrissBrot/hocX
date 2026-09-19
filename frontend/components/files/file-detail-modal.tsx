@@ -40,6 +40,7 @@ export function FileDetailModal({
   const [loadingMetadata, setLoadingMetadata] = useState(true);
   const [tagsValue, setTagsValue] = useState(item.tags.join(","));
   const [saving, setSaving] = useState(false);
+  const [previewFailed, setPreviewFailed] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fileUrl = `${browserApiBaseUrl}${item.content_url}`;
@@ -47,6 +48,7 @@ export function FileDetailModal({
   useEffect(() => {
     setTagsValue(item.tags.join(","));
     setMetadata(null);
+    setPreviewFailed(false);
     setLoadingMetadata(true);
     browserApiFetch<StoredFileMetadata>(item.metadata_url)
       .then((data) => setMetadata(data))
@@ -80,84 +82,99 @@ export function FileDetailModal({
   }
 
   const dimensions = metadata?.width && metadata?.height ? `${metadata.width} × ${metadata.height} px` : null;
+  const extension = fileExtension(item.original_name);
+  const isImage = Boolean(item.mime_type?.startsWith("image/")) && !previewFailed;
 
   return (
-    <Modal open title={item.original_name} onClose={onClose} size="wide">
+    <Modal open title={item.original_name} onClose={onClose} size="wide" className="file-detail-modal">
       <div className="file-detail">
         <div className="file-detail-preview">
-          <a href={fileUrl} target="_blank" rel="noreferrer" className="file-detail-preview-icon">
-            <FileTypeIcon />
-            <span>Original öffnen</span>
+          <a href={fileUrl} target="_blank" rel="noreferrer" className={isImage ? "file-detail-preview-link" : "file-detail-preview-icon"}>
+            {isImage ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={fileUrl} alt={item.original_name} className="file-detail-preview-img" onError={() => setPreviewFailed(true)} />
+            ) : (
+              <>
+                <span className="file-detail-preview-glyph">
+                  <FileTypeIcon />
+                  {extension ? <span className="file-detail-preview-ext">{extension}</span> : null}
+                </span>
+                <span className="file-detail-preview-cta">Original öffnen</span>
+              </>
+            )}
           </a>
         </div>
 
         <div className="file-detail-meta">
-          <dl className="file-detail-meta-list">
-            <div>
-              <dt>Quelle</dt>
-              <dd><Badge variant={SOURCE_BADGE_VARIANT[item.source]}>{SOURCE_LABEL[item.source]}</Badge></dd>
-            </div>
-            {item.ref_label && (
+          <section className="file-detail-section">
+            <h3 className="file-detail-section-title">Details</h3>
+            <dl className="file-detail-meta-list">
               <div>
-                <dt>Bezug</dt>
-                <dd>
-                  {item.ref_href ? (
-                    <button type="button" className="file-card-ref" onClick={() => onNavigate(item.ref_href!)}>
-                      {item.ref_label}
-                    </button>
-                  ) : (
-                    item.ref_label
-                  )}
-                  {item.ref_date ? ` · ${formatDate(item.ref_date)}` : ""}
-                </dd>
+                <dt>Quelle</dt>
+                <dd><Badge variant={SOURCE_BADGE_VARIANT[item.source]}>{SOURCE_LABEL[item.source]}</Badge></dd>
               </div>
-            )}
-            <div>
-              <dt>Hochgeladen</dt>
-              <dd>{formatDateTime(item.created_at)}</dd>
-            </div>
-            {metadata?.uploaded_by_name && (
+              {item.ref_label && (
+                <div>
+                  <dt>Bezug</dt>
+                  <dd className="file-detail-ref">
+                    {item.ref_href ? (
+                      <button type="button" className="file-card-ref" onClick={() => onNavigate(item.ref_href!)}>
+                        {item.ref_label}
+                      </button>
+                    ) : (
+                      item.ref_label
+                    )}
+                    {item.ref_date ? <span className="muted"> · {formatDate(item.ref_date)}</span> : null}
+                  </dd>
+                </div>
+              )}
               <div>
-                <dt>Hochgeladen von</dt>
-                <dd>{metadata.uploaded_by_name}</dd>
+                <dt>Hochgeladen</dt>
+                <dd>{formatDateTime(item.created_at)}</dd>
               </div>
-            )}
-            <div>
-              <dt>Dateityp</dt>
-              <dd>{item.mime_type ?? "Unbekannt"}</dd>
-            </div>
-            {item.file_size_bytes ? (
+              {metadata?.uploaded_by_name && (
+                <div>
+                  <dt>Hochgeladen von</dt>
+                  <dd>{metadata.uploaded_by_name}</dd>
+                </div>
+              )}
               <div>
-                <dt>Grösse</dt>
-                <dd>{formatFileSize(item.file_size_bytes)}</dd>
+                <dt>Dateityp</dt>
+                <dd>{item.mime_type ?? "Unbekannt"}</dd>
               </div>
-            ) : null}
-            {loadingMetadata ? (
-              <div>
-                <dt>Bildmasse</dt>
-                <dd className="muted">Lädt…</dd>
-              </div>
-            ) : dimensions ? (
-              <div>
-                <dt>Bildmasse</dt>
-                <dd>{dimensions}</dd>
-              </div>
-            ) : null}
-          </dl>
+              {item.file_size_bytes ? (
+                <div>
+                  <dt>Grösse</dt>
+                  <dd>{formatFileSize(item.file_size_bytes)}</dd>
+                </div>
+              ) : null}
+              {loadingMetadata ? (
+                <div>
+                  <dt>Bildmasse</dt>
+                  <dd className="muted">Lädt…</dd>
+                </div>
+              ) : dimensions ? (
+                <div>
+                  <dt>Bildmasse</dt>
+                  <dd>{dimensions}</dd>
+                </div>
+              ) : null}
+            </dl>
+          </section>
 
-          <div className="file-detail-origin">
-            <span className="file-detail-origin-label">Herkunft</span>
+          <section className="file-detail-section">
+            <h3 className="file-detail-section-title">Herkunft</h3>
             <span className="tag-chip tag-chip-sm tag-chip-origin">{item.origin_tag}</span>
-          </div>
+          </section>
 
-          <div className="file-detail-tags">
-            <span className="file-detail-tags-label">
-              Tags {saving ? <span className="muted">(speichert…)</span> : null}
-            </span>
+          <section className="file-detail-section file-detail-tags">
+            <h3 className="file-detail-section-title">
+              Tags {saving ? <span className="file-detail-saving">Speichert…</span> : null}
+            </h3>
             <TagInput value={tagsValue} onChange={handleTagsChange} suggestions={tagSuggestions} placeholder="Tag hinzufügen…" />
-          </div>
+          </section>
 
-          <a href={fileUrl} target="_blank" rel="noreferrer" className="button-inline button-ghost">
+          <a href={fileUrl} target="_blank" rel="noreferrer" className="button-inline button-ghost file-detail-open">
             Original in neuem Tab öffnen
           </a>
         </div>
@@ -166,9 +183,15 @@ export function FileDetailModal({
   );
 }
 
+function fileExtension(name: string): string | null {
+  const dot = name.lastIndexOf(".");
+  if (dot < 0 || dot === name.length - 1) return null;
+  return name.slice(dot + 1, dot + 6).toUpperCase();
+}
+
 function FileTypeIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round">
+    <svg viewBox="0 0 24 24" width="34" height="34" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round">
       <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z" />
       <path d="M14 3v5h5" />
     </svg>

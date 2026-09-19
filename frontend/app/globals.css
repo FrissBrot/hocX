@@ -6413,101 +6413,263 @@ input[type="radio"] {
   .gallery-upload-file-heading { flex-wrap: wrap; gap: 2px 8px; }
 }
 
-/* File-detail modal (components/files/files-view.tsx FileDetailModal) */
+/* File-detail modal (components/files/file-detail-modal.tsx) */
+.file-detail-modal {
+  padding: 28px 28px 24px;
+  border-radius: 24px;
+  background: var(--panel-solid);
+}
+
+.file-detail-modal .modal-header {
+  align-items: center;
+  margin-bottom: 22px;
+}
+
+.file-detail-modal .modal-header > div:first-child {
+  min-width: 0;
+}
+
+.file-detail-modal .modal-header h2 {
+  overflow: hidden;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-detail-modal .modal-close {
+  border-radius: 10px;
+}
+
+.file-detail-modal .modal-content {
+  padding-right: 0;
+}
+
 .file-detail {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
 }
 
 @media (max-width: 720px) {
+  .file-detail-modal {
+    padding: 20px 18px 18px;
+  }
+
   .file-detail {
     grid-template-columns: 1fr;
+    gap: 20px;
   }
 }
 
 .file-detail-preview {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  min-height: 300px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background:
+    radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--accent) 14%, transparent) 0%, transparent 60%),
+    var(--accent-soft);
+  overflow: hidden;
+}
+
+.file-detail-preview-link {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 220px;
-  border-radius: var(--radius-lg);
-  background: var(--accent-soft);
-  overflow: hidden;
+  width: 100%;
+  padding: 12px;
 }
 
 .file-detail-preview-img {
   display: block;
   width: 100%;
   max-height: 60vh;
+  border-radius: var(--radius-md);
   object-fit: contain;
   cursor: zoom-in;
 }
 
 .file-detail-preview-icon {
   display: flex;
+  flex: 1;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  padding: 48px;
-  color: var(--muted);
+  gap: 18px;
+  padding: 40px 24px;
+  color: var(--accent-strong);
   text-decoration: none;
+  transition: background 0.15s;
+}
+
+.file-detail-preview-icon:hover {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+.file-detail-preview-glyph {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  border-radius: 24px;
+  background: var(--panel-solid);
+  color: var(--accent);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 8px 24px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.file-detail-preview-ext {
+  position: absolute;
+  right: -8px;
+  bottom: -8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.file-detail-preview-cta {
+  padding: 7px 16px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  background: var(--panel-solid);
+  color: var(--accent-strong);
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
 .file-detail-meta {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
   min-width: 0;
+}
+
+.file-detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.file-detail-section-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.file-detail-saving {
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .file-detail-meta-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
   margin: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel-solid);
+  overflow: hidden;
 }
 
 .file-detail-meta-list > div {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  min-height: 42px;
+}
+
+.file-detail-meta-list > div + div {
+  border-top: 1px solid var(--border);
 }
 
 .file-detail-meta-list dt {
-  flex: 0 0 120px;
-  font-size: 0.78rem;
-  font-weight: 600;
   color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 500;
 }
 
 .file-detail-meta-list dd {
   margin: 0;
-  overflow: hidden;
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 0.88rem;
-  text-overflow: ellipsis;
+  font-weight: 500;
 }
 
-.file-detail-origin,
-.file-detail-tags {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.file-detail-origin-label,
-.file-detail-tags-label {
-  font-size: 0.78rem;
+.file-detail-ref .file-card-ref {
+  display: inline;
+  overflow: visible;
+  font-size: inherit;
   font-weight: 600;
-  color: var(--muted);
+  white-space: normal;
 }
 
 .tag-chip-origin {
   align-self: flex-start;
-  background: var(--surface-2);
+  max-width: 100%;
+  overflow: hidden;
+  padding: 4px 12px;
+  background: var(--bg);
   border-color: var(--border);
   color: var(--text);
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+}
+
+/* Suggestions open inline (instead of floating) so the modal's scroll area can't clip them. */
+.file-detail-tags .tag-input-field {
+  min-height: 44px;
+  border-radius: var(--radius-md);
+  background: var(--bg);
+}
+
+.file-detail-tags .tag-input-field:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.file-detail-tags .tag-input-text {
+  background: transparent !important;
+}
+
+.file-detail-tags .tag-input-dropdown {
+  position: static;
+  max-height: 180px;
+  margin-top: 6px;
+  background: var(--panel-solid);
+  box-shadow: none;
+}
+
+.file-detail-open {
+  width: 100%;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--panel-solid);
+  font-weight: 600;
+  text-decoration: none;
 }
 
 .quality-info-wrapper {
