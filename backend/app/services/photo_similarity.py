@@ -55,6 +55,10 @@ def _quality_rank(image: GroupableImage) -> float:
     return score if score is not None else float("-inf")
 
 
+def _hash_as_int(perceptual_hash: imagehash.ImageHash) -> int:
+    return int("".join("1" if bit else "0" for bit in perceptual_hash.hash.flatten()), 2)
+
+
 def group_similar_images(images: list[GroupableImage]) -> list[list[GroupableImage]]:
     """Union-find clustering by perceptual-hash Hamming distance. Images without a
     perceptual_hash (a decode failure at upload time - see _compute_perceptual_hash) never
@@ -82,10 +86,16 @@ def group_similar_images(images: list[GroupableImage]) -> list[list[GroupableIma
     # uses (audit fix, 2026-09-17: this used to parse the hex string as a raw int and XOR
     # it by hand instead - a second, independent hash-distance implementation that would
     # break differently than upload_pipeline's if the stored hash format ever changed).
-    hashed = [(image, imagehash.hex_to_hash(image.perceptual_hash)) for image in images if image.perceptual_hash]
-    for i, (image_a, hash_a) in enumerate(hashed):
-        for image_b, hash_b in hashed[i + 1 :]:
-            if (hash_a - hash_b) <= SIMILARITY_HAMMING_THRESHOLD:
+    #
+    # The parse still goes through imagehash, but each hash is converted to a plain int
+    # once, so the O(n^2) loop below is an int XOR + popcount (same bit-for-bit Hamming
+    # distance as ImageHash.__sub__) instead of a numpy array comparison per pair - that
+    # was ~4.5s for MAX_GROUPING_IMAGES on a CI runner, i.e. 10x+ slower than this module's
+    # docstring promises.
+    hashed = [(image, _hash_as_int(imagehash.hex_to_hash(image.perceptual_hash))) for image in images if image.perceptual_hash]
+    for i, (image_a, bits_a) in enumerate(hashed):
+        for image_b, bits_b in hashed[i + 1 :]:
+            if (bits_a ^ bits_b).bit_count() <= SIMILARITY_HAMMING_THRESHOLD:
                 union(image_a.id, image_b.id)
 
     groups: dict[int, list[GroupableImage]] = {}

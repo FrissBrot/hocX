@@ -323,6 +323,7 @@ def _compute_perceptual_hash(content: bytes, mime: str) -> str | None:
 # dunkler Himmel in der Bildecke darf nicht als Rand weggeschnitten werden.
 _BORDER_COLOR_TOLERANCE = 24
 _BORDER_MIN_CONTENT_FRACTION = 0.4
+_BORDER_EDGE_MIN_CONTENT_FRACTION = 0.5
 
 
 def _crop_uniform_border(image: Image.Image) -> Image.Image:
@@ -341,12 +342,31 @@ def _crop_uniform_border(image: Image.Image) -> Image.Image:
     if not (max(background) <= _BORDER_COLOR_TOLERANCE or min(background) >= 255 - _BORDER_COLOR_TOLERANCE):
         return rgb
     diff = ImageChops.difference(rgb, Image.new("RGB", rgb.size, background)).convert("L")
-    box = diff.point(lambda value: 255 if value > _BORDER_COLOR_TOLERANCE else 0).getbbox()
+    mask = diff.point(lambda value: 255 if value > _BORDER_COLOR_TOLERANCE else 0)
+    box = mask.getbbox()
     if box is None:
         return rgb
     if (box[2] - box[0]) * (box[3] - box[1]) < _BORDER_MIN_CONTENT_FRACTION * width * height:
         return rgb
+    if not _box_edges_are_content(mask, box):
+        return rgb
     return rgb.crop(box)
+
+
+def _box_edges_are_content(mask: Image.Image, box: tuple[int, int, int, int]) -> bool:
+    """Ein echter Rahmen umschliesst ein Bild, dessen vier Kanten (fast) komplett Inhalt sind.
+    Ein Objekt auf dunklem/hellem Hintergrund (z. B. der Kreis eines Testbilds oder ein
+    Motiv auf schwarzem Tuch) beruehrt seine Bounding-Box dagegen nur punktuell - dort waere
+    der Zuschnitt vom Zufall abhaengig (eine unscharfe Kopie wuerde ploetzlich zugeschnitten,
+    das scharfe Original nicht) und die beiden Hashes laegen weit auseinander."""
+    left, top, right, bottom = box
+    edges = ((left, top, right, top + 1), (left, bottom - 1, right, bottom), (left, top, left + 1, bottom), (right - 1, top, right, bottom))
+    for edge in edges:
+        strip = mask.crop(edge)
+        length = strip.width * strip.height
+        if strip.histogram()[255] < _BORDER_EDGE_MIN_CONTENT_FRACTION * length:
+            return False
+    return True
 
 
 def perceptual_hash_of_image(image: Image.Image) -> imagehash.ImageHash:
