@@ -125,6 +125,22 @@ describe("PhotoSimilarSeries", () => {
     );
   });
 
+  it("reports the actually deleted ids to the gallery via onDeleted", async () => {
+    const group = makeGroup();
+    browserApiFetchMock.mockImplementation((url: string) => {
+      if (url.startsWith("/api/files/similarity-groups")) return Promise.resolve([group]);
+      if (url === "/api/files/bulk-delete") return Promise.resolve({ deleted_ids: ["other-1"], errors: ["other-2 fehlgeschlagen"] });
+      return Promise.resolve(null);
+    });
+    confirmMock.mockResolvedValue(true);
+    const onDeleted = vi.fn();
+    render(<PhotoSimilarSeries search="" tagFilter={[]} onDeleted={onDeleted} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Nur beste behalten" }));
+
+    await waitFor(() => expect(onDeleted).toHaveBeenCalledWith(["other-1"]));
+  });
+
   it("ignores a stale similarity-groups response that resolves after a newer one (audit fix, 2026-09-17)", async () => {
     // Regression test: unlike its sibling fetch effects elsewhere in the app, this one had
     // no requestId/cancelled guard, so a slow response to an earlier search term could

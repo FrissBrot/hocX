@@ -8,7 +8,15 @@ import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { formatTime } from "@/lib/utils/format";
 import { FileBulkDeleteResult, SimilarityGroup } from "@/types/api";
 
-export function PhotoSimilarSeries({ search, tagFilter }: { search: string; tagFilter: string[] }) {
+export function PhotoSimilarSeries({
+  search,
+  tagFilter,
+  onDeleted,
+}: {
+  search: string;
+  tagFilter: string[];
+  onDeleted?: (deletedIds: string[]) => void;
+}) {
   const confirm = useConfirm();
   const showToast = useToast();
   const [groups, setGroups] = useState<SimilarityGroup[] | null>(null);
@@ -57,6 +65,7 @@ export function PhotoSimilarSeries({ search, tagFilter }: { search: string; tagF
       });
       setDismissed((current) => new Set(current).add(group.best_id));
       const deletedCount = result?.deleted_ids.length ?? 0;
+      if (result && deletedCount > 0) onDeleted?.(result.deleted_ids);
       if (result?.errors.length) {
         showToast(result.errors.join(" · "), deletedCount > 0 ? "info" : "error");
       } else {

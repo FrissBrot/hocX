@@ -207,6 +207,14 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
     };
   }, [tab]);
 
+  // Photos deleted from another tab of this page (Ähnliche): the gallery list stays mounted
+  // underneath, so drop them right away instead of showing them until the next reload.
+  function handleDeletedElsewhere(deletedIds: string[]) {
+    const gone = new Set(deletedIds);
+    setItems((current) => (current.some((item) => gone.has(item.id)) ? current.filter((item) => !gone.has(item.id)) : current));
+    setSelectedIds((current) => (Array.from(current).some((id) => gone.has(id)) ? new Set(Array.from(current).filter((id) => !gone.has(id))) : current));
+  }
+
   function toggleSelect(id: string) {
     setSelectedIds((current) => {
       const next = new Set(current);
@@ -354,7 +362,7 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
       {tab === "albums" && !embedded ? (
         <PhotoAlbums />
       ) : tab === "similar" && !embedded ? (
-        <PhotoSimilarSeries search={search} tagFilter={tagFilter} />
+        <PhotoSimilarSeries search={search} tagFilter={tagFilter} onDeleted={handleDeletedElsewhere} />
       ) : (
         <>
           {!embedded && <PhotoAnalysisProgress onUpdate={setAnalysisProgress} />}
