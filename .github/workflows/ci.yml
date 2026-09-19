@@ -15,9 +15,10 @@ jobs:
 
       - name: Test secure env loader and shell syntax
         run: |
-          bash -n scripts/lib/env.sh scripts/lib/cosign.sh scripts/lib/github.sh scripts/deploy.sh scripts/dev.sh scripts/e2e.sh scripts/test.sh scripts/provision_deploy_user.sh scripts/update_deploy_code.sh scripts/verify_release.sh scripts/record_tested_candidate.sh scripts/backup_db.sh scripts/tests/*.sh
+          bash -n scripts/lib/env.sh scripts/lib/cosign.sh scripts/lib/github.sh scripts/deploy.sh scripts/dev.sh scripts/e2e.sh scripts/test.sh scripts/provision_deploy_user.sh scripts/update_deploy_code.sh scripts/verify_release.sh scripts/record_tested_candidate.sh scripts/backup_db.sh scripts/sync-design-tokens.sh scripts/tests/*.sh
           bash scripts/tests/test_env.sh
           bash scripts/tests/test_release_config.sh
+          bash scripts/sync-design-tokens.sh --check
 
   migration-check:
     runs-on: ubuntu-latest

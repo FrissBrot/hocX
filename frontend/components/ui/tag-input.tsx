@@ -180,7 +180,7 @@ export function TagInput({
                 />
               )}
               {renameError && (
-                <div style={{ color: "var(--danger, #EF4444)", fontSize: 12, padding: "2px 4px" }}>{renameError}</div>
+                <div style={{ color: "var(--danger)", fontSize: "var(--text-xs)", padding: "2px 4px" }}>{renameError}</div>
               )}
               {onTagColorChange && (
                 <div className="tag-color-swatches">

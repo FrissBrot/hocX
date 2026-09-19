@@ -23,15 +23,15 @@ export default async function AdminDashboardPage() {
         <div className="three-col">
           <div className="card">
             <div className="eyebrow">Mandanten</div>
-            <strong style={{ fontSize: "2rem" }}>{tenantCount}</strong>
+            <strong style={{ fontSize: "var(--text-3xl)" }}>{tenantCount}</strong>
           </div>
           <div className="card">
             <div className="eyebrow">Benutzer gesamt</div>
-            <strong style={{ fontSize: "2rem" }}>{userCount}</strong>
+            <strong style={{ fontSize: "var(--text-3xl)" }}>{userCount}</strong>
           </div>
           <div className="card">
             <div className="eyebrow">Mit aktivem Login</div>
-            <strong style={{ fontSize: "2rem" }}>{activeLoginCount}</strong>
+            <strong style={{ fontSize: "var(--text-3xl)" }}>{activeLoginCount}</strong>
           </div>
         </div>
       </section>

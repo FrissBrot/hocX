@@ -479,11 +479,11 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
           <p className="muted">Alle offenen und erledigten Todos dieses Mandanten.</p>
         </div>
         <div className="table-toolbar-actions">
-          <button type="button" className="button-inline button-ghost" onClick={() => setExportModalOpen(true)}>
+          <button type="button" className="button-secondary button-ghost" onClick={() => setExportModalOpen(true)}>
             Export
           </button>
           {canEdit && (
-            <button type="button" className="button-inline" onClick={() => setShowCreate(true)}>
+            <button type="button" className="button-secondary" onClick={() => setShowCreate(true)}>
               + Todo
             </button>
           )}
@@ -602,7 +602,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
           {isLoadingMore ? (
             <span className="muted">Lädt weitere Todos…</span>
           ) : (
-            <button type="button" className="button-inline button-ghost" onClick={() => void loadMore()}>
+            <button type="button" className="button-secondary button-ghost" onClick={() => void loadMore()}>
               Mehr laden ({activeTodos.length} geladen)
             </button>
           )}
@@ -617,7 +617,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
       >
         <form
           className="grid"
-          style={{ gap: 14, minWidth: 320 }}
+          style={{ gap: "var(--space-4)", minWidth: 320 }}
           onSubmit={(event) => {
             event.preventDefault();
             void createTodo();
@@ -675,7 +675,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
         onClose={() => setEditTodoId(null)}
       >
         {editingTodo && (
-          <div className="grid" style={{ gap: 14, minWidth: 320 }}>
+          <div className="grid" style={{ gap: "var(--space-4)", minWidth: 320 }}>
             {(() => {
               const isDone = editingTodo.todo_status_code === "done" || editingTodo.todo_status_code === "cancelled";
               const isAuto = !!editingTodo.submission_assignment_id;
@@ -689,7 +689,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
                   />
                   <div>
                     <strong>Erledigt</strong>
-                    <div className="muted" style={{ fontSize: "0.82rem" }}>
+                    <div className="muted" style={{ fontSize: "var(--text-sm)" }}>
                       {isAuto
                         ? "Wird automatisch durch die Abgabe geschlossen."
                         : "Markiert die Aufgabe als erledigt."}
@@ -795,12 +795,12 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
         title="Todos exportieren"
         onClose={() => { setExportModalOpen(false); clearExportState(); }}
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: 20, minWidth: 360, maxWidth: 480 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)", minWidth: 360, maxWidth: 480 }}>
 
           {/* Status filter */}
           <div>
             <div className="field-label" style={{ marginBottom: 8 }}>Status</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
               {(["open", "all"] as const).map((f) => (
                 <button
                   key={f}
@@ -818,7 +818,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
           {/* Person filter */}
           <div>
             <div className="field-label" style={{ marginBottom: 8 }}>Person</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
               {(["all", "filter", "group"] as const).map((mode) => (
                 <button
                   key={mode}
@@ -841,25 +841,12 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
                   onChange={(e) => { setParticipantSearch(e.target.value); if (!e.target.value) setExportParticipantId(""); clearExportState(); }}
                 />
                 {participantSuggestions.length > 0 && (
-                  <div style={{
-                    position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 60,
-                    backgroundColor: "var(--panel-solid)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 6,
-                    boxShadow: "0 6px 20px rgba(0,0,0,0.2)",
-                    padding: "4px 0",
-                  }}>
+                  <div className="dropdown-panel dropdown-panel-down" style={{ padding: "4px 0", overflow: "visible" }}>
                     {participantSuggestions.map((p) => (
                       <button
                         key={p.id}
                         type="button"
-                        style={{
-                          display: "block", width: "100%", textAlign: "left",
-                          padding: "6px 12px", background: "none", border: "none",
-                          color: "var(--text)", cursor: "pointer", fontSize: "0.9rem",
-                          minHeight: 0,
-                          fontWeight: exportParticipantId === p.id ? 700 : 400,
-                        }}
+                        className={exportParticipantId === p.id ? "dropdown-option dropdown-option-selected" : "dropdown-option"}
                         onClick={() => {
                           setExportParticipantId(p.id);
                           setParticipantSearch(p.display_name);
@@ -879,7 +866,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
           {/* Date filter */}
           <div>
             <div className="field-label" style={{ marginBottom: 8 }}>Zeitraum</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
               {(["all", "next-hock", "until-event", "custom-date"] as const).map((mode) => (
                 <button
                   key={mode}
@@ -893,7 +880,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
               ))}
             </div>
             {exportDateMode === "next-hock" && (
-              <div className="muted" style={{ marginTop: 8, fontSize: "0.85rem" }}>
+              <div className="muted" style={{ marginTop: 8, fontSize: "var(--text-base)" }}>
                 {nextHockEvent
                   ? `Bis ${nextHockEvent.title ?? "Termin"} (${formatDate(nextHockEvent.event_date)})`
                   : "Kein passender Hock gefunden"}
@@ -924,7 +911,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
           </div>
 
           {/* Action bar */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", marginTop: 4 }}>
             <button
               type="button"
               className="pdf-icon-link pdf-icon-link-success"
@@ -953,11 +940,11 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
                   onClick={() => setTemplateDropdownOpen((v) => !v)}
                   style={{
                     padding: "5px 10px",
-                    borderRadius: 6,
+                    borderRadius: "var(--radius-sm)",
                     border: "1px solid var(--border)",
                     backgroundColor: "transparent",
                     color: "var(--text)",
-                    fontSize: "0.85rem",
+                    fontSize: "var(--text-base)",
                     cursor: "pointer",
                     minHeight: 0,
                     whiteSpace: "nowrap",
@@ -969,27 +956,13 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
                   {landscapeTemplates.find((t) => t.id === exportTemplateId)?.name ?? "Vorlage"} ▾
                 </button>
                 {templateDropdownOpen && (
-                  <div style={{
-                    position: "absolute", right: 0, bottom: "calc(100% + 4px)", zIndex: 70,
-                    backgroundColor: "var(--panel-solid)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 6,
-                    boxShadow: "0 6px 20px rgba(0,0,0,0.2)",
-                    padding: "4px 0",
-                    minWidth: 180,
-                  }}>
+                  <div className="dropdown-panel dropdown-panel-up" style={{ padding: "4px 0", overflow: "visible" }}>
                     {landscapeTemplates.map((t) => (
                       <button
                         key={t.id}
                         type="button"
                         onClick={() => { setExportTemplateId(t.id); setTemplateDropdownOpen(false); clearExportState(); }}
-                        style={{
-                          display: "block", width: "100%", textAlign: "left",
-                          padding: "6px 12px", background: "none", border: "none",
-                          color: "var(--text)", cursor: "pointer", fontSize: "0.9rem",
-                          minHeight: 0,
-                          fontWeight: exportTemplateId === t.id ? 700 : 400,
-                        }}
+                        className={exportTemplateId === t.id ? "dropdown-option dropdown-option-selected" : "dropdown-option"}
                       >
                         {t.name}
                       </button>

@@ -14,7 +14,7 @@ export default function GlobalError({ reset }: { error: Error & { digest?: strin
           <h1>Verbindung unterbrochen</h1>
           <p className="login-subtitle">Der Server ist momentan nicht erreichbar. Bereits bestätigte Daten bleiben erhalten; prüfe nach dem erneuten Verbinden den Speicherstatus offener Änderungen.</p>
         </div>
-        <button type="button" className="button-inline login-submit" onClick={() => reset()}>
+        <button type="button" className="button-secondary login-submit" onClick={() => reset()}>
           Erneut versuchen
         </button>
       </section>

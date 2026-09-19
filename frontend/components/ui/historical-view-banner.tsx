@@ -25,7 +25,7 @@ export function HistoricalViewBanner({ cycleConfigName, cycleYear, isEdited, edi
         </p>
       </div>
       {!editUnlocked && (
-        <button type="button" className="button-ghost button-inline" onClick={onRequestUnlock}>
+        <button type="button" className="button-ghost button-secondary" onClick={onRequestUnlock}>
           Bearbeitung freischalten
         </button>
       )}
@@ -58,10 +58,10 @@ export function ReconstructionBanner({ cycleConfigName, cycleYear, source, isCon
         </p>
       </div>
       <div className="table-toolbar-actions">
-        <button type="button" className="button-ghost button-inline" onClick={onCancel}>
+        <button type="button" className="button-ghost button-secondary" onClick={onCancel}>
           Abbrechen
         </button>
-        <button type="button" className="button-inline" onClick={onConfirm} disabled={isConfirming}>
+        <button type="button" className="button-secondary" onClick={onConfirm} disabled={isConfirming}>
           {isConfirming ? "…" : "Bestätigen"}
         </button>
       </div>
@@ -87,10 +87,10 @@ export function HistoricalEditConfirmModal({ open, onCancel, onConfirm }: Histor
       description="Sie bearbeiten Daten aus einem vergangenen, abgeschlossenen Zyklus. Diese Änderung verändert den historischen Datenstand dauerhaft und wird protokolliert."
     >
       <div className="table-toolbar-actions">
-        <button type="button" className="button-inline button-ghost" onClick={onCancel}>
+        <button type="button" className="button-secondary button-ghost" onClick={onCancel}>
           Abbrechen
         </button>
-        <button type="button" className="button-inline button-danger" onClick={onConfirm}>
+        <button type="button" className="button-secondary button-danger" onClick={onConfirm}>
           Trotzdem bearbeiten
         </button>
       </div>

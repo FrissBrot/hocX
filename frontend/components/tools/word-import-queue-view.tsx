@@ -242,7 +242,7 @@ export function WordImportQueueView({ templates, initialDocuments, initialTempla
             <span className="pill">{selectedIds.length} ausgewählt</span>
             <button
               type="button"
-              className="button-inline button-danger"
+              className="button-secondary button-danger"
               disabled={bulkDeleting}
               onClick={() => void handleBulkDelete()}
             >

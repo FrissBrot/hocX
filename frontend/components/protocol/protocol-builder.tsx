@@ -216,7 +216,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
           <p className="muted">Alle Sitzungsprotokolle dieses Mandanten.</p>
         </div>
         {!readOnly ? (
-          <button type="button" className="button-inline" onClick={() => setShowCreateForm((c) => !c)}>
+          <button type="button" className="button-secondary" onClick={() => setShowCreateForm((c) => !c)}>
             {showCreateForm ? "Abbrechen" : "+ Neues Protokoll"}
           </button>
         ) : null}
@@ -279,7 +279,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
             ) : null}
           </div>
           <div className="table-toolbar-actions">
-            <button type="submit" className="button-inline" disabled={!form.template_id}>
+            <button type="submit" className="button-secondary" disabled={!form.template_id}>
               Erstellen
             </button>
           </div>
@@ -359,7 +359,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
           {isLoadingMore ? (
             <span className="muted">Lädt weitere Protokolle…</span>
           ) : (
-            <button type="button" className="button-inline button-ghost" onClick={() => void loadMore()}>
+            <button type="button" className="button-secondary button-ghost" onClick={() => void loadMore()}>
               Mehr laden ({protocols.length} geladen)
             </button>
           )}

@@ -428,7 +428,7 @@ export function ListManager({
           <h1 className="page-title">Listen</h1>
           <p className="muted">Alle Listen dieses Mandanten.</p>
         </div>
-        <button type="button" className="button-inline" onClick={openCreate}>Neue Liste</button>
+        <button type="button" className="button-secondary" onClick={openCreate}>Neue Liste</button>
       </div>
       <div className="list-manager-layout">
 
@@ -446,7 +446,7 @@ export function ListManager({
           {/* List items — scrollable, fills available height */}
           <div className="list-manager-items">
             {filteredLists.length === 0 ? (
-              <span className="muted" style={{ fontSize: "0.85rem", padding: "6px 4px", display: "block" }}>Keine Listen</span>
+              <span className="muted" style={{ fontSize: "var(--text-base)", padding: "6px 4px", display: "block" }}>Keine Listen</span>
             ) : filteredLists.map((definition) => {
               const isSelected = selectedListId === definition.id;
               const entryCount = (entriesByList[definition.id] ?? []).length;
@@ -542,13 +542,13 @@ export function ListManager({
                     />
                   )}
                   {isLive && landscapeTemplates.length > 0 && (
-                    <button type="button" className="button-inline button-ghost" onClick={() => { setExportListId(selectedListId ?? ""); setExportUrl(null); setExportModalOpen(true); }}>
+                    <button type="button" className="button-secondary button-ghost" onClick={() => { setExportListId(selectedListId ?? ""); setExportUrl(null); setExportModalOpen(true); }}>
                       Export
                     </button>
                   )}
                         {isLive && <>
-                        <button type="button" className="button-inline button-ghost" onClick={() => openEdit(selectedList)}>Bearbeiten</button>
-                        <button type="button" className="button-inline button-ghost" onClick={() => void deleteDefinition(selectedList.id)}>Liste löschen</button>
+                        <button type="button" className="button-secondary button-ghost" onClick={() => openEdit(selectedList)}>Bearbeiten</button>
+                        <button type="button" className="button-secondary button-ghost" onClick={() => void deleteDefinition(selectedList.id)}>Liste löschen</button>
                         </>}
                       </>
                     }
@@ -596,9 +596,9 @@ export function ListManager({
         title="Liste exportieren"
         size="wide"
       >
-        <div style={{ display: "flex", gap: 24, height: "min(640px, calc(100dvh - 200px))", minHeight: 0 }}>
+        <div style={{ display: "flex", gap: "var(--space-5)", height: "min(640px, calc(100dvh - 200px))", minHeight: 0 }}>
           {/* Left: options */}
-          <div style={{ width: 260, flexShrink: 0, display: "flex", flexDirection: "column", gap: 20, overflowY: "auto" }}>
+          <div style={{ width: 260, flexShrink: 0, display: "flex", flexDirection: "column", gap: "var(--space-5)", overflowY: "auto" }}>
 
             {/* List dropdown with search */}
             <div>
@@ -607,7 +607,7 @@ export function ListManager({
                 <button
                   type="button"
                   onClick={() => { setListDropdownOpen((v) => !v); setListDropdownSearch(""); }}
-                  style={{ width: "100%", textAlign: "left", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", backgroundColor: "var(--surface)", color: "var(--text)", fontSize: "0.9rem", cursor: "pointer", minHeight: 0, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}
+                  className="dropdown-trigger"
                 >
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {exportListDef?.name ?? "Liste wählen…"}
@@ -615,26 +615,26 @@ export function ListManager({
                   <span style={{ flexShrink: 0, opacity: 0.5 }}>▾</span>
                 </button>
                 {listDropdownOpen && (
-                  <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 70, backgroundColor: "var(--panel-solid)", border: "1px solid var(--border)", borderRadius: 6, boxShadow: "0 6px 20px rgba(0,0,0,0.2)", overflow: "hidden" }}>
-                    <div style={{ padding: "6px 8px", borderBottom: "1px solid var(--border)" }}>
+                  <div className="dropdown-panel dropdown-panel-down">
+                    <div className="dropdown-search">
                       <input
                         autoFocus
                         type="text"
                         placeholder="Suchen…"
                         value={listDropdownSearch}
                         onChange={(e) => setListDropdownSearch(e.target.value)}
-                        style={{ width: "100%", boxSizing: "border-box", padding: "4px 8px", borderRadius: 4, border: "1px solid var(--border)", backgroundColor: "var(--surface)", color: "var(--text)", fontSize: "0.88rem", minHeight: 0, outline: "none" }}
+                        className="dropdown-search-input"
                       />
                     </div>
-                    <div style={{ maxHeight: 220, overflowY: "auto", padding: "4px 0" }}>
+                    <div className="dropdown-panel-scroll">
                       {listDropdownFiltered.length === 0 ? (
-                        <div className="muted" style={{ padding: "8px 12px", fontSize: "0.88rem" }}>Keine Listen gefunden</div>
+                        <div className="muted" style={{ padding: "8px 12px", fontSize: "var(--text-base)" }}>Keine Listen gefunden</div>
                       ) : listDropdownFiltered.map((l) => (
                         <button
                           key={l.id}
                           type="button"
                           onClick={() => { setExportListId(l.id); setExportFilterColumn(""); setExportFilterParticipantId(""); setExportFilterEventId(""); setExportFilterText(""); setExportGroupBy(""); setExportSortBy(""); clearExportUrl(); setListDropdownOpen(false); setListDropdownSearch(""); }}
-                          style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 12px", background: "none", border: "none", color: "var(--text)", cursor: "pointer", fontSize: "0.9rem", minHeight: 0, fontWeight: exportListId === l.id ? 700 : 400 }}
+                          className={exportListId === l.id ? "dropdown-option dropdown-option-selected" : "dropdown-option"}
                         >
                           {l.name}
                         </button>
@@ -649,7 +649,7 @@ export function ListManager({
             {exportListDef && (
               <div>
                 <div className="field-label" style={{ marginBottom: 8 }}>Gruppieren nach</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
                   {(["", "column_one", "column_two"] as const).map((col) => (
                     <button
                       key={col}
@@ -669,7 +669,7 @@ export function ListManager({
             {exportListDef && (
               <div>
                 <div className="field-label" style={{ marginBottom: 8 }}>Filtern nach Spalte</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
                   {(["", "column_one", "column_two"] as const).map((col) => (
                     <button
                       key={col}
@@ -727,7 +727,7 @@ export function ListManager({
             )}
 
             {/* Action bar pinned to bottom */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: "auto", paddingTop: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", marginTop: "auto", paddingTop: 8 }}>
               <button
                 type="button"
                 className="pdf-icon-link pdf-icon-link-success"
@@ -739,8 +739,8 @@ export function ListManager({
               </button>
               <button
                 type="button"
-                className="pdf-icon-link"
-                style={{ minWidth: 56, textAlign: "center", backgroundColor: "#a78bfa", color: "#fff", opacity: 0.5, cursor: "not-allowed" }}
+                className="pdf-icon-link pdf-icon-link-soon"
+                style={{ minWidth: 56, textAlign: "center" }}
                 disabled
               >
                 MD
@@ -751,18 +751,18 @@ export function ListManager({
                   <button
                     type="button"
                     onClick={() => setTemplateDropdownOpen((v) => !v)}
-                    style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid var(--border)", backgroundColor: "transparent", color: "var(--text)", fontSize: "0.85rem", cursor: "pointer", minHeight: 0, whiteSpace: "nowrap", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis" }}
+                    style={{ padding: "5px 10px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", backgroundColor: "transparent", color: "var(--text)", fontSize: "var(--text-base)", cursor: "pointer", minHeight: 0, whiteSpace: "nowrap", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis" }}
                   >
                     {landscapeTemplates.find((t) => t.id === exportTemplateId)?.name ?? "Vorlage"} ▾
                   </button>
                   {templateDropdownOpen && (
-                    <div style={{ position: "absolute", right: 0, bottom: "calc(100% + 4px)", zIndex: 70, backgroundColor: "var(--panel-solid)", border: "1px solid var(--border)", borderRadius: 6, boxShadow: "0 6px 20px rgba(0,0,0,0.2)", padding: "4px 0", minWidth: 160 }}>
+                    <div className="dropdown-panel dropdown-panel-up" style={{ padding: "4px 0", overflow: "visible", minWidth: 160 }}>
                       {landscapeTemplates.map((t) => (
                         <button
                           key={t.id}
                           type="button"
                           onClick={() => { setExportTemplateId(t.id); setTemplateDropdownOpen(false); clearExportUrl(); }}
-                          style={{ display: "block", width: "100%", textAlign: "left", padding: "6px 12px", background: "none", border: "none", color: "var(--text)", cursor: "pointer", fontSize: "0.9rem", minHeight: 0, fontWeight: exportTemplateId === t.id ? 700 : 400 }}
+                          className={exportTemplateId === t.id ? "dropdown-option dropdown-option-selected" : "dropdown-option"}
                         >
                           {t.name}
                         </button>
@@ -893,7 +893,7 @@ export function ListManager({
             </div>
           </div>
           <div className="table-toolbar-actions">
-            <button type="submit" className="button-inline">
+            <button type="submit" className="button-secondary">
               {editingListId ? "Liste speichern" : "Liste erstellen"}
             </button>
           </div>

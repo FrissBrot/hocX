@@ -72,7 +72,7 @@ export function EventDetailForm({
           id: "overview",
           label: "Übersicht",
           content: (
-            <div className="grid" style={{ gap: 14 }}>
+            <div className="grid" style={{ gap: "var(--space-4)" }}>
               <div className="two-col">
                 <label className="field-stack">
                   <span className="field-label">Datum</span>
@@ -119,7 +119,7 @@ export function EventDetailForm({
           id: "participants",
           label: "Teilnehmer & Status",
           content: (
-            <div className="grid" style={{ gap: 14 }}>
+            <div className="grid" style={{ gap: "var(--space-4)" }}>
               <label className="field-radio-option">
                 <input
                   type="checkbox"
@@ -128,7 +128,7 @@ export function EventDetailForm({
                 />
                 <div>
                   <strong>Termin abgesagt</strong>
-                  <div className="muted" style={{ fontSize: "0.82rem" }}>
+                  <div className="muted" style={{ fontSize: "var(--text-sm)" }}>
                     Markiert den Termin als abgesagt, ohne ihn zu löschen.
                   </div>
                 </div>
@@ -145,16 +145,16 @@ export function EventDetailForm({
               </label>
               <div className="field-stack">
                 <span className="field-label">Personen</span>
-                <div className="two-col" style={{ rowGap: 8 }}>
+                <div className="two-col" style={{ rowGap: "var(--space-2)" }}>
                   {ROLE_FIELDS.map(({ field, label }) => (
-                    <div key={field} className="field-stack" style={{ gap: 4 }}>
-                      <span className="muted" style={{ fontSize: "0.78rem" }}>
+                    <div key={field} className="field-stack" style={{ gap: "var(--space-1)" }}>
+                      <span className="muted" style={{ fontSize: "var(--text-xs)" }}>
                         {label}
                       </span>
                       <button
                         type="button"
                         className="button-ghost structured-list-picker"
-                        style={{ textAlign: "left", minHeight: 36, padding: "6px 10px", fontSize: "0.85rem" }}
+                        style={{ textAlign: "left", minHeight: 36, padding: "6px 10px", fontSize: "var(--text-base)" }}
                         onClick={() => {
                           setActiveRoleField(field);
                           setRoleSearch("");
@@ -207,7 +207,7 @@ export function EventDetailForm({
           id: "extra",
           label: "Weitere Felder",
           content: (
-            <div className="grid" style={{ gap: 14 }}>
+            <div className="grid" style={{ gap: "var(--space-4)" }}>
               <label className="field-stack">
                 <span className="field-label">Standort</span>
                 <input value={event.location ?? ""} onChange={(e) => void onUpdate({ location: e.target.value || null })} />

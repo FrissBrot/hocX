@@ -73,10 +73,10 @@ export function ProfileModal({
                   </span>
                 </label>
                 <div className="table-actions table-actions-start">
-                  <button type="button" className="button-inline" onClick={onSave}>
+                  <button type="button" className="button-secondary" onClick={onSave}>
                     Profil speichern
                   </button>
-                  <button type="button" className="button-inline button-danger" onClick={onLogout}>
+                  <button type="button" className="button-secondary button-danger" onClick={onLogout}>
                     Logout
                   </button>
                 </div>

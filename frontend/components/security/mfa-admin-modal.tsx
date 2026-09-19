@@ -104,7 +104,7 @@ export function MfaAdminModal({ open, onClose, title, loadPath, deletePathBase }
               </div>
               <button
                 type="button"
-                className="button-inline button-danger"
+                className="button-secondary button-danger"
                 onClick={() => void deleteFactor(factor.id, factor.label)}
               >
                 Löschen

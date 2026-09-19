@@ -1172,7 +1172,7 @@ export function WordImportWizard({
             {entry.raw_title} ({entry.raw_date ? formatDateRange(entry.raw_date, entry.raw_end_date) : "kein Datum"})
             {entry.participant_count !== null && <span className="muted"> · {entry.participant_count} TN</span>}
           </span>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
             {!isOpen &&
               (linked ? (
                 <span className="word-import-text-row-summary">
@@ -1217,7 +1217,7 @@ export function WordImportWizard({
           </div>
         </div>
         {isOpen && (
-          <div className="grid" style={{ gap: "10px" }}>
+          <div className="grid" style={{ gap: "var(--space-3)" }}>
             {missingDate && (
               <div className="word-import-alert word-import-alert-block">
                 <WarningIcon />
@@ -1248,7 +1248,7 @@ export function WordImportWizard({
             {linked && (titleDiffers || dateDiffers) && (
               <div className="word-import-alert word-import-alert-block">
                 <WarningIcon />
-                <div className="grid" style={{ gap: "10px" }}>
+                <div className="grid" style={{ gap: "var(--space-3)" }}>
                   <span>Welchen Wert übernehmen?</span>
                   {titleDiffers && (
                     <div className="word-import-diff-options">
@@ -1360,7 +1360,7 @@ export function WordImportWizard({
           <span className="word-import-text-row-title">
             {entry.raw_name || <span className="muted">– nicht im Dokument (Standard: abwesend) –</span>}
           </span>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
             {!isOpen &&
               (isLinked ? (
                 <span className="word-import-text-row-summary">
@@ -1469,7 +1469,7 @@ export function WordImportWizard({
               </span>
             )}
           </span>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
             {!isOpen &&
               (linked ? (
                 <span className="word-import-text-row-summary">
@@ -1501,7 +1501,7 @@ export function WordImportWizard({
           </div>
         </div>
         {isOpen && (
-          <div className="grid" style={{ gap: "10px" }}>
+          <div className="grid" style={{ gap: "var(--space-3)" }}>
             <TodoAssigneeMenu
               label={linked ? `${linked.column_one_display} → ${linked.column_two_display}` : "🆕 Neu (nur in diesem Protokoll)"}
               nullLabel="🆕 Neu (nur in diesem Protokoll)"
@@ -1597,7 +1597,7 @@ export function WordImportWizard({
               col2IsText && (
                 <div className="word-import-alert word-import-alert-block">
                   <WarningIcon />
-                  <div className="grid" style={{ gap: "10px" }}>
+                  <div className="grid" style={{ gap: "var(--space-3)" }}>
                     <span>Spalte 2 weicht ab — welchen Wert übernehmen?</span>
                     <div className="word-import-diff-options">
                       <label className="field-radio-option">
@@ -2751,7 +2751,7 @@ export function WordImportWizard({
                               </td>
                               <td>
                                 {current.role === "list" ? (
-                                  <div className="grid" style={{ gap: "4px" }}>
+                                  <div className="grid" style={{ gap: "var(--space-1)" }}>
                                     <SearchableSelect
                                       className={table.needs_manual_grouping ? "word-import-select-warning" : undefined}
                                       options={table.available_grouping_strategies}
@@ -2796,7 +2796,7 @@ export function WordImportWizard({
                   {recurringNameGroups.length === 0 ? (
                     <p className="muted">Keine wiederkehrenden, ungeklärten Namen gefunden.</p>
                   ) : (
-                    <div className="grid" style={{ gap: "10px" }}>
+                    <div className="grid" style={{ gap: "var(--space-3)" }}>
                       {recurringNameGroups.map((group) => {
                         const whereParts: string[] = [];
                         if (group.counts.attendance) whereParts.push(`${group.counts.attendance}× Anwesenheit`);
@@ -2818,7 +2818,7 @@ export function WordImportWizard({
                               </span>
                             </div>
                             {group.candidates.length > 0 && (
-                              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
                                 {group.candidates.map((candidate) => {
                                   const candidateParticipant = participants.find((p) => p.id === candidate.participant_id);
                                   if (!candidateParticipant) return null;
@@ -2835,7 +2835,7 @@ export function WordImportWizard({
                                 })}
                               </div>
                             )}
-                            <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                            <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center", flexWrap: "wrap" }}>
                               <TodoAssigneeMenu
                                 label="Anderen Teilnehmer wählen…"
                                 nullLabel="Keinen verknüpfen (überall)"
@@ -2858,7 +2858,7 @@ export function WordImportWizard({
                     <h3 className="word-import-panel-title">Anwesenheit</h3>
                     <p className="word-import-panel-desc">{attendance.length} Namen im Dokument erkannt.</p>
                   </div>
-                  <div className="grid" style={{ gap: "10px" }}>
+                  <div className="grid" style={{ gap: "var(--space-3)" }}>
                     {attendance.map((entry, index) => renderAttendanceRow(entry, index))}
                     {attendance.length === 0 && <p className="muted">Keine Anwesenheitstabelle erkannt bzw. zugeordnet.</p>}
                   </div>
@@ -2871,7 +2871,7 @@ export function WordImportWizard({
                     <h3 className="word-import-panel-title">Termine</h3>
                     <p className="word-import-panel-desc">Im Dokument erwähnte Anlässe mit bestehenden Terminen abgleichen.</p>
                   </div>
-                  <div className="grid" style={{ gap: "10px" }}>
+                  <div className="grid" style={{ gap: "var(--space-3)" }}>
                     {plainEventItems.map(({ entry, index }) => renderEventRow(entry, index))}
                     {plainEventItems.length === 0 && <p className="muted">Keine Termin-Tabelle erkannt bzw. zugeordnet.</p>}
                   </div>
@@ -2884,7 +2884,7 @@ export function WordImportWizard({
                     <h3 className="word-import-panel-title">Listen</h3>
                     <p className="word-import-panel-desc">Erkannte Listen-Zeilen bestehenden Einträgen zuordnen.</p>
                   </div>
-                  <div className="grid" style={{ gap: "10px" }}>
+                  <div className="grid" style={{ gap: "var(--space-3)" }}>
                     {lists.map((entry, index) => renderListRow(entry, index))}
                     {lists.length === 0 && <p className="muted">Keine Listen-Tabelle erkannt bzw. zugeordnet.</p>}
                   </div>
@@ -2897,9 +2897,9 @@ export function WordImportWizard({
                     <h3 className="word-import-panel-title">Matrizen</h3>
                     <p className="word-import-panel-desc">Erkannte Matrix-Daten je Spalte, wie im Protokoll-Editor.</p>
                   </div>
-                  <div className="grid" style={{ gap: "20px" }}>
+                  <div className="grid" style={{ gap: "var(--space-5)" }}>
                     {matrixCardGroups.map((group) => (
-                      <div key={group.matrixKey} className="grid" style={{ gap: "8px" }}>
+                      <div key={group.matrixKey} className="grid" style={{ gap: "var(--space-2)" }}>
                         <strong>{group.matrixTitle}</strong>
                         <div className="matrix-cards matrix-cards-stacked">
                           {group.columns.map((column) => {
@@ -3026,7 +3026,7 @@ export function WordImportWizard({
                     <h3 className="word-import-panel-title">Texte</h3>
                     <p className="word-import-panel-desc">Erkannte Abschnitte den Blöcken der Vorlage zuordnen.</p>
                   </div>
-                  <div className="grid" style={{ gap: "10px" }}>
+                  <div className="grid" style={{ gap: "var(--space-3)" }}>
                     {texts.map((text, index) => {
                       const target = analysis.text_targets.find(
                         (candidate) =>
@@ -3067,7 +3067,7 @@ export function WordImportWizard({
                             onKeyDown={flagged ? undefined : rowHeadKeyDown(() => toggleTextExpanded(index))}
                           >
                             <span className="word-import-text-row-title">{text.extracted_heading}</span>
-                            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
                               {!isOpen &&
                                 (text.createNew ? (
                                   <span className="word-import-text-row-summary">
@@ -3101,7 +3101,7 @@ export function WordImportWizard({
                             </div>
                           </div>
                           {isOpen && (
-                            <div className="grid" style={{ gap: "10px" }}>
+                            <div className="grid" style={{ gap: "var(--space-3)" }}>
                               <TodoAssigneeMenu
                                 label={
                                   text.createNew
@@ -3200,7 +3200,7 @@ export function WordImportWizard({
                                   }
                                 >
                                   {text.syncFieldStatus === "conflict" ? <WarningIcon /> : <LinkIcon />}
-                                  <div className="grid" style={{ gap: "10px" }}>
+                                  <div className="grid" style={{ gap: "var(--space-3)" }}>
                                     {text.syncFieldStatus === "conflict" ? (
                                       <>
                                         <span>

@@ -360,7 +360,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                   />
                 </label>
                 <div className="table-actions table-actions-start">
-                  <button type="submit" className="button-inline">
+                  <button type="submit" className="button-secondary">
                     Speichern
                   </button>
                 </div>
@@ -401,12 +401,12 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                             </select>
                           </td>
                           <td>
-                            <button type="button" className="button-inline button-ghost" onClick={() => setMfaModalUser(u)}>
+                            <button type="button" className="button-secondary button-ghost" onClick={() => setMfaModalUser(u)}>
                               Anzeigen
                             </button>
                           </td>
                           <td>
-                            <button type="button" className="button-inline button-ghost" onClick={() => removeUser(u.user_id, u.display_name)}>
+                            <button type="button" className="button-secondary button-ghost" onClick={() => removeUser(u.user_id, u.display_name)}>
                               Entfernen
                             </button>
                           </td>
@@ -442,7 +442,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                       </select>
                     </label>
                     <div className="role-picker-action">
-                      <button type="submit" className="button-inline" disabled={!addUserId || addUserBusy}>
+                      <button type="submit" className="button-secondary" disabled={!addUserId || addUserBusy}>
                         Hinzufügen
                       </button>
                     </div>
@@ -548,7 +548,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                     />
                   </label>
                   <div className="table-actions table-actions-start">
-                    <button type="submit" className="button-inline" disabled={quotaBusy}>
+                    <button type="submit" className="button-secondary" disabled={quotaBusy}>
                       {quotaBusy ? "Wird gespeichert…" : "Kontingent speichern"}
                     </button>
                   </div>

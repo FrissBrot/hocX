@@ -24,7 +24,7 @@ export function Pagination({ offset, limit, total, onOffsetChange }: Props) {
       <div className="table-actions-start">
         <button
           type="button"
-          className="button-inline button-ghost"
+          className="button-secondary button-ghost"
           disabled={offset === 0}
           onClick={() => onOffsetChange(Math.max(0, offset - limit))}
         >
@@ -32,7 +32,7 @@ export function Pagination({ offset, limit, total, onOffsetChange }: Props) {
         </button>
         <button
           type="button"
-          className="button-inline button-ghost"
+          className="button-secondary button-ghost"
           disabled={to >= total}
           onClick={() => onOffsetChange(offset + limit)}
         >

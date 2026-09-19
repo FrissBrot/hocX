@@ -147,7 +147,7 @@ export function SessionTodosSection({
                 {isDone || isLocked ? "✓" : "○"}
               </button>
               <div className="todo-main todo-main-compact">
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
                   <span className="todo-task-text">
                     <TrackedTaskText
                       todo={todo}
@@ -210,7 +210,7 @@ export function SessionTodosSection({
               {!isReadOnly && !isLocked && (
                 <button
                   type="button"
-                  className="button-inline button-danger todo-delete"
+                  className="button-secondary button-danger todo-delete"
                   onClick={() => void onDelete(todo.protocol_element_block_id, todo.id)}
                 >
                   Löschen

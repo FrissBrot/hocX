@@ -105,12 +105,12 @@ export function PhotoSimilarSeries({
                   <span className="photo-series-count muted"> {group.images.length} ähnliche Fotos</span>
                 </div>
                 <div className="photo-series-actions">
-                  <button type="button" className="button-ghost button-inline" onClick={() => keepSeries(group)} disabled={busyGroup === group.best_id}>
+                  <button type="button" className="button-ghost button-secondary" onClick={() => keepSeries(group)} disabled={busyGroup === group.best_id}>
                     Serie behalten
                   </button>
                   <button
                     type="button"
-                    className="button-inline"
+                    className="button-secondary"
                     onClick={() => void keepOnlyBest(group)}
                     disabled={busyGroup === group.best_id || deletableCount === 0}
                     title={deletableCount === 0 ? "Nur direkt hochgeladene Fotos können hier gelöscht werden." : undefined}

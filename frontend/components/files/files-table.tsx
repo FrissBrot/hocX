@@ -48,7 +48,7 @@ export function FilesTable({
             <td>{formatDate(item.created_at)}</td>
             <td>{item.file_size_bytes ? formatFileSize(item.file_size_bytes) : <span className="muted">–</span>}</td>
             <td onClick={(event) => event.stopPropagation()}>
-              <a href={`${browserApiBaseUrl}${item.content_url}`} target="_blank" rel="noreferrer" className="button-inline button-ghost">
+              <a href={`${browserApiBaseUrl}${item.content_url}`} target="_blank" rel="noreferrer" className="button-secondary button-ghost">
                 Download
               </a>
             </td>

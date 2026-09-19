@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { DateInput } from "@/components/ui/date-input";
+import { Modal } from "@/components/ui/modal";
 import { FinanceAccount, FinanceTransaction } from "@/types/api";
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -203,7 +204,7 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
       <aside className="finance-sidebar">
         <div className="finance-sidebar-header">
           <span className="finance-sidebar-title">Konten</span>
-          {canWrite && <button type="button" className="btn-icon" onClick={startCreateAccount} title="Konto erstellen">＋</button>}
+          {canWrite && <button type="button" className="button-icon-soft" onClick={startCreateAccount} title="Konto erstellen">＋</button>}
         </div>
 
         {accounts.length === 0 ? (
@@ -231,18 +232,17 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
                 {account.description ? <div className="finance-account-desc">{account.description}</div> : null}
                 <div className="finance-account-actions">
                   <span className="finance-account-count">{account.transaction_count} Transaktionen</span>
-                  {canWrite && <button type="button" className="btn-icon-sm" onClick={(e) => startEditAccount(account, e)} title="Bearbeiten">✎</button>}
-                  {canWrite && <button type="button" className="btn-icon-sm btn-icon-danger" onClick={(e) => void deleteAccount(account, e)} title="Löschen">✕</button>}
+                  {canWrite && <button type="button" className="button-icon-soft-sm" onClick={(e) => startEditAccount(account, e)} title="Bearbeiten">✎</button>}
+                  {canWrite && <button type="button" className="button-icon-soft-sm button-icon-soft-danger" onClick={(e) => void deleteAccount(account, e)} title="Löschen">✕</button>}
                 </div>
               </div>
             ))}
           </div>
         )}
 
-        {canWrite && showAccountForm && (
-          <div className="finance-form-overlay" onClick={() => setShowAccountForm(false)}>
-            <div className="finance-form-modal" onClick={(e) => e.stopPropagation()}>
-              <h3>{editingAccount ? "Konto bearbeiten" : "Neues Konto"}</h3>
+        {canWrite && (
+          <Modal open={showAccountForm} title={editingAccount ? "Konto bearbeiten" : "Neues Konto"} onClose={() => setShowAccountForm(false)}>
+            <div className="finance-form-modal">
               <label className="field-stack">
                 <span className="field-label">Name</span>
                 <input value={accountDraft.name} onChange={(e) => setAccountDraft((d) => ({ ...d, name: e.target.value }))} placeholder="z. B. Vereinskasse" autoFocus />
@@ -256,13 +256,13 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
                 <input value={accountDraft.description} onChange={(e) => setAccountDraft((d) => ({ ...d, description: e.target.value }))} placeholder="Beschreibung…" />
               </label>
               <div className="finance-form-actions">
-                <button type="button" className="button-inline" onClick={() => setShowAccountForm(false)}>Abbrechen</button>
-                <button type="button" className="button-inline" onClick={() => void saveAccount()} disabled={savingAccount || !accountDraft.name.trim()}>
+                <button type="button" className="button-secondary" onClick={() => setShowAccountForm(false)}>Abbrechen</button>
+                <button type="button" className="button-secondary" onClick={() => void saveAccount()} disabled={savingAccount || !accountDraft.name.trim()}>
                   {savingAccount ? "Speichern…" : "Speichern"}
                 </button>
               </div>
             </div>
-          </div>
+          </Modal>
         )}
       </aside>
 
@@ -286,7 +286,7 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
                   </div>
                 ) : null}
               </div>
-              {canWrite && <button type="button" className="button-inline" onClick={startCreateTx}>+ Transaktion</button>}
+              {canWrite && <button type="button" className="button-secondary" onClick={startCreateTx}>+ Transaktion</button>}
             </div>
 
             {canWrite && showTxForm && (
@@ -318,8 +318,8 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
                   </label>
                 </div>
                 <div className="finance-form-actions">
-                  <button type="button" className="button-inline" onClick={() => { setShowTxForm(false); setEditingTx(null); }}>Abbrechen</button>
-                  <button type="button" className="button-inline" onClick={() => void saveTx()} disabled={savingTx || !txDraft.description.trim() || !txDraft.amount}>
+                  <button type="button" className="button-secondary" onClick={() => { setShowTxForm(false); setEditingTx(null); }}>Abbrechen</button>
+                  <button type="button" className="button-secondary" onClick={() => void saveTx()} disabled={savingTx || !txDraft.description.trim() || !txDraft.amount}>
                     {savingTx ? "Speichern…" : editingTx ? "Aktualisieren" : "Hinzufügen"}
                   </button>
                 </div>
@@ -354,8 +354,8 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
                         {formatAmount(running, currency)}
                       </span>
                       <span className="finance-tx-actions">
-                        {canWrite && <button type="button" className="btn-icon-sm" onClick={() => startEditTx(tx)} title="Bearbeiten">✎</button>}
-                        {canWrite && <button type="button" className="btn-icon-sm btn-icon-danger" onClick={() => void deleteTx(tx)} title="Löschen">✕</button>}
+                        {canWrite && <button type="button" className="button-icon-soft-sm" onClick={() => startEditTx(tx)} title="Bearbeiten">✎</button>}
+                        {canWrite && <button type="button" className="button-icon-soft-sm button-icon-soft-danger" onClick={() => void deleteTx(tx)} title="Löschen">✕</button>}
                       </span>
                     </div>
                   );
@@ -368,7 +368,7 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
                 {isLoadingMoreTx ? (
                   <span className="muted">Lädt weitere Transaktionen…</span>
                 ) : (
-                  <button type="button" className="button-inline button-ghost" onClick={() => void loadMoreTx()}>
+                  <button type="button" className="button-secondary button-ghost" onClick={() => void loadMoreTx()}>
                     Mehr laden ({transactions.length} geladen)
                   </button>
                 )}

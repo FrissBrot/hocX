@@ -571,7 +571,7 @@ export function StructuredListTable({
           {editable && allowCreate && (
             <button
               type="button"
-              className="button-inline"
+              className="button-secondary"
               disabled={showNewRow || creatingNewRow}
               onClick={() => {
                 setShowNewRow(true);
@@ -754,7 +754,7 @@ export function StructuredListTable({
                               <div className="event-row-actions">
                                 <button
                                   type="button"
-                                  className={heading ? "button-inline button-danger" : "button-ghost button-icon button-icon-danger"}
+                                  className={heading ? "button-secondary button-danger" : "button-ghost button-icon button-icon-danger"}
                                   title="Listenzeile loeschen"
                                   aria-label="Listenzeile loeschen"
                                   onClick={() => void onDeleteEntry(entry.id)}
@@ -829,7 +829,7 @@ export function StructuredListTable({
             })}
           </div>
           <div className="table-toolbar-actions">
-            <button type="button" className="button-inline" onClick={applyParticipantPicker}>
+            <button type="button" className="button-secondary" onClick={applyParticipantPicker}>
               Auswahl uebernehmen
             </button>
           </div>

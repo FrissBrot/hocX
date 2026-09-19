@@ -313,7 +313,7 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
                   Bildern
                 </span>
               )}
-              <button type="button" className="button-inline" onClick={() => {
+              <button type="button" className="button-secondary" onClick={() => {
                 setDroppedFiles([]);
                 setUploadModalOpen(true);
               }}>
@@ -415,7 +415,7 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
             <div className="photo-grid">
               {items.map((item) => (
                 <div key={item.id}>
-                  <button type="button" className="button-inline" onClick={() => onSelectPhoto(item)}>Zum Album hinzufügen</button>
+                  <button type="button" className="button-secondary" onClick={() => onSelectPhoto(item)}>Zum Album hinzufügen</button>
                   <img
                     alt={item.original_name}
                     src={item.thumbnail_url ?? item.content_url}
@@ -440,7 +440,7 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
           {hasMore && (
             <div className="load-more-row" ref={loadMoreSentinelRef}>
               {isLoadingMore ? <span className="muted">Lädt weitere Fotos…</span> : (
-                <button type="button" className="button-inline button-ghost" disabled={isReloading} onClick={() => void loadMore()}>
+                <button type="button" className="button-secondary button-ghost" disabled={isReloading} onClick={() => void loadMore()}>
                   {loadMoreFailed ? "Erneut versuchen" : `Mehr laden (${items.length} geladen)`}
                 </button>
               )}

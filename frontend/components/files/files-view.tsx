@@ -178,7 +178,7 @@ export function FilesView({ initialItems }: Props) {
           </p>
         </div>
         <div className="table-toolbar-actions">
-          <button type="button" className="button-inline" onClick={() => {
+          <button type="button" className="button-secondary" onClick={() => {
               setDroppedFiles([]);
               setUploadModalOpen(true);
             }}>
@@ -222,7 +222,7 @@ export function FilesView({ initialItems }: Props) {
           {isLoadingMore ? (
             <span className="muted">Lädt weitere Dateien…</span>
           ) : (
-            <button type="button" className="button-inline button-ghost" onClick={() => void loadMore()}>
+            <button type="button" className="button-secondary button-ghost" onClick={() => void loadMore()}>
               Mehr laden ({items.length} geladen)
             </button>
           )}

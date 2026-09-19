@@ -700,7 +700,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
           <button type="button" className="button-ghost" onClick={() => setLinksModalOpen(true)}>
             Links ({links.length})
           </button>
-          <button type="button" className="button-inline subm-new-button" onClick={openCreate}>
+          <button type="button" className="button-secondary subm-new-button" onClick={openCreate}>
             <PlusIcon /> Abgabe
           </button>
         </div>
@@ -831,14 +831,14 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
             <div className="subm-detail-footer">
               <button
                 type="button"
-                className="button-ghost button-inline"
+                className="button-ghost button-secondary"
                 onClick={() => void downloadZip(selectedId)}
                 disabled={zipLoading}
                 title="Alle geprüften Dateien als ZIP herunterladen"
               >
                 <DownloadIcon /> {zipLoading ? "…" : "Alle Dateien (.zip)"}
               </button>
-              <button type="button" className="button-inline" onClick={() => setSelectedId(null)}>
+              <button type="button" className="button-secondary" onClick={() => setSelectedId(null)}>
                 Schliessen
               </button>
             </div>
@@ -923,7 +923,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
               {elementModal.status === "closed" ? (
                 <button
                   type="button"
-                  className="button-ghost button-inline subm-reopen-button"
+                  className="button-ghost button-secondary subm-reopen-button"
                   onClick={() => selectedId && void reopenElement(selectedId, elementModal.element_ref)}
                 >
                   Wieder aufschalten
@@ -931,7 +931,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
               ) : (
                 <button
                   type="button"
-                  className="button-ghost button-inline subm-close-button"
+                  className="button-ghost button-secondary subm-close-button"
                   onClick={() => selectedId && void closeElement(selectedId, elementModal.element_ref)}
                 >
                   Element schliessen
@@ -1021,7 +1021,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
               </span>
             ) : (
               <>
-                <div style={{ display: "flex", flexDirection: "column", gap: 6, border: "1px solid var(--border)", borderRadius: 12, padding: "10px 14px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "10px 14px" }}>
                   {links.map((link) => (
                     <label key={link.id} className="checkbox-line" style={{ margin: 0, minHeight: 0 }}>
                       <input type="checkbox" checked={form.link_ids.includes(link.id)} onChange={() => toggleLink(link.id)} />
@@ -1056,7 +1056,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
                   <button
                     type="button"
                     onClick={() => { setTagDropdownOpen((v) => !v); setTagDropdownSearch(""); }}
-                    style={{ width: "100%", textAlign: "left", padding: "12px 14px", borderRadius: 16, border: "1px solid var(--border)", background: "color-mix(in srgb, var(--panel-solid) 92%, transparent 8%)", color: form.tag_filter ? "var(--text)" : "var(--muted)", cursor: "pointer", minHeight: 48, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, fontSize: "inherit", boxSizing: "border-box" }}
+                    style={{ width: "100%", textAlign: "left", padding: "12px 14px", borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", background: "color-mix(in srgb, var(--panel-solid) 92%, transparent 8%)", color: form.tag_filter ? "var(--text)" : "var(--muted)", cursor: "pointer", minHeight: 48, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-2)", fontSize: "inherit", boxSizing: "border-box" }}
                   >
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {form.tag_filter || "Tag wählen…"}
@@ -1064,26 +1064,26 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
                     <span style={{ flexShrink: 0, opacity: 0.5 }}>▾</span>
                   </button>
                   {tagDropdownOpen && (
-                    <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 200, backgroundColor: "var(--panel-solid)", border: "1px solid var(--border)", borderRadius: 10, boxShadow: "0 6px 20px rgba(0,0,0,0.2)", overflow: "hidden" }}>
-                      <div style={{ padding: "6px 8px", borderBottom: "1px solid var(--border)" }}>
+                    <div className="dropdown-panel dropdown-panel-down">
+                      <div className="dropdown-search">
                         <input
                           autoFocus
                           type="text"
                           placeholder="Suchen…"
                           value={tagDropdownSearch}
                           onChange={(e) => setTagDropdownSearch(e.target.value)}
-                          style={{ width: "100%", boxSizing: "border-box", padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border)", backgroundColor: "var(--bg)", color: "var(--text)", fontSize: "0.88rem", minHeight: 0, outline: "none" }}
+                          className="dropdown-search-input"
                         />
                       </div>
-                      <div style={{ maxHeight: 220, overflowY: "auto", padding: "4px 0" }}>
+                      <div className="dropdown-panel-scroll">
                         {filteredTags.length === 0 ? (
-                          <div style={{ padding: "8px 12px", fontSize: "0.88rem", color: "var(--muted)" }}>Keine Tags gefunden</div>
+                          <div className="dropdown-empty">Keine Tags gefunden</div>
                         ) : filteredTags.map((tag) => (
                           <button
                             key={tag}
                             type="button"
                             onClick={() => { setForm((c) => ({ ...c, tag_filter: tag })); setTagDropdownOpen(false); }}
-                            style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 14px", background: "none", border: "none", color: "var(--text)", cursor: "pointer", fontSize: "0.9rem", minHeight: 0, fontWeight: form.tag_filter === tag ? 700 : 400 }}
+                            className={form.tag_filter === tag ? "dropdown-option dropdown-option-selected" : "dropdown-option"}
                           >
                             {tag}
                           </button>
@@ -1180,18 +1180,18 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
 
           <div className="field-stack">
             <span className="field-label">Erlaubte Dateitypen</span>
-            <div style={{ display: "flex", flexDirection: "column", gap: 0, border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 0, border: "1px solid var(--border)", borderRadius: "var(--radius-md)", overflow: "hidden" }}>
               {FILE_TYPE_GROUPS.map((group, gi) => {
                 const allChecked = group.types.every((t) => form.allowed_file_types.includes(t));
                 const someChecked = group.types.some((t) => form.allowed_file_types.includes(t));
                 return (
                   <div key={group.label} style={{ padding: "10px 14px", borderTop: gi > 0 ? "1px solid var(--border)" : undefined }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 7 }}>
-                      <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--text)", textTransform: "uppercase", letterSpacing: "0.05em", flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", marginBottom: 7 }}>
+                      <span style={{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--text)", textTransform: "uppercase", letterSpacing: "0.05em", flex: 1 }}>
                         {group.label}
                       </span>
                       {group.types.length > 1 && (
-                        <label className="checkbox-line" style={{ margin: 0, minHeight: 0, fontSize: "0.8rem", color: "var(--muted)" }}>
+                        <label className="checkbox-line" style={{ margin: 0, minHeight: 0, fontSize: "var(--text-sm)", color: "var(--muted)" }}>
                           <input
                             type="checkbox"
                             checked={allChecked}
@@ -1268,7 +1268,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
           </label>
 
           <div className="table-toolbar-actions">
-            <button type="submit" className="button-inline">
+            <button type="submit" className="button-secondary">
               {editingId ? "Abgabe speichern" : "Abgabe erstellen"}
             </button>
           </div>

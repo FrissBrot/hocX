@@ -642,11 +642,11 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
           <p className="muted">Alle Termine dieses Mandanten.</p>
         </div>
         <div className="table-toolbar-actions">
-          <button type="button" className="button-inline button-ghost" onClick={openImportModal}>
+          <button type="button" className="button-secondary button-ghost" onClick={openImportModal}>
             CSV Import
           </button>
           {landscapeTemplates.length > 0 && (
-            <button type="button" className="button-inline button-ghost" onClick={() => setExportModalOpen(true)}>
+            <button type="button" className="button-secondary button-ghost" onClick={() => setExportModalOpen(true)}>
               Export
             </button>
           )}
@@ -695,7 +695,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
               </div>
             </Popover>
           </div>
-          <button type="button" className="button-inline" onClick={openCreate}>
+          <button type="button" className="button-secondary" onClick={openCreate}>
             Neuer Termin
           </button>
         </div>
@@ -759,7 +759,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
               <div className="table-actions table-actions-start">
                 <button
                   type="button"
-                  className="button-inline button-danger"
+                  className="button-secondary button-danger"
                   onClick={(clickEvent) => {
                     clickEvent.stopPropagation();
                     void deleteEvent(item.id);
@@ -778,7 +778,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
           {isLoadingMore ? (
             <span className="muted">Lädt weitere Termine…</span>
           ) : (
-            <button type="button" className="button-inline button-ghost" onClick={() => void loadMore()}>
+            <button type="button" className="button-secondary button-ghost" onClick={() => void loadMore()}>
               Mehr laden ({events.length} geladen)
             </button>
           )}
@@ -792,7 +792,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
         description="Ordne die Spalten deiner Datei den Termin-Feldern zu und prüfe die Vorschau, bevor du importierst."
         size="wide"
       >
-        <div className="grid" style={{ gap: "18px" }}>
+        <div className="grid" style={{ gap: "var(--space-4)" }}>
           {!importFile ? (
             <label className="csv-import-dropzone" style={{ cursor: "pointer" }}>
               <strong>CSV-Datei auswählen</strong>
@@ -805,7 +805,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                 <strong>{importFile.name}</strong>
                 <span className="muted"> · {importPreview ? `${importPreview.rows.length} Zeile(n) erkannt` : "wird gelesen…"}</span>
               </span>
-              <label className="button-inline button-ghost" style={{ width: "auto", minHeight: 0, padding: "6px 14px", cursor: "pointer" }}>
+              <label className="button-secondary button-ghost" style={{ width: "auto", minHeight: 0, padding: "6px 14px", cursor: "pointer" }}>
                 Andere Datei
                 <input type="file" accept=".csv,text/csv" onChange={handleImportFileChange} hidden />
               </label>
@@ -881,12 +881,12 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
               </DataTable>
 
               <div className="table-actions" style={{ justifyContent: "flex-end" }}>
-                <button type="button" className="button-inline button-ghost" onClick={() => setShowImportModal(false)}>
+                <button type="button" className="button-secondary button-ghost" onClick={() => setShowImportModal(false)}>
                   Abbrechen
                 </button>
                 <button
                   type="button"
-                  className="button-inline"
+                  className="button-secondary"
                   disabled={
                     importCommitting ||
                     importPreviewLoading ||
@@ -983,15 +983,15 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
           {availableParticipants.length > 0 && (
             <div className="field-stack">
               <span className="field-label">Personen</span>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-2)" }}>
                 {PARTICIPANT_ROLE_FIELDS.map(({ field, label }) => (
-                  <div key={field} className="field-stack" style={{ gap: 4 }}>
-                    <span className="field-label" style={{ fontSize: "0.78rem" }}>{label}</span>
+                  <div key={field} className="field-stack" style={{ gap: "var(--space-1)" }}>
+                    <span className="field-label" style={{ fontSize: "var(--text-xs)" }}>{label}</span>
                     <button
                       type="button"
                       className="button-ghost structured-list-picker"
                       onClick={() => openParticipantPicker(field)}
-                      style={{ textAlign: "left", minHeight: 36, padding: "6px 10px", fontSize: "0.85rem" }}
+                      style={{ textAlign: "left", minHeight: 36, padding: "6px 10px", fontSize: "var(--text-base)" }}
                     >
                       {participantLabel(form[field] as string[])}
                     </button>
@@ -1003,9 +1003,9 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
           <div className="field-stack">
             <span className="field-label">Zyklen</span>
             {cyclesLoading ? (
-              <span className="muted" style={{ fontSize: "0.85rem" }}>Zyklen werden geladen…</span>
+              <span className="muted" style={{ fontSize: "var(--text-base)" }}>Zyklen werden geladen…</span>
             ) : availableCycles.length === 0 ? (
-              <span className="muted" style={{ fontSize: "0.85rem" }}>Keine Zyklen verfügbar (Zyklen unter Struktur → Zyklen anlegen)</span>
+              <span className="muted" style={{ fontSize: "var(--text-base)" }}>Keine Zyklen verfügbar (Zyklen unter Struktur → Zyklen anlegen)</span>
             ) : (
               <div className="cycle-chip-list">
                 {availableCycles.map((cycle) => {
@@ -1092,7 +1092,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
               })}
           </div>
           <div className="table-toolbar-actions">
-            <button type="button" className="button-inline" onClick={applyParticipantPicker}>
+            <button type="button" className="button-secondary" onClick={applyParticipantPicker}>
               Auswahl übernehmen
             </button>
           </div>
@@ -1100,14 +1100,14 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
       </Modal>
 
       <Modal open={exportModalOpen} title="Termine exportieren" onClose={() => setExportModalOpen(false)}>
-        <div style={{ display: "grid", gap: "24px" }}>
+        <div style={{ display: "grid", gap: "var(--space-5)" }}>
 
           {knownExportTags.length > 0 && (
             <div className="field-stack">
               <span className="field-label">Tags</span>
               <div style={{ position: "relative" }}>
                 <input
-                  style={{ width: "100%", minHeight: 0, padding: "7px 12px", borderRadius: "10px", fontSize: "0.875rem", border: "1px solid var(--border)", background: "var(--surface, var(--panel-solid))", color: "var(--text)", outline: "none" }}
+                  className="dropdown-search-input"
                   placeholder="Tag suchen…"
                   value={exportTagSearch}
                   onChange={(e) => setExportTagSearch(e.target.value)}
@@ -1125,28 +1125,16 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                   }}
                 />
                 {tagSuggestions.length > 0 && (
-                  <div style={{
-                    position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 100,
-                    background: "var(--panel-solid)", border: "1px solid var(--border)",
-                    borderRadius: "10px", boxShadow: "0 8px 24px rgba(0,0,0,0.28)",
-                    overflow: "hidden",
-                  }}>
+                  <div className="dropdown-panel dropdown-panel-down">
                     {tagSuggestions.map((tag, i) => (
                       <button
                         key={tag}
                         type="button"
                         onMouseDown={(e) => { e.preventDefault(); toggleExportTag(tag); setExportTagSearch(""); }}
-                        style={{
-                          display: "flex", alignItems: "center", justifyContent: "space-between",
-                          width: "100%", minHeight: 0, padding: "9px 12px", textAlign: "left",
-                          background: i === 0 ? "color-mix(in srgb, var(--accent) 12%, var(--panel-solid) 88%)" : "var(--panel-solid)",
-                          color: "var(--text)", fontSize: "0.9rem", border: "none",
-                          borderBottom: i < tagSuggestions.length - 1 ? "1px solid var(--border)" : "none",
-                          cursor: "pointer", borderRadius: 0,
-                        }}
+                        className={i === 0 ? "dropdown-option dropdown-option-active dropdown-option-row" : "dropdown-option dropdown-option-row"}
                       >
                         <span>{tag}</span>
-                        {i === 0 && <span style={{ fontSize: "0.72rem", color: "var(--muted)", background: "var(--surface, var(--accent-soft))", padding: "2px 6px", borderRadius: "4px", border: "1px solid var(--border)" }}>Tab</span>}
+                        {i === 0 && <span className="dropdown-hint">Tab</span>}
                       </button>
                     ))}
                   </div>
@@ -1156,13 +1144,13 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                 {exportTagFilters.map((tag) => (
                   <button key={tag} type="button" className="tag-filter-chip tag-filter-chip-active"
                     onClick={() => toggleExportTag(tag)}
-                    style={{ width: "auto", minHeight: 0, padding: "4px 12px", display: "inline-flex", fontSize: "0.85rem" }}
+                    style={{ width: "auto", minHeight: 0, padding: "4px 12px", display: "inline-flex", fontSize: "var(--text-base)" }}
                   >{tag} ×</button>
                 ))}
                 {knownExportTags.filter((t) => !exportTagFilters.includes(t)).map((tag) => (
                   <button key={tag} type="button" className="tag-filter-chip"
                     onClick={() => toggleExportTag(tag)}
-                    style={{ width: "auto", minHeight: 0, padding: "4px 12px", display: "inline-flex", fontSize: "0.85rem" }}
+                    style={{ width: "auto", minHeight: 0, padding: "4px 12px", display: "inline-flex", fontSize: "var(--text-base)" }}
                   >{tag}</button>
                 ))}
               </div>
@@ -1171,7 +1159,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
 
           <div className="field-stack">
             <span className="field-label">Zeitraum</span>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
               {(["all", "next-session", "until-event"] as const).map((mode) => {
                 const label = mode === "all" ? "Alle Termine" : mode === "next-session" ? "Nächste Sitzung" : "Bis Termin";
                 return (
@@ -1184,7 +1172,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
               })}
             </div>
             {exportDateMode === "next-session" && (
-              <span className="muted" style={{ fontSize: "0.82rem", paddingLeft: "2px" }}>
+              <span className="muted" style={{ fontSize: "var(--text-sm)", paddingLeft: "2px" }}>
                 {nextSessionEvent
                   ? `Bis ${nextSessionEvent.title} · ${formatDate(nextSessionEvent.event_date)}`
                   : "Keine Sitzung gefunden"}
@@ -1202,8 +1190,8 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
             )}
           </div>
 
-          <div style={{ display: "flex", gap: "10px", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid var(--border)", paddingTop: "20px" }}>
-            <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: "var(--space-3)", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid var(--border)", paddingTop: "20px" }}>
+            <div style={{ display: "flex", gap: "var(--space-3)", alignItems: "center" }}>
             <button
               type="button"
               className={`pdf-icon-link pdf-icon-link-success${exportBusy || (!exportUrl && (!exportTemplateId || (exportDateMode === "until-event" && !exportUntilEventId) || (exportDateMode === "next-session" && !nextSessionEvent))) ? " pdf-icon-disabled" : ""}`}
@@ -1216,15 +1204,10 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
             </button>
             <button
               type="button"
-              className="pdf-icon-link pdf-icon-disabled"
+              className="pdf-icon-link pdf-icon-link-soon"
               disabled
               title="Markdown-Export – kommt bald"
-              style={{
-                width: "auto", minWidth: "56px", minHeight: 0, padding: "0 14px", display: "inline-flex", justifyContent: "center",
-                borderColor: "color-mix(in srgb, #a78bfa 28%, transparent 72%)",
-                background: "color-mix(in srgb, #a78bfa 10%, transparent 90%)",
-                color: "#a78bfa",
-              }}
+              style={{ width: "auto", minWidth: "56px", minHeight: 0, padding: "0 14px", display: "inline-flex", justifyContent: "center" }}
             >
               MD
             </button>
@@ -1236,7 +1219,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                   onClick={() => setTemplateDropdownOpen((v) => !v)}
                   style={{
                     width: "auto", minHeight: 0, height: "42px", padding: "0 32px 0 12px",
-                    borderRadius: "14px", fontSize: "0.8rem",
+                    borderRadius: "var(--radius-md)", fontSize: "var(--text-sm)",
                     border: "1px solid var(--border)", backgroundColor: "transparent",
                     color: "var(--text)", display: "flex", alignItems: "center", whiteSpace: "nowrap",
                     backgroundImage: "linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%)",
@@ -1247,27 +1230,13 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                   {landscapeTemplates.find((t) => t.id === exportTemplateId)?.name ?? "Vorlage"}
                 </button>
                 {templateDropdownOpen && (
-                  <div style={{
-                    position: "absolute", bottom: "calc(100% + 4px)", right: 0, zIndex: 50,
-                    backgroundColor: "var(--panel-solid)", border: "1px solid var(--border)",
-                    borderRadius: "12px", boxShadow: "0 4px 20px rgba(0,0,0,0.22)",
-                    overflow: "hidden", minWidth: "100%",
-                  }}>
+                  <div className="dropdown-panel dropdown-panel-up" style={{ minWidth: "100%" }}>
                     {landscapeTemplates.map((t, i) => (
                       <button
                         key={t.id}
                         type="button"
                         onMouseDown={() => { setExportTemplateId(t.id); setExportUrl(null); setTemplateDropdownOpen(false); }}
-                        style={{
-                          width: "100%", minHeight: 0, padding: "9px 14px",
-                          textAlign: "left", fontSize: "0.88rem",
-                          backgroundColor: "var(--panel-solid)",
-                          color: "var(--text)",
-                          fontWeight: t.id === exportTemplateId ? 700 : 400,
-                          border: "none", borderRadius: 0,
-                          borderBottom: i < landscapeTemplates.length - 1 ? "1px solid var(--border)" : "none",
-                          cursor: "pointer", whiteSpace: "nowrap",
-                        }}
+                        className={t.id === exportTemplateId ? "dropdown-option dropdown-option-selected" : "dropdown-option"}
                       >
                         {t.name}
                       </button>

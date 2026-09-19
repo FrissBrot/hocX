@@ -1556,7 +1556,7 @@ export function ProtocolEditor({
     <div className="grid" ref={editorRef}>
       {useDocumentLayout && (
         <div className="protocol-document-header">
-          <a href="/protocols" className="button-inline protocol-document-back">← Zurück zu Protokollen</a>
+          <a href="/protocols" className="button-secondary protocol-document-back">← Zurück zu Protokollen</a>
           <Badge variant={protocolStatusVariant(protocolStatus)} className="protocol-document-badge">
             {protocolStatusLabel(protocolStatus)}
           </Badge>
@@ -1951,7 +1951,7 @@ export function ProtocolEditor({
             </button>
           </>
         ) : (
-          <a href="/protocols" className="button-inline">← Zurück zu den Protokollen</a>
+          <a href="/protocols" className="button-secondary">← Zurück zu den Protokollen</a>
         )}
       </div>
       </>

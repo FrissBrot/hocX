@@ -16,6 +16,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { StatisticsOverview } from "@/types/api";
+import { CHART_COLORS, CHART_PIE_PALETTE } from "@/lib/constants/chart-colors";
 
 type Props = { data: StatisticsOverview | null };
 
@@ -24,20 +25,8 @@ function useChartHeight(normal: number, fs = 480) {
   return useContext(FullscreenCtx) ? fs : normal;
 }
 
-const COLORS = {
-  present: "#15803d",
-  absent: "#b91c1c",
-  excused: "#b45309",
-  income: "#15803d",
-  expenses: "#b91c1c",
-  done: "#15803d",
-  open: "#d1d5db",
-  fines: "#b45309",
-  sessions: "#6366f1",
-  participants: "#06b6d4",
-};
-
-const PIE_PALETTE = ["#b45309", "#b91c1c", "#15803d", "#6366f1", "#06b6d4", "#a855f7", "#ec4899", "#84cc16"];
+const COLORS = CHART_COLORS;
+const PIE_PALETTE = CHART_PIE_PALETTE;
 
 function fmtMonth(m: string): string {
   const [y, mo] = m.split("-");
@@ -223,7 +212,7 @@ function AttendanceTimeChart({ data }: { data: AttEntry[] }) {
         <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="var(--muted)" />
         <YAxis allowDecimals={false} tick={{ fontSize: 11 }} stroke="var(--muted)" width={28} />
         <Tooltip content={<ChartTooltip />} />
-        <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 12 }} />
+        <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: "var(--text-xs)" }} />
         <Bar dataKey="present" name="Anwesend" stackId="a" fill={COLORS.present} />
         <Bar dataKey="excused" name="Entschuldigt" stackId="a" fill={COLORS.excused} />
         <Bar dataKey="absent" name="Abwesend" stackId="a" fill={COLORS.absent} radius={[4, 4, 0, 0]} />
@@ -242,7 +231,7 @@ function AttendanceParticipantChart({ data }: { data: ParticipantAttEntry[] }) {
         <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} stroke="var(--muted)" />
         <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 11 }} stroke="var(--muted)" />
         <Tooltip content={<ChartTooltip />} />
-        <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 12 }} />
+        <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: "var(--text-xs)" }} />
         <Bar dataKey="Anwesend" stackId="a" fill={COLORS.present} />
         <Bar dataKey="Entschuldigt" stackId="a" fill={COLORS.excused} />
         <Bar dataKey="Abwesend" stackId="a" fill={COLORS.absent} radius={[0, 4, 4, 0]} />
@@ -261,7 +250,7 @@ function FinanceChart({ data }: { data: FinanceEntry[] }) {
         <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="var(--muted)" />
         <YAxis tick={{ fontSize: 11 }} stroke="var(--muted)" width={50} />
         <Tooltip content={<ChartTooltip formatter={(v) => `${fmtAmount(v)} CHF`} />} />
-        <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 12 }} />
+        <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: "var(--text-xs)" }} />
         <Bar dataKey="income" name="Einnahmen" fill={COLORS.income} radius={[4, 4, 0, 0]} />
         <Bar dataKey="expenses" name="Ausgaben" fill={COLORS.expenses} radius={[4, 4, 0, 0]} />
       </BarChart>
@@ -279,7 +268,7 @@ function GroupSessionsChart({ data }: { data: GroupEntry[] }) {
         <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} stroke="var(--muted)" />
         <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 11 }} stroke="var(--muted)" />
         <Tooltip content={<ChartTooltip />} />
-        <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 12 }} />
+        <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: "var(--text-xs)" }} />
         <Bar dataKey="Alle Termine" fill={COLORS.sessions} radius={[0, 4, 4, 0]} opacity={0.5} />
         <Bar dataKey="Mit Teilnehmern" fill={COLORS.sessions} radius={[0, 4, 4, 0]} />
       </BarChart>

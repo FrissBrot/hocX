@@ -113,7 +113,7 @@ export function AdminMfaSettings({ initialOverview }: Props) {
       <div className="two-col">
         <article className="security-method-card">
           <div className="security-method-header">
-            <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+            <div style={{ display: "flex", gap: "var(--space-4)", alignItems: "flex-start" }}>
               <div className="security-method-icon">
                 <KeyIcon />
               </div>
@@ -129,7 +129,7 @@ export function AdminMfaSettings({ initialOverview }: Props) {
             Authenticator.
           </p>
           {!totpSetup ? (
-            <button type="button" className="button-inline" disabled={busy} onClick={() => void startTotp()}>
+            <button type="button" className="button-secondary" disabled={busy} onClick={() => void startTotp()}>
               TOTP einrichten
             </button>
           ) : (
@@ -148,7 +148,7 @@ export function AdminMfaSettings({ initialOverview }: Props) {
 
         <article className="security-method-card">
           <div className="security-method-header">
-            <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+            <div style={{ display: "flex", gap: "var(--space-4)", alignItems: "flex-start" }}>
               <div className="security-method-icon">
                 <FingerprintIcon />
               </div>
@@ -173,7 +173,7 @@ export function AdminMfaSettings({ initialOverview }: Props) {
                   placeholder="z.B. YubiKey / MacBook Pro"
                 />
               </label>
-              <button type="button" className="button-inline" disabled={busy} onClick={() => void startPasskey()}>
+              <button type="button" className="button-secondary" disabled={busy} onClick={() => void startPasskey()}>
                 {busy ? "Passkey wird vorbereitet…" : "Passkey hinzufügen"}
               </button>
             </div>
@@ -208,7 +208,7 @@ export function AdminMfaSettings({ initialOverview }: Props) {
                 </div>
                 <button
                   type="button"
-                  className="button-inline button-danger"
+                  className="button-secondary button-danger"
                   disabled={isLastFactor}
                   title={isLastFactor ? "Platform-Administratoren müssen mindestens einen MFA-Faktor behalten" : undefined}
                   onClick={() => void deleteFactor(factor.id, factor.label)}

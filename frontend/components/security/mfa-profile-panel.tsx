@@ -129,12 +129,12 @@ export function MfaProfilePanel({ open }: Props) {
             Ideal, wenn du einen zuverlässigen zweiten Faktor auf mehreren Geräten nutzen willst.
           </p>
           {hasTotpFactor && overview?.preferred_factor_type !== "totp" ? (
-            <button type="button" className="button-inline button-ghost" disabled={busy} onClick={() => void setPreferredMethod("totp")}>
+            <button type="button" className="button-secondary button-ghost" disabled={busy} onClick={() => void setPreferredMethod("totp")}>
               Als Standard fürs Login setzen
             </button>
           ) : null}
           {!totpSetup ? (
-            <button type="button" className="button-inline" onClick={() => void startTotp()}>
+            <button type="button" className="button-secondary" onClick={() => void startTotp()}>
               TOTP einrichten
             </button>
           ) : (
@@ -169,7 +169,7 @@ export function MfaProfilePanel({ open }: Props) {
           {hasPasskeyFactor && overview?.preferred_factor_type !== "webauthn" ? (
             <button
               type="button"
-              className="button-inline button-ghost"
+              className="button-secondary button-ghost"
               disabled={busy}
               onClick={() => void setPreferredMethod("webauthn")}
             >
@@ -186,7 +186,7 @@ export function MfaProfilePanel({ open }: Props) {
                   placeholder="z.B. MacBook Pro"
                 />
               </label>
-              <button type="button" className="button-inline" disabled={busy} onClick={() => void startPasskey()}>
+              <button type="button" className="button-secondary" disabled={busy} onClick={() => void startPasskey()}>
                 {busy ? "Passkey wird vorbereitet…" : "Passkey hinzufügen"}
               </button>
             </div>
@@ -222,7 +222,7 @@ export function MfaProfilePanel({ open }: Props) {
                 </div>
                 <button
                   type="button"
-                  className="button-inline button-danger"
+                  className="button-secondary button-danger"
                   disabled={isLastRequiredFactor}
                   title={isLastRequiredFactor ? "Tenant-Administratoren müssen mindestens einen MFA-Faktor behalten" : undefined}
                   onClick={() => void deleteFactor(factor.id, factor.label)}

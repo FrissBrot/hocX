@@ -1551,7 +1551,7 @@ export function FocusedElementEditor({
                           {todoEditable && (
                             <button
                               type="button"
-                              className="button-inline button-danger todo-delete"
+                              className="button-secondary button-danger todo-delete"
                               onClick={() => deleteTodo(block.id, todo.id)}
                             >
                               Löschen
@@ -1632,7 +1632,7 @@ export function FocusedElementEditor({
                         </div>
                         <button
                           type="button"
-                          className="button-inline button-danger todo-delete"
+                          className="button-secondary button-danger todo-delete"
                           onClick={() => {
                             const nextItems = ((Array.isArray(blockConfig.bullet_items) ? blockConfig.bullet_items : []) as string[]).filter((_, itemIndex) => itemIndex !== index);
                             void saveBlockConfiguration(block.id, { ...blockConfig, bullet_items: nextItems });
@@ -2226,7 +2226,7 @@ export function FocusedElementEditor({
                     <div className="matrix-block-toolbar">
                       <button
                         type="button"
-                        className="button-inline"
+                        className="button-secondary"
                         onClick={() => {
                           const nextColumns = [
                             ...matrixColumns(blockConfig),
@@ -2249,7 +2249,7 @@ export function FocusedElementEditor({
                       {(blockConfig.auto_source?.type || blockConfig.matrix_column_source) ? (
                         <button
                           type="button"
-                          className="button-inline"
+                          className="button-secondary"
                           onClick={() => generateMatrixColumns(block.id, blockConfig)}
                         >
                           Generieren
@@ -2341,7 +2341,7 @@ export function FocusedElementEditor({
                                       }
                                     >
                                       {isPlaceholder ? (
-                                        <div className="matrix-table-placeholder" style={{ height: 40, borderRadius: 8 }} />
+                                        <div className="matrix-table-placeholder" style={{ height: 40, borderRadius: "var(--radius-sm)" }} />
                                       ) : embeddedBlock ? (
                                         <>
                                           <MatrixEmbeddedBlockEditor
@@ -3098,7 +3098,7 @@ export function FocusedElementEditor({
               {elementType === "fine_list" && (() => {
                 const fineAccount = (accountId: string) => availableAccounts.find((a) => a.id === accountId);
                 return (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
                     {/* Pending fines from earlier protocols */}
                     {pendingFines.length > 0 && (
                       <div className="fine-list-block fine-list-block-pending">
@@ -3433,7 +3433,7 @@ export function FocusedElementEditor({
             );
           }}
           topActions={
-            <div style={{ display: "grid", gap: 12, width: "100%" }}>
+            <div style={{ display: "grid", gap: "var(--space-3)", width: "100%" }}>
               <div className="list-block-config-bar">
                 <button
                   type="button"
@@ -3451,7 +3451,7 @@ export function FocusedElementEditor({
                 </button>
               </div>
               {showEventBlockCreateForm ? (
-                <div className="event-row-new grid" style={{ gap: 8 }}>
+                <div className="event-row-new grid" style={{ gap: "var(--space-2)" }}>
                   <div className="event-date-fields">
                     <DateInput
                       className="event-field-date"
@@ -3490,7 +3490,7 @@ export function FocusedElementEditor({
               ) : (
                 <button
                   type="button"
-                  className="button-inline"
+                  className="button-secondary"
                   style={{ justifySelf: "start" }}
                   onClick={() => setShowEventBlockCreateForm(true)}
                 >
@@ -3586,7 +3586,7 @@ export function FocusedElementEditor({
           <div className="table-toolbar-actions table-actions-end">
             <button
               type="button"
-              className="button-inline"
+              className="button-secondary"
               onClick={() => {
                 if (multiParticipantPicker) {
                   const currentBlock = element.blocks.find((block) => block.id === multiParticipantPicker.blockId);

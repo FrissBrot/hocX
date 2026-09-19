@@ -781,7 +781,7 @@ function BlockEditorSummary({
             <h3>{currentTypeLabel}</h3>
             <p className="muted">{currentTypeDescription || "Wähle den Blocktyp und konfiguriere danach die passenden Einstellungen."}</p>
           </div>
-          <button type="button" className="button-ghost button-inline block-editor-hero-action" onClick={onChooseType}>
+          <button type="button" className="button-ghost button-secondary block-editor-hero-action" onClick={onChooseType}>
             Blocktyp wechseln
           </button>
         </div>
@@ -1205,7 +1205,7 @@ export function ElementDefinitionManager({
                 />
                 Historische Daten verwenden
               </label>
-              <p className="muted" style={{ fontSize: "0.8rem" }}>
+              <p className="muted" style={{ fontSize: "var(--text-sm)" }}>
                 Zeigt den Wert aus dem Snapshot des Zyklus, in den das jeweilige Protokoll fällt (statt immer den aktuellen Listenwert).
                 Existiert für diesen Zyklus noch kein Snapshot, wird der aktuelle Wert verwendet.
               </p>
@@ -1778,7 +1778,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
         </div>
         <button
           type="button"
-          className="button-inline"
+          className="button-secondary"
           onClick={() => {
             setCreateDefinitionForm(initialDefinitionForm);
             setCreateBlockForm({ ...initialBlockForm, id: "1", sort_index: "10" });
@@ -1811,7 +1811,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
             <td>{definition.blocks.length} {definition.blocks.length === 1 ? "Block" : "Blöcke"}</td>
             <td>
               <div className="table-actions">
-                <button type="button" className="button-inline button-danger" onClick={(event) => {
+                <button type="button" className="button-secondary button-danger" onClick={(event) => {
                   event.stopPropagation();
                   void deleteDefinition(definition.id);
                 }}>Löschen</button>
@@ -1838,7 +1838,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
             <button type="button" className="button-ghost modal-close" onClick={() => setShowDetailModal(false)}>
               Abbrechen
             </button>
-            <button type="submit" form="element-definition-form" className="button-inline">
+            <button type="submit" form="element-definition-form" className="button-secondary">
               Speichern
             </button>
           </>
@@ -1878,7 +1878,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
               actions={
                 <button
                   type="button"
-                  className="button-inline"
+                  className="button-secondary"
                   onClick={() => {
                     setCreatingNewDefinition(false);
                     setShowCreateBlockModal(true);
@@ -1924,7 +1924,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                       <div className="table-actions">
                         <button
                           type="button"
-                          className="button-inline button-ghost"
+                          className="button-secondary button-ghost"
                           onClick={(event) => {
                             event.stopPropagation();
                             setSelectedBlockId(block.id);
@@ -1934,7 +1934,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                         >
                           Bearbeiten
                         </button>
-                        <button type="button" className="button-inline button-danger" onClick={(event) => {
+                        <button type="button" className="button-secondary button-danger" onClick={(event) => {
                           event.stopPropagation();
                           void deleteBlock(block.id);
                         }}>Löschen</button>
@@ -2295,7 +2295,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
               }
               actions={
                 createBlockForm.linked_list_id ? null : (
-                  <button type="button" className="button-inline" onClick={() => openTableDesigner("create")}>
+                  <button type="button" className="button-secondary" onClick={() => openTableDesigner("create")}>
                     Tabelle konfigurieren
                   </button>
                 )
@@ -2398,16 +2398,16 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 {createBlockForm.repeat_source === "event" && (
                   <div className="grid">
                     <div className="eyebrow" style={{ marginBottom: 4 }}>Terminfelder</div>
-                    <p className="muted" style={{ fontSize: "0.85rem", margin: 0 }}>
+                    <p className="muted" style={{ fontSize: "var(--text-base)", margin: 0 }}>
                       Diese Felder des Termins erscheinen als bearbeitbare Zeilen in der Tabelle und werden direkt im Termin gespeichert.
                     </p>
-                    <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
+                    <div style={{ display: "grid", gap: "var(--space-2)", marginTop: 8 }}>
                       {createBlockForm.event_fields.map((entry) => {
                         const def = ALL_EVENT_FIELDS.find((d) => d.field === entry.field);
                         if (!def) return null;
                         return (
-                          <div key={entry.field} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            <label style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 160, cursor: "pointer" }}>
+                          <div key={entry.field} style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+                            <label style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", minWidth: 160, cursor: "pointer" }}>
                               <input
                                 type="checkbox"
                                 checked={entry.enabled}
@@ -2420,13 +2420,13 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                                   }))
                                 }
                               />
-                              <span style={{ fontSize: "0.85rem" }}>{def.defaultLabel}</span>
+                              <span style={{ fontSize: "var(--text-base)" }}>{def.defaultLabel}</span>
                             </label>
                             {entry.enabled && (
                               <input
                                 value={entry.label}
                                 placeholder={def.defaultLabel}
-                                style={{ flex: 1, minHeight: 0, padding: "4px 8px", fontSize: "0.85rem" }}
+                                style={{ flex: 1, minHeight: 0, padding: "4px 8px", fontSize: "var(--text-base)" }}
                                 onChange={(e) =>
                                   setCreateBlockForm((current) => ({
                                     ...current,
@@ -2481,7 +2481,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
               title="Matrix"
               description="Lege Zeilen und Spalten im Designer an. Danach kannst du pro Zeile den Datentyp und pro Spalte den Terminfilter setzen."
               actions={
-                <button type="button" className="button-inline" onClick={() => openMatrixDesigner("create")}>
+                <button type="button" className="button-secondary" onClick={() => openMatrixDesigner("create")}>
                   Matrix konfigurieren
                 </button>
               }
@@ -2561,7 +2561,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
             </SettingsSection>
           ) : null}
           <div className="block-editor-footer">
-            <button type="submit" className="button-inline">{creatingNewDefinition ? "Element anlegen" : "Block anlegen"}</button>
+            <button type="submit" className="button-secondary">{creatingNewDefinition ? "Element anlegen" : "Block anlegen"}</button>
           </div>
         </form>
       </Modal>
@@ -2882,7 +2882,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 }
                 actions={
                   blockForm.linked_list_id ? null : (
-                    <button type="button" className="button-inline" onClick={() => openTableDesigner("edit")}>
+                    <button type="button" className="button-secondary" onClick={() => openTableDesigner("edit")}>
                       Tabelle konfigurieren
                     </button>
                   )
@@ -2985,16 +2985,16 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                     {blockForm.repeat_source === "event" && (
                       <div className="grid">
                         <div className="eyebrow" style={{ marginBottom: 4 }}>Terminfelder</div>
-                        <p className="muted" style={{ fontSize: "0.85rem", margin: 0 }}>
+                        <p className="muted" style={{ fontSize: "var(--text-base)", margin: 0 }}>
                           Diese Felder des Termins erscheinen als bearbeitbare Zeilen in der Tabelle und werden direkt im Termin gespeichert.
                         </p>
-                        <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
+                        <div style={{ display: "grid", gap: "var(--space-2)", marginTop: 8 }}>
                           {blockForm.event_fields.map((entry) => {
                             const def = ALL_EVENT_FIELDS.find((d) => d.field === entry.field);
                             if (!def) return null;
                             return (
-                              <div key={entry.field} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                <label style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 160, cursor: "pointer" }}>
+                              <div key={entry.field} style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+                                <label style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", minWidth: 160, cursor: "pointer" }}>
                                   <input
                                     type="checkbox"
                                     checked={entry.enabled}
@@ -3007,13 +3007,13 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                                       }))
                                     }
                                   />
-                                  <span style={{ fontSize: "0.85rem" }}>{def.defaultLabel}</span>
+                                  <span style={{ fontSize: "var(--text-base)" }}>{def.defaultLabel}</span>
                                 </label>
                                 {entry.enabled && (
                                   <input
                                     value={entry.label}
                                     placeholder={def.defaultLabel}
-                                    style={{ flex: 1, minHeight: 0, padding: "4px 8px", fontSize: "0.85rem" }}
+                                    style={{ flex: 1, minHeight: 0, padding: "4px 8px", fontSize: "var(--text-base)" }}
                                     onChange={(e) =>
                                       setBlockForm((current) => ({
                                         ...current,
@@ -3076,7 +3076,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 title="Matrix"
                 description="Öffne den Matrix-Designer, um Spalten, Zeilen und Datentypen direkt visuell zu konfigurieren."
                 actions={
-                  <button type="button" className="button-inline" onClick={() => openMatrixDesigner("edit")}>
+                  <button type="button" className="button-secondary" onClick={() => openMatrixDesigner("edit")}>
                     Matrix konfigurieren
                   </button>
                 }
@@ -3156,7 +3156,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
               </SettingsSection>
             ) : null}
             <div className="block-editor-footer">
-              <button type="submit" className="button-inline">Block speichern</button>
+              <button type="submit" className="button-secondary">Block speichern</button>
             </div>
           </form>
         ) : null}
@@ -3211,7 +3211,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
         size="fullscreen"
         headerActions={
           matrixDesignerMode === "edit" ? (
-            <button type="button" className="button-inline" onClick={() => { void saveMatrixDesigner(); }}>
+            <button type="button" className="button-secondary" onClick={() => { void saveMatrixDesigner(); }}>
               Übernehmen
             </button>
           ) : undefined
@@ -3284,7 +3284,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
               <div className="matrix-designer-strip-actions">
                 <button
                   type="button"
-                  className="button-inline"
+                  className="button-secondary"
                   onClick={() => {
                     const nextId = nextTableFieldId(matrixDesignerRows);
                     updateMatrixDesignerForm((c) => ({ ...c, table_fields: [...c.table_fields, defaultFieldRow(nextId)] }));
@@ -3296,7 +3296,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 {matrixDesignerForm.matrix_mode !== "auto" ? (
                   <button
                     type="button"
-                    className="button-inline"
+                    className="button-secondary"
                     onClick={() => {
                       const nextId = nextMatrixColumnConfigId(matrixDesignerColumns);
                       updateMatrixDesignerForm((c) => ({ ...c, matrix_columns: [...c.matrix_columns, defaultMatrixColumn(nextId)] }));
@@ -3308,7 +3308,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 ) : (
                   <button
                     type="button"
-                    className="button-inline"
+                    className="button-secondary"
                     disabled={matrixPreviewLoading}
                     onClick={() => { void loadMatrixPreview(); }}
                   >
@@ -3407,7 +3407,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                       </div>
                       <button
                         type="button"
-                        className="button-inline button-danger"
+                        className="button-secondary button-danger"
                         onClick={() => {
                           updateMatrixDesignerForm((c) => ({ ...c, table_fields: c.table_fields.filter((e) => e.id !== selectedMatrixRow.id) }));
                           const next = matrixDesignerRows.find((e) => e.id !== selectedMatrixRow.id) ?? null;
@@ -3706,7 +3706,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                       </div>
                       <button
                         type="button"
-                        className="button-inline button-danger"
+                        className="button-secondary button-danger"
                         onClick={() => {
                           updateMatrixDesignerForm((c) => ({ ...c, matrix_columns: c.matrix_columns.filter((e) => e.id !== selectedMatrixColumn.id) }));
                           const next = matrixDesignerColumns.find((e) => e.id !== selectedMatrixColumn.id) ?? null;
@@ -3760,7 +3760,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
         size="fullscreen"
         headerActions={
           tableDesignerMode === "edit" ? (
-            <button type="button" className="button-inline" onClick={() => { void saveTableDesigner(); }}>
+            <button type="button" className="button-secondary" onClick={() => { void saveTableDesigner(); }}>
               Übernehmen
             </button>
           ) : undefined
@@ -3771,7 +3771,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
             <div className="matrix-designer-strip">
               <div className="matrix-designer-strip-left" />
               <div className="matrix-designer-strip-actions">
-                <button type="button" className="button-inline" onClick={addTableDesignerRow}>
+                <button type="button" className="button-secondary" onClick={addTableDesignerRow}>
                   + Zeile
                 </button>
               </div>
@@ -3814,7 +3814,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                       </div>
                       <button
                         type="button"
-                        className="button-inline button-danger"
+                        className="button-secondary button-danger"
                         onClick={() => removeTableDesignerRow(selectedTableRow.id)}
                       >
                         Entfernen

@@ -331,7 +331,7 @@ export function MatrixEmbeddedBlockEditor({
                 </div>
                 <button
                   type="button"
-                  className="button-inline button-danger todo-delete"
+                  className="button-secondary button-danger todo-delete"
                   onClick={async () => {
                     const ok = await confirm({
                       message: `Todo "${String(item.task ?? "").trim() || "Unbenannt"}" löschen?`,
@@ -432,7 +432,7 @@ export function MatrixEmbeddedBlockEditor({
               {String(image.url ?? "").trim() ? <LightboxImage alt={String(image.caption ?? "Matrixbild")} src={String(image.url)} /> : null}
               <button
                 type="button"
-                className="button-inline button-danger"
+                className="button-secondary button-danger"
                 onClick={() =>
                   updateEmbeddedConfig((current) => ({
                     ...current,
@@ -448,7 +448,7 @@ export function MatrixEmbeddedBlockEditor({
         <div className="table-toolbar-actions">
           <button
             type="button"
-            className="button-inline"
+            className="button-secondary"
             onClick={() =>
               updateEmbeddedConfig((current) => ({
                 ...current,
@@ -606,7 +606,7 @@ export function MatrixEmbeddedBlockEditor({
               </div>
               <button
                 type="button"
-                className="button-inline button-danger todo-delete"
+                className="button-secondary button-danger todo-delete"
                 onClick={async () => {
                   const ok = await confirm({
                     message: `Zeile "${String(row.label ?? "").trim() || "Unbenannt"}" löschen?`,
@@ -628,7 +628,7 @@ export function MatrixEmbeddedBlockEditor({
         <div className="table-toolbar-actions">
           <button
             type="button"
-            className="button-inline"
+            className="button-secondary"
             onClick={() =>
               updateEmbeddedConfig((current) => ({
                 ...current,
@@ -1082,7 +1082,7 @@ export function MatrixEmbeddedBlockEditor({
               </div>
               <button
                 type="button"
-                className="button-inline button-danger todo-delete"
+                className="button-secondary button-danger todo-delete"
                 onClick={async () => {
                   const ok = await confirm({
                     message: `Bulletpoint "${String(item ?? "").trim() || "Unbenannt"}" löschen?`,

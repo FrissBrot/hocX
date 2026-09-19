@@ -240,7 +240,7 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
           {isLoadingMore ? (
             <span className="muted">Lädt weitere Bussen…</span>
           ) : (
-            <button type="button" className="button-inline button-ghost" onClick={() => void loadMore()}>
+            <button type="button" className="button-secondary button-ghost" onClick={() => void loadMore()}>
               Mehr laden ({fines.length} geladen)
             </button>
           )}

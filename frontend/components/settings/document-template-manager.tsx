@@ -591,7 +591,7 @@ function PresetCardGrid({
           <div className="preset-card-preview">{opt.preview}</div>
           <div className="block-type-summary">
             <strong>{opt.label}</strong>
-            <span className="muted" style={{ fontSize: "0.78rem" }}>{opt.description}</span>
+            <span className="muted" style={{ fontSize: "var(--text-xs)" }}>{opt.description}</span>
           </div>
         </button>
       ))}
@@ -660,7 +660,7 @@ function FontFamilyPicker({ value, onChange }: { value: string; onChange: (v: st
           <div className="font-sample" style={opt.style}>{opt.sample}</div>
           <div className="block-type-summary">
             <strong style={opt.style}>{opt.label}</strong>
-            <span className="muted" style={{ fontSize: "0.78rem" }}>{opt.description}</span>
+            <span className="muted" style={{ fontSize: "var(--text-xs)" }}>{opt.description}</span>
           </div>
         </button>
       ))}
@@ -750,7 +750,7 @@ function TemplateForm({
           <span className="field-label">Beschreibung</span>
           <input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
         </label>
-        <div style={{ display: "flex", gap: "20px", alignItems: "flex-end", paddingBottom: "4px" }}>
+        <div style={{ display: "flex", gap: "var(--space-5)", alignItems: "flex-end", paddingBottom: "4px" }}>
           <label className="checkbox-row">
             <input type="checkbox" checked={form.is_active} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))} />
             Aktiv
@@ -765,7 +765,7 @@ function TemplateForm({
       {/* Orientation selector */}
       <div className="card inset-card" style={{ padding: "12px 16px" }}>
         <div className="eyebrow" style={{ marginBottom: "8px" }}>Format</div>
-        <div style={{ display: "flex", gap: "10px" }}>
+        <div style={{ display: "flex", gap: "var(--space-3)" }}>
           {([["portrait", "Hochformat", "A4 vertikal — für Protokolle"], ["landscape", "Querformat", "A4 horizontal — für Listen & Tabellen"]] as const).map(([val, label, desc]) => (
             <button
               key={val}
@@ -780,10 +780,10 @@ function TemplateForm({
                 preset_title_page: val === "landscape" ? "none" : f.preset_title_page,
               }))}
             >
-              <div style={{ fontSize: "1.4rem", marginBottom: "4px" }}>{val === "portrait" ? "📄" : "📋"}</div>
+              <div style={{ fontSize: "var(--text-2xl)", marginBottom: "4px" }}>{val === "portrait" ? "📄" : "📋"}</div>
               <div className="block-type-summary">
                 <strong>{label}</strong>
-                <span className="muted" style={{ fontSize: "0.78rem" }}>{desc}</span>
+                <span className="muted" style={{ fontSize: "var(--text-xs)" }}>{desc}</span>
               </div>
             </button>
           ))}
@@ -817,13 +817,13 @@ function TemplateForm({
                 value={form.secondary_color}
                 onChange={(v) => setForm((f) => ({ ...f, secondary_color: v }))}
               />
-              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                <div style={{ width: "80px", height: "80px", borderRadius: "12px", background: `linear-gradient(135deg, #${form.primary_color} 50%, #${form.secondary_color} 50%)`, border: "1px solid var(--border)", flexShrink: 0 }} />
-                <div style={{ fontSize: "0.78rem", color: "var(--muted)" }}>Vorschau</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+                <div style={{ width: "80px", height: "80px", borderRadius: "var(--radius-md)", background: `linear-gradient(135deg, #${form.primary_color} 50%, #${form.secondary_color} 50%)`, border: "1px solid var(--border)", flexShrink: 0 }} />
+                <div style={{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>Vorschau</div>
               </div>
             </div>
             <div style={{ marginTop: "10px" }}>
-              <button type="button" className="button-inline" style={{ fontSize: "0.78rem" }}
+              <button type="button" className="button-secondary" style={{ fontSize: "var(--text-xs)" }}
                 onClick={() => setForm((f) => ({ ...f, primary_color: "174B7A", secondary_color: "4F6D7A" }))}>
                 Farben zurücksetzen
               </button>
@@ -864,7 +864,7 @@ function TemplateForm({
 
           <div className="card inset-card">
             <div className="eyebrow">Schriftgrösse</div>
-            <div style={{ display: "flex", gap: "12px", marginTop: "12px", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "12px", flexWrap: "wrap" }}>
               {(["10pt", "11pt", "12pt"] as const).map((size) => (
                 <button
                   key={size}
@@ -874,7 +874,7 @@ function TemplateForm({
                   style={{ minWidth: "90px", padding: "14px 16px" }}
                 >
                   <span style={{ fontSize: size === "10pt" ? "1.1rem" : size === "11pt" ? "1.3rem" : "1.5rem", fontWeight: 600 }}>Aa</span>
-                  <span style={{ fontSize: "0.75rem", color: "var(--muted)", marginTop: "4px", display: "block" }}>{size}</span>
+                  <span style={{ fontSize: "var(--text-xs)", color: "var(--muted)", marginTop: "4px", display: "block" }}>{size}</span>
                 </button>
               ))}
             </div>
@@ -889,7 +889,7 @@ function TemplateForm({
             style={{ "--dt-accent": `#${form.primary_color}` } as React.CSSProperties}
           >
             <div className="eyebrow">Kopfzeile (Header)</div>
-            <p className="muted" style={{ marginTop: "4px", fontSize: "0.82rem" }}>Erscheint oben auf jeder Seite.</p>
+            <p className="muted" style={{ marginTop: "4px", fontSize: "var(--text-sm)" }}>Erscheint oben auf jeder Seite.</p>
             <div style={{ marginTop: "12px" }}>
               <PresetCardGrid options={headerOptions} value={form.preset_header} onChange={(v) => setForm((f) => ({ ...f, preset_header: v }))} accentColor={form.primary_color} />
             </div>
@@ -915,7 +915,7 @@ function TemplateForm({
             style={{ "--dt-accent": `#${form.primary_color}` } as React.CSSProperties}
           >
             <div className="eyebrow">Fusszeile (Footer)</div>
-            <p className="muted" style={{ marginTop: "4px", fontSize: "0.82rem" }}>Erscheint unten auf jeder Seite.</p>
+            <p className="muted" style={{ marginTop: "4px", fontSize: "var(--text-sm)" }}>Erscheint unten auf jeder Seite.</p>
             <div style={{ marginTop: "12px" }}>
               <PresetCardGrid options={footerOptions} value={form.preset_footer} onChange={(v) => setForm((f) => ({ ...f, preset_footer: v }))} accentColor={form.primary_color} />
             </div>
@@ -926,7 +926,7 @@ function TemplateForm({
             style={{ "--dt-accent": `#${form.primary_color}` } as React.CSSProperties}
           >
             <div className="eyebrow">Titelblatt</div>
-            <p className="muted" style={{ marginTop: "4px", fontSize: "0.82rem" }}>Erste Seite des Protokolls mit Metadaten.</p>
+            <p className="muted" style={{ marginTop: "4px", fontSize: "var(--text-sm)" }}>Erste Seite des Protokolls mit Metadaten.</p>
             <div style={{ marginTop: "12px" }}>
               <PresetCardGrid options={titlePageOptions} value={form.preset_title_page} onChange={(v) => setForm((f) => ({ ...f, preset_title_page: v }))} accentColor={form.primary_color} />
             </div>
@@ -936,10 +936,10 @@ function TemplateForm({
           {!isLandscape && (form.preset_title_page === "combined_toc" ? (
             <div className="card inset-card" style={{ "--dt-accent": `#${form.primary_color}` } as React.CSSProperties}>
               <div className="eyebrow">Titelblatt + Inhaltsverzeichnis — Konfiguration</div>
-              <p className="muted" style={{ marginTop: "4px", fontSize: "0.82rem" }}>
+              <p className="muted" style={{ marginTop: "4px", fontSize: "var(--text-sm)" }}>
                 Das Inhaltsverzeichnis ist in diesem Titelblatt integriert.
               </p>
-              <div style={{ display: "flex", gap: "16px", marginTop: "16px", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: "var(--space-4)", marginTop: "16px", flexWrap: "wrap" }}>
                 <label className="field-stack" style={{ flex: 1, minWidth: "200px" }}>
                   <span className="field-label">Logo / Bild oben links</span>
                   <SearchableSelect
@@ -974,7 +974,7 @@ function TemplateForm({
                   <span className="field-help">Abstände zwischen IHV-Einträgen.</span>
                 </label>
               </div>
-              <div style={{ display: "flex", gap: "16px", marginTop: "12px", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: "var(--space-4)", marginTop: "12px", flexWrap: "wrap" }}>
                 <label className="field-stack" style={{ flex: 1, minWidth: "140px" }}>
                   <span className="field-label">Ort</span>
                   <input value={form.title_location} onChange={(e) => setForm((f) => ({ ...f, title_location: e.target.value }))} placeholder="z.B. Musterort" />
@@ -1000,7 +1000,7 @@ function TemplateForm({
               style={{ "--dt-accent": `#${form.primary_color}` } as React.CSSProperties}
             >
               <div className="eyebrow">Inhaltsverzeichnis</div>
-              <p className="muted" style={{ marginTop: "4px", fontSize: "0.82rem" }}>Übersicht aller Abschnitte.</p>
+              <p className="muted" style={{ marginTop: "4px", fontSize: "var(--text-sm)" }}>Übersicht aller Abschnitte.</p>
               <div style={{ marginTop: "12px" }}>
                 <PresetCardGrid options={tocOptions} value={form.preset_toc} onChange={(v) => setForm((f) => ({ ...f, preset_toc: v }))} accentColor={form.primary_color} />
               </div>
@@ -1009,7 +1009,7 @@ function TemplateForm({
 
           <div className="card inset-card">
             <div className="eyebrow">Nummerierung</div>
-            <div style={{ display: "flex", gap: "12px", marginTop: "12px" }}>
+            <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "12px" }}>
               {([["sections", "Mit Nummern", "1. Abschnitt, 1.1 Unterabschnitt"], ["none", "Ohne Nummern", "Nur Titel, keine Nummern"]] as const).map(([val, label, desc]) => (
                 <button
                   key={val}
@@ -1020,7 +1020,7 @@ function TemplateForm({
                 >
                   <div className="block-type-summary">
                     <strong>{label}</strong>
-                    <span className="muted" style={{ fontSize: "0.78rem" }}>{desc}</span>
+                    <span className="muted" style={{ fontSize: "var(--text-xs)" }}>{desc}</span>
                   </div>
                 </button>
               ))}
@@ -1029,7 +1029,7 @@ function TemplateForm({
 
           <div className="card inset-card">
             <div className="eyebrow">Weitere Optionen</div>
-            <label style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "12px", cursor: "pointer" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", marginTop: "12px", cursor: "pointer" }}>
               <input
                 type="checkbox"
                 checked={form.show_metadata}
@@ -1037,7 +1037,7 @@ function TemplateForm({
               />
               <span>Protokoll-Metadaten anzeigen</span>
             </label>
-            <p className="muted" style={{ marginTop: "4px", fontSize: "0.82rem" }}>Zeigt einen automatischen Metadaten-Block (Nummer, Titel, Datum, Status) im exportierten PDF an. Standardmässig ausgeblendet.</p>
+            <p className="muted" style={{ marginTop: "4px", fontSize: "var(--text-sm)" }}>Zeigt einen automatischen Metadaten-Block (Nummer, Titel, Datum, Status) im exportierten PDF an. Standardmässig ausgeblendet.</p>
           </div>
         </div>
       )}
@@ -1246,7 +1246,7 @@ export function DocumentTemplateManager({ initialTemplates, initialParts, tenant
             <input value={partForm.description} onChange={(e) => setPartForm((f) => ({ ...f, description: e.target.value }))} />
           </label>
           <div className="table-toolbar-actions">
-            <button type="submit" className="button-inline">Hochladen</button>
+            <button type="submit" className="button-secondary">Hochladen</button>
           </div>
         </form>
       </Modal>
@@ -1255,7 +1255,7 @@ export function DocumentTemplateManager({ initialTemplates, initialParts, tenant
         <form className="grid" onSubmit={createTemplate}>
           <TemplateForm form={templateForm} setForm={setTemplateForm} partsByType={partsByType} allParts={parts} />
           <div className="table-toolbar-actions">
-            <button type="submit" className="button-inline">Layout erstellen</button>
+            <button type="submit" className="button-secondary">Layout erstellen</button>
           </div>
         </form>
       </Modal>
@@ -1265,7 +1265,7 @@ export function DocumentTemplateManager({ initialTemplates, initialParts, tenant
           <DataToolbar
             title="Parts-Bibliothek"
             description="Eigene LaTeX-Snippets oder Fonts hochladen und in Layouts einbinden."
-            actions={<button type="button" className="button-inline" onClick={() => setShowPartForm(true)}>Part hochladen</button>}
+            actions={<button type="button" className="button-secondary" onClick={() => setShowPartForm(true)}>Part hochladen</button>}
           />
           <article className="card">
             <label className="field-stack">
@@ -1282,7 +1282,7 @@ export function DocumentTemplateManager({ initialTemplates, initialParts, tenant
                 <td><Badge variant={part.is_active ? "success" : "neutral"}>{part.is_active ? "Aktiv" : "Inaktiv"}</Badge></td>
                 <td>
                   <div className="table-actions">
-                    <button type="button" className="button-inline button-danger" onClick={() => deletePart(part.id)}>Löschen</button>
+                    <button type="button" className="button-secondary button-danger" onClick={() => deletePart(part.id)}>Löschen</button>
                   </div>
                 </td>
               </tr>
@@ -1294,7 +1294,7 @@ export function DocumentTemplateManager({ initialTemplates, initialParts, tenant
           <DataToolbar
             title="PDF-Layouts"
             description="Layouts definieren das Aussehen des exportierten Protokolls."
-            actions={<button type="button" className="button-inline" onClick={() => setShowTemplateForm(true)}>Neues Layout</button>}
+            actions={<button type="button" className="button-secondary" onClick={() => setShowTemplateForm(true)}>Neues Layout</button>}
           />
           <div className="editor-shell">
             <aside className="editor-nav">
@@ -1317,7 +1317,7 @@ export function DocumentTemplateManager({ initialTemplates, initialParts, tenant
                         {isLandscape ? "Q" : "H"}
                       </span>
                       <span className="editor-nav-label">{template.name}</span>
-                      <div className="editor-nav-subtitle status-row" style={{ gap: "4px" }}>
+                      <div className="editor-nav-subtitle status-row" style={{ gap: "var(--space-1)" }}>
                         <span className="pill">v{template.version}</span>
                         {template.is_default && <span className="pill">Standard</span>}
                         {!template.is_active && <span className="pill">Inaktiv</span>}
@@ -1337,13 +1337,13 @@ export function DocumentTemplateManager({ initialTemplates, initialParts, tenant
                       <div className="eyebrow">Layout</div>
                       <h2>{selectedTemplate.name}</h2>
                     </div>
-                    <button type="button" className="button-inline button-danger" onClick={() => deleteTemplate(selectedTemplate.id)}>
+                    <button type="button" className="button-secondary button-danger" onClick={() => deleteTemplate(selectedTemplate.id)}>
                       Löschen
                     </button>
                   </div>
                   <TemplateForm form={selectedTemplateForm} setForm={setSelectedTemplateForm} partsByType={partsByType} allParts={parts} />
                   <div className="table-toolbar-actions">
-                    <button type="submit" className="button-inline">Layout speichern</button>
+                    <button type="submit" className="button-secondary">Layout speichern</button>
                   </div>
                 </form>
               ) : (

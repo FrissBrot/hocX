@@ -149,7 +149,7 @@ function ErrorRow({ entry, expanded, onToggle }: { entry: SystemErrorLogEntry; e
                 <div className="muted">Ausgelöst von: {entry.actor_email}</div>
               )}
               {entry.traceback && (
-                <pre style={{ whiteSpace: "pre-wrap", fontSize: "0.8rem", overflowX: "auto" }}>{entry.traceback}</pre>
+                <pre style={{ whiteSpace: "pre-wrap", fontSize: "var(--text-sm)", overflowX: "auto" }}>{entry.traceback}</pre>
               )}
             </div>
           </td>

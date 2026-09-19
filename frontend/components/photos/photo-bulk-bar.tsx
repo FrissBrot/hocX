@@ -131,29 +131,29 @@ export function PhotoBulkBar({
           nullLabel="Album wählen…"
           disabled={busy}
         />
-        <button type="button" className="button-ghost button-inline" onClick={() => void addToAlbum()} disabled={busy || !selectedAlbumId}>
+        <button type="button" className="button-ghost button-secondary" onClick={() => void addToAlbum()} disabled={busy || !selectedAlbumId}>
           Zu Album hinzufügen
         </button>
-        <button type="button" className="button-ghost button-inline" onClick={() => setTaggingOpen((current) => !current)} disabled={busy}>
+        <button type="button" className="button-ghost button-secondary" onClick={() => setTaggingOpen((current) => !current)} disabled={busy}>
           Tags hinzufügen
         </button>
-        <button type="button" className="button-ghost button-inline" onClick={() => void toggleBest("include")} disabled={busy}>
+        <button type="button" className="button-ghost button-secondary" onClick={() => void toggleBest("include")} disabled={busy}>
           ★ Best-of
         </button>
-        <button type="button" className="button-ghost button-inline" onClick={() => void toggleBest("exclude")} disabled={busy}>
+        <button type="button" className="button-ghost button-secondary" onClick={() => void toggleBest("exclude")} disabled={busy}>
           ☆ Best-of entfernen
         </button>
-        <button type="button" className="button-inline button-danger" onClick={() => void deleteSelected()} disabled={busy}>
+        <button type="button" className="button-secondary button-danger" onClick={() => void deleteSelected()} disabled={busy}>
           Löschen
         </button>
-        <button type="button" className="button-ghost button-inline" onClick={onClearSelection} disabled={busy}>
+        <button type="button" className="button-ghost button-secondary" onClick={onClearSelection} disabled={busy}>
           Auswahl aufheben
         </button>
       </div>
       {taggingOpen && (
         <div className="photo-bulk-bar-tagging">
           <TagInput value={tagsValue} onChange={setTagsValue} suggestions={tagSuggestions} placeholder="Tag hinzufügen…" />
-          <button type="button" className="button-inline" onClick={() => void applyTags()} disabled={busy || !tagsValue.trim()}>
+          <button type="button" className="button-secondary" onClick={() => void applyTags()} disabled={busy || !tagsValue.trim()}>
             Anwenden
           </button>
         </div>

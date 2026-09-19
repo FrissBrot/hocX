@@ -174,7 +174,7 @@ export function FileDetailModal({
             <TagInput value={tagsValue} onChange={handleTagsChange} suggestions={tagSuggestions} placeholder="Tag hinzufügen…" />
           </section>
 
-          <a href={fileUrl} target="_blank" rel="noreferrer" className="button-inline button-ghost file-detail-open">
+          <a href={fileUrl} target="_blank" rel="noreferrer" className="button-secondary button-ghost file-detail-open">
             Original in neuem Tab öffnen
           </a>
         </div>

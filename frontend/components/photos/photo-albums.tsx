@@ -63,7 +63,7 @@ export function PhotoAlbums() {
             <h2>{active.name}</h2>
             <p className="muted">{ALBUM_KIND_LABEL[active.kind]}{active.kind !== "manual" ? " (automatisch geführt)" : ""}</p>
           </div>
-          <button type="button" className="button-inline" onClick={() => setPicking(true)}>Vorhandene Fotos hinzufügen</button>
+          <button type="button" className="button-secondary" onClick={() => setPicking(true)}>Vorhandene Fotos hinzufügen</button>
         </div>
         <PhotosView key={active.id + revision} albumId={active.id} />
         {picking && (
@@ -84,7 +84,7 @@ export function PhotoAlbums() {
   return (
     <div className="grid">
       {error && <p role="alert" className="form-error-banner">{error}</p>}
-      <div><button type="button" className="button-inline" onClick={() => { setError(""); setCreating(true); }}>+ Album erstellen</button></div>
+      <div><button type="button" className="button-secondary" onClick={() => { setError(""); setCreating(true); }}>+ Album erstellen</button></div>
       {loading ? (
         <p className="muted">Alben werden geladen…</p>
       ) : albums.length === 0 ? (
@@ -121,7 +121,7 @@ export function PhotoAlbums() {
         <Modal open title="Fotoalbum erstellen" onClose={() => { if (!busy) setCreating(false); }}>
           <form className="grid" onSubmit={createAlbum}>
             <label>Albumname<input autoFocus required maxLength={120} value={name} onChange={(event) => setName(event.target.value)} /></label>
-            <button className="button-inline" type="submit" disabled={busy || !name.trim()}>{busy ? "Wird erstellt…" : "Album erstellen"}</button>
+            <button className="button-secondary" type="submit" disabled={busy || !name.trim()}>{busy ? "Wird erstellt…" : "Album erstellen"}</button>
           </form>
         </Modal>
       )}

@@ -109,17 +109,7 @@ export function AdminShell({ children, session }: { children: ReactNode; session
             <h1 className="topbar-title">Platform-Admin</h1>
           </header>
           {isReadOnlyAdmin && (
-            <div
-              className="admin-readonly-banner"
-              style={{
-                background: "var(--sev-medium-soft, #f8f0d8)",
-                color: "var(--sev-medium, #8a6d0a)",
-                borderBottom: "1px solid var(--border, #d8dee9)",
-                padding: "8px 24px",
-                fontSize: "13.5px",
-                fontWeight: 500,
-              }}
-            >
+            <div className="admin-readonly-banner">
               Nur-Lesezugriff (support): Änderungen sind mit diesem Account nicht möglich.
             </div>
           )}

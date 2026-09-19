@@ -101,7 +101,7 @@ export function DashboardView({ todos, fines, nextSession, canExcuse }: Props) {
               </span>
               {countdown ? <span className="dashboard-countdown-pill pill">{countdown}</span> : null}
             </div>
-            <button type="button" className="button-inline dashboard-hero-action" onClick={() => router.push(`/protocols/${protocol.id}`)}>
+            <button type="button" className="button-secondary dashboard-hero-action" onClick={() => router.push(`/protocols/${protocol.id}`)}>
               Protokoll öffnen
             </button>
           </>

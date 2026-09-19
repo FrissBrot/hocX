@@ -212,7 +212,7 @@ export function EventOverviewModal({
 
         {!showAddPanel ? (
           <div className="modal-actions">
-            <button type="button" className="button-inline" onClick={openAddPanel}>
+            <button type="button" className="button-secondary" onClick={openAddPanel}>
               + Hinzufügen
             </button>
           </div>
@@ -274,7 +274,7 @@ export function EventOverviewModal({
             )}
 
             {showCreateForm ? (
-              <div className="event-row-new grid" style={{ gap: 8, marginTop: 12 }}>
+              <div className="event-row-new grid" style={{ gap: "var(--space-2)", marginTop: 12 }}>
                 <div className={`event-date-fields${allowEndDate ? " event-date-fields-range" : ""}`}>
                   <DateInput
                     className="event-field-date"
@@ -330,7 +330,7 @@ export function EventOverviewModal({
                 <button type="button" className="button-ghost" onClick={() => setShowAddPanel(false)}>
                   Schliessen
                 </button>
-                <button type="button" className="button-inline" onClick={() => setShowCreateForm(true)}>
+                <button type="button" className="button-secondary" onClick={() => setShowCreateForm(true)}>
                   + Neuer Termin
                 </button>
               </div>

@@ -249,10 +249,10 @@ export function AdminTenantManagement({ initialPage }: Props) {
         description="Alle Mandanten im System. Neue Mandanten werden hier zentral angelegt."
         actions={
           <>
-            <button type="button" className="button-inline button-ghost" onClick={openImport}>
+            <button type="button" className="button-secondary button-ghost" onClick={openImport}>
               Mandant importieren
             </button>
-            <button type="button" className="button-inline" onClick={() => setModalOpen(true)}>
+            <button type="button" className="button-secondary" onClick={() => setModalOpen(true)}>
               Neuer Mandant
             </button>
           </>
@@ -331,7 +331,7 @@ export function AdminTenantManagement({ initialPage }: Props) {
             <input value={name} onChange={(event) => setName(event.target.value)} required />
           </label>
           <div className="table-actions table-actions-start">
-            <button type="submit" className="button-inline">
+            <button type="submit" className="button-secondary">
               Erstellen
             </button>
           </div>
@@ -386,7 +386,7 @@ export function AdminTenantManagement({ initialPage }: Props) {
             </label>
           </div>
           <div className="table-actions table-actions-start">
-            <button type="submit" className="button-inline" disabled={cloneBusy}>
+            <button type="submit" className="button-secondary" disabled={cloneBusy}>
               {cloneBusy ? "Wird geklont…" : "Klonen"}
             </button>
           </div>
@@ -456,7 +456,7 @@ export function AdminTenantManagement({ initialPage }: Props) {
             </label>
           </div>
           <div className="table-actions table-actions-start">
-            <button type="submit" className="button-inline">
+            <button type="submit" className="button-secondary">
               Exportieren
             </button>
           </div>
@@ -507,7 +507,7 @@ export function AdminTenantManagement({ initialPage }: Props) {
             </div>
           ) : null}
           <div className="table-actions table-actions-start">
-            <button type="submit" className="button-inline" disabled={importBusy || !importFile}>
+            <button type="submit" className="button-secondary" disabled={importBusy || !importFile}>
               {importBusy ? "Wird importiert…" : "Importieren"}
             </button>
           </div>
@@ -526,7 +526,7 @@ export function AdminTenantManagement({ initialPage }: Props) {
           ))}
         </ul>
         <div className="table-actions table-actions-start">
-          <button type="button" className="button-inline" onClick={() => setImportWarnings(null)}>
+          <button type="button" className="button-secondary" onClick={() => setImportWarnings(null)}>
             Schliessen
           </button>
         </div>

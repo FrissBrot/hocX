@@ -520,7 +520,7 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
           <h1 className="page-title">Vorlagen</h1>
           <p className="muted">Vorlagen sind schlanke Container: sie wählen fertige Elemente aus und legen nur deren Reihenfolge fest.</p>
         </div>
-        <button type="button" className="button-inline" onClick={() => setShowCreateForm((current) => !current)}>
+        <button type="button" className="button-secondary" onClick={() => setShowCreateForm((current) => !current)}>
           {showCreateForm ? "Abbrechen" : "+ Vorlage"}
         </button>
       </div>
@@ -576,7 +576,7 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
             Tokens: {"{n}"} = alle Protokolle, {"{n_year}"} = in diesem Jahr, {"{n_month}"} = in diesem Monat, {"{n_cycle}"} = im eigenen Zyklus. Datums-Tokens: {"{date}"}, {"{date:DD.MM.YYYY}"}, {"{dd}"}, {"{mm}"}, {"{yyyy}"}.
           </div>
           <div className="table-toolbar-actions">
-            <button type="submit" className="button-inline">Vorlage erstellen</button>
+            <button type="submit" className="button-secondary">Vorlage erstellen</button>
           </div>
         </form>
       </Modal>
@@ -604,7 +604,7 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
               <div className="table-actions">
                 <button
                   type="button"
-                  className="button-inline button-ghost"
+                  className="button-secondary button-ghost"
                   onClick={(event) => {
                     event.stopPropagation();
                     openDuplicate(template);
@@ -614,7 +614,7 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
                 </button>
                 <button
                   type="button"
-                  className="button-inline button-ghost"
+                  className="button-secondary button-ghost"
                   onClick={(event) => {
                     event.stopPropagation();
                     void toggleTemplateArchived(template);
@@ -622,7 +622,7 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
                 >
                   {template.status === "archived" ? "Aus Archiv zurückholen" : "Archivieren"}
                 </button>
-                <button type="button" className="button-inline button-danger" onClick={(event) => {
+                <button type="button" className="button-secondary button-danger" onClick={(event) => {
                   event.stopPropagation();
                   void deleteTemplate(template.id);
                 }}>Löschen</button>
@@ -644,7 +644,7 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
             <input value={duplicateName} onChange={(event) => setDuplicateName(event.target.value)} required />
           </label>
           <div className="table-toolbar-actions">
-            <button type="submit" className="button-inline" disabled={duplicateBusy}>
+            <button type="submit" className="button-secondary" disabled={duplicateBusy}>
               {duplicateBusy ? "Wird dupliziert…" : "Duplizieren"}
             </button>
           </div>
@@ -1547,10 +1547,10 @@ export function TemplateEditor({
         description="Ziehe Elemente in die gewünschte Reihenfolge."
         actions={
           <div className="table-toolbar-actions">
-            <button type="button" className="button-ghost button-inline" onClick={() => setShowSettingsModal(true)}>
+            <button type="button" className="button-ghost button-secondary" onClick={() => setShowSettingsModal(true)}>
               Einstellungen
             </button>
-            <button type="button" className="button-ghost button-inline" onClick={() => setShowParticipantModal(true)}>
+            <button type="button" className="button-ghost button-secondary" onClick={() => setShowParticipantModal(true)}>
               Teilnehmer
             </button>
           </div>
@@ -1635,7 +1635,7 @@ export function TemplateEditor({
             <span className="field-help">Wird beim PDF-Export verwendet. Kann in den Einstellungen → Dokumentlayouts konfiguriert werden.</span>
           </label>
           <div className="table-toolbar-actions">
-            <button type="submit" className="button-inline">Vorlage speichern</button>
+            <button type="submit" className="button-secondary">Vorlage speichern</button>
           </div>
         </form>
       </Modal>
@@ -1660,7 +1660,7 @@ export function TemplateEditor({
           <div className="table-toolbar-actions">
             <button
               type="button"
-              className="button-ghost button-inline"
+              className="button-ghost button-secondary"
               onClick={() =>
                 setParticipantAssignments((current) => {
                   const currentAssignmentsById = new Map(current.map((assignment) => [assignment.participant_id, assignment]));
@@ -1722,7 +1722,7 @@ export function TemplateEditor({
             })}
           </div>
           <div className="table-toolbar-actions table-actions-end">
-            <button type="button" className="button-inline" onClick={() => void saveTemplateParticipants(true)}>
+            <button type="button" className="button-secondary" onClick={() => void saveTemplateParticipants(true)}>
               Auswahl speichern
             </button>
           </div>
@@ -1735,12 +1735,12 @@ export function TemplateEditor({
           description="Vorlagen sammeln nur fertige Elemente. Wiederholungen und Filter werden direkt in den Blöcken des Elements gepflegt."
           actions={
             <div className="table-toolbar-actions">
-              <button type="button" className="button-ghost button-inline" onClick={() => setShowAutoAssignModal(true)}>
+              <button type="button" className="button-ghost button-secondary" onClick={() => setShowAutoAssignModal(true)}>
                 Verantwortliche-Zuordnung
               </button>
               <button
                 type="button"
-                className="button-inline"
+                className="button-secondary"
                 onClick={() => {
                   setElementPickerSearch("");
                   setShowCreateItem((current) => !current);
@@ -1796,7 +1796,7 @@ export function TemplateEditor({
               <div className="table-toolbar-actions align-end">
                 <button
                   type="button"
-                  className="button-ghost button-inline"
+                  className="button-ghost button-secondary"
                   disabled={!responsibilityAutoListId || bulkAssignBusy}
                   onClick={() => responsibilityAutoListId && void autoAssignResponsiblesFromList(responsibilityAutoListId)}
                 >
@@ -1877,7 +1877,7 @@ export function TemplateEditor({
             </DataTable>
             <span className="field-help">Neue Elemente werden automatisch hinten angehaengt. Die Reihenfolge kannst du danach per Drag and Drop oder direkt ueber die Positionszahl anpassen.</span>
             <div className="table-toolbar-actions">
-              <button type="submit" className="button-inline" disabled={newItemForm.element_definition_ids.length === 0}>Ausgewaehlte Elemente hinzufuegen</button>
+              <button type="submit" className="button-secondary" disabled={newItemForm.element_definition_ids.length === 0}>Ausgewaehlte Elemente hinzufuegen</button>
             </div>
           </form>
         </Modal>
@@ -1939,7 +1939,7 @@ export function TemplateEditor({
                                 ) : null}
                                 <button
                                   type="button"
-                                  className="button-ghost button-inline"
+                                  className="button-ghost button-secondary"
                                   onClick={() => void toggleResponsibleParticipant(responsibilityModalElement.id, assignment.participant_id, false)}
                                 >
                                   Entfernen
@@ -1991,7 +1991,7 @@ export function TemplateEditor({
                   <div className="table-toolbar-actions">
                     <button
                       type="button"
-                      className="button-inline"
+                      className="button-secondary"
                       disabled={!manualLinkEntryId}
                       onClick={() => void linkElementToResponsibleRow()}
                     >
@@ -2122,7 +2122,7 @@ export function TemplateEditor({
                         {item.blocks.length > 1 ? (
                           <button
                             type="button"
-                            className="button-ghost button-inline behavior-expand-toggle"
+                            className="button-ghost button-secondary behavior-expand-toggle"
                             onClick={() => toggleBehaviorExpanded(item.id)}
                             aria-expanded={expandedBehaviorIds.has(item.id)}
                           >
@@ -2166,12 +2166,12 @@ export function TemplateEditor({
                   <div className="template-element-row-actions">
                     <button
                       type="button"
-                      className="button-inline button-ghost"
+                      className="button-secondary button-ghost"
                       onClick={() => setShowResponsibilityModalFor(item.id)}
                     >
                       Verantwortliche
                     </button>
-                    <button type="button" className="button-inline button-danger" onClick={() => void deleteTemplateItem(item.id)}>
+                    <button type="button" className="button-secondary button-danger" onClick={() => void deleteTemplateItem(item.id)}>
                       Entfernen
                     </button>
                   </div>

@@ -96,7 +96,7 @@ export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props)
         title="Admin-Accounts"
         description="Zugang zum Platform-Admin-Panel selbst - getrennt von allen Mandanten-Benutzern."
         actions={
-          <button type="button" className="button-inline" onClick={() => setModalOpen(true)}>
+          <button type="button" className="button-secondary" onClick={() => setModalOpen(true)}>
             Neuer Admin
           </button>
         }
@@ -114,12 +114,12 @@ export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props)
             <td>{admin.is_active ? "Aktiv" : "Deaktiviert"}</td>
             <td>
               <div className="table-actions table-actions-start">
-                <button type="button" className="button-inline" onClick={() => void toggleRole(admin)}>
+                <button type="button" className="button-secondary" onClick={() => void toggleRole(admin)}>
                   {admin.role === "owner" ? "Auf Nur-Lesezugriff setzen" : "Auf Vollzugriff setzen"}
                 </button>
                 <button
                   type="button"
-                  className={`button-inline${admin.is_active ? " button-danger" : ""}`}
+                  className={`button-secondary${admin.is_active ? " button-danger" : ""}`}
                   onClick={() => void toggleActive(admin)}
                   disabled={admin.id === currentAdminId && admin.is_active}
                 >
@@ -153,7 +153,7 @@ export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props)
             </select>
           </label>
           <div className="table-actions table-actions-start">
-            <button type="submit" className="button-inline">
+            <button type="submit" className="button-secondary">
               Erstellen
             </button>
           </div>

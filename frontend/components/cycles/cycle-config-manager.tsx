@@ -118,7 +118,7 @@ function CycleForm({
             display: "flex",
             alignItems: "center",
             justifyContent: "flex-end",
-            gap: "10px",
+            gap: "var(--space-3)",
             paddingTop: "4px",
           }}
         >
@@ -127,7 +127,7 @@ function CycleForm({
               Abbrechen
             </button>
           )}
-          <button type="submit" className="button-inline" disabled={saving}>
+          <button type="submit" className="button-secondary" disabled={saving}>
             {saving ? "Wird gespeichert…" : submitLabel}
           </button>
         </div>
@@ -244,7 +244,7 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
         {!showCreate && editId === null ? (
           <button
             type="button"
-            className="button-inline"
+            className="button-secondary"
             onClick={() => {
               setShowCreate(true);
               setCreateError(null);
@@ -282,7 +282,7 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
         <div
           style={{
             padding: "32px 24px",
-            borderRadius: "20px",
+            borderRadius: "var(--radius-xl)",
             border: "1px dashed var(--border)",
             color: "var(--muted)",
             textAlign: "center",
@@ -309,15 +309,15 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
                 </>
               ) : (
                 <div className="responsibility-card-head">
-                  <div style={{ display: "grid", gap: "4px" }}>
-                    <strong style={{ fontSize: "1rem" }}>{cfg.name}</strong>
+                  <div style={{ display: "grid", gap: "var(--space-1)" }}>
+                    <strong style={{ fontSize: "var(--text-lg)" }}>{cfg.name}</strong>
                     <div
                       style={{
                         display: "flex",
                         alignItems: "center",
-                        gap: "8px",
+                        gap: "var(--space-2)",
                         flexWrap: "wrap",
-                        fontSize: "0.84rem",
+                        fontSize: "var(--text-sm)",
                         color: "var(--muted)",
                       }}
                     >
@@ -341,7 +341,7 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
                             style={{
                               fontSize: "0.78em",
                               padding: "1px 6px",
-                              borderRadius: "6px",
+                              borderRadius: "var(--radius-sm)",
                               background: "color-mix(in srgb, var(--muted) 12%, transparent 88%)",
                               border: "1px solid color-mix(in srgb, var(--muted) 18%, transparent 82%)",
                             }}

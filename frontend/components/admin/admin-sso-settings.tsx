@@ -111,7 +111,7 @@ export function AdminSsoSettings({ initialConfig }: Props) {
         </label>
 
         <div className="table-actions table-actions-start">
-          <button type="submit" className="button-inline" disabled={loading}>
+          <button type="submit" className="button-secondary" disabled={loading}>
             {loading ? "…" : "Speichern"}
           </button>
         </div>

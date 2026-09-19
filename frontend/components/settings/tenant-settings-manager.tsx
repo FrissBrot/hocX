@@ -163,7 +163,7 @@ export function TenantSettingsManager({ initialTenant }: Props) {
               />
             </label>
             <div className="table-actions table-actions-start">
-              <button type="submit" className="button-inline">
+              <button type="submit" className="button-secondary">
                 Speichern
               </button>
             </div>
@@ -199,13 +199,13 @@ export function TenantSettingsManager({ initialTenant }: Props) {
                   <td>
                     <div className="table-actions">
                       {d.status === "pending" && (
-                        <button type="button" className="button-inline" onClick={() => openWizardToResume(d)}>
+                        <button type="button" className="button-secondary" onClick={() => openWizardToResume(d)}>
                           Einrichten
                         </button>
                       )}
                       <button
                         type="button"
-                        className="button-inline button-danger"
+                        className="button-secondary button-danger"
                         disabled={domainBusyId === d.id}
                         onClick={() => deleteDomain(d.id, d.domain)}
                       >

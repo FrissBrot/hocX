@@ -78,11 +78,11 @@ export function TotpEnrollCard({
       </div>
 
       <div className="table-actions table-actions-start">
-        <button type="button" className="button-inline" disabled={code.length !== 6 || busy} onClick={onSubmit}>
+        <button type="button" className="button-secondary" disabled={code.length !== 6 || busy} onClick={onSubmit}>
           {busy ? submitBusyLabel : submitLabel}
         </button>
         {onCancel ? (
-          <button type="button" className="button-inline button-ghost" onClick={onCancel}>
+          <button type="button" className="button-secondary button-ghost" onClick={onCancel}>
             Abbrechen
           </button>
         ) : null}

@@ -318,19 +318,19 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
           <p className="muted">Mandantenweite Personen, die später Templates und Todos zugeordnet werden können.</p>
         </div>
         <div className="table-toolbar-actions">
-          <label className="button-inline button-ghost participant-import-button">
+          <label className="button-secondary button-ghost participant-import-button">
             CSV-Import
             <input type="file" accept=".csv,text/csv" onChange={(e) => void handleCsvFileSelected(e)} hidden />
           </label>
           <button
             type="button"
-            className="button-inline button-danger"
+            className="button-secondary button-danger"
             onClick={() => void bulkDeleteParticipants()}
             disabled={selectedParticipantIds.length === 0}
           >
             Auswahl löschen
           </button>
-          <button type="button" className="button-inline" onClick={openCreate}>
+          <button type="button" className="button-secondary" onClick={openCreate}>
             Neuer Teilnehmer
           </button>
         </div>
@@ -392,7 +392,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
                 <div className="table-actions">
                   <button
                     type="button"
-                    className="button-inline button-danger"
+                    className="button-secondary button-danger"
                     onClick={(event) => {
                       event.stopPropagation();
                       void deleteParticipant(participant.id);
@@ -412,7 +412,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
           {isLoadingMore ? (
             <span className="muted">Lädt weitere Teilnehmer…</span>
           ) : (
-            <button type="button" className="button-inline button-ghost" onClick={() => void loadMore()}>
+            <button type="button" className="button-secondary button-ghost" onClick={() => void loadMore()}>
               Mehr laden ({participants.length} geladen)
             </button>
           )}
@@ -438,8 +438,8 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
             ))}
           </DataTable>
           <div className="table-toolbar-actions">
-            <button type="button" className="button-inline button-ghost" onClick={() => setCsvPreview(null)}>Abbrechen</button>
-            <button type="button" className="button-inline" onClick={() => void confirmCsvImport()} disabled={importing}>
+            <button type="button" className="button-secondary button-ghost" onClick={() => setCsvPreview(null)}>Abbrechen</button>
+            <button type="button" className="button-secondary" onClick={() => void confirmCsvImport()} disabled={importing}>
               {importing ? "Importiere…" : `${csvPreview?.rows.length ?? 0} Einträge importieren`}
             </button>
           </div>
@@ -465,7 +465,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
             {importResult.duplicates.length > 0 && (
               <div>
                 <div className="field-label">Übersprungen (bereits vorhanden)</div>
-                <div className="muted" style={{ fontSize: "0.85rem", lineHeight: 1.7 }}>
+                <div className="muted" style={{ fontSize: "var(--text-base)", lineHeight: 1.7 }}>
                   {importResult.duplicates.join(", ")}
                 </div>
               </div>
@@ -473,13 +473,13 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
             {importResult.errors.length > 0 && (
               <div>
                 <div className="field-label">Fehler</div>
-                <div className="muted" style={{ fontSize: "0.85rem", lineHeight: 1.7 }}>
+                <div className="muted" style={{ fontSize: "var(--text-base)", lineHeight: 1.7 }}>
                   {importResult.errors.map((e, i) => <div key={i}>{e}</div>)}
                 </div>
               </div>
             )}
             <div className="table-toolbar-actions">
-              <button type="button" className="button-inline" onClick={() => setImportResult(null)}>Schließen</button>
+              <button type="button" className="button-secondary" onClick={() => setImportResult(null)}>Schließen</button>
             </div>
           </div>
         )}
@@ -525,14 +525,14 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
             <label className="field-stack">
               <span className="field-label">Eintrittsdatum</span>
               <DateInput value={form.joined_at} onChange={(value) => setForm((current) => ({ ...current, joined_at: value }))} />
-              <span className="muted" style={{ fontSize: "0.8rem" }}>
+              <span className="muted" style={{ fontSize: "var(--text-sm)" }}>
                 Erscheint erst ab diesem Datum in Anwesenheitslisten. Leer = kein Beginn hinterlegt.
               </span>
             </label>
             <label className="field-stack">
               <span className="field-label">Austrittsdatum</span>
               <DateInput value={form.left_at} onChange={(value) => setForm((current) => ({ ...current, left_at: value }))} />
-              <span className="muted" style={{ fontSize: "0.8rem" }}>
+              <span className="muted" style={{ fontSize: "var(--text-sm)" }}>
                 Erscheint ab dem Folgetag nicht mehr in Anwesenheitslisten. Leer = kein Austritt hinterlegt.
               </span>
             </label>
@@ -563,7 +563,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
             </div>
           </div>
           <div className="table-toolbar-actions">
-            <button type="submit" className="button-inline">
+            <button type="submit" className="button-secondary">
               {selectedParticipant ? "Teilnehmer speichern" : "Teilnehmer erstellen"}
             </button>
           </div>

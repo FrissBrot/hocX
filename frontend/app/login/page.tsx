@@ -463,7 +463,7 @@ export default function LoginPage() {
           <span className="field-label">Passwort</span>
           <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
         </label>
-        <button type="submit" className="button-inline login-submit" disabled={loading}>
+        <button type="submit" className="button-secondary login-submit" disabled={loading}>
           {loading ? "…" : "Einloggen"}
         </button>
       </form>
@@ -535,7 +535,7 @@ export default function LoginPage() {
               <span className="pill">Pflicht</span>
             </div>
             {!totpSetup ? (
-              <button type="button" className="button-inline" onClick={() => void startTotpSetup()} disabled={loading}>
+              <button type="button" className="button-secondary" onClick={() => void startTotpSetup()} disabled={loading}>
                 TOTP-Setup starten
               </button>
             ) : (
@@ -569,7 +569,7 @@ export default function LoginPage() {
               <span className="field-label">Bezeichnung</span>
               <input value={passkeyLabel} onChange={(event) => setPasskeyLabel(event.target.value)} placeholder="z.B. Arbeitslaptop" />
             </label>
-            <button type="button" className="button-inline" disabled={loading || !canUsePasskeys || !pendingMfa.can_add_passkey} onClick={() => void runPasskeyFlow()}>
+            <button type="button" className="button-secondary" disabled={loading || !canUsePasskeys || !pendingMfa.can_add_passkey} onClick={() => void runPasskeyFlow()}>
               {loading ? "Passkey wird eingerichtet…" : "Passkey einrichten und anmelden"}
             </button>
           </article>
@@ -624,7 +624,7 @@ export default function LoginPage() {
           </div>
 
           <div className="mfa-footer-stack">
-            <button type="button" className="button-inline button-ghost login-secondary-button login-secondary-button-centered" onClick={resetMfaFlow}>
+            <button type="button" className="button-secondary button-ghost login-secondary-button login-secondary-button-centered" onClick={resetMfaFlow}>
               Zurück zur Anmeldung
             </button>
           </div>
@@ -672,17 +672,17 @@ export default function LoginPage() {
               ))}
             </div>
 
-            <button type="submit" className="button-inline login-submit mfa-primary-button" disabled={totpCode.length !== MFA_CODE_LENGTH || loading}>
+            <button type="submit" className="button-secondary login-submit mfa-primary-button" disabled={totpCode.length !== MFA_CODE_LENGTH || loading}>
               {loading ? "Prüft…" : "Bestätigen"}
             </button>
           </form>
 
           <div className={`mfa-footer-links${canSwitchMethods ? " mfa-footer-links-split" : ""}`}>
-            <button type="button" className="button-inline button-ghost login-secondary-button" onClick={resetMfaFlow}>
+            <button type="button" className="button-secondary button-ghost login-secondary-button" onClick={resetMfaFlow}>
               Zurück zur Anmeldung
             </button>
             {canSwitchMethods ? (
-              <button type="button" className="button-inline button-ghost login-secondary-button" onClick={openMethodChooser}>
+              <button type="button" className="button-secondary button-ghost login-secondary-button" onClick={openMethodChooser}>
                 Andere Option wählen
               </button>
             ) : null}
@@ -704,7 +704,7 @@ export default function LoginPage() {
 
         <button
           type="button"
-          className="button-inline login-submit mfa-primary-button"
+          className="button-secondary login-submit mfa-primary-button"
           disabled={loading || !canUsePasskeys}
           onClick={() => void runPasskeyFlow("manual")}
         >
@@ -713,11 +713,11 @@ export default function LoginPage() {
 
         <div className="mfa-footer-stack">
           {canSwitchMethods ? (
-            <button type="button" className="button-inline button-ghost login-secondary-button login-secondary-button-centered" onClick={openMethodChooser}>
+            <button type="button" className="button-secondary button-ghost login-secondary-button login-secondary-button-centered" onClick={openMethodChooser}>
               Andere Option wählen
             </button>
           ) : null}
-          <button type="button" className="button-inline button-ghost login-secondary-button login-secondary-button-centered" onClick={resetMfaFlow}>
+          <button type="button" className="button-secondary button-ghost login-secondary-button login-secondary-button-centered" onClick={resetMfaFlow}>
             Zurück zur Anmeldung
           </button>
         </div>
@@ -758,7 +758,7 @@ export default function LoginPage() {
 
         {pendingMfa?.status === "setup_required" ? (
           <div className="table-actions table-actions-start">
-            <button type="button" className="button-inline button-ghost login-secondary-button" onClick={resetMfaFlow}>
+            <button type="button" className="button-secondary button-ghost login-secondary-button" onClick={resetMfaFlow}>
               Zurück zum Login
             </button>
           </div>

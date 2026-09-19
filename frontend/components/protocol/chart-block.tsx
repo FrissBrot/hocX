@@ -6,6 +6,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import { StatisticsOverview } from "@/types/api";
+import { CHART_COLORS, CHART_PIE_PALETTE } from "@/lib/constants/chart-colors";
 import { browserApiFetch } from "@/lib/api/client";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 
@@ -79,13 +80,8 @@ const CHART_OPTIONS = [
   { value: "todos", label: "Todos Übersicht" },
 ];
 
-const C = {
-  present: "#22c55e", absent: "#ef4444", excused: "#f59e0b",
-  income: "#22c55e", expenses: "#ef4444",
-  done: "#22c55e", open: "#94a3b8",
-  fines: "#f59e0b", sessions: "#6366f1", participants: "#06b6d4",
-};
-const PIE = ["#6366f1", "#22c55e", "#f59e0b", "#ef4444", "#06b6d4", "#a855f7"];
+const C = CHART_COLORS;
+const PIE = CHART_PIE_PALETTE;
 
 function fmtMonth(m: string) {
   const [y, mo] = m.split("-");
@@ -149,9 +145,9 @@ export function ChartBlock({ config, editable, onSave }: Props) {
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
       {editable && (
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "var(--space-3)", flexWrap: "wrap", alignItems: "center" }}>
           <select
             className="stats-cycle-select"
             value={chartType}
@@ -179,7 +175,7 @@ export function ChartBlock({ config, editable, onSave }: Props) {
         <p className="muted">Kein Diagramm ausgewählt.</p>
       )}
       {stale && (
-        <p className="muted" style={{ fontSize: 12 }}>
+        <p className="muted" style={{ fontSize: "var(--text-xs)" }}>
           ⚠ Aktualisierung fehlgeschlagen – zeige zwischengespeicherte Daten.
         </p>
       )}
@@ -201,7 +197,7 @@ function ChartPreview({ chartType, cycleKey, data }: { chartType: string; cycleK
           <XAxis dataKey="month" tick={{ fontSize: 10 }} stroke="var(--muted)" />
           <YAxis allowDecimals={false} tick={{ fontSize: 10 }} stroke="var(--muted)" width={24} />
           <Tooltip />
-          <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+          <Legend iconSize={10} wrapperStyle={{ fontSize: "var(--text-xs)" }} />
           <Bar dataKey="present" name="Anwesend" stackId="a" fill={C.present} />
           <Bar dataKey="excused" name="Entschuldigt" stackId="a" fill={C.excused} />
           <Bar dataKey="absent" name="Abwesend" stackId="a" fill={C.absent} radius={[4, 4, 0, 0]} />
@@ -220,7 +216,7 @@ function ChartPreview({ chartType, cycleKey, data }: { chartType: string; cycleK
           <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} stroke="var(--muted)" />
           <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 10 }} stroke="var(--muted)" />
           <Tooltip />
-          <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+          <Legend iconSize={10} wrapperStyle={{ fontSize: "var(--text-xs)" }} />
           <Bar dataKey="Anwesend" stackId="a" fill={C.present} />
           <Bar dataKey="Entschuldigt" stackId="a" fill={C.excused} />
           <Bar dataKey="Abwesend" stackId="a" fill={C.absent} radius={[0, 4, 4, 0]} />
@@ -245,7 +241,7 @@ function ChartPreview({ chartType, cycleKey, data }: { chartType: string; cycleK
           <XAxis dataKey="month" tick={{ fontSize: 10 }} stroke="var(--muted)" />
           <YAxis tick={{ fontSize: 10 }} stroke="var(--muted)" width={40} />
           <Tooltip />
-          <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+          <Legend iconSize={10} wrapperStyle={{ fontSize: "var(--text-xs)" }} />
           <Bar dataKey="income" name="Einnahmen" fill={C.income} radius={[4, 4, 0, 0]} />
           <Bar dataKey="expenses" name="Ausgaben" fill={C.expenses} radius={[4, 4, 0, 0]} />
         </BarChart>
@@ -279,7 +275,7 @@ function ChartPreview({ chartType, cycleKey, data }: { chartType: string; cycleK
             {d.map((e) => <Cell key={e.name} fill={e.color} />)}
           </Pie>
           <Tooltip />
-          <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+          <Legend iconSize={10} wrapperStyle={{ fontSize: "var(--text-xs)" }} />
         </PieChart>
       </ResponsiveContainer>
     );
@@ -297,7 +293,7 @@ function ChartPreview({ chartType, cycleKey, data }: { chartType: string; cycleK
             {d.map((e) => <Cell key={e.name} fill={e.color} />)}
           </Pie>
           <Tooltip />
-          <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+          <Legend iconSize={10} wrapperStyle={{ fontSize: "var(--text-xs)" }} />
         </PieChart>
       </ResponsiveContainer>
     );
@@ -329,7 +325,7 @@ function ChartPreview({ chartType, cycleKey, data }: { chartType: string; cycleK
             <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} stroke="var(--muted)" />
             <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 10 }} stroke="var(--muted)" />
             <Tooltip />
-            <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+            <Legend iconSize={10} wrapperStyle={{ fontSize: "var(--text-xs)" }} />
             <Bar dataKey="Alle Termine" fill={C.sessions} opacity={0.5} radius={[0, 4, 4, 0]} />
             <Bar dataKey="Mit Teilnehmern" fill={C.sessions} radius={[0, 4, 4, 0]} />
           </BarChart>

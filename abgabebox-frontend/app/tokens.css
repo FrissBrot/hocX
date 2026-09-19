@@ -1,0 +1,203 @@
+/* hocX Design-Tokens - EINZIGE QUELLE (single source of truth).
+ *
+ * Diese Datei wird per `scripts/sync-design-tokens.sh` nach
+ *   frontend/app/tokens.css
+ *   abgabebox-frontend/app/tokens.css
+ * kopiert, weil beide Apps eigene Docker-Build-Kontexte ohne gemeinsames Paket haben.
+ * Nur HIER aendern, danach `./scripts/sync-design-tokens.sh` ausfuehren.
+ * `./scripts/sync-design-tokens.sh --check` schlaegt fehl, wenn eine Kopie abweicht (CI).
+ *
+ * Skalen (Radius, Schrift, Abstand, z-index, Bewegung) sind bewusst klein gehalten:
+ * neue Werte nur ergaenzen, wenn keine Stufe passt. Literale (`10px`, `0.82rem`, `9999`)
+ * im Feature-CSS vermeiden.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* --- Farben: Flaeche, Text, Rand ------------------------------------------------ */
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --panel-solid: #ffffff;
+  --text: #101828;
+  --muted: #667085;
+  --border: #e4e7ec;
+  --border-strong: #d0d5dd;
+
+  /* --- Akzent ---------------------------------------------------------------------
+     --accent-strong ist der "betonte" Ton fuer Text/Hover auf hellem bzw. dunklem
+     Grund: in Light dunkler, in Dark heller als --accent (Kontrast, nicht Intensitaet). */
+  --accent: #2f6df6;
+  --accent-strong: #1d54cf;
+  --accent-soft: #e8f0fe;
+
+  /* --- Semantik --------------------------------------------------------------------
+     --x        = Vollton fuer Icons, Rahmen, Punkte, Fokus
+     --x-fg     = Text/Icon auf --x-bg (kontrastoptimiert)
+     --x-bg     = flaechige Hinterlegung (Badges, Banner) */
+  --success: #12805c;
+  --warning: #b45309;
+  --danger: #dc2626;
+  --success-bg: #dcfce7;
+  --success-fg: #0f7a4c;
+  --warning-bg: #fef3c7;
+  --warning-fg: #92400e;
+  --danger-bg: #fee2e2;
+  --danger-fg: #b42318;
+  --info-bg: var(--accent-soft);
+  --info-fg: var(--accent-strong);
+  --neutral-bg: #f1f2f4;
+  --neutral-fg: #667085;
+
+  /* Sekundaerer Akzent fuer "bald verfuegbar"-Hinweise */
+  --violet: #a78bfa;
+
+  /* Primaerbutton */
+  --primary: #16223d;
+  --primary-strong: #0b1626;
+  --primary-contrast: #ffffff;
+
+  /* Kategoriale Diagrammfarben (ohne feste Bedeutung); Bedeutungsfarben nutzen success/warning/danger */
+  --chart-1: #6366f1;
+  --chart-2: #06b6d4;
+  --chart-3: #a855f7;
+  --chart-4: #ec4899;
+  --chart-5: #84cc16;
+
+  /* Text/Icon auf Vollfarben (Accent, Success) und auf dunklen Scrims (Lightbox) */
+  --on-solid: #ffffff;
+
+  /* --- Schatten ------------------------------------------------------------------- */
+  --shadow: 0 4px 12px rgba(16, 24, 40, 0.08);
+  --shadow-soft: 0 1px 2px rgba(16, 24, 40, 0.05), 0 1px 3px rgba(16, 24, 40, 0.06);
+  --shadow-popover: 0 8px 24px rgba(16, 24, 40, 0.16);
+  --shadow-overlay: 0 20px 60px rgba(16, 24, 40, 0.25);
+
+  /* --- Fokus ---------------------------------------------------------------------- */
+  --focus-ring-color: var(--accent);
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+
+  /* --- Radius ---------------------------------------------------------------------- */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-pill: 999px;
+
+  /* --- Schrift --------------------------------------------------------------------- */
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.875rem;
+  --text-md: 0.9375rem;
+  --text-lg: 1rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 2rem;
+
+  /* --- Abstaende (gap) -------------------------------------------------------------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+
+  /* --- Bewegung -------------------------------------------------------------------- */
+  --dur-fast: 120ms;
+  --dur-base: 160ms;
+  --dur-slow: 240ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* --- Ebenen (z-index) --------------------------------------------------------------
+     Nur fuer Ebenen ueber dem normalen Inhalt. Lokales Stapeln (1-5) bleibt literal. */
+  --z-sidebar-overlay: 110;
+  --z-sidebar: 120;
+  --z-dropdown: 140;
+  --z-sticky: 200;
+  --z-flyout: 620;
+  --z-popover: 1000;
+  --z-lightbox: 1000;
+  --z-overlay: 1100;
+  --z-modal: 1200;
+  --z-confirm: 1300;
+  --z-portal: 1400;
+  --z-fullscreen: 1500;
+  --z-menu: 1600;
+  --z-toast: 1700;
+  --z-connectivity: 1800;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0e1420;
+  --panel: #161d2c;
+  --panel-solid: #161d2c;
+  --text: #e7eaf0;
+  --muted: #8b94a7;
+  --border: #262e40;
+  --border-strong: #333d54;
+  --accent: #5b8def;
+  --accent-strong: #8ab0ff;
+  --accent-soft: rgba(91, 141, 239, 0.16);
+  --success: #3ecf8e;
+  --warning: #f0b84f;
+  --danger: #f87171;
+  --success-bg: rgba(34, 197, 94, 0.16);
+  --success-fg: #4ade80;
+  --warning-bg: rgba(245, 158, 11, 0.16);
+  --warning-fg: #fbbf24;
+  --danger-bg: rgba(248, 113, 113, 0.16);
+  --danger-fg: #f87171;
+  --neutral-bg: rgba(148, 158, 180, 0.14);
+  --neutral-fg: #9aa4bc;
+
+  /* Dark-mode primary deliberately uses the accent blue rather than a dark navy:
+     a near-black button on an already-dark surface would read as low-contrast. */
+  --primary: #5b8def;
+  --primary-strong: #3d6fd4;
+  --primary-contrast: #0b1626;
+
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-overlay: 0 20px 60px rgba(0, 0, 0, 0.5);
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 32%, transparent);
+}
+
+/* Ohne JS bzw. vor dem Theme-Script folgt die Darstellung dem System. Sobald `data-theme`
+   gesetzt ist (Haupt-App: immer, Abgabebox: per Script), gilt der Block oben. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --bg: #0e1420;
+    --panel: #161d2c;
+    --panel-solid: #161d2c;
+    --text: #e7eaf0;
+    --muted: #8b94a7;
+    --border: #262e40;
+    --border-strong: #333d54;
+    --accent: #5b8def;
+    --accent-strong: #8ab0ff;
+    --accent-soft: rgba(91, 141, 239, 0.16);
+    --success: #3ecf8e;
+    --warning: #f0b84f;
+    --danger: #f87171;
+    --success-bg: rgba(34, 197, 94, 0.16);
+    --success-fg: #4ade80;
+    --warning-bg: rgba(245, 158, 11, 0.16);
+    --warning-fg: #fbbf24;
+    --danger-bg: rgba(248, 113, 113, 0.16);
+    --danger-fg: #f87171;
+    --neutral-bg: rgba(148, 158, 180, 0.14);
+    --neutral-fg: #9aa4bc;
+    --primary: #5b8def;
+    --primary-strong: #3d6fd4;
+    --primary-contrast: #0b1626;
+    --shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.45);
+    --shadow-overlay: 0 20px 60px rgba(0, 0, 0, 0.5);
+    --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 32%, transparent);
+  }
+}

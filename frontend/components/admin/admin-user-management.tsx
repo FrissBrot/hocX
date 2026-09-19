@@ -230,7 +230,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
         title="Benutzer"
         description="Alle zentralen Benutzer über alle Mandanten hinweg."
         actions={
-          <button type="button" className="button-inline" onClick={openNewUser}>
+          <button type="button" className="button-secondary" onClick={openNewUser}>
             Neuer Benutzer
           </button>
         }
@@ -268,7 +268,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
               <div className="table-actions table-actions-start">
                 <button
                   type="button"
-                  className="button-inline"
+                  className="button-secondary"
                   onClick={(event) => {
                     event.stopPropagation();
                     openMfa(user);
@@ -278,7 +278,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
                 </button>
                 <button
                   type="button"
-                  className="button-inline"
+                  className="button-secondary"
                   onClick={(event) => {
                     event.stopPropagation();
                     openMerge(user);
@@ -391,7 +391,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
                                 </select>
                               </td>
                               <td>
-                                <button type="button" className="button-inline button-ghost" onClick={() => removeMembership(membership.tenant_id)}>
+                                <button type="button" className="button-secondary button-ghost" onClick={() => removeMembership(membership.tenant_id)}>
                                   Entfernen
                                 </button>
                               </td>
@@ -427,7 +427,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
                             </select>
                           </label>
                           <div className="role-picker-action">
-                            <button type="button" className="button-inline" onClick={addMembership}>
+                            <button type="button" className="button-secondary" onClick={addMembership}>
                               Hinzufügen
                             </button>
                           </div>
@@ -443,7 +443,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
           {formError && <div className="form-error-banner">{formError}</div>}
 
           <div className="table-actions table-actions-start">
-            <button type="submit" className="button-inline">
+            <button type="submit" className="button-secondary">
               Speichern
             </button>
           </div>
@@ -480,7 +480,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
             />
           </label>
           <div className="modal-actions">
-            <button type="button" className="button-inline" onClick={() => void mergeUsers()} disabled={!mergeTargetUserId}>
+            <button type="button" className="button-secondary" onClick={() => void mergeUsers()} disabled={!mergeTargetUserId}>
               Jetzt mergen
             </button>
           </div>

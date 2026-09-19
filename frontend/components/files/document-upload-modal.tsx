@@ -256,7 +256,7 @@ export function DocumentUploadModal({
             </button>
             <button
               type="button"
-              className="button-inline"
+              className="button-secondary"
               onClick={() => void handleUpload()}
               disabled={uploading || selectedFiles.length === 0 || target.incomplete || ruleProblems.length > 0}
             >

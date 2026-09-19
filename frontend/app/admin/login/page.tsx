@@ -168,7 +168,7 @@ export default function AdminLoginPage() {
       <>
         {oidcConfig?.enabled && (
           <div className="login-sso">
-            <button type="button" className="button-inline oidc-button" onClick={loginWithOidc}>
+            <button type="button" className="button-secondary oidc-button" onClick={loginWithOidc}>
               Mit {new URL(oidcConfig.issuer_url).hostname} anmelden
             </button>
             <div className="login-divider"><span>oder</span></div>
@@ -184,7 +184,7 @@ export default function AdminLoginPage() {
             <span className="field-label">Passwort</span>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
           </label>
-          <button type="submit" className="button-inline" disabled={loading}>
+          <button type="submit" className="button-secondary" disabled={loading}>
             {loading ? "…" : "Einloggen"}
           </button>
         </form>
@@ -205,7 +205,7 @@ export default function AdminLoginPage() {
         </div>
 
         {!totpSetup ? (
-          <button type="button" className="button-inline" onClick={() => void startTotpSetup()} disabled={loading}>
+          <button type="button" className="button-secondary" onClick={() => void startTotpSetup()} disabled={loading}>
             TOTP-Setup starten
           </button>
         ) : (
@@ -224,7 +224,7 @@ export default function AdminLoginPage() {
         )}
 
         <div className="table-actions table-actions-start">
-          <button type="button" className="button-inline button-ghost login-secondary-button" onClick={resetMfaFlow}>
+          <button type="button" className="button-secondary button-ghost login-secondary-button" onClick={resetMfaFlow}>
             Zurück zum Login
           </button>
         </div>
@@ -251,12 +251,12 @@ export default function AdminLoginPage() {
               autoFocus
             />
           </label>
-          <button type="submit" className="button-inline" disabled={totpCode.length !== 6 || loading}>
+          <button type="submit" className="button-secondary" disabled={totpCode.length !== 6 || loading}>
             {loading ? "Prüft…" : "Bestätigen"}
           </button>
         </form>
         <div className="table-actions table-actions-start">
-          <button type="button" className="button-inline button-ghost login-secondary-button" onClick={resetMfaFlow}>
+          <button type="button" className="button-secondary button-ghost login-secondary-button" onClick={resetMfaFlow}>
             Zurück zum Login
           </button>
         </div>

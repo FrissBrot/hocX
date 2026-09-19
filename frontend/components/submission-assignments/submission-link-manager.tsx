@@ -126,7 +126,7 @@ export function SubmissionLinkManager({ links, onLinksChange, onLinkRemoved }: P
 
       {links.map((link) => (
         <div key={link.id} className="field-stack" style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", flexWrap: "wrap" }}>
             {editingId === link.id ? (
               <>
                 <input
@@ -146,7 +146,7 @@ export function SubmissionLinkManager({ links, onLinksChange, onLinkRemoved }: P
                   }}
                   style={{ flex: 1, minWidth: 160 }}
                 />
-                <button type="button" className="button-inline" onClick={() => void saveName(link)} disabled={!editName.trim()}>
+                <button type="button" className="button-secondary" onClick={() => void saveName(link)} disabled={!editName.trim()}>
                   Speichern
                 </button>
                 <button type="button" className="button-ghost" onClick={() => setEditingId(null)}>
@@ -185,7 +185,7 @@ export function SubmissionLinkManager({ links, onLinksChange, onLinkRemoved }: P
             )}
           </div>
           <CopyField label="Link" value={link.url} />
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
             {!link.is_default ? (
               <button type="button" className="button-ghost" onClick={() => void makeDefault(link)}>
                 Als Standard festlegen
@@ -200,7 +200,7 @@ export function SubmissionLinkManager({ links, onLinksChange, onLinkRemoved }: P
 
       <form className="field-stack" onSubmit={createLink} style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
         <span className="field-label">Neuer Link</span>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: "var(--space-2)" }}>
           <input
             value={newName}
             maxLength={80}
@@ -209,7 +209,7 @@ export function SubmissionLinkManager({ links, onLinksChange, onLinkRemoved }: P
             required
             style={{ flex: 1 }}
           />
-          <button type="submit" className="button-inline" disabled={!newName.trim()}>
+          <button type="submit" className="button-secondary" disabled={!newName.trim()}>
             Link erstellen
           </button>
         </div>

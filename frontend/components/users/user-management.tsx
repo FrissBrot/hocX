@@ -205,7 +205,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
           <h1 className="page-title">Benutzer</h1>
           <p className="muted">Systemweite Konten mit genau den Mandantenrollen, die du verwalten darfst.</p>
         </div>
-        <button type="button" className="button-inline" onClick={openNewUser}>
+        <button type="button" className="button-secondary" onClick={openNewUser}>
           Neuer Benutzer
         </button>
       </div>
@@ -258,7 +258,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
                 <div className="table-actions table-actions-start">
                   <button
                     type="button"
-                    className="button-inline button-ghost"
+                    className="button-secondary button-ghost"
                     onClick={(event) => {
                       event.stopPropagation();
                       openMfa(user);
@@ -268,7 +268,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
                   </button>
                   <button
                     type="button"
-                    className="button-inline button-danger"
+                    className="button-secondary button-danger"
                     onClick={(event) => {
                       event.stopPropagation();
                       void deleteUser(user.id, user.display_name);
@@ -302,10 +302,10 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
               </td>
               <td>
                 <div className="table-actions table-actions-start">
-                  <button type="button" className="button-inline button-ghost" onClick={() => openMfa(user)}>
+                  <button type="button" className="button-secondary button-ghost" onClick={() => openMfa(user)}>
                     MFA
                   </button>
-                  <button type="button" className="button-inline" onClick={() => openEnableLogin(user)}>
+                  <button type="button" className="button-secondary" onClick={() => openEnableLogin(user)}>
                     Login aktivieren
                   </button>
                 </div>
@@ -399,7 +399,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
                 </select>
               </label>
               <div className="role-picker-action">
-                <button type="button" className="button-inline" onClick={upsertMembership} disabled={!userForm.pickerTenantId}>
+                <button type="button" className="button-secondary" onClick={upsertMembership} disabled={!userForm.pickerTenantId}>
                   Rolle zuweisen
                 </button>
               </div>
@@ -415,7 +415,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
                       <strong>{tenantNameById.get(membership.tenant_id) ?? "Unbekannter Mandant"}</strong>
                       <div className="muted">{membership.role_code}</div>
                     </div>
-                    <button type="button" className="button-inline button-danger" onClick={() => removeMembership(membership.tenant_id)}>
+                    <button type="button" className="button-secondary button-danger" onClick={() => removeMembership(membership.tenant_id)}>
                       Entfernen
                     </button>
                   </div>
@@ -429,7 +429,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
           )}
 
           <div className="table-actions table-actions-start">
-            <button type="submit" className="button-inline">
+            <button type="submit" className="button-secondary">
               Speichern
             </button>
           </div>
@@ -462,7 +462,7 @@ export function UserManagement({ initialUsers, manageableTenants }: Props) {
           {loginError && <div className="form-error-banner">{loginError}</div>}
 
           <div className="table-actions table-actions-start">
-            <button type="submit" className="button-inline">
+            <button type="submit" className="button-secondary">
               Login aktivieren
             </button>
           </div>

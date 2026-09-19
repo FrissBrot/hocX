@@ -55,7 +55,7 @@ export function TenantSelectorModal({ open, onClose, session, onSelect, onOpenSe
                   ) : null}
                 </div>
 
-                <button type="button" className="button-inline tenant-tile-switch" onClick={() => onSelect(membership)} disabled={isActive}>
+                <button type="button" className="button-secondary tenant-tile-switch" onClick={() => onSelect(membership)} disabled={isActive}>
                   {isActive ? "Aktiv" : "Wechseln"}
                 </button>
 
