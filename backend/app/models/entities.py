@@ -1026,6 +1026,8 @@ class GalleryImage(Base, TimestampMixin):
         Index("idx_gallery_image_tenant", "tenant_id"),
         Index("idx_gallery_image_event", "event_id"),
         Index("idx_gallery_image_stored_file", "stored_file_id"),
+        Index("idx_gallery_image_cycle_config", "cycle_config_id"),
+        Index("idx_gallery_image_submission_assignment", "submission_assignment_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -1035,6 +1037,17 @@ class GalleryImage(Base, TimestampMixin):
     # used to be discarded once the file landed in that Termin's auto-album) so the Fotos
     # page's date-grouped headers can show which Termin/Zyklus a given date belongs to.
     event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("event.id", ondelete="SET NULL"))
+    # Bezug of a direct *document* upload on the "Dateien" page (POST /files/document-uploads) -
+    # at most one of event_id / cycle_config_id / submission_assignment_id (+ element ref/label)
+    # is ever set. Photo uploads don't write these: they link through auto-albums instead
+    # (see photo_album_service.py). The element label is snapshotted, like
+    # GalleryUploadJob.upload_element_label, so the Bezug column needn't re-resolve it.
+    cycle_config_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("cycle_config.id", ondelete="SET NULL"))
+    submission_assignment_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("submission_assignment.id", ondelete="SET NULL")
+    )
+    submission_element_ref: Mapped[str | None] = mapped_column(Text)
+    submission_element_label: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
 
 

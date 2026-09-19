@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 
+import { DocumentUploadModal } from "./document-upload-modal";
 import { FileDetailModal } from "./file-detail-modal";
 import { FileStatCards } from "./file-stat-cards";
 import { FilesTable } from "./files-table";
@@ -14,7 +15,7 @@ import { TagInput } from "@/components/ui/tag-input";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
-import { FileOverviewItem, FileOverviewSource } from "@/types/api";
+import { DocumentUploadResult, FileOverviewItem, FileOverviewSource } from "@/types/api";
 
 const PAGE_SIZE = 60;
 
@@ -26,6 +27,7 @@ const SOURCE_OPTIONS: { value: SourceFilter; label: string }[] = [
   { value: "protocol_image", label: "Protokolle" },
   { value: "word_import", label: "Word-Import" },
   { value: "submission_upload", label: "Abgaben" },
+  { value: "gallery_upload", label: "Uploads" },
 ];
 
 type SortOption = { id: string; label: string; key: SortKey; dir: "asc" | "desc" };
@@ -57,6 +59,9 @@ export function FilesView({ initialItems }: Props) {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isReloading, setIsReloading] = useState(false);
   const [detailItem, setDetailItem] = useState<FileOverviewItem | null>(null);
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  // Bumped after an upload so FileStatCards (which only fetches on mount) re-reads its counts.
+  const [statsRefreshKey, setStatsRefreshKey] = useState(0);
   const didMountRef = useRef(false);
   const requestIdRef = useRef(0);
 
@@ -98,6 +103,30 @@ export function FilesView({ initialItems }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sourceFilter, search, tagFilter.join(","), sortKey, sortDir]);
 
+  async function reloadFromStart() {
+    const requestId = ++requestIdRef.current;
+    setIsReloading(true);
+    try {
+      const next = await browserApiFetch<FileOverviewItem[]>(buildUrl(0));
+      if (requestIdRef.current !== requestId) return;
+      setItems(next ?? []);
+      setHasMore((next ?? []).length === PAGE_SIZE);
+    } catch {
+      if (requestIdRef.current === requestId) showToast("Dateien konnten nicht geladen werden.", "error");
+    } finally {
+      if (requestIdRef.current === requestId) setIsReloading(false);
+    }
+  }
+
+  function handleDocumentsUploaded(result: DocumentUploadResult) {
+    const uploaded = result.items;
+    void reloadFromStart();
+    setStatsRefreshKey((current) => current + 1);
+    setTagSuggestions((current) => Array.from(new Set([...current, ...uploaded.flatMap((item) => item.tags)])).sort((a, b) => a.localeCompare(b)));
+    showToast(uploaded.length === 1 ? "1 Datei hochgeladen." : `${uploaded.length} Dateien hochgeladen.`, "success");
+    if (result.errors.length > 0) showToast(result.errors.join(" · "), "info");
+  }
+
   useEffect(() => {
     browserApiFetch<string[]>("/api/files/tags")
       .then((tags) => setTagSuggestions(tags ?? []))
@@ -135,13 +164,18 @@ export function FilesView({ initialItems }: Props) {
         <div>
           <h1 className="page-title">Dateien</h1>
           <p className="muted">
-            Alle hochgeladenen Nicht-Bild-Dateien dieses Mandanten - aus Protokollen, Word-Importen und Abgaben. Fotos
-            siehe die separate &quot;Fotos&quot;-Seite.
+            Alle hochgeladenen Nicht-Bild-Dateien dieses Mandanten - aus Protokollen, Word-Importen, Abgaben und
+            direkten Uploads. Fotos siehe die separate &quot;Fotos&quot;-Seite.
           </p>
+        </div>
+        <div className="table-toolbar-actions">
+          <button type="button" className="button-inline" onClick={() => setUploadModalOpen(true)}>
+            + Dateien hochladen
+          </button>
         </div>
       </div>
 
-      <FileStatCards />
+      <FileStatCards refreshKey={statsRefreshKey} />
 
       <div className="list-filter-row list-filter-row-compact">
         <FilterTabs options={SOURCE_OPTIONS} value={sourceFilter} onChange={(value) => setSourceFilter(value as SourceFilter)} />
@@ -183,6 +217,14 @@ export function FilesView({ initialItems }: Props) {
             </button>
           )}
         </div>
+      )}
+
+      {uploadModalOpen && (
+        <DocumentUploadModal
+          tagSuggestions={tagSuggestions}
+          onClose={() => setUploadModalOpen(false)}
+          onUploaded={handleDocumentsUploaded}
+        />
       )}
 
       {detailItem && (

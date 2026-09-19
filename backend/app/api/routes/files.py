@@ -1,4 +1,5 @@
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -17,6 +18,7 @@ from app.core.config import settings
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
 from app.models import ProtocolElementBlock, ProtocolImage, StoredFile
 from app.schemas.files import (
+    DocumentUploadResult,
     FileBulkDelete,
     FileBulkDeleteResult,
     FileBulkTagsUpdate,
@@ -36,6 +38,7 @@ from app.schemas.protocol import ProtocolImageRead
 from app.services import photo_album_service, public_id_service
 from app.services.access_service import AccessService
 from app.services.file_service import MAX_UPLOAD_BYTES, FileService, _safe_storage_path
+from app.services import submission_upload_rules
 from app.services.submission_service import SubmissionService, _element_ref, _parse_element_ref
 from app.services.upload_pipeline import GALLERY_ZIP_MAX_BYTES, stage_upload_to_disk
 
@@ -50,6 +53,12 @@ submission_service = SubmissionService()
 # haeufigste Fall) statt eines eigenen, kleineren Werts.
 MAX_GALLERY_UPLOAD_BATCH_FILES = 50
 MAX_GALLERY_UPLOAD_BATCH_BYTES = GALLERY_ZIP_MAX_BYTES
+
+# Dokument-Upload ("Dateien"-Seite): laeuft inline im Request (kein Hintergrund-Job) und
+# haelt einen Batch dafuer kurz im Speicher - deshalb deutlich kleinere Batch-Grenzen als beim
+# Galerie-Upload; eine einzelne Datei bleibt bei MAX_UPLOAD_BYTES.
+MAX_DOCUMENT_UPLOAD_BATCH_FILES = 20
+MAX_DOCUMENT_UPLOAD_BATCH_BYTES = 100 * 1024 * 1024
 
 
 @router.get("/files", response_model=list[FileOverviewItem])
@@ -250,6 +259,72 @@ def _gallery_upload_job_to_read(job: GalleryUploadJob) -> GalleryUploadJobRead:
     )
 
 
+@dataclass
+class _UploadTarget:
+    """Internal ids behind the optional Bezug picker shared by the "Fotos" and "Dateien"
+    upload windows - at most one of event / Zyklus / Abgabe(+Element) is ever set."""
+
+    event_id: int | None = None
+    assignment_id: int | None = None
+    # The resolved Abgabe itself - its file rules apply to the upload (see
+    # submission_upload_rules.py).
+    assignment: SubmissionAssignment | None = None
+    element_label: str | None = None
+    cycle_config_id: int | None = None
+
+
+def _resolve_upload_target(
+    db: Session,
+    user: CurrentUser,
+    *,
+    event_id: uuid.UUID | None,
+    submission_assignment_id: uuid.UUID | None,
+    submission_element_ref: str | None,
+    cycle_config_id: uuid.UUID | None,
+) -> _UploadTarget:
+    """Validates the Bezug form fields (mutual exclusion, tenant scoping) and resolves the
+    public ids to internal ones - shared by upload_gallery_images and upload_documents."""
+    if sum([event_id is not None, submission_assignment_id is not None, cycle_config_id is not None]) > 1:
+        raise HTTPException(status_code=422, detail="Nur ein Zielbezug (Termin, Abgabe-Element oder Zyklus) gleichzeitig erlaubt")
+    if (submission_assignment_id is None) != (submission_element_ref is None):
+        raise HTTPException(status_code=422, detail="Abgabe und Abgabe-Element muessen zusammen angegeben werden")
+
+    target = _UploadTarget()
+
+    if event_id is not None:
+        target.event_id = public_id_service.resolve_internal_id(db, Event, event_id, tenant_id=user.current_tenant_id)
+        if target.event_id is None:
+            raise HTTPException(status_code=404, detail="Termin nicht gefunden")
+    elif submission_assignment_id is not None:
+        target.assignment_id = public_id_service.resolve_internal_id(
+            db, SubmissionAssignment, submission_assignment_id, tenant_id=user.current_tenant_id
+        )
+        if target.assignment_id is None:
+            raise HTTPException(status_code=404, detail="Abgabe nicht gefunden")
+        upload_assignment = db.get(SubmissionAssignment, target.assignment_id)
+        target.assignment = upload_assignment
+        try:
+            parsed_event_id, parsed_list_entry_id = _parse_element_ref(db, submission_element_ref)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Ungueltige Abgabe-Element-Referenz") from None
+        # _parse_element_ref resolves the event/list-entry public id without a tenant
+        # filter (see its docstring) - only trust it once it's confirmed as one of *this*
+        # (already tenant-scoped) assignment's own elements, otherwise a writer could point
+        # event_id at another tenant's event and leak this upload into that tenant's Zyklus
+        # album.
+        elements = submission_service._resolve_raw_elements(db, upload_assignment)
+        match = next((e for e in elements if e["event_id"] == parsed_event_id and e["list_entry_id"] == parsed_list_entry_id), None)
+        if match is None:
+            raise HTTPException(status_code=404, detail="Abgabe-Element nicht gefunden")
+        target.event_id = match["event_id"]
+        target.element_label = match["label"]
+    elif cycle_config_id is not None:
+        target.cycle_config_id = public_id_service.resolve_internal_id(db, CycleConfig, cycle_config_id, tenant_id=user.current_tenant_id)
+        if target.cycle_config_id is None:
+            raise HTTPException(status_code=404, detail="Zyklus nicht gefunden")
+    return target
+
+
 @router.post("/files/gallery-uploads", response_model=GalleryUploadJobRead, status_code=status.HTTP_201_CREATED)
 async def upload_gallery_images(
     files: list[UploadFile] = File(...),
@@ -282,46 +357,33 @@ async def upload_gallery_images(
             detail=f"Zu viele Dateien in einem Batch (maximal {MAX_GALLERY_UPLOAD_BATCH_FILES})",
         )
 
-    if sum([event_id is not None, submission_assignment_id is not None, cycle_config_id is not None]) > 1:
-        raise HTTPException(status_code=422, detail="Nur ein Zielbezug (Termin, Abgabe-Element oder Zyklus) gleichzeitig erlaubt")
-    if (submission_assignment_id is None) != (submission_element_ref is None):
-        raise HTTPException(status_code=422, detail="Abgabe und Abgabe-Element muessen zusammen angegeben werden")
-
-    upload_event_id: int | None = None
-    upload_assignment_id: int | None = None
-    upload_element_label: str | None = None
-    upload_cycle_config_id: int | None = None
-
-    if event_id is not None:
-        upload_event_id = public_id_service.resolve_internal_id(db, Event, event_id, tenant_id=user.current_tenant_id)
-        if upload_event_id is None:
-            raise HTTPException(status_code=404, detail="Termin nicht gefunden")
-    elif submission_assignment_id is not None:
-        upload_assignment_id = public_id_service.resolve_internal_id(
-            db, SubmissionAssignment, submission_assignment_id, tenant_id=user.current_tenant_id
+    target = _resolve_upload_target(
+        db,
+        user,
+        event_id=event_id,
+        submission_assignment_id=submission_assignment_id,
+        submission_element_ref=submission_element_ref,
+        cycle_config_id=cycle_config_id,
+    )
+    upload_event_id = target.event_id
+    upload_assignment_id = target.assignment_id
+    upload_element_label = target.element_label
+    upload_cycle_config_id = target.cycle_config_id
+    # An Abgabe-Element Bezug brings that Abgabe's file rules along. Direct images are judged
+    # right here; a ZIP's entries only exist once the ingest job opens it, so it judges those
+    # itself (FileService._ingest_gallery_batch).
+    rules = (
+        submission_upload_rules.load_rules(db, target.assignment, submission_element_ref)
+        if target.assignment is not None and submission_element_ref is not None
+        else None
+    )
+    if rules is not None:
+        direct_files = [file for file in files if not (file.filename or "").lower().endswith(".zip")]
+        problem = rules.check_count(len(direct_files)) or next(
+            (error for error in (rules.check_extension(file.filename or "") for file in direct_files) if error), None
         )
-        if upload_assignment_id is None:
-            raise HTTPException(status_code=404, detail="Abgabe nicht gefunden")
-        upload_assignment = db.get(SubmissionAssignment, upload_assignment_id)
-        try:
-            parsed_event_id, parsed_list_entry_id = _parse_element_ref(db, submission_element_ref)
-        except ValueError:
-            raise HTTPException(status_code=422, detail="Ungueltige Abgabe-Element-Referenz") from None
-        # _parse_element_ref resolves the event/list-entry public id without a tenant
-        # filter (see its docstring) - only trust it once it's confirmed as one of *this*
-        # (already tenant-scoped) assignment's own elements, otherwise a writer could point
-        # event_id at another tenant's event and leak this upload into that tenant's Zyklus
-        # album.
-        elements = submission_service._resolve_raw_elements(db, upload_assignment)
-        match = next((e for e in elements if e["event_id"] == parsed_event_id and e["list_entry_id"] == parsed_list_entry_id), None)
-        if match is None:
-            raise HTTPException(status_code=404, detail="Abgabe-Element nicht gefunden")
-        upload_event_id = match["event_id"]
-        upload_element_label = match["label"]
-    elif cycle_config_id is not None:
-        upload_cycle_config_id = public_id_service.resolve_internal_id(db, CycleConfig, cycle_config_id, tenant_id=user.current_tenant_id)
-        if upload_cycle_config_id is None:
-            raise HTTPException(status_code=404, detail="Zyklus nicht gefunden")
+        if problem is not None:
+            raise HTTPException(status_code=400, detail=problem)
 
     tag_list = [tag.strip() for tag in (tags or "").split(",") if tag.strip()]
 
@@ -342,6 +404,8 @@ async def upload_gallery_images(
             is_zip = name.lower().endswith(".zip")
             has_zip = has_zip or is_zip
             max_bytes = GALLERY_ZIP_MAX_BYTES if is_zip else MAX_UPLOAD_BYTES
+            if rules is not None and not is_zip:
+                max_bytes = min(max_bytes, rules.max_bytes)
             staged_path = await stage_upload_to_disk(
                 file, target_dir=staging_dir, max_bytes=max_bytes, suffix=Path(name).suffix.lower() or ".bin"
             )
@@ -380,6 +444,96 @@ async def upload_gallery_images(
     db.commit()
     db.refresh(job)
     return _gallery_upload_job_to_read(job)
+
+
+@router.post("/files/document-uploads", response_model=DocumentUploadResult, status_code=status.HTTP_201_CREATED)
+async def upload_documents(
+    files: list[UploadFile] = File(...),
+    tags: str | None = Form(default=None),
+    # Same optional Bezug picker as upload_gallery_images (at most one of Termin / Abgabe-
+    # Element / Zyklus) - here it is stored on the file itself and shown in the "Bezug"
+    # column of the Dateien page, instead of routing it into an auto-album.
+    event_id: uuid.UUID | None = Form(default=None),
+    submission_assignment_id: uuid.UUID | None = Form(default=None),
+    submission_element_ref: str | None = Form(default=None),
+    cycle_config_id: uuid.UUID | None = Form(default=None),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Direkter Dokument-Upload fuer die "Dateien"-Seite (PDF, Office/OpenDocument, RTF, Text,
+    ZIP - siehe upload_pipeline._sniff_document_mime; Bilder gehoeren auf die "Fotos"-Seite).
+    Anders als der Galerie-Upload laeuft alles inline: Magic-Byte-Pruefung, Virenscan und
+    Speichern passieren in diesem Request, das Ergebnis (gespeicherte Dateien + Einzelfehler)
+    kommt direkt zurueck."""
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    if len(files) > MAX_DOCUMENT_UPLOAD_BATCH_FILES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Zu viele Dateien in einem Batch (maximal {MAX_DOCUMENT_UPLOAD_BATCH_FILES})",
+        )
+    target = _resolve_upload_target(
+        db,
+        user,
+        event_id=event_id,
+        submission_assignment_id=submission_assignment_id,
+        submission_element_ref=submission_element_ref,
+        cycle_config_id=cycle_config_id,
+    )
+    tag_list = [tag.strip() for tag in (tags or "").split(",") if tag.strip()]
+
+    # An Abgabe-Element Bezug brings that Abgabe's file rules (Dateitypen, Dateigrösse, Anzahl)
+    # along - rejected as a whole like the Abgabebox does, before anything is staged.
+    rules = (
+        submission_upload_rules.load_rules(db, target.assignment, submission_element_ref)
+        if target.assignment is not None and submission_element_ref is not None
+        else None
+    )
+    max_file_bytes = MAX_UPLOAD_BYTES
+    if rules is not None:
+        problem = rules.check_count(len(files)) or next(
+            (error for error in (rules.check_extension(file.filename or "") for file in files) if error), None
+        )
+        if problem is not None:
+            raise HTTPException(status_code=400, detail=problem)
+        max_file_bytes = min(max_file_bytes, rules.max_bytes)
+
+    # Streamed to disk first (rather than `await file.read()`) so the per-file size cap is
+    # enforced while the bytes arrive, then read back for the scan/ingest step.
+    staging_dir = Path(settings.upload_root) / "_staging" / "documents"
+    staged: list[tuple[str, bytes]] = []
+    batch_bytes = 0
+    for file in files:
+        name = file.filename or ""
+        staged_path = await stage_upload_to_disk(
+            file, target_dir=staging_dir, max_bytes=max_file_bytes, suffix=Path(name).suffix.lower() or ".bin"
+        )
+        try:
+            content = staged_path.read_bytes()
+        finally:
+            staged_path.unlink(missing_ok=True)
+        batch_bytes += len(content)
+        if batch_bytes > MAX_DOCUMENT_UPLOAD_BATCH_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Gesamtgrösse des Batches überschritten (maximal {MAX_DOCUMENT_UPLOAD_BATCH_BYTES // 1024 // 1024} MB)",
+            )
+        staged.append((name, content))
+
+    items, errors = await service.save_document_uploads(
+        db,
+        tenant_id=user.current_tenant_id,
+        files=staged,
+        tags=tag_list,
+        created_by=user.user_id,
+        upload_event_id=target.event_id,
+        upload_assignment=target.assignment,
+        upload_element_ref=submission_element_ref if target.assignment is not None else None,
+        upload_element_label=target.element_label,
+        upload_cycle_config_id=target.cycle_config_id,
+    )
+    return DocumentUploadResult(items=items, errors=errors)
 
 
 @router.get("/files/gallery-upload-jobs", response_model=list[GalleryUploadJobRead])

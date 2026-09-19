@@ -138,6 +138,14 @@ class GalleryUploadJobDetail(GalleryUploadJobRead):
     errors: list[str]
 
 
+class DocumentUploadResult(BaseModel):
+    """POST /files/document-uploads response: what got saved plus per-file problems (too
+    large, unsupported format, infected, ...) - partial success, like GalleryUploadJobDetail."""
+
+    items: list[FileOverviewItem]
+    errors: list[str]
+
+
 class StoredFileMetadata(BaseModel):
     id: uuid.UUID
     original_name: str

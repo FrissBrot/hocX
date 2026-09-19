@@ -13,7 +13,7 @@ const SOURCE_LABEL: Record<FileOverviewSource, string> = {
   protocol_image: "Protokoll",
   word_import: "Word-Import",
   submission_upload: "Abgabe",
-  gallery_upload: "Galerie",
+  gallery_upload: "Upload",
 };
 
 const SOURCE_BADGE_VARIANT: Record<FileOverviewSource, BadgeVariant> = {

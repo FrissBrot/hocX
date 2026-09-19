@@ -1,13 +1,14 @@
 import json
 import uuid
 
-from sqlalchemy import BigInteger, Date, String, and_, cast, func, literal, null, or_, select, union_all
+from sqlalchemy import BigInteger, Date, String, and_, case, cast, func, literal, null, or_, select, union_all
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.engine import Row
 from sqlalchemy.orm import Session
 
 from app.models import (
+    CycleConfig,
     Event,
     GalleryImage,
     Protocol,
@@ -185,6 +186,7 @@ class StoredFileRepository:
                         ProtocolElementBlock.title_snapshot,
                     ),
                 ).label("context_label"),
+                cast(null(), String).label("ref_kind"),
             )
             .select_from(StoredFile)
             .join(Tenant, Tenant.id == StoredFile.tenant_id)
@@ -208,6 +210,7 @@ class StoredFileRepository:
                 func.concat("Word-Import: ", WordImportDocument.display_name).label("origin_tag"),
                 func.coalesce(WordImportDocument.protocol_date, cast(StoredFile.created_at, Date)).label("group_date"),
                 WordImportDocument.display_name.label("context_label"),
+                cast(null(), String).label("ref_kind"),
             )
             .select_from(StoredFile)
             .join(Tenant, Tenant.id == StoredFile.tenant_id)
@@ -228,6 +231,7 @@ class StoredFileRepository:
                 func.concat("Abgabe: ", SubmissionAssignment.title).label("origin_tag"),
                 cast(StoredFile.created_at, Date).label("group_date"),
                 SubmissionAssignment.title.label("context_label"),
+                cast(null(), String).label("ref_kind"),
             )
             .select_from(StoredFile)
             .join(Tenant, Tenant.id == StoredFile.tenant_id)
@@ -237,26 +241,53 @@ class StoredFileRepository:
             .where(*tenant_filter, SubmissionUploadFile.delete_comment.is_(None))
         )
 
+        # Documents uploaded on the "Dateien" page (POST /files/document-uploads) carry their
+        # Bezug in the link columns below; photo uploads leave them NULL (they link through
+        # albums instead) and so keep the empty ref_label they always had.
         gallery_branch = (
             select(
                 *self._shared_file_overview_columns(),
                 literal("gallery_upload").label("source"),
                 GalleryImage.id.label("ref_id"),
                 cast(null(), PG_UUID(as_uuid=True)).label("ref_public_id"),
-                literal("").label("ref_label"),
-                cast(null(), Date).label("ref_date"),
+                case(
+                    # An Abgabe-Element upload also stores the element's Termin in event_id
+                    # (see _resolve_upload_target) - the Abgabe is the Bezug the user picked.
+                    (
+                        SubmissionAssignment.id.is_not(None),
+                        case(
+                            (
+                                GalleryImage.submission_element_label.is_not(None),
+                                func.concat(SubmissionAssignment.title, " · ", GalleryImage.submission_element_label),
+                            ),
+                            else_=SubmissionAssignment.title,
+                        ),
+                    ),
+                    (Event.id.is_not(None), Event.title),
+                    (CycleConfig.id.is_not(None), CycleConfig.name),
+                    else_=literal(""),
+                ).label("ref_label"),
+                Event.event_date.label("ref_date"),
                 cast(null(), BigInteger).label("upload_id"),
                 cast(null(), PG_UUID(as_uuid=True)).label("upload_public_id"),
                 literal("Direkt hochgeladen").label("origin_tag"),
                 func.coalesce(Event.event_date, cast(StoredFile.created_at, Date)).label("group_date"),
                 Event.title.label("context_label"),
+                case(
+                    (SubmissionAssignment.id.is_not(None), literal("submission_assignment")),
+                    (Event.id.is_not(None), literal("event")),
+                    (CycleConfig.id.is_not(None), literal("cycle")),
+                    else_=cast(null(), String),
+                ).label("ref_kind"),
             )
             .select_from(StoredFile)
             .join(Tenant, Tenant.id == StoredFile.tenant_id)
             .join(GalleryImage, GalleryImage.stored_file_id == StoredFile.id)
-            # Outer join: most gallery uploads have no Termin at all, and those must still
-            # be listed (group_date/context_label just fall back to created_at/None then).
+            # Outer joins: most gallery uploads have no Termin/Zyklus/Abgabe at all, and those
+            # must still be listed (group_date/context_label just fall back to created_at/None).
             .outerjoin(Event, Event.id == GalleryImage.event_id)
+            .outerjoin(CycleConfig, CycleConfig.id == GalleryImage.cycle_config_id)
+            .outerjoin(SubmissionAssignment, SubmissionAssignment.id == GalleryImage.submission_assignment_id)
             .where(*tenant_filter)
         )
 

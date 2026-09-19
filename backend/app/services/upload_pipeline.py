@@ -114,6 +114,50 @@ def _sniff_word_import_mime(content: bytes) -> str | None:
     return None
 
 
+# "Dateien"-Seite (POST /files/document-uploads): allow-list of document formats by extension.
+# The extension only picks *which* signature check applies and what mime type gets stored -
+# the content itself must still match it (see _sniff_document_mime), so a renamed .exe never
+# gets through as .pdf. Images are deliberately absent (they belong on the "Fotos" page).
+_OOXML_ODF_ZIP_MIMES = {
+    ".docx": WORD_IMPORT_MIME_TYPE,
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".odt": "application/vnd.oasis.opendocument.text",
+    ".ods": "application/vnd.oasis.opendocument.spreadsheet",
+    ".odp": "application/vnd.oasis.opendocument.presentation",
+    ".zip": "application/zip",
+}
+_LEGACY_OFFICE_MIMES = {
+    ".doc": "application/msword",
+    ".xls": "application/vnd.ms-excel",
+    ".ppt": "application/vnd.ms-powerpoint",
+}
+_PLAIN_TEXT_MIMES = {".txt": "text/plain", ".csv": "text/csv", ".md": "text/markdown"}
+DOCUMENT_UPLOAD_EXTENSIONS = tuple(
+    sorted({".pdf", ".rtf", *_OOXML_ODF_ZIP_MIMES, *_LEGACY_OFFICE_MIMES, *_PLAIN_TEXT_MIMES})
+)
+
+
+def _sniff_document_mime(content: bytes, filename: str) -> str | None:
+    """Same idea as _sniff_image_mime, for the "Dateien" upload window - returns None unless
+    the filename's extension is on the document allow-list *and* the content's own magic
+    bytes agree with it (plain-text formats have no signature: they just must not look
+    binary)."""
+    extension = Path(filename).suffix.lower()
+    head = content[:8]
+    if extension == ".pdf":
+        return PDF_MIME_TYPE if _content_matches_mime(content, PDF_MIME_TYPE) else None
+    if extension in _OOXML_ODF_ZIP_MIMES:
+        return _OOXML_ODF_ZIP_MIMES[extension] if head.startswith(b"PK\x03\x04") else None
+    if extension in _LEGACY_OFFICE_MIMES:
+        return _LEGACY_OFFICE_MIMES[extension] if head.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1") else None
+    if extension == ".rtf":
+        return "application/rtf" if head.startswith(b"{\\rtf") else None
+    if extension in _PLAIN_TEXT_MIMES:
+        return _PLAIN_TEXT_MIMES[extension] if b"\x00" not in content[:8192] else None
+    return None
+
+
 def _sniff_image_mime(content: bytes) -> str | None:
     """Same idea as _sniff_word_import_mime, for the gallery upload window - returns None
     for anything whose magic bytes don't match one of ALLOWED_IMAGE_MIME_TYPES."""

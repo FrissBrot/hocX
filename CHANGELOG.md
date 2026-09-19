@@ -17,6 +17,13 @@ gemergten Fixes/Hardening-Massnahmen auf `main` die folgenden neuen Funktionen.
 - **Fotos-Galerie**: direkter Bild-Upload (einzelne Dateien oder ZIP-Archive) auf der
   "Dateien"-Seite, unabhängig von Protokoll/Word-Import/Abgabebox. Mit Tags,
   Duplikat-Warnung (Perceptual Hash) und Vorschaubildern.
+- **Dateien-Upload**: Dokumente (PDF, Word/Excel/PowerPoint, OpenDocument, RTF, Text/CSV,
+  ZIP) lassen sich direkt auf der "Dateien"-Seite hochladen - gleicher Upload-Dialog wie bei
+  den Fotos (Drag & Drop, Warteschlange, Tags, Virenprüfung). Optionaler Bezug zu einem
+  Termin, Abgabe-Element oder Zyklus, der in der Spalte "Bezug" erscheint.
+  Bei einem Abgabe-Element gelten für Datei- und Foto-Uploads die Dateiregeln der Abgabe
+  (erlaubte Dateitypen, maximale Dateigrösse, maximale Anzahl Dateien pro Element - inklusive
+  der bereits über die Abgabebox eingereichten Dateien).
 - **Speicherkontingent**: Mandanten-Speichernutzung im Adminportal einsehbar, mit pro
   Mandant konfigurierbarem Limit (Speicherkontingent-Verwaltung, eigene Storage-Seite).
 - **Word-Import-Verbesserungen**: Matrix-Spalten-Zuordnung für Tabellen mit variablen

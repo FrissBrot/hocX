@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { FileOverviewItem } from "@/types/api";
@@ -135,5 +135,15 @@ describe("FilesView (Dateien)", () => {
     render(<FilesView initialItems={shortPage} />);
 
     expect(screen.queryByText(/Mehr laden/)).not.toBeInTheDocument();
+  });
+
+  it("opens the document upload window from the header button", () => {
+    render(<FilesView initialItems={[]} />);
+    expect(screen.queryByText("Dateien hochladen", { selector: "h2" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Dateien hochladen" }));
+
+    expect(screen.getByText("Dateien hochladen", { selector: "h2" })).toBeInTheDocument();
+    expect(screen.getByText("Noch keine Dateien ausgewählt.")).toBeInTheDocument();
   });
 });

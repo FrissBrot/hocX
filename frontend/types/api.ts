@@ -259,6 +259,11 @@ export type GalleryUploadJobDetail = GalleryUploadJob & {
   errors: string[];
 };
 
+export type DocumentUploadResult = {
+  items: FileOverviewItem[];
+  errors: string[];
+};
+
 export type StoredFileMetadata = {
   id: string;
   original_name: string;

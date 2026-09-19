@@ -35,6 +35,7 @@ from app.services.upload_pipeline import (
     _closest_perceptual_match,
     _compute_perceptual_hash,
     _content_matches_mime,
+    _sniff_document_mime,
     _sniff_image_mime,
     _sniff_word_import_mime,
     extract_word_import_files_from_zip,
@@ -115,6 +116,14 @@ def _extract_image_metadata(content: bytes) -> tuple[int | None, int | None, dat
             return width, height, taken_at, camera
     except Exception:
         return None, None, None, None
+
+
+# Overview page a document's Bezug links to, by StoredFileRepository's `ref_kind` label.
+GALLERY_REF_HREFS = {
+    "event": "/events",
+    "submission_assignment": "/submission-assignments",
+    "cycle": "/cycles",
+}
 
 
 def _normalize_tags(tags: list[str]) -> list[str]:
@@ -341,7 +350,9 @@ class FileService:
             thumbnail_url = self.build_thumbnail_url(row.public_id) if is_image else None
             tags_url = self.build_tags_url(row.public_id)
             metadata_url = self.build_metadata_url(row.public_id)
-            ref_href = None
+            # A document's Bezug (see save_document_uploads) has no per-record page either -
+            # the best it can do is the matching overview page.
+            ref_href = GALLERY_REF_HREFS.get(row.ref_kind) if row.source == "gallery_upload" else None
         return FileOverviewItem(
             id=row.public_id,
             original_name=row.original_name,
@@ -812,7 +823,15 @@ class FileService:
             stored_file = result.stored_file
             db.add(
                 GalleryImage(
-                    tenant_id=tenant_id, stored_file_id=stored_file.id, event_id=upload_event_id, created_by=created_by
+                    tenant_id=tenant_id,
+                    stored_file_id=stored_file.id,
+                    event_id=upload_event_id,
+                    # Stored so the Abgabe's max_files_per_element also counts photos uploaded
+                    # this way (see submission_upload_rules.load_rules).
+                    submission_assignment_id=upload_assignment.id if upload_assignment is not None else None,
+                    submission_element_ref=upload_element_ref if upload_assignment is not None else None,
+                    submission_element_label=upload_element_label if upload_assignment is not None else None,
+                    created_by=created_by,
                 )
             )
             db.flush()
@@ -899,6 +918,110 @@ class FileService:
                     element_label=upload_element_label,
                 )
 
+        return items, errors
+
+    def _recheck_element_capacity(
+        self, db: Session, tenant_id: int, assignment: SubmissionAssignment, element_ref: str, incoming: int
+    ) -> None:
+        """Takes the tenant upload lock (held until this transaction commits, i.e. across the
+        caller's whole save) and re-counts the Abgabe-Element's remaining capacity - the
+        authoritative version of the route's early check."""
+        from app.services import submission_upload_rules  # deferred: import cycle, see photo_album_service below
+
+        with _tenant_protocol_image_upload_lock(db, tenant_id):
+            problem = submission_upload_rules.load_rules(db, assignment, element_ref).check_count(incoming)
+        if problem is not None:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=problem)
+
+    async def save_document_uploads(
+        self,
+        db: Session,
+        *,
+        tenant_id: int,
+        files: list[tuple[str, bytes]],
+        tags: list[str],
+        created_by: int | None,
+        upload_event_id: int | None = None,
+        upload_assignment: SubmissionAssignment | None = None,
+        upload_element_ref: str | None = None,
+        upload_element_label: str | None = None,
+        upload_cycle_config_id: int | None = None,
+    ) -> tuple[list[FileOverviewItem], list[str]]:
+        """"Dateien"-page counterpart of save_gallery_uploads for non-image documents (PDF,
+        Office/OpenDocument, RTF, plain text, ZIP - see _sniff_document_mime). Same shared
+        ingest_file() pipeline (magic-byte check instead of trusting the filename, size cap,
+        ClamAV verdict, tenant storage quota), but no perceptual dedupe/thumbnail/quality
+        scoring - none of that means anything for a document - and it runs inline in the
+        request rather than as a background job, since a single document is capped at
+        MAX_UPLOAD_BYTES. The optional upload_* Bezug (at most one of Termin / Zyklus / Abgabe
+        + Abgabe-Element, validated by the route) is stored on the gallery_image row itself,
+        which StoredFileRepository turns into the overview's ref_label. One bad file never
+        aborts the batch - problems come back in `errors` next to whatever did succeed.
+
+        With an Abgabe-Element Bezug the Abgabe's own file rules apply. The route has already
+        rejected a batch violating them (see upload_documents); the Dateianzahl is checked
+        once more here, under the tenant upload lock, because two near-simultaneous uploads
+        into the same element could otherwise both pass the route's check."""
+        self.ensure_storage()
+        normalized_tags = _normalize_tags(tags)
+        scan_statuses = await scanner.scan_many(
+            [content for _filename, content in files], host=settings.clamav_host, port=settings.clamav_port
+        )
+        if upload_assignment is not None and upload_element_ref is not None:
+            self._recheck_element_capacity(db, tenant_id, upload_assignment, upload_element_ref, len(files))
+
+        saved_public_ids: list[uuid.UUID] = []
+        errors: list[str] = []
+        for (filename, content), scan_status in zip(files, scan_statuses):
+            label = filename or "Datei"
+            try:
+                result = ingest_file(
+                    db,
+                    tenant_id=tenant_id,
+                    content=content,
+                    original_filename=filename or "datei",
+                    scan_status=scan_status,
+                    # ingest_file's sniff callback only receives the bytes - the filename's
+                    # extension is what picks the signature to check them against.
+                    sniff=lambda data, name=filename: _sniff_document_mime(data, name or ""),
+                    max_bytes=MAX_UPLOAD_BYTES,
+                    storage_subdir_parts=(f"tenant-{tenant_id}", "documents"),
+                    enable_perceptual_dedupe=False,
+                    enable_thumbnail=False,
+                    created_by=created_by,
+                    tags=normalized_tags,
+                    too_large_message=f"zu gross (maximal {MAX_UPLOAD_BYTES // 1024 // 1024} MB)",
+                    unsupported_format_message="kein unterstütztes Dokumentformat oder Inhalt passt nicht zur Dateiendung",
+                    infected_message="wurde von der Virenprüfung als infiziert erkannt und wurde nicht gespeichert",
+                    stored_file_repository=self.stored_file_repository,
+                )
+            except HTTPException as exc:
+                errors.append(f"{label}: {exc.detail}")
+                continue
+
+            stored_file = result.stored_file
+            db.add(
+                GalleryImage(
+                    tenant_id=tenant_id,
+                    stored_file_id=stored_file.id,
+                    event_id=upload_event_id,
+                    cycle_config_id=upload_cycle_config_id,
+                    submission_assignment_id=upload_assignment.id if upload_assignment is not None else None,
+                    submission_element_ref=upload_element_ref,
+                    submission_element_label=upload_element_label,
+                    created_by=created_by,
+                )
+            )
+            db.flush()
+            saved_public_ids.append(stored_file.public_id)
+
+        db.commit()
+        if not saved_public_ids:
+            return [], errors
+        items = self.list_tenant_files(
+            db, tenant_id, source="gallery_upload", file_ids=saved_public_ids, limit=len(saved_public_ids)
+        )
         return items, errors
 
     # Images per save_gallery_uploads() call while working through a gallery_upload_job -
@@ -1037,7 +1160,39 @@ class FileService:
         upload_assignment: SubmissionAssignment | None,
         upload_cycle_config: CycleConfig | None,
     ) -> None:
-        items, errors = await self.save_gallery_uploads(
+        rule_errors: list[str] = []
+        if upload_assignment is not None and job.upload_element_ref is not None:
+            from app.services import submission_upload_rules  # deferred: import cycle, see photo_album_service below
+
+            # The lock stays held until save_gallery_uploads' commit, so the count below can't
+            # go stale before this batch's rows are written.
+            with _tenant_protocol_image_upload_lock(db, job.tenant_id):
+                rules = submission_upload_rules.load_rules(db, upload_assignment, job.upload_element_ref)
+            batch, rule_errors = rules.filter_batch(batch)
+        if not batch:
+            db.commit()  # releases the lock
+            items, errors = [], []
+        else:
+            items, errors = await self._save_gallery_batch(
+                db, job, batch, upload_assignment=upload_assignment, upload_cycle_config=upload_cycle_config
+            )
+        errors = [*rule_errors, *errors]
+        db.refresh(job)
+        job.imported_file_ids = [*job.imported_file_ids, *(str(item.id) for item in items)]
+        job.errors = [*job.errors, *errors]
+        job.processed_files += len(batch) + len(rule_errors)
+        db.commit()
+
+    async def _save_gallery_batch(
+        self,
+        db: Session,
+        job: GalleryUploadJob,
+        batch: list[tuple[str, bytes]],
+        *,
+        upload_assignment: SubmissionAssignment | None,
+        upload_cycle_config: CycleConfig | None,
+    ) -> tuple[list[FileOverviewItem], list[str]]:
+        return await self.save_gallery_uploads(
             db,
             tenant_id=job.tenant_id,
             files=batch,
@@ -1049,11 +1204,6 @@ class FileService:
             upload_element_label=job.upload_element_label,
             upload_cycle_config=upload_cycle_config,
         )
-        db.refresh(job)
-        job.imported_file_ids = [*job.imported_file_ids, *(str(item.id) for item in items)]
-        job.errors = [*job.errors, *errors]
-        job.processed_files += len(batch)
-        db.commit()
 
     def save_word_import_document(
         self,

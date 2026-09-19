@@ -6,7 +6,7 @@ import { browserApiFetch } from "@/lib/api/client";
 import { formatFileSize } from "@/lib/utils/format";
 import { FileStats } from "@/types/api";
 
-export function FileStatCards() {
+export function FileStatCards({ refreshKey = 0 }: { refreshKey?: number }) {
   const [stats, setStats] = useState<FileStats | null>(null);
   // Distinguishes "haven't loaded yet"/"genuinely zero files" from "the request failed" -
   // the no-op .catch() below used to swallow any error, leaving the whole KPI row blank
@@ -23,7 +23,7 @@ export function FileStatCards() {
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, refreshKey]);
 
   if (error) {
     return (
