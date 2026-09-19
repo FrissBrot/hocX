@@ -10,8 +10,8 @@ function usage(overrides: Partial<StorageUsageRead> = {}): StorageUsageRead {
     total_bytes: 800,
     quota_bytes: 1000,
     categories: [
-      { key: "protocol_image", label: "Protokoll", bytes: 500 },
-      { key: "gallery_upload", label: "Galerie", bytes: 300 },
+      { key: "photos", label: "Fotos", bytes: 500 },
+      { key: "files", label: "Dateien", bytes: 300 },
     ],
     ...overrides,
   };

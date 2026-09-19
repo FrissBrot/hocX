@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -15,75 +15,63 @@ from app.models import (
 from app.schemas.storage import StorageCategoryUsage, StorageUsageRead
 
 CATEGORY_LABELS: dict[str, str] = {
-    "protocol_image": "Protokoll-Bilder",
-    "word_import": "Word-Import-Dateien",
-    "submission_upload": "Abgabebox-Uploads",
-    "gallery_upload": "Galerie-Uploads",
-    "export": "PDF-/LaTeX-Exporte",
+    "photos": "Fotos",
+    "files": "Dateien",
+    "protocols": "Protokolle",
     "other": "Sonstiges",
 }
 
-# Order mirrors the join branches below, "other" always last.
-_KNOWN_CATEGORY_KEYS = ("protocol_image", "word_import", "submission_upload", "gallery_upload", "export")
+# "other" always last.
+_KNOWN_CATEGORY_KEYS = ("photos", "files", "protocols")
 
 
 class StorageService:
-    """Computes per-tenant disk usage from `stored_file.file_size_bytes`, broken down by
-    which feature produced the file. The three main categories mirror
-    StoredFileRepository._files_overview_branches (protocol_image/word_import/
-    submission_upload); "export" adds protocol_export_cache, which that "Dateien" overview
-    deliberately excludes (see file_repository.py) because a generated PDF isn't something a
-    user "hochgeladen" hat - but it still occupies real disk space and belongs in a storage
-    report. Everything else - tenant-import/-clone artifacts, orphaned rows, the tenant logo
-    (a raw path on Tenant, not a stored_file row at all) - falls into "other" so total always
-    reconciles with SUM(file_size_bytes), the number that actually matters for a quota check.
+    """Computes per-tenant disk usage from `stored_file.file_size_bytes`, grouped the way
+    users think about their data rather than by technical origin table - mirroring the
+    "Fotos" / "Dateien" split of the files overview (StoredFileRepository.list_tenant_files:
+    only_images vs. exclude_images, i.e. `mime_type LIKE 'image/%'`):
+
+    - photos:    uploaded images (protocol images, gallery uploads, image submissions)
+    - files:     every other upload (word-import sources, abgabebox documents, ...)
+    - protocols: generated PDF/LaTeX exports (protocol_export_cache). The "Dateien"
+                 overview deliberately excludes these (a generated PDF isn't something a
+                 user "hochgeladen" hat), but they occupy real disk space and belong in a
+                 storage report.
+    - other:     everything else - tenant-import/-clone artifacts, orphaned rows, non-
+                 image-typed leftovers. (The tenant logo is a raw path on Tenant, not a
+                 stored_file row at all.) Each stored_file lands in exactly one bucket, so
+                 the categories always reconcile with SUM(file_size_bytes), the number that
+                 actually matters for a quota check.
     """
 
     def _category_sums(self, db: Session, tenant_id: int | None) -> dict[int, dict[str, int]]:
         """tenant_id=None sums across every tenant at once (admin list), otherwise scoped to one."""
+        is_export = StoredFile.id.in_(select(ProtocolExportCache.generated_file_id))
+        is_upload = or_(
+            StoredFile.id.in_(select(ProtocolImage.stored_file_id)),
+            StoredFile.id.in_(select(GalleryImage.stored_file_id)),
+            StoredFile.id.in_(select(WordImportDocument.stored_file_id)),
+            StoredFile.id.in_(select(SubmissionUploadFile.stored_file_id)),
+        )
+        is_image = StoredFile.mime_type.like("image/%")
+        category = case(
+            (is_export, "protocols"),
+            (is_upload & is_image, "photos"),
+            (is_upload, "files"),
+            else_="other",
+        ).label("category")
+
+        query = select(
+            StoredFile.tenant_id, category, func.coalesce(func.sum(StoredFile.file_size_bytes), 0)
+        ).group_by(StoredFile.tenant_id, category)
+        if tenant_id is not None:
+            query = query.where(StoredFile.tenant_id == tenant_id)
+
         totals: dict[int, dict[str, int]] = {}
-
-        def add(rows, key: str) -> None:
-            for row_tenant_id, total in rows:
-                totals.setdefault(row_tenant_id, {})[key] = int(total or 0)
-
-        def scoped(query):
-            return query if tenant_id is None else query.where(StoredFile.tenant_id == tenant_id)
-
-        # submission_upload folded in here (audit fix, 2026-09-17) - it joins on
-        # stored_file_id exactly like the other three, so it never needed its own
-        # hand-written copy of this query shape below. export stays separate: it's the
-        # only category that joins on a different column (generated_file_id).
-        joins: dict[str, type] = {
-            "protocol_image": ProtocolImage,
-            "word_import": WordImportDocument,
-            "gallery_upload": GalleryImage,
-            "submission_upload": SubmissionUploadFile,
-        }
-        for key, model in joins.items():
-            query = scoped(
-                select(StoredFile.tenant_id, func.coalesce(func.sum(StoredFile.file_size_bytes), 0))
-                .select_from(StoredFile)
-                .join(model, model.stored_file_id == StoredFile.id)
-                .group_by(StoredFile.tenant_id)
-            )
-            add(db.execute(query).all(), key)
-
-        export_query = scoped(
-            select(StoredFile.tenant_id, func.coalesce(func.sum(StoredFile.file_size_bytes), 0))
-            .select_from(StoredFile)
-            .join(ProtocolExportCache, ProtocolExportCache.generated_file_id == StoredFile.id)
-            .group_by(StoredFile.tenant_id)
-        )
-        add(db.execute(export_query).all(), "export")
-
-        total_query = scoped(
-            select(StoredFile.tenant_id, func.coalesce(func.sum(StoredFile.file_size_bytes), 0)).group_by(
-                StoredFile.tenant_id
-            )
-        )
-        add(db.execute(total_query).all(), "total")
-
+        for row_tenant_id, key, total in db.execute(query).all():
+            bucket = totals.setdefault(row_tenant_id, {})
+            bucket[key] = int(total or 0)
+            bucket["total"] = bucket.get("total", 0) + int(total or 0)
         return totals
 
     def total_bytes_by_tenant(self, db: Session) -> dict[int, int]:

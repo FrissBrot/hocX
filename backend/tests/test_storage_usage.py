@@ -144,12 +144,12 @@ def test_breakdown_categorizes_each_source_correctly(db):
     result = service.breakdown_for_tenant(db, tenant.id)
     by_key = {c.key: c.bytes for c in result.categories}
 
-    assert by_key["protocol_image"] == 1000
-    assert by_key["word_import"] == 2000
-    assert by_key["submission_upload"] == 3000
-    assert by_key["export"] == 4000
+    # Fotos: protocol image (1000) + gallery image (6000); Dateien: word import (2000) +
+    # submission pdf (3000); Protokolle: generated export; Sonstiges: orphan.
+    assert by_key["photos"] == 1000 + 6000
+    assert by_key["files"] == 2000 + 3000
+    assert by_key["protocols"] == 4000
     assert by_key["other"] == 5000
-    assert by_key["gallery_upload"] == 6000
     assert result.total_bytes == 1000 + 2000 + 3000 + 4000 + 5000 + 6000
     assert result.quota_bytes is None
 
@@ -235,7 +235,7 @@ def test_admin_get_tenant_storage_returns_breakdown(db):
     result = admin_routes.get_tenant_storage(tenant.public_id, db=db)
 
     by_key = {c.key: c.bytes for c in result.categories}
-    assert by_key["word_import"] == 42
+    assert by_key["files"] == 42
 
 
 def test_admin_get_tenant_storage_404s_for_unknown_tenant(db):

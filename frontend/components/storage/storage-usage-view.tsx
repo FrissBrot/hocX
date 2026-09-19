@@ -8,12 +8,17 @@ type Props = {
 };
 
 export const CATEGORY_COLORS: Record<StorageCategoryKey, string> = {
-  protocol_image: "#6366f1",
-  word_import: "#06b6d4",
-  submission_upload: "#b45309",
-  gallery_upload: "#db2777",
-  export: "#a855f7",
+  photos: "#db2777",
+  files: "#6366f1",
+  protocols: "#0d9488",
   other: "#9ca3af",
+};
+
+const CATEGORY_HINTS: Record<StorageCategoryKey, string> = {
+  photos: "Galerie, Protokoll-Bilder und Abgabebox-Bilder",
+  files: "Word-Importe, Abgabebox-Dokumente und weitere Uploads",
+  protocols: "Erzeugte PDF-/LaTeX-Exporte",
+  other: "Logos, Importe und übrige Dateien",
 };
 
 export function formatPercent(part: number, total: number): string {
@@ -77,6 +82,7 @@ export function StorageBreakdown({ total_bytes, quota_bytes, categories }: Stora
                   <td>
                     <span className="storage-legend-dot" style={{ background: CATEGORY_COLORS[category.key] }} />
                     {category.label}
+                    <div className="muted storage-legend-hint">{CATEGORY_HINTS[category.key]}</div>
                   </td>
                   <td>{formatFileSize(category.bytes)}</td>
                   <td className="muted">{formatPercent(category.bytes, total_bytes)}</td>
