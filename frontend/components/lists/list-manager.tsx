@@ -446,7 +446,7 @@ export function ListManager({
           {/* List items — scrollable, fills available height */}
           <div className="list-manager-items">
             {filteredLists.length === 0 ? (
-              <span className="muted" style={{ fontSize: "var(--text-base)", padding: "6px 4px", display: "block" }}>Keine Listen</span>
+              <span className="muted" style={{ fontSize: "var(--text-base)", padding: "var(--space-2) var(--space-1)", display: "block" }}>Keine Listen</span>
             ) : filteredLists.map((definition) => {
               const isSelected = selectedListId === definition.id;
               const entryCount = (entriesByList[definition.id] ?? []).length;
@@ -628,7 +628,7 @@ export function ListManager({
                     </div>
                     <div className="dropdown-panel-scroll">
                       {listDropdownFiltered.length === 0 ? (
-                        <div className="muted" style={{ padding: "8px 12px", fontSize: "var(--text-base)" }}>Keine Listen gefunden</div>
+                        <div className="muted" style={{ padding: "var(--space-2) var(--space-3)", fontSize: "var(--text-base)" }}>Keine Listen gefunden</div>
                       ) : listDropdownFiltered.map((l) => (
                         <button
                           key={l.id}
@@ -751,12 +751,12 @@ export function ListManager({
                   <button
                     type="button"
                     onClick={() => setTemplateDropdownOpen((v) => !v)}
-                    style={{ padding: "5px 10px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", backgroundColor: "transparent", color: "var(--text)", fontSize: "var(--text-base)", cursor: "pointer", minHeight: 0, whiteSpace: "nowrap", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis" }}
+                    style={{ padding: "var(--space-1) var(--space-3)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", backgroundColor: "transparent", color: "var(--text)", fontSize: "var(--text-base)", cursor: "pointer", minHeight: 0, whiteSpace: "nowrap", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis" }}
                   >
                     {landscapeTemplates.find((t) => t.id === exportTemplateId)?.name ?? "Vorlage"} ▾
                   </button>
                   {templateDropdownOpen && (
-                    <div className="dropdown-panel dropdown-panel-up" style={{ padding: "4px 0", overflow: "visible", minWidth: 160 }}>
+                    <div className="dropdown-panel dropdown-panel-up" style={{ padding: "var(--space-1) 0", overflow: "visible", minWidth: 160 }}>
                       {landscapeTemplates.map((t) => (
                         <button
                           key={t.id}

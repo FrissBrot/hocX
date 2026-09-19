@@ -86,7 +86,7 @@ export function AdminMfaSettings({ initialOverview }: Props) {
     <div className="grid">
       <div>
         <div className="eyebrow">Zwei-Faktor-Authentifizierung</div>
-        <p className="muted" style={{ marginTop: 6, maxWidth: "60ch" }}>
+        <p className="muted" style={{ marginTop: "var(--space-2)", maxWidth: "60ch" }}>
           Platform-Admin-Konten haben systemweiten Zugriff auf alle Mandanten und benötigen deshalb zwingend einen
           zweiten Faktor. Mindestens ein Faktor muss immer erhalten bleiben.
         </p>

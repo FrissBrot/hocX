@@ -594,7 +594,7 @@ export function StructuredListTable({
               >
                 {definition.column_one_title}
                 {onHeaderSort && (
-                  <span style={{ marginLeft: 4, opacity: sortByColumn === "column_one" ? 1 : 0.25, fontSize: "0.8em" }}>
+                  <span style={{ marginLeft: "var(--space-1)", opacity: sortByColumn === "column_one" ? 1 : 0.25, fontSize: "0.8em" }}>
                     {sortByColumn === "column_one" ? (sortDirection === "asc" ? "↑" : "↓") : "↕"}
                   </span>
                 )}
@@ -605,7 +605,7 @@ export function StructuredListTable({
               >
                 {definition.column_two_title}
                 {onHeaderSort && (
-                  <span style={{ marginLeft: 4, opacity: sortByColumn === "column_two" ? 1 : 0.25, fontSize: "0.8em" }}>
+                  <span style={{ marginLeft: "var(--space-1)", opacity: sortByColumn === "column_two" ? 1 : 0.25, fontSize: "0.8em" }}>
                     {sortByColumn === "column_two" ? (sortDirection === "asc" ? "↑" : "↓") : "↕"}
                   </span>
                 )}

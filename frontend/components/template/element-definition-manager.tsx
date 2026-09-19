@@ -2426,7 +2426,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                               <input
                                 value={entry.label}
                                 placeholder={def.defaultLabel}
-                                style={{ flex: 1, minHeight: 0, padding: "4px 8px", fontSize: "var(--text-base)" }}
+                                style={{ flex: 1, minHeight: 0, padding: "var(--space-1) var(--space-2)", fontSize: "var(--text-base)" }}
                                 onChange={(e) =>
                                   setCreateBlockForm((current) => ({
                                     ...current,
@@ -3013,7 +3013,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                                   <input
                                     value={entry.label}
                                     placeholder={def.defaultLabel}
-                                    style={{ flex: 1, minHeight: 0, padding: "4px 8px", fontSize: "var(--text-base)" }}
+                                    style={{ flex: 1, minHeight: 0, padding: "var(--space-1) var(--space-2)", fontSize: "var(--text-base)" }}
                                     onChange={(e) =>
                                       setBlockForm((current) => ({
                                         ...current,

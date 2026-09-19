@@ -119,7 +119,7 @@ function CycleForm({
             alignItems: "center",
             justifyContent: "flex-end",
             gap: "var(--space-3)",
-            paddingTop: "4px",
+            paddingTop: "var(--space-1)",
           }}
         >
           {onCancel && (
@@ -281,7 +281,7 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
       {configs.length === 0 && !showCreate ? (
         <div
           style={{
-            padding: "32px 24px",
+            padding: "var(--space-6) var(--space-5)",
             borderRadius: "var(--radius-xl)",
             border: "1px dashed var(--border)",
             color: "var(--muted)",
@@ -340,7 +340,7 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
                           <code
                             style={{
                               fontSize: "0.78em",
-                              padding: "1px 6px",
+                              padding: "1px var(--space-2)",
                               borderRadius: "var(--radius-sm)",
                               background: "color-mix(in srgb, var(--muted) 12%, transparent 88%)",
                               border: "1px solid color-mix(in srgb, var(--muted) 18%, transparent 82%)",

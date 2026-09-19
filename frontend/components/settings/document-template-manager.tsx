@@ -864,7 +864,7 @@ function TemplateForm({
 
           <div className="card inset-card">
             <div className="eyebrow">Schriftgrösse</div>
-            <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "12px", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "var(--space-3)", flexWrap: "wrap" }}>
               {(["10pt", "11pt", "12pt"] as const).map((size) => (
                 <button
                   key={size}
@@ -874,7 +874,7 @@ function TemplateForm({
                   style={{ minWidth: "90px", padding: "14px 16px" }}
                 >
                   <span style={{ fontSize: size === "10pt" ? "1.1rem" : size === "11pt" ? "1.3rem" : "1.5rem", fontWeight: 600 }}>Aa</span>
-                  <span style={{ fontSize: "var(--text-xs)", color: "var(--muted)", marginTop: "4px", display: "block" }}>{size}</span>
+                  <span style={{ fontSize: "var(--text-xs)", color: "var(--muted)", marginTop: "var(--space-1)", display: "block" }}>{size}</span>
                 </button>
               ))}
             </div>
@@ -889,7 +889,7 @@ function TemplateForm({
             style={{ "--dt-accent": `#${form.primary_color}` } as React.CSSProperties}
           >
             <div className="eyebrow">Kopfzeile (Header)</div>
-            <p className="muted" style={{ marginTop: "4px", fontSize: "var(--text-sm)" }}>Erscheint oben auf jeder Seite.</p>
+            <p className="muted" style={{ marginTop: "var(--space-1)", fontSize: "var(--text-sm)" }}>Erscheint oben auf jeder Seite.</p>
             <div style={{ marginTop: "12px" }}>
               <PresetCardGrid options={headerOptions} value={form.preset_header} onChange={(v) => setForm((f) => ({ ...f, preset_header: v }))} accentColor={form.primary_color} />
             </div>
@@ -915,7 +915,7 @@ function TemplateForm({
             style={{ "--dt-accent": `#${form.primary_color}` } as React.CSSProperties}
           >
             <div className="eyebrow">Fusszeile (Footer)</div>
-            <p className="muted" style={{ marginTop: "4px", fontSize: "var(--text-sm)" }}>Erscheint unten auf jeder Seite.</p>
+            <p className="muted" style={{ marginTop: "var(--space-1)", fontSize: "var(--text-sm)" }}>Erscheint unten auf jeder Seite.</p>
             <div style={{ marginTop: "12px" }}>
               <PresetCardGrid options={footerOptions} value={form.preset_footer} onChange={(v) => setForm((f) => ({ ...f, preset_footer: v }))} accentColor={form.primary_color} />
             </div>
@@ -926,7 +926,7 @@ function TemplateForm({
             style={{ "--dt-accent": `#${form.primary_color}` } as React.CSSProperties}
           >
             <div className="eyebrow">Titelblatt</div>
-            <p className="muted" style={{ marginTop: "4px", fontSize: "var(--text-sm)" }}>Erste Seite des Protokolls mit Metadaten.</p>
+            <p className="muted" style={{ marginTop: "var(--space-1)", fontSize: "var(--text-sm)" }}>Erste Seite des Protokolls mit Metadaten.</p>
             <div style={{ marginTop: "12px" }}>
               <PresetCardGrid options={titlePageOptions} value={form.preset_title_page} onChange={(v) => setForm((f) => ({ ...f, preset_title_page: v }))} accentColor={form.primary_color} />
             </div>
@@ -936,10 +936,10 @@ function TemplateForm({
           {!isLandscape && (form.preset_title_page === "combined_toc" ? (
             <div className="card inset-card" style={{ "--dt-accent": `#${form.primary_color}` } as React.CSSProperties}>
               <div className="eyebrow">Titelblatt + Inhaltsverzeichnis — Konfiguration</div>
-              <p className="muted" style={{ marginTop: "4px", fontSize: "var(--text-sm)" }}>
+              <p className="muted" style={{ marginTop: "var(--space-1)", fontSize: "var(--text-sm)" }}>
                 Das Inhaltsverzeichnis ist in diesem Titelblatt integriert.
               </p>
-              <div style={{ display: "flex", gap: "var(--space-4)", marginTop: "16px", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: "var(--space-4)", marginTop: "var(--space-4)", flexWrap: "wrap" }}>
                 <label className="field-stack" style={{ flex: 1, minWidth: "200px" }}>
                   <span className="field-label">Logo / Bild oben links</span>
                   <SearchableSelect
@@ -974,7 +974,7 @@ function TemplateForm({
                   <span className="field-help">Abstände zwischen IHV-Einträgen.</span>
                 </label>
               </div>
-              <div style={{ display: "flex", gap: "var(--space-4)", marginTop: "12px", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: "var(--space-4)", marginTop: "var(--space-3)", flexWrap: "wrap" }}>
                 <label className="field-stack" style={{ flex: 1, minWidth: "140px" }}>
                   <span className="field-label">Ort</span>
                   <input value={form.title_location} onChange={(e) => setForm((f) => ({ ...f, title_location: e.target.value }))} placeholder="z.B. Musterort" />
@@ -1000,7 +1000,7 @@ function TemplateForm({
               style={{ "--dt-accent": `#${form.primary_color}` } as React.CSSProperties}
             >
               <div className="eyebrow">Inhaltsverzeichnis</div>
-              <p className="muted" style={{ marginTop: "4px", fontSize: "var(--text-sm)" }}>Übersicht aller Abschnitte.</p>
+              <p className="muted" style={{ marginTop: "var(--space-1)", fontSize: "var(--text-sm)" }}>Übersicht aller Abschnitte.</p>
               <div style={{ marginTop: "12px" }}>
                 <PresetCardGrid options={tocOptions} value={form.preset_toc} onChange={(v) => setForm((f) => ({ ...f, preset_toc: v }))} accentColor={form.primary_color} />
               </div>
@@ -1029,7 +1029,7 @@ function TemplateForm({
 
           <div className="card inset-card">
             <div className="eyebrow">Weitere Optionen</div>
-            <label style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", marginTop: "12px", cursor: "pointer" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", marginTop: "var(--space-3)", cursor: "pointer" }}>
               <input
                 type="checkbox"
                 checked={form.show_metadata}
@@ -1037,7 +1037,7 @@ function TemplateForm({
               />
               <span>Protokoll-Metadaten anzeigen</span>
             </label>
-            <p className="muted" style={{ marginTop: "4px", fontSize: "var(--text-sm)" }}>Zeigt einen automatischen Metadaten-Block (Nummer, Titel, Datum, Status) im exportierten PDF an. Standardmässig ausgeblendet.</p>
+            <p className="muted" style={{ marginTop: "var(--space-1)", fontSize: "var(--text-sm)" }}>Zeigt einen automatischen Metadaten-Block (Nummer, Titel, Datum, Status) im exportierten PDF an. Standardmässig ausgeblendet.</p>
           </div>
         </div>
       )}

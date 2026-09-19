@@ -2568,7 +2568,7 @@ export function WordImportWizard({
               <summary style={{ cursor: "pointer" }}>
                 <WarningIcon /> {analysis.warnings.length} Hinweis{analysis.warnings.length === 1 ? "" : "e"} zur Analyse
               </summary>
-              <ul style={{ margin: "8px 0 0", paddingLeft: "18px" }}>
+              <ul style={{ margin: "var(--space-2) 0 0", paddingLeft: "18px" }}>
                 {analysis.warnings.map((warning, index) => (
                   <li key={index}>{warning}</li>
                 ))}

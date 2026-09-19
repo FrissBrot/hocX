@@ -805,7 +805,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                 <strong>{importFile.name}</strong>
                 <span className="muted"> · {importPreview ? `${importPreview.rows.length} Zeile(n) erkannt` : "wird gelesen…"}</span>
               </span>
-              <label className="button-secondary button-ghost" style={{ width: "auto", minHeight: 0, padding: "6px 14px", cursor: "pointer" }}>
+              <label className="button-secondary button-ghost" style={{ width: "auto", minHeight: 0, padding: "var(--space-2) var(--space-4)", cursor: "pointer" }}>
                 Andere Datei
                 <input type="file" accept=".csv,text/csv" onChange={handleImportFileChange} hidden />
               </label>
@@ -991,7 +991,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                       type="button"
                       className="button-ghost structured-list-picker"
                       onClick={() => openParticipantPicker(field)}
-                      style={{ textAlign: "left", minHeight: 36, padding: "6px 10px", fontSize: "var(--text-base)" }}
+                      style={{ textAlign: "left", minHeight: 36, padding: "var(--space-2) var(--space-3)", fontSize: "var(--text-base)" }}
                     >
                       {participantLabel(form[field] as string[])}
                     </button>
@@ -1144,13 +1144,13 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                 {exportTagFilters.map((tag) => (
                   <button key={tag} type="button" className="tag-filter-chip tag-filter-chip-active"
                     onClick={() => toggleExportTag(tag)}
-                    style={{ width: "auto", minHeight: 0, padding: "4px 12px", display: "inline-flex", fontSize: "var(--text-base)" }}
+                    style={{ width: "auto", minHeight: 0, padding: "var(--space-1) var(--space-3)", display: "inline-flex", fontSize: "var(--text-base)" }}
                   >{tag} ×</button>
                 ))}
                 {knownExportTags.filter((t) => !exportTagFilters.includes(t)).map((tag) => (
                   <button key={tag} type="button" className="tag-filter-chip"
                     onClick={() => toggleExportTag(tag)}
-                    style={{ width: "auto", minHeight: 0, padding: "4px 12px", display: "inline-flex", fontSize: "var(--text-base)" }}
+                    style={{ width: "auto", minHeight: 0, padding: "var(--space-1) var(--space-3)", display: "inline-flex", fontSize: "var(--text-base)" }}
                   >{tag}</button>
                 ))}
               </div>
@@ -1198,7 +1198,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
               disabled={exportBusy || (!exportUrl && (!exportTemplateId || (exportDateMode === "until-event" && !exportUntilEventId) || (exportDateMode === "next-session" && !nextSessionEvent)))}
               onClick={() => void handlePdfClick()}
               title={exportUrl ? "PDF erneut herunterladen" : "PDF generieren"}
-              style={{ width: "auto", minWidth: "56px", minHeight: 0, padding: "0 14px", display: "inline-flex", justifyContent: "center" }}
+              style={{ width: "auto", minWidth: "56px", minHeight: 0, padding: "0 var(--space-4)", display: "inline-flex", justifyContent: "center" }}
             >
               {exportBusy ? "..." : "PDF"}
             </button>
@@ -1207,7 +1207,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
               className="pdf-icon-link pdf-icon-link-soon"
               disabled
               title="Markdown-Export – kommt bald"
-              style={{ width: "auto", minWidth: "56px", minHeight: 0, padding: "0 14px", display: "inline-flex", justifyContent: "center" }}
+              style={{ width: "auto", minWidth: "56px", minHeight: 0, padding: "0 var(--space-4)", display: "inline-flex", justifyContent: "center" }}
             >
               MD
             </button>
@@ -1218,7 +1218,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                   type="button"
                   onClick={() => setTemplateDropdownOpen((v) => !v)}
                   style={{
-                    width: "auto", minHeight: 0, height: "42px", padding: "0 32px 0 12px",
+                    width: "auto", minHeight: 0, height: "42px", padding: "0 var(--space-6) 0 var(--space-3)",
                     borderRadius: "var(--radius-md)", fontSize: "var(--text-sm)",
                     border: "1px solid var(--border)", backgroundColor: "transparent",
                     color: "var(--text)", display: "flex", alignItems: "center", whiteSpace: "nowrap",

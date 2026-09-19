@@ -1056,7 +1056,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
                   <button
                     type="button"
                     onClick={() => { setTagDropdownOpen((v) => !v); setTagDropdownSearch(""); }}
-                    style={{ width: "100%", textAlign: "left", padding: "12px 14px", borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", background: "color-mix(in srgb, var(--panel-solid) 92%, transparent 8%)", color: form.tag_filter ? "var(--text)" : "var(--muted)", cursor: "pointer", minHeight: 48, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-2)", fontSize: "inherit", boxSizing: "border-box" }}
+                    style={{ width: "100%", textAlign: "left", padding: "var(--space-3) var(--space-4)", borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", background: "color-mix(in srgb, var(--panel-solid) 92%, transparent 8%)", color: form.tag_filter ? "var(--text)" : "var(--muted)", cursor: "pointer", minHeight: 48, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-2)", fontSize: "inherit", boxSizing: "border-box" }}
                   >
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {form.tag_filter || "Tag wählen…"}
@@ -1185,7 +1185,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
                 const allChecked = group.types.every((t) => form.allowed_file_types.includes(t));
                 const someChecked = group.types.some((t) => form.allowed_file_types.includes(t));
                 return (
-                  <div key={group.label} style={{ padding: "10px 14px", borderTop: gi > 0 ? "1px solid var(--border)" : undefined }}>
+                  <div key={group.label} style={{ padding: "var(--space-3) var(--space-4)", borderTop: gi > 0 ? "1px solid var(--border)" : undefined }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", marginBottom: 7 }}>
                       <span style={{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--text)", textTransform: "uppercase", letterSpacing: "0.05em", flex: 1 }}>
                         {group.label}

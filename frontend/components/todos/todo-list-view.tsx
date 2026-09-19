@@ -832,7 +832,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
               ))}
             </div>
             {exportPersonMode === "filter" && (
-              <div style={{ marginTop: 10, position: "relative" }}>
+              <div style={{ marginTop: "var(--space-3)", position: "relative" }}>
                 <input
                   className="input"
                   type="text"
@@ -841,7 +841,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
                   onChange={(e) => { setParticipantSearch(e.target.value); if (!e.target.value) setExportParticipantId(""); clearExportState(); }}
                 />
                 {participantSuggestions.length > 0 && (
-                  <div className="dropdown-panel dropdown-panel-down" style={{ padding: "4px 0", overflow: "visible" }}>
+                  <div className="dropdown-panel dropdown-panel-down" style={{ padding: "var(--space-1) 0", overflow: "visible" }}>
                     {participantSuggestions.map((p) => (
                       <button
                         key={p.id}
@@ -880,7 +880,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
               ))}
             </div>
             {exportDateMode === "next-hock" && (
-              <div className="muted" style={{ marginTop: 8, fontSize: "var(--text-base)" }}>
+              <div className="muted" style={{ marginTop: "var(--space-2)", fontSize: "var(--text-base)" }}>
                 {nextHockEvent
                   ? `Bis ${nextHockEvent.title ?? "Termin"} (${formatDate(nextHockEvent.event_date)})`
                   : "Kein passender Hock gefunden"}
@@ -939,7 +939,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
                   type="button"
                   onClick={() => setTemplateDropdownOpen((v) => !v)}
                   style={{
-                    padding: "5px 10px",
+                    padding: "var(--space-1) var(--space-3)",
                     borderRadius: "var(--radius-sm)",
                     border: "1px solid var(--border)",
                     backgroundColor: "transparent",
@@ -956,7 +956,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
                   {landscapeTemplates.find((t) => t.id === exportTemplateId)?.name ?? "Vorlage"} ▾
                 </button>
                 {templateDropdownOpen && (
-                  <div className="dropdown-panel dropdown-panel-up" style={{ padding: "4px 0", overflow: "visible" }}>
+                  <div className="dropdown-panel dropdown-panel-up" style={{ padding: "var(--space-1) 0", overflow: "visible" }}>
                     {landscapeTemplates.map((t) => (
                       <button
                         key={t.id}

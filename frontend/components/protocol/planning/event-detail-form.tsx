@@ -154,7 +154,7 @@ export function EventDetailForm({
                       <button
                         type="button"
                         className="button-ghost structured-list-picker"
-                        style={{ textAlign: "left", minHeight: 36, padding: "6px 10px", fontSize: "var(--text-base)" }}
+                        style={{ textAlign: "left", minHeight: 36, padding: "var(--space-2) var(--space-3)", fontSize: "var(--text-base)" }}
                         onClick={() => {
                           setActiveRoleField(field);
                           setRoleSearch("");
