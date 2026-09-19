@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 
 import { ElementDefinitionManager } from "@/components/template/element-definition-manager";
 import { AppShell } from "@/components/ui/app-shell";
+import { RouteTabs } from "@/components/ui/route-tabs";
+import { TEMPLATE_TABS } from "@/components/ui/section-tabs";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { ElementDefinition, EventSummary, FinanceAccount, ParticipantSummary, StructuredListDefinition } from "@/types/api";
 
@@ -22,6 +24,7 @@ export default async function ElementsPage() {
 
   return (
     <AppShell initialSession={session}>
+      <RouteTabs tabs={TEMPLATE_TABS} activeHref="/elements" />
       <section className="panel">
         <ElementDefinitionManager
           initialDefinitions={definitions ?? []}

@@ -1,4 +1,6 @@
 import { AppShell } from "@/components/ui/app-shell";
+import { RouteTabs } from "@/components/ui/route-tabs";
+import { DASHBOARD_TABS } from "@/components/ui/section-tabs";
 import { DashboardView } from "@/components/dashboard/dashboard-view";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { AttendanceFineListItem, NextSessionInfo, TodoListItem } from "@/types/api";
@@ -15,6 +17,7 @@ export default async function HomePage() {
 
   return (
     <AppShell initialSession={session}>
+      <RouteTabs tabs={DASHBOARD_TABS} activeHref="/" />
       <DashboardView
         todos={todos ?? []}
         fines={fines ?? []}
