@@ -1556,6 +1556,7 @@ input[type="radio"] {
 }
 
 .table-shell {
+  max-width: var(--table-max-width);
   align-self: start;
   height: fit-content;
   overflow-x: auto;
@@ -8859,6 +8860,52 @@ input[type="radio"] {
    whole table to the width of its longest row. */
 .data-table-lg td.table-cell-wrap {
   white-space: normal;
+}
+
+/* Todo table: compact fixed layout (narrow checkbox column, no stretched gaps) */
+.data-table-todos {
+  table-layout: fixed;
+}
+
+.data-table-todos th,
+.data-table-todos td {
+  padding: var(--space-3) var(--space-3);
+  overflow: hidden;
+}
+
+.data-table-todos th:nth-child(1),
+.data-table-todos td:nth-child(1) {
+  width: 52px;
+  padding-right: 0;
+}
+
+.data-table-todos th:nth-child(3),
+.data-table-todos td:nth-child(3) {
+  width: 22%;
+}
+
+.data-table-todos th:nth-child(4),
+.data-table-todos td:nth-child(4) {
+  width: 18%;
+}
+
+.data-table-todos th:nth-child(5),
+.data-table-todos td:nth-child(5) {
+  width: 120px;
+}
+
+.data-table-todos .table-sort-button {
+  width: auto;
+  justify-content: flex-start;
+  gap: var(--space-1);
+}
+
+.data-table-todos .todo-row-task-text,
+.data-table-todos .todo-assignee-cell,
+.data-table-todos .todo-due-cell {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .fines-collected-note {

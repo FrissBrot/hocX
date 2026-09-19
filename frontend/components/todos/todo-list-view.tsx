@@ -432,7 +432,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
       </div>
 
       <DataTable
-        className="data-table-lg"
+        className="data-table-lg data-table-todos"
         columns={[
           "",
           { key: "task", label: "Aufgabe", sortable: true, sortDirection: sd("task"), onSort: () => toggleSort("task") },
