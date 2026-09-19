@@ -108,8 +108,8 @@ describe("PhotoViewer", () => {
     const item = makeItem({ sharpness_score: 34.0, exposure_score: 0.42, face_analyzed_at: null, face_quality_score: null });
     render(<PhotoViewer items={[item]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
 
-    expect(screen.getByText("34.0")).toBeInTheDocument();
-    expect(screen.getByText("42%")).toBeInTheDocument();
+    expect(screen.getByText("Unscharf · 39/100")).toBeInTheDocument();
+    expect(screen.getByText("Starkes Clipping · 42%")).toBeInTheDocument();
     expect(screen.getByText("Analyse ausstehend")).toBeInTheDocument();
   });
 
@@ -128,10 +128,10 @@ describe("PhotoViewer", () => {
   });
 
   it("shows the face-quality score once analyzed with a detected face", () => {
-    const item = makeItem({ face_analyzed_at: "2026-07-10T09:00:00Z", face_quality_score: 3.6 });
+    const item = makeItem({ face_analyzed_at: "2026-07-10T09:00:00Z", face_quality_score: 3023.0 });
     render(<PhotoViewer items={[item]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
 
-    expect(screen.getByText("3.6 / 10")).toBeInTheDocument();
+    expect(screen.getByText("Sehr scharf · 87/100")).toBeInTheDocument();
   });
 
   it("advances to the next photo and updates the counter", () => {

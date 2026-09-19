@@ -24,6 +24,26 @@ export function PhotoViewer({
   onTagsSaved: (id: string, tags: string[]) => void;
 }) {
   const item = items[index];
+  const hasFace = item.face_quality_score !== null;
+  const faceMeter = (
+    <PhotoMeter
+      label="Gesichtsqualität"
+      tone="face"
+      value={
+        item.face_analyzed_at === null
+          ? null
+          : item.face_quality_score !== null
+            ? describeSharpness(item.face_quality_score)
+            : "Kein Gesicht erkannt"
+      }
+      fraction={item.face_quality_score !== null ? sharpnessFraction(item.face_quality_score) : null}
+      title={
+        item.face_quality_score !== null
+          ? `Rohwert (Schärfe des Gesichtsausschnitts, gewichtet nach Belichtung): ${item.face_quality_score.toFixed(1)}`
+          : undefined
+      }
+    />
+  );
   const fileUrl = `${browserApiBaseUrl}${item.content_url}`;
   const thumbnailUrl = item.thumbnail_url ? `${browserApiBaseUrl}${item.thumbnail_url}` : fileUrl;
   const [readyUrl, setReadyUrl] = useState<string | null>(null);
@@ -171,30 +191,26 @@ export function PhotoViewer({
         <div className="photo-viewer-sidebar">
           <div className="photo-viewer-section">
             <div className="photo-viewer-section-title">Analyse</div>
+            {hasFace && faceMeter}
             <PhotoMeter
-              label="Schärfe"
+              label={hasFace ? "Schärfe (gesamtes Bild)" : "Schärfe"}
               tone="sharpness"
-              value={item.sharpness_score !== null ? item.sharpness_score.toFixed(1) : null}
-              fraction={item.sharpness_score !== null ? Math.min(1, item.sharpness_score / 100) : null}
+              value={item.sharpness_score !== null ? describeSharpness(item.sharpness_score) : null}
+              fraction={item.sharpness_score !== null ? sharpnessFraction(item.sharpness_score) : null}
+              title={item.sharpness_score !== null ? `Rohwert (Laplace-Varianz der schärfsten Bildbereiche): ${item.sharpness_score.toFixed(1)}` : undefined}
             />
             <PhotoMeter
               label="Belichtung"
               tone="exposure"
-              value={item.exposure_score !== null ? `${Math.round(item.exposure_score * 100)}%` : null}
+              value={item.exposure_score !== null ? describeExposure(item.exposure_score) : null}
               fraction={item.exposure_score}
-            />
-            <PhotoMeter
-              label="Gesichtsqualität"
-              tone="face"
-              value={
-                item.face_analyzed_at === null
-                  ? null
-                  : item.face_quality_score !== null
-                    ? `${item.face_quality_score.toFixed(1)} / 10`
-                    : "Kein Gesicht erkannt"
+              title={
+                item.exposure_score !== null
+                  ? `${Math.round((1 - item.exposure_score) * 100)}% der Pixel sind ausgebrannt oder abgesoffen`
+                  : undefined
               }
-              fraction={item.face_quality_score !== null ? Math.min(1, item.face_quality_score / 10) : null}
             />
+            {!hasFace && faceMeter}
           </div>
 
           <div className="photo-viewer-section">
@@ -253,14 +269,16 @@ function PhotoMeter({
   value,
   fraction,
   tone,
+  title,
 }: {
   label: string;
   value: string | null;
   fraction: number | null;
   tone: "sharpness" | "exposure" | "face";
+  title?: string;
 }) {
   return (
-    <div className="photo-meter-row">
+    <div className="photo-meter-row" title={title}>
       <div className="photo-meter-label-row">
         <span className="photo-meter-label">{label}</span>
         <span className="photo-meter-value">{value ?? "Analyse ausstehend"}</span>
@@ -273,4 +291,23 @@ function PhotoMeter({
       </div>
     </div>
   );
+}
+
+// Schärfe und Gesichtsqualität sind rohe Laplace-Varianzen ohne Obergrenze (typisch ~10 bis
+// mehrere Tausend, stark motiv- und rauschabhängig). Für die Anzeige werden sie logarithmisch
+// auf 0-100 abgebildet und in Stufen beschriftet; der Rohwert steht im Tooltip.
+const SHARPNESS_LOG_CEILING = Math.log10(1 + 10000);
+
+function sharpnessFraction(score: number): number {
+  return Math.min(1, Math.max(0, Math.log10(1 + Math.max(0, score)) / SHARPNESS_LOG_CEILING));
+}
+
+function describeSharpness(score: number): string {
+  const label = score < 50 ? "Unscharf" : score < 300 ? "Mittel" : score < 1500 ? "Scharf" : "Sehr scharf";
+  return `${label} · ${Math.round(sharpnessFraction(score) * 100)}/100`;
+}
+
+function describeExposure(score: number): string {
+  const label = score >= 0.95 ? "Gut" : score >= 0.85 ? "Leichtes Clipping" : "Starkes Clipping";
+  return `${label} · ${Math.round(score * 100)}%`;
 }

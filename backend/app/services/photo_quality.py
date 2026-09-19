@@ -28,6 +28,13 @@ _ANALYSIS_MAX_DIMENSION = 512
 # highlights / crushed shadows) for the exposure score below.
 _CLIPPED_BIN_WIDTH = 3
 
+# Sharpness is measured per tile and then summarised by a high percentile instead of one
+# global variance: a portrait with a creamy blurred background has a tack-sharp face but
+# mostly edge-free pixels, so a global Laplacian variance rates it as blurry. Taking the
+# sharpest tiles asks "is anything in focus" rather than "is everything in focus".
+_SHARPNESS_TILE_SIZE = 64
+_SHARPNESS_PERCENTILE = 90
+
 
 def _load_grayscale_array(content: bytes) -> np.ndarray | None:
     try:
@@ -41,7 +48,15 @@ def _load_grayscale_array(content: bytes) -> np.ndarray | None:
 
 
 def _sharpness_from_array(gray: np.ndarray) -> float:
-    return float(ndimage.laplace(gray).var())
+    laplacian = ndimage.laplace(gray)
+    rows, cols = laplacian.shape
+    tile = _SHARPNESS_TILE_SIZE
+    tile_rows, tile_cols = rows // tile, cols // tile
+    if tile_rows == 0 or tile_cols == 0:
+        return float(laplacian.var())
+    tiles = laplacian[: tile_rows * tile, : tile_cols * tile].reshape(tile_rows, tile, tile_cols, tile)
+    tile_variances = tiles.var(axis=(1, 3)).ravel()
+    return float(np.percentile(tile_variances, _SHARPNESS_PERCENTILE))
 
 
 def _exposure_from_array(gray: np.ndarray) -> float | None:
@@ -56,7 +71,9 @@ def _exposure_from_array(gray: np.ndarray) -> float | None:
 
 def compute_sharpness_score(content: bytes) -> float | None:
     """Laplacian-variance blur estimate: a sharp image has a lot of high-frequency edge
-    energy, a blurred/out-of-focus one doesn't. Unbounded, higher is sharper. Returns None
+    energy, a blurred/out-of-focus one doesn't. Computed per 64px tile and summarised by the
+    90th percentile, so a sharp subject in front of a blurred background still scores high.
+    Unbounded, higher is sharper. Returns None
     for content PIL can't decode (mirrors _generate_thumbnail_bytes's convention in
     file_service.py). Prefer compute_quality_scores() when both this and
     compute_exposure_score are needed for the same content - it decodes once instead of

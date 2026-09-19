@@ -34,6 +34,23 @@ def test_sharpness_score_is_higher_for_a_sharp_image_than_a_blurred_copy():
     assert sharp_score > blurred_score
 
 
+def test_sharp_subject_on_blurred_background_is_not_rated_as_blurry():
+    """Portrait with bokeh: only a small region is in focus. A global variance would rate
+    this like a blurry photo; the tile-based percentile must stay close to the all-sharp one."""
+    sharp = _checkerboard(size=512)
+    blurred = sharp.filter(ImageFilter.GaussianBlur(radius=6))
+    portrait = blurred.copy()
+    portrait.paste(sharp.crop((192, 128, 384, 384)), (192, 128))
+
+    all_sharp_score = compute_sharpness_score(_png_bytes(sharp))
+    portrait_score = compute_sharpness_score(_png_bytes(portrait))
+    all_blurred_score = compute_sharpness_score(_png_bytes(blurred))
+
+    assert portrait_score is not None and all_sharp_score is not None and all_blurred_score is not None
+    assert portrait_score > all_blurred_score * 10
+    assert portrait_score > all_sharp_score * 0.5
+
+
 def test_sharpness_score_is_none_for_undecodable_content():
     assert compute_sharpness_score(b"not an image") is None
 
