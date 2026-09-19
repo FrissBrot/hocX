@@ -602,7 +602,7 @@ export function ListManager({
 
             {/* List dropdown with search */}
             <div>
-              <div className="field-label" style={{ marginBottom: 8 }}>Liste</div>
+              <div className="field-label" style={{ marginBottom: "var(--space-2)" }}>Liste</div>
               <div ref={listDropdownRef} style={{ position: "relative" }}>
                 <button
                   type="button"
@@ -648,7 +648,7 @@ export function ListManager({
             {/* Group by */}
             {exportListDef && (
               <div>
-                <div className="field-label" style={{ marginBottom: 8 }}>Gruppieren nach</div>
+                <div className="field-label" style={{ marginBottom: "var(--space-2)" }}>Gruppieren nach</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
                   {(["", "column_one", "column_two"] as const).map((col) => (
                     <button
@@ -668,7 +668,7 @@ export function ListManager({
             {/* Filter */}
             {exportListDef && (
               <div>
-                <div className="field-label" style={{ marginBottom: 8 }}>Filtern nach Spalte</div>
+                <div className="field-label" style={{ marginBottom: "var(--space-2)" }}>Filtern nach Spalte</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
                   {(["", "column_one", "column_two"] as const).map((col) => (
                     <button
@@ -686,7 +686,7 @@ export function ListManager({
                   const vtype = exportFilterColumn === "column_one" ? exportListDef.column_one_value_type : exportListDef.column_two_value_type;
                   if (vtype === "participant" || vtype === "participants") {
                     return (
-                      <div style={{ marginTop: 8 }}>
+                      <div style={{ marginTop: "var(--space-2)" }}>
                         <SearchableSelect
                           options={availableParticipants}
                           getId={(p) => p.id}
@@ -700,7 +700,7 @@ export function ListManager({
                   }
                   if (vtype === "event") {
                     return (
-                      <div style={{ marginTop: 8 }}>
+                      <div style={{ marginTop: "var(--space-2)" }}>
                         <SearchableSelect
                           options={[...availableEvents].sort((a, b) => a.event_date.localeCompare(b.event_date))}
                           getId={(e) => e.id}
@@ -719,7 +719,7 @@ export function ListManager({
                       placeholder="Suchbegriff…"
                       value={exportFilterText}
                       onChange={(e) => { setExportFilterText(e.target.value); clearExportUrl(); }}
-                      style={{ marginTop: 8 }}
+                      style={{ marginTop: "var(--space-2)" }}
                     />
                   );
                 })()}
@@ -727,7 +727,7 @@ export function ListManager({
             )}
 
             {/* Action bar pinned to bottom */}
-            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", marginTop: "auto", paddingTop: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", marginTop: "auto", paddingTop: "var(--space-2)" }}>
               <button
                 type="button"
                 className="pdf-icon-link pdf-icon-link-success"
@@ -775,10 +775,10 @@ export function ListManager({
           </div>
 
           {/* Right: live preview */}
-          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflowY: "auto", borderLeft: "1px solid var(--border)", paddingLeft: 24 }}>
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflowY: "auto", borderLeft: "1px solid var(--border)", paddingLeft: "var(--space-5)" }}>
             {exportListDef ? (
               <>
-                <div className="field-label" style={{ marginBottom: 12 }}>
+                <div className="field-label" style={{ marginBottom: "var(--space-3)" }}>
                   Vorschau · {exportFilteredEntries.length} Einträge
                 </div>
                 <StructuredListTable

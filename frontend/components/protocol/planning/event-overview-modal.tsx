@@ -274,7 +274,7 @@ export function EventOverviewModal({
             )}
 
             {showCreateForm ? (
-              <div className="event-row-new grid" style={{ gap: "var(--space-2)", marginTop: 12 }}>
+              <div className="event-row-new grid" style={{ gap: "var(--space-2)", marginTop: "var(--space-3)" }}>
                 <div className={`event-date-fields${allowEndDate ? " event-date-fields-range" : ""}`}>
                   <DateInput
                     className="event-field-date"

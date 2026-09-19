@@ -135,8 +135,8 @@ export function ChartBlock({ config, editable, onSave }: Props) {
     onSave({ ...config, ...partial });
   }
 
-  if (loading) return <div className="muted" style={{ padding: "12px 0" }}>Lade Daten…</div>;
-  if (!data) return <div className="muted" style={{ padding: "12px 0" }}>Statistikdaten nicht verfügbar.</div>;
+  if (loading) return <div className="muted" style={{ padding: "var(--space-3) 0" }}>Lade Daten…</div>;
+  if (!data) return <div className="muted" style={{ padding: "var(--space-3) 0" }}>Statistikdaten nicht verfügbar.</div>;
 
   const hasCycles = data.cycles.length > 0;
   const cycleOptions = [
@@ -351,5 +351,5 @@ function ChartPreview({ chartType, cycleKey, data }: { chartType: string; cycleK
 }
 
 function NoData() {
-  return <p className="muted" style={{ padding: "8px 0" }}>Keine Daten verfügbar.</p>;
+  return <p className="muted" style={{ padding: "var(--space-2) 0" }}>Keine Daten verfügbar.</p>;
 }

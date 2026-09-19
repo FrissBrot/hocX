@@ -93,7 +93,7 @@ function CycleForm({
             />
           </label>
         </div>
-        <p className="field-help" style={{ marginTop: "-6px" }}>
+        <p className="field-help" style={{ marginTop: "calc(-1 * var(--space-2))" }}>
           Neuer Zyklus beginnt nach diesem Datum — z.&nbsp;B. 31.&nbsp;Juli → Start 1.&nbsp;August.
         </p>
 

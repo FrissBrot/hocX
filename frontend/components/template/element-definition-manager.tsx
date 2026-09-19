@@ -2397,11 +2397,11 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 <>
                 {createBlockForm.repeat_source === "event" && (
                   <div className="grid">
-                    <div className="eyebrow" style={{ marginBottom: 4 }}>Terminfelder</div>
+                    <div className="eyebrow" style={{ marginBottom: "var(--space-1)" }}>Terminfelder</div>
                     <p className="muted" style={{ fontSize: "var(--text-base)", margin: 0 }}>
                       Diese Felder des Termins erscheinen als bearbeitbare Zeilen in der Tabelle und werden direkt im Termin gespeichert.
                     </p>
-                    <div style={{ display: "grid", gap: "var(--space-2)", marginTop: 8 }}>
+                    <div style={{ display: "grid", gap: "var(--space-2)", marginTop: "var(--space-2)" }}>
                       {createBlockForm.event_fields.map((entry) => {
                         const def = ALL_EVENT_FIELDS.find((d) => d.field === entry.field);
                         if (!def) return null;
@@ -2984,11 +2984,11 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                   <>
                     {blockForm.repeat_source === "event" && (
                       <div className="grid">
-                        <div className="eyebrow" style={{ marginBottom: 4 }}>Terminfelder</div>
+                        <div className="eyebrow" style={{ marginBottom: "var(--space-1)" }}>Terminfelder</div>
                         <p className="muted" style={{ fontSize: "var(--text-base)", margin: 0 }}>
                           Diese Felder des Termins erscheinen als bearbeitbare Zeilen in der Tabelle und werden direkt im Termin gespeichert.
                         </p>
-                        <div style={{ display: "grid", gap: "var(--space-2)", marginTop: 8 }}>
+                        <div style={{ display: "grid", gap: "var(--space-2)", marginTop: "var(--space-2)" }}>
                           {blockForm.event_fields.map((entry) => {
                             const def = ALL_EVENT_FIELDS.find((d) => d.field === entry.field);
                             if (!def) return null;

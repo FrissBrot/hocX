@@ -34,7 +34,7 @@ export function computePopoverPosition(rect: DOMRect, align: Align, gap: number,
     // Above .modal-backdrop (1200) and .confirm-backdrop (1300): popovers opened from inside a
     // modal (e.g. SearchableSelect in the upload dialog) are portaled to <body> and would
     // otherwise sit underneath it.
-    zIndex: 1400,
+    zIndex: "var(--z-portal)",
     overflowY: "auto",
   };
 }

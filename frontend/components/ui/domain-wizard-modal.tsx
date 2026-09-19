@@ -223,7 +223,7 @@ export function DomainWizardModal({ open, onClose, tenantId, domain, onChanged }
             </div>
             <div>
               <strong>{activeDomain.domain}</strong> ist aktiv.
-              <p className="muted" style={{ marginTop: "4px" }}>
+              <p className="muted" style={{ marginTop: "var(--space-1)" }}>
                 {activeDomain.purpose === "app"
                   ? "Die hocX-App ist ab sofort auch unter dieser Domain erreichbar."
                   : "Die Abgabebox ist ab sofort auch unter dieser Domain erreichbar."}

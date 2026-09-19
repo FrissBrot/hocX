@@ -750,7 +750,7 @@ function TemplateForm({
           <span className="field-label">Beschreibung</span>
           <input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
         </label>
-        <div style={{ display: "flex", gap: "var(--space-5)", alignItems: "flex-end", paddingBottom: "4px" }}>
+        <div style={{ display: "flex", gap: "var(--space-5)", alignItems: "flex-end", paddingBottom: "var(--space-1)" }}>
           <label className="checkbox-row">
             <input type="checkbox" checked={form.is_active} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))} />
             Aktiv
@@ -763,15 +763,15 @@ function TemplateForm({
       </div>
 
       {/* Orientation selector */}
-      <div className="card inset-card" style={{ padding: "12px 16px" }}>
-        <div className="eyebrow" style={{ marginBottom: "8px" }}>Format</div>
+      <div className="card inset-card" style={{ padding: "var(--space-3) var(--space-4)" }}>
+        <div className="eyebrow" style={{ marginBottom: "var(--space-2)" }}>Format</div>
         <div style={{ display: "flex", gap: "var(--space-3)" }}>
           {([["portrait", "Hochformat", "A4 vertikal — für Protokolle"], ["landscape", "Querformat", "A4 horizontal — für Listen & Tabellen"]] as const).map(([val, label, desc]) => (
             <button
               key={val}
               type="button"
               className={`block-type-card${form.orientation === val ? " block-type-card-active" : ""}`}
-              style={{ flex: 1, padding: "10px 14px" }}
+              style={{ flex: 1, padding: "var(--space-3) var(--space-4)" }}
               onClick={() => setForm((f) => ({
                 ...f,
                 orientation: val,
@@ -780,7 +780,7 @@ function TemplateForm({
                 preset_title_page: val === "landscape" ? "none" : f.preset_title_page,
               }))}
             >
-              <div style={{ fontSize: "var(--text-2xl)", marginBottom: "4px" }}>{val === "portrait" ? "📄" : "📋"}</div>
+              <div style={{ fontSize: "var(--text-2xl)", marginBottom: "var(--space-1)" }}>{val === "portrait" ? "📄" : "📋"}</div>
               <div className="block-type-summary">
                 <strong>{label}</strong>
                 <span className="muted" style={{ fontSize: "var(--text-xs)" }}>{desc}</span>
@@ -806,7 +806,7 @@ function TemplateForm({
         <div className="grid">
           <div className="card inset-card">
             <div className="eyebrow">Farben</div>
-            <div style={{ display: "flex", gap: "32px", flexWrap: "wrap", marginTop: "12px" }}>
+            <div style={{ display: "flex", gap: "32px", flexWrap: "wrap", marginTop: "var(--space-3)" }}>
               <ColorField
                 label="Primärfarbe"
                 value={form.primary_color}
@@ -822,7 +822,7 @@ function TemplateForm({
                 <div style={{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>Vorschau</div>
               </div>
             </div>
-            <div style={{ marginTop: "10px" }}>
+            <div style={{ marginTop: "var(--space-3)" }}>
               <button type="button" className="button-secondary" style={{ fontSize: "var(--text-xs)" }}
                 onClick={() => setForm((f) => ({ ...f, primary_color: "174B7A", secondary_color: "4F6D7A" }))}>
                 Farben zurücksetzen
@@ -832,12 +832,12 @@ function TemplateForm({
 
           <div className="card inset-card">
             <div className="eyebrow">Schriftart</div>
-            <div style={{ marginTop: "12px" }}>
+            <div style={{ marginTop: "var(--space-3)" }}>
               <FontFamilyPicker value={form.font_family} onChange={(v) => setForm((f) => ({ ...f, font_family: v }))} />
             </div>
             {(form.font_family === "century_gothic" || form.font_family === "uploaded") && (
-              <div className="card inset-card" style={{ marginTop: "16px" }}>
-                <div className="info-note" style={{ marginBottom: "12px" }}>
+              <div className="card inset-card" style={{ marginTop: "var(--space-4)" }}>
+                <div className="info-note" style={{ marginBottom: "var(--space-3)" }}>
                   {form.font_family === "century_gothic"
                     ? "Century Gothic ist nicht vorinstalliert. Bitte die Font-Dateien hochladen."
                     : "Eigene Font-Dateien hochladen. Regular ist erforderlich, Varianten sind optional."}
@@ -871,7 +871,7 @@ function TemplateForm({
                   type="button"
                   className={`block-type-card font-size-card${form.font_size === size ? " block-type-card-active" : ""}`}
                   onClick={() => setForm((f) => ({ ...f, font_size: size }))}
-                  style={{ minWidth: "90px", padding: "14px 16px" }}
+                  style={{ minWidth: "90px", padding: "var(--space-4) var(--space-4)" }}
                 >
                   <span style={{ fontSize: size === "10pt" ? "1.1rem" : size === "11pt" ? "1.3rem" : "1.5rem", fontWeight: 600 }}>Aa</span>
                   <span style={{ fontSize: "var(--text-xs)", color: "var(--muted)", marginTop: "var(--space-1)", display: "block" }}>{size}</span>
@@ -890,11 +890,11 @@ function TemplateForm({
           >
             <div className="eyebrow">Kopfzeile (Header)</div>
             <p className="muted" style={{ marginTop: "var(--space-1)", fontSize: "var(--text-sm)" }}>Erscheint oben auf jeder Seite.</p>
-            <div style={{ marginTop: "12px" }}>
+            <div style={{ marginTop: "var(--space-3)" }}>
               <PresetCardGrid options={headerOptions} value={form.preset_header} onChange={(v) => setForm((f) => ({ ...f, preset_header: v }))} accentColor={form.primary_color} />
             </div>
             {["logo", "logo_bar", "logo_date"].includes(form.preset_header) && (
-              <div style={{ marginTop: "14px" }}>
+              <div style={{ marginTop: "var(--space-4)" }}>
                 <label className="field-stack">
                   <span className="field-label">Logo / Bild für Header</span>
                   <SearchableSelect
@@ -916,7 +916,7 @@ function TemplateForm({
           >
             <div className="eyebrow">Fusszeile (Footer)</div>
             <p className="muted" style={{ marginTop: "var(--space-1)", fontSize: "var(--text-sm)" }}>Erscheint unten auf jeder Seite.</p>
-            <div style={{ marginTop: "12px" }}>
+            <div style={{ marginTop: "var(--space-3)" }}>
               <PresetCardGrid options={footerOptions} value={form.preset_footer} onChange={(v) => setForm((f) => ({ ...f, preset_footer: v }))} accentColor={form.primary_color} />
             </div>
           </div>
@@ -927,7 +927,7 @@ function TemplateForm({
           >
             <div className="eyebrow">Titelblatt</div>
             <p className="muted" style={{ marginTop: "var(--space-1)", fontSize: "var(--text-sm)" }}>Erste Seite des Protokolls mit Metadaten.</p>
-            <div style={{ marginTop: "12px" }}>
+            <div style={{ marginTop: "var(--space-3)" }}>
               <PresetCardGrid options={titlePageOptions} value={form.preset_title_page} onChange={(v) => setForm((f) => ({ ...f, preset_title_page: v }))} accentColor={form.primary_color} />
             </div>
           </div>
@@ -991,7 +991,7 @@ function TemplateForm({
                     value={form.title_footer_color}
                     onChange={(v) => setForm((f) => ({ ...f, title_footer_color: v }))}
                   />
-                  <span className="field-help" style={{ display: "block", marginTop: "4px" }}>Farbe für den Kontakttext.</span>
+                  <span className="field-help" style={{ display: "block", marginTop: "var(--space-1)" }}>Farbe für den Kontakttext.</span>
                 </div>
               </div>
             </div>
@@ -1001,7 +1001,7 @@ function TemplateForm({
             >
               <div className="eyebrow">Inhaltsverzeichnis</div>
               <p className="muted" style={{ marginTop: "var(--space-1)", fontSize: "var(--text-sm)" }}>Übersicht aller Abschnitte.</p>
-              <div style={{ marginTop: "12px" }}>
+              <div style={{ marginTop: "var(--space-3)" }}>
                 <PresetCardGrid options={tocOptions} value={form.preset_toc} onChange={(v) => setForm((f) => ({ ...f, preset_toc: v }))} accentColor={form.primary_color} />
               </div>
             </div>
@@ -1009,7 +1009,7 @@ function TemplateForm({
 
           <div className="card inset-card">
             <div className="eyebrow">Nummerierung</div>
-            <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "12px" }}>
+            <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "var(--space-3)" }}>
               {([["sections", "Mit Nummern", "1. Abschnitt, 1.1 Unterabschnitt"], ["none", "Ohne Nummern", "Nur Titel, keine Nummern"]] as const).map(([val, label, desc]) => (
                 <button
                   key={val}
@@ -1300,7 +1300,7 @@ export function DocumentTemplateManager({ initialTemplates, initialParts, tenant
             <aside className="editor-nav">
               <div className="editor-nav-section">
                 <h3 className="editor-nav-title">Layouts</h3>
-                <label className="field-stack" style={{ padding: "0 8px 8px" }}>
+                <label className="field-stack" style={{ padding: "0 var(--space-2) var(--space-2)" }}>
                   <SearchInput value={layoutSearch} onChange={setLayoutSearch} placeholder="Suchen…" />
                 </label>
                 {filteredTemplates.map((template) => {

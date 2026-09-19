@@ -545,7 +545,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
                       }}
                     >
                       {isDone ? (
-                        <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="4" fill="currentColor"/><path d="M4.5 8.5l2.5 2.5 4.5-4.5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="4" fill="currentColor"/><path d="M4.5 8.5l2.5 2.5 4.5-4.5" stroke="var(--on-solid)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                       ) : (
                         <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="4" strokeWidth="1.5"/></svg>
                       )}
@@ -753,7 +753,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
             {editingTodo.protocol_id ? (
               <div className="info-note">
                 <span className="field-label">Aus Protokoll</span>
-                <div style={{ marginTop: 8 }}>
+                <div style={{ marginTop: "var(--space-2)" }}>
                   <button
                     type="button"
                     className="todo-protocol-link"
@@ -772,7 +772,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
             ) : editingTodo.reference_link ? (
               <div className="info-note">
                 <span className="field-label">Quelle</span>
-                <div style={{ marginTop: 8 }}>
+                <div style={{ marginTop: "var(--space-2)" }}>
                   {/^https?:\/\//i.test(editingTodo.reference_link) ? (
                     <a href={editingTodo.reference_link} target="_blank" rel="noreferrer" className="todo-protocol-link">
                       <span className="todo-protocol-num">Abgabebox</span>
@@ -799,7 +799,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
 
           {/* Status filter */}
           <div>
-            <div className="field-label" style={{ marginBottom: 8 }}>Status</div>
+            <div className="field-label" style={{ marginBottom: "var(--space-2)" }}>Status</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
               {(["open", "all"] as const).map((f) => (
                 <button
@@ -817,7 +817,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
 
           {/* Person filter */}
           <div>
-            <div className="field-label" style={{ marginBottom: 8 }}>Person</div>
+            <div className="field-label" style={{ marginBottom: "var(--space-2)" }}>Person</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
               {(["all", "filter", "group"] as const).map((mode) => (
                 <button
@@ -865,7 +865,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
 
           {/* Date filter */}
           <div>
-            <div className="field-label" style={{ marginBottom: 8 }}>Zeitraum</div>
+            <div className="field-label" style={{ marginBottom: "var(--space-2)" }}>Zeitraum</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
               {(["all", "next-hock", "until-event", "custom-date"] as const).map((mode) => (
                 <button
@@ -887,7 +887,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
               </div>
             )}
             {exportDateMode === "until-event" && (
-              <div style={{ marginTop: 8 }}>
+              <div style={{ marginTop: "var(--space-2)" }}>
                 <SearchableSelect
                   options={sortedEvents}
                   getId={(e) => e.id}
@@ -899,7 +899,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
               </div>
             )}
             {exportDateMode === "custom-date" && (
-              <div style={{ marginTop: 8 }}>
+              <div style={{ marginTop: "var(--space-2)" }}>
                 <input
                   className="input"
                   type="date"
@@ -911,7 +911,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
           </div>
 
           {/* Action bar */}
-          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", marginTop: 4 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", marginTop: "var(--space-1)" }}>
             <button
               type="button"
               className="pdf-icon-link pdf-icon-link-success"

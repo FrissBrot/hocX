@@ -125,7 +125,7 @@ export function SubmissionLinkManager({ links, onLinksChange, onLinkRemoved }: P
       {links.length === 0 ? <p className="muted">Noch keine Links – ohne Link ist keine Abgabe erreichbar.</p> : null}
 
       {links.map((link) => (
-        <div key={link.id} className="field-stack" style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+        <div key={link.id} className="field-stack" style={{ borderTop: "1px solid var(--border)", paddingTop: "var(--space-3)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", flexWrap: "wrap" }}>
             {editingId === link.id ? (
               <>
@@ -198,7 +198,7 @@ export function SubmissionLinkManager({ links, onLinksChange, onLinkRemoved }: P
         </div>
       ))}
 
-      <form className="field-stack" onSubmit={createLink} style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+      <form className="field-stack" onSubmit={createLink} style={{ borderTop: "1px solid var(--border)", paddingTop: "var(--space-3)" }}>
         <span className="field-label">Neuer Link</span>
         <div style={{ display: "flex", gap: "var(--space-2)" }}>
           <input

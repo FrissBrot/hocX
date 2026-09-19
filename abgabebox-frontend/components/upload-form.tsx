@@ -207,7 +207,7 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
           </div>
         )}
         {canUploadMore && (
-          <button type="button" className="button" style={{ marginTop: 16 }} onClick={() => setDone(false)}>
+          <button type="button" className="button" style={{ marginTop: "var(--space-4)" }} onClick={() => setDone(false)}>
             Weitere Datei hochladen
           </button>
         )}
@@ -272,7 +272,7 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
           im Hintergrund trotzdem (siehe useEffect oben), damit der Rest des Formulars unveraendert
           bleibt. */}
       {sitekey ? (
-        <div style={{ margin: "20px 0 4px" }}>
+        <div style={{ margin: "var(--space-5) 0 var(--space-1)" }}>
           {!captchaSessionToken && (
             <CaptchaWidget key={captchaKey} sitekey={sitekey} onSolved={handleSolved} onExpired={() => { exchangedSolutionRef.current = null; }} />
           )}
@@ -285,7 +285,7 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
           </div>
         </div>
       ) : (
-        <div style={{ margin: "20px 0 4px" }}>
+        <div style={{ margin: "var(--space-5) 0 var(--space-1)" }}>
           <div className="captcha-placeholder">Sicherheitscheck (kein FriendlyCaptcha konfiguriert – Test-/Dev-Betrieb)</div>
         </div>
       )}
@@ -295,7 +295,7 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
       <button
         type="submit"
         className="button"
-        style={{ width: "100%", marginTop: 12 }}
+        style={{ width: "100%", marginTop: "var(--space-3)" }}
         disabled={submitting || files.length === 0}
       >
         {submitting ? "Wird hochgeladen…" : "Abgeben"}

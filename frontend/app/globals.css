@@ -69,7 +69,7 @@ pre {
 
 .app-frame {
   min-height: 100vh;
-  padding: 20px;
+  padding: var(--space-5);
 }
 
 .shell {
@@ -97,7 +97,7 @@ pre {
   height: calc(100vh - 40px);
   position: sticky;
   top: 20px;
-  padding: 22px;
+  padding: 22px; /* design-ok: an calc(100vh - 40px) der Sidebar gekoppelt */
   border-radius: var(--radius-xl);
   background: var(--panel);
   border: 1px solid var(--border);
@@ -1024,7 +1024,7 @@ button:disabled {
 .search-input input {
   width: 100%;
   min-height: 40px;
-  padding: 0 14px 0 36px; /* links Platz fuer das Such-Icon: bewusst literal */ /* links Platz fuer das Such-Icon: bewusst literal */
+  padding: 0 var(--space-4) 0 var(--space-6); /* links Platz fuer das Such-Icon: bewusst literal */ /* links Platz fuer das Such-Icon: bewusst literal */
   border-radius: var(--radius-sm);
   border: 1.5px solid transparent;
   background: var(--bg);
@@ -2314,7 +2314,7 @@ input[type="radio"] {
   -moz-appearance: none;
   width: auto;
   min-height: 0;
-  padding: 4px 26px 4px 9px; /* rechts Platz fuer den Pfeil: bewusst literal */ /* rechts Platz fuer den Pfeil: bewusst literal */
+  padding: var(--space-1) var(--space-5) var(--space-1) var(--space-2); /* rechts Platz fuer den Pfeil: bewusst literal */ /* rechts Platz fuer den Pfeil: bewusst literal */
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background-color: color-mix(in srgb, var(--panel-solid) 92%, transparent 8%);
@@ -2785,7 +2785,7 @@ input[type="radio"] {
   overflow: hidden;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  padding: 22px;
+  padding: 22px; /* design-ok: Modal-Shell, an max-height calc gekoppelt */
   border-radius: var(--radius-xl);
   background: var(--panel);
   border: 1px solid var(--border);
@@ -6091,7 +6091,7 @@ input[type="radio"] {
   align-items: center;
   justify-content: center;
   padding: 40px;
-  background: color-mix(in srgb, #000 78%, transparent 22%);
+  background: color-mix(in srgb, #000 78%, transparent 22%); /* design-ok: Scrim ueber Bildern, bewusst schwarz */
   backdrop-filter: blur(4px);
   animation: image-lightbox-fade var(--dur-base) ease-out;
 }
@@ -6510,7 +6510,7 @@ input[type="radio"] {
 .gallery-upload-actions { display: flex; justify-content: flex-end; gap: var(--space-3); }
 .gallery-upload-actions button { white-space: nowrap; min-height: 42px; border-radius: var(--radius-md); font-size: var(--text-base); font-weight: 600; padding: var(--space-2) var(--space-5); transition: background var(--dur-base) ease, box-shadow var(--dur-base) ease, transform var(--dur-fast) ease; }
 .gallery-upload-actions .button-ghost { border: 1px solid var(--border-strong); background: var(--panel-solid); }
-.gallery-upload-actions .button-secondary { background: var(--accent); color: var(--on-solid); box-shadow: 0 1px 2px rgba(16, 24, 40, 0.12), 0 4px 12px color-mix(in srgb, var(--accent) 30%, transparent); }
+.gallery-upload-actions .button-secondary { background: var(--accent); color: var(--on-solid); box-shadow: 0 1px 2px rgba(16, 24, 40, 0.12), 0 4px 12px color-mix(in srgb, var(--accent) 30%, transparent); } /* design-ok: Akzent-Glow, kein Standardschatten */
 .gallery-upload-actions .button-secondary:hover:not(:disabled) { background: var(--accent-strong); }
 .gallery-upload-actions .button-secondary:active:not(:disabled) { transform: translateY(1px); }
 .gallery-upload-actions .button-secondary:disabled { background: color-mix(in srgb, var(--accent) 35%, var(--panel-solid)); box-shadow: none; opacity: 1; cursor: not-allowed; }
@@ -6635,7 +6635,7 @@ input[type="radio"] {
   border-radius: var(--radius-xl);
   background: var(--panel-solid);
   color: var(--accent);
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 8px 24px color-mix(in srgb, var(--accent) 18%, transparent);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 8px 24px color-mix(in srgb, var(--accent) 18%, transparent); /* design-ok: Akzent-Glow, kein Standardschatten */
 }
 
 .file-detail-preview-ext {
@@ -7686,7 +7686,7 @@ input[type="radio"] {
     position: sticky;
     top: 0;
     align-self: start;
-    padding: 8px 6px;
+    padding: var(--space-2) var(--space-2);
     border-radius: var(--radius-lg);
     background: color-mix(in srgb, var(--panel-solid) 70%, transparent 30%);
     border: 1px solid var(--border);
@@ -7719,13 +7719,13 @@ input[type="radio"] {
   .app-frame-writing .editor-nav-item {
     position: relative;
     white-space: nowrap;
-    padding: 7px 8px;
+    padding: var(--space-2) var(--space-2);
     grid-template-columns: 1fr;
     justify-items: center;
   }
 
   .app-frame-writing .editor-shell:has(.editor-nav:hover) .editor-nav-item {
-    padding: 7px 8px 7px 10px;
+    padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
     grid-template-columns: 22px 1fr;
     justify-items: initial;
   }
@@ -7828,7 +7828,7 @@ input[type="radio"] {
   /* Give protocol writing the feel of a slightly zoomed-out workspace without changing
      browser zoom or making form controls across the rest of the app smaller. */
   .app-frame-writing {
-    padding: 12px;
+    padding: var(--space-3);
   }
 
   .app-frame-writing .shell {
@@ -7863,7 +7863,7 @@ input[type="radio"] {
   }
 
   .app-frame-writing .topbar {
-    padding: 11px 16px;
+    padding: var(--space-3) var(--space-4);
   }
 
   .app-frame-writing .topbar-breadcrumb {
@@ -8604,7 +8604,7 @@ input[type="radio"] {
 
 @media (max-width: 900px) {
   .app-frame {
-    padding: 14px;
+    padding: var(--space-4);
   }
 
   .shell {
@@ -9014,7 +9014,7 @@ input[type="radio"] {
 }
 
 .finance-main-balance {
-  font-size: 2.6rem;
+  font-size: 2.6rem; /* design-ok: Display-Zahl (Hero) */
   font-weight: 700;
   color: var(--text);
   font-variant-numeric: tabular-nums;
@@ -10855,7 +10855,7 @@ input[type="radio"] {
 .subm-summary-segment {
   border-radius: var(--radius-xs);
   flex-shrink: 0;
-  transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1); /* design-ok: Fortschrittsbalken, laengere Animation */
 }
 
 .subm-summary-segment-clean { background: var(--success); }
@@ -11390,7 +11390,7 @@ input[type="radio"] {
   place-items: center;
   padding: var(--space-3);
   border-radius: var(--radius-md);
-  background: #ffffff; /* bewusst fest: QR-Codes brauchen weissen Grund */
+  background: #ffffff; /* bewusst fest: QR-Codes brauchen weissen Grund */ /* design-ok: QR-Codes brauchen weissen Grund */
   border: 1px solid var(--border);
 }
 

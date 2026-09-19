@@ -1021,7 +1021,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
               </span>
             ) : (
               <>
-                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "10px 14px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "var(--space-3) var(--space-4)" }}>
                   {links.map((link) => (
                     <label key={link.id} className="checkbox-line" style={{ margin: 0, minHeight: 0 }}>
                       <input type="checkbox" checked={form.link_ids.includes(link.id)} onChange={() => toggleLink(link.id)} />
@@ -1186,7 +1186,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
                 const someChecked = group.types.some((t) => form.allowed_file_types.includes(t));
                 return (
                   <div key={group.label} style={{ padding: "var(--space-3) var(--space-4)", borderTop: gi > 0 ? "1px solid var(--border)" : undefined }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", marginBottom: 7 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", marginBottom: "var(--space-2)" }}>
                       <span style={{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--text)", textTransform: "uppercase", letterSpacing: "0.05em", flex: 1 }}>
                         {group.label}
                       </span>
@@ -1211,7 +1211,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
                         </label>
                       )}
                     </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "5px 14px" }}>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-1) var(--space-4)" }}>
                       {group.types.map((type) => (
                         <label key={type} className="checkbox-line" style={{ margin: 0, minHeight: 0 }}>
                           <input

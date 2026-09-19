@@ -34,16 +34,16 @@ body {
 .page-shell {
   max-width: 560px;
   margin: 0 auto;
-  padding: 0 16px 48px;
+  padding: 0 var(--space-4) 48px;
 }
 
 .page-header {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: 20px 0 24px;
+  padding: var(--space-5) 0 var(--space-5);
   border-bottom: 1px solid var(--border);
-  margin-bottom: 28px;
+  margin-bottom: var(--space-5);
 }
 
 .page-header img {
@@ -60,7 +60,7 @@ body {
 }
 
 .page-footer {
-  margin-top: 28px;
+  margin-top: var(--space-5);
   color: var(--muted);
   font-size: var(--text-xs);
   line-height: 1.4;
@@ -70,28 +70,28 @@ body {
 
 h1 {
   font-size: var(--text-2xl);
-  margin: 0 0 6px;
+  margin: 0 0 var(--space-2);
   font-weight: 700;
   letter-spacing: -0.02em;
 }
 
 h2 {
   font-size: var(--text-lg);
-  margin: 0 0 12px;
+  margin: 0 0 var(--space-3);
 }
 
 p.muted, .muted {
   color: var(--muted);
   font-size: var(--text-base);
-  margin: 0 0 20px;
+  margin: 0 0 var(--space-5);
 }
 
 .card {
   background: var(--panel);
   border: 1.5px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 16px 18px;
-  margin-bottom: 10px;
+  padding: var(--space-4) var(--space-4);
+  margin-bottom: var(--space-3);
 }
 
 .card-colored-0 { border-color: color-mix(in srgb, var(--c0) 45%, transparent); }
@@ -125,7 +125,7 @@ a.card-link.card-colored-3:hover { border-color: var(--c3); box-shadow: 0 0 0 3p
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  margin-right: 8px;
+  margin-right: var(--space-2);
   flex-shrink: 0;
 }
 .card-dot-0 { background: var(--c0); }
@@ -144,8 +144,8 @@ a.card-link.card-colored-3:hover { border-color: var(--c3); box-shadow: 0 0 0 3p
 .window {
   font-size: var(--text-sm);
   color: var(--muted);
-  margin-top: 4px;
-  padding-left: 16px;
+  margin-top: var(--space-1);
+  padding-left: var(--space-4);
 }
 
 .button {
@@ -156,7 +156,7 @@ a.card-link.card-colored-3:hover { border-color: var(--c3); box-shadow: 0 0 0 3p
   color: var(--on-solid);
   border: none;
   border-radius: var(--radius-sm);
-  padding: 12px 20px;
+  padding: var(--space-3) var(--space-5);
   font-size: var(--text-md);
   font-weight: 600;
   cursor: pointer;
@@ -176,12 +176,12 @@ a.card-link.card-colored-3:hover { border-color: var(--c3); box-shadow: 0 0 0 3p
   background: none;
   border: 1.5px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 10px 16px;
+  padding: var(--space-3) var(--space-4);
   color: var(--muted);
   font-size: var(--text-base);
   cursor: pointer;
   text-decoration: none;
-  margin-top: 24px;
+  margin-top: var(--space-5);
   min-height: 44px;
   transition: border-color var(--dur-fast), color var(--dur-fast);
 }
@@ -193,13 +193,13 @@ a.card-link.card-colored-3:hover { border-color: var(--c3); box-shadow: 0 0 0 3p
 
 input[type="file"] {
   display: block;
-  margin: 12px 0;
+  margin: var(--space-3) 0;
 }
 
 .error {
   color: var(--danger);
   font-size: var(--text-base);
-  margin-top: 8px;
+  margin-top: var(--space-2);
 }
 
 .success {
@@ -211,12 +211,12 @@ input[type="file"] {
 .upload-already-count {
   font-size: var(--text-base);
   color: var(--muted);
-  margin: 0 0 10px;
+  margin: 0 0 var(--space-3);
 }
 
 .upload-warning-list {
-  margin-top: 14px;
-  padding: 10px 14px;
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-sm);
   border: 1px solid var(--c3);
   background: color-mix(in srgb, var(--c3) 16%, var(--panel));
@@ -230,13 +230,13 @@ input[type="file"] {
 }
 
 .upload-warning-list p + p {
-  margin-top: 4px;
+  margin-top: var(--space-1);
 }
 
 .drop-zone {
   border: 2px dashed var(--border);
   border-radius: var(--radius-md);
-  padding: 32px 20px;
+  padding: var(--space-6) var(--space-5);
   text-align: center;
   cursor: pointer;
   transition: border-color var(--dur-base), background var(--dur-base);
@@ -258,7 +258,7 @@ input[type="file"] {
 
 .drop-zone-icon {
   font-size: var(--text-3xl);
-  margin-bottom: 10px;
+  margin-bottom: var(--space-3);
   line-height: 1;
 }
 
@@ -266,7 +266,7 @@ input[type="file"] {
   font-weight: 600;
   font-size: var(--text-md);
   color: var(--text);
-  margin-bottom: 4px;
+  margin-bottom: var(--space-1);
 }
 
 .drop-zone-hint {
@@ -276,7 +276,7 @@ input[type="file"] {
 
 .file-list {
   list-style: none;
-  margin: 10px 0 0;
+  margin: var(--space-3) 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -290,7 +290,7 @@ input[type="file"] {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 10px 12px;
+  padding: var(--space-3) var(--space-3);
   font-size: var(--text-base);
 }
 
@@ -314,7 +314,7 @@ input[type="file"] {
   color: var(--muted);
   cursor: pointer;
   font-size: var(--text-sm);
-  padding: 2px 4px;
+  padding: 2px var(--space-1);
   border-radius: var(--radius-xs);
   flex-shrink: 0;
   transition: color var(--dur-fast), background var(--dur-fast);
@@ -328,7 +328,7 @@ input[type="file"] {
 .captcha-status {
   font-size: var(--text-sm);
   color: var(--muted);
-  margin-top: 6px;
+  margin-top: var(--space-2);
 }
 
 .captcha-status-ok {
@@ -338,18 +338,18 @@ input[type="file"] {
 .captcha-placeholder {
   font-size: var(--text-sm);
   color: var(--muted);
-  padding: 10px 12px;
+  padding: var(--space-3) var(--space-3);
   border: 1.5px dashed color-mix(in srgb, var(--muted) 40%, transparent);
   border-radius: var(--radius-sm);
 }
 
 .upload-success {
   text-align: center;
-  padding: 40px 20px;
+  padding: 40px var(--space-5);
   background: var(--panel);
   border: 1.5px solid color-mix(in srgb, var(--c0) 45%, transparent);
   border-radius: var(--radius-md);
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
 
 .upload-success-icon {
@@ -363,14 +363,14 @@ input[type="file"] {
   color: var(--c0);
   font-size: var(--text-2xl);
   font-weight: 700;
-  margin-bottom: 14px;
+  margin-bottom: var(--space-4);
 }
 
 .upload-success-title {
   font-size: var(--text-lg);
   font-weight: 700;
   color: var(--c0);
-  margin-bottom: 4px;
+  margin-bottom: var(--space-1);
 }
 
 .upload-success-sub {
@@ -379,8 +379,8 @@ input[type="file"] {
 }
 
 @media (max-width: 600px) {
-  .page-shell { padding: 0 12px 40px; }
+  .page-shell { padding: 0 var(--space-3) 40px; }
   h1 { font-size: var(--text-xl); }
-  .card { padding: 14px 15px; }
-  .drop-zone { padding: 24px 16px; }
+  .card { padding: var(--space-4) var(--space-4); }
+  .drop-zone { padding: var(--space-5) var(--space-4); }
 }

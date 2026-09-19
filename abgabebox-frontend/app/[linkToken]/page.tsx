@@ -34,7 +34,7 @@ export default async function LinkAssignmentsPage({ params }: { params: Promise<
                 <span className={`card-dot card-dot-${c}`} />
                 {assignment.title}
               </div>
-              {assignment.description ? <div className="muted" style={{ margin: 0, paddingLeft: 16 }}>{assignment.description}</div> : null}
+              {assignment.description ? <div className="muted" style={{ margin: 0, paddingLeft: "var(--space-4)" }}>{assignment.description}</div> : null}
             </Link>
           );
         })

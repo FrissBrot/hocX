@@ -35,7 +35,8 @@ export function ConnectivityStatus() {
       if (state.pending === 0 || event.defaultPrevented || event.button !== 0) return;
       const anchor = (event.target as Element | null)?.closest("a[href]") as HTMLAnchorElement | null;
       if (!anchor || anchor.origin !== window.location.origin || anchor.target === "_blank") return;
-      if (!window.confirm("Es gibt noch nicht gespeicherte Änderungen. Seite trotzdem verlassen?")) {
+      // Synchrone Abfrage im Klick-Handler: useConfirm() ist async und kann die Navigation nicht mehr stoppen.
+      if (!window.confirm("Es gibt noch nicht gespeicherte Änderungen. Seite trotzdem verlassen?")) { // design-ok
         event.preventDefault();
         event.stopPropagation();
       }

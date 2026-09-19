@@ -1464,7 +1464,7 @@ export function WordImportWizard({
             {titleLabel}
             {!col2IsNames && entry.column_two_raw && <span className="muted"> · {entry.column_two_raw}</span>}
             {entry.group_filled && (
-              <span className="muted" title="Automatisch ergänzt (Gruppierung) – bitte prüfen" style={{ marginLeft: "6px" }}>
+              <span className="muted" title="Automatisch ergänzt (Gruppierung) – bitte prüfen" style={{ marginLeft: "var(--space-2)" }}>
                 ✨
               </span>
             )}
@@ -2568,7 +2568,7 @@ export function WordImportWizard({
               <summary style={{ cursor: "pointer" }}>
                 <WarningIcon /> {analysis.warnings.length} Hinweis{analysis.warnings.length === 1 ? "" : "e"} zur Analyse
               </summary>
-              <ul style={{ margin: "var(--space-2) 0 0", paddingLeft: "18px" }}>
+              <ul style={{ margin: "var(--space-2) 0 0", paddingLeft: "var(--space-4)" }}>
                 {analysis.warnings.map((warning, index) => (
                   <li key={index}>{warning}</li>
                 ))}
@@ -3384,7 +3384,7 @@ export function WordImportWizard({
               <CheckIcon />
             </div>
             <div>
-              <h3 style={{ margin: "0 0 6px" }}>Protokoll erstellt</h3>
+              <h3 style={{ margin: "0 0 var(--space-2)" }}>Protokoll erstellt</h3>
               <p className="muted word-import-success-stats">
                 {doneSummary &&
                   `${doneSummary.attendance} Anwesenheiten, ${doneSummary.events} Termine, ${doneSummary.lists} Listeneinträge und ${doneSummary.matrices} Matrix-Werte wurden übernommen.`}
@@ -3393,9 +3393,9 @@ export function WordImportWizard({
                 )}
               </p>
               {doneSummary && doneSummary.warnings.length > 0 && (
-                <div className="word-import-alert word-import-alert-block" style={{ marginTop: "10px" }}>
+                <div className="word-import-alert word-import-alert-block" style={{ marginTop: "var(--space-3)" }}>
                   <WarningIcon />
-                  <ul style={{ margin: 0, paddingLeft: "18px" }}>
+                  <ul style={{ margin: 0, paddingLeft: "var(--space-4)" }}>
                     {doneSummary.warnings.map((warning, index) => (
                       <li key={index}>{warning}</li>
                     ))}

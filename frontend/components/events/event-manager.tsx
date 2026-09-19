@@ -1190,7 +1190,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
             )}
           </div>
 
-          <div style={{ display: "flex", gap: "var(--space-3)", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid var(--border)", paddingTop: "20px" }}>
+          <div style={{ display: "flex", gap: "var(--space-3)", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid var(--border)", paddingTop: "var(--space-5)" }}>
             <div style={{ display: "flex", gap: "var(--space-3)", alignItems: "center" }}>
             <button
               type="button"
