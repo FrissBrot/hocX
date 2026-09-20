@@ -60,6 +60,21 @@ require_unprovisioned_dev_host() {
   return 1
 }
 
+# Variablen, die frueher in der .env standen und heute nicht mehr existieren. Ein Server, der
+# von einem aelteren Release aktualisiert wird, hat sie noch in seiner .env - load_env_file
+# ueberspringt sie statt abzubrechen, und scripts/lib/env_migrate.sh entfernt sie aus der
+# Datei. Neue Eintraege hier UND in scripts/tests/test_env_migrate.sh beruecksichtigen.
+#   TRAEFIK_WEB_DOMAIN: Marketing-Website, mit 1.1.0 entfernt.
+ENV_RETIRED_KEYS=(TRAEFIK_WEB_DOMAIN)
+
+is_retired_env_key() {
+  local key
+  for key in "${ENV_RETIRED_KEYS[@]}"; do
+    [ "$key" = "$1" ] && return 0
+  done
+  return 1
+}
+
 is_allowed_env_key() {
   case "$1" in
     ABGABEBOX_BASE_URL|ABGABEBOX_CAPTCHA_SESSION_SECRET|ABGABEBOX_CAPTCHA_SESSION_TTL_MINUTES|\
@@ -75,7 +90,7 @@ is_allowed_env_key() {
     GHCR_NAMESPACE|HOCX_ABGABEBOX_BACKEND_IMAGE|HOCX_ABGABEBOX_FRONTEND_IMAGE|\
     HOCX_APP_URL|HOCX_BACKEND_IMAGE|HOCX_DOCS_IMAGE|HOCX_ENVIRONMENT|HOCX_FRONTEND_IMAGE|\
     HOCX_MIN_FREE_KB|HOCX_PHOTO_ANALYSIS_WORKER_IMAGE|HOCX_SIGNING_IDENTITY_REGEXP|\
-    HOCX_STORAGE_PATH|\
+    HOCX_SINGLE_TENANT_RESOLUTION|HOCX_STORAGE_PATH|\
     HOCX_VERSION|\
     INITIAL_ADMIN_EMAIL|INITIAL_ADMIN_PASSWORD|INTERNAL_API_URL|NEXT_PUBLIC_API_URL|\
     OFFSITE_BACKUP_REMOTE|PHOTO_ANALYSIS_AUTO_QUEUE_END_HOUR|\
@@ -128,6 +143,9 @@ load_env_file() {
     key="${BASH_REMATCH[1]}"
     value="${BASH_REMATCH[2]}"
 
+    if is_retired_env_key "$key"; then
+      continue
+    fi
     if ! is_allowed_env_key "$key"; then
       echo "Nicht erlaubte Variable $key in $env_file." >&2
       return 1

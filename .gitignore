@@ -64,3 +64,5 @@ storage/abgabebox-uploads/*
 /storage-local/
 backend/storage-local/
 storage-e2e/
+.env.bak-*
+.env.tmp.*

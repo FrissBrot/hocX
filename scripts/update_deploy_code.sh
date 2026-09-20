@@ -153,6 +153,7 @@ fi
 
 bash -n \
   "$REPO_DIR/scripts/lib/env.sh" \
+  "$REPO_DIR/scripts/lib/env_migrate.sh" \
   "$REPO_DIR/scripts/lib/cosign.sh" \
   "$REPO_DIR/scripts/deploy.sh" \
   "$REPO_DIR/scripts/update_deploy_code.sh"

@@ -12,6 +12,30 @@ Zweite stabile Version. Sie enthält alle seit 1.0.0 gemergten Fixes und
 Hardening-Massnahmen sowie die unten aufgeführten neuen Funktionen. Vor dem Update bitte die
 mit **Achtung beim Update** markierten Punkte lesen (Migrationen `0064` bis `0078`).
 
+### Update von 1.0.x auf 1.1.0
+
+Ablauf auf jedem Host (Test wie Prod): `HOCX_VERSION` in `.env` auf `v1.1.0` setzen, dann
+`./scripts/update_deploy_code.sh` und `./scripts/deploy.sh <test|prod>` (oder
+`update_deploy_code.sh --deploy`). `deploy.sh` erledigt dabei alles Weitere selbst:
+
+- **`.env` wird migriert** (`scripts/lib/env_migrate.sh`, Sicherung als `.env.bak-<Zeitstempel>`):
+  `PHOTO_WORKER_DB_PASSWORD` und `PHOTO_WORKER_DATABASE_URL` werden neu erzeugt (eigene
+  DB-Rolle `hocx_photo_worker`, Migration `0067`), die entfernte Variable `TRAEFIK_WEB_DOMAIN`
+  wird gelöscht. Vorhandene Werte bleiben unverändert.
+- **`storage-local/thumbnails`** wird angelegt und für den Backend-Benutzer (Gruppe 5001)
+  freigegeben; der neue Dienst `photo-analysis-worker` wird signaturgeprüft, gestartet und
+  in Smoke-Checks und Rollback einbezogen.
+- **Migration `0078` (ein Konto = ein Mandant)** bricht ab, wenn Konten mit mehr als einer
+  aktiven Mandanten-Mitgliedschaft oder ganz ohne Mandant existieren; die Datenbank bleibt
+  dann unverändert und die alte Version läuft weiter. Entweder vorher bereinigen oder
+  `HOCX_SINGLE_TENANT_RESOLUTION=auto` in `.env` setzen (behält je Konto die Mitgliedschaft
+  des Standard-Mandanten, sonst die höchste Rolle; Konten ohne jeden Mandanten werden
+  **gelöscht**). Das Backup vor dem Update liegt in `backups/`.
+- Nur **Test**: Nach dem Deploy wird der Demo-Mandant "Jubla Sonnenberg" neu aufgebaut.
+  Optional kann `DEMO_TOTP_SEED` in `.env` gesetzt werden.
+- Der Rollback startet die vorherigen Images, macht Datenbankmigrationen aber nicht rückgängig;
+  ein Zurück auf 1.0.x nach erfolgreicher Migration braucht das Backup (RUNBOOK Abschnitt 5).
+
 ### Geändert
 
 - **Ein Konto gehört genau einem Mandanten** (Migration `0078_single_tenant_users`): Die

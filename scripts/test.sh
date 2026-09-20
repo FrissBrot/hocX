@@ -83,6 +83,7 @@ run_compose_suite() {
 run_script_tests() {
   run_suite "Skripte: Env-Loader" "$REPO_DIR/scripts/tests/test_env.sh"
   run_suite "Skripte: Release-Konfiguration" "$REPO_DIR/scripts/tests/test_release_config.sh"
+  run_suite "Skripte: Env-Migration (1.0.x -> 1.1.0)" "$REPO_DIR/scripts/tests/test_env_migrate.sh"
 }
 
 run_e2e() {

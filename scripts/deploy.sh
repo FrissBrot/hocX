@@ -15,12 +15,23 @@ set -euo pipefail
 # schlicht ".env" (wie bei Dev) - Compose sucht sie unter diesem Namen sowohl fuer
 # --env-file fuer die Variablen-Interpolation. Secrets werden den jeweils berechtigten
 # Services separat als Compose-Secrets unter /run/secrets bereitgestellt.
+#
+# Update von einem aelteren Release: HOCX_VERSION in .env anheben, dann deploy.sh starten.
+# Das Skript migriert die bestehende .env selbst (fehlende Variablen ergaenzen, entfernte
+# loeschen, Sicherung als .env.bak-<Zeitstempel>), siehe scripts/lib/env_migrate.sh.
+#
+# Optional in .env oder Shell: HOCX_SINGLE_TENANT_RESOLUTION=auto - noetig beim Update von
+# 1.0.x auf 1.1.0, falls Konten mit mehreren Mandanten-Mitgliedschaften oder ganz ohne
+# Mandant existieren (Migration 0078, siehe CHANGELOG). Ohne den Wert bricht die Migration
+# in dem Fall ab und listet die Konten auf; die Datenbank bleibt dabei unveraendert.
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENVIRONMENT="${1:-}"
 
 # shellcheck source=scripts/lib/env.sh
 source "$REPO_DIR/scripts/lib/env.sh"
+# shellcheck source=scripts/lib/env_migrate.sh
+source "$REPO_DIR/scripts/lib/env_migrate.sh"
 # shellcheck source=scripts/lib/cosign.sh
 source "$REPO_DIR/scripts/lib/cosign.sh"
 # shellcheck source=scripts/lib/github.sh
@@ -191,6 +202,13 @@ create_env_file() {
   prompt_value FRIENDLY_CAPTCHA_SITEKEY "Friendly Captcha Sitekey (leer = deaktiviert)" "" false true
   prompt_value FRIENDLY_CAPTCHA_API_KEY "Friendly Captcha API Key (leer = deaktiviert)" "" true true
 
+  DEMO_TOTP_SEED=""
+  if [ "$ENVIRONMENT" = test ]; then
+    echo "    Optional (nur test): fester TOTP-Seed (base32) fuer die Demo-Konten, damit nach" >&3
+    echo "    jedem Test-Deploy derselbe Authenticator-Eintrag weiter funktioniert." >&3
+    prompt_value DEMO_TOTP_SEED "DEMO_TOTP_SEED (leer = Einrichtung beim ersten Login)" "" true true
+  fi
+
   POSTGRES_PASSWORD="$(generate_secret)"
   AUTH_SECRET="$(generate_secret)"
   ADMIN_AUTH_SECRET="$(generate_secret)"
@@ -243,6 +261,9 @@ create_env_file() {
   write_env_value ABGABEBOX_CAPTCHA_SESSION_SECRET "$ABGABEBOX_CAPTCHA_SESSION_SECRET"
   write_env_value PHOTO_WORKER_DB_PASSWORD "$PHOTO_WORKER_DB_PASSWORD"
   write_env_value PHOTO_WORKER_DATABASE_URL "$PHOTO_WORKER_DATABASE_URL"
+  if [ -n "$DEMO_TOTP_SEED" ]; then
+    write_env_value DEMO_TOTP_SEED "$DEMO_TOTP_SEED"
+  fi
   mv "$ENV_TMP_FILE" "$ENV_FILE"
   trap - EXIT
   exec 3>&-
@@ -253,6 +274,9 @@ create_env_file() {
 
 if [ ! -f "$ENV_FILE" ]; then
   create_env_file
+else
+  echo "==> [$ENVIRONMENT] Env-Datei pruefen"
+  migrate_env_file "$ENV_FILE"
 fi
 
 load_env_file "$ENV_FILE"
@@ -426,6 +450,34 @@ prepare_runtime_permissions() {
   done
 }
 
+prepare_thumbnail_dir() {
+  # storage-local/thumbnails (ab 1.1.0) liegt bewusst ausserhalb von HOCX_STORAGE_PATH und ist
+  # nicht im Repo. Existiert es nicht, legt Docker den Bind-Mount als root:root an und der
+  # Backend-Nutzer (uid 5000, Gruppe 5001) kann keine Vorschaubilder schreiben. Der
+  # Deploy-Benutzer darf nicht selbst auf Gruppe 5001 chgrp'en; deshalb laeuft die
+  # Berechtigungs-Korrektur in einem kurzlebigen Container aus dem bereits signaturgeprueften
+  # Backend-Image (HOCX_BACKEND_IMAGE stammt aus dem Release-Manifest).
+  local base="$PROJECT_DIR/storage-local"
+  local dir="$base/thumbnails"
+
+  echo "==> [$ENVIRONMENT] Thumbnail-Verzeichnis vorbereiten"
+  if [ -L "$base" ] || [ -L "$dir" ]; then
+    echo "Runtime-Pfad darf kein Symlink sein: $dir" >&2
+    return 1
+  fi
+  mkdir -p "$dir"
+  if ! find "$dir" \( ! -group 5001 -o ! -perm -g+w -o -perm /007 \) -print -quit | grep -q .; then
+    echo "    Thumbnail-Verzeichnis: ok"
+    return 0
+  fi
+  echo "    Haerte Berechtigungen: $dir"
+  docker run --rm --pull never --network none --user 0:0 \
+    --cap-drop ALL --cap-add CHOWN --cap-add FOWNER --cap-add FSETID --cap-add DAC_OVERRIDE \
+    --security-opt no-new-privileges:true --entrypoint sh \
+    -v "$dir:/target" "$HOCX_BACKEND_IMAGE" \
+    -c 'chgrp -R 5001 /target && chmod -R g+rwX,o-rwx /target && find /target -type d -exec chmod g+s {} +'
+}
+
 verify_release_images() {
   local service image repository digest_ref
 
@@ -486,7 +538,12 @@ capture_current_release() {
 
   for service in backend frontend abgabebox-backend abgabebox-frontend docs photo-analysis-worker; do
     container_id="$("${DC[@]}" ps -q "$service" 2> /dev/null || true)"
-    [ -n "$container_id" ] || return 0
+    if [ -z "$container_id" ]; then
+      # photo-analysis-worker gibt es erst ab 1.1.0; ein Host, der von 1.0.x kommt, hat ihn
+      # nicht und muss trotzdem ein Rollback-Ziel erfassen koennen.
+      [ "$service" != photo-analysis-worker ] || continue
+      return 0
+    fi
     repository="ghcr.io/${GHCR_NAMESPACE}/hocx-${service}"
     image_id="$(docker inspect "$container_id" --format '{{.Image}}')"
     digest_ref="$(docker image inspect "$image_id" --format '{{range .RepoDigests}}{{println .}}{{end}}' | grep -F "${repository}@sha256:" | head -n 1)"
@@ -503,14 +560,26 @@ capture_current_release() {
 
 rollback_apps() {
   local current_manifest="$PROJECT_DIR/.releases/current.env"
+  local -a services=(backend frontend abgabebox-backend abgabebox-frontend docs)
   echo "==> [$ENVIRONMENT] Automatischer App-Rollback"
   if [ ! -f "$current_manifest" ]; then
     echo "    Kein vorheriges Release vorhanden; stoppe neu gestartete App-Services." >&2
     "${DC[@]}" stop backend frontend abgabebox-backend abgabebox-frontend docs photo-analysis-worker || true
     return 1
   fi
+  # Die Image-Variablen des fehlgeschlagenen Releases duerfen das alte Manifest nicht ueberlagern.
+  unset HOCX_BACKEND_IMAGE HOCX_FRONTEND_IMAGE HOCX_ABGABEBOX_BACKEND_IMAGE \
+    HOCX_ABGABEBOX_FRONTEND_IMAGE HOCX_DOCS_IMAGE HOCX_PHOTO_ANALYSIS_WORKER_IMAGE
   load_env_file "$current_manifest"
-  if "${DC[@]}" up -d --no-deps --pull never backend frontend abgabebox-backend abgabebox-frontend docs photo-analysis-worker; then
+  if [ -n "${HOCX_PHOTO_ANALYSIS_WORKER_IMAGE:-}" ]; then
+    services+=(photo-analysis-worker)
+  else
+    # Vorheriges Release (< 1.1.0) kennt den Worker nicht: den neuen stoppen statt ein
+    # nicht vorhandenes Image zu starten, und ihn in den Smoke-Checks auslassen.
+    SKIP_PHOTO_WORKER_CHECK=true
+    "${DC[@]}" stop photo-analysis-worker || true
+  fi
+  if "${DC[@]}" up -d --no-deps --pull never "${services[@]}"; then
     if run_smoke_checks; then
       echo "    Vorheriges Image-Set wurde wieder gestartet und geprueft."
       echo "    Datenbankmigrationen wurden nicht zurueckgerollt."
@@ -575,7 +644,7 @@ run_smoke_checks() {
     wait_for_exec clamav "ClamAV" "clamdcheck.sh" 150 2 || return 1
   fi
 
-  if service_exists photo-analysis-worker; then
+  if service_exists photo-analysis-worker && [ "${SKIP_PHOTO_WORKER_CHECK:-false}" != true ]; then
     # No HTTP endpoint (it's a polling worker, not a web service) - actually loads the
     # baked-in YuNet model instead of just checking the process is alive, so a broken
     # model file or missing dependency fails the deploy here instead of surfacing later
@@ -607,13 +676,32 @@ echo "==> [$ENVIRONMENT] Pull Images ($HOCX_VERSION)"
 
 verify_release_images
 create_release_manifest
+prepare_thumbnail_dir
 
 echo "==> [$ENVIRONMENT] Infrastruktur starten"
 "${DC[@]}" up -d --pull never db redis
 wait_for_exec db "Postgres" "pg_isready -U '$POSTGRES_USER' -d '$POSTGRES_DB'" 30 2
 
 echo "==> [$ENVIRONMENT] Datenbankmigration"
-"${DC[@]}" run --rm --no-deps backend alembic upgrade head
+ALEMBIC_ARGS=()
+case "${HOCX_SINGLE_TENANT_RESOLUTION:-}" in
+  "") ;;
+  auto)
+    echo "    HOCX_SINGLE_TENANT_RESOLUTION=auto: Konten mit mehreren Mandanten werden automatisch aufgeloest (Migration 0078)."
+    ALEMBIC_ARGS=(-x single_tenant_resolution=auto)
+    ;;
+  *)
+    echo "Ungueltiger HOCX_SINGLE_TENANT_RESOLUTION: ${HOCX_SINGLE_TENANT_RESOLUTION} (erlaubt: auto)" >&2
+    exit 1
+    ;;
+esac
+if ! "${DC[@]}" run --rm --no-deps backend alembic ${ALEMBIC_ARGS[@]+"${ALEMBIC_ARGS[@]}"} upgrade head; then
+  echo "Datenbankmigration fehlgeschlagen. Die laufende App wurde nicht veraendert." >&2
+  [ ! -f "$BACKUP_FILE" ] || echo "Backup dieses Laufs: $BACKUP_FILE" >&2
+  echo "Meldet die Migration 0078 Konten mit mehreren Mandanten oder ohne Mandant:" >&2
+  echo "entweder bereinigen oder HOCX_SINGLE_TENANT_RESOLUTION=auto in .env setzen und erneut deployen." >&2
+  exit 1
+fi
 
 echo "==> [$ENVIRONMENT] Deploy"
 if ! "${DC[@]}" up -d --pull never; then

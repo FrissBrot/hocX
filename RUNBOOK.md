@@ -126,6 +126,14 @@ vim .env   # HOCX_VERSION auf die neue Version setzen
 
 Auf Prod immer den finalen Release-Tag pinnen, nie einen Candidate-Tag.
 
+`deploy.sh` migriert eine bestehende `.env` bei jedem Lauf selbst auf das aktuelle Schema
+(fehlende Variablen ergaenzen - Secrets werden neu erzeugt -, entfernte loeschen, Sicherung
+als `.env.bak-<Zeitstempel>`, siehe `scripts/lib/env_migrate.sh`). Beim Update von 1.0.x auf
+1.1.0 sind keine weiteren manuellen Schritte noetig; Details und der Umgang mit Konten in
+mehreren Mandanten (`HOCX_SINGLE_TENANT_RESOLUTION=auto`) stehen im CHANGELOG unter
+"Update von 1.0.x auf 1.1.0". Bricht die Migration `0078` ab, ist nichts veraendert: die
+alte Version laeuft weiter, Ursache beheben und `deploy.sh` erneut starten.
+
 ## 5. Rollback
 
 Schlagen Containerstart oder Smoke-Checks fehl, startet `deploy.sh` automatisch das

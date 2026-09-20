@@ -62,4 +62,13 @@ grep -q 'HOCX_ENVIRONMENT:.*production' docker-compose.release.yml
 grep -q 'docs_url=None if settings.is_production' backend/app/main.py
 grep -q 'Lokale Demo-Admin-Adresse ist in Release-Umgebungen verboten' scripts/deploy.sh
 
+# 1.1.0: photo-analysis-worker (uid 5002) muss den auf Gruppe 5001 gehaerteten Storage lesen
+# koennen, und das Backend braucht das immer lokale Thumbnail-Verzeichnis.
+grep -q '^  photo-analysis-worker:$' docker-compose.release.yml
+grep -q 'group_add:' docker-compose.release.yml
+grep -q '^      - "5001"$' docker-compose.release.yml
+grep -q '\./storage-local/thumbnails:/app/storage-local/thumbnails' docker-compose.release.yml
+grep -q 'THUMBNAIL_ROOT: /app/storage-local/thumbnails' docker-compose.release.yml
+grep -q 'PHOTO_WORKER_DB_PASSWORD_FILE: /run/secrets/photo_worker_db_password' docker-compose.release.yml
+
 echo "release config tests: ok"

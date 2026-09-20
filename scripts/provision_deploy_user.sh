@@ -117,9 +117,11 @@ echo "==> Richte Runtime-Verzeichnisse fuer Non-Root-Container ein"
 install -d -m 2770 -o "$DEPLOY_USER" -g "$STORAGE_GROUP_ID" \
   "$REPO_DIR/storage" \
   "$REPO_DIR/storage/abgabebox-uploads" \
+  "$REPO_DIR/storage-local" \
+  "$REPO_DIR/storage-local/thumbnails" \
   "$REPO_DIR/infra/traefik/dynamic"
 
-for runtime_dir in "$REPO_DIR/storage" "$REPO_DIR/infra/traefik/dynamic"; do
+for runtime_dir in "$REPO_DIR/storage" "$REPO_DIR/storage-local" "$REPO_DIR/infra/traefik/dynamic"; do
   if find "$runtime_dir" -type l -print -quit | grep -q .; then
     echo "Symlinks im Runtime-Verzeichnis werden aus Sicherheitsgruenden abgelehnt: $runtime_dir" >&2
     exit 1

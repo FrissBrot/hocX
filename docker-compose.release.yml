@@ -288,6 +288,12 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+    # Der Worker laeuft als uid 5002 (photo-analysis-worker/Dockerfile), der gehaertete
+    # Storage (deploy.sh: prepare_runtime_permissions) ist aber nur fuer Gruppe 5001
+    # zugaenglich (Modus 2770, "others" ohne Rechte). Ohne die Gruppe scheitert jeder
+    # Lesezugriff auf die Originale mit "Permission denied".
+    group_add:
+      - "5001"
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,mode=1777
     logging:
