@@ -5245,6 +5245,40 @@ input[type="radio"] {
   font-size: var(--text-sm);
 }
 
+.matrix-designer-source-row select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  width: auto;
+  min-height: 0;
+  padding: var(--space-2) var(--space-6) var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background-color: var(--panel-solid);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 16px) calc(50% - 2px),
+    calc(100% - 11px) calc(50% - 2px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  color: var(--text);
+  font-size: var(--text-base);
+  cursor: pointer;
+  transition: border-color var(--dur-base) ease, box-shadow var(--dur-base) ease;
+}
+
+.matrix-designer-source-row select:hover:not(:focus) {
+  border-color: var(--border-strong);
+}
+
+.matrix-designer-source-row select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
 .matrix-designer-strip-actions {
   display: flex;
   gap: var(--space-2);
