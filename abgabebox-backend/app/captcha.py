@@ -178,10 +178,18 @@ async def verify_captcha(solution: str) -> bool:
                     "sitekey": settings.friendly_captcha_sitekey,
                 },
             )
-        if response.status_code != 200:
+        data = response.json() if response.status_code == 200 else None
+        if not data or not data.get("success"):
+            # Ohne dieses Log sieht ein kaputter Verify-Endpoint (404, ungueltiger Secret/Sitekey)
+            # fuer Besucher nur wie ein endlos "laufender" Sicherheitscheck aus.
+            _logger.warning(
+                "FriendlyCaptcha-Verifikation abgelehnt (HTTP %s, errors=%s, url=%s).",
+                response.status_code,
+                (data or {}).get("errors") if isinstance(data, dict) else None,
+                settings.friendly_captcha_verify_url,
+            )
             return False
-        data = response.json()
-        return bool(data.get("success"))
+        return True
     except (httpx.HTTPError, ValueError) as exc:
         _logger.warning("FriendlyCaptcha-Verifikation fehlgeschlagen (%s) - Upload wird abgelehnt (fail closed).", exc)
         return False

@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     friendly_captcha_sitekey: str = Field(default="", validation_alias="FRIENDLY_CAPTCHA_SITEKEY")
     friendly_captcha_api_key: str = Field(default="", validation_alias="FRIENDLY_CAPTCHA_API_KEY")
     friendly_captcha_verify_url: str = Field(
-        default="https://api.friendlycaptcha.com/api/v2/captcha/siteverify",
+        default="https://api.friendlycaptcha.com/api/v1/siteverify",
         validation_alias="FRIENDLY_CAPTCHA_VERIFY_URL",
     )
     # Signs the short-lived session token issued after a successful FriendlyCaptcha solve (see
