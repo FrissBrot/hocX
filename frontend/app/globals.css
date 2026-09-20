@@ -12047,6 +12047,26 @@ input[type="radio"] {
 /* Not linked to any participant - won't actually be imported, so the row is dimmed and its
    title greyed out rather than showing a status pill that implies a real decision was made
    about a real person (see renderAttendanceRow). */
+/* A name inside a form block that still needs a decision - the one field keeping the row
+   red, so it gets its own red frame instead of looking like its resolved siblings. */
+.word-import-field-open {
+  border-left: 3px solid var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent 90%);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+}
+
+.word-import-field-open .mini-menu-trigger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.word-import-field-open-hint {
+  color: var(--danger);
+  font-weight: 600;
+  font-size: var(--text-sm, 0.85em);
+}
+
 .word-import-text-row-muted {
   opacity: 0.6;
 }

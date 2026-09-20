@@ -772,6 +772,20 @@ function formFieldsStillOpen(text: TextDraft): boolean {
   return text.formFields.some((field) => field.names.some((name) => name.participant_id === null && !name.create_new && !name.no_link));
 }
 
+// One name inside a form block's field that still needs a decision - the exact condition
+// formFieldsStillOpen scans for, so the field the reviewer must fix can be highlighted.
+function formNameOpen(name: WordImportNameResolution | undefined): boolean {
+  return !!name && name.participant_id === null && !name.create_new && !name.no_link;
+}
+
+// "Feld: Name" for every still-open name in a form block, in document order.
+function formOpenNames(text: TextDraft): { field: string; name: string }[] {
+  if (!text.isFormBlock) return [];
+  return text.formFields.flatMap((field) =>
+    field.names.filter(formNameOpen).map((name) => ({ field: field.label, name: name.raw_name }))
+  );
+}
+
 function textNeedsReview(text: TextDraft): boolean {
   if (text.dismissed) return false;
   return (
@@ -3256,6 +3270,22 @@ export function WordImportWizard({
                                   </div>
                                 </div>
                               )}
+                              {formOpenNames(text).length > 0 && (
+                                <div className="word-import-alert word-import-alert-block">
+                                  <WarningIcon />
+                                  <div className="grid" style={{ gap: "0.15rem" }}>
+                                    <span>
+                                      <strong>Noch nicht zugeordnet:</strong> Diese Namen brauchen eine Entscheidung (Teilnehmer wählen, neu
+                                      anlegen oder &quot;Keinen verknüpfen&quot;).
+                                    </span>
+                                    {formOpenNames(text).map((entry, entryIndex) => (
+                                      <span key={entryIndex}>
+                                        {entry.field}: <strong>{entry.name}</strong>
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                               {text.isFormBlock ? (
                                 <div className="grid" style={{ gap: "0.5rem" }}>
                                   {text.formFields.map((field, fieldIndex) => (
@@ -3268,7 +3298,7 @@ export function WordImportWizard({
                                           onChange={(event) => updateFormFieldValue(index, fieldIndex, event.target.value)}
                                         />
                                       ) : field.row_type === "participant" ? (
-                                        <div className="field-stack" style={{ gap: "0.15rem" }}>
+                                        <div className={`field-stack${formNameOpen(field.names[0]) ? " word-import-field-open" : ""}`} style={{ gap: "0.15rem" }}>
                                           {field.raw_value && field.names[0]?.participant_id === null && !field.names[0]?.create_new && (
                                             <span className="muted">{field.raw_value}</span>
                                           )}
@@ -3277,7 +3307,7 @@ export function WordImportWizard({
                                               field.names[0]?.create_new
                                                 ? `🆕 Neuer Teilnehmer: "${field.names[0].raw_name}"`
                                                 : participants.find((participant) => participant.id === field.names[0]?.participant_id)?.display_name ??
-                                                  "Keinen verknüpfen"
+                                                  (formNameOpen(field.names[0]) ? "– nicht zugeordnet –" : "Keinen verknüpfen")
                                             }
                                             nullLabel="Keinen verknüpfen"
                                             activeId={field.names[0]?.create_new ? CREATE_NEW_PARTICIPANT_ID : field.names[0]?.participant_id ?? null}
@@ -3288,18 +3318,24 @@ export function WordImportWizard({
                                             }
                                             onChange={(option) => updateFormFieldSingleName(index, fieldIndex, option.id, field.raw_value)}
                                           />
+                                          {formNameOpen(field.names[0]) && <span className="word-import-field-open-hint">Nicht zugeordnet - bitte auswählen</span>}
                                         </div>
                                       ) : field.row_type === "participants" ? (
                                         field.names.length > 0 ? (
                                           <div className="grid" style={{ gap: "0.35rem" }}>
                                             {field.names.map((name, nameIndex) => (
-                                              <div key={nameIndex} className="field-stack" style={{ gap: "0.15rem" }}>
+                                              <div
+                                                key={nameIndex}
+                                                className={`field-stack${formNameOpen(name) ? " word-import-field-open" : ""}`}
+                                                style={{ gap: "0.15rem" }}
+                                              >
                                                 <span className="muted">{name.raw_name}</span>
                                                 <TodoAssigneeMenu
                                                   label={
                                                     name.create_new
                                                       ? `🆕 Neuer Teilnehmer: "${name.raw_name}"`
-                                                      : participants.find((participant) => participant.id === name.participant_id)?.display_name ?? "Keinen verknüpfen"
+                                                      : participants.find((participant) => participant.id === name.participant_id)?.display_name ??
+                                                        (formNameOpen(name) ? "– nicht zugeordnet –" : "Keinen verknüpfen")
                                                   }
                                                   nullLabel="Keinen verknüpfen"
                                                   activeId={name.create_new ? CREATE_NEW_PARTICIPANT_ID : name.participant_id}
@@ -3309,6 +3345,7 @@ export function WordImportWizard({
                                                   ]}
                                                   onChange={(option) => updateFormFieldNameAt(index, fieldIndex, nameIndex, option.id)}
                                                 />
+                                                {formNameOpen(name) && <span className="word-import-field-open-hint">Nicht zugeordnet - bitte auswählen</span>}
                                               </div>
                                             ))}
                                           </div>

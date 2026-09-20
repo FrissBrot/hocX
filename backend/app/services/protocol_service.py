@@ -1,3 +1,4 @@
+import uuid
 from datetime import date, timedelta
 
 from fastapi import HTTPException
@@ -1858,7 +1859,7 @@ class ProtocolService:
             return
         if template.next_event_id is None:
             return
-        followup_template_id = template.id
+        followup_template = template
         session_date_blocks = list(
             db.scalars(
                 select(ProtocolElementBlock)
@@ -1874,13 +1875,21 @@ class ProtocolService:
             raw_followup_template_id = config.get("followup_template_id")
             if raw_followup_template_id is None:
                 break
+            # The editor stores the client-facing public UUID; older configs may still
+            # hold the internal integer id.
+            candidate_template_id: int | None
             try:
-                candidate_template_id = int(raw_followup_template_id)
-            except (TypeError, ValueError):
-                break
-            candidate_template = db.get(Template, candidate_template_id)
+                candidate_template_id = public_id_service.resolve_internal_id(
+                    db, Template, uuid.UUID(str(raw_followup_template_id)), tenant_id=protocol.tenant_id
+                )
+            except ValueError:
+                try:
+                    candidate_template_id = int(raw_followup_template_id)
+                except (TypeError, ValueError):
+                    break
+            candidate_template = db.get(Template, candidate_template_id) if candidate_template_id is not None else None
             if candidate_template is not None and candidate_template.tenant_id == protocol.tenant_id:
-                followup_template_id = candidate_template.id
+                followup_template = candidate_template
             break
         next_event = db.get(Event, template.next_event_id)
         if next_event is None or next_event.event_date is None:
@@ -1892,7 +1901,7 @@ class ProtocolService:
             select(Protocol.id)
             .where(
                 Protocol.tenant_id == protocol.tenant_id,
-                Protocol.template_id == followup_template_id,
+                Protocol.template_id == followup_template.id,
                 or_(
                     Protocol.event_id == next_event.id,
                     Protocol.protocol_date == next_event.event_date,
@@ -1906,9 +1915,11 @@ class ProtocolService:
         self.create_from_template(
             db,
             ProtocolCreateFromTemplate(
-                template_id=followup_template_id,
+                # create_from_template expects client-facing public UUIDs and resolves
+                # them back to internal ids itself.
+                template_id=followup_template.public_id,
                 protocol_date=next_event.event_date,
-                event_id=next_event.id,
+                event_id=next_event.public_id,
             ),
             tenant_id=protocol.tenant_id,
             created_by=protocol.created_by,
