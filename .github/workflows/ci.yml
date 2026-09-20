@@ -154,6 +154,9 @@ jobs:
           # Defaults to /app/storage-local/thumbnails (same unwritable-on-a-runner problem
           # as above) - only needs to be a writable absolute path, created on demand.
           THUMBNAIL_ROOT: ${{ github.workspace }}/storage-local/thumbnails
+          # Same for the Traefik dynamic-config dir (default /app/traefik_dynamic) that the
+          # app lifespan writes on startup (tests/test_app_lifespan_smoke.py).
+          TRAEFIK_DYNAMIC_CONFIG_DIR: ${{ runner.temp }}/traefik_dynamic
         # No coverage threshold gate: per hocX.wiki/Bekannte-offene-Punkte, meaningful
         # domain/security test cases matter more than a bare percentage. This is purely
         # for visibility into which areas have no test coverage at all.

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import os
 import re
 import resource
 import shutil
@@ -2225,6 +2226,12 @@ Status: {protocol_status}
             f"-output-directory={main_tex_path.parent.as_posix()}",
             main_tex_path.as_posix(),
         ]
+        # Paranoid mode only lets absolute paths through below TEXMFOUTPUT. TeX Live 2025
+        # (the backend image) implicitly derives that from -output-directory; TeX Live 2023
+        # (Ubuntu 24.04, e.g. GitHub runners) does not and rejects even main.tex itself with
+        # "Not reading from /abs/main.tex (openin_any = p)". Setting it explicitly to the
+        # compile directory works on all of them and keeps everything outside it blocked.
+        compile_env = {**os.environ, "TEXMFOUTPUT": main_tex_path.parent.as_posix()}
         result = None
         async with _compile_semaphore:
             # Run twice: first pass writes .toc/.aux, second pass uses them for TOC/refs.
@@ -2234,6 +2241,7 @@ Status: {protocol_status}
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                     cwd=main_tex_path.parent,
+                    env=compile_env,
                     preexec_fn=_limit_compile_resources,
                 )
                 try:
