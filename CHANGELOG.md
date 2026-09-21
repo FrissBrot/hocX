@@ -93,6 +93,8 @@ kommt, folgt zusätzlich dem Abschnitt «Update von 1.0.x auf 1.1.0».
 - Datei-Uploads, die mit einem Abgabe-Element verknüpft sind, zählen jetzt als Abgabe.
 - Fotos: Ähnliche Fotos öffnen im Betrachter, das Album-Cover lässt sich nicht mehr
   versehentlich ziehen, und Albumtitel bleiben in allen Designs lesbar.
+- Frontend: Runtime-Konfiguration und Theme-Skript stehen als normale `<script>`-Tags im `<head>`;
+  die React-19-Warnung «Encountered a script tag while rendering React component» entfällt.
 - Galerie-Upload: Ein Duplikat-Ergebnis geht auch dann genau einmal an die Oberfläche, wenn
   der Job vor der ersten Statusabfrage fertig ist.
 
