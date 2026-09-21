@@ -60,7 +60,7 @@ export function StorageBreakdown({ total_bytes, quota_bytes, categories }: Stora
         ) : null}
       </div>
 
-      <div className="table-shell">
+      <div className="table-shell storage-breakdown-table">
         <table className="data-table">
           <thead>
             <tr>
@@ -131,7 +131,7 @@ export function StorageUsageView({ usage }: Props) {
         </div>
       ) : null}
 
-      <div className="stats">
+      <div className="grid stats">
         <div className="stats-card">
           <div className="stats-card-label">Belegt</div>
           <div className="stats-card-value">{formatFileSize(total_bytes)}</div>
