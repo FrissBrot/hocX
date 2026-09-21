@@ -13202,6 +13202,8 @@ input[type="radio"] {
 }
 
 .album-card {
+  --button-bg: var(--panel);
+  --button-hover-bg: var(--accent-soft);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -13209,6 +13211,7 @@ input[type="radio"] {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--panel);
+  color: var(--text);
   text-align: left;
   cursor: pointer;
 }
