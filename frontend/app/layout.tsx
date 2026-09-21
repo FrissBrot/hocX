@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import Script from "next/script";
 import { getMainAppUrl } from "@/lib/site-config";
 import "./tokens.css";
 import "./globals.css";
@@ -35,17 +34,18 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
 
   return (
     <html lang="de" className={inter.variable} suppressHydrationWarning>
-      <body suppressHydrationWarning>
-        <Script
+      {/* Plain <script> statt next/script: Next 16/React 19 warnt bei <Script strategy="beforeInteractive">
+          im <body> ("Encountered a script tag while rendering React component"). Das Layout ist eine
+          Server Component, die Tags landen also unveraendert im initialen HTML und laufen vor der Hydration. */}
+      <head>
+        <script
           id="hocx-runtime-config"
-          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `window.__HOCX_CONFIG__ = ${JSON.stringify(runtimeConfig).replace(/</g, "\\u003c")};`
           }}
         />
-        <Script
+        <script
           id="hocx-theme"
-          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `
               (function () {
@@ -62,6 +62,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             `
           }}
         />
+      </head>
+      <body suppressHydrationWarning>
         {children}
       </body>
     </html>
