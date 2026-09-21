@@ -1,6 +1,8 @@
 import { test, expect, request as playwrightRequest } from "@playwright/test";
 import path from "node:path";
+import { readFile } from "node:fs/promises";
 import { authFiles } from "./auth";
+import { uniquePng } from "./unique-fixture";
 
 // Gallery upload with a Zyklus target (see gallery-upload-modal.tsx's "Bezug" picker /
 // files.py's upload_gallery_images cycle_config_id branch): a writer can pick a Zyklus while
@@ -33,7 +35,12 @@ test("uploading with a Zyklus target puts the photo in that cycle's auto-album",
     const fileChooserPromise = page.waitForEvent("filechooser");
     await modal.getByText("Bilder hierher ziehen").click();
     const fileChooser = await fileChooserPromise;
-    await fileChooser.setFiles(path.resolve("e2e/fixtures/photos/sample.png"));
+    // Own bytes per run: an already stored identical file would be skipped as exact duplicate.
+    await fileChooser.setFiles({
+      name: "sample.png",
+      mimeType: "image/png",
+      buffer: uniquePng(await readFile(path.resolve("e2e/fixtures/photos/sample.png"))),
+    });
     await expect(modal.locator(".gallery-upload-file-list")).toContainText("sample.png");
 
     // Both pickers are SearchableSelects (mini-menu popovers), not native controls - see

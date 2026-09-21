@@ -2,6 +2,7 @@ import { test, expect, request as playwrightRequest } from "@playwright/test";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { authFiles } from "./auth";
+import { uniquePng } from "./unique-fixture";
 
 // Storage-quota enforcement (audit fix, 2026-09-17): Tenant.storage_quota_bytes has been
 // computed and *displayed* everywhere (the Speicher page, "Kontingent überschritten") for a
@@ -25,7 +26,8 @@ test("rejects a gallery upload once the platform-admin-configured storage quota 
     // see the generation note in fixtures/photos/) - bigger than the smallest quota the API
     // allows, so the check is exceeded on this one file alone regardless of pre-existing
     // usage.
-    const imageBuffer = await fs.readFile(path.join("e2e/fixtures/photos/sample-oversized.png"));
+    // Own bytes per run (a repeated run would otherwise hit the exact-duplicate check first).
+    const imageBuffer = uniquePng(await fs.readFile(path.join("e2e/fixtures/photos/sample-oversized.png")));
 
     const setQuota = await adminApi.patch(`/api/admin/tenants/${tenantId}/storage-quota`, { data: { quota_mb: 1 } });
     expect(setQuota.ok(), await setQuota.text()).toBeTruthy();

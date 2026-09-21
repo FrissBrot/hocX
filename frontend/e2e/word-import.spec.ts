@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import cases from "./fixtures/word-import/manifest.json";
-import { api, seedImport, upload, reanalyze, commitPayload, verifyImported, expectHistoricalRows, fixtureDir } from "./word-import.helpers";
+import { api, seedImport, upload, reanalyze, commitPayload, verifyImported, expectHistoricalRows, fixtureDir, uniqueFixtureFile } from "./word-import.helpers";
 
 test.describe("Word import testbook", () => {
   test.setTimeout(120_000);
@@ -144,7 +144,7 @@ test.describe("Word import testbook", () => {
     await api(request, "put", "/api/tools/word-import/last-template", { template_id: seed.template.id });
     await page.goto("/tools/import");
     const uploaded = page.waitForResponse((r) => r.url().endsWith("/word-import/documents") && r.request().method() === "POST");
-    await page.locator('input[type="file"]').setInputFiles(path.join(fixtureDir, "cycle-end.docx"));
+    await page.locator('input[type="file"]').setInputFiles(await uniqueFixtureFile("cycle-end.docx"));
     const uploadResponse = await uploaded;
     expect(uploadResponse.ok(), await uploadResponse.text()).toBeTruthy();
     const { documents } = await uploadResponse.json();

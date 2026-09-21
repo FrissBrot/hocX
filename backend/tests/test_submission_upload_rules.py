@@ -21,6 +21,11 @@ service = FileService()
 PDF = b"%PDF-1.7\n%test\n"
 
 
+def _distinct_pdf(tag: str) -> bytes:
+    """Byte-identical uploads count as exact duplicates and never count against the file limit."""
+    return PDF + f"%{tag}\n".encode()
+
+
 @pytest.fixture(autouse=True)
 def _isolated_storage_root(monkeypatch, tmp_path):
     from app.core.config import settings
@@ -141,14 +146,17 @@ def test_document_upload_counts_abgabebox_files_and_earlier_in_app_uploads_again
     _add_abgabebox_file(db, tenant.id, upload)  # 1 of 3 used through the public Abgabebox
 
     with pytest.raises(HTTPException) as exc_info:
-        _upload_documents(db, writer, assignment, ref, [_upload_file(PDF, f"{n}.pdf") for n in range(3)])
+        _upload_documents(db, writer, assignment, ref, [_upload_file(_distinct_pdf(str(n)), f"{n}.pdf") for n in range(3)])
     assert exc_info.value.status_code == 400
     assert exc_info.value.detail == "Maximal 3 Dateien insgesamt erlaubt (2 noch möglich)"
 
-    _upload_documents(db, writer, assignment, ref, [_upload_file(PDF, "a.pdf"), _upload_file(PDF, "b.pdf")])  # fills it
+    _upload_documents(
+        db, writer, assignment, ref,
+        [_upload_file(_distinct_pdf("a"), "a.pdf"), _upload_file(_distinct_pdf("b"), "b.pdf")],
+    )  # fills it
 
     with pytest.raises(HTTPException) as exc_info:
-        _upload_documents(db, writer, assignment, ref, [_upload_file(PDF, "c.pdf")])
+        _upload_documents(db, writer, assignment, ref, [_upload_file(_distinct_pdf("c"), "c.pdf")])
     assert exc_info.value.detail == "Maximal 3 Dateien insgesamt erlaubt (0 noch möglich)"
 
 

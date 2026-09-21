@@ -1,6 +1,7 @@
 import { expect, type APIRequestContext } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { uniqueDocx, uniqueZip } from "./unique-fixture";
 
 export const fixtureDir = path.resolve("e2e/fixtures/word-import");
 export const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -57,11 +58,22 @@ export async function expectHistoricalRows(request: APIRequestContext, seed: Imp
   return rows;
 }
 
+// A copy of the fixture with its own bytes: identical files already stored for the tenant are
+// rejected as exact duplicates, and every test of this suite uploads into the same tenant.
+export async function uniqueFixtureFile(filename: string) {
+  const buffer = await readFile(path.join(fixtureDir, filename));
+  const zip = filename.endsWith(".zip");
+  return {
+    name: filename,
+    mimeType: zip ? "application/zip" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    buffer: zip ? uniqueZip(buffer) : uniqueDocx(buffer),
+  };
+}
+
 export async function upload(request: APIRequestContext, seed: ImportSeed, filename: string) {
   const response = await request.post("/api/tools/word-import/documents", { multipart: {
     template_id: seed.template.id,
-    files: { name: filename, mimeType: filename.endsWith(".zip") ? "application/zip" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      buffer: await readFile(path.join(fixtureDir, filename)) },
+    files: await uniqueFixtureFile(filename),
   } });
   expect(response.ok(), await response.text()).toBeTruthy();
   const result = await response.json();

@@ -1,5 +1,6 @@
-"""save_protocol_image(): exact-duplicate blocking (SHA-256, scoped to the protocol_element_block)
-and perceptual-hash duplicate warning (scoped to the tenant, non-blocking)."""
+"""save_protocol_image(): exact-duplicate blocking (SHA-256; same block, and since 0082 the whole
+tenant - see backend/UPLOAD_DUPLICATES.md) and perceptual-hash duplicate warning (scoped to the
+tenant, non-blocking)."""
 import asyncio
 import io
 
@@ -74,9 +75,9 @@ def test_exact_duplicate_within_same_block_is_rejected(db):
     assert exc_info.value.status_code == 409
 
 
-def test_identical_image_in_different_block_of_same_tenant_is_not_blocked(db):
-    """Exact-duplicate blocking is scoped to the block, not the tenant - reusing the same
-    picture (e.g. a club logo) in a different block/protocol must still be allowed."""
+def test_identical_image_in_different_block_of_same_tenant_is_rejected_as_exact_duplicate(db):
+    """Exact duplicates are detected tenant-wide (UPLOAD_DUPLICATES.md), not only per block:
+    the same bytes in another block/protocol are refused and no second file is stored."""
     _, protocol = _make_tenant_with_protocol(db)
     block_a = _make_block(db, protocol.id)
     block_b = _make_block(db, protocol.id)
@@ -84,9 +85,11 @@ def test_identical_image_in_different_block_of_same_tenant_is_not_blocked(db):
     content = _png_bytes((40, 50, 60))
 
     asyncio.run(service.save_protocol_image(db, protocol_element_block=block_a, file=_upload_file(content)))
-    result = asyncio.run(service.save_protocol_image(db, protocol_element_block=block_b, file=_upload_file(content)))
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(service.save_protocol_image(db, protocol_element_block=block_b, file=_upload_file(content)))
 
-    assert result.id is not None
+    assert exc_info.value.status_code == 409
+    assert "Duplikat" in exc_info.value.detail
 
 
 def test_similar_image_in_same_tenant_gets_duplicate_warning_but_still_uploads(db):
