@@ -21,6 +21,12 @@ Installationen aktualisieren können.
   Bild gelöscht (Migration `0081`). Das Backend-Image enthält dafür `ffmpeg` und
   `pillow-heif`. Nicht abgedeckt: die öffentliche Abgabebox, Android-Motion-Photos und
   ProRAW (DNG).
+- **Manuelle Abgaben:** Neben «Termine» und «Liste» gibt es die Verknüpfung «Manuell» – ein
+  einzelnes Abgabefeld ohne Bezug zu Terminen oder Listen, optional mit Stichtag (Migration
+  `0080`). In der Abgabebox erscheint es als einzelnes Element mit dem Titel der Abgabe.
+- **Abgabe erstellen/bearbeiten neu gestaltet:** Aufbau wie der Todo-Editor mit Titel im Kopf,
+  Verknüpfung als Karten, Dateitypen als Chips und einer Seitenleiste mit öffentlichem Link,
+  Erreichbarkeit und einer Zusammenfassung, wie sich die Abgabe verhält.
 
 ## [1.1.0] - 2026-09-19
 

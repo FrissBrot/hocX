@@ -5,6 +5,12 @@ Subdomain – gedacht für Externe, die z. B. Belege oder Formulare einreichen s
 selbst einen hocX-Account zu benötigen.
 
 - Konfiguriert wird eine Abgabe unter *Abgaben* im normalen Vereinsbereich.
+- **Verknüpfung:** Eine Abgabe ist an *Termine* (ein Abgabefeld pro Termin mit einem Tag,
+  mit Zeitfenster relativ zum Termin), an eine *Liste* (ein Abgabefeld pro Listeneintrag, mit
+  gemeinsamem Stichtag) oder *manuell* gekoppelt. Eine manuelle Abgabe hat genau ein
+  Abgabefeld, das wie die Abgabe heisst, unabhängig von Terminen und Listen; ein Stichtag ist
+  optional. Ohne Zeitfenster bzw. Stichtag bleibt eine Abgabe offen, bis sie manuell
+  geschlossen wird.
 - **Zugang per Link:** Die Abgabebox ist nur über einen Link erreichbar, dessen Adresse einen
   zufällig erzeugten Schlüssel enthält – wer den Link kennt, kann die damit verknüpften
   Abgaben nutzen. Unter *Abgaben → Links* legst du beliebig viele Links mit einem frei
