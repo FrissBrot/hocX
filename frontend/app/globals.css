@@ -1082,6 +1082,21 @@ button:disabled {
   background: var(--button-bg);
 }
 
+/* A link styled as a primary button (e.g. "Protokoll ansehen"): the base chrome
+   (padding, height, radius, border) is only defined for <button>, so add it here. */
+a.button-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  transition: background var(--dur-base) ease, box-shadow var(--dur-base) ease;
+}
+
 .button-toggle {
   width: auto;
   min-width: 0;
