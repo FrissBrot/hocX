@@ -1,35 +1,34 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Modal } from "@/components/ui/modal";
-import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
+import {
+  FormState,
+  SubmissionAssignmentFormModal,
+  cycleOffsetLabel,
+  formFromAssignment,
+  initialForm,
+} from "@/components/submission-assignments/submission-assignment-form";
 import { SubmissionLinkManager } from "@/components/submission-assignments/submission-link-manager";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
 import {
   AssignmentSummary,
+  CycleConfigSummary,
   EventSummary,
   ParticipantSummary,
   StructuredListDefinition,
   SubmissionAssignment,
   SubmissionElementStatusEntry,
   SubmissionLink,
-  SubmissionSortOrder,
-  SubmissionSourceType,
   SubmissionUploadLogEntry,
 } from "@/types/api";
-
-const SORT_ORDER_LABEL: Record<SubmissionSortOrder, string> = {
-  alphabetical: "Alphabetisch",
-  date: "Nach Datum",
-  proximity: "Nähe zu heute",
-};
 
 const LOG_STATUS_LABEL: Record<string, string> = {
   upload_received: "Datei empfangen",
@@ -77,89 +76,15 @@ const SCAN_STATUS_VARIANT: Record<string, BadgeVariant> = {
   infected: "danger",
 };
 
-const SINGLE_PARTICIPANT_EVENT_FIELDS: { field: string; label: string }[] = [
-  { field: "spezial1_ids", label: "Spezial 1" },
-  { field: "spezial2_ids", label: "Spezial 2" },
-  { field: "spezial3_ids", label: "Spezial 3" },
-];
-
 type Props = {
   initialAssignments: SubmissionAssignment[];
   initialLinks: SubmissionLink[];
   availableLists: StructuredListDefinition[];
   availableEvents: EventSummary[];
   availableParticipants: ParticipantSummary[];
+  availableCycleConfigs: CycleConfigSummary[];
+  tenantName?: string | null;
 };
-
-type FormState = {
-  title: string;
-  description: string;
-  public_slug: string;
-  source_type: SubmissionSourceType;
-  tag_filter: string;
-  offset_days_before: number | "";
-  offset_days_after: number | "";
-  list_definition_id: string | "";
-  deadline: string;
-  allowed_file_types: string[];
-  max_files_per_element: number | "";
-  max_file_size_mb: number;
-  sort_order: SubmissionSortOrder;
-  responsible_participant_source: string;
-  link_ids: string[];
-};
-
-const FILE_TYPE_GROUPS = [
-  { label: "PDF", types: ["pdf"] },
-  { label: "Office-Dateien", types: ["doc", "docx", "xls", "xlsx", "ppt", "pptx"] },
-  { label: "Bilddateien", types: ["jpg", "jpeg", "png", "gif", "webp"] },
-];
-
-const initialForm: FormState = {
-  title: "",
-  description: "",
-  public_slug: "",
-  source_type: "events",
-  tag_filter: "",
-  offset_days_before: "",
-  offset_days_after: "",
-  list_definition_id: "",
-  deadline: "",
-  allowed_file_types: [],
-  max_files_per_element: 5,
-  max_file_size_mb: 20,
-  sort_order: "date",
-  responsible_participant_source: "",
-  link_ids: [],
-};
-
-function slugify(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-function formFromAssignment(assignment: SubmissionAssignment): FormState {
-  return {
-    title: assignment.title,
-    description: assignment.description ?? "",
-    public_slug: assignment.public_slug,
-    source_type: assignment.source_type,
-    tag_filter: assignment.tag_filter ?? "",
-    offset_days_before: assignment.offset_days_before ?? "",
-    offset_days_after: assignment.offset_days_after ?? "",
-    list_definition_id: assignment.list_definition_id ?? "",
-    deadline: assignment.deadline ?? "",
-    allowed_file_types: assignment.allowed_file_types,
-    max_files_per_element: assignment.max_files_per_element ?? "",
-    max_file_size_mb: assignment.max_file_size_mb,
-    sort_order: assignment.sort_order,
-    responsible_participant_source: assignment.responsible_participant_source ?? "",
-    link_ids: assignment.link_ids,
-  };
-}
 
 function statusLabel(element: SubmissionElementStatusEntry): string {
   if (element.status === "closed") return "Geschlossen";
@@ -326,12 +251,15 @@ function VerifiedIcon() {
   );
 }
 
-export function SubmissionAssignmentManager({ initialAssignments, initialLinks, availableLists, availableEvents, availableParticipants }: Props) {
+export function SubmissionAssignmentManager({ initialAssignments, initialLinks, availableLists, availableEvents, availableParticipants, availableCycleConfigs, tenantName = null }: Props) {
   const showToast = useToast();
   const confirm = useConfirm();
   const [assignments, setAssignments] = useState(initialAssignments);
   const [links, setLinks] = useState(initialLinks);
   const [linksModalOpen, setLinksModalOpen] = useState(false);
+  // "Abgabe-Links verwalten" im Formular: das Formular wird für die Links geschlossen (Entwurf bleibt
+  // im State) und danach wieder geöffnet – kein zweites Modal im Modal.
+  const [linksReturnToForm, setLinksReturnToForm] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(initialForm);
@@ -352,21 +280,6 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
     new Set(availableEvents.map((e) => e.tag).filter((t): t is string => Boolean(t)))
   ).sort();
 
-  const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
-  const [tagDropdownSearch, setTagDropdownSearch] = useState("");
-  const tagDropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!tagDropdownOpen) return;
-    function handleClick(e: MouseEvent) {
-      if (tagDropdownRef.current && !tagDropdownRef.current.contains(e.target as Node)) {
-        setTagDropdownOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [tagDropdownOpen]);
-
   // Load ClamAV status and all assignment summaries on mount
   useEffect(() => {
     void browserApiFetch<{ status: string }>("/api/clamav/status").then(
@@ -382,10 +295,6 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
     );
   }, []);
 
-  const filteredTags = tagDropdownSearch.trim()
-    ? availableTags.filter((t) => t.toLowerCase().includes(tagDropdownSearch.toLowerCase()))
-    : availableTags;
-
   const filteredAssignments = search.trim()
     ? assignments.filter((a) => a.title.toLowerCase().includes(search.toLowerCase()))
     : assignments;
@@ -397,11 +306,18 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
     setModalOpen(true);
   }
 
-  function toggleLink(linkId: string) {
-    setForm((c) => ({
-      ...c,
-      link_ids: c.link_ids.includes(linkId) ? c.link_ids.filter((id) => id !== linkId) : [...c.link_ids, linkId],
-    }));
+  function openLinksFromForm() {
+    setModalOpen(false);
+    setLinksReturnToForm(true);
+    setLinksModalOpen(true);
+  }
+
+  function closeLinksModal() {
+    setLinksModalOpen(false);
+    if (linksReturnToForm) {
+      setLinksReturnToForm(false);
+      setModalOpen(true);
+    }
   }
 
   // A deleted link disappears from every Abgabe on the server (and from the edit form, if open).
@@ -414,15 +330,6 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
     setEditingId(assignment.id);
     setForm(formFromAssignment(assignment));
     setModalOpen(true);
-  }
-
-  function toggleFileType(type: string) {
-    setForm((c) => ({
-      ...c,
-      allowed_file_types: c.allowed_file_types.includes(type)
-        ? c.allowed_file_types.filter((t) => t !== type)
-        : [...c.allowed_file_types, type],
-    }));
   }
 
   function clearRescanTimer() {
@@ -496,44 +403,28 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
     return () => clearRescanTimer();
   }, []);
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const payload =
-      form.source_type === "events"
-        ? {
-            title: form.title,
-            description: form.description || null,
-            public_slug: form.public_slug,
-            source_type: "events" as const,
-            tag_filter: form.tag_filter,
-            offset_days_before: form.offset_days_before === "" ? null : Number(form.offset_days_before),
-            offset_days_after: form.offset_days_after === "" ? null : Number(form.offset_days_after),
-            list_definition_id: null,
-            deadline: null,
-            allowed_file_types: form.allowed_file_types,
-            max_files_per_element: form.max_files_per_element === "" ? null : Number(form.max_files_per_element),
-            max_file_size_mb: Number(form.max_file_size_mb),
-            sort_order: form.sort_order,
-            responsible_participant_source: form.responsible_participant_source || null,
-            link_ids: form.link_ids,
-          }
-        : {
-            title: form.title,
-            description: form.description || null,
-            public_slug: form.public_slug,
-            source_type: "list" as const,
-            tag_filter: null,
-            offset_days_before: null,
-            offset_days_after: null,
-            list_definition_id: form.list_definition_id === "" ? null : form.list_definition_id,
-            deadline: form.deadline || null,
-            allowed_file_types: form.allowed_file_types,
-            max_files_per_element: form.max_files_per_element === "" ? null : Number(form.max_files_per_element),
-            max_file_size_mb: Number(form.max_file_size_mb),
-            sort_order: form.sort_order,
-            responsible_participant_source: form.responsible_participant_source || null,
-            link_ids: form.link_ids,
-          };
+  async function submit() {
+    const isEvents = form.source_type === "events";
+    const payload = {
+      title: form.title.trim(),
+      description: form.description || null,
+      public_slug: form.public_slug,
+      source_type: form.source_type,
+      // Nur was zur gewählten Verknüpfung gehört, wird gesendet – der Rest wird beim Wechsel geleert.
+      tag_filter: isEvents ? form.tag_filter : null,
+      offset_days_before: isEvents && form.offset_days_before !== "" ? Number(form.offset_days_before) : null,
+      offset_days_after: isEvents && form.offset_days_after !== "" ? Number(form.offset_days_after) : null,
+      cycle_config_id: isEvents ? form.cycle_config_id || null : null,
+      cycle_offsets: isEvents && form.cycle_config_id ? form.cycle_offsets : [],
+      list_definition_id: form.source_type === "list" ? form.list_definition_id || null : null,
+      deadline: isEvents ? null : form.deadline || null,
+      allowed_file_types: form.allowed_file_types,
+      max_files_per_element: form.max_files_per_element === "" ? null : Number(form.max_files_per_element),
+      max_file_size_mb: Number(form.max_file_size_mb),
+      sort_order: form.sort_order,
+      responsible_participant_source: form.source_type === "manual" ? null : form.responsible_participant_source || null,
+      link_ids: form.link_ids,
+    };
 
     try {
       const saved = editingId
@@ -669,7 +560,11 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
 
   function metaLine(assignment: SubmissionAssignment): string {
     if (assignment.source_type === "events") {
-      const source = assignment.tag_filter ? `Termin „${assignment.tag_filter}“` : "Termine";
+      const cycleConfig = availableCycleConfigs.find((c) => c.id === assignment.cycle_config_id);
+      const cycles = cycleConfig
+        ? ` (${cycleConfig.name}: ${[...assignment.cycle_offsets].sort((a, b) => b - a).map(cycleOffsetLabel).join(", ")})`
+        : "";
+      const source = (assignment.tag_filter ? `Termin „${assignment.tag_filter}“` : "Termine") + cycles;
       const before = assignment.offset_days_before;
       const after = assignment.offset_days_after;
       const windowParts = [
@@ -678,6 +573,10 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
       ].filter((v): v is string => Boolean(v));
       const window = windowParts.length > 0 ? windowParts.join(", ") : "kein Zeitfenster (offen bis manuell geschlossen)";
       return `Quelle: ${source} · ${window}`;
+    }
+    if (assignment.source_type === "manual") {
+      const deadline = assignment.deadline ? `Deadline ${formatDateShort(assignment.deadline)}` : "Kein Stichtag (offen bis manuell geschlossen)";
+      return `Quelle: Manuell · ${deadline}`;
     }
     const list = availableLists.find((l) => l.id === assignment.list_definition_id);
     const source = list ? `Liste „${list.name}“` : "Liste";
@@ -693,7 +592,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
       <div className="page-header">
         <div>
           <h1 className="page-title">Abgaben</h1>
-          <p className="muted">{hasNoAssignments ? "Öffentliche Abgabeboxen für Dokumente und Formulare." : "Externe Abgaben ohne Anmeldung — gekoppelt an Termine oder eine Liste."}</p>
+          <p className="muted">{hasNoAssignments ? "Öffentliche Abgabeboxen für Dokumente und Formulare." : "Externe Abgaben ohne Anmeldung — gekoppelt an Termine oder eine Liste, oder manuell."}</p>
         </div>
         <div className="subm-toolbar-actions">
           <span className={`subm-clamav subm-clamav-${clamavStatus}`}>
@@ -802,7 +701,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
               </Badge>
             )}
 
-            <div className="subm-modal-section-title">Teilnehmer</div>
+            <div className="subm-modal-section-title">{selectedAssignment?.source_type === "manual" ? "Abgabe" : "Teilnehmer"}</div>
 
             {elementsLoading ? (
               <div className="subm-skeleton-box">
@@ -993,7 +892,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
       {/* Links: Zugang zur öffentlichen Abgabebox */}
       <Modal
         open={linksModalOpen}
-        onClose={() => setLinksModalOpen(false)}
+        onClose={closeLinksModal}
         title="Abgabe-Links"
         description="Über diese Links ist die öffentliche Abgabebox erreichbar."
       >
@@ -1001,299 +900,20 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
       </Modal>
 
       {/* Create/Edit Modal */}
-      <Modal
+      <SubmissionAssignmentFormModal
         open={modalOpen}
+        editing={editingId !== null}
+        tenantName={tenantName}
+        form={form}
+        setForm={setForm}
+        links={links}
+        availableLists={availableLists}
+        availableTags={availableTags}
+        availableCycleConfigs={availableCycleConfigs}
+        onSubmit={() => void submit()}
         onClose={() => setModalOpen(false)}
-        title={editingId ? "Abgabe bearbeiten" : "Abgabe erstellen"}
-        description="Termin-Abgaben nutzen ein Zeitfenster relativ zum Termin, Listen-Abgaben einen festen Stichtag."
-      >
-        <form className="grid" onSubmit={submit}>
-          <label className="field-stack">
-            <span className="field-label">Titel</span>
-            <input
-              value={form.title}
-              onChange={(e) => {
-                const title = e.target.value;
-                setForm((c) => ({
-                  ...c,
-                  title,
-                  ...(editingId === null ? { public_slug: slugify(title) } : {}),
-                }));
-              }}
-              required
-            />
-          </label>
-
-          <label className="field-stack">
-            <span className="field-label">Beschreibung</span>
-            <input
-              value={form.description}
-              onChange={(e) => setForm((c) => ({ ...c, description: e.target.value }))}
-              placeholder="Optional"
-            />
-          </label>
-
-          <div className="field-stack">
-            <span className="field-label">Erreichbar über</span>
-            {links.length === 0 ? (
-              <span className="field-help">
-                Es gibt noch keinen Link – lege zuerst unter „Links“ einen an, sonst ist diese Abgabe nicht erreichbar.
-              </span>
-            ) : (
-              <>
-                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "var(--space-3) var(--space-4)" }}>
-                  {links.map((link) => (
-                    <label key={link.id} className="checkbox-line" style={{ margin: 0, minHeight: 0 }}>
-                      <input type="checkbox" checked={form.link_ids.includes(link.id)} onChange={() => toggleLink(link.id)} />
-                      {link.name}
-                      {link.is_default ? <span className="muted"> (Standard)</span> : null}
-                    </label>
-                  ))}
-                </div>
-                {form.link_ids.length === 0 ? (
-                  <span className="field-help">Kein Link ausgewählt – die Abgabe ist so über die Abgabebox nicht erreichbar.</span>
-                ) : null}
-              </>
-            )}
-          </div>
-
-          <label className="field-stack">
-            <span className="field-label">Verknüpfung</span>
-            <select
-              value={form.source_type}
-              onChange={(e) => setForm((c) => ({ ...c, source_type: e.target.value as SubmissionSourceType }))}
-            >
-              <option value="events">Termine (per Tag-Filter)</option>
-              <option value="list">Liste (mit Stichtag)</option>
-            </select>
-          </label>
-
-          {form.source_type === "events" ? (
-            <div className="two-col">
-              <div className="field-stack">
-                <span className="field-label">Tag-Filter</span>
-                <div ref={tagDropdownRef} style={{ position: "relative" }}>
-                  <button
-                    type="button"
-                    onClick={() => { setTagDropdownOpen((v) => !v); setTagDropdownSearch(""); }}
-                    style={{ width: "100%", textAlign: "left", padding: "var(--space-3) var(--space-4)", borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", background: "color-mix(in srgb, var(--panel-solid) 92%, transparent 8%)", color: form.tag_filter ? "var(--text)" : "var(--muted)", cursor: "pointer", minHeight: 48, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-2)", fontSize: "inherit", boxSizing: "border-box" }}
-                  >
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {form.tag_filter || "Tag wählen…"}
-                    </span>
-                    <span style={{ flexShrink: 0, opacity: 0.5 }}>▾</span>
-                  </button>
-                  {tagDropdownOpen && (
-                    <div className="dropdown-panel dropdown-panel-down">
-                      <div className="dropdown-search">
-                        <input
-                          autoFocus
-                          type="text"
-                          placeholder="Suchen…"
-                          value={tagDropdownSearch}
-                          onChange={(e) => setTagDropdownSearch(e.target.value)}
-                          className="dropdown-search-input"
-                        />
-                      </div>
-                      <div className="dropdown-panel-scroll">
-                        {filteredTags.length === 0 ? (
-                          <div className="dropdown-empty">Keine Tags gefunden</div>
-                        ) : filteredTags.map((tag) => (
-                          <button
-                            key={tag}
-                            type="button"
-                            onClick={() => { setForm((c) => ({ ...c, tag_filter: tag })); setTagDropdownOpen(false); }}
-                            className={form.tag_filter === tag ? "dropdown-option dropdown-option-selected" : "dropdown-option"}
-                          >
-                            {tag}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="two-col">
-                <label className="field-stack">
-                  <span className="field-label">Tage vor Termin (ab)</span>
-                  <input
-                    type="number"
-                    min={0}
-                    placeholder="unbegrenzt"
-                    value={form.offset_days_before}
-                    onChange={(e) => setForm((c) => ({ ...c, offset_days_before: e.target.value === "" ? "" : Number(e.target.value) }))}
-                  />
-                </label>
-                <label className="field-stack">
-                  <span className="field-label">Tage nach Termin (bis)</span>
-                  <input
-                    type="number"
-                    min={0}
-                    placeholder="unbegrenzt"
-                    value={form.offset_days_after}
-                    onChange={(e) => setForm((c) => ({ ...c, offset_days_after: e.target.value === "" ? "" : Number(e.target.value) }))}
-                  />
-                </label>
-              </div>
-              <span className="field-help">
-                Leer lassen = kein Zeitfenster auf dieser Seite. Ohne beide Werte bleibt die Abgabe offen, bis sie manuell geschlossen wird.
-              </span>
-            </div>
-          ) : (
-            <div className="two-col">
-              <label className="field-stack">
-                <span className="field-label">Liste</span>
-                <SearchableSelect
-                  options={availableLists}
-                  getId={(list) => list.id}
-                  getLabel={(list) => list.name}
-                  value={form.list_definition_id || null}
-                  onChange={(list) => setForm((c) => ({ ...c, list_definition_id: list ? list.id : "" }))}
-                  nullLabel="Liste wählen…"
-                />
-              </label>
-              <label className="field-stack">
-                <span className="field-label">Stichtag</span>
-                <input
-                  type="date"
-                  value={form.deadline}
-                  onChange={(e) => setForm((c) => ({ ...c, deadline: e.target.value }))}
-                />
-                <span className="field-help">Leer lassen = kein Stichtag, Abgabe bleibt offen, bis sie manuell geschlossen wird.</span>
-              </label>
-            </div>
-          )}
-
-          {(() => {
-            const selectedList = form.source_type === "list" && form.list_definition_id !== ""
-              ? availableLists.find((l) => l.id === form.list_definition_id)
-              : null;
-            const listParticipantCols: { value: string; label: string }[] = [];
-            if (selectedList) {
-              if (selectedList.column_one_value_type === "participant")
-                listParticipantCols.push({ value: "column_one", label: selectedList.column_one_title || "Spalte 1" });
-              if (selectedList.column_two_value_type === "participant")
-                listParticipantCols.push({ value: "column_two", label: selectedList.column_two_title || "Spalte 2" });
-            }
-            const eventOptions = form.source_type === "events" ? SINGLE_PARTICIPANT_EVENT_FIELDS : [];
-            const options = form.source_type === "events" ? eventOptions : listParticipantCols;
-            if (options.length === 0) return null;
-            const normalizedOptions = options.map((opt) => ({
-              value: "field" in opt ? opt.field : opt.value,
-              label: opt.label,
-            }));
-            return (
-              <label className="field-stack">
-                <span className="field-label">Verantwortliche Person</span>
-                <SearchableSelect
-                  options={normalizedOptions}
-                  getId={(opt) => opt.value}
-                  getLabel={(opt) => opt.label}
-                  value={form.responsible_participant_source || null}
-                  onChange={(opt) => setForm((c) => ({ ...c, responsible_participant_source: opt ? opt.value : "" }))}
-                  nullLabel="Keine Zuweisung"
-                />
-                <span className="field-help">Das Feld, das die verantwortliche Person für diese Abgabe enthält.</span>
-              </label>
-            );
-          })()}
-
-          <div className="field-stack">
-            <span className="field-label">Erlaubte Dateitypen</span>
-            <div style={{ display: "flex", flexDirection: "column", gap: 0, border: "1px solid var(--border)", borderRadius: "var(--radius-md)", overflow: "hidden" }}>
-              {FILE_TYPE_GROUPS.map((group, gi) => {
-                const allChecked = group.types.every((t) => form.allowed_file_types.includes(t));
-                const someChecked = group.types.some((t) => form.allowed_file_types.includes(t));
-                return (
-                  <div key={group.label} style={{ padding: "var(--space-3) var(--space-4)", borderTop: gi > 0 ? "1px solid var(--border)" : undefined }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", marginBottom: "var(--space-2)" }}>
-                      <span style={{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--text)", textTransform: "uppercase", letterSpacing: "0.05em", flex: 1 }}>
-                        {group.label}
-                      </span>
-                      {group.types.length > 1 && (
-                        <label className="checkbox-line" style={{ margin: 0, minHeight: 0, fontSize: "var(--text-sm)", color: "var(--muted)" }}>
-                          <input
-                            type="checkbox"
-                            checked={allChecked}
-                            ref={(el) => { if (el) el.indeterminate = someChecked && !allChecked; }}
-                            onChange={() => {
-                              const toAdd = allChecked ? [] : group.types;
-                              setForm((c) => ({
-                                ...c,
-                                allowed_file_types: [
-                                  ...c.allowed_file_types.filter((t) => !group.types.includes(t)),
-                                  ...toAdd,
-                                ],
-                              }));
-                            }}
-                          />
-                          Alle
-                        </label>
-                      )}
-                    </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-1) var(--space-4)" }}>
-                      {group.types.map((type) => (
-                        <label key={type} className="checkbox-line" style={{ margin: 0, minHeight: 0 }}>
-                          <input
-                            type="checkbox"
-                            checked={form.allowed_file_types.includes(type)}
-                            onChange={() => toggleFileType(type)}
-                          />
-                          .{type}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="two-col">
-            <label className="field-stack">
-              <span className="field-label">Max. Dateien</span>
-              <input
-                type="number"
-                min={1}
-                placeholder="unbegrenzt"
-                value={form.max_files_per_element}
-                onChange={(e) => setForm((c) => ({ ...c, max_files_per_element: e.target.value === "" ? "" : Number(e.target.value) }))}
-              />
-              <span className="field-help">Leer lassen = unbegrenzt viele Dateien.</span>
-            </label>
-            <label className="field-stack">
-              <span className="field-label">Max. Größe (MB)</span>
-              <input
-                type="number"
-                min={1}
-                value={form.max_file_size_mb}
-                onChange={(e) => setForm((c) => ({ ...c, max_file_size_mb: Number(e.target.value) }))}
-              />
-            </label>
-          </div>
-
-          <label className="field-stack">
-            <span className="field-label">Sortierung der Elemente</span>
-            <select
-              value={form.sort_order}
-              onChange={(e) => setForm((c) => ({ ...c, sort_order: e.target.value as SubmissionSortOrder }))}
-            >
-              {(Object.keys(SORT_ORDER_LABEL) as SubmissionSortOrder[]).map((value) => (
-                <option key={value} value={value}>
-                  {SORT_ORDER_LABEL[value]}
-                </option>
-              ))}
-            </select>
-            <span className="field-help">Wird unverändert in der öffentlichen Abgabebox übernommen (dort nicht anpassbar).</span>
-          </label>
-
-          <div className="table-toolbar-actions">
-            <button type="submit" className="button-secondary">
-              {editingId ? "Abgabe speichern" : "Abgabe erstellen"}
-            </button>
-          </div>
-        </form>
-      </Modal>
+        onManageLinks={openLinksFromForm}
+      />
     </div>
   );
 }

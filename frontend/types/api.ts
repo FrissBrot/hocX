@@ -102,7 +102,7 @@ export type TenantDomain = {
   last_checked_at: string | null;
 };
 
-export type SubmissionSourceType = "events" | "list";
+export type SubmissionSourceType = "events" | "list" | "manual";
 export type SubmissionElementStatus = "open" | "submitted" | "closed";
 export type SubmissionSortOrder = "alphabetical" | "date" | "proximity";
 
@@ -116,6 +116,9 @@ export type SubmissionAssignment = {
   tag_filter: string | null;
   offset_days_before: number | null;
   offset_days_after: number | null;
+  cycle_config_id: string | null;
+  /** 0 = aktueller Zyklus, -1 = vorheriger usw. Leer, wenn kein Zyklus-Filter gesetzt ist. */
+  cycle_offsets: number[];
   list_definition_id: string | null;
   deadline: string | null;
   allowed_file_types: string[];
