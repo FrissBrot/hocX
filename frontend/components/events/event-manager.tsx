@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
+import { EmptyState } from "@/components/ui/empty-state";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
 import { computePopoverPosition, Popover, usePopoverDismiss } from "@/components/ui/popover";
@@ -634,13 +635,16 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     }
   }
 
+  const hasNoEvents = events.length === 0 && !hasMore;
+
   return (
     <div className="grid">
       <div className="page-header">
         <div>
           <h1 className="page-title">Termine</h1>
-          <p className="muted">Alle Termine dieses Mandanten.</p>
+          <p className="muted">{hasNoEvents ? "Alle Termine und Anlässe dieses Mandanten." : "Alle Termine dieses Mandanten."}</p>
         </div>
+        {hasNoEvents ? null : (
         <div className="table-toolbar-actions">
           <button type="button" className="button-secondary button-ghost" onClick={openImportModal}>
             CSV Import
@@ -699,8 +703,22 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
             Neuer Termin
           </button>
         </div>
+        )}
       </div>
 
+      {hasNoEvents ? (
+        <EmptyState
+          title="Keine Termine geplant"
+          description="Trage Anlässe ein, damit sie in Protokollen, Abgaben und im Dashboard erscheinen."
+          actions={
+            <button type="button" className="button-primary" onClick={openCreate}>
+              + Termin
+            </button>
+          }
+          hint="Termine lassen sich einem Zyklus zuordnen – so bleiben Vereinsjahre sauber getrennt."
+        />
+      ) : (
+      <>
       <div className="list-filter-row">
         <FilterTabs
           options={[{ value: "all", label: "Alle" }, ...knownTags.map((tag) => ({ value: tag, label: tag }))]}
@@ -772,6 +790,8 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
           </tr>
         ))}
       </DataTable>
+      </>
+      )}
 
       {hasMore && (
         <div className="load-more-row" ref={loadMoreSentinelRef}>

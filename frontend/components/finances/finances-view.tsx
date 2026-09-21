@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { DateInput } from "@/components/ui/date-input";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Modal } from "@/components/ui/modal";
 import { FinanceAccount, FinanceTransaction } from "@/types/api";
 import { browserApiFetch } from "@/lib/api/client";
@@ -198,6 +199,80 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
 
   const currency = selected?.currency_label ?? "";
 
+  const accountModal = (
+    <>
+    {canWrite && (
+      <Modal
+        open={showAccountForm}
+        title={editingAccount ? "Konto bearbeiten" : "Neues Konto"}
+        description="Verwalte Einnahmen und Ausgaben in einem eigenen Konto."
+        className="finance-account-modal"
+        onClose={() => setShowAccountForm(false)}
+      >
+        <form className="grid finance-form-modal" onSubmit={(event) => { event.preventDefault(); void saveAccount(); }}>
+          <label className="field-stack">
+            <span className="field-label">Name</span>
+            <input value={accountDraft.name} onChange={(e) => setAccountDraft((d) => ({ ...d, name: e.target.value }))} placeholder="z. B. Vereinskasse" required autoFocus />
+          </label>
+          <label className="field-stack">
+            <span className="field-label">Währungsbezeichnung</span>
+            <input value={accountDraft.currency_label} onChange={(e) => setAccountDraft((d) => ({ ...d, currency_label: e.target.value }))} placeholder="CHF" />
+          </label>
+          <label className="field-stack">
+            <span className="field-label">Beschreibung (optional)</span>
+            <textarea rows={3} value={accountDraft.description} onChange={(e) => setAccountDraft((d) => ({ ...d, description: e.target.value }))} placeholder="Beschreibung…" />
+          </label>
+          <div className="modal-actions">
+            <button type="button" className="button-ghost" onClick={() => setShowAccountForm(false)}>Abbrechen</button>
+            <button type="submit" className="button-primary" disabled={savingAccount || !accountDraft.name.trim()}>
+              {savingAccount ? "Speichern…" : "Speichern"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+    )}
+    </>
+  );
+
+
+  if (accounts.length === 0) {
+    return (
+      <div className="grid">
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Finanzen</h1>
+            <p className="muted">Konten, Transaktionen und Saldo dieses Mandanten.</p>
+          </div>
+        </div>
+        <EmptyState
+          title="Noch keine Transaktionen"
+          description="Lege ein Konto an und erfasse Einnahmen und Ausgaben – der Saldo wird laufend mitgerechnet."
+          actions={
+            canWrite ? (
+              <>
+                <button
+                  type="button"
+                  className="button-primary"
+                  onClick={() => {
+                    showToast("Lege zuerst ein Konto an – danach kannst du Transaktionen erfassen.", "info");
+                    startCreateAccount();
+                  }}
+                >
+                  + Transaktion
+                </button>
+                <button type="button" className="button-secondary" onClick={startCreateAccount}>
+                  Konto anlegen
+                </button>
+              </>
+            ) : null
+          }
+          hint="Kassierte Bussen können direkt als Transaktion auf ein Konto gebucht werden."
+        />
+        {accountModal}
+      </div>
+    );
+  }
+
   return (
     <div className="finance-layout">
       {/* ── Account sidebar ── */}
@@ -207,69 +282,36 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
           {canWrite && <button type="button" className="button-icon-soft" onClick={startCreateAccount} title="Konto erstellen">＋</button>}
         </div>
 
-        {accounts.length === 0 ? (
-          <p className="muted finance-empty">Noch keine Konten. Erstelle dein erstes Konto.</p>
-        ) : (
-          <div className="finance-account-list">
-            {accounts.map((account) => (
-              <div
-                key={account.id}
-                role="button"
-                tabIndex={0}
-                className={`finance-account-card${selected?.id === account.id ? " finance-account-card-active" : ""}`}
-                onClick={() => void openAccount(account)}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") void openAccount(account); }}
-              >
-                <div className="finance-account-name">{account.name}</div>
-                <div className={`finance-account-balance${account.balance < 0 ? " finance-balance-negative" : ""}`}>
-                  {formatAmount(account.balance, account.currency_label)}
-                </div>
-                {account.provisional_balance > 0 ? (
-                  <div className="finance-account-provisional">
-                    + {formatAmount(account.provisional_balance, account.currency_label)} provisorisch
-                  </div>
-                ) : null}
-                {account.description ? <div className="finance-account-desc">{account.description}</div> : null}
-                <div className="finance-account-actions">
-                  <span className="finance-account-count">{account.transaction_count} Transaktionen</span>
-                  {canWrite && <button type="button" className="button-icon-soft-sm" onClick={(e) => startEditAccount(account, e)} title="Bearbeiten">✎</button>}
-                  {canWrite && <button type="button" className="button-icon-soft-sm button-icon-soft-danger" onClick={(e) => void deleteAccount(account, e)} title="Löschen">✕</button>}
-                </div>
+        <div className="finance-account-list">
+          {accounts.map((account) => (
+            <div
+              key={account.id}
+              role="button"
+              tabIndex={0}
+              className={`finance-account-card${selected?.id === account.id ? " finance-account-card-active" : ""}`}
+              onClick={() => void openAccount(account)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") void openAccount(account); }}
+            >
+              <div className="finance-account-name">{account.name}</div>
+              <div className={`finance-account-balance${account.balance < 0 ? " finance-balance-negative" : ""}`}>
+                {formatAmount(account.balance, account.currency_label)}
               </div>
-            ))}
-          </div>
-        )}
+              {account.provisional_balance > 0 ? (
+                <div className="finance-account-provisional">
+                  + {formatAmount(account.provisional_balance, account.currency_label)} provisorisch
+                </div>
+              ) : null}
+              {account.description ? <div className="finance-account-desc">{account.description}</div> : null}
+              <div className="finance-account-actions">
+                <span className="finance-account-count">{account.transaction_count} Transaktionen</span>
+                {canWrite && <button type="button" className="button-icon-soft-sm" onClick={(e) => startEditAccount(account, e)} title="Bearbeiten">✎</button>}
+                {canWrite && <button type="button" className="button-icon-soft-sm button-icon-soft-danger" onClick={(e) => void deleteAccount(account, e)} title="Löschen">✕</button>}
+              </div>
+            </div>
+          ))}
+        </div>
 
-        {canWrite && (
-          <Modal
-            open={showAccountForm}
-            title={editingAccount ? "Konto bearbeiten" : "Neues Konto"}
-            description="Verwalte Einnahmen und Ausgaben in einem eigenen Konto."
-            className="finance-account-modal"
-            onClose={() => setShowAccountForm(false)}
-          >
-            <form className="grid finance-form-modal" onSubmit={(event) => { event.preventDefault(); void saveAccount(); }}>
-              <label className="field-stack">
-                <span className="field-label">Name</span>
-                <input value={accountDraft.name} onChange={(e) => setAccountDraft((d) => ({ ...d, name: e.target.value }))} placeholder="z. B. Vereinskasse" required autoFocus />
-              </label>
-              <label className="field-stack">
-                <span className="field-label">Währungsbezeichnung</span>
-                <input value={accountDraft.currency_label} onChange={(e) => setAccountDraft((d) => ({ ...d, currency_label: e.target.value }))} placeholder="CHF" />
-              </label>
-              <label className="field-stack">
-                <span className="field-label">Beschreibung (optional)</span>
-                <textarea rows={3} value={accountDraft.description} onChange={(e) => setAccountDraft((d) => ({ ...d, description: e.target.value }))} placeholder="Beschreibung…" />
-              </label>
-              <div className="modal-actions">
-                <button type="button" className="button-ghost" onClick={() => setShowAccountForm(false)}>Abbrechen</button>
-                <button type="submit" className="button-primary" disabled={savingAccount || !accountDraft.name.trim()}>
-                  {savingAccount ? "Speichern…" : "Speichern"}
-                </button>
-              </div>
-            </form>
-          </Modal>
-        )}
+        {accountModal}
       </aside>
 
       {/* ── Transaction panel ── */}

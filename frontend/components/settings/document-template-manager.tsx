@@ -4,6 +4,7 @@ import { Dispatch, FormEvent, SetStateAction, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -1166,6 +1167,21 @@ export function DocumentTemplateManager({ initialTemplates, initialParts, tenant
     }
   }
 
+  // Ein Layout mit den Standardwerten anlegen, damit Exporte sofort ein definiertes Aussehen haben.
+  async function createStandardLayout() {
+    try {
+      const created = await browserApiFetch<DocumentTemplate>("/api/document-templates", {
+        method: "POST",
+        body: JSON.stringify(buildTemplatePayload({ ...initialTemplateForm, name: "Standard-Layout", is_default: true }, tenantId)),
+      });
+      setTemplates((cur) => [created, ...cur.filter((t) => t.id !== created.id)]);
+      selectTemplate(created);
+      showToast("Standard-Layout angelegt", "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Fehler beim Erstellen", "error");
+    }
+  }
+
   async function saveSelectedTemplate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedTemplate) return;
@@ -1198,23 +1214,27 @@ export function DocumentTemplateManager({ initialTemplates, initialParts, tenant
     }
   }
 
+  const hasNothingYet = templates.length === 0 && parts.length === 0;
+
   return (
     <div className="grid">
       <div className="page-header">
         <div>
           <h1 className="page-title">Dokument-Vorlagen</h1>
-          <p className="muted">PDF-Layouts und wiederverwendbare LaTeX-Parts für den Protokoll-Export verwalten.</p>
+          <p className="muted">{hasNothingYet ? "Layouts für PDF- und Word-Exporte." : "PDF-Layouts und wiederverwendbare LaTeX-Parts für den Protokoll-Export verwalten."}</p>
         </div>
       </div>
 
-      <FilterTabs
-        options={[
-          { value: "layouts", label: "Layouts" },
-          { value: "parts", label: "Parts-Bibliothek" },
-        ]}
-        value={activePanel}
-        onChange={setActivePanel}
-      />
+      {hasNothingYet ? null : (
+        <FilterTabs
+          options={[
+            { value: "layouts", label: "Layouts" },
+            { value: "parts", label: "Parts-Bibliothek" },
+          ]}
+          value={activePanel}
+          onChange={setActivePanel}
+        />
+      )}
 
       <Modal open={showPartForm} onClose={() => setShowPartForm(false)} title="LaTeX-Part hochladen" description="Eigene .tex-Datei oder Font-Datei hochladen.">
         <form className="grid" onSubmit={createPart}>
@@ -1260,7 +1280,22 @@ export function DocumentTemplateManager({ initialTemplates, initialParts, tenant
         </form>
       </Modal>
 
-      {activePanel === "parts" ? (
+      {hasNothingYet ? (
+        <EmptyState
+          title="Noch keine Dokument-Vorlage"
+          description="Dokument-Vorlagen bestimmen Layout, Logo und Kopfzeilen der exportierten Protokolle."
+          actions={
+            <>
+              <button type="button" className="button-primary" onClick={() => setShowTemplateForm(true)}>
+                + Dokument-Vorlage
+              </button>
+              <button type="button" className="button-secondary" onClick={() => void createStandardLayout()}>
+                Standard-Layout verwenden
+              </button>
+            </>
+          }
+        />
+      ) : activePanel === "parts" ? (
         <article className="card">
           <DataToolbar
             title="Parts-Bibliothek"

@@ -2,6 +2,9 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
+
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   BarChart,
   Bar,
@@ -335,6 +338,7 @@ function FinesParticipantChart({ data }: { data: FineEntry[] }) {
 // ── Main view ─────────────────────────────────────────────────────────────────
 
 export function StatisticsView({ data }: Props) {
+  const router = useRouter();
   const [period, setPeriod] = useState<Period>("all");
   const [attendanceView, setAttendanceView] = useState<"participant" | "time">("time");
   const [financeAccount, setFinanceAccount] = useState<string>("all");
@@ -405,6 +409,37 @@ export function StatisticsView({ data }: Props) {
 
   if (!data) {
     return <div className="stats-empty"><p className="muted">Keine Statistikdaten verfügbar.</p></div>;
+  }
+
+  const hasNoStatistics =
+    data.protocols_total === 0 &&
+    data.todos.total === 0 &&
+    data.attendance_over_time.length === 0 &&
+    data.attendance_by_participant.length === 0 &&
+    data.fines_by_participant.length === 0 &&
+    data.finance_by_month.length === 0;
+
+  if (hasNoStatistics) {
+    return (
+      <div className="stats-page">
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Statistiken</h1>
+            <p className="muted">Auswertungen zu Anwesenheit, Todos und Finanzen.</p>
+          </div>
+        </div>
+        <EmptyState
+          title="Noch keine Auswertung möglich"
+          description="Sobald Protokolle mit Anwesenheit, Todos oder Finanzdaten vorliegen, entstehen hier automatisch Diagramme."
+          actions={
+            <button type="button" className="button-primary" onClick={() => router.push("/protocols")}>
+              Zum ersten Protokoll
+            </button>
+          }
+          hint="Ab dem zweiten Protokoll zeigt der Zeitverlauf Entwicklungen über mehrere Monate."
+        />
+      </div>
+    );
   }
 
   const todoData: PieEntry[] = [

@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { DocumentUploadModal } from "./document-upload-modal";
 import { FileDetailModal } from "./file-detail-modal";
 import { FilesTable } from "./files-table";
+import { EmptyState } from "@/components/ui/empty-state";
 import { FileDropOverlay } from "@/components/ui/file-drop-overlay";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -167,26 +168,46 @@ export function FilesView({ initialItems }: Props) {
     setTagSuggestions((current) => Array.from(new Set([...current, ...tags])).sort((a, b) => a.localeCompare(b)));
   }
 
+  const hasNoFiles = items.length === 0 && !hasMore && sourceFilter === "all" && !search.trim() && tagFilter.length === 0;
+
+  function openUpload() {
+    setDroppedFiles([]);
+    setUploadModalOpen(true);
+  }
+
   return (
     <div className="grid grid-tight">
       <div className="page-header">
         <div>
           <h1 className="page-title">Dateien</h1>
           <p className="muted">
-            Alle hochgeladenen Nicht-Bild-Dateien dieses Mandanten - aus Protokollen, Word-Importen, Abgaben und
-            direkten Uploads. Fotos siehe die separate &quot;Fotos&quot;-Seite.
+            {hasNoFiles
+              ? "Alle Dokumente dieses Mandanten."
+              : "Alle hochgeladenen Nicht-Bild-Dateien dieses Mandanten - aus Protokollen, Word-Importen, Abgaben und direkten Uploads. Fotos siehe die separate \"Fotos\"-Seite."}
           </p>
         </div>
-        <div className="table-toolbar-actions">
-          <button type="button" className="button-secondary" onClick={() => {
-              setDroppedFiles([]);
-              setUploadModalOpen(true);
-            }}>
-            + Dateien hochladen
-          </button>
-        </div>
+        {hasNoFiles ? null : (
+          <div className="table-toolbar-actions">
+            <button type="button" className="button-secondary" onClick={openUpload}>
+              + Dateien hochladen
+            </button>
+          </div>
+        )}
       </div>
 
+      {hasNoFiles ? (
+        <EmptyState
+          title="Noch keine Dateien vorhanden"
+          description="Dokumente aus Protokollen und Abgaben sammeln sich hier – oder lade sie direkt hoch."
+          actions={
+            <button type="button" className="button-primary" onClick={openUpload}>
+              + Dateien hochladen
+            </button>
+          }
+          hint="Jede Datei wird beim Upload automatisch auf Viren geprüft."
+        />
+      ) : (
+      <>
       <div className="list-filter-row list-filter-row-compact">
         <FilterTabs options={SOURCE_OPTIONS} value={sourceFilter} onChange={(value) => setSourceFilter(value as SourceFilter)} />
         <div className="list-filter-search">
@@ -216,6 +237,8 @@ export function FilesView({ initialItems }: Props) {
       </div>
 
       <FilesTable items={items} onOpenDetail={setDetailItem} onNavigate={(href) => router.push(href as Route)} />
+      </>
+      )}
 
       {hasMore && (
         <div className="load-more-row" ref={loadMoreSentinelRef}>

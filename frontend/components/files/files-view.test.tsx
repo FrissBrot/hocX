@@ -106,7 +106,7 @@ describe("FilesView (Dateien)", () => {
 
   it("shows an empty state when there are no files", () => {
     render(<FilesView initialItems={[]} />);
-    expect(screen.getByText("Keine Dateien gefunden.")).toBeInTheDocument();
+    expect(screen.getByText("Noch keine Dateien vorhanden")).toBeInTheDocument();
   });
 
   it("shows a load-more sentinel once a full page has loaded", () => {

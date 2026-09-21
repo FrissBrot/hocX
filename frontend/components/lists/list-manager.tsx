@@ -2,6 +2,7 @@
 
 import { FormEvent, useMemo, useRef, useState } from "react";
 
+import { EmptyState } from "@/components/ui/empty-state";
 import { StructuredListTable } from "@/components/lists/structured-list-table";
 import { HistoricalEditConfirmModal, HistoricalViewBanner, ReconstructionBanner } from "@/components/ui/historical-view-banner";
 import { Modal } from "@/components/ui/modal";
@@ -426,10 +427,22 @@ export function ListManager({
       <div className="page-header">
         <div>
           <h1 className="page-title">Listen</h1>
-          <p className="muted">Alle Listen dieses Mandanten.</p>
+          <p className="muted">{lists.length === 0 ? "Frei definierbare Listen für Material, Ämter oder Anmeldungen." : "Alle Listen dieses Mandanten."}</p>
         </div>
-        <button type="button" className="button-secondary" onClick={openCreate}>Neue Liste</button>
+        {lists.length > 0 ? <button type="button" className="button-secondary" onClick={openCreate}>Neue Liste</button> : null}
       </div>
+      {lists.length === 0 ? (
+        <EmptyState
+          title="Noch keine Liste vorhanden"
+          description="Listen sind frei definierbare Tabellen – etwa Materialausleihe, Ämterverteilung oder Anmeldungen."
+          actions={
+            <button type="button" className="button-primary" onClick={openCreate}>
+              + Neue Liste
+            </button>
+          }
+          hint="Listen können als Quelle für Abgaben verwendet werden."
+        />
+      ) : (
       <div className="list-manager-layout">
 
         {/* Left sidebar */}
@@ -589,6 +602,7 @@ export function ListManager({
           )}
         </div>
       </div>
+      )}
 
       <Modal
         open={exportModalOpen}

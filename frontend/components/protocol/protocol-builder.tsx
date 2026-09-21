@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { DateInput } from "@/components/ui/date-input";
 import { FilterTabOption, FilterTabs } from "@/components/ui/filter-tabs";
 import { Menu, MenuItem, Popover } from "@/components/ui/popover";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -76,6 +77,8 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
   );
   const autoProtocolNumber = !!selectedTemplate?.protocol_number_pattern?.trim();
   const autoTitle = !!selectedTemplate?.title_pattern?.trim();
+
+  const hasNoProtocols = protocols.length === 0 && !hasMore;
 
   const sortedProtocols = useMemo(() => {
     return [...protocols]
@@ -215,19 +218,21 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
           <h1 className="page-title">Protokolle</h1>
           <p className="muted">Alle Sitzungsprotokolle dieses Mandanten.</p>
         </div>
-        {!readOnly ? (
+        {!readOnly && !hasNoProtocols ? (
           <button type="button" className="button-secondary" onClick={() => setShowCreateForm((c) => !c)}>
             {showCreateForm ? "Abbrechen" : "+ Neues Protokoll"}
           </button>
         ) : null}
       </div>
 
-      <div className="list-filter-row">
-        <FilterTabs options={STATUS_FILTER_OPTIONS} value={statusFilter} onChange={setStatusFilter} />
-        <div className="list-filter-search">
-          <SearchInput value={search} onChange={setSearch} placeholder="Protokolle durchsuchen" />
+      {hasNoProtocols ? null : (
+        <div className="list-filter-row">
+          <FilterTabs options={STATUS_FILTER_OPTIONS} value={statusFilter} onChange={setStatusFilter} />
+          <div className="list-filter-search">
+            <SearchInput value={search} onChange={setSearch} placeholder="Protokolle durchsuchen" />
+          </div>
         </div>
-      </div>
+      )}
 
       <Modal
         open={showCreateForm}
@@ -286,6 +291,25 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
         </form>
       </Modal>
 
+      {hasNoProtocols ? (
+        <EmptyState
+          title="Noch keine Protokolle erfasst"
+          description="Erstelle das erste Protokoll aus einer Vorlage oder importiere ein bestehendes Word-Dokument."
+          actions={
+            readOnly ? null : (
+              <>
+                <button type="button" className="button-primary" onClick={() => setShowCreateForm(true)}>
+                  + Neues Protokoll
+                </button>
+                <button type="button" className="button-secondary" onClick={() => router.push("/tools/word-import")}>
+                  Word-Dokument importieren
+                </button>
+              </>
+            )
+          }
+          hint="Aus Vorlagen erstellte Protokolle enthalten Traktanden, Anwesenheit und Todos bereits vorbereitet."
+        />
+      ) : (
       <article className="card">
         <div className="record-list">
           {sortedProtocols.map((protocol) => {
@@ -353,6 +377,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
 
         {sortedProtocols.length === 0 ? <p className="muted record-list-empty">Keine Protokolle gefunden.</p> : null}
       </article>
+      )}
 
       {hasMore && (
         <div className="load-more-row" ref={loadMoreSentinelRef}>

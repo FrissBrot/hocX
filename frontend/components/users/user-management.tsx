@@ -4,7 +4,9 @@ import { FormEvent, useMemo, useState } from "react";
 
 import { ROLE_OPTIONS } from "@/components/admin/admin-tenant-settings-modal";
 import { MfaAdminModal } from "@/components/security/mfa-admin-modal";
+import { formatRoleLabel } from "@/components/ui/app-shell-nav";
 import { DataTable } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
@@ -17,6 +19,13 @@ import { emptyUserForm, userFormToPayload, UserFormState } from "@/components/us
 type Props = {
   initialUsers: UserSummary[];
 };
+
+const ROLE_DESCRIPTIONS: { code: string; description: string }[] = [
+  { code: "admin", description: "Voller Zugriff innerhalb des Mandanten, inklusive Struktur (Vorlagen, Zyklen, Einstellungen) und Benutzerverwaltung." },
+  { code: "writer", description: "Arbeitet im Protokoll-Bereich mit und pflegt operative Daten, ändert aber weder Struktur noch Finanzen." },
+  { code: "kassier", description: "Wie Leser, zusätzlich voller Schreibzugriff auf Finanzen und Bussen." },
+  { code: "reader", description: "Nur Lesezugriff, kann PDF-Exporte auslösen und sieht nur die eigenen Bussen." },
+];
 
 function roleLabel(roleCode: string) {
   return ROLE_OPTIONS.find((role) => role.code === roleCode)?.label ?? roleCode;
@@ -37,6 +46,7 @@ export function UserManagement({ initialUsers }: Props) {
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState<string | null>(null);
   const [mfaModalUser, setMfaModalUser] = useState<UserSummary | null>(null);
+  const [rolesModalOpen, setRolesModalOpen] = useState(false);
 
   const activeUsers = useMemo(() => users.filter((user) => user.login_enabled), [users]);
   const usersWithoutLogin = useMemo(() => users.filter((user) => !user.login_enabled), [users]);
@@ -159,18 +169,40 @@ export function UserManagement({ initialUsers }: Props) {
     }
   }
 
+  // Nur das eigene Konto und keine Teilnehmer ohne Login: die Liste hätte nichts zu zeigen.
+  const hasOnlyOwnAccess = activeUsers.length <= 1 && usersWithoutLogin.length === 0;
+
   return (
     <div className="grid">
       <div className="page-header">
         <div>
           <h1 className="page-title">Benutzer</h1>
-          <p className="muted">Die Konten dieses Mandanten und ihre Rollen.</p>
+          <p className="muted">{hasOnlyOwnAccess ? "Zugänge und Rollen dieses Mandanten." : "Die Konten dieses Mandanten und ihre Rollen."}</p>
         </div>
-        <button type="button" className="button-secondary" onClick={openNewUser}>
-          Neuer Benutzer
-        </button>
+        {hasOnlyOwnAccess ? null : (
+          <button type="button" className="button-secondary" onClick={openNewUser}>
+            Neuer Benutzer
+          </button>
+        )}
       </div>
 
+      {hasOnlyOwnAccess ? (
+        <EmptyState
+          title="Nur dein eigener Zugang"
+          description="Lade weitere Personen ein und weise ihnen eine Rolle zu: Admin, Schreiber, Kassier oder Leser."
+          actions={
+            <>
+              <button type="button" className="button-primary" onClick={openNewUser}>
+                + Benutzer einladen
+              </button>
+              <button type="button" className="button-secondary" onClick={() => setRolesModalOpen(true)}>
+                Rollen erklären
+              </button>
+            </>
+          }
+        />
+      ) : (
+      <>
       <div className="list-filter-row">
         <FilterTabs
           options={[
@@ -259,6 +291,22 @@ export function UserManagement({ initialUsers }: Props) {
           ))}
         </DataTable>
       )}
+      </>
+      )}
+
+      <Modal open={rolesModalOpen} onClose={() => setRolesModalOpen(false)} title="Rollen erklären" description="Jedes Konto hat pro Mandant genau eine Rolle.">
+        <div className="grid">
+          {ROLE_DESCRIPTIONS.map((role) => (
+            <div key={role.code} className="field-stack">
+              <span className="field-label">{formatRoleLabel(role.code)}</span>
+              <span className="muted">{role.description}</span>
+            </div>
+          ))}
+        </div>
+        <div className="modal-actions">
+          <button type="button" className="button-ghost" onClick={() => setRolesModalOpen(false)}>Schliessen</button>
+        </div>
+      </Modal>
 
       <Modal
         open={userModalOpen}

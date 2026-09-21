@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { DataTable } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
 import { FilterTabOption, FilterTabs } from "@/components/ui/filter-tabs";
 import { SearchInput } from "@/components/ui/search-input";
 import { TagInput } from "@/components/ui/tag-input";
@@ -394,6 +395,9 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
     </div>
   );
 
+  const showEmptyState = filtered.length === 0 && !hasMore && statusFilter === "open" && !search.trim() && tagFilter === null;
+  const hasNoTodos = showEmptyState && activeTodos.length === 0;
+
   return (
     <div className="grid">
       <div className="page-header">
@@ -405,7 +409,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
           <button type="button" className="button-secondary button-ghost" onClick={() => setExportModalOpen(true)}>
             Export
           </button>
-          {canEdit && (
+          {canEdit && !showEmptyState && (
             <button type="button" className="button-secondary" onClick={() => setShowCreate(true)}>
               + Todo
             </button>
@@ -413,6 +417,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
         </div>
       </div>
 
+      {hasNoTodos ? null : (
       <div className="list-filter-row">
         <div className="table-toolbar-actions">
           {allTodos !== null && <FilterTabs options={SCOPE_OPTIONS} value={scope} onChange={setScope} />}
@@ -430,7 +435,27 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
           <SearchInput value={search} onChange={setSearch} placeholder="Todos durchsuchen" />
         </div>
       </div>
+      )}
 
+      {showEmptyState ? (
+        <EmptyState
+          title="Keine offenen Todos"
+          description="Todos entstehen direkt in Protokollen oder werden hier manuell erfasst und einer Person zugewiesen."
+          actions={
+            <>
+              {canEdit ? (
+                <button type="button" className="button-primary" onClick={() => setShowCreate(true)}>
+                  + Todo
+                </button>
+              ) : null}
+              <button type="button" className="button-secondary" onClick={() => setStatusFilter("done")}>
+                Erledigte anzeigen
+              </button>
+            </>
+          }
+          hint="Im Protokoll-Editor erfasste Todos erscheinen automatisch in dieser Liste."
+        />
+      ) : (
       <DataTable
         className="data-table-lg data-table-todos"
         columns={[
@@ -519,6 +544,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
           );
         })}
       </DataTable>
+      )}
 
       {hasMore && (
         <div className="load-more-row" ref={loadMoreSentinelRef}>

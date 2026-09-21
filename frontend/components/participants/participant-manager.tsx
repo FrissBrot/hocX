@@ -3,6 +3,7 @@
 import { ChangeEvent, FormEvent, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import { DataTable } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
@@ -310,13 +311,16 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
     }
   }
 
+  const hasNoParticipants = participants.length === 0 && !hasMore;
+
   return (
     <div className="grid">
       <div className="page-header">
         <div>
           <h1 className="page-title">Teilnehmer</h1>
-          <p className="muted">Mandantenweite Personen, die später Templates und Todos zugeordnet werden können.</p>
+          <p className="muted">{hasNoParticipants ? "Mitglieder und Gäste dieses Mandanten." : "Mandantenweite Personen, die später Templates und Todos zugeordnet werden können."}</p>
         </div>
+        {hasNoParticipants ? null : (
         <div className="table-toolbar-actions">
           <label className="button-secondary button-ghost participant-import-button">
             CSV-Import
@@ -334,8 +338,27 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
             Neuer Teilnehmer
           </button>
         </div>
+        )}
       </div>
 
+      {hasNoParticipants ? (
+        <EmptyState
+          title="Noch keine Teilnehmer erfasst"
+          description="Erfasse Mitglieder einzeln oder importiere eine bestehende Liste – danach stehen sie in Anwesenheit, Todos und Bussen zur Verfügung."
+          actions={
+            <>
+              <button type="button" className="button-primary" onClick={openCreate}>
+                + Teilnehmer
+              </button>
+              <label className="button-secondary participant-import-button">
+                Liste importieren
+                <input type="file" accept=".csv,text/csv" onChange={(e) => void handleCsvFileSelected(e)} hidden />
+              </label>
+            </>
+          }
+        />
+      ) : (
+      <>
       <div className="list-filter-row">
         <div className="status-row">
           <span className="pill">{selectedParticipantIds.length} ausgewählt</span>
@@ -406,6 +429,8 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
           );
         })}
       </DataTable>
+      </>
+      )}
 
       {hasMore && (
         <div className="load-more-row" ref={loadMoreSentinelRef}>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { GalleryUploadModal } from "./gallery-upload-modal";
 import { GalleryUploadProgress } from "./gallery-upload-progress";
@@ -11,6 +12,7 @@ import { PhotoBulkBar } from "./photo-bulk-bar";
 import { PhotoDateGroups } from "./photo-date-groups";
 import { PhotoSimilarSeries } from "./photo-similar-series";
 import { PhotoViewer } from "./photo-viewer";
+import { EmptyState } from "@/components/ui/empty-state";
 import { FileDropOverlay } from "@/components/ui/file-drop-overlay";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -45,6 +47,7 @@ type Props = {
 
 export function PhotosView({ albumId, onSelectPhoto }: Props) {
   const embedded = Boolean(albumId) || Boolean(onSelectPhoto);
+  const router = useRouter();
   const showToast = useToast();
 
   const [tab, setTab] = useState<Tab>("all");
@@ -409,6 +412,45 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
                 </div>
               ))}
             </div>
+          ) : items.length === 0 && !embedded && !search.trim() && tagFilter.length === 0 ? (
+            <EmptyState
+              icon="image"
+              title="Noch keine Fotos vorhanden"
+              description="Sobald Bilder in Protokollen eingefügt, über eine Abgabebox eingereicht oder hier hochgeladen werden, erscheinen sie in dieser Galerie."
+              actions={
+                <>
+                  <button
+                    type="button"
+                    className="button-primary"
+                    onClick={() => {
+                      setDroppedFiles([]);
+                      setUploadModalOpen(true);
+                    }}
+                  >
+                    + Bilder hochladen
+                  </button>
+                  <button type="button" className="button-secondary" onClick={() => router.push("/submission-assignments")}>
+                    Abgabebox erstellen
+                  </button>
+                </>
+              }
+              hint={
+                <div className="empty-state-sources">
+                  <div>
+                    <strong>Aus Protokollen</strong>
+                    <span>Bilder aus dem Protokoll-Editor</span>
+                  </div>
+                  <div>
+                    <strong>Aus Abgaben</strong>
+                    <span>Einreichungen über Abgabeboxen</span>
+                  </div>
+                  <div>
+                    <strong>Direkt hochgeladen</strong>
+                    <span>Galerie-Upload</span>
+                  </div>
+                </div>
+              }
+            />
           ) : items.length === 0 ? (
             <p className="muted">Keine Fotos gefunden.</p>
           ) : onSelectPhoto ? (

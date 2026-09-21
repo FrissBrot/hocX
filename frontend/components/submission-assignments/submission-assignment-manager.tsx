@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 
 import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Modal } from "@/components/ui/modal";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
@@ -684,13 +685,15 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
     return `Quelle: ${source} · ${deadline}`;
   }
 
+  const hasNoAssignments = assignments.length === 0;
+
   return (
     <div className="grid subm-root">
       {/* Header — always visible, including ClamAV status */}
       <div className="page-header">
         <div>
           <h1 className="page-title">Abgaben</h1>
-          <p className="muted">Externe Abgaben ohne Anmeldung — gekoppelt an Termine oder eine Liste.</p>
+          <p className="muted">{hasNoAssignments ? "Öffentliche Abgabeboxen für Dokumente und Formulare." : "Externe Abgaben ohne Anmeldung — gekoppelt an Termine oder eine Liste."}</p>
         </div>
         <div className="subm-toolbar-actions">
           <span className={`subm-clamav subm-clamav-${clamavStatus}`}>
@@ -700,12 +703,27 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
           <button type="button" className="button-ghost" onClick={() => setLinksModalOpen(true)}>
             Links ({links.length})
           </button>
-          <button type="button" className="button-secondary subm-new-button" onClick={openCreate}>
-            <PlusIcon /> Abgabe
-          </button>
+          {hasNoAssignments ? null : (
+            <button type="button" className="button-secondary subm-new-button" onClick={openCreate}>
+              <PlusIcon /> Abgabe
+            </button>
+          )}
         </div>
       </div>
 
+      {hasNoAssignments ? (
+        <EmptyState
+          title="Keine Abgaben eingerichtet"
+          description="Mit einer Abgabebox sammelst du Dokumente und Bilder über einen öffentlichen Link – ohne Login für die Einreichenden."
+          actions={
+            <button type="button" className="button-primary" onClick={openCreate}>
+              + Abgabe
+            </button>
+          }
+          hint="Eingereichte Bilder landen automatisch in der Fotogalerie, Dokumente unter Dateien."
+        />
+      ) : (
+      <>
       <div className="list-filter-row">
         <div />
         <div className="list-filter-search">
@@ -721,7 +739,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
       <DataTable
         className="data-table-lg"
         columns={["Titel", "Quelle / Zeitraum", "Fortschritt", "Aktionen"]}
-        emptyMessage={assignments.length === 0 ? "Noch keine Abgaben" : "Keine Treffer"}
+        emptyMessage="Keine Treffer"
       >
           {filteredAssignments.map((assignment) => (
             <tr
@@ -763,6 +781,8 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
             </tr>
           ))}
       </DataTable>
+      </>
+      )}
 
       {/* Assignment detail popup — participants + progress */}
       <Modal

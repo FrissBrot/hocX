@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { FineCreateModal } from "@/components/finances/fine-create-modal";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
@@ -38,6 +40,7 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [hasMore, setHasMore] = useState(initialFines.length === PAGE_SIZE);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const accountMap = new Map(accounts.map((a) => [a.id, a]));
 
@@ -132,6 +135,20 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
     }
   }
 
+  async function reloadFines() {
+    try {
+      const latest = await browserApiFetch<AttendanceFineListItem[]>(`/api/fines?limit=${PAGE_SIZE}`);
+      setFines(latest ?? []);
+      setHasMore((latest ?? []).length === PAGE_SIZE);
+      setCreateOpen(false);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Bussen konnten nicht geladen werden", "error");
+    }
+  }
+
+  const hasNoFines = fines.length === 0 && !hasMore;
+  const canCreate = canWrite && accounts.length > 0;
+
   const sd = (key: SortKey) => (sortKey === key ? sortDirection : null);
 
   return (
@@ -143,6 +160,21 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
         </div>
       </div>
 
+      {hasNoFines ? (
+        <EmptyState
+          title="Noch keine Bussen erfasst"
+          description="Bussen entstehen aus der Anwesenheitskontrolle eines Protokolls oder werden hier manuell hinzugefügt."
+          actions={
+            canCreate ? (
+              <button type="button" className="button-primary" onClick={() => setCreateOpen(true)}>
+                + Busse
+              </button>
+            ) : null
+          }
+          hint="Verspätungen und unentschuldigte Absenzen lassen sich pro Protokoll automatisch verbuchen."
+        />
+      ) : (
+      <>
       <div className="list-filter-row">
         <FilterTabs
           options={[
@@ -234,6 +266,8 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
           );
         })}
       </DataTable>
+      </>
+      )}
 
       {hasMore && (
         <div className="load-more-row" ref={loadMoreSentinelRef}>
@@ -246,6 +280,8 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
           )}
         </div>
       )}
+
+      <FineCreateModal open={createOpen} accounts={accounts} onClose={() => setCreateOpen(false)} onCreated={() => void reloadFines()} />
     </div>
   );
 }

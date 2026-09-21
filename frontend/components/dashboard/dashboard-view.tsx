@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { EmptyState } from "@/components/ui/empty-state";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { FINE_TYPE_LABEL } from "@/lib/constants/fine-types";
@@ -14,6 +15,9 @@ type Props = {
   fines: AttendanceFineListItem[];
   nextSession: NextSessionInfo;
   canExcuse: boolean;
+  canWrite: boolean;
+  hasProtocols: boolean;
+  canConfigure: boolean;
 };
 
 function isTodoDone(todo: TodoListItem): boolean {
@@ -35,7 +39,7 @@ function sessionCountdownLabel(dateStr: string): string {
   return "";
 }
 
-export function DashboardView({ todos, fines, nextSession, canExcuse }: Props) {
+export function DashboardView({ todos, fines, nextSession, canExcuse, canWrite, hasProtocols, canConfigure }: Props) {
   const router = useRouter();
   const showToast = useToast();
   const [entries, setEntries] = useState<NextSessionAttendanceEntry[]>(nextSession.entries);
@@ -86,6 +90,40 @@ export function DashboardView({ todos, fines, nextSession, canExcuse }: Props) {
     } finally {
       setBusy((b) => ({ ...b, [entry.participant_id]: false }));
     }
+  }
+
+  if (!hasProtocols && !protocol) {
+    return (
+      <div className="grid">
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Dashboard</h1>
+            <p className="muted">Überblick über Protokolle, Todos und Termine.</p>
+          </div>
+        </div>
+        <EmptyState
+          title="Hier entsteht dein Überblick"
+          description="Sobald das erste Protokoll läuft, zeigt das Dashboard offene Todos, kommende Termine und Kennzahlen deines Mandanten."
+          actions={
+            canWrite || canConfigure ? (
+              <>
+                {canWrite ? (
+                  <button type="button" className="button-primary" onClick={() => router.push("/protocols")}>
+                    + Neues Protokoll
+                  </button>
+                ) : null}
+                {canConfigure ? (
+                  <button type="button" className={canWrite ? "button-secondary" : "button-primary"} onClick={() => router.push("/templates")}>
+                    Vorlage einrichten
+                  </button>
+                ) : null}
+              </>
+            ) : null
+          }
+          hint="Tipp: Beginne mit einer Vorlage – sie bestimmt, welche Elemente jedes Protokoll enthält."
+        />
+      </div>
+    );
   }
 
   return (
