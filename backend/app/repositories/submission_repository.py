@@ -6,7 +6,9 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.models import (
+    CycleConfig,
     Event,
+    EventCycle,
     GalleryImage,
     ListDefinition,
     ListEntry,
@@ -20,6 +22,9 @@ from app.models import (
     Tenant,
 )
 from app.services import public_id_service
+
+# element_ref des einzigen Elements einer manuellen Abgabe (weder Termin noch Listen-Eintrag).
+MANUAL_ELEMENT_REF = "manual"
 
 
 class SubmissionRepository:
@@ -55,13 +60,29 @@ class SubmissionRepository:
         db.delete(assignment)
         db.commit()
 
-    def list_events_by_tag(self, db: Session, *, tenant_id: int, tag: str) -> list[Event]:
-        statement = (
-            select(Event)
-            .where(Event.tenant_id == tenant_id, Event.tag == tag)
-            .order_by(Event.event_date.asc(), Event.id.asc())
-        )
-        return list(db.scalars(statement))
+    def get_cycle_config(self, db: Session, cycle_config_id: int) -> CycleConfig | None:
+        return db.get(CycleConfig, cycle_config_id)
+
+    def list_events_by_tag(
+        self,
+        db: Session,
+        *,
+        tenant_id: int,
+        tag: str,
+        cycle_config_id: int | None = None,
+        cycle_years: set[int] | None = None,
+    ) -> list[Event]:
+        statement = select(Event).where(Event.tenant_id == tenant_id, Event.tag == tag)
+        if cycle_config_id is not None:
+            statement = statement.where(
+                Event.id.in_(
+                    select(EventCycle.event_id).where(
+                        EventCycle.cycle_config_id == cycle_config_id,
+                        EventCycle.cycle_year.in_(cycle_years or set()),
+                    )
+                )
+            )
+        return list(db.scalars(statement.order_by(Event.event_date.asc(), Event.id.asc())))
 
     def get_event(self, db: Session, event_id: int) -> Event | None:
         return db.get(Event, event_id)
@@ -168,7 +189,12 @@ class SubmissionRepository:
         for row in db.execute(statement):
             event_id = row.event_id
             list_entry_id = row.list_entry_id
-            element_ref = f"event-{event_id}" if event_id is not None else f"entry-{list_entry_id}"
+            if event_id is not None:
+                element_ref = f"event-{event_id}"
+            elif list_entry_id is not None:
+                element_ref = f"entry-{list_entry_id}"
+            else:
+                element_ref = MANUAL_ELEMENT_REF
             result.append((row.StoredFile, element_ref))
         return result
 

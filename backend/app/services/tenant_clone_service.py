@@ -214,7 +214,7 @@ class TenantCloneService:
         )
         self._clone_template_participants(db, template_map=template_map, participant_map=participant_map)
         submission_assignment_map = self._clone_submission_assignments(
-            db, source.id, new_tenant.id, list_definition_map=list_definition_map
+            db, source.id, new_tenant.id, list_definition_map=list_definition_map, cycle_config_map=cycle_config_map
         )
         self._clone_submission_links(db, source.id, new_tenant.id, submission_assignment_map=submission_assignment_map)
         submission_upload_map = self._clone_submission_uploads(
@@ -608,7 +608,13 @@ class TenantCloneService:
         return id_map
 
     def _clone_submission_assignments(
-        self, db: Session, source_tenant_id: int, new_tenant_id: int, *, list_definition_map: dict[int, int]
+        self,
+        db: Session,
+        source_tenant_id: int,
+        new_tenant_id: int,
+        *,
+        list_definition_map: dict[int, int],
+        cycle_config_map: dict[int, int],
     ) -> dict[int, int]:
         rows = db.scalars(select(SubmissionAssignment).where(SubmissionAssignment.tenant_id == source_tenant_id)).all()
         id_map: dict[int, int] = {}
@@ -616,6 +622,7 @@ class TenantCloneService:
             new_row = _copy_row(row, {
                 "tenant_id": new_tenant_id,
                 "list_definition_id": list_definition_map.get(row.list_definition_id) if row.list_definition_id else None,
+                "cycle_config_id": cycle_config_map.get(row.cycle_config_id) if row.cycle_config_id else None,
             })
             db.add(new_row)
             db.flush()

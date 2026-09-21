@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.cycle_utils import format_cycle_name, get_cycle_year
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, require_admin, require_reader
-from app.models.entities import CycleConfig, Protocol, Template
+from app.models.entities import CycleConfig, Protocol, SubmissionAssignment, Template
 from app.schemas.cycle_config import CycleConfigCreate, CycleConfigRead, CycleConfigUpdate, CycleInfo
 from app.services import public_id_service
 
@@ -103,6 +103,8 @@ def delete_cycle_config(
     in_use = db.scalar(select(Template.id).where(Template.cycle_config_id == obj.id).limit(1))
     if in_use:
         raise HTTPException(status_code=409, detail="Cycle config is still assigned to one or more templates")
+    if db.scalar(select(SubmissionAssignment.id).where(SubmissionAssignment.cycle_config_id == obj.id).limit(1)):
+        raise HTTPException(status_code=409, detail="Cycle config is still used by one or more submission assignments")
     try:
         db.delete(obj)
         db.commit()

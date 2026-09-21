@@ -24,9 +24,10 @@ from datetime import date, timedelta
 import pytest
 from sqlalchemy import select
 
-from app.models.entities import StoredFile, SubmissionAssignment, SubmissionUpload, SubmissionUploadFile
+from app.core.cycle_utils import get_cycle_year
+from app.models.entities import EventCycle, StoredFile, SubmissionAssignment, SubmissionUpload, SubmissionUploadFile
 from app.services.submission_service import SubmissionService
-from tests.factories import make_event, make_list_definition, make_list_entry, make_tenant
+from tests.factories import make_cycle_config, make_event, make_list_definition, make_list_entry, make_tenant
 
 
 def _make_tagged_event(db, tenant_id: int, title: str, event_date: date, tag: str = "lager"):
@@ -294,6 +295,130 @@ def test_create_assignment_rejects_events_type_with_list_fields_set(db):
         service.create_assignment(db, payload, tenant_id=tenant.id)
 
 
+# --- Zyklus-Filter der Termin-Abgabe -------------------------------------------------------
+
+
+def _cycle_event_assignment(db, tenant_id: int, cycle_config_id: int | None, offsets: list[int]) -> SubmissionAssignment:
+    assignment = SubmissionAssignment(
+        tenant_id=tenant_id, title="Lagerfotos", public_slug="lagerfotos", source_type="events", tag_filter="lager",
+        cycle_config_id=cycle_config_id, cycle_offsets=offsets,
+    )
+    db.add(assignment)
+    db.flush()
+    return assignment
+
+
+def _events_in_cycles(db, tenant_id: int, cycle_config_id: int):
+    """Drei Termine mit Tag 'lager' in Zyklus aktuell / -1 / -2 und einer ohne Zyklus-Zuordnung."""
+    current = get_cycle_year(date.today(), 12, 31)
+    events = {}
+    for name, offset in (("aktuell", 0), ("vorher", -1), ("vorvorher", -2)):
+        event = _make_tagged_event(db, tenant_id, name, date.today())
+        db.add(EventCycle(event_id=event.id, cycle_config_id=cycle_config_id, cycle_year=current + offset))
+        events[name] = event
+    events["ohne"] = _make_tagged_event(db, tenant_id, "ohne", date.today())
+    db.flush()
+    return events
+
+
+def _labels(db, assignment) -> set[str]:
+    return {e.title for e in SubmissionService().list_assignment_events(db, assignment)}
+
+
+def test_events_assignment_without_cycle_filter_includes_all_tagged_events(db):
+    tenant = make_tenant(db)
+    config = make_cycle_config(db, tenant.id)
+    _events_in_cycles(db, tenant.id, config.id)
+    assignment = _cycle_event_assignment(db, tenant.id, None, [])
+
+    assert _labels(db, assignment) == {"aktuell", "vorher", "vorvorher", "ohne"}
+
+
+def test_events_assignment_cycle_filter_current_only(db):
+    tenant = make_tenant(db)
+    config = make_cycle_config(db, tenant.id)
+    _events_in_cycles(db, tenant.id, config.id)
+    assignment = _cycle_event_assignment(db, tenant.id, config.id, [0])
+
+    assert _labels(db, assignment) == {"aktuell"}
+
+
+def test_events_assignment_cycle_filter_current_and_previous(db):
+    tenant = make_tenant(db)
+    config = make_cycle_config(db, tenant.id)
+    _events_in_cycles(db, tenant.id, config.id)
+    assignment = _cycle_event_assignment(db, tenant.id, config.id, [0, -1])
+
+    assert _labels(db, assignment) == {"aktuell", "vorher"}
+
+
+def test_events_assignment_cycle_filter_previous_only(db):
+    tenant = make_tenant(db)
+    config = make_cycle_config(db, tenant.id)
+    _events_in_cycles(db, tenant.id, config.id)
+    assignment = _cycle_event_assignment(db, tenant.id, config.id, [-1])
+
+    assert _labels(db, assignment) == {"vorher"}
+
+
+def test_create_assignment_rejects_cycle_config_without_offsets(db):
+    from app.schemas.submission import SubmissionAssignmentCreate
+
+    tenant = make_tenant(db)
+    config = make_cycle_config(db, tenant.id)
+    payload = SubmissionAssignmentCreate(
+        title="X", public_slug="x", source_type="events", tag_filter="lager", cycle_config_id=config.public_id, cycle_offsets=[],
+    )
+
+    with pytest.raises(ValueError):
+        SubmissionService().create_assignment(db, payload, tenant_id=tenant.id)
+
+
+def test_create_assignment_rejects_cycle_filter_on_list_assignment(db):
+    from app.schemas.submission import SubmissionAssignmentCreate
+
+    tenant = make_tenant(db)
+    config = make_cycle_config(db, tenant.id)
+    list_definition = make_list_definition(db, tenant.id)
+    payload = SubmissionAssignmentCreate(
+        title="X", public_slug="x", source_type="list", list_definition_id=list_definition.public_id,
+        cycle_config_id=config.public_id, cycle_offsets=[0],
+    )
+
+    with pytest.raises(ValueError):
+        SubmissionService().create_assignment(db, payload, tenant_id=tenant.id)
+
+
+def test_create_assignment_rejects_foreign_tenants_cycle_config(db):
+    from app.schemas.submission import SubmissionAssignmentCreate
+
+    tenant = make_tenant(db)
+    foreign_config = make_cycle_config(db, make_tenant(db).id)
+    payload = SubmissionAssignmentCreate(
+        title="X", public_slug="x", source_type="events", tag_filter="lager",
+        cycle_config_id=foreign_config.public_id, cycle_offsets=[0],
+    )
+
+    with pytest.raises(ValueError):
+        SubmissionService().create_assignment(db, payload, tenant_id=tenant.id)
+
+
+def test_create_assignment_stores_cycle_filter_deduplicated_and_sorted(db):
+    from app.schemas.submission import SubmissionAssignmentCreate
+
+    tenant = make_tenant(db)
+    config = make_cycle_config(db, tenant.id)
+    payload = SubmissionAssignmentCreate(
+        title="X", public_slug="x", source_type="events", tag_filter="lager",
+        cycle_config_id=config.public_id, cycle_offsets=[-1, 0, -1],
+    )
+
+    created = SubmissionService().create_assignment(db, payload, tenant_id=tenant.id)
+
+    assert created.cycle_config_id == config.public_id
+    assert created.cycle_offsets == [0, -1]
+
+
 # --- count_submissions_summary -----------------------------------------------------------
 
 
@@ -331,3 +456,106 @@ def test_create_assignment_rejects_list_type_without_list_definition(db):
 
     with pytest.raises(ValueError, match="list_definition_id"):
         service.create_assignment(db, payload, tenant_id=tenant.id)
+
+
+# --- manuelle Abgaben (weder Termine noch Liste, Migration 0080) ------------------------------
+
+
+def _make_manual_assignment(db, tenant_id: int, *, deadline: date | None = None) -> SubmissionAssignment:
+    assignment = SubmissionAssignment(
+        tenant_id=tenant_id,
+        title="Vereinsfotos",
+        public_slug="vereinsfotos",
+        source_type="manual",
+        deadline=deadline,
+    )
+    db.add(assignment)
+    db.flush()
+    return assignment
+
+
+def _make_manual_upload(db, *, assignment_id: int, tenant_id: int, filename: str) -> SubmissionUpload:
+    upload = SubmissionUpload(assignment_id=assignment_id, status="submitted", submitted_at=None)
+    db.add(upload)
+    db.flush()
+    stored_file = StoredFile(tenant_id=tenant_id, original_name=filename, mime_type="application/pdf", storage_path=f"abgabebox/{filename}")
+    db.add(stored_file)
+    db.flush()
+    db.add(SubmissionUploadFile(upload_id=upload.id, stored_file_id=stored_file.id))
+    db.commit()
+    db.refresh(upload)
+    return upload
+
+
+def test_create_manual_assignment_has_a_single_element_named_like_the_assignment(db):
+    from app.schemas.submission import SubmissionAssignmentCreate
+
+    tenant = make_tenant(db)
+    service = SubmissionService()
+    payload = SubmissionAssignmentCreate(title="Vereinsfotos", public_slug="vereinsfotos", source_type="manual")
+
+    created = service.create_assignment(db, payload, tenant_id=tenant.id)
+    assignment = service.repository.get_assignment_by_public_id(db, created.id, tenant_id=tenant.id)
+    elements = service.get_assignment_elements(db, assignment)
+
+    assert created.source_type == "manual"
+    assert [(e.element_ref, e.label, e.status) for e in elements] == [("manual", "Vereinsfotos", "open")]
+
+
+def test_manual_assignment_element_collects_files_and_can_be_closed_and_reopened(db):
+    tenant = make_tenant(db)
+    assignment = _make_manual_assignment(db, tenant.id)
+    _make_manual_upload(db, assignment_id=assignment.id, tenant_id=tenant.id, filename="a.pdf")
+    service = SubmissionService()
+
+    assert service.get_assignment_elements(db, assignment)[0].status == "submitted"
+    assert [f.original_name for f in service.get_assignment_elements(db, assignment)[0].files] == ["a.pdf"]
+
+    closed = service.close_element(db, assignment, "manual")
+    assert closed.status == "closed"
+    assert len(closed.files) == 1
+
+    reopened = service.reopen_element(db, assignment, "manual")
+    assert reopened.status == "submitted"
+
+
+def test_manual_assignment_is_counted_in_the_summary(db):
+    tenant = make_tenant(db)
+    assignment = _make_manual_assignment(db, tenant.id)
+    _make_manual_upload(db, assignment_id=assignment.id, tenant_id=tenant.id, filename="a.pdf")
+    _make_manual_upload(db, assignment_id=assignment.id, tenant_id=tenant.id, filename="b.pdf")
+    service = SubmissionService()
+
+    counts = service.repository.count_submissions_summary(db, assignment_id=assignment.id)
+
+    assert counts["submitted"] == 1
+
+
+def test_manual_assignment_rejects_event_and_list_fields(db):
+    from app.schemas.submission import SubmissionAssignmentCreate
+
+    tenant = make_tenant(db)
+    service = SubmissionService()
+
+    with pytest.raises(ValueError, match="manuellen"):
+        service.create_assignment(
+            db,
+            SubmissionAssignmentCreate(title="X", public_slug="x", source_type="manual", tag_filter="lager"),
+            tenant_id=tenant.id,
+        )
+    with pytest.raises(ValueError, match="manuellen"):
+        service.create_assignment(
+            db,
+            SubmissionAssignmentCreate(title="X", public_slug="x", source_type="manual", offset_days_before=3),
+            tenant_id=tenant.id,
+        )
+
+
+def test_manual_assignment_accepts_an_optional_deadline(db):
+    tenant = make_tenant(db)
+    assignment = _make_manual_assignment(db, tenant.id, deadline=date(2026, 12, 31))
+    service = SubmissionService()
+
+    element = service.get_assignment_elements(db, assignment)[0]
+
+    assert element.window_end == date(2026, 12, 31)

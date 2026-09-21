@@ -51,6 +51,8 @@ submission_assignment_table = Table(
     Column("tag_filter", Text),
     Column("offset_days_before", Integer),
     Column("offset_days_after", Integer),
+    Column("cycle_config_id", BigInteger),
+    Column("cycle_offsets", JSONB),
     Column("list_definition_id", BigInteger),
     Column("deadline", Date),
     Column("allowed_file_types", JSONB),
@@ -58,6 +60,25 @@ submission_assignment_table = Table(
     Column("max_file_size_mb", Integer),
     Column("is_active", Boolean),
     Column("sort_order", Text),
+)
+
+# cycle_config/event_cycle: nur fuer den Zyklus-Filter der Termin-Abgaben. Spalten-SELECT
+# (id, reset_month, reset_day) bzw. (event_id, cycle_config_id, cycle_year), siehe Migration
+# 0079_submission_cycle_filter - nie name/name_pattern.
+cycle_config_table = Table(
+    "cycle_config",
+    metadata,
+    Column("id", BigInteger, primary_key=True),
+    Column("reset_month", Integer),
+    Column("reset_day", Integer),
+)
+
+event_cycle_table = Table(
+    "event_cycle",
+    metadata,
+    Column("event_id", BigInteger, primary_key=True),
+    Column("cycle_config_id", BigInteger, primary_key=True),
+    Column("cycle_year", Integer, primary_key=True),
 )
 
 event_table = Table(

@@ -6,12 +6,15 @@ from typing import Annotated, ClassVar, Literal
 
 from pydantic import BaseModel, Field, StringConstraints
 
-from app.models.entities import ListDefinition, Tenant
+from app.models.entities import CycleConfig, ListDefinition, Tenant
 from app.schemas.base import PublicIdModel
 
-SubmissionSourceType = Literal["events", "list"]
+SubmissionSourceType = Literal["events", "list", "manual"]
 SubmissionElementStatus = Literal["open", "submitted", "closed"]
 SubmissionSortOrder = Literal["alphabetical", "date", "proximity"]
+
+# 0 = aktueller Zyklus, -1 = vorheriger usw. (siehe SubmissionAssignment.cycle_offsets)
+CycleOffset = Annotated[int, Field(ge=-20, le=0)]
 
 SLUG_PATTERN = r"^[a-z0-9-]+$"
 
@@ -25,6 +28,8 @@ class SubmissionAssignmentBase(BaseModel):
     tag_filter: str | None = None
     offset_days_before: int | None = Field(default=None, ge=0)
     offset_days_after: int | None = Field(default=None, ge=0)
+    cycle_config_id: uuid.UUID | None = None
+    cycle_offsets: list[CycleOffset] = Field(default_factory=list)
     list_definition_id: uuid.UUID | None = None
     deadline: date | None = None
     allowed_file_types: list[str] = Field(default_factory=list)
@@ -49,6 +54,8 @@ class SubmissionAssignmentUpdate(BaseModel):
     tag_filter: str | None = None
     offset_days_before: int | None = Field(default=None, ge=0)
     offset_days_after: int | None = Field(default=None, ge=0)
+    cycle_config_id: uuid.UUID | None = None
+    cycle_offsets: list[CycleOffset] | None = None
     list_definition_id: uuid.UUID | None = None
     deadline: date | None = None
     allowed_file_types: list[str] | None = None
@@ -61,7 +68,7 @@ class SubmissionAssignmentUpdate(BaseModel):
 
 
 class SubmissionAssignmentRead(PublicIdModel, SubmissionAssignmentBase):
-    _fk_models: ClassVar[dict[str, type]] = {"tenant_id": Tenant, "list_definition_id": ListDefinition}
+    _fk_models: ClassVar[dict[str, type]] = {"tenant_id": Tenant, "list_definition_id": ListDefinition, "cycle_config_id": CycleConfig}
 
     id: uuid.UUID
     tenant_id: uuid.UUID

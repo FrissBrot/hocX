@@ -14,6 +14,33 @@ from sqlalchemy.orm import Session
 
 from app import repository
 
+# element_ref des einzigen Elements einer manuellen Abgabe (Duplikation aus
+# backend/app/repositories/submission_repository.py, siehe Modul-Docstring).
+MANUAL_ELEMENT_REF = "manual"
+
+
+def _reset_boundary(year: int, reset_month: int, reset_day: int) -> date:
+    """Bewusste Duplikation aus backend/app/core/cycle_utils.py (siehe Modul-Docstring): der
+    Reset-Tag wird auf den letzten gueltigen Tag des Monats gekappt (z.B. 30./31. Februar)."""
+    try:
+        return date(year, reset_month, reset_day)
+    except ValueError:
+        import calendar
+
+        return date(year, reset_month, min(reset_day, calendar.monthrange(year, reset_month)[1]))
+
+
+def _cycle_years(today: date, reset_month: int, reset_day: int, offsets: list[int]) -> set[int]:
+    """Startjahre der Zyklen, die per Offset (0 = aktueller Zyklus, -1 = vorheriger, ...)
+    gewaehlt sind. Bewusste Duplikation aus cycle_years_for_offsets()/get_cycle_year() in
+    backend/app/core/cycle_utils.py."""
+    boundary = _reset_boundary(today.year, reset_month, reset_day)
+    if today <= boundary:
+        cycle_start = _reset_boundary(today.year - 1, reset_month, reset_day) + timedelta(days=1)
+    else:
+        cycle_start = boundary + timedelta(days=1)
+    return {cycle_start.year + offset for offset in offsets}
+
 
 def _participant_initials(participant: dict) -> str:
     """Initialen statt vollem Namen.
@@ -95,7 +122,21 @@ def resolve_open_elements(db: Session, assignment: dict) -> list[dict]:
     elements: list[dict] = []
     sort_dates: dict[str, date | None] = {}
     if assignment["source_type"] == "events":
-        events = repository.list_events_by_tag(db, tenant_id=assignment["tenant_id"], tag=assignment["tag_filter"])
+        cycle_config_id = assignment.get("cycle_config_id")
+        cycle_years: set[int] | None = None
+        if cycle_config_id is not None:
+            config = repository.get_cycle_config(db, cycle_config_id=cycle_config_id)
+            cycle_years = (
+                _cycle_years(today, config["reset_month"], config["reset_day"], assignment.get("cycle_offsets") or [])
+                if config is not None else set()
+            )
+        events = repository.list_events_by_tag(
+            db,
+            tenant_id=assignment["tenant_id"],
+            tag=assignment["tag_filter"],
+            cycle_config_id=cycle_config_id,
+            cycle_years=cycle_years,
+        )
         for event in events:
             offset_before = assignment["offset_days_before"]
             offset_after = assignment["offset_days_after"]
@@ -128,6 +169,22 @@ def resolve_open_elements(db: Session, assignment: dict) -> list[dict]:
     deadline = assignment["deadline"]
     if deadline is not None and today > deadline:
         return []
+    if assignment["source_type"] == "manual":
+        # Genau ein Element: die Abgabe selbst (weder Termin noch Listen-Eintrag dahinter).
+        # Bewusste Duplikation von SubmissionService._resolve_raw_elements, siehe Modul-Docstring.
+        if latest_status.get((None, None)) == "closed":
+            return []
+        return [
+            {
+                "element_ref": MANUAL_ELEMENT_REF,
+                "event_id": None,
+                "list_entry_id": None,
+                "label": assignment["title"],
+                "window_start": None,
+                "window_end": deadline.isoformat() if deadline else None,
+                "uploaded_count": file_counts.get((None, None), 0),
+            }
+        ]
     definition = repository.get_list_definition(db, list_definition_id=assignment["list_definition_id"])
     if definition is None:
         return []

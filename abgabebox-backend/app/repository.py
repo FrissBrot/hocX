@@ -10,6 +10,8 @@ from sqlalchemy import func, insert, select
 from sqlalchemy.orm import Session
 
 from app.models import (
+    cycle_config_table,
+    event_cycle_table,
     event_table,
     list_definition_table,
     list_entry_table,
@@ -62,10 +64,30 @@ def get_assignment_by_slug(db: Session, *, tenant_id: int, link_id: int, public_
     return dict(row) if row else None
 
 
-def list_events_by_tag(db: Session, *, tenant_id: int, tag: str) -> list[dict]:
-    rows = db.execute(
-        select(event_table).where(event_table.c.tenant_id == tenant_id, event_table.c.tag == tag)
-    ).mappings()
+def get_cycle_config(db: Session, *, cycle_config_id: int) -> dict | None:
+    row = db.execute(select(cycle_config_table).where(cycle_config_table.c.id == cycle_config_id)).mappings().first()
+    return dict(row) if row else None
+
+
+def list_events_by_tag(
+    db: Session,
+    *,
+    tenant_id: int,
+    tag: str,
+    cycle_config_id: int | None = None,
+    cycle_years: set[int] | None = None,
+) -> list[dict]:
+    statement = select(event_table).where(event_table.c.tenant_id == tenant_id, event_table.c.tag == tag)
+    if cycle_config_id is not None:
+        statement = statement.where(
+            event_table.c.id.in_(
+                select(event_cycle_table.c.event_id).where(
+                    event_cycle_table.c.cycle_config_id == cycle_config_id,
+                    event_cycle_table.c.cycle_year.in_(cycle_years or set()),
+                )
+            )
+        )
+    rows = db.execute(statement).mappings()
     return [dict(row) for row in rows]
 
 

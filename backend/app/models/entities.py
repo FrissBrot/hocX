@@ -1133,12 +1133,13 @@ class AttendanceFine(Base, TimestampMixin):
 
 
 class SubmissionAssignment(Base, TimestampMixin, UpdatedAtMixin):
-    """Konfiguration einer Abgabe (Upload-Box), gekoppelt an Termine (per Tag-Filter + Offset) oder eine Liste (+ Stichtag)."""
+    """Konfiguration einer Abgabe (Upload-Box), gekoppelt an Termine (per Tag-Filter + Offset), eine Liste (+ Stichtag)
+    oder manuell (weder Termine noch Liste: genau ein Element, optional mit Stichtag)."""
 
     __tablename__ = "submission_assignment"
     __table_args__ = (
         UniqueConstraint("tenant_id", "public_slug", name="uq_submission_assignment_tenant_slug"),
-        CheckConstraint("source_type IN ('events', 'list')", name="ck_submission_assignment_source_type"),
+        CheckConstraint("source_type IN ('events', 'list', 'manual')", name="ck_submission_assignment_source_type"),
         CheckConstraint(
             # Tage vor/nach Termin bzw. Stichtag sind bewusst optional (siehe Migration
             # 0056_submission_flexible_window): NULL = kein Zeitfenster, die Abgabe bleibt offen,
@@ -1146,16 +1147,26 @@ class SubmissionAssignment(Base, TimestampMixin, UpdatedAtMixin):
             "(source_type = 'events' AND tag_filter IS NOT NULL "
             "AND list_definition_id IS NULL AND deadline IS NULL) OR "
             "(source_type = 'list' AND list_definition_id IS NOT NULL "
-            "AND tag_filter IS NULL AND offset_days_before IS NULL AND offset_days_after IS NULL)",
+            "AND tag_filter IS NULL AND offset_days_before IS NULL AND offset_days_after IS NULL) OR "
+            "(source_type = 'manual' AND tag_filter IS NULL AND list_definition_id IS NULL "
+            "AND offset_days_before IS NULL AND offset_days_after IS NULL)",
             name="ck_submission_assignment_source_fields",
         ),
         CheckConstraint("offset_days_before IS NULL OR offset_days_before >= 0", name="ck_submission_assignment_offset_before"),
         CheckConstraint("offset_days_after IS NULL OR offset_days_after >= 0", name="ck_submission_assignment_offset_after"),
+        CheckConstraint(
+            # Zyklus-Filter nur fuer Termin-Abgaben: cycle_config_id und cycle_offsets gehoeren
+            # zusammen (Migration 0079_submission_cycle_filter).
+            "(cycle_config_id IS NULL AND jsonb_array_length(cycle_offsets) = 0) OR "
+            "(cycle_config_id IS NOT NULL AND source_type = 'events' AND jsonb_array_length(cycle_offsets) > 0)",
+            name="ck_submission_assignment_cycle_filter",
+        ),
         CheckConstraint("max_files_per_element IS NULL OR max_files_per_element >= 1", name="ck_submission_assignment_max_files"),
         CheckConstraint("max_file_size_mb >= 1", name="ck_submission_assignment_max_size"),
         CheckConstraint("sort_order IN ('alphabetical', 'date', 'proximity')", name="ck_submission_assignment_sort_order"),
         Index("idx_submission_assignment_tenant_active", "tenant_id", "is_active"),
         Index("idx_submission_assignment_list_definition", "list_definition_id"),
+        Index("idx_submission_assignment_cycle_config", "cycle_config_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -1170,6 +1181,11 @@ class SubmissionAssignment(Base, TimestampMixin, UpdatedAtMixin):
     tag_filter: Mapped[str | None] = mapped_column(Text)
     offset_days_before: Mapped[int | None] = mapped_column(Integer)
     offset_days_after: Mapped[int | None] = mapped_column(Integer)
+    # Optionaler Zyklus-Filter der Termin-Quelle: nur Termine, die per event_cycle einem der
+    # Zyklen (cycle_config + aktuelles Zyklusjahr + Offset) zugeordnet sind. cycle_offsets:
+    # 0 = aktueller Zyklus, -1 = vorheriger usw. Ohne cycle_config_id: alle Termine mit dem Tag.
+    cycle_config_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("cycle_config.id", ondelete="RESTRICT"))
+    cycle_offsets: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
     list_definition_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("list_definition.id", ondelete="RESTRICT"))
     deadline: Mapped[date | None] = mapped_column(Date)
     allowed_file_types: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
@@ -1232,14 +1248,15 @@ class SubmissionUpload(Base, TimestampMixin):
     abgabebox-backend-Service darf auf dieser Tabelle nur INSERT (kein UPDATE/DELETE),
     damit ein kompromittierter öffentlicher Prozess frühere Abgaben nicht verändern kann.
     Der aktuelle Zustand eines Elements ist der Status der Zeile mit der höchsten id
-    je (assignment_id, event_id|list_entry_id).
+    je (assignment_id, event_id, list_entry_id). Uploads einer manuellen Abgabe tragen weder
+    event_id noch list_entry_id (Migration 0080_submission_manual_source).
     """
 
     __tablename__ = "submission_upload"
     __table_args__ = (
         CheckConstraint(
-            "(event_id IS NOT NULL AND list_entry_id IS NULL) OR (event_id IS NULL AND list_entry_id IS NOT NULL)",
-            name="ck_submission_upload_exactly_one_target",
+            "event_id IS NULL OR list_entry_id IS NULL",
+            name="ck_submission_upload_at_most_one_target",
         ),
         # 'reopened' bleibt in der CHECK-Liste fuer historische Zeilen aus vor der 2026-08-17
         # Umstellung auf kumulative Uploads (siehe submission_service.py) - der Service erzeugt

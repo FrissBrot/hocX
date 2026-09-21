@@ -9,9 +9,10 @@ from sqlalchemy.orm import Session
 from pathlib import Path
 
 from app.core.config import settings
+from app.core.cycle_utils import cycle_years_for_offsets
 from app import scanner
-from app.models import GalleryImage, Event, ListDefinition, ListEntry, Participant, ProtocolTodo, StoredFile, SubmissionAssignment, SubmissionUpload
-from app.repositories.submission_repository import SubmissionRepository
+from app.models import CycleConfig, GalleryImage, Event, ListDefinition, ListEntry, Participant, ProtocolTodo, StoredFile, SubmissionAssignment, SubmissionUpload
+from app.repositories.submission_repository import MANUAL_ELEMENT_REF, SubmissionRepository
 from app.schemas.submission import (
     SubmissionAssignmentCreate,
     SubmissionAssignmentRead,
@@ -45,7 +46,9 @@ def _move_from_quarantine(quarantine_rel_path: str, storage_root: str) -> str:
 def _element_ref(*, event_public_id: uuid.UUID | None, list_entry_public_id: uuid.UUID | None) -> str:
     if event_public_id is not None:
         return f"event-{event_public_id}"
-    return f"entry-{list_entry_public_id}"
+    if list_entry_public_id is not None:
+        return f"entry-{list_entry_public_id}"
+    return MANUAL_ELEMENT_REF
 
 
 def _resolve_event_responsible(event: Event, source: str | None) -> int | None:
@@ -67,6 +70,8 @@ def _resolve_list_responsible(entry: object, source: str | None) -> int | None:
 
 
 def _parse_element_ref(db: Session, element_ref: str) -> tuple[int | None, int | None]:
+    if element_ref == MANUAL_ELEMENT_REF:
+        return None, None
     kind, _, raw_id = element_ref.partition("-")
     try:
         public_id = uuid.UUID(raw_id)
@@ -133,6 +138,8 @@ class SubmissionService:
         values = payload.model_dump()
         link_ids = values.pop("link_ids")
         values["list_definition_id"] = list_definition_id
+        values["cycle_config_id"] = self._resolve_cycle_config_tenant(db, payload.cycle_config_id, tenant_id=tenant_id)
+        values["cycle_offsets"] = sorted(set(values["cycle_offsets"]), reverse=True)
         links = (
             submission_link_service.default_links(db, tenant_id)
             if link_ids is None
@@ -163,11 +170,19 @@ class SubmissionService:
             values["list_definition_id"] = self._resolve_list_definition_tenant(
                 db, values["list_definition_id"], tenant_id=assignment.tenant_id
             )
+        if "cycle_config_id" in values:
+            values["cycle_config_id"] = self._resolve_cycle_config_tenant(
+                db, values["cycle_config_id"], tenant_id=assignment.tenant_id
+            )
+        if values.get("cycle_offsets") is not None:
+            values["cycle_offsets"] = sorted(set(values["cycle_offsets"]), reverse=True)
         merged = {
             "source_type": values.get("source_type", assignment.source_type),
             "tag_filter": values.get("tag_filter", assignment.tag_filter),
             "offset_days_before": values.get("offset_days_before", assignment.offset_days_before),
             "offset_days_after": values.get("offset_days_after", assignment.offset_days_after),
+            "cycle_config_id": values.get("cycle_config_id", assignment.cycle_config_id),
+            "cycle_offsets": values.get("cycle_offsets") if values.get("cycle_offsets") is not None else assignment.cycle_offsets,
             "list_definition_id": values.get("list_definition_id", assignment.list_definition_id),
             "deadline": values.get("deadline", assignment.deadline),
         }
@@ -190,6 +205,34 @@ class SubmissionService:
             raise ValueError("list_definition_id not found")
         return internal_id
 
+    def _resolve_cycle_config_tenant(self, db: Session, cycle_config_public_id: uuid.UUID | None, *, tenant_id: int) -> int | None:
+        # Wie bei list_definition_id: client-geliefert, die tenant-gescopte Aufloesung ist zugleich
+        # der Ownership-Check - eine fremde Zyklus-Konfiguration loest gar nicht erst auf.
+        if cycle_config_public_id is None:
+            return None
+        internal_id = public_id_service.resolve_internal_id(db, CycleConfig, cycle_config_public_id, tenant_id=tenant_id)
+        if internal_id is None:
+            raise ValueError("cycle_config_id not found")
+        return internal_id
+
+    def list_assignment_events(self, db: Session, assignment: SubmissionAssignment) -> list[Event]:
+        """Termine einer Termin-Abgabe: Tag-Filter, optional eingeschraenkt auf die Zyklen
+        (cycle_config + cycle_offsets relativ zum heutigen Zyklus)."""
+        cycle_years: set[int] | None = None
+        if assignment.cycle_config_id is not None:
+            config = self.repository.get_cycle_config(db, assignment.cycle_config_id)
+            cycle_years = (
+                cycle_years_for_offsets(date.today(), config.reset_month, config.reset_day, assignment.cycle_offsets)
+                if config is not None else set()
+            )
+        return self.repository.list_events_by_tag(
+            db,
+            tenant_id=assignment.tenant_id,
+            tag=assignment.tag_filter or "",
+            cycle_config_id=assignment.cycle_config_id,
+            cycle_years=cycle_years,
+        )
+
     def delete_assignment(self, db: Session, assignment_id: int) -> bool:
         assignment = self.repository.get_assignment(db, assignment_id)
         if assignment is None:
@@ -209,16 +252,31 @@ class SubmissionService:
                 raise ValueError("tag_filter ist fuer Termin-Abgaben erforderlich")
             if values.get("list_definition_id") is not None or values.get("deadline") is not None:
                 raise ValueError("list_definition_id/deadline duerfen bei Termin-Abgaben nicht gesetzt sein")
+            # Zyklus-Filter: Konfiguration und Zyklen gehoeren zusammen (ohne beides = alle Termine).
+            if (values.get("cycle_config_id") is None) != (not values.get("cycle_offsets")):
+                raise ValueError("cycle_config_id und cycle_offsets muessen zusammen gesetzt sein")
+        elif values["source_type"] == "manual":
+            if (
+                values.get("tag_filter") is not None
+                or values.get("list_definition_id") is not None
+                or values.get("offset_days_before") is not None
+                or values.get("offset_days_after") is not None
+            ):
+                raise ValueError("tag_filter/list_definition_id/offset_days_* duerfen bei manuellen Abgaben nicht gesetzt sein")
+            if values.get("cycle_config_id") is not None or values.get("cycle_offsets"):
+                raise ValueError("cycle_config_id/cycle_offsets duerfen bei manuellen Abgaben nicht gesetzt sein")
         else:
             if values.get("list_definition_id") is None:
                 raise ValueError("list_definition_id ist fuer Listen-Abgaben erforderlich")
             if values.get("tag_filter") is not None or values.get("offset_days_before") is not None or values.get("offset_days_after") is not None:
                 raise ValueError("tag_filter/offset_days_* duerfen bei Listen-Abgaben nicht gesetzt sein")
+            if values.get("cycle_config_id") is not None or values.get("cycle_offsets"):
+                raise ValueError("cycle_config_id/cycle_offsets duerfen bei Listen-Abgaben nicht gesetzt sein")
 
     def _resolve_raw_elements(self, db: Session, assignment: SubmissionAssignment) -> list[dict]:
         source = assignment.responsible_participant_source
         if assignment.source_type == "events":
-            events = self.repository.list_events_by_tag(db, tenant_id=assignment.tenant_id, tag=assignment.tag_filter or "")
+            events = self.list_assignment_events(db, assignment)
             raw = [
                 {
                     "event_id": event.id,
@@ -242,6 +300,23 @@ class SubmissionService:
                 for event in events
             ]
             return self._sort_raw_elements(raw, assignment.sort_order)
+
+        if assignment.source_type == "manual":
+            # Genau ein Element: die Abgabe selbst. Kein Event/Listen-Eintrag dahinter,
+            # daher event_id = list_entry_id = None (siehe Migration 0080).
+            return [
+                {
+                    "event_id": None,
+                    "event_public_id": None,
+                    "list_entry_id": None,
+                    "list_entry_public_id": None,
+                    "label": assignment.title,
+                    "sort_date": None,
+                    "window_start": None,
+                    "window_end": assignment.deadline,
+                    "responsible_participant_id": None,
+                }
+            ]
 
         definition = self.repository.get_list_definition(db, assignment.list_definition_id) if assignment.list_definition_id else None
         if definition is None:

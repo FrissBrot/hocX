@@ -43,6 +43,14 @@ def get_cycle_year(d: date, reset_month: int, reset_day: int) -> int:
     return cycle_start.year
 
 
+def cycle_years_for_offsets(today: date, reset_month: int, reset_day: int, offsets: list[int]) -> set[int]:
+    """Cycle years selected by `offsets` relative to the cycle containing `today`
+    (0 = current cycle, -1 = previous, ...). cycle_year is the cycle's start year, so an
+    offset is a plain subtraction. Duplicated (deliberately) in abgabebox-backend."""
+    current = get_cycle_year(today, reset_month, reset_day)
+    return {current + offset for offset in offsets}
+
+
 def format_cycle_name(pattern: str | None, cycle_year: int) -> str:
     """Format a cycle name from the given pattern and cycle_year.
 
