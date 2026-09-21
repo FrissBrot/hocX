@@ -8,6 +8,28 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+## [1.1.1] - 2026-09-21
+
+Wartungsrelease auf 1.1.0 mit iPhone-Foto-Support, manuellen Abgaben, Zyklusfilter für
+Abgaben, Duplikaterkennung beim Upload und mehreren Fixes. Enthält die Migrationen `0079`
+bis `0082`; sie laufen beim Deploy automatisch. Manuelle Schritte sind nur nötig, wenn
+`FRIENDLY_CAPTCHA_VERIFY_URL` von Hand gesetzt wurde (siehe unten). Wer direkt von 1.0.x
+kommt, folgt zusätzlich dem Abschnitt «Update von 1.0.x auf 1.1.0».
+
+### Update von 1.1.0 auf 1.1.1
+
+`HOCX_VERSION` in `.env` auf `v1.1.1` setzen, dann `./scripts/update_deploy_code.sh` und
+`./scripts/deploy.sh <test|prod>`. Zu beachten:
+
+- Das Backend-Image enthält neu `ffmpeg` und `pillow-heif`; es kommt mit dem Release-Image,
+  ein lokaler Build ist nicht nötig.
+- Die Abgabebox prüft das CAPTCHA jetzt gegen `https://api.friendlycaptcha.com/api/v1/siteverify`.
+  Wer `FRIENDLY_CAPTCHA_VERIFY_URL` in `.env` von Hand auf den alten v2-Endpunkt gesetzt hat,
+  muss die Zeile entfernen oder anpassen, sonst schlägt jede Prüfung weiterhin fehl.
+- Migration `0079` gibt der eingeschränkten Rolle `hocx_abgabebox` Lesezugriff auf einzelne
+  Spalten von `cycle_config` und `event_cycle` (für den Zyklusfilter der öffentlichen
+  Abgabebox). Sie ergänzt nur, entzieht nichts.
+
 ### Neu
 
 - **iPhone-Fotos (HEIC/HEIF) und Live Photos in der Galerie:** Der Upload nimmt HEIC/HEIF an
@@ -27,6 +49,52 @@ Installationen aktualisieren können.
 - **Abgabe erstellen/bearbeiten neu gestaltet:** Aufbau wie der Todo-Editor mit Titel im Kopf,
   Verknüpfung als Karten, Dateitypen als Chips und einer Seitenleiste mit öffentlichem Link,
   Erreichbarkeit und einer Zusammenfassung, wie sich die Abgabe verhält.
+- **Zyklusfilter für Abgaben nach Terminen:** Eine Abgabe kann auf Termine eines Zyklus
+  eingeschränkt werden (Zyklus-Konfiguration plus Versatz: `0` = aktueller, `-1` = voriger
+  Zyklus usw., Migration `0079`). Eine Zyklus-Konfiguration, die noch von einer Abgabe
+  verwendet wird, lässt sich nicht löschen; Mandanten klonen übernimmt die Zuordnung. Die
+  öffentliche Abgabebox wertet den Filter selbst aus (nur lesender Zugriff auf `cycle_config`
+  und `event_cycle`).
+- **Leerzustände auf allen Listenseiten:** Dashboard, Protokolle, Todos, Bussen, Finanzen,
+  Statistiken, Listen, Teilnehmende, Termine, Abgaben, Fotos, Dateien, Benutzer und
+  Dokumentvorlagen zeigen ohne Daten eine erklärende Startansicht mit direkter Aktion.
+  Neu dabei: «Busse erfassen» (damit «+ Busse» funktioniert), «Rollen erklären» in der
+  Benutzerverwaltung und «Standard-Layout verwenden» bei den Dokumentvorlagen. Filter und
+  Kopfzeilen-Knöpfe erscheinen erst, wenn Daten vorhanden sind.
+- **Duplikaterkennung vor dem Scan** (Migration `0082`): Byteidentische Dateien werden in der
+  App (Dokumente, Fotos, Word-Import) vor Virenscan und Verarbeitung als Duplikat gemeldet.
+  Bei konvertierten Dateien (z. B. HEIC → JPEG) zählt der Hash des Originals. Die öffentliche
+  Abgabebox überspringt Duplikate desselben Abgabe-Elements still und bestätigt den Upload
+  normal. Gleichzeitige Uploads werden pro Mandant über PostgreSQL-Sperren serialisiert, so
+  dass auch parallel abgeschickte Kopien nur einmal gespeichert werden.
+
+### Geändert
+
+- **Dokumentvorlagen-Seite neu gestaltet:** Layouts und Bausteine-Bibliothek mit Kartenlayout,
+  Liste/Editor-Aufteilung, Reitern im Editor und kompakten Auswahlkarten; der Upload-Dialog
+  für Bausteine ist zweispaltig mit Slot-Auswahl, Ablagefläche und Bibliotheks-Übersicht.
+- Ein hochgeladenes Mandantenlogo wird in der Seitenleiste angezeigt.
+- Word-Import-Assistent: Der Feldname, der eine Zeile rot hält, ist rot umrandet und mit
+  Hinweistext sowie einer Zusammenfassung offener Felder markiert; nicht zugeordnete Namen
+  heissen «– nicht zugeordnet –» statt «Keinen verknüpfen».
+- Matrix-Designer: native Auswahlfelder sehen aus wie die übrigen Dropdowns.
+- Speicher-Seite: Abstände der Kennzahlenkarten und der Aufschlüsselung korrigiert.
+
+### Behoben
+
+- **Abgabebox-CAPTCHA:** Die Lösung wurde gegen den v2-Endpunkt geprüft, obwohl das Widget
+  FriendlyCaptcha v1 ist; jede Prüfung schlug mit 404 fehl, das Widget lud endlos neu und der
+  Sicherheitscheck wurde nie abgeschlossen. Der Standard zeigt jetzt auf `/api/v1/siteverify`;
+  abgelehnte Prüfungen werden mit Status, Fehlern und URL protokolliert.
+- **Automatisch erzeugtes Folgeprotokoll:** Es wurden interne Zahlen-IDs statt öffentlicher
+  UUIDs an die Validierung übergeben (Fehler bei `template_id` und `event_id`). Die
+  konfigurierte Folgevorlage wird aus ihrer öffentlichen UUID aufgelöst (alte Zahlenwerte
+  gehen weiterhin).
+- Datei-Uploads, die mit einem Abgabe-Element verknüpft sind, zählen jetzt als Abgabe.
+- Fotos: Ähnliche Fotos öffnen im Betrachter, das Album-Cover lässt sich nicht mehr
+  versehentlich ziehen, und Albumtitel bleiben in allen Designs lesbar.
+- Galerie-Upload: Ein Duplikat-Ergebnis geht auch dann genau einmal an die Oberfläche, wenn
+  der Job vor der ersten Statusabfrage fertig ist.
 
 ## [1.1.0] - 2026-09-19
 

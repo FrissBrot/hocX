@@ -16,7 +16,8 @@ eine separate Plattform-Administration und eine mit MkDocs gebaute Dokumentation
 - Aufgaben, strukturierte Listen, Finanzen, Bussen und Statistiken
 - Word-, PDF- und ZIP-Import sowie PDF-/Dokumentexport
 - öffentliche Abgabebox mit Zugang über Abgabe-Links, optionalem Virenscan und CAPTCHA
-- Fotos-Galerie und Dateiverwaltung mit ZIP-Upload, Tags, Qualitätsanalyse, Serien-Bereinigung und automatischen Alben
+- Fotos-Galerie und Dateiverwaltung mit ZIP-Upload, iPhone-Fotos (HEIC) und Live Photos, Tags, Qualitätsanalyse, Serien-Bereinigung und automatischen Alben
+- Duplikaterkennung bei Uploads (App und Abgabebox)
 - Speicherkontingente pro Mandant
 - lokale Anmeldung, MFA und getrennte Plattform-Admin-Sitzungen
 - vollständiger Mandantenexport und -import für Transfers und Backups

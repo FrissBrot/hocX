@@ -11,6 +11,10 @@ selbst einen hocX-Account zu benötigen.
   Abgabefeld, das wie die Abgabe heisst, unabhängig von Terminen und Listen; ein Stichtag ist
   optional. Ohne Zeitfenster bzw. Stichtag bleibt eine Abgabe offen, bis sie manuell
   geschlossen wird.
+- **Zyklusfilter (bei Terminen):** Eine Abgabe nach Terminen lässt sich auf einen Zyklus
+  beschränken, z. B. nur auf Termine des aktuellen oder des vorigen Zyklus.
+- **Doppelte Dateien:** Reicht jemand exakt dieselbe Datei für dasselbe Abgabefeld erneut
+  ein, bestätigt die Abgabebox den Upload wie gewohnt, speichert die Datei aber nur einmal.
 - **Zugang per Link:** Die Abgabebox ist nur über einen Link erreichbar, dessen Adresse einen
   zufällig erzeugten Schlüssel enthält – wer den Link kennt, kann die damit verknüpften
   Abgaben nutzen. Unter *Abgaben → Links* legst du beliebig viele Links mit einem frei
