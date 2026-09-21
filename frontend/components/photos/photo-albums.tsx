@@ -97,7 +97,7 @@ export function PhotoAlbums() {
                 {Array.from({ length: 4 }).map((_, index) => {
                   const url = album.cover_thumbnail_urls[index];
                   return url ? (
-                    <img key={index} src={url} alt="" className="album-cover-cell" />
+                    <img key={index} src={url} alt="" className="album-cover-cell" draggable={false} />
                   ) : (
                     <div key={index} className="album-cover-cell album-cover-empty" />
                   );

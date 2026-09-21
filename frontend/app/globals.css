@@ -13155,6 +13155,11 @@ input[type="radio"] {
 
 .photo-series-thumb-wrap {
   position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
   aspect-ratio: 1;
   border-radius: var(--radius-md);
   overflow: hidden;

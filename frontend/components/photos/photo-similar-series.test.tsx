@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { FileOverviewItem, SimilarityGroup } from "@/types/api";
@@ -70,6 +70,30 @@ describe("PhotoSimilarSeries", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("opens the clicked photo and navigates only within its series with arrow keys", async () => {
+    const group = makeGroup();
+    group.images.forEach((image, index) => { image.original_name = `serie-${index}.jpg`; });
+    const otherGroup = { best_id: "separate", images: [makeItem({ id: "separate" }), makeItem({ id: "separate-other" })] };
+    browserApiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(url.startsWith("/api/files/similarity-groups") ? [group, otherGroup] : null)
+    );
+    render(<PhotoSimilarSeries search="" tagFilter={[]} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "serie-1.jpg öffnen" }));
+    expect(screen.getByRole("dialog", { name: "serie-1.jpg" })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    const lastPhoto = screen.getByRole("dialog", { name: "serie-2.jpg" });
+    expect(within(lastPhoto).queryByRole("button", { name: "Nächstes Foto" })).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(screen.getByRole("dialog", { name: "serie-2.jpg" })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "ArrowLeft" });
+    fireEvent.keyDown(window, { key: "ArrowLeft" });
+    const firstPhoto = screen.getByRole("dialog", { name: "serie-0.jpg" });
+    expect(within(firstPhoto).queryByRole("button", { name: "Vorheriges Foto" })).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("shows a confirmation naming the number of photos that will be deleted", async () => {
