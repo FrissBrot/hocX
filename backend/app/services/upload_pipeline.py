@@ -36,6 +36,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models import StoredFile, Tenant
 from app.repositories.file_repository import StoredFileRepository
+from app.services.apple_media import MAX_LIVE_CLIP_BYTES, is_heic, is_live_clip, pair_live_clips
 from app.services.photo_quality import compute_quality_scores
 
 ALLOWED_IMAGE_MIME_TYPES = {
@@ -159,11 +160,20 @@ def _sniff_document_mime(content: bytes, filename: str) -> str | None:
 
 def _sniff_image_mime(content: bytes) -> str | None:
     """Same idea as _sniff_word_import_mime, for the gallery upload window - returns None
-    for anything whose magic bytes don't match one of ALLOWED_IMAGE_MIME_TYPES."""
+    for anything whose magic bytes don't match one of ALLOWED_IMAGE_MIME_TYPES or a HEIC/HEIF
+    (see apple_media - the gallery converts those to JPEG before ingest_file ever sees them,
+    so "image/heic" is only ever returned to the callers that decide what to convert)."""
     for mime in ALLOWED_IMAGE_MIME_TYPES:
         if _content_matches_mime(content, mime):
             return mime
+    if is_heic(content):
+        return "image/heic"
     return None
+
+
+def _sniff_live_clip_mime(content: bytes) -> str | None:
+    """Live-Photo-Clip (nach apple_media.transcode_live_clip immer ein MP4)."""
+    return "video/mp4" if is_live_clip(content) else None
 
 
 def _extract_matching_files_from_zip(
@@ -225,13 +235,24 @@ def extract_word_import_files_from_zip(content: bytes) -> tuple[list[tuple[str, 
     )
 
 
-def iter_gallery_zip_entries(path: Path) -> Iterator[tuple[str, bytes] | str]:
+@dataclass(frozen=True)
+class GalleryZipClip:
+    """Live-Photo-Clip (.mov/.mp4) eines ZIP-Eintrags - wird von iter_gallery_zip_entries
+    immer direkt nach dem zugehoerigen Bild geliefert (image_name = dessen Dateiname)."""
+
+    image_name: str
+    content: bytes
+
+
+def iter_gallery_zip_entries(path: Path) -> Iterator[tuple[str, bytes] | GalleryZipClip | str]:
     """ZIP upload for the gallery upload window (see FileService.process_pending_gallery_upload_jobs):
     reads a ZIP already staged on disk and yields one matching (filename, content) image at
     a time, or a plain str note for a skipped/oversized/corrupt entry (only genuine images,
     by magic bytes not filename, ever match - folders/junk/wrong-type entries are silently
     skipped, same as _extract_matching_files_from_zip's word-import counterpart). Callers
-    tell a match from a note with isinstance(item, tuple).
+    tell a match from a note with isinstance(item, tuple). A Live Photo's .mov/.mp4 (same name
+    as its image, see apple_media.pair_live_clips) is yielded as a GalleryZipClip right after
+    its image; clips without an image are skipped like any other non-image entry.
 
     Deliberately not built on _extract_matching_files_from_zip: that helper takes the whole
     ZIP as one `content: bytes` and returns one fully-materialized `matched` list, which is
@@ -247,9 +268,16 @@ def iter_gallery_zip_entries(path: Path) -> Iterator[tuple[str, bytes] | str]:
         yield "ZIP-Datei ist beschädigt oder ungültig"
         return
 
-    entries = [info for info in archive.infolist() if not info.is_dir()]
+    all_entries = [info for info in archive.infolist() if not info.is_dir()]
+    total_entries = len(all_entries)
+    entries = all_entries[:GALLERY_ZIP_MAX_ENTRIES]
+    # Live Photos: the clip is read together with its image (below), never on its own.
+    clip_for_image = pair_live_clips([info.filename for info in entries])
+    paired_clip_indexes = set(clip_for_image.values())
     total_bytes = 0
-    for info in entries[:GALLERY_ZIP_MAX_ENTRIES]:
+    for index, info in enumerate(entries):
+        if index in paired_clip_indexes:
+            continue
         name = Path(info.filename).name
         if not name or name.startswith("."):
             continue
@@ -269,7 +297,23 @@ def iter_gallery_zip_entries(path: Path) -> Iterator[tuple[str, bytes] | str]:
             continue
         yield (name, entry_bytes)
 
-    if len(entries) > GALLERY_ZIP_MAX_ENTRIES:
+        clip_index = clip_for_image.get(index)
+        if clip_index is None:
+            continue
+        clip_info = entries[clip_index]
+        if clip_info.file_size > MAX_LIVE_CLIP_BYTES:
+            yield f"{name}: Live-Photo-Video zu gross, als normales Foto gespeichert"
+            continue
+        total_bytes += clip_info.file_size
+        try:
+            clip_bytes = archive.read(clip_info)
+        except (zipfile.BadZipFile, zlib.error, OSError):
+            yield f"{name}: Live-Photo-Video beschädigt, als normales Foto gespeichert"
+            continue
+        if _sniff_live_clip_mime(clip_bytes) is not None:
+            yield GalleryZipClip(image_name=name, content=clip_bytes)
+
+    if total_entries > GALLERY_ZIP_MAX_ENTRIES:
         yield f"ZIP enthält mehr als {GALLERY_ZIP_MAX_ENTRIES} Dateien - restliche wurden ignoriert"
 
 

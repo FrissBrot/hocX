@@ -765,6 +765,11 @@ class TenantImportService:
             self.db.add(build_row(GalleryImage, data, {
                 "tenant_id": new_tenant_id,
                 "stored_file_id": new_stored_file_id,
+                # Live Photo clip: a stored_file of the same tenant, so it goes through the same
+                # remap (NULL if the clip itself was skipped on import - the photo stays a photo).
+                "live_video_stored_file_id": (
+                    stored_file_map.get(data["live_video_stored_file_id"]) if data.get("live_video_stored_file_id") else None
+                ),
                 # Audit fix (2026-09-17): event_id was passed through unremapped here while
                 # every other imported table's event FK (e.g. _import_protocols) goes through
                 # event_map - event.id is a global sequence, so an unremapped value either

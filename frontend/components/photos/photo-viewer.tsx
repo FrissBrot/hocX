@@ -3,10 +3,18 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { LivePhotoClip } from "@/components/photos/live-photo-clip";
 import { TagInput } from "@/components/ui/tag-input";
 import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { formatDateTime, formatFileSize, formatWeekdayDate } from "@/lib/utils/format";
 import { FileOverviewItem, StoredFileMetadata } from "@/types/api";
+
+// Was ein Live Photo beim Herunterladen liefert - siehe GET /stored-files/{id}/download?part=.
+const LIVE_DOWNLOAD_OPTIONS = [
+  { part: "image", label: "Bild (JPEG)" },
+  { part: "video", label: "Video (MP4)" },
+  { part: "both", label: "Bild und Video (ZIP)" },
+];
 
 export function PhotoViewer({
   items,
@@ -52,6 +60,10 @@ export function PhotoViewer({
   const [metadata, setMetadata] = useState<StoredFileMetadata | null>(null);
   const [tagsValue, setTagsValue] = useState(item.tags.join(","));
   const [saving, setSaving] = useState(false);
+  // Live Photo: spielt, solange der Zeiger über der Bühne liegt, oder per LIVE-Knopf (Touch/Tastatur).
+  const [liveHover, setLiveHover] = useState(false);
+  const [livePinned, setLivePinned] = useState(false);
+  const [downloadOpen, setDownloadOpen] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const hasPrev = index > 0;
@@ -94,6 +106,12 @@ export function PhotoViewer({
       document.body.style.overflow = "";
     };
   }, [hasPrev, hasNext, index, onClose, onIndexChange]);
+
+  useEffect(() => {
+    setLiveHover(false);
+    setLivePinned(false);
+    setDownloadOpen(false);
+  }, [item.id]);
 
   useEffect(() => {
     setTagsValue(item.tags.join(","));
@@ -156,6 +174,36 @@ export function PhotoViewer({
           <button type="button" className="pill photo-viewer-pill-accent" onClick={() => onToggleBest(item)}>
             {item.is_best ? "★ Best-of" : "☆ Best-of"}
           </button>
+          {item.live_video_url && (
+            <div className="photo-viewer-download">
+              <button
+                type="button"
+                className="pill"
+                aria-haspopup="menu"
+                aria-expanded={downloadOpen}
+                onClick={() => setDownloadOpen((open) => !open)}
+              >
+                Herunterladen ▾
+              </button>
+              {downloadOpen && (
+                <div className="dropdown-panel dropdown-panel-down" role="menu">
+                  <div className="dropdown-panel-scroll">
+                    {LIVE_DOWNLOAD_OPTIONS.map((option) => (
+                      <a
+                        key={option.part}
+                        role="menuitem"
+                        className="dropdown-option"
+                        href={`${browserApiBaseUrl}/api/stored-files/${item.id}/download?part=${option.part}`}
+                        onClick={() => setDownloadOpen(false)}
+                      >
+                        {option.label}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           <a href={fileUrl} target="_blank" rel="noreferrer" className="pill photo-viewer-pill-solid">
             Original öffnen
           </a>
@@ -163,7 +211,11 @@ export function PhotoViewer({
       </div>
 
       <div className="photo-viewer-body">
-        <div className="photo-viewer-stage">
+        <div
+          className="photo-viewer-stage"
+          onMouseEnter={item.live_video_url ? () => setLiveHover(true) : undefined}
+          onMouseLeave={item.live_video_url ? () => setLiveHover(false) : undefined}
+        >
           {hasPrev && (
             <button type="button" className="photo-viewer-nav photo-viewer-nav-prev" aria-label="Vorheriges Foto" onClick={() => onIndexChange(index - 1)}>
               ‹
@@ -176,6 +228,25 @@ export function PhotoViewer({
             onLoad={() => { if (thumbnailUrl === fileUrl) setReadyUrl(fileUrl); }}
             onError={() => { if (thumbnailUrl === fileUrl) setFailedUrl(fileUrl); }}
           />
+          {item.live_video_url && (
+            <>
+              <LivePhotoClip
+                key={item.id}
+                src={`${browserApiBaseUrl}${item.live_video_url}`}
+                active={liveHover || livePinned}
+                className="photo-viewer-live-video"
+              />
+              <button
+                type="button"
+                className="photo-viewer-live"
+                aria-pressed={livePinned}
+                aria-label="Live Photo abspielen"
+                onClick={() => setLivePinned((pinned) => !pinned)}
+              >
+                LIVE
+              </button>
+            </>
+          )}
           {loadingOriginal && (
             <div className="photo-viewer-loading" role="status" aria-label="Originalbild wird geladen">
               <span className="photo-viewer-loading-spinner" aria-hidden="true" />

@@ -1,4 +1,5 @@
 import uuid
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Literal
@@ -12,11 +13,12 @@ from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 
 from app.core.db import get_db
 from app.core.config import settings
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
-from app.models import ProtocolElementBlock, ProtocolImage, StoredFile
+from app.models import GalleryImage, ProtocolElementBlock, ProtocolImage, StoredFile
 from app.schemas.files import (
     DocumentUploadResult,
     FileBulkDelete,
@@ -37,6 +39,7 @@ from app.schemas.files import (
 from app.schemas.protocol import ProtocolImageRead
 from app.services import photo_album_service, public_id_service
 from app.services.access_service import AccessService
+from app.services.apple_media import pair_live_clips
 from app.services.file_service import MAX_UPLOAD_BYTES, FileService, _safe_storage_path
 from app.services import submission_upload_rules
 from app.services.submission_service import SubmissionService, _element_ref, _parse_element_ref
@@ -377,8 +380,15 @@ async def upload_gallery_images(
         if target.assignment is not None and submission_element_ref is not None
         else None
     )
+    # Live Photos: an IMG_1.MOV that belongs to an IMG_1.HEIC in this same batch is that photo's
+    # clip, not a file of its own - it neither counts against the Abgabe's rules nor the
+    # progress total (see FileService._run_gallery_upload_job, which pairs them the same way).
+    plain_positions = [i for i, file in enumerate(files) if not (file.filename or "").lower().endswith(".zip")]
+    live_pairs = pair_live_clips([files[i].filename or "" for i in plain_positions])
+    clip_positions = {plain_positions[clip] for clip in live_pairs.values()}
     if rules is not None:
-        direct_files = [file for file in files if not (file.filename or "").lower().endswith(".zip")]
+        direct_positions = set(plain_positions) - clip_positions
+        direct_files = [file for i, file in enumerate(files) if i in direct_positions]
         problem = rules.check_count(len(direct_files)) or next(
             (error for error in (rules.check_extension(file.filename or "") for file in direct_files) if error), None
         )
@@ -399,12 +409,12 @@ async def upload_gallery_images(
     batch_bytes = 0
     has_zip = False
     try:
-        for file in files:
+        for position, file in enumerate(files):
             name = file.filename or ""
             is_zip = name.lower().endswith(".zip")
             has_zip = has_zip or is_zip
             max_bytes = GALLERY_ZIP_MAX_BYTES if is_zip else MAX_UPLOAD_BYTES
-            if rules is not None and not is_zip:
+            if rules is not None and not is_zip and position not in clip_positions:
                 max_bytes = min(max_bytes, rules.max_bytes)
             staged_path = await stage_upload_to_disk(
                 file, target_dir=staging_dir, max_bytes=max_bytes, suffix=Path(name).suffix.lower() or ".bin"
@@ -438,7 +448,7 @@ async def upload_gallery_images(
         requested_by=user.user_id,
         # A ZIP's matching entries are only known once the ingest loop opens it; a batch
         # of individually-selected images (no ZIP at all) knows its count immediately.
-        total_files=None if has_zip else len(staged_paths),
+        total_files=None if has_zip else len(staged_paths) - len(clip_positions),
     )
     db.add(job)
     db.commit()
@@ -670,7 +680,8 @@ def get_stored_file_content(
     # otherwise force browsers to treat as a download instead of image data to paint.
     # nosniff already closes the MIME-confusion risk "attachment" was guarding against
     # for a real image mime type.
-    is_inline_safe = stored_file.mime_type == "application/pdf" or (stored_file.mime_type or "").startswith("image/")
+    # video/mp4 is the Live Photo clip (see apple_media.py) the Fotos grid plays via <video src>.
+    is_inline_safe = stored_file.mime_type in {"application/pdf", "video/mp4"} or (stored_file.mime_type or "").startswith("image/")
     return FileResponse(
         path=file_path,
         media_type=stored_file.mime_type,
@@ -741,6 +752,78 @@ def get_stored_file_thumbnail(
         # Same immutability as get_stored_file_content above - once generated, a thumbnail never
         # changes for a given stored_file id, so it's safe to cache far longer than a day.
         headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=604800, immutable"},
+    )
+
+
+@router.get("/stored-files/{stored_file_id}/download")
+def download_stored_file(
+    stored_file_id: uuid.UUID,
+    part: Literal["image", "video", "both"] = "image",
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Explicit download (Content-Disposition: attachment) of a gallery photo. For a Live Photo
+    the caller picks what to get: `image` (the still, default), `video` (the clip as MP4) or `both`
+    (a ZIP with IMG_1234.jpg + IMG_1234.mp4 - same names, so it can be uploaded again as a Live
+    Photo). An ordinary photo has no clip: `video` is a 404, `both` is just the image."""
+    require_reader(user)
+    stored_file = public_id_service.get_by_public_id(db, StoredFile, stored_file_id)
+    if stored_file is None:
+        raise HTTPException(status_code=404, detail="Stored file not found")
+    access_service.ensure_can_read_stored_file(db, user, stored_file.id)
+    if stored_file.scan_status == "infected":
+        raise HTTPException(status_code=403, detail="Datei wurde von der Virenprüfung als infiziert erkannt und ist gesperrt")
+    if stored_file.scan_status == "pending":
+        raise HTTPException(status_code=425, detail="Datei wird noch auf Schadsoftware geprüft, bitte in Kürze erneut versuchen")
+
+    live_video_id = db.scalar(select(GalleryImage.live_video_stored_file_id).where(GalleryImage.stored_file_id == stored_file.id))
+    live_video = db.get(StoredFile, live_video_id) if live_video_id is not None else None
+    if live_video is not None and live_video.scan_status != "clean":
+        live_video = None
+    if part == "video" and live_video is None:
+        raise HTTPException(status_code=404, detail="Zu diesem Foto gibt es kein Live-Photo-Video")
+
+    image_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
+    if part != "video" and not image_path.exists():
+        raise HTTPException(status_code=404, detail="File missing on filesystem")
+    headers = {"X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"}
+
+    if part == "image" or (part == "both" and live_video is None):
+        return FileResponse(
+            path=image_path,
+            media_type=stored_file.mime_type,
+            filename=stored_file.original_name,
+            content_disposition_type="attachment",
+            headers=headers,
+        )
+
+    video_path = _safe_storage_path(settings.storage_root, live_video.storage_path)
+    if not video_path.exists():
+        raise HTTPException(status_code=404, detail="File missing on filesystem")
+    if part == "video":
+        return FileResponse(
+            path=video_path,
+            media_type="video/mp4",
+            filename=live_video.original_name,
+            content_disposition_type="attachment",
+            headers=headers,
+        )
+
+    # Both: JPEG and MP4 are already compressed, so the ZIP just stores them. Built on disk (not
+    # in memory) and removed once the response has been sent.
+    work_dir = Path(settings.upload_root) / "_staging" / "download"
+    work_dir.mkdir(parents=True, exist_ok=True)
+    zip_path = work_dir / f"{uuid.uuid4().hex}.zip"
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_STORED) as archive:
+        archive.write(image_path, arcname=Path(stored_file.original_name).name)
+        archive.write(video_path, arcname=Path(live_video.original_name).name)
+    return FileResponse(
+        path=zip_path,
+        media_type="application/zip",
+        filename=f"{Path(stored_file.original_name).stem}-live.zip",
+        content_disposition_type="attachment",
+        headers=headers,
+        background=BackgroundTask(zip_path.unlink, missing_ok=True),
     )
 
 

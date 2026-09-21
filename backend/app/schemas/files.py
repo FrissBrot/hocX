@@ -67,6 +67,9 @@ class FileOverviewItem(BaseModel):
     # import display name, submission assignment title, or event title) - None when there's
     # nothing more specific than the plain upload date (e.g. an event-less gallery upload).
     context_label: str | None = None
+    # Live Photo: content URL of the short MP4 the Fotos grid plays on hover - None for every
+    # ordinary photo (see apple_media.py).
+    live_video_url: str | None = None
     # Every album this file belongs to (unscoped GET /files only - see
     # FileService.attach_album_context; empty when the file is in no album).
     albums: list[FileAlbumRef] = []

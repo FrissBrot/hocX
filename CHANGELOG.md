@@ -6,6 +6,22 @@ Versionierung nach [SemVer](https://semver.org/lang/de/). Die Beta-Historie
 ist der erste offiziell unterstützte Stand und muss keine älteren
 Installationen aktualisieren können.
 
+## [Unveröffentlicht]
+
+### Neu
+
+- **iPhone-Fotos (HEIC/HEIF) und Live Photos in der Galerie:** Der Upload nimmt HEIC/HEIF an
+  (auch in ZIPs) und speichert sie als JPEG – Aufnahmedatum, Kamera, Ausrichtung und
+  Farbprofil bleiben erhalten, das HEIC-Original wird nicht aufbewahrt. Wird zu einem Bild
+  ein gleichnamiges `.mov`/`.mp4` mitgeschickt (`IMG_1234.HEIC` + `IMG_1234.MOV`, so liefert
+  es der iPhone-Export), gilt es als Live Photo: der Clip wird zu einem kleinen H.264-MP4
+  umgerechnet und in der Galerie beim Hovern über dem Bild abgespielt (im Viewer zusätzlich
+  per «LIVE»-Knopf). Im Viewer wählt man bei «Herunterladen», ob man das Bild (JPEG), das
+  Video (MP4) oder beides (ZIP mit gleichnamigen Dateien) bekommt. Der Clip ist kein eigenes Foto, zählt aber zum Speicher und wird mit dem
+  Bild gelöscht (Migration `0081`). Das Backend-Image enthält dafür `ffmpeg` und
+  `pillow-heif`. Nicht abgedeckt: die öffentliche Abgabebox, Android-Motion-Photos und
+  ProRAW (DNG).
+
 ## [1.1.0] - 2026-09-19
 
 Zweite stabile Version. Sie enthält alle seit 1.0.0 gemergten Fixes und

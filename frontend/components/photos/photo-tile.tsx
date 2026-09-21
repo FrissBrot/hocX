@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { LivePhotoClip } from "@/components/photos/live-photo-clip";
 import { browserApiBaseUrl } from "@/lib/api/client";
 import { FileOverviewItem } from "@/types/api";
 
@@ -21,6 +22,8 @@ export function PhotoTile({
   const imageRef = useRef<HTMLImageElement>(null);
   const [requestedUrl, setRequestedUrl] = useState<string | null>(null);
   const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
+  // Live Photo: der Clip spielt, solange der Zeiger auf der Kachel liegt (oder sie per Tastatur fokussiert ist).
+  const [liveActive, setLiveActive] = useState(false);
   const thumbnailUrl = item.thumbnail_url ? `${browserApiBaseUrl}${item.thumbnail_url}` : `${browserApiBaseUrl}${item.content_url}`;
   const requested = requestedUrl === thumbnailUrl;
   const loaded = loadedUrl === thumbnailUrl;
@@ -48,7 +51,13 @@ export function PhotoTile({
   const aspectRatio = item.width && item.height ? item.width / item.height : 4 / 3;
 
   return (
-    <div className={`photo-tile${selected ? " photo-tile-selected" : ""}`}>
+    <div
+      className={`photo-tile${selected ? " photo-tile-selected" : ""}`}
+      onMouseEnter={item.live_video_url ? () => setLiveActive(true) : undefined}
+      onMouseLeave={item.live_video_url ? () => setLiveActive(false) : undefined}
+      onFocus={item.live_video_url ? () => setLiveActive(true) : undefined}
+      onBlur={item.live_video_url ? () => setLiveActive(false) : undefined}
+    >
       <button
         type="button"
         ref={previewRef}
@@ -66,6 +75,12 @@ export function PhotoTile({
           onLoad={() => { if (requested) setLoadedUrl(thumbnailUrl); }}
         />
       </button>
+      {item.live_video_url && (
+        <>
+          <LivePhotoClip src={`${browserApiBaseUrl}${item.live_video_url}`} active={liveActive} className="photo-tile-live-video" />
+          <span className="photo-tile-badge photo-tile-badge-live">LIVE</span>
+        </>
+      )}
       <button
         type="button"
         className={`photo-tile-select${selected ? " photo-tile-select-checked" : ""}`}

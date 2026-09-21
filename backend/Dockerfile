@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     texlive-xetex \
     texlive-pictures \
     fonts-lmodern \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd --gid 5001 hocx-storage \

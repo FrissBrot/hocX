@@ -198,6 +198,8 @@ export type FileOverviewItem = {
   // Short context label for that date group's header (protocol/word-import/submission/
   // event) - null when there's nothing more specific than the plain date.
   context_label: string | null;
+  // Live Photo: content URL of the short MP4 played on hover (null for ordinary photos).
+  live_video_url: string | null;
   // Every album this file belongs to (only populated on the unscoped GET /files listing).
   albums: FileAlbumRef[];
   // Best-of ("Stern") state: within the album this item was fetched for when scoped by

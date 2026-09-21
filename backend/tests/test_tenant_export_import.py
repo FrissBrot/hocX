@@ -861,6 +861,45 @@ def test_export_import_roundtrip_recreates_gallery_image(db, monkeypatch, tmp_pa
     assert imported_gallery_image.stored_file_id == imported_stored_file.id
 
 
+def test_export_import_roundtrip_remaps_the_live_photo_clip(db, monkeypatch, tmp_path):
+    """gallery_image.live_video_stored_file_id points at a second stored_file of the same tenant -
+    it must follow that file's new id, not keep the exported one (stored_file.id is global)."""
+    from app.core.config import settings
+    from app.services import tenant_import_service as import_svc_module
+
+    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
+    monkeypatch.setattr(import_svc_module.scanner, "scan_file", lambda path, host, port: "clean")
+
+    tenant_a = make_tenant(db, "Tenant A")
+    (tmp_path / "gallery").mkdir()
+    (tmp_path / "gallery" / "photo.jpg").write_bytes(b"fake-jpeg-bytes")
+    (tmp_path / "gallery" / "photo.mp4").write_bytes(b"fake-mp4-bytes")
+    photo = StoredFile(
+        tenant_id=tenant_a.id, original_name="photo.jpg", mime_type="image/jpeg",
+        storage_path="gallery/photo.jpg", file_size_bytes=15,
+    )
+    clip = StoredFile(
+        tenant_id=tenant_a.id, original_name="photo.mp4", mime_type="video/mp4",
+        storage_path="gallery/photo.mp4", file_size_bytes=14,
+    )
+    db.add_all([photo, clip])
+    db.flush()
+    db.add(GalleryImage(tenant_id=tenant_a.id, stored_file_id=photo.id, live_video_stored_file_id=clip.id))
+    db.flush()
+
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
+    try:
+        new_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
+    finally:
+        zip_path.unlink(missing_ok=True)
+
+    assert warnings == []
+    imported_clip = db.scalar(select(StoredFile).where(StoredFile.tenant_id == new_tenant.id, StoredFile.mime_type == "video/mp4"))
+    imported_gallery_image = db.scalar(select(GalleryImage).where(GalleryImage.tenant_id == new_tenant.id))
+    assert imported_clip is not None and imported_clip.id != clip.id
+    assert imported_gallery_image.live_video_stored_file_id == imported_clip.id
+
+
 def test_export_import_roundtrip_remaps_gallery_image_event_id(db, monkeypatch, tmp_path):
     """Regression test (2026-09-17 audit fix): _import_gallery_images used to pass
     event_id through unremapped, unlike every other imported table's event FK - since

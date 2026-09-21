@@ -6,7 +6,7 @@ import uuid
 from contextlib import contextmanager
 from datetime import UTC, date, datetime
 from io import BytesIO
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Iterator
 
 from fastapi import HTTPException, UploadFile
@@ -23,11 +23,19 @@ from app.repositories.file_repository import ProtocolImageRepository, StoredFile
 from app.schemas.files import FileAlbumRef, FileOverviewItem, FileStats, PhotoAnalysisProgress, SimilarityGroup, StoredFileMetadata
 from app.schemas.protocol import ProtocolImageRead
 from app.services import public_id_service
+from app.services.apple_media import (
+    convert_heic_to_jpeg,
+    is_heic,
+    jpeg_filename,
+    pair_live_clips,
+    transcode_live_clip,
+)
 from app.services.photo_quality import compute_quality_scores
 from app.services.photo_similarity import MAX_GROUPING_IMAGES, GroupableImage, group_similar_images
 from app.services.upload_lock import UPLOAD_LOCK_NAMESPACE, acquire_upload_lock, acquire_upload_lock_sync
 from app.services.upload_pipeline import (
     ALLOWED_IMAGE_MIME_TYPES,
+    GalleryZipClip,
     MAX_UPLOAD_BYTES,
     MAX_ZIP_TOTAL_BYTES,
     PDF_MIME_TYPE,
@@ -38,6 +46,7 @@ from app.services.upload_pipeline import (
     _content_matches_mime,
     _sniff_document_mime,
     _sniff_image_mime,
+    _sniff_live_clip_mime,
     _sniff_word_import_mime,
     extract_word_import_files_from_zip,
     generate_thumbnail_bytes,
@@ -379,6 +388,7 @@ class FileService:
             height=row.height,
             group_date=row.group_date,
             context_label=row.context_label,
+            live_video_url=self.build_content_url(row.live_video_public_id) if row.live_video_public_id else None,
         )
 
     def group_similar_gallery_images(
@@ -786,6 +796,7 @@ class FileService:
         upload_element_ref: str | None = None,
         upload_element_label: str | None = None,
         upload_cycle_config: CycleConfig | None = None,
+        live_clips: dict[str, bytes] | None = None,
     ) -> tuple[list[FileOverviewItem], list[str]]:
         """Persists a batch of already-decoded (filename, bytes) images for the "Dateien"/
         "Fotos" gallery upload window - only genuine images (magic bytes, not filename)
@@ -810,7 +821,15 @@ class FileService:
         batch is saved (see the end of this method). upload_cycle_config resolves each
         file's own EXIF capture date to a period independently (see the loop below) since a
         multi-file batch can span more than one Periode; the other two targets apply to
-        every file in the batch alike."""
+        every file in the batch alike.
+
+        HEIC/HEIF images (iPhone photos, see apple_media) are converted to JPEG here, after the
+        virus scan and before ingest_file - everything downstream only ever sees the JPEG.
+        live_clips maps a file's name in `files` to the .mov/.mp4 of its Live Photo; the clip is
+        transcoded to a small H.264 MP4, stored as its own StoredFile (no gallery_image row - it
+        is not a gallery item itself) and linked via gallery_image.live_video_stored_file_id, so
+        the grid can play it on hover. A clip that can't be used (infected, no ffmpeg, corrupt,
+        over quota) never fails its image: it is stored as a plain photo plus a note in `errors`."""
         await acquire_upload_lock(db, tenant_id)
         self.ensure_storage()
         normalized_tags = _normalize_tags(tags)
@@ -818,9 +837,15 @@ class FileService:
         files, duplicate_errors = self._filter_exact_duplicates(db, tenant_id, files)
         if not files:
             return [], duplicate_errors
-        scan_statuses = await scanner.scan_many(
-            [content for _filename, content in files], host=settings.clamav_host, port=settings.clamav_port
+        live_clips = live_clips or {}
+        clip_names = [filename for filename, _content in files if filename in live_clips]
+        scan_results = await scanner.scan_many(
+            [content for _filename, content in files] + [live_clips[name] for name in clip_names],
+            host=settings.clamav_host,
+            port=settings.clamav_port,
         )
+        scan_statuses = scan_results[: len(files)]
+        clip_scan_status = dict(zip(clip_names, scan_results[len(files) :]))
 
         # Fetched once and passed into every ingest_file() call below instead of letting
         # each call re-query it (audit fix, 2026-09-17 - see ingest_file's tenant_hashes
@@ -835,6 +860,13 @@ class FileService:
         for (filename, content), scan_status in zip(files, scan_statuses):
             label = filename or "Bild"
             source_checksum = hashlib.sha256(content).hexdigest()
+            source_filename = filename
+            if scan_status != "infected" and is_heic(content):
+                converted = await asyncio.to_thread(convert_heic_to_jpeg, content)
+                if converted is None:
+                    errors.append(f"{label}: HEIC-Datei konnte nicht gelesen werden")
+                    continue
+                content, filename = converted, jpeg_filename(filename)
             try:
                 result = ingest_file(
                     db,
@@ -862,10 +894,25 @@ class FileService:
 
             stored_file = result.stored_file
             stored_file.source_checksum_sha256 = source_checksum
+
+            live_video_file: StoredFile | None = None
+            if source_filename in live_clips:
+                live_video_file, clip_note = await self._store_live_clip(
+                    db,
+                    tenant_id=tenant_id,
+                    image_filename=filename,
+                    clip=live_clips[source_filename],
+                    scan_status=clip_scan_status[source_filename],
+                    created_by=created_by,
+                )
+                if clip_note is not None:
+                    errors.append(f"{label}: {clip_note}")
+
             db.add(
                 GalleryImage(
                     tenant_id=tenant_id,
                     stored_file_id=stored_file.id,
+                    live_video_stored_file_id=live_video_file.id if live_video_file is not None else None,
                     event_id=upload_event_id,
                     # Stored so the Abgabe's max_files_per_element also counts photos uploaded
                     # this way (see submission_upload_rules.load_rules).
@@ -910,6 +957,7 @@ class FileService:
                     height=stored_file.height,
                     group_date=upload_event.event_date if upload_event is not None else stored_file.created_at.date(),
                     context_label=upload_event.title if upload_event is not None else None,
+                    live_video_url=self.build_content_url(live_video_file.public_id) if live_video_file is not None else None,
                 )
             )
 
@@ -960,6 +1008,42 @@ class FileService:
                 )
 
         return items, errors
+
+    async def _store_live_clip(
+        self,
+        db: Session,
+        *,
+        tenant_id: int,
+        image_filename: str,
+        clip: bytes,
+        scan_status: str,
+        created_by: int | None,
+    ) -> tuple[StoredFile | None, str | None]:
+        """(StoredFile, None) for a stored Live-Photo clip, else (None, Hinweis) - see
+        save_gallery_uploads for why a bad clip only ever costs the "live" part."""
+        if scan_status == "infected":
+            return None, "Live-Photo-Video wurde von der Virenprüfung als infiziert erkannt und nicht gespeichert"
+        transcoded = await asyncio.to_thread(transcode_live_clip, clip)
+        if transcoded is None:
+            return None, "Live-Photo-Video konnte nicht verarbeitet werden, als normales Foto gespeichert"
+        try:
+            result = ingest_file(
+                db,
+                tenant_id=tenant_id,
+                content=transcoded,
+                original_filename=str(PurePosixPath(image_filename).with_suffix(".mp4")),
+                scan_status=scan_status,
+                sniff=_sniff_live_clip_mime,
+                max_bytes=MAX_UPLOAD_BYTES,
+                storage_subdir_parts=(f"tenant-{tenant_id}", "gallery"),
+                enable_perceptual_dedupe=False,
+                enable_thumbnail=False,
+                created_by=created_by,
+                stored_file_repository=self.stored_file_repository,
+            )
+        except HTTPException as exc:
+            return None, f"Live-Photo-Video nicht gespeichert ({exc.detail}), als normales Foto gespeichert"
+        return result.stored_file, None
 
     def _recheck_element_capacity(
         self, db: Session, tenant_id: int, assignment: SubmissionAssignment, element_ref: str, incoming: int
@@ -1127,8 +1211,23 @@ class FileService:
             job.total_files = 0
             db.commit()
 
-        for relative_path, original_filename in zip(job.staged_paths, job.original_filenames):
+        # Live Photos selected as separate files (IMG_1.HEIC + IMG_1.MOV): the clip is read
+        # together with its image below and skipped as a file of its own. A ZIP is never
+        # paired with a clip - only its own entries are (see iter_gallery_zip_entries).
+        plain_indexes = [i for i, path in enumerate(job.staged_paths) if not path.lower().endswith(".zip")]
+        pairs_by_plain_position = pair_live_clips([job.original_filenames[i] for i in plain_indexes])
+        clip_index_for_image = {plain_indexes[image]: plain_indexes[clip] for image, clip in pairs_by_plain_position.items()}
+        paired_clip_indexes = set(clip_index_for_image.values())
+
+        for index, (relative_path, original_filename) in enumerate(zip(job.staged_paths, job.original_filenames)):
+            if index in paired_clip_indexes:
+                continue
             staged_path = Path(settings.storage_root) / relative_path
+            clip_path = (
+                Path(settings.storage_root) / job.staged_paths[clip_index_for_image[index]]
+                if index in clip_index_for_image
+                else None
+            )
             try:
                 if staged_path.suffix.lower() == ".zip":
                     await self._ingest_gallery_zip(
@@ -1141,6 +1240,7 @@ class FileService:
                         [(original_filename, staged_path.read_bytes())],
                         upload_assignment=upload_assignment,
                         upload_cycle_config=upload_cycle_config,
+                        live_clips={original_filename: clip_path.read_bytes()} if clip_path is not None else None,
                     )
                     if counting_incrementally:
                         db.refresh(job)
@@ -1148,6 +1248,8 @@ class FileService:
                         db.commit()
             finally:
                 staged_path.unlink(missing_ok=True)
+                if clip_path is not None:
+                    clip_path.unlink(missing_ok=True)
 
     async def _ingest_gallery_zip(
         self,
@@ -1170,27 +1272,38 @@ class FileService:
         images and no per-entry problems still gets one clear error rather than silently
         importing nothing."""
         batch: list[tuple[str, bytes]] = []
+        live_clips: dict[str, bytes] = {}
         saw_anything = False
+
+        async def flush() -> None:
+            nonlocal batch, live_clips
+            db.refresh(job)
+            job.total_files += len(batch)
+            db.commit()
+            await self._ingest_gallery_batch(
+                db, job, batch, upload_assignment=upload_assignment, upload_cycle_config=upload_cycle_config, live_clips=live_clips
+            )
+            batch, live_clips = [], {}
+
         for item in iter_gallery_zip_entries(staged_path):
             saw_anything = True
             if isinstance(item, str):
                 job.errors = [*job.errors, item]
                 db.commit()
                 continue
+            if isinstance(item, GalleryZipClip):
+                # Always directly follows its image (see iter_gallery_zip_entries), which is
+                # why a batch is only flushed *before* the next image is added, never right
+                # after one - otherwise a pair could be split across two batches.
+                live_clips[item.image_name] = item.content
+                continue
+            # Clips are matched to images by name, so two same-named images (different ZIP
+            # folders) must not share a batch.
+            if len(batch) >= self.GALLERY_INGEST_BATCH_SIZE or any(name == item[0] for name, _content in batch):
+                await flush()
             batch.append(item)
-            if len(batch) >= self.GALLERY_INGEST_BATCH_SIZE:
-                db.refresh(job)
-                job.total_files += len(batch)
-                db.commit()
-                await self._ingest_gallery_batch(
-                    db, job, batch, upload_assignment=upload_assignment, upload_cycle_config=upload_cycle_config
-                )
-                batch = []
         if batch:
-            db.refresh(job)
-            job.total_files += len(batch)
-            db.commit()
-            await self._ingest_gallery_batch(db, job, batch, upload_assignment=upload_assignment, upload_cycle_config=upload_cycle_config)
+            await flush()
         if not saw_anything:
             db.refresh(job)
             job.errors = [*job.errors, "ZIP enthält keine Bilddateien"]
@@ -1204,6 +1317,7 @@ class FileService:
         *,
         upload_assignment: SubmissionAssignment | None,
         upload_cycle_config: CycleConfig | None,
+        live_clips: dict[str, bytes] | None = None,
     ) -> None:
         await acquire_upload_lock(db, job.tenant_id)
         rule_errors: list[str] = []
@@ -1220,7 +1334,12 @@ class FileService:
             items, errors = [], []
         else:
             items, errors = await self._save_gallery_batch(
-                db, job, batch, upload_assignment=upload_assignment, upload_cycle_config=upload_cycle_config
+                db,
+                job,
+                batch,
+                upload_assignment=upload_assignment,
+                upload_cycle_config=upload_cycle_config,
+                live_clips=live_clips,
             )
         errors = [*rule_errors, *errors]
         db.refresh(job)
@@ -1237,6 +1356,7 @@ class FileService:
         *,
         upload_assignment: SubmissionAssignment | None,
         upload_cycle_config: CycleConfig | None,
+        live_clips: dict[str, bytes] | None = None,
     ) -> tuple[list[FileOverviewItem], list[str]]:
         return await self.save_gallery_uploads(
             db,
@@ -1249,6 +1369,7 @@ class FileService:
             upload_element_ref=job.upload_element_ref,
             upload_element_label=job.upload_element_label,
             upload_cycle_config=upload_cycle_config,
+            live_clips=live_clips,
         )
 
     def save_word_import_document(
@@ -1376,8 +1497,12 @@ class FileService:
             if stored_file is None:
                 errors.append(f"{row.original_name}: nicht gefunden")
                 continue
+            live_video_id = db.scalar(select(GalleryImage.live_video_stored_file_id).where(GalleryImage.stored_file_id == stored_file.id))
             db.execute(delete(GalleryImage).where(GalleryImage.stored_file_id == stored_file.id))
             self.delete_stored_file(db, stored_file)
+            live_video = self.stored_file_repository.get(db, live_video_id) if live_video_id is not None else None
+            if live_video is not None:
+                self.delete_stored_file(db, live_video)
             deleted.append(file_id)
         return deleted, errors
 

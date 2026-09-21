@@ -39,6 +39,7 @@ function makeItem(overrides: Partial<FileOverviewItem> = {}): FileOverviewItem {
     height: null,
     group_date: "2026-07-10",
     context_label: null,
+    live_video_url: null,
     albums: [],
     is_best: false,
     ...overrides,
@@ -158,5 +159,70 @@ describe("PhotoViewer", () => {
 
     fireEvent.keyDown(window, { key: "Escape" });
     expect(onClose).toHaveBeenCalled();
+  });
+});
+
+describe("PhotoViewer Live Photo", () => {
+  beforeEach(() => {
+    browserApiFetchMock.mockReset();
+    browserApiFetchMock.mockResolvedValue(null);
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("offers no LIVE button for an ordinary photo", () => {
+    render(<PhotoViewer items={[makeItem()]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: "Live Photo abspielen" })).not.toBeInTheDocument();
+  });
+
+  it("plays the clip via the LIVE button (touch/keyboard) and stops it on a second press", () => {
+    vi.useFakeTimers();
+    const item = makeItem({ live_video_url: "/api/stored-files/clip/content" });
+    render(<PhotoViewer items={[item]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
+    const button = screen.getByRole("button", { name: "Live Photo abspielen" });
+    expect(button).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(button);
+    act(() => { vi.advanceTimersByTime(200); });
+    expect(button).toHaveAttribute("aria-pressed", "true");
+    expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
+
+    fireEvent.click(button);
+    expect(button).toHaveAttribute("aria-pressed", "false");
+    expect(HTMLMediaElement.prototype.pause).toHaveBeenCalled();
+  });
+
+  it("plays the clip while the pointer is over the photo", () => {
+    vi.useFakeTimers();
+    const item = makeItem({ live_video_url: "/api/stored-files/clip/content" });
+    render(<PhotoViewer items={[item]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
+    const stage = document.querySelector(".photo-viewer-stage")!;
+
+    fireEvent.mouseEnter(stage);
+    act(() => { vi.advanceTimersByTime(200); });
+    expect(document.querySelector("video")).toHaveAttribute("src", "/api/stored-files/clip/content");
+    expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
+  });
+
+  it("lets the user choose image, video or both when downloading a Live Photo", () => {
+    const item = makeItem({ id: "live-1", live_video_url: "/api/stored-files/clip/content" });
+    render(<PhotoViewer items={[item]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
+    expect(screen.queryByRole("menuitem")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Herunterladen/ }));
+
+    expect(screen.getByRole("menuitem", { name: "Bild (JPEG)" })).toHaveAttribute("href", "/api/stored-files/live-1/download?part=image");
+    expect(screen.getByRole("menuitem", { name: "Video (MP4)" })).toHaveAttribute("href", "/api/stored-files/live-1/download?part=video");
+    expect(screen.getByRole("menuitem", { name: "Bild und Video (ZIP)" })).toHaveAttribute("href", "/api/stored-files/live-1/download?part=both");
+  });
+
+  it("offers no download choice for an ordinary photo", () => {
+    render(<PhotoViewer items={[makeItem()]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /Herunterladen/ })).not.toBeInTheDocument();
   });
 });

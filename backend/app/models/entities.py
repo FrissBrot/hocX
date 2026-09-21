@@ -1009,6 +1009,7 @@ class GalleryImage(Base, TimestampMixin):
         Index("idx_gallery_image_tenant", "tenant_id"),
         Index("idx_gallery_image_event", "event_id"),
         Index("idx_gallery_image_stored_file", "stored_file_id"),
+        Index("idx_gallery_image_live_video", "live_video_stored_file_id"),
         Index("idx_gallery_image_cycle_config", "cycle_config_id"),
         Index("idx_gallery_image_submission_assignment", "submission_assignment_id"),
     )
@@ -1016,6 +1017,9 @@ class GalleryImage(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     stored_file_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("stored_file.id", ondelete="RESTRICT"), nullable=False)
+    # Live Photo: the short H.264 clip (its own StoredFile, no gallery_image row of its own) the
+    # Fotos grid plays on hover - see apple_media.py. NULL for every ordinary photo.
+    live_video_stored_file_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("stored_file.id", ondelete="SET NULL"))
     # The Termin the uploader optionally targeted in GalleryUploadModal, kept around (it
     # used to be discarded once the file landed in that Termin's auto-album) so the Fotos
     # page's date-grouped headers can show which Termin/Zyklus a given date belongs to.

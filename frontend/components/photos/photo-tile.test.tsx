@@ -93,3 +93,94 @@ it("starts requests only for visible tiles, preserving offscreen placeholders un
   intersect(1, true);
   expect(images[1]).toHaveAttribute("src", expect.stringContaining("/second.jpg"));
 });
+
+// --- Live Photo: der Clip spielt beim Hovern über dem Standbild ---
+
+const liveItem = { ...item, live_video_url: "/api/stored-files/clip-1/content" } as FileOverviewItem;
+
+function renderLiveTile() {
+  const { container } = render(<PhotoTile item={liveItem} selected={false} selectionMode={false} onOpen={vi.fn()} onToggleSelect={vi.fn()} />);
+  return { tile: container.querySelector(".photo-tile") as HTMLElement, video: () => container.querySelector("video") };
+}
+
+function stubMedia() {
+  const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+  const pause = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+  return { play, pause };
+}
+
+it("shows no LIVE badge and loads no video for an ordinary photo", () => {
+  vi.useFakeTimers();
+  const { container } = render(<PhotoTile item={item} selected={false} selectionMode={false} onOpen={vi.fn()} onToggleSelect={vi.fn()} />);
+  fireEvent.mouseEnter(container.querySelector(".photo-tile")!);
+  act(() => { vi.advanceTimersByTime(1000); });
+  expect(screen.queryByText("LIVE")).not.toBeInTheDocument();
+  expect(container.querySelector("video")).toBeNull();
+  vi.useRealTimers();
+});
+
+it("marks a Live Photo but does not load its clip until it is hovered", () => {
+  vi.useFakeTimers();
+  const { video } = renderLiveTile();
+  expect(screen.getByText("LIVE")).toBeInTheDocument();
+  act(() => { vi.advanceTimersByTime(1000); });
+  expect(video()).toBeNull();
+  vi.useRealTimers();
+});
+
+it("plays the clip while hovered and stops and rewinds it on leave", () => {
+  vi.useFakeTimers();
+  const { play, pause } = stubMedia();
+  const { tile, video } = renderLiveTile();
+
+  fireEvent.mouseEnter(tile);
+  expect(video()).toBeNull(); // erst nach kurzer Verzögerung, damit Überstreichen nichts lädt
+  act(() => { vi.advanceTimersByTime(200); });
+  expect(video()).toHaveAttribute("src", "/api/stored-files/clip-1/content");
+  expect(video()).toHaveProperty("muted", true);
+  expect(play).toHaveBeenCalled();
+  expect(video()).not.toHaveClass("photo-tile-live-video-playing"); // Standbild bleibt bis zum ersten Videobild
+
+  fireEvent.playing(video()!);
+  expect(video()).toHaveClass("photo-tile-live-video-playing");
+
+  fireEvent.mouseLeave(tile);
+  expect(pause).toHaveBeenCalled();
+  expect(video()).not.toHaveClass("photo-tile-live-video-playing");
+  vi.useRealTimers();
+});
+
+it("does not request the clip when the pointer only passes over the tile", () => {
+  vi.useFakeTimers();
+  stubMedia();
+  const { tile, video } = renderLiveTile();
+  fireEvent.mouseEnter(tile);
+  act(() => { vi.advanceTimersByTime(50); });
+  fireEvent.mouseLeave(tile);
+  act(() => { vi.advanceTimersByTime(1000); });
+  expect(video()).toBeNull();
+  vi.useRealTimers();
+});
+
+it("never plays the clip when the user prefers reduced motion", () => {
+  vi.useFakeTimers();
+  const { play } = stubMedia();
+  vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("prefers-reduced-motion"), addEventListener() {}, removeEventListener() {} }));
+  const { tile } = renderLiveTile();
+  fireEvent.mouseEnter(tile);
+  act(() => { vi.advanceTimersByTime(200); });
+  expect(play).not.toHaveBeenCalled();
+  vi.useRealTimers();
+});
+
+it("falls back to the still photo when the clip cannot be loaded", () => {
+  vi.useFakeTimers();
+  stubMedia();
+  const { tile, video } = renderLiveTile();
+  fireEvent.mouseEnter(tile);
+  act(() => { vi.advanceTimersByTime(200); });
+  fireEvent.error(video()!);
+  expect(video()).toBeNull();
+  expect(screen.getByRole("img")).toBeInTheDocument();
+  vi.useRealTimers();
+});

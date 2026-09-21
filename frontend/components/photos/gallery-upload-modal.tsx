@@ -1,15 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { findUploadRuleProblems, UploadTargetFields, useUploadTarget } from "@/components/files/upload-target-fields";
 import { Modal } from "@/components/ui/modal";
 import { TagInput } from "@/components/ui/tag-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { formatFileSize } from "@/lib/utils/format";
+import { isHeicName, isLiveClipName, pairLiveClips } from "@/lib/utils/live-photo";
 import { GalleryUploadJob } from "@/types/api";
 
-const GALLERY_UPLOAD_ACCEPT = "image/jpeg,image/png,image/gif,image/webp,image/bmp,image/tiff,.zip";
+// HEIC/HEIF (iPhone) und .mov (Live-Photo-Clip) stehen mit Endung da, weil Browser ausser Safari dafür
+// keinen MIME-Typ melden. Der Clip wird nur zusammen mit dem gleichnamigen Bild angenommen.
+const GALLERY_UPLOAD_ACCEPT = "image/jpeg,image/png,image/gif,image/webp,image/bmp,image/tiff,image/heic,image/heif,.heic,.heif,video/quicktime,.mov,.zip";
 
 function UploadIcon() {
   return (
@@ -28,6 +31,15 @@ function CloseIcon() {
   );
 }
 
+function ClipIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" width="22" height="22">
+      <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="1.5" />
+      <path d="m10 9.5 4.5 2.5-4.5 2.5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function ZipIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" width="22" height="22">
@@ -40,12 +52,15 @@ function ZipIcon() {
 
 // Per-file preview: an object URL for a real image, null for a ZIP (or anything else the
 // browser can't thumbnail on its own without unpacking it first - the queue just shows a
-// generic archive icon for those instead, see ZipIcon above).
+// generic archive icon for those instead, see ZipIcon above). HEIC is skipped too: outside
+// Safari the browser can't decode it, so the <img> would only show a broken-image icon.
 function useFilePreviews(files: File[]): (string | null)[] {
   const [previews, setPreviews] = useState<(string | null)[]>([]);
 
   useEffect(() => {
-    const urls = files.map((file) => (file.type.startsWith("image/") ? URL.createObjectURL(file) : null));
+    const urls = files.map((file) =>
+      file.type.startsWith("image/") && !isHeicName(file.name) && !/^image\/hei[cf]/.test(file.type) ? URL.createObjectURL(file) : null,
+    );
     setPreviews(urls);
     return () => {
       urls.forEach((url) => {
@@ -99,7 +114,15 @@ export function GalleryUploadModal({
   }
 
   // A ZIP is only a carrier for images - the backend judges its entries once it opens it.
-  const ruleProblems = findUploadRuleProblems(selectedFiles, target.rules, true);
+  // A Live Photo's clip (IMG_1.MOV next to IMG_1.HEIC) is part of that photo, not a file of its own -
+  // neither for the Abgabe's rules nor for the count on the button.
+  const clipIndexes = useMemo(() => new Set(pairLiveClips(selectedFiles.map((file) => file.name)).values()), [selectedFiles]);
+  const photoCount = selectedFiles.length - clipIndexes.size;
+  const ruleProblems = findUploadRuleProblems(
+    selectedFiles.filter((_, index) => !clipIndexes.has(index)),
+    target.rules,
+    true,
+  );
 
   const totalBytes = selectedFiles.reduce((sum, file) => sum + file.size, 0);
 
@@ -182,10 +205,13 @@ export function GalleryUploadModal({
               oder <span className="gallery-upload-browse">Dateien auswählen</span>
             </p>
             <div className="gallery-upload-formats" aria-label="Unterstützte Formate">
-              {["JPG", "PNG", "GIF", "WebP", "BMP", "TIFF", "ZIP"].map((format) => (
+              {["JPG", "PNG", "GIF", "WebP", "BMP", "TIFF", "HEIC", "Live Photo", "ZIP"].map((format) => (
                 <span key={format}>{format}</span>
               ))}
             </div>
+            <p className="muted">
+              iPhone-Fotos (HEIC) werden als JPEG gespeichert. Für ein Live Photo Bild und Video (.mov) mit gleichem Namen zusammen wählen.
+            </p>
           </div>
 
           <div>
@@ -210,7 +236,7 @@ export function GalleryUploadModal({
                         <img src={previews[index] ?? undefined} alt="" />
                       ) : (
                         <div className="gallery-upload-thumbnail-fallback">
-                          <ZipIcon />
+                          {isLiveClipName(file.name) ? <ClipIcon /> : <ZipIcon />}
                         </div>
                       )}
                     </div>
@@ -220,7 +246,7 @@ export function GalleryUploadModal({
                         <span className="muted">{formatFileSize(file.size)}</span>
                       </div>
                       <span className="gallery-upload-file-status">
-                        {uploading ? "Wird hochgeladen…" : "Bereit zum Hochladen"}
+                        {uploading ? "Wird hochgeladen…" : clipIndexes.has(index) ? "Live-Photo-Video, gehört zum gleichnamigen Bild" : "Bereit zum Hochladen"}
                       </span>
                       {uploading && <progress className="gallery-upload-progress" />}
                     </div>
@@ -266,7 +292,7 @@ export function GalleryUploadModal({
               {uploading
                 ? "Lädt hoch…"
                 : selectedFiles.length > 0
-                  ? `${selectedFiles.length} ${selectedFiles.length === 1 ? "Bild" : "Bilder"} hochladen`
+                  ? `${photoCount} ${photoCount === 1 ? "Bild" : "Bilder"} hochladen`
                   : "Hochladen"}
             </button>
           </div>

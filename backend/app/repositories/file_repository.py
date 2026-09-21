@@ -5,7 +5,7 @@ from sqlalchemy import BigInteger, Date, String, and_, case, cast, func, literal
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.engine import Row
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from app.models import (
     CycleConfig,
@@ -187,6 +187,7 @@ class StoredFileRepository:
                     ),
                 ).label("context_label"),
                 cast(null(), String).label("ref_kind"),
+                cast(null(), PG_UUID(as_uuid=True)).label("live_video_public_id"),
             )
             .select_from(StoredFile)
             .join(Tenant, Tenant.id == StoredFile.tenant_id)
@@ -211,6 +212,7 @@ class StoredFileRepository:
                 func.coalesce(WordImportDocument.protocol_date, cast(StoredFile.created_at, Date)).label("group_date"),
                 WordImportDocument.display_name.label("context_label"),
                 cast(null(), String).label("ref_kind"),
+                cast(null(), PG_UUID(as_uuid=True)).label("live_video_public_id"),
             )
             .select_from(StoredFile)
             .join(Tenant, Tenant.id == StoredFile.tenant_id)
@@ -232,6 +234,7 @@ class StoredFileRepository:
                 cast(StoredFile.created_at, Date).label("group_date"),
                 SubmissionAssignment.title.label("context_label"),
                 cast(null(), String).label("ref_kind"),
+                cast(null(), PG_UUID(as_uuid=True)).label("live_video_public_id"),
             )
             .select_from(StoredFile)
             .join(Tenant, Tenant.id == StoredFile.tenant_id)
@@ -244,6 +247,7 @@ class StoredFileRepository:
         # Documents uploaded on the "Dateien" page (POST /files/document-uploads) carry their
         # Bezug in the link columns below; photo uploads leave them NULL (they link through
         # albums instead) and so keep the empty ref_label they always had.
+        live_video = aliased(StoredFile)
         gallery_branch = (
             select(
                 *self._shared_file_overview_columns(),
@@ -279,10 +283,12 @@ class StoredFileRepository:
                     (CycleConfig.id.is_not(None), literal("cycle")),
                     else_=cast(null(), String),
                 ).label("ref_kind"),
+                live_video.public_id.label("live_video_public_id"),
             )
             .select_from(StoredFile)
             .join(Tenant, Tenant.id == StoredFile.tenant_id)
             .join(GalleryImage, GalleryImage.stored_file_id == StoredFile.id)
+            .outerjoin(live_video, live_video.id == GalleryImage.live_video_stored_file_id)
             # Outer joins: most gallery uploads have no Termin/Zyklus/Abgabe at all, and those
             # must still be listed (group_date/context_label just fall back to created_at/None).
             .outerjoin(Event, Event.id == GalleryImage.event_id)
