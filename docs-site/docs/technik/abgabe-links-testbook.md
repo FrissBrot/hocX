@@ -12,6 +12,7 @@ DB-Rolle, kein geteilter Code).
 | Ebene | Befehl | Datei |
 |---|---|---|
 | E2E (echter Stack, Chromium) | `./scripts/e2e.sh all` | `frontend/e2e/abgabe-links.spec.ts` |
+| Haupt-Backend (verknüpfte Uploads, echte DB) | `./scripts/test.sh backend` | `backend/tests/test_submission_upload_rules.py`, `backend/tests/test_submission_service.py` |
 | Haupt-Backend (echte DB, DB-Rechte) | `./scripts/test.sh backend` | `backend/tests/test_submission_links.py` |
 | Abgabebox-Backend (ohne DB) | `./scripts/test.sh abgabebox-backend` | `abgabebox-backend/tests/test_link_token_access.py` |
 | Haupt-Frontend (Vitest) | `./scripts/test.sh frontend` | `frontend/components/submission-assignments/submission-link-manager.test.tsx` |
@@ -68,6 +69,38 @@ Abgaben und Termine selbst auf und stellt den ursprünglichen Standard-Link wied
 `submission-link-manager.test.tsx`: Anzeige mit Namen, Standard-Markierung und voller URL;
 Anlegen nur mit Namen; Löschen nur nach Bestätigung samt Hinweis auf betroffene Abgaben;
 nach „Als Standard festlegen“ genau ein Standard-Link.
+
+## Verknüpfte Dateien und Bilder als Abgabe
+
+Direkt-Uploads über „Dateien“ oder „Fotos“ mit Bezug auf ein Abgabe-Element zählen
+in der internen Abgabeansicht ebenfalls als eingereicht. Bestehende Verknüpfungen
+werden beim Lesen berücksichtigt; eine erneute Einreichung ist nicht nötig.
+
+Automatisiert in `backend/tests/test_submission_upload_rules.py`,
+`test_linked_upload_counts_as_submission`: acht Kombinationen aus Dokument/Bild,
+offen/geschlossen und Virenprüfung `clean`/`pending`. Jeder Fall prüft anschließend
+auch die Kombination mit einer zusätzlichen Datei aus der öffentlichen Abgabebox.
+
+| ID | Durchführung | Erwartung |
+|---|---|---|
+| ABG-UP-01 | PDF direkt hochladen und einem offenen Abgabe-Element zuordnen, das noch keinen öffentlichen Upload hat | Status `submitted`; Datei und Einreichungszeitpunkt vorhanden; Download-URL verweist auf die interne Datei |
+| ABG-UP-02 | Bild direkt hochladen und demselben Typ Abgabe-Element zuordnen | Gleiche Status-, Zeitpunkt- und Dateianzeige wie beim Dokument |
+| ABG-UP-03 | Dokument oder Bild einem bereits geschlossenen Element zuordnen | Datei wird angezeigt; Status bleibt `closed` |
+| ABG-UP-04 | Verknüpften Upload mit ausstehender Virenprüfung (`pending`) lesen | Datei behält `pending`; Element zählt in der Quarantäne, nicht als sauber geprüft; bei `clean` zählt es als freigegeben |
+| ABG-UP-05 | Zu einem verknüpften Direkt-Upload eine saubere öffentliche Einreichung desselben Elements hinzufügen | Beide Dateien erscheinen; die Übersicht zählt das Element nur einmal; die saubere Einreichung zählt auch neben einer ausstehenden Prüfung |
+| ABG-UP-06 | Dateilimit auf drei setzen, zuerst direkt und dann öffentlich je eine Datei verknüpfen | Nach dem Direkt-Upload bleiben zwei Plätze, danach einer; keine doppelte Anrechnung |
+
+Ergänzend deckt `backend/tests/test_submission_service.py` offene Elemente ohne
+Dateien, öffentliche Einreichungen sowie Schließen und Wiederöffnen ab.
+
+Manuell im Browser prüfen (diese Schritte wurden durch die Backend-Tests nicht ausgeführt):
+
+| ID | Durchführung | Erwartung |
+|---|---|---|
+| ABG-UP-M1 | Unter „Dateien“ eine PDF mit Abgabe-Bezug hochladen; Abgabe öffnen und Datei herunterladen | Datei erscheint in Detailansicht und Übersicht; heruntergeladener Inhalt entspricht der PDF |
+| ABG-UP-M2 | Unter „Fotos“ ein Bild mit Abgabe-Bezug hochladen; Verarbeitung abwarten und Abgabe öffnen | Bild erscheint mit Einreichungszeitpunkt; Download funktioniert |
+| ABG-UP-M3 | Eine bereits vor der Änderung verknüpfte Datei in der Abgabe öffnen | Datei und Status werden ohne erneuten Upload berücksichtigt |
+| ABG-UP-M4 | Bei einer Datei mit ausstehender Virenprüfung die Abgabe öffnen | Quarantänekennzeichnung sichtbar; kein freigegebener Download angeboten |
 
 ## Manuelle Prüfungen
 

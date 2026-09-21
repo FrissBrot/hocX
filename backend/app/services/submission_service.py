@@ -3,13 +3,14 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime, timedelta
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from pathlib import Path
 
 from app.core.config import settings
 from app import scanner
-from app.models import Event, ListDefinition, ListEntry, Participant, ProtocolTodo, StoredFile, SubmissionAssignment, SubmissionUpload
+from app.models import GalleryImage, Event, ListDefinition, ListEntry, Participant, ProtocolTodo, StoredFile, SubmissionAssignment, SubmissionUpload
 from app.repositories.submission_repository import SubmissionRepository
 from app.schemas.submission import (
     SubmissionAssignmentCreate,
@@ -317,6 +318,8 @@ class SubmissionService:
         - sonst 'submitted', wenn irgendeine Zeile Dateien beigetragen hat (weiterhin offen fuer
           weitere Uploads).
         - sonst 'open' (noch nie etwas eingereicht).
+        Verknuepfte Direkt-Uploads zaehlen ebenfalls als eingereichte Dateien; ihr
+        Download bleibt beim internen Dateispeicher.
         Dateien = Vereinigung aller Zeilen, mit dem tatsaechlichen Owner-Upload pro Datei (fuer
         content_url), nicht der Datei-Liste der juengsten Zeile allein.
         """
@@ -325,6 +328,19 @@ class SubmissionService:
         uploads_by_key: dict[tuple[int | None, int | None], list[SubmissionUpload]] = {}
         for upload in uploads:
             uploads_by_key.setdefault((upload.event_id, upload.list_entry_id), []).append(upload)
+
+        linked_files: dict[str, list[StoredFile]] = {}
+        for gallery_image, stored_file in db.execute(
+            select(GalleryImage, StoredFile)
+            .join(StoredFile, StoredFile.id == GalleryImage.stored_file_id)
+            .where(
+                GalleryImage.tenant_id == assignment.tenant_id,
+                StoredFile.tenant_id == assignment.tenant_id,
+                GalleryImage.submission_assignment_id == assignment.id,
+            )
+            .order_by(GalleryImage.id)
+        ):
+            linked_files.setdefault(gallery_image.submission_element_ref, []).append(stored_file)
 
         results: list[SubmissionElementRead] = []
         for raw in raw_elements:
@@ -348,9 +364,26 @@ class SubmissionService:
                         )
                     )
 
-            if not element_uploads:
-                status = "open"
-            elif element_uploads[-1].status == "closed":
+            element_ref = _element_ref(
+                event_public_id=raw["event_public_id"], list_entry_public_id=raw["list_entry_public_id"]
+            )
+            known_file_ids = {file.id for file in files}
+            for stored_file in linked_files.get(element_ref, []):
+                if stored_file.public_id in known_file_ids:
+                    continue
+                known_file_ids.add(stored_file.public_id)
+                files.append(SubmissionFileRead(
+                    id=stored_file.public_id,
+                    original_name=stored_file.original_name,
+                    mime_type=stored_file.mime_type,
+                    file_size_bytes=stored_file.file_size_bytes,
+                    content_url=f"/api/stored-files/{stored_file.public_id}/content",
+                    scan_status=stored_file.scan_status,
+                ))
+                if submitted_at is None or stored_file.created_at > submitted_at:
+                    submitted_at = stored_file.created_at
+
+            if element_uploads and element_uploads[-1].status == "closed":
                 status = "closed"
             elif files:
                 status = "submitted"
@@ -359,7 +392,7 @@ class SubmissionService:
 
             results.append(
                 SubmissionElementRead(
-                    element_ref=_element_ref(event_public_id=raw["event_public_id"], list_entry_public_id=raw["list_entry_public_id"]),
+                    element_ref=element_ref,
                     label=raw["label"],
                     window_start=raw["window_start"],
                     window_end=raw["window_end"],

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.models import (
     Event,
+    GalleryImage,
     ListDefinition,
     ListEntry,
     Participant,
@@ -184,59 +185,36 @@ class SubmissionRepository:
         return [row[0] for row in db.execute(statement)]
 
     def count_submissions_summary(self, db: Session, *, assignment_id: int) -> dict:
-        """Count submitted elements and those in quarantine for an assignment.
-
-        An element is identified by its (event_id, list_entry_id) pair - exactly one of the
-        two is set per row (ck_submission_upload_exactly_one_target), so COUNT(DISTINCT ...)
-        over both columns correctly counts distinct elements without colliding across the two
-        id spaces.
-
-        Must join through submission_upload_file so a manually closed element that never
-        received any file (see SubmissionService.close_element - closing works even before a
-        submission exists) doesn't inflate this count: a bare SubmissionUpload row alone no
-        longer implies a real submission happened, only that *some* status-changing event did.
-        """
-        element_key = (SubmissionUpload.event_id, SubmissionUpload.list_entry_id)
-
-        submitted_stmt = (
-            select(func.count(func.distinct(*element_key)))
+        """Count distinct elements across public submissions and linked in-app uploads."""
+        public_files = db.execute(
+            select(Event.public_id, ListEntry.public_id, StoredFile.scan_status)
+            .select_from(SubmissionUpload)
             .join(SubmissionUploadFile, SubmissionUploadFile.upload_id == SubmissionUpload.id)
+            .join(StoredFile, StoredFile.id == SubmissionUploadFile.stored_file_id)
+            .outerjoin(Event, Event.id == SubmissionUpload.event_id)
+            .outerjoin(ListEntry, ListEntry.id == SubmissionUpload.list_entry_id)
             .where(SubmissionUpload.assignment_id == assignment_id)
         )
-        submitted = db.scalar(submitted_stmt) or 0
-
-        quarantine_stmt = (
-            select(func.count(func.distinct(*element_key)))
-            .join(SubmissionUploadFile, SubmissionUploadFile.upload_id == SubmissionUpload.id)
-            .join(StoredFile, StoredFile.id == SubmissionUploadFile.stored_file_id)
-            .where(SubmissionUpload.assignment_id == assignment_id, StoredFile.scan_status == "pending")
-        )
-        quarantine = db.scalar(quarantine_stmt) or 0
-
-        infected_stmt = (
-            select(func.count(func.distinct(*element_key)))
-            .join(SubmissionUploadFile, SubmissionUploadFile.upload_id == SubmissionUpload.id)
-            .join(StoredFile, StoredFile.id == SubmissionUploadFile.stored_file_id)
-            .where(SubmissionUpload.assignment_id == assignment_id, StoredFile.scan_status == "infected")
-        )
-        infected = db.scalar(infected_stmt) or 0
-
-        # Computed directly, not derived as submitted - quarantine - infected (audit
-        # finding, 2026-08-25): each of the three counts above is independently
-        # COUNT(DISTINCT element), so an element with both a clean AND an infected/pending
-        # file (or a mix of any two statuses) was counted in more than one bucket at once -
-        # the subtraction then double-deducted it, undercounting (occasionally negative,
-        # masked by the route's max(0, ...) clamp) how many elements actually have a clean
-        # submission.
-        clean_stmt = (
-            select(func.count(func.distinct(*element_key)))
-            .join(SubmissionUploadFile, SubmissionUploadFile.upload_id == SubmissionUpload.id)
-            .join(StoredFile, StoredFile.id == SubmissionUploadFile.stored_file_id)
-            .where(SubmissionUpload.assignment_id == assignment_id, StoredFile.scan_status == "clean")
-        )
-        clean = db.scalar(clean_stmt) or 0
-
-        return {"submitted": submitted, "quarantine": quarantine, "infected": infected, "clean": clean}
+        files = [
+            (f"event-{event_id}" if event_id else f"entry-{entry_id}" if entry_id else "manual", status)
+            for event_id, entry_id, status in public_files
+        ]
+        files.extend(db.execute(
+            select(GalleryImage.submission_element_ref, StoredFile.scan_status)
+            .join(StoredFile, StoredFile.id == GalleryImage.stored_file_id)
+            .join(SubmissionAssignment, SubmissionAssignment.id == GalleryImage.submission_assignment_id)
+            .where(
+                GalleryImage.submission_assignment_id == assignment_id,
+                GalleryImage.tenant_id == SubmissionAssignment.tenant_id,
+                StoredFile.tenant_id == SubmissionAssignment.tenant_id,
+            )
+        ).all())
+        return {
+            "submitted": len({ref for ref, _ in files}),
+            "quarantine": len({ref for ref, status in files if status == "pending"}),
+            "infected": len({ref for ref, status in files if status == "infected"}),
+            "clean": len({ref for ref, status in files if status == "clean"}),
+        }
 
     def count_list_entries(self, db: Session, *, list_definition_id: int) -> int:
         stmt = select(func.count()).where(ListEntry.list_definition_id == list_definition_id)

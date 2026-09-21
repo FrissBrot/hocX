@@ -230,3 +230,55 @@ def test_photo_zip_entries_are_judged_by_the_job_per_file(db):
     assert any(error.startswith("d.png:") and "Limit der Abgabe erreicht" in error for error in problems)
     # The photos that made it are counted toward the element from now on.
     assert db.query(GalleryImage).filter_by(submission_assignment_id=assignment.id, submission_element_ref=ref).count() == 2
+
+
+@pytest.mark.parametrize("image", [False, True])
+@pytest.mark.parametrize("closed", [False, True])
+@pytest.mark.parametrize("scan_status", ["clean", "pending"])
+def test_linked_upload_counts_as_submission(db, monkeypatch, image, closed, scan_status):
+    from app.services.submission_service import SubmissionService
+    from app.services.submission_upload_rules import load_rules
+    from app.services import file_service as file_service_module
+
+    async def clean_scan(contents, **kwargs):
+        return [scan_status] * len(contents)
+
+    monkeypatch.setattr(file_service_module.scanner, "scan_many", clean_scan)
+    tenant = make_tenant(db)
+    assignment, ref, empty_upload = _make_assignment(db, tenant.id, max_files=3)
+    if closed:
+        empty_upload.status = "closed"
+    else:
+        db.delete(empty_upload)
+    db.flush()
+    upload = service.save_gallery_uploads if image else service.save_document_uploads
+    items, errors = asyncio.run(upload(
+        db, tenant_id=tenant.id, files=[("bild.png", _image_bytes())] if image else [("datei.pdf", PDF)],
+        tags=[], created_by=None, upload_assignment=assignment, upload_element_ref=ref,
+    ))
+    assert errors == []
+    submissions = SubmissionService()
+    element = submissions.get_assignment_elements(db, assignment)[0]
+    assert element.status == ("closed" if closed else "submitted")
+    assert element.submitted_at is not None
+    assert [file.id for file in element.files] == [items[0].id]
+    assert element.files[0].content_url == service.build_content_url(items[0].id)
+    assert submissions.repository.count_submissions_summary(db, assignment_id=assignment.id) == {
+        "submitted": 1, "clean": int(scan_status == "clean"),
+        "quarantine": int(scan_status == "pending"), "infected": 0,
+    }
+    assert load_rules(db, assignment, ref).remaining == 2
+
+    # A public submission for the same element adds a file, not another completed element.
+    from app.services.submission_service import _parse_element_ref
+    event_id, entry_id = _parse_element_ref(db, ref)
+    public_upload = SubmissionUpload(
+        assignment_id=assignment.id, event_id=event_id, list_entry_id=entry_id, status="submitted",
+    )
+    db.add(public_upload)
+    db.flush()
+    _add_abgabebox_file(db, tenant.id, public_upload)
+    assert len(submissions.get_assignment_elements(db, assignment)[0].files) == 2
+    counts = submissions.repository.count_submissions_summary(db, assignment_id=assignment.id)
+    assert counts["submitted"] == counts["clean"] == 1
+    assert load_rules(db, assignment, ref).remaining == 1
