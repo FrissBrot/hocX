@@ -68,6 +68,7 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [analysisProgress, setAnalysisProgress] = useState<ProgressData | null>(null);
+  const [queuedUploadId, setQueuedUploadId] = useState<string | undefined>();
   const [galleryUploadJobs, setGalleryUploadJobs] = useState<GalleryUploadJob[]>([]);
   const requestIdRef = useRef(0);
   const didMountRef = useRef(false);
@@ -265,7 +266,8 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
     setTagSuggestions((current) => Array.from(new Set([...current, ...tags])).sort((a, b) => a.localeCompare(b)));
   }
 
-  function handleGalleryUploadQueued() {
+  function handleGalleryUploadQueued(job: GalleryUploadJob) {
+    setQueuedUploadId(job.id);
     // The actual result (imported items/errors) only arrives later, once the background
     // job finishes - see handleGalleryUploadJobDone, wired to GalleryUploadProgress below.
     showToast("Wird hochgeladen und im Hintergrund verarbeitet…", "info");
@@ -369,7 +371,7 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
       ) : (
         <>
           {!embedded && <PhotoAnalysisProgress onUpdate={setAnalysisProgress} />}
-          {!embedded && <GalleryUploadProgress onUpdate={setGalleryUploadJobs} onJobDone={handleGalleryUploadJobDone} />}
+          {!embedded && <GalleryUploadProgress queuedJobId={queuedUploadId} onUpdate={setGalleryUploadJobs} onJobDone={handleGalleryUploadJobDone} />}
           {embedded && (
             <div className="list-filter-row list-filter-row-compact">
               <div className="list-filter-search">

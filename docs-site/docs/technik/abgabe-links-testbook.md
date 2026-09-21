@@ -7,6 +7,9 @@ Dinge: **kein Zugriff ohne gültigen Link**, **ein Link erreicht nur die ihm zug
 Abgaben** und **die Trennung der Abgabebox bleibt so strikt wie zuvor** (eingeschränkte
 DB-Rolle, kein geteilter Code).
 
+Die ergänzenden Prüfungen für exakte Datei-Duplikate und gleichzeitige Uploads stehen im
+[Upload-Testbook](upload-testbook.md).
+
 ## Ausführung
 
 | Ebene | Befehl | Datei |

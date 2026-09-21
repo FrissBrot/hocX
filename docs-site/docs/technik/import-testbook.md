@@ -5,6 +5,9 @@ Prüfungen. Es schützt insbesondere die Übergänge zwischen öffentlichen UUID
 internen IDs, Datumsinterpretation und historische Daten. Die Tests verwenden echte
 HTTP-Endpunkte, DOCX-Parser, Datenbank und Chromium; Importantworten werden nicht gemockt.
 
+Die ergänzenden Prüfungen für exakte Datei-Duplikate und gleichzeitige Uploads stehen im
+[Upload-Testbook](upload-testbook.md).
+
 ## Ausführung
 
 Der vollständige, isolierte Lauf inklusive Anmeldung und Aufräumen:

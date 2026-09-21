@@ -1,8 +1,10 @@
-from contextlib import contextmanager
+import asyncio
+from contextlib import asynccontextmanager, contextmanager
 from typing import Iterator
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import NullPool
 
 from app.config import settings
 
@@ -62,4 +64,22 @@ def tenant_upload_lock(tenant_id: int) -> Iterator[None]:
     lock_key = _TENANT_UPLOAD_LOCK_OFFSET + tenant_id
     with engine.begin() as conn:
         conn.execute(text("SELECT pg_advisory_xact_lock(:lock_key)"), {"lock_key": lock_key})
+        yield
+
+
+# Shared with backend/app/services/upload_lock.py. A separate, unpooled connection
+# survives the upload log's commits without consuming the request connection pool.
+# Transaction scope releases the lock on errors, cancellation and connection loss.
+UPLOAD_LOCK_NAMESPACE = 909100001
+_upload_lock_engine = create_engine(settings.database_url, poolclass=NullPool)
+
+
+@asynccontextmanager
+async def serialized_upload(tenant_id: int):
+    with _upload_lock_engine.begin() as conn:
+        while not conn.scalar(
+            text("SELECT pg_try_advisory_xact_lock(:ns, :tenant_id)"),
+            {"ns": UPLOAD_LOCK_NAMESPACE, "tenant_id": tenant_id},
+        ):
+            await asyncio.sleep(0.05)
         yield

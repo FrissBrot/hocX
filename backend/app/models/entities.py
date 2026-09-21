@@ -838,6 +838,8 @@ Index("idx_protocol_element_block_render", ProtocolElementBlock.protocol_element
 class StoredFile(Base, TimestampMixin):
     __tablename__ = "stored_file"
     __table_args__ = (
+        Index("idx_stored_file_tenant_checksum", "tenant_id", "checksum_sha256"),
+        Index("idx_stored_file_tenant_source_checksum", "tenant_id", "source_checksum_sha256"),
         Index("idx_stored_file_tenant", "tenant_id"),
         Index("idx_stored_file_tags_gin", "tags", postgresql_using="gin"),
         Index("idx_stored_file_created_by", "created_by"),
@@ -859,6 +861,7 @@ class StoredFile(Base, TimestampMixin):
     latex_path: Mapped[str | None] = mapped_column(Text)
     file_size_bytes: Mapped[int | None] = mapped_column(BigInteger)
     checksum_sha256: Mapped[str | None] = mapped_column(Text)
+    source_checksum_sha256: Mapped[str | None] = mapped_column(Text)
     perceptual_hash: Mapped[str | None] = mapped_column(Text)
     # Laplacian-variance sharpness and clipped-histogram exposure estimates (see
     # photo_quality.py) - relative ranking signals for the photo-culling "beste Bilder

@@ -11,7 +11,7 @@ from typing import Iterator
 
 from fastapi import HTTPException, UploadFile
 from PIL import Image
-from sqlalchemy import delete, func, select, text
+from sqlalchemy import delete, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app import scanner
@@ -25,6 +25,7 @@ from app.schemas.protocol import ProtocolImageRead
 from app.services import public_id_service
 from app.services.photo_quality import compute_quality_scores
 from app.services.photo_similarity import MAX_GROUPING_IMAGES, GroupableImage, group_similar_images
+from app.services.upload_lock import UPLOAD_LOCK_NAMESPACE, acquire_upload_lock, acquire_upload_lock_sync
 from app.services.upload_pipeline import (
     ALLOWED_IMAGE_MIME_TYPES,
     MAX_UPLOAD_BYTES,
@@ -53,7 +54,7 @@ MAX_TAG_LENGTH = 60
 
 # Distinct namespace (paired with tenant_id as the advisory lock's two int32 keys) from
 # the fixed single-bigint lock ids main.py's background loops use (202600xxx range).
-_PROTOCOL_IMAGE_QUOTA_LOCK_NAMESPACE = 909100001
+_PROTOCOL_IMAGE_QUOTA_LOCK_NAMESPACE = UPLOAD_LOCK_NAMESPACE
 
 
 @contextmanager
@@ -643,6 +644,31 @@ class FileService:
             uploaded_by_name=uploaded_by_name,
         )
 
+    def _filter_exact_duplicates(
+        self, db: Session, tenant_id: int, files: list[tuple[str, bytes]]
+    ) -> tuple[list[tuple[str, bytes]], list[str]]:
+        """One indexed lookup per batch, before scanning or decoding any file."""
+        checksums = [hashlib.sha256(content).hexdigest() for _, content in files]
+        if not checksums:
+            return [], []
+        rows = db.execute(
+            select(StoredFile.checksum_sha256, StoredFile.source_checksum_sha256).where(
+                StoredFile.tenant_id == tenant_id,
+                StoredFile.scan_status != "infected",
+                or_(StoredFile.checksum_sha256.in_(checksums),
+                    StoredFile.source_checksum_sha256.in_(checksums)),
+            )
+        )
+        seen = {value for row in rows for value in row if value}
+        accepted, warnings = [], []
+        for file, checksum in zip(files, checksums):
+            if checksum in seen:
+                warnings.append(f"{file[0] or 'Datei'}: Exaktes Duplikat – bereits vorhanden, nicht erneut gespeichert.")
+            else:
+                accepted.append(file)
+                seen.add(checksum)
+        return accepted, warnings
+
     async def save_protocol_image(
         self,
         db: Session,
@@ -665,10 +691,16 @@ class FileService:
         if not _content_matches_mime(content, mime):
             raise HTTPException(status_code=400, detail="Dateiinhalt passt nicht zum angegebenen Bildformat")
 
+        tenant_id = self._resolve_tenant_id(db, protocol_element_block.id)
+        await acquire_upload_lock(db, tenant_id)
         checksum = hashlib.sha256(content).hexdigest()
         existing_block_images = self.protocol_image_repository.list_for_protocol_block(db, protocol_element_block.id)
         if any(row.StoredFile.checksum_sha256 == checksum for row in existing_block_images):
             raise HTTPException(status_code=409, detail="Dieses Bild wurde bereits in diesen Block hochgeladen")
+
+        _, duplicates = self._filter_exact_duplicates(db, tenant_id, [(file.filename or "Bild", content)])
+        if duplicates:
+            raise HTTPException(status_code=409, detail=duplicates[0])
 
         # Unlike word-import documents and abgabebox uploads, protocol images were never
         # scanned at all (audit finding, 2026-08-25) - scan_status defaulted to "clean" in
@@ -677,8 +709,6 @@ class FileService:
         # request's event loop, and a direct scan_bytes() call would block the whole uvicorn
         # worker for every tenant until ClamAV answers (up to 30s on timeout).
         scan_status = (await scanner.scan_many([content], host=settings.clamav_host, port=settings.clamav_port))[0]
-
-        tenant_id = self._resolve_tenant_id(db, protocol_element_block.id)
 
         # No per-tenant total quota existed at all before this fix (audit finding,
         # 2026-08-25) - only the per-file MAX_UPLOAD_BYTES check above. Quota check and
@@ -768,7 +798,7 @@ class FileService:
         content verification (never the client-supplied filename/Content-Type), a size cap, a
         checksum + tenant-wide perceptual-hash duplicate check (same "sieht aus wie ein bereits
         hochgeladenes Bild" warning as protocol images), and thumbnail generation for the
-        "Fotos" grid. Scans the whole batch concurrently up front via scanner.scan_many()
+        "Fotos" grid. Filters exact duplicates before scanning the remaining batch via scanner.scan_many()
         rather than one blocking scan_bytes() call per file. One bad file never aborts the
         whole batch - problems are collected into `errors` and returned alongside whatever did
         succeed.
@@ -781,9 +811,13 @@ class FileService:
         file's own EXIF capture date to a period independently (see the loop below) since a
         multi-file batch can span more than one Periode; the other two targets apply to
         every file in the batch alike."""
+        await acquire_upload_lock(db, tenant_id)
         self.ensure_storage()
         normalized_tags = _normalize_tags(tags)
         upload_event = db.get(Event, upload_event_id) if upload_event_id is not None else None
+        files, duplicate_errors = self._filter_exact_duplicates(db, tenant_id, files)
+        if not files:
+            return [], duplicate_errors
         scan_statuses = await scanner.scan_many(
             [content for _filename, content in files], host=settings.clamav_host, port=settings.clamav_port
         )
@@ -797,9 +831,10 @@ class FileService:
 
         items: list[FileOverviewItem] = []
         item_taken_at: dict[uuid.UUID, datetime | None] = {}
-        errors: list[str] = []
+        errors: list[str] = list(duplicate_errors)
         for (filename, content), scan_status in zip(files, scan_statuses):
             label = filename or "Bild"
+            source_checksum = hashlib.sha256(content).hexdigest()
             try:
                 result = ingest_file(
                     db,
@@ -826,6 +861,7 @@ class FileService:
                 continue
 
             stored_file = result.stored_file
+            stored_file.source_checksum_sha256 = source_checksum
             db.add(
                 GalleryImage(
                     tenant_id=tenant_id,
@@ -968,8 +1004,12 @@ class FileService:
         rejected a batch violating them (see upload_documents); the Dateianzahl is checked
         once more here, under the tenant upload lock, because two near-simultaneous uploads
         into the same element could otherwise both pass the route's check."""
+        await acquire_upload_lock(db, tenant_id)
         self.ensure_storage()
         normalized_tags = _normalize_tags(tags)
+        files, duplicate_errors = self._filter_exact_duplicates(db, tenant_id, files)
+        if not files:
+            return [], duplicate_errors
         scan_statuses = await scanner.scan_many(
             [content for _filename, content in files], host=settings.clamav_host, port=settings.clamav_port
         )
@@ -977,7 +1017,7 @@ class FileService:
             self._recheck_element_capacity(db, tenant_id, upload_assignment, upload_element_ref, len(files))
 
         saved_public_ids: list[uuid.UUID] = []
-        errors: list[str] = []
+        errors: list[str] = list(duplicate_errors)
         for (filename, content), scan_status in zip(files, scan_statuses):
             label = filename or "Datei"
             try:
@@ -1165,6 +1205,7 @@ class FileService:
         upload_assignment: SubmissionAssignment | None,
         upload_cycle_config: CycleConfig | None,
     ) -> None:
+        await acquire_upload_lock(db, job.tenant_id)
         rule_errors: list[str] = []
         if upload_assignment is not None and job.upload_element_ref is not None:
             from app.services import submission_upload_rules  # deferred: import cycle, see photo_album_service below
@@ -1224,6 +1265,10 @@ class FileService:
         (see routes/word_import.py) because analyze() is a long, synchronous parse - there is
         no event loop to block here in the first place, so the plain blocking scanner.scan_bytes()
         is the right tool, not scan_many()."""
+        acquire_upload_lock_sync(db, tenant_id)
+        _, duplicates = self._filter_exact_duplicates(db, tenant_id, [(filename, content)])
+        if duplicates:
+            raise HTTPException(status_code=409, detail=duplicates[0])
         self.ensure_storage()
 
         # SECURITY: scan before anything ever touches disk - an uploaded .docx/.pdf is

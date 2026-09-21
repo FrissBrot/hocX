@@ -18,7 +18,9 @@ const POLL_INTERVAL_MS = 3000;
 export function GalleryUploadProgress({
   onUpdate,
   onJobDone,
+  queuedJobId,
 }: {
+  queuedJobId?: string;
   onUpdate?: (jobs: GalleryUploadJob[]) => void;
   onJobDone?: (job: GalleryUploadJobDetail) => void;
 }) {
@@ -29,6 +31,7 @@ export function GalleryUploadProgress({
   onJobDoneRef.current = onJobDone;
 
   useEffect(() => {
+    if (queuedJobId) previouslyActiveRef.current.add(queuedJobId);
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -66,7 +69,7 @@ export function GalleryUploadProgress({
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, []);
+  }, [queuedJobId]);
 
   return null;
 }

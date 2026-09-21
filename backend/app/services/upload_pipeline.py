@@ -1,8 +1,7 @@
 """Shared core of every internal (non-abgabebox) upload path: protocol images, gallery
 uploads, word-import documents. Each of the three FileService.save_* methods differs only in
 where it decides to write the file, whether it wants perceptual-hash dedupe/a thumbnail, and
-what its own caller-specific pre-checks are (protocol images check an exact per-block
-duplicate before scanning; nothing else does) - everything past "I have validated,
+what its own caller-specific pre-checks are (exact duplicates are filtered before scanning) - everything past "I have validated,
 already-scanned bytes and know where they go" is identical, and lives here as ingest_file().
 
 Deliberately NOT shared with abgabebox-backend (see the upload-pipeline unification plan) -

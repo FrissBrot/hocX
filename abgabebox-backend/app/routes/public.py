@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from app import element_resolver, repository, scanner
 from app.captcha import mint_captcha_session_token, verify_captcha, verify_captcha_session_token
 from app.config import settings
-from app.db import get_db, tenant_upload_lock
+from app.db import get_db, serialized_upload, tenant_upload_lock
 from app.schemas import AssignmentDetailPublic, AssignmentPublic, CaptchaVerifyResult, ElementPublic, UploadResult
 from app.storage import move_from_quarantine, save_to_quarantine, tenant_storage_bytes
 
@@ -340,28 +340,7 @@ async def upload(
             detail=f"Maximal {settings.max_files_per_upload_request} Dateien pro Anfrage erlaubt",
         )
 
-    # Kumulatives Modell (seit 2026-08-17): max_files_per_element gilt fuer die Gesamtzahl ueber
-    # alle bisherigen Upload-Vorgaenge dieses Elements hinweg, nicht nur fuer diese eine Anfrage.
-    # None = unbegrenzt viele Dateien.
-    #
-    # This early check alone is a TOCTOU (audit finding, 2026-08-25): it ran outside
-    # tenant_upload_lock, so two near-simultaneous uploads for the same element could both
-    # read "0 bisher hochgeladen" and both pass here before either had written anything -
-    # together exceeding max_files_per_element, the same bug class H12 already closed for
-    # the storage quota. Kept here too (not just re-checked in the lock below) purely as a
-    # cheap, early reject for the common non-racing case - it must not be the only check.
     max_files = assignment["max_files_per_element"]
-    if max_files is not None:
-        already_uploaded = repository.count_files_by_element(db, assignment_id=assignment["id"]).get(
-            (element["event_id"], element["list_entry_id"]), 0
-        )
-        remaining = max(0, max_files - already_uploaded)
-        if len(files) > remaining:
-            _log("validation_failed", f"Zu viele Dateien (max. {max_files} insgesamt, {remaining} noch moeglich)")
-            raise HTTPException(
-                status_code=400,
-                detail=f"Maximal {max_files} Dateien insgesamt erlaubt ({remaining} noch möglich)",
-            )
 
     allowed_types = {str(t).lower().lstrip(".") for t in (assignment["allowed_file_types"] or [])}
     max_bytes = assignment["max_file_size_mb"] * 1024 * 1024
@@ -391,200 +370,204 @@ async def upload(
 
     _log("upload_received", f"{len(contents)} Datei(en) empfangen")
 
-    # Exakt-Duplikat-Pruefung (SHA-256): dieselbe Datei darf nicht zweimal fuer dasselbe
-    # Element landen - weder zweimal in diesem Request noch erneut in einem spaeteren.
-    # Laeuft bewusst vor jeglichem Quarantaene-Schreiben (siehe Schritt 1 unten), damit ein
-    # Duplikat abgelehnt wird, ohne dass ueberhaupt etwas auf Platte geschrieben wurde.
-    #
-    # This is a TOCTOU on its own (audit finding, 2026-08-25): two near-simultaneous
-    # requests uploading the same file content could both read "not yet uploaded" here
-    # before either has written anything. Kept as a cheap early reject for the common
-    # non-racing case; re-checked again inside tenant_upload_lock below (same pattern as
-    # max_files_per_element above) for the actual guarantee.
-    checksums = [hashlib.sha256(content).hexdigest() for content, _, _ in contents]
-    existing_checksums = repository.list_checksums_for_element(
-        db, assignment_id=assignment["id"], event_id=element["event_id"], list_entry_id=element["list_entry_id"]
-    )
-    seen_in_request: set[str] = set()
-    for (_content, original_name, _mime), checksum in zip(contents, checksums):
-        if checksum in seen_in_request or checksum in existing_checksums:
-            _log("validation_failed", f"Datei bereits hochgeladen: {original_name}")
-            raise HTTPException(status_code=400, detail=f"Datei '{original_name}' wurde bereits hochgeladen")
-        seen_in_request.add(checksum)
-
-    # Bild-Aehnlichkeitspruefung (Perceptual Hash): nur Warnung, blockiert nicht - siehe
-    # _compute_perceptual_hash. Mandantenweit statt element-scoped, und erfasst dank der
-    # gemeinsamen stored_file-Tabelle automatisch auch Protokoll-Bilder aus dem Haupt-Backend.
-    perceptual_hashes = [_compute_perceptual_hash(content, mime) for content, _, mime in contents]
-    tenant_image_hashes = [phash for _id, phash in repository.list_tenant_image_hashes(db, tenant_id=tenant["id"])]
-    image_duplicate_warnings: list[str] = []
-    for i, ((_content, original_name, _mime), phash) in enumerate(zip(contents, perceptual_hashes)):
-        if phash is None:
-            continue
-        other_hashes_in_request = [h for j, h in enumerate(perceptual_hashes) if h is not None and j != i]
-        if _has_close_perceptual_match(phash, tenant_image_hashes + other_hashes_in_request):
-            image_duplicate_warnings.append(f"{original_name} ähnelt einem bereits im Mandanten hochgeladenen Bild.")
-
-    incoming_bytes = sum(len(content) for content, _, _ in contents)
-    quota_bytes = settings.tenant_storage_quota_mb * 1024 * 1024
-
-    def _slugify(text: str) -> str:
-        text = text.lower()
-        text = re.sub(r"[äÄ]", "ae", text); text = re.sub(r"[öÖ]", "oe", text)
-        text = re.sub(r"[üÜ]", "ue", text); text = re.sub(r"ß", "ss", text)
-        return re.sub(r"[^a-z0-9]+", "-", text).strip("-")
-
-    date_str = datetime.now(UTC).strftime("%Y%m%d")
-    assignment_slug = _slugify(assignment["title"])
-    element_slug = _slugify(element.get("label") or element_ref)
-
-    # H12: quota check + Step 1 (writing to quarantine, which is what actually changes what
-    # tenant_storage_bytes() sees) both happen inside a per-tenant advisory lock so two
-    # near-simultaneous uploads for the same tenant can't both pass the check before either has
-    # written its bytes to disk (TOCTOU) - see db.tenant_upload_lock for the full rationale,
-    # including why this is a cross-process Postgres lock and not an in-process asyncio.Lock.
-    quarantine_files: list[dict] = []
-    with tenant_upload_lock(tenant["id"]):
-        # (Medium, audit finding 2026-08-27): tenant_storage_bytes() does a synchronous
-        # Path.rglob()+stat() walk over every file ever stored for this tenant - cost grows with
-        # total accumulated files, and it's called here while holding the cross-process
-        # tenant_upload_lock above. Run off the event loop via asyncio.to_thread so a tenant with
-        # a lot of accumulated files doesn't freeze this worker (and everyone else on it) for the
-        # duration of the walk. A running per-tenant byte counter would avoid the walk
-        # altogether, but this storage_root is also written to directly by the separate main
-        # backend (see storage.py's move_from_quarantine docstring - the quarantine-path
-        # transform, and therefore the files landing under the same tenant-N/ directories, is
-        # shared with backend/app/services/submission_service.py's rescan/move flow), so an
-        # in-process counter maintained only here could not stay accurate; asyncio.to_thread is
-        # the safe, contained fix for this pass.
-        if await asyncio.to_thread(tenant_storage_bytes, tenant["id"]) + incoming_bytes > quota_bytes:
-            _log("validation_failed", f"Speicherlimit des Mandanten erreicht (max. {settings.tenant_storage_quota_mb} MB)")
-            raise HTTPException(status_code=400, detail="Speicherlimit erreicht - bitte den Verein kontaktieren")
-
-        # Authoritative re-check of max_files_per_element, now inside the same per-tenant
-        # lock the quota check above uses (audit finding, 2026-08-25) - this is what
-        # actually closes the TOCTOU the early check above can't: no other upload for this
-        # tenant can be mid-write while this re-count runs, so "already_uploaded" here is
-        # guaranteed accurate at the moment this request commits to writing its own files.
-        if max_files is not None:
-            already_uploaded = repository.count_files_by_element(db, assignment_id=assignment["id"]).get(
-                (element["event_id"], element["list_entry_id"]), 0
-            )
-            if already_uploaded + len(contents) > max_files:
-                remaining = max(0, max_files - already_uploaded)
-                _log("validation_failed", f"Zu viele Dateien (max. {max_files} insgesamt, {remaining} noch moeglich)")
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Maximal {max_files} Dateien insgesamt erlaubt ({remaining} noch möglich)",
-                )
-
-        # Authoritative re-check of the exact-duplicate guard above, same reasoning and
-        # same lock (audit finding, 2026-08-25).
-        existing_checksums_locked = repository.list_checksums_for_element(
+    # Hold across checksum lookup, scan and the final database commit.
+    async with serialized_upload(tenant["id"]):
+        # Identical submissions are silently acknowledged, before image decoding or ClamAV.
+        # Keep the received count stable so the public response does not reveal duplicates.
+        files_received = len(contents)
+        existing_checksums = repository.list_checksums_for_element(
             db, assignment_id=assignment["id"], event_id=element["event_id"], list_entry_id=element["list_entry_id"]
         )
-        for (_content, original_name, _mime), checksum in zip(contents, checksums):
-            if checksum in existing_checksums_locked:
-                _log("validation_failed", f"Datei bereits hochgeladen: {original_name}")
-                raise HTTPException(status_code=400, detail=f"Datei '{original_name}' wurde bereits hochgeladen")
+        unique_contents = []
+        checksums = []
+        for item in contents:
+            checksum = hashlib.sha256(item[0]).hexdigest()
+            if checksum not in existing_checksums:
+                unique_contents.append(item)
+                checksums.append(checksum)
+                existing_checksums.add(checksum)
+        contents = unique_contents
+        if not contents:
+            return UploadResult(ok=True, files_received=files_received, image_duplicate_warnings=[])
 
-        # Step 1: Save ALL files to quarantine first — nothing ever enters regular storage unscanned.
-        for i, (content, original_name, mime_type) in enumerate(contents):
-            suffix = Path(original_name).suffix.lower()
-            try:
-                q_path, checksum = save_to_quarantine(
-                    content, tenant_id=tenant["id"], assignment_id=assignment["id"], suffix=suffix
+        # Bild-Aehnlichkeitspruefung (Perceptual Hash): nur Warnung, blockiert nicht - siehe
+        # _compute_perceptual_hash. Mandantenweit statt element-scoped, und erfasst dank der
+        # gemeinsamen stored_file-Tabelle automatisch auch Protokoll-Bilder aus dem Haupt-Backend.
+        perceptual_hashes = [_compute_perceptual_hash(content, mime) for content, _, mime in contents]
+        tenant_image_hashes = [phash for _id, phash in repository.list_tenant_image_hashes(db, tenant_id=tenant["id"])]
+        image_duplicate_warnings: list[str] = []
+        for i, ((_content, original_name, _mime), phash) in enumerate(zip(contents, perceptual_hashes)):
+            if phash is None:
+                continue
+            other_hashes_in_request = [h for j, h in enumerate(perceptual_hashes) if h is not None and j != i]
+            if _has_close_perceptual_match(phash, tenant_image_hashes + other_hashes_in_request):
+                image_duplicate_warnings.append(f"{original_name} ähnelt einem bereits im Mandanten hochgeladenen Bild.")
+
+        incoming_bytes = sum(len(content) for content, _, _ in contents)
+        quota_bytes = settings.tenant_storage_quota_mb * 1024 * 1024
+
+        def _slugify(text: str) -> str:
+            text = text.lower()
+            text = re.sub(r"[äÄ]", "ae", text); text = re.sub(r"[öÖ]", "oe", text)
+            text = re.sub(r"[üÜ]", "ue", text); text = re.sub(r"ß", "ss", text)
+            return re.sub(r"[^a-z0-9]+", "-", text).strip("-")
+
+        date_str = datetime.now(UTC).strftime("%Y%m%d")
+        assignment_slug = _slugify(assignment["title"])
+        element_slug = _slugify(element.get("label") or element_ref)
+
+        # H12: quota check + Step 1 (writing to quarantine, which is what actually changes what
+        # tenant_storage_bytes() sees) both happen inside a per-tenant advisory lock so two
+        # near-simultaneous uploads for the same tenant can't both pass the check before either has
+        # written its bytes to disk (TOCTOU) - see db.tenant_upload_lock for the full rationale,
+        # including why this is a cross-process Postgres lock and not an in-process asyncio.Lock.
+        quarantine_files: list[dict] = []
+        with tenant_upload_lock(tenant["id"]):
+            existing_checksums_locked = repository.list_checksums_for_element(
+                db, assignment_id=assignment["id"], event_id=element["event_id"], list_entry_id=element["list_entry_id"]
+            )
+            remaining_files = [
+                (item, checksum, phash)
+                for item, checksum, phash in zip(contents, checksums, perceptual_hashes)
+                if checksum not in existing_checksums_locked
+            ]
+            if not remaining_files:
+                return UploadResult(ok=True, files_received=files_received, image_duplicate_warnings=[])
+            contents = [item for item, _, _ in remaining_files]
+            checksums = [checksum for _, checksum, _ in remaining_files]
+            perceptual_hashes = [phash for _, _, phash in remaining_files]
+            incoming_bytes = sum(len(content) for content, _, _ in contents)
+
+            # (Medium, audit finding 2026-08-27): tenant_storage_bytes() does a synchronous
+            # Path.rglob()+stat() walk over every file ever stored for this tenant - cost grows with
+            # total accumulated files, and it's called here while holding the cross-process
+            # tenant_upload_lock above. Run off the event loop via asyncio.to_thread so a tenant with
+            # a lot of accumulated files doesn't freeze this worker (and everyone else on it) for the
+            # duration of the walk. A running per-tenant byte counter would avoid the walk
+            # altogether, but this storage_root is also written to directly by the separate main
+            # backend (see storage.py's move_from_quarantine docstring - the quarantine-path
+            # transform, and therefore the files landing under the same tenant-N/ directories, is
+            # shared with backend/app/services/submission_service.py's rescan/move flow), so an
+            # in-process counter maintained only here could not stay accurate; asyncio.to_thread is
+            # the safe, contained fix for this pass.
+            if await asyncio.to_thread(tenant_storage_bytes, tenant["id"]) + incoming_bytes > quota_bytes:
+                _log("validation_failed", f"Speicherlimit des Mandanten erreicht (max. {settings.tenant_storage_quota_mb} MB)")
+                raise HTTPException(status_code=400, detail="Speicherlimit erreicht - bitte den Verein kontaktieren")
+
+            # Authoritative re-check of max_files_per_element, now inside the same per-tenant
+            # lock the quota check above uses (audit finding, 2026-08-25) - this is what
+            # actually closes the TOCTOU the early check above can't: no other upload for this
+            # tenant can be mid-write while this re-count runs, so "already_uploaded" here is
+            # guaranteed accurate at the moment this request commits to writing its own files.
+            if max_files is not None:
+                already_uploaded = repository.count_files_by_element(db, assignment_id=assignment["id"]).get(
+                    (element["event_id"], element["list_entry_id"]), 0
                 )
-            except Exception as exc:
-                _log("upload_error", f"Quarantäne-Speicherung fehlgeschlagen: {exc}")
-                raise HTTPException(status_code=500, detail="Datei konnte nicht gespeichert werden") from exc
-            counter = f"_{i+1}" if len(contents) > 1 else ""
-            display_name = f"{assignment_slug}_{element_slug}_{date_str}{counter}{suffix}"
-            quarantine_files.append({
-                "tenant_id": tenant["id"],
-                "original_name": display_name,
-                "mime_type": mime_type,
-                "storage_path": q_path,
-                "file_size_bytes": len(content),
-                "checksum_sha256": checksum,
-                "perceptual_hash": perceptual_hashes[i],
-                "_content": content,
-            })
+                if already_uploaded + len(contents) > max_files:
+                    remaining = max(0, max_files - already_uploaded)
+                    _log("validation_failed", f"Zu viele Dateien (max. {max_files} insgesamt, {remaining} noch moeglich)")
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Maximal {max_files} Dateien insgesamt erlaubt ({remaining} noch möglich)",
+                    )
 
-    _log("quarantined", "In Quarantäne gespeichert, Scan wird gestartet")
+            # Step 1: Save ALL files to quarantine first — nothing ever enters regular storage unscanned.
+            for i, (content, original_name, mime_type) in enumerate(contents):
+                suffix = Path(original_name).suffix.lower()
+                try:
+                    q_path, checksum = save_to_quarantine(
+                        content, tenant_id=tenant["id"], assignment_id=assignment["id"], suffix=suffix
+                    )
+                except Exception as exc:
+                    _log("upload_error", f"Quarantäne-Speicherung fehlgeschlagen: {exc}")
+                    raise HTTPException(status_code=500, detail="Datei konnte nicht gespeichert werden") from exc
+                counter = f"_{i+1}" if len(contents) > 1 else ""
+                display_name = f"{assignment_slug}_{element_slug}_{date_str}{counter}{suffix}"
+                quarantine_files.append({
+                    "tenant_id": tenant["id"],
+                    "original_name": display_name,
+                    "mime_type": mime_type,
+                    "storage_path": q_path,
+                    "file_size_bytes": len(content),
+                    "checksum_sha256": checksum,
+                    "perceptual_hash": perceptual_hashes[i],
+                    "_content": content,
+                })
 
-    # Step 2: Scan every file via ClamAV stream.
-    # (Critical, audit finding 2026-08-27): scanner.scan_bytes() is a blocking call (raw
-    # synchronous clamd socket, up to a 30s timeout) - calling it directly here would block this
-    # entire async worker (every tenant, every other in-flight request) for the duration of each
-    # scan. scan_many() runs each scan in a worker thread (asyncio.to_thread) with a small bounded
-    # concurrency instead of a fully sequential loop - see scanner.py for the full rationale.
-    scan_results = await scanner.scan_many(
-        [f["_content"] for f in quarantine_files], host=settings.clamav_host, port=settings.clamav_port
-    )
+        _log("quarantined", "In Quarantäne gespeichert, Scan wird gestartet")
 
-    # Step 3: Infected → delete quarantine files, reject upload.
-    if "infected" in scan_results:
-        for f in quarantine_files:
-            try:
-                (Path(settings.storage_root) / f["storage_path"]).unlink(missing_ok=True)
-            except Exception:
-                pass
-        _log("scan_infected", "Schadware gefunden – Upload abgelehnt")
-        raise HTTPException(status_code=400, detail="Eine oder mehrere Dateien wurden als Schadware eingestuft")
-
-    # Per-file, not a single overall_scan applied to the whole batch (audit finding,
-    # 2026-08-25) - ClamAV being unreachable for just one file out of several used to hold
-    # every file in this request back in quarantine, including ones that scanned cleanly,
-    # instead of only the one actually still pending.
-    any_pending = "pending" in scan_results
-
-    # Step 4: Clean → move from quarantine to regular storage before DB insert; pending
-    # stays in quarantine untouched (the rescan sweep resolves it later).
-    saved_files: list[dict] = []
-    for f, status in zip(quarantine_files, scan_results):
-        file_info = {k: v for k, v in f.items() if k != "_content"}
-        file_info["scan_status"] = status
-        if status == "clean":
-            try:
-                file_info["storage_path"] = move_from_quarantine(f["storage_path"])
-            except Exception as exc:
-                _log("upload_error", f"Dateiverschiebung fehlgeschlagen: {exc}")
-                raise HTTPException(status_code=500, detail="Datei konnte nicht verschoben werden") from exc
-        saved_files.append(file_info)
-
-    if not any_pending:
-        _log("moved_to_storage", "Aus Quarantäne in die Abgabe verschoben")
-
-    # Step 5: Single DB transaction.
-    try:
-        repository.insert_full_upload(
-            db,
-            assignment_id=assignment["id"],
-            event_id=element["event_id"],
-            list_entry_id=element["list_entry_id"],
-            files=saved_files,
+        # Step 2: Scan every file via ClamAV stream.
+        # (Critical, audit finding 2026-08-27): scanner.scan_bytes() is a blocking call (raw
+        # synchronous clamd socket, up to a 30s timeout) - calling it directly here would block this
+        # entire async worker (every tenant, every other in-flight request) for the duration of each
+        # scan. scan_many() runs each scan in a worker thread (asyncio.to_thread) with a small bounded
+        # concurrency instead of a fully sequential loop - see scanner.py for the full rationale.
+        scan_results = await scanner.scan_many(
+            [f["_content"] for f in quarantine_files], host=settings.clamav_host, port=settings.clamav_port
         )
-    except Exception as exc:
-        # M16: files were already moved out of quarantine (Step 4) before this insert, and
-        # regular storage - unlike quarantine/ - has no age-based cleanup loop at all (see
-        # cleanup_stale_quarantine_files's docstring in storage.py), so a failed insert here
-        # would otherwise leave them on disk forever with no DB row and no reaper to catch
-        # them. Delete them back out rather than reordering Step 4/5 (which would need the
-        # DB row to exist before the file is confirmed moved, trading one orphan class for
-        # another - a DB row pointing at a file that never made it out of quarantine).
-        for f in saved_files:
-            try:
-                (Path(settings.storage_root) / f["storage_path"]).unlink(missing_ok=True)
-            except Exception:
-                pass
-        _log("upload_error", f"Datenbankfehler: {exc}")
-        raise
 
-    if any_pending:
-        pending_count = sum(1 for status in scan_results if status == "pending")
-        _log("scan_pending", f"ClamAV nicht erreichbar – {pending_count} von {len(scan_results)} Datei(en) in Quarantäne")
-    if any(status == "clean" for status in scan_results):
-        _log("scan_clean")
-    _log("submitted", "Freigegeben")
-    return UploadResult(ok=True, files_received=len(contents), image_duplicate_warnings=image_duplicate_warnings)
+        # Step 3: Infected → delete quarantine files, reject upload.
+        if "infected" in scan_results:
+            for f in quarantine_files:
+                try:
+                    (Path(settings.storage_root) / f["storage_path"]).unlink(missing_ok=True)
+                except Exception:
+                    pass
+            _log("scan_infected", "Schadware gefunden – Upload abgelehnt")
+            raise HTTPException(status_code=400, detail="Eine oder mehrere Dateien wurden als Schadware eingestuft")
+
+        # Per-file, not a single overall_scan applied to the whole batch (audit finding,
+        # 2026-08-25) - ClamAV being unreachable for just one file out of several used to hold
+        # every file in this request back in quarantine, including ones that scanned cleanly,
+        # instead of only the one actually still pending.
+        any_pending = "pending" in scan_results
+
+        # Step 4: Clean → move from quarantine to regular storage before DB insert; pending
+        # stays in quarantine untouched (the rescan sweep resolves it later).
+        saved_files: list[dict] = []
+        for f, status in zip(quarantine_files, scan_results):
+            file_info = {k: v for k, v in f.items() if k != "_content"}
+            file_info["scan_status"] = status
+            if status == "clean":
+                try:
+                    file_info["storage_path"] = move_from_quarantine(f["storage_path"])
+                except Exception as exc:
+                    _log("upload_error", f"Dateiverschiebung fehlgeschlagen: {exc}")
+                    raise HTTPException(status_code=500, detail="Datei konnte nicht verschoben werden") from exc
+            saved_files.append(file_info)
+
+        if not any_pending:
+            _log("moved_to_storage", "Aus Quarantäne in die Abgabe verschoben")
+
+        # Step 5: Single DB transaction.
+        try:
+            repository.insert_full_upload(
+                db,
+                assignment_id=assignment["id"],
+                event_id=element["event_id"],
+                list_entry_id=element["list_entry_id"],
+                files=saved_files,
+            )
+        except Exception as exc:
+            # M16: files were already moved out of quarantine (Step 4) before this insert, and
+            # regular storage - unlike quarantine/ - has no age-based cleanup loop at all (see
+            # cleanup_stale_quarantine_files's docstring in storage.py), so a failed insert here
+            # would otherwise leave them on disk forever with no DB row and no reaper to catch
+            # them. Delete them back out rather than reordering Step 4/5 (which would need the
+            # DB row to exist before the file is confirmed moved, trading one orphan class for
+            # another - a DB row pointing at a file that never made it out of quarantine).
+            for f in saved_files:
+                try:
+                    (Path(settings.storage_root) / f["storage_path"]).unlink(missing_ok=True)
+                except Exception:
+                    pass
+            _log("upload_error", f"Datenbankfehler: {exc}")
+            raise
+
+        if any_pending:
+            pending_count = sum(1 for status in scan_results if status == "pending")
+            _log("scan_pending", f"ClamAV nicht erreichbar – {pending_count} von {len(scan_results)} Datei(en) in Quarantäne")
+        if any(status == "clean" for status in scan_results):
+            _log("scan_clean")
+        _log("submitted", "Freigegeben")
+        return UploadResult(ok=True, files_received=files_received, image_duplicate_warnings=image_duplicate_warnings)

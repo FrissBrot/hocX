@@ -261,6 +261,9 @@ Die Import-Regressionen und ihre generierten Testdateien sind im
 Die Prüfungen für den Zugang zur Abgabebox per Link stehen im
 [Abgabe-Links-Testbook](docs-site/docs/technik/abgabe-links-testbook.md).
 
+Duplikaterkennung, parallele Uploads und die unterschiedlichen Rückmeldungen von App und
+Abgabebox sind im [Upload-Testbook](docs-site/docs/technik/upload-testbook.md) beschrieben.
+
 ## Lizenz
 
 Copyright © 2026 hocX Project. All rights reserved.
