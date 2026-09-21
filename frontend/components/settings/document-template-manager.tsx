@@ -10,6 +10,7 @@ import { Modal } from "@/components/ui/modal";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
+import { formatFileSize } from "@/lib/utils/format";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { DocumentTemplate, DocumentTemplatePart } from "@/types/api";
@@ -76,8 +77,8 @@ type TemplateFormState = {
 };
 
 const latexSlotDefinitions = [
-  { key: "preamble",              label: "LaTeX — Präambel",            help: "LaTeX-Pakete und globale Einstellungen." },
-  { key: "macros",                label: "LaTeX — Makros",              help: "Wiederverwendbare Befehle und Hilfsfunktionen." },
+  { key: "preamble",              label: "LaTeX — Präambel",            help: "Pakete und globale Einstellungen." },
+  { key: "macros",                label: "LaTeX — Makros",              help: "Wiederverwendbare Befehle." },
   { key: "title_page",            label: "Layout — Titelblatt",         help: "Überschreibt das gewählte Titelblatt-Preset." },
   { key: "header_footer",         label: "Layout — Kopf- & Fusszeile",  help: "Überschreibt die gewählten Header/Footer-Presets." },
   { key: "toc",                   label: "Layout — Inhaltsverzeichnis", help: "Überschreibt das gewählte Inhaltsverzeichnis-Preset." },
@@ -93,28 +94,54 @@ const latexSlotDefinitions = [
 ] as const;
 
 const fontSlotDefinitions = [
-  { key: "font_regular",     label: "Schrift — Regular",     help: "Haupt-Fontdatei (.ttf oder .otf)" },
-  { key: "font_bold",        label: "Schrift — Fett",        help: "Optionale Fett-Variante." },
-  { key: "font_italic",      label: "Schrift — Kursiv",      help: "Optionale Kursiv-Variante." },
-  { key: "font_bold_italic", label: "Schrift — Fett Kursiv", help: "Optionale Fett-Kursiv-Variante." },
+  { key: "font_regular",     label: "Schrift — Regular",     shortLabel: "Regular",     help: "Haupt-Fontdatei, erforderlich." },
+  { key: "font_bold",        label: "Schrift — Fett",        shortLabel: "Fett",        help: "Optionale Fett-Variante." },
+  { key: "font_italic",      label: "Schrift — Kursiv",      shortLabel: "Kursiv",      help: "Optionale Kursiv-Variante." },
+  { key: "font_bold_italic", label: "Schrift — Fett Kursiv", shortLabel: "Fett Kursiv", help: "Optionale Fett-Kursiv-Variante." },
 ] as const;
 
 const imageSlotDefinitions = [
-  { key: "title_header_image", label: "Bild — Titelblatt Logo",        help: "Logo oben links auf dem Titelblatt (.png, .jpg, .svg)" },
-  { key: "title_footer_image", label: "Bild — Titelblatt Footer",      help: "Bild unten links auf dem Titelblatt (.png, .jpg, .svg)" },
+  { key: "title_header_image", label: "Bild — Titelblatt Logo",        help: "Logo oben links auf dem Titelblatt." },
+  { key: "title_footer_image", label: "Bild — Titelblatt Footer",      help: "Bild unten links auf dem Titelblatt." },
 ] as const;
 
 const imagePartTypes: Set<string> = new Set(imageSlotDefinitions.map((d) => d.key));
 
-const partTypeGroups = [
-  { label: "Bilder",      defs: imageSlotDefinitions },
-  { label: "Schriftart",  defs: fontSlotDefinitions },
-  { label: "LaTeX / Erweitert", defs: latexSlotDefinitions },
-] as const;
-
 const partTypeDefinitions = [...latexSlotDefinitions, ...fontSlotDefinitions, ...imageSlotDefinitions] as const;
 const partTypeOptions = partTypeDefinitions.map((entry) => entry.key);
 const fontPartTypes: Set<string> = new Set(fontSlotDefinitions.map((entry) => entry.key));
+
+type PartKind = "image" | "font" | "latex";
+
+const partKinds: {
+  value: PartKind;
+  label: string;
+  fileLabel: string;
+  accept: string;
+  formats: string;
+  hint: string;
+  defs: readonly { key: string; label: string; help: string }[];
+}[] = [
+  {
+    value: "image", label: "Bild", fileLabel: "Bilddatei", accept: ".png,.jpg,.jpeg,.svg", formats: ".png · .jpg · .svg",
+    hint: "Bilder erscheinen in der Auswahl «Logo / Bild» der Titelblatt- und Header-Presets im Layout-Editor.",
+    defs: imageSlotDefinitions,
+  },
+  {
+    value: "font", label: "Schriftart", fileLabel: "Font-Datei", accept: ".ttf,.otf", formats: ".ttf · .otf",
+    hint: "Font-Dateien werden im Tab Gestaltung unter «Eigene Schrift» den vier Schnitten zugewiesen. Regular ist erforderlich.",
+    defs: fontSlotDefinitions,
+  },
+  {
+    value: "latex", label: "LaTeX-Baustein", fileLabel: "LaTeX-Datei", accept: ".tex", formats: ".tex",
+    hint: "LaTeX-Parts überschreiben den entsprechenden Slot im Tab Erweitert — nur nötig, wenn die Presets nicht ausreichen.",
+    defs: latexSlotDefinitions,
+  },
+];
+
+function partKindOf(partType: string): PartKind {
+  return imagePartTypes.has(partType) ? "image" : fontPartTypes.has(partType) ? "font" : "latex";
+}
 
 const initialPartForm: PartFormState = {
   name: "", part_type: "title_header_image", description: "", version: "1", is_active: true, file: null,
@@ -140,6 +167,11 @@ const initialTemplateForm: TemplateFormState = {
   toc_spacing: "normal",
   show_metadata: false,
 };
+
+function templateInitials(name: string) {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  return words.slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?";
+}
 
 function templateFormFromTemplate(template: DocumentTemplate): TemplateFormState {
   const config = (template.configuration_json ?? {}) as Record<string, any>;
@@ -645,24 +677,22 @@ const fontOptions = [
   { value: "helvet", label: "Helvetica", description: "Modern, neutral", sample: "Aa", style: { fontFamily: "Helvetica, Arial, sans-serif" } },
   { value: "palatino", label: "Palatino", description: "Elegant, seriös", sample: "Aa", style: { fontFamily: "Palatino, Georgia, serif" } },
   { value: "century_gothic", label: "Century Gothic", description: "Geometrisch, modern", sample: "Aa", style: { fontFamily: "Century Gothic, Futura, sans-serif" } },
-  { value: "uploaded", label: "Eigene Schrift", description: "Font-Dateien hochladen", sample: "↑", style: {} },
+  { value: "uploaded", label: "Eigene Schrift", description: "Font-Dateien hochladen", sample: "Aa", style: {} },
 ] as const;
 
 function FontFamilyPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
-    <div className="block-type-grid">
+    <div className="doctpl-choice-grid">
       {fontOptions.map((opt) => (
         <button
           key={opt.value}
           type="button"
-          className={`block-type-card font-family-card${value === opt.value ? " block-type-card-active" : ""}`}
+          className={`doctpl-choice doctpl-choice-stack${value === opt.value ? " doctpl-choice-active" : ""}`}
           onClick={() => onChange(opt.value)}
         >
-          <div className="font-sample" style={opt.style}>{opt.sample}</div>
-          <div className="block-type-summary">
-            <strong style={opt.style}>{opt.label}</strong>
-            <span className="muted" style={{ fontSize: "var(--text-xs)" }}>{opt.description}</span>
-          </div>
+          <span className="doctpl-choice-sample" style={opt.style}>{opt.sample}</span>
+          <span className="doctpl-choice-title" style={opt.style}>{opt.label}</span>
+          <span className="doctpl-choice-desc">{opt.description}</span>
         </button>
       ))}
     </div>
@@ -736,8 +766,8 @@ function TemplateForm({
   return (
     <div className="grid">
       {/* Metadata — always visible */}
-      <div className="three-col">
-        <label className="field-stack" style={{ gridColumn: "span 2" }}>
+      <div className="doctpl-fields">
+        <label className="field-stack">
           <span className="field-label">Name</span>
           <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
         </label>
@@ -745,13 +775,11 @@ function TemplateForm({
           <span className="field-label">Version</span>
           <input type="number" min={1} value={form.version} onChange={(e) => setForm((f) => ({ ...f, version: e.target.value }))} />
         </label>
-      </div>
-      <div className="three-col">
         <label className="field-stack">
           <span className="field-label">Beschreibung</span>
           <input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
         </label>
-        <div style={{ display: "flex", gap: "var(--space-5)", alignItems: "flex-end", paddingBottom: "var(--space-1)" }}>
+        <div className="doctpl-fields-flags">
           <label className="checkbox-row">
             <input type="checkbox" checked={form.is_active} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))} />
             Aktiv
@@ -764,15 +792,14 @@ function TemplateForm({
       </div>
 
       {/* Orientation selector */}
-      <div className="card inset-card" style={{ padding: "var(--space-3) var(--space-4)" }}>
-        <div className="eyebrow" style={{ marginBottom: "var(--space-2)" }}>Format</div>
-        <div style={{ display: "flex", gap: "var(--space-3)" }}>
+      <div className="doctpl-panel">
+        <div className="eyebrow">Format</div>
+        <div className="doctpl-choice-grid doctpl-choice-grid-2">
           {([["portrait", "Hochformat", "A4 vertikal — für Protokolle"], ["landscape", "Querformat", "A4 horizontal — für Listen & Tabellen"]] as const).map(([val, label, desc]) => (
             <button
               key={val}
               type="button"
-              className={`block-type-card${form.orientation === val ? " block-type-card-active" : ""}`}
-              style={{ flex: 1, padding: "var(--space-3) var(--space-4)" }}
+              className={`doctpl-choice${form.orientation === val ? " doctpl-choice-active" : ""}`}
               onClick={() => setForm((f) => ({
                 ...f,
                 orientation: val,
@@ -781,33 +808,43 @@ function TemplateForm({
                 preset_title_page: val === "landscape" ? "none" : f.preset_title_page,
               }))}
             >
-              <div style={{ fontSize: "var(--text-2xl)", marginBottom: "var(--space-1)" }}>{val === "portrait" ? "📄" : "📋"}</div>
-              <div className="block-type-summary">
-                <strong>{label}</strong>
-                <span className="muted" style={{ fontSize: "var(--text-xs)" }}>{desc}</span>
-              </div>
+              <span className={`doctpl-thumb${val === "landscape" ? " doctpl-thumb-landscape" : ""}`} aria-hidden="true" />
+              <span>
+                <span className="doctpl-choice-title">{label}</span>
+                <span className="doctpl-choice-desc">{desc}</span>
+              </span>
             </button>
           ))}
         </div>
       </div>
 
       {/* Tab nav */}
-      <FilterTabs
-        options={[
-          { value: "design", label: "Gestaltung" },
-          { value: "structure", label: "Struktur" },
-          { value: "advanced", label: `Erweitert${hasCustomSlot(["preamble", "macros", "title_page", "header_footer", "toc"]) ? " ·" : ""}` },
-        ]}
-        value={activeTab}
-        onChange={setActiveTab}
-      />
+      <div className="tabs-list doctpl-tabs" role="tablist">
+        {([
+          ["design", "Gestaltung", false],
+          ["structure", "Struktur", false],
+          ["advanced", "Erweitert", hasCustomSlot(["preamble", "macros", "title_page", "header_footer", "toc"])],
+        ] as const).map(([value, label, marked]) => (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === value}
+            className={activeTab === value ? "tabs-trigger tabs-trigger-active" : "tabs-trigger"}
+            onClick={() => setActiveTab(value)}
+          >
+            {label}
+            {marked ? <span className="doctpl-tabs-dot" title="Eigene LaTeX-Dateien hinterlegt" /> : null}
+          </button>
+        ))}
+      </div>
 
       {/* ── Gestaltung ── */}
       {activeTab === "design" && (
         <div className="grid">
-          <div className="card inset-card">
+          <div className="doctpl-panel">
             <div className="eyebrow">Farben</div>
-            <div style={{ display: "flex", gap: "32px", flexWrap: "wrap", marginTop: "var(--space-3)" }}>
+            <div className="doctpl-colors">
               <ColorField
                 label="Primärfarbe"
                 value={form.primary_color}
@@ -818,35 +855,34 @@ function TemplateForm({
                 value={form.secondary_color}
                 onChange={(v) => setForm((f) => ({ ...f, secondary_color: v }))}
               />
-              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
-                <div style={{ width: "80px", height: "80px", borderRadius: "var(--radius-md)", background: `linear-gradient(135deg, #${form.primary_color} 50%, #${form.secondary_color} 50%)`, border: "1px solid var(--border)", flexShrink: 0 }} />
-                <div style={{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>Vorschau</div>
-              </div>
             </div>
-            <div style={{ marginTop: "var(--space-3)" }}>
-              <button type="button" className="button-secondary" style={{ fontSize: "var(--text-xs)" }}
-                onClick={() => setForm((f) => ({ ...f, primary_color: "174B7A", secondary_color: "4F6D7A" }))}>
-                Farben zurücksetzen
-              </button>
+            <div className="doctpl-color-preview">
+              <div
+                className="doctpl-color-preview-tile"
+                style={{ background: `linear-gradient(135deg, #${form.primary_color} 50%, #${form.secondary_color} 50%)` }}
+              />
+              Vorschau
             </div>
+            <button type="button" className="button-secondary"
+              onClick={() => setForm((f) => ({ ...f, primary_color: "174B7A", secondary_color: "4F6D7A" }))}>
+              Farben zurücksetzen
+            </button>
           </div>
 
-          <div className="card inset-card">
+          <div className="doctpl-panel">
             <div className="eyebrow">Schriftart</div>
-            <div style={{ marginTop: "var(--space-3)" }}>
-              <FontFamilyPicker value={form.font_family} onChange={(v) => setForm((f) => ({ ...f, font_family: v }))} />
-            </div>
+            <FontFamilyPicker value={form.font_family} onChange={(v) => setForm((f) => ({ ...f, font_family: v }))} />
             {(form.font_family === "century_gothic" || form.font_family === "uploaded") && (
-              <div className="card inset-card" style={{ marginTop: "var(--space-4)" }}>
-                <div className="info-note" style={{ marginBottom: "var(--space-3)" }}>
+              <div className="doctpl-font-note">
+                <p>
                   {form.font_family === "century_gothic"
-                    ? "Century Gothic ist nicht vorinstalliert. Bitte die Font-Dateien hochladen."
-                    : "Eigene Font-Dateien hochladen. Regular ist erforderlich, Varianten sind optional."}
-                </div>
-                <div className="four-col">
-                  {fontSlotDefinitions.map(({ key, label, help }) => (
+                    ? "Diese Schrift ist nicht vorinstalliert — Font-Dateien in der Parts-Bibliothek hinterlegen. Regular ist erforderlich, Varianten optional."
+                    : "Eigene Font-Dateien in der Parts-Bibliothek hinterlegen. Regular ist erforderlich, Varianten optional."}
+                </p>
+                <div className="doctpl-font-slots">
+                  {fontSlotDefinitions.map(({ key, shortLabel }) => (
                     <label className="field-stack" key={key}>
-                      <span className="field-label">{label}</span>
+                      <span className="field-label">{shortLabel}</span>
                       <SearchableSelect
                         options={partsByType[key] ?? []}
                         getId={(part) => String(part.id)}
@@ -855,7 +891,6 @@ function TemplateForm({
                         onChange={(part) => setForm((f) => ({ ...f, [key]: part ? String(part.id) : "" }))}
                         nullLabel="Keine"
                       />
-                      <span className="field-help">{help}</span>
                     </label>
                   ))}
                 </div>
@@ -863,19 +898,18 @@ function TemplateForm({
             )}
           </div>
 
-          <div className="card inset-card">
+          <div className="doctpl-panel">
             <div className="eyebrow">Schriftgrösse</div>
-            <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "var(--space-3)", flexWrap: "wrap" }}>
+            <div className="doctpl-choice-grid doctpl-choice-grid-sizes">
               {(["10pt", "11pt", "12pt"] as const).map((size) => (
                 <button
                   key={size}
                   type="button"
-                  className={`block-type-card font-size-card${form.font_size === size ? " block-type-card-active" : ""}`}
+                  className={`doctpl-choice doctpl-choice-stack${form.font_size === size ? " doctpl-choice-active" : ""}`}
                   onClick={() => setForm((f) => ({ ...f, font_size: size }))}
-                  style={{ minWidth: "90px", padding: "var(--space-4) var(--space-4)" }}
                 >
-                  <span style={{ fontSize: size === "10pt" ? "1.1rem" : size === "11pt" ? "1.3rem" : "1.5rem", fontWeight: 600 }}>Aa</span>
-                  <span style={{ fontSize: "var(--text-xs)", color: "var(--muted)", marginTop: "var(--space-1)", display: "block" }}>{size}</span>
+                  <span className="doctpl-choice-sample">Aa</span>
+                  <span className="doctpl-choice-desc">{size}</span>
                 </button>
               ))}
             </div>
@@ -886,7 +920,7 @@ function TemplateForm({
       {/* ── Struktur ── */}
       {activeTab === "structure" && (
         <div className="grid">
-          <div className="card inset-card"
+          <div className="doctpl-panel"
             style={{ "--dt-accent": `#${form.primary_color}` } as React.CSSProperties}
           >
             <div className="eyebrow">Kopfzeile (Header)</div>
@@ -912,7 +946,7 @@ function TemplateForm({
             )}
           </div>
 
-          <div className="card inset-card"
+          <div className="doctpl-panel"
             style={{ "--dt-accent": `#${form.primary_color}` } as React.CSSProperties}
           >
             <div className="eyebrow">Fusszeile (Footer)</div>
@@ -923,7 +957,7 @@ function TemplateForm({
           </div>
 
           {!isLandscape && (
-          <div className="card inset-card"
+          <div className="doctpl-panel"
             style={{ "--dt-accent": `#${form.primary_color}` } as React.CSSProperties}
           >
             <div className="eyebrow">Titelblatt</div>
@@ -935,7 +969,7 @@ function TemplateForm({
           )}
 
           {!isLandscape && (form.preset_title_page === "combined_toc" ? (
-            <div className="card inset-card" style={{ "--dt-accent": `#${form.primary_color}` } as React.CSSProperties}>
+            <div className="doctpl-panel" style={{ "--dt-accent": `#${form.primary_color}` } as React.CSSProperties}>
               <div className="eyebrow">Titelblatt + Inhaltsverzeichnis — Konfiguration</div>
               <p className="muted" style={{ marginTop: "var(--space-1)", fontSize: "var(--text-sm)" }}>
                 Das Inhaltsverzeichnis ist in diesem Titelblatt integriert.
@@ -997,7 +1031,7 @@ function TemplateForm({
               </div>
             </div>
           ) : (
-            <div className="card inset-card"
+            <div className="doctpl-panel"
               style={{ "--dt-accent": `#${form.primary_color}` } as React.CSSProperties}
             >
               <div className="eyebrow">Inhaltsverzeichnis</div>
@@ -1008,7 +1042,7 @@ function TemplateForm({
             </div>
           ))}
 
-          <div className="card inset-card">
+          <div className="doctpl-panel">
             <div className="eyebrow">Nummerierung</div>
             <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "var(--space-3)" }}>
               {([["sections", "Mit Nummern", "1. Abschnitt, 1.1 Unterabschnitt"], ["none", "Ohne Nummern", "Nur Titel, keine Nummern"]] as const).map(([val, label, desc]) => (
@@ -1028,7 +1062,7 @@ function TemplateForm({
             </div>
           </div>
 
-          <div className="card inset-card">
+          <div className="doctpl-panel">
             <div className="eyebrow">Weitere Optionen</div>
             <label style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", marginTop: "var(--space-3)", cursor: "pointer" }}>
               <input
@@ -1068,6 +1102,144 @@ function TemplateForm({
         </div>
       )}
     </div>
+  );
+}
+
+// ── Part-Upload ───────────────────────────────────────────────────────────────
+
+function PartUploadModal({
+  open, onClose, form, setForm, onSubmit,
+}: {
+  open: boolean;
+  onClose: () => void;
+  form: PartFormState;
+  setForm: Dispatch<SetStateAction<PartFormState>>;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const [dragOver, setDragOver] = useState(false);
+  const kind = partKinds.find((k) => k.value === partKindOf(form.part_type)) ?? partKinds[0];
+
+  function pickFile(file: File | null | undefined) {
+    if (file) setForm((f) => ({ ...f, file }));
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Part hochladen" className="doctpl-part-modal" hideCloseButton>
+      <form className="doctpl-part-form" onSubmit={onSubmit}>
+        <header className="doctpl-part-heading">
+          <div>
+            <h2>Part hochladen</h2>
+            <p className="muted">Eigene Datei in die Parts-Bibliothek legen — Layouts binden sie danach über ihren Slot ein.</p>
+          </div>
+          <button type="button" className="doctpl-part-close" aria-label="Schliessen" onClick={onClose}>×</button>
+        </header>
+
+        <div className="doctpl-part-body">
+          <div className="doctpl-part-main grid">
+            <div className="field-stack doctpl-kind">
+              <span className="field-label">Art des Parts</span>
+              <FilterTabs
+                options={partKinds.map((k) => ({ value: k.value, label: k.label }))}
+                value={kind.value}
+                onChange={(value) => {
+                  const next = partKinds.find((k) => k.value === value);
+                  if (next) setForm((f) => ({ ...f, part_type: next.defs[0].key, file: null }));
+                }}
+              />
+            </div>
+
+            <div className="field-stack">
+              <span className="field-label">Slot</span>
+              <div className="doctpl-slots" role="radiogroup" aria-label="Slot">
+                {kind.defs.map((def) => (
+                  <label key={def.key} className="field-radio-option doctpl-slot">
+                    <input
+                      type="radio"
+                      name="part_type"
+                      value={def.key}
+                      checked={form.part_type === def.key}
+                      onChange={() => setForm((f) => ({ ...f, part_type: def.key }))}
+                    />
+                    <span>
+                      <span className="doctpl-choice-title">{def.label}</span>
+                      <span className="doctpl-choice-desc">{def.help}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="doctpl-part-row">
+              <label className="field-stack">
+                <span className="field-label">Name</span>
+                <input value={form.name} placeholder="z.B. Jungwacht Logo" onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
+              </label>
+              <label className="field-stack">
+                <span className="field-label">Version</span>
+                <input type="number" min={1} value={form.version} onChange={(e) => setForm((f) => ({ ...f, version: e.target.value }))} />
+              </label>
+            </div>
+
+            <label className="field-stack">
+              <span className="field-label">Beschreibung <span className="doctpl-optional">— optional</span></span>
+              <input value={form.description} placeholder="Wofür wird dieser Part verwendet?" onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
+            </label>
+          </div>
+
+          <aside className="doctpl-part-side">
+            <div className="field-stack">
+              <span className="field-label">{kind.fileLabel}</span>
+              <label
+                className={`doctpl-drop${dragOver ? " doctpl-drop-over" : ""}${form.file ? " doctpl-drop-filled" : ""}`}
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => { e.preventDefault(); setDragOver(false); pickFile(e.dataTransfer.files?.[0]); }}
+              >
+                <input
+                  type="file"
+                  className="doctpl-drop-input"
+                  accept={kind.accept}
+                  onChange={(e) => pickFile(e.target.files?.[0])}
+                />
+                <span className="doctpl-drop-icon" aria-hidden="true">
+                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                    <path d="M9 12V3M9 3L5.5 6.5M9 3l3.5 3.5M3 12.5v1.25c0 .69.56 1.25 1.25 1.25h9.5c.69 0 1.25-.56 1.25-1.25V12.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </span>
+                {form.file ? (
+                  <>
+                    <span className="doctpl-choice-title">{form.file.name}</span>
+                    <span className="doctpl-drop-sub">{formatFileSize(form.file.size)} · <span className="doctpl-drop-link">andere Datei wählen</span></span>
+                  </>
+                ) : (
+                  <>
+                    <span className="doctpl-choice-title">Datei hierher ziehen</span>
+                    <span className="doctpl-drop-sub">oder <span className="doctpl-drop-link">durchsuchen</span></span>
+                    <span className="doctpl-mono doctpl-drop-formats">{kind.formats}</span>
+                  </>
+                )}
+              </label>
+            </div>
+
+            <div className="doctpl-summary">
+              <div className="eyebrow">Eintrag in der Bibliothek</div>
+              <dl>
+                <dt>Typ</dt><dd className="doctpl-mono">{form.part_type}</dd>
+                <dt>Version</dt><dd>v{form.version || "1"}</dd>
+                <dt>Status</dt><dd><Badge variant="success">Aktiv</Badge></dd>
+              </dl>
+            </div>
+
+            <p className="doctpl-part-hint">{kind.hint}</p>
+          </aside>
+        </div>
+
+        <footer className="doctpl-part-footer">
+          <button type="button" className="button-secondary" onClick={onClose}>Abbrechen</button>
+          <button type="submit" className="button-primary" disabled={!form.name.trim() || !form.file}>Hochladen</button>
+        </footer>
+      </form>
+    </Modal>
   );
 }
 
@@ -1116,6 +1288,11 @@ export function DocumentTemplateManager({ initialTemplates, initialParts, tenant
   function selectTemplate(template: DocumentTemplate) {
     setSelectedTemplateId(template.id);
     setSelectedTemplateForm(templateFormFromTemplate(template));
+  }
+
+  function closePartForm() {
+    setShowPartForm(false);
+    setPartForm(initialPartForm);
   }
 
   async function createPart(event: FormEvent<HTMLFormElement>) {
@@ -1223,6 +1400,9 @@ export function DocumentTemplateManager({ initialTemplates, initialParts, tenant
           <h1 className="page-title">Dokument-Vorlagen</h1>
           <p className="muted">{hasNothingYet ? "Layouts für PDF- und Word-Exporte." : "PDF-Layouts und wiederverwendbare LaTeX-Parts für den Protokoll-Export verwalten."}</p>
         </div>
+        {hasNothingYet ? null : (
+          <button type="button" className="button-primary" onClick={() => setShowTemplateForm(true)}>+ Neues Layout</button>
+        )}
       </div>
 
       {hasNothingYet ? null : (
@@ -1236,40 +1416,7 @@ export function DocumentTemplateManager({ initialTemplates, initialParts, tenant
         />
       )}
 
-      <Modal open={showPartForm} onClose={() => setShowPartForm(false)} title="LaTeX-Part hochladen" description="Eigene .tex-Datei oder Font-Datei hochladen.">
-        <form className="grid" onSubmit={createPart}>
-          <div className="three-col">
-            <label className="field-stack">
-              <span className="field-label">Name</span>
-              <input value={partForm.name} onChange={(e) => setPartForm((f) => ({ ...f, name: e.target.value }))} required />
-            </label>
-            <label className="field-stack">
-              <span className="field-label">Typ</span>
-              <select value={partForm.part_type} onChange={(e) => setPartForm((f) => ({ ...f, part_type: e.target.value }))}>
-                {partTypeGroups.map((group) => (
-                  <optgroup key={group.label} label={group.label}>
-                    {group.defs.map((d) => (
-                      <option key={d.key} value={d.key}>{d.label}</option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-            </label>
-            <label className="field-stack">
-              <span className="field-label">{imagePartTypes.has(partForm.part_type) ? "Bilddatei" : fontPartTypes.has(partForm.part_type) ? "Font-Datei" : "LaTeX-Datei"}</span>
-              <input type="file" accept={imagePartTypes.has(partForm.part_type) ? ".png,.jpg,.jpeg,.svg" : fontPartTypes.has(partForm.part_type) ? ".ttf,.otf" : ".tex"}
-                onChange={(e) => setPartForm((f) => ({ ...f, file: e.target.files?.[0] ?? null }))} required />
-            </label>
-          </div>
-          <label className="field-stack">
-            <span className="field-label">Beschreibung</span>
-            <input value={partForm.description} onChange={(e) => setPartForm((f) => ({ ...f, description: e.target.value }))} />
-          </label>
-          <div className="table-toolbar-actions">
-            <button type="submit" className="button-secondary">Hochladen</button>
-          </div>
-        </form>
-      </Modal>
+      <PartUploadModal open={showPartForm} onClose={closePartForm} form={partForm} setForm={setPartForm} onSubmit={createPart} />
 
       <Modal open={showTemplateForm} onClose={() => setShowTemplateForm(false)} title="Neues Layout erstellen" size="wide">
         <form className="grid" onSubmit={createTemplate}>
@@ -1296,93 +1443,89 @@ export function DocumentTemplateManager({ initialTemplates, initialParts, tenant
           }
         />
       ) : activePanel === "parts" ? (
-        <article className="card">
-          <DataToolbar
-            title="Parts-Bibliothek"
-            description="Eigene LaTeX-Snippets oder Fonts hochladen und in Layouts einbinden."
-            actions={<button type="button" className="button-secondary" onClick={() => setShowPartForm(true)}>Part hochladen</button>}
-          />
-          <article className="card">
-            <label className="field-stack">
-              <span className="field-label">Suche</span>
-              <SearchInput value={partSearch} onChange={setPartSearch} placeholder="Parts durchsuchen" />
-            </label>
-          </article>
-          <DataTable className="data-table-lg" columns={["Name", "Typ", "Version", "Status", "Aktionen"]} emptyMessage="Keine Parts gefunden.">
-            {filteredParts.map((part) => (
-              <tr key={part.id}>
-                <td><strong>{part.name}</strong><div className="muted">{part.code}</div></td>
-                <td>{partTypeDefinitions.find((d) => d.key === part.part_type)?.label ?? part.part_type}</td>
-                <td>{part.version}</td>
-                <td><Badge variant={part.is_active ? "success" : "neutral"}>{part.is_active ? "Aktiv" : "Inaktiv"}</Badge></td>
-                <td>
-                  <div className="table-actions">
-                    <button type="button" className="button-secondary button-danger" onClick={() => deletePart(part.id)}>Löschen</button>
+        <article className="card doctpl-card">
+          <div className="doctpl-card-head">
+            <DataToolbar
+              title="Parts-Bibliothek"
+              description="Bilder, Schriftdateien und LaTeX-Bausteine, die Layouts einbinden."
+              actions={
+                <>
+                  <div className="doctpl-search">
+                    <SearchInput value={partSearch} onChange={setPartSearch} placeholder="Parts suchen…" aria-label="Parts suchen" />
                   </div>
-                </td>
-              </tr>
-            ))}
-          </DataTable>
+                  <button type="button" className="button-secondary" onClick={() => setShowPartForm(true)}>+ Neuer Part</button>
+                </>
+              }
+            />
+          </div>
+          <div className="doctpl-table">
+            <DataTable columns={["Name", "Typ", "Version", "Status", "Aktionen"]} emptyMessage="Keine Parts gefunden.">
+              {filteredParts.map((part) => (
+                <tr key={part.id}>
+                  <td><strong>{part.name}</strong></td>
+                  <td><span className="doctpl-mono">{part.part_type}</span></td>
+                  <td className="muted">v{part.version}</td>
+                  <td><Badge variant={part.is_active ? "success" : "neutral"}>{part.is_active ? "Aktiv" : "Inaktiv"}</Badge></td>
+                  <td>
+                    <button type="button" className="row-text-action row-text-action-danger" onClick={() => deletePart(part.id)}>Löschen</button>
+                  </td>
+                </tr>
+              ))}
+            </DataTable>
+          </div>
         </article>
       ) : (
-        <article className="card">
-          <DataToolbar
-            title="PDF-Layouts"
-            description="Layouts definieren das Aussehen des exportierten Protokolls."
-            actions={<button type="button" className="button-secondary" onClick={() => setShowTemplateForm(true)}>Neues Layout</button>}
-          />
-          <div className="editor-shell">
-            <aside className="editor-nav">
-              <div className="editor-nav-section">
-                <h3 className="editor-nav-title">Layouts</h3>
-                <label className="field-stack" style={{ padding: "0 var(--space-2) var(--space-2)" }}>
-                  <SearchInput value={layoutSearch} onChange={setLayoutSearch} placeholder="Suchen…" />
-                </label>
-                {filteredTemplates.map((template) => {
-                  const cfg = (template.configuration_json ?? {}) as Record<string, any>;
-                  const isLandscape = cfg?.options?.orientation === "landscape";
-                  return (
-                    <button
-                      key={template.id}
-                      type="button"
-                      className={`editor-nav-item${selectedTemplateId === template.id ? " editor-nav-item-active" : ""}`}
-                      onClick={() => selectTemplate(template)}
-                    >
-                      <span className="editor-nav-index" title={isLandscape ? "Querformat" : "Hochformat"}>
-                        {isLandscape ? "Q" : "H"}
-                      </span>
-                      <span className="editor-nav-label">{template.name}</span>
-                      <div className="editor-nav-subtitle status-row" style={{ gap: "var(--space-1)" }}>
-                        <span className="pill">v{template.version}</span>
-                        {template.is_default && <span className="pill">Standard</span>}
-                        {!template.is_active && <span className="pill">Inaktiv</span>}
-                      </div>
-                    </button>
-                  );
-                })}
-                {filteredTemplates.length === 0 && <div className="editor-panel-empty">Keine Layouts.</div>}
-              </div>
+        <article className="card doctpl-card">
+          <div className="doctpl-card-head">
+            <DataToolbar title="PDF-Layouts" description="Layouts definieren das Aussehen des exportierten Protokolls." />
+          </div>
+          <div className="doctpl-split">
+            <aside className="doctpl-list">
+              <h3 className="eyebrow doctpl-list-title">Layouts</h3>
+              <SearchInput value={layoutSearch} onChange={setLayoutSearch} placeholder="Suchen…" aria-label="Layouts suchen" />
+              {filteredTemplates.map((template) => {
+                const cfg = (template.configuration_json ?? {}) as Record<string, any>;
+                const isLandscape = cfg?.options?.orientation === "landscape";
+                return (
+                  <button
+                    key={template.id}
+                    type="button"
+                    className={`doctpl-item${selectedTemplateId === template.id ? " doctpl-item-active" : ""}`}
+                    onClick={() => selectTemplate(template)}
+                  >
+                    <span className="doctpl-avatar" aria-hidden="true">{templateInitials(template.name)}</span>
+                    <span className="doctpl-item-name">{template.name}</span>
+                    <span className="doctpl-item-meta">
+                      <Badge>v{template.version}</Badge>
+                      {template.is_default && <Badge variant="info">Standard</Badge>}
+                      {isLandscape && <Badge>Querformat</Badge>}
+                      {!template.is_active && <Badge variant="warning">Inaktiv</Badge>}
+                    </span>
+                  </button>
+                );
+              })}
+              {filteredTemplates.length === 0 && <div className="doctpl-empty">Keine Layouts.</div>}
             </aside>
 
-            <div className="editor-panel">
+            <div className="doctpl-detail-wrap">
               {selectedTemplate ? (
-                <form className="grid" onSubmit={saveSelectedTemplate}>
-                  <div className="editor-panel-header">
+                <form className="doctpl-detail" onSubmit={saveSelectedTemplate}>
+                  <div className="doctpl-detail-head">
                     <div>
                       <div className="eyebrow">Layout</div>
                       <h2>{selectedTemplate.name}</h2>
                     </div>
-                    <button type="button" className="button-secondary button-danger" onClick={() => deleteTemplate(selectedTemplate.id)}>
+                    <button type="button" className="doctpl-delete" onClick={() => deleteTemplate(selectedTemplate.id)}>
                       Löschen
                     </button>
                   </div>
                   <TemplateForm form={selectedTemplateForm} setForm={setSelectedTemplateForm} partsByType={partsByType} allParts={parts} />
-                  <div className="table-toolbar-actions">
-                    <button type="submit" className="button-secondary">Layout speichern</button>
+                  <div className="doctpl-detail-actions">
+                    <button type="submit" className="button-primary">Layout speichern</button>
                   </div>
                 </form>
               ) : (
-                <div className="editor-panel-empty">Layout aus der Liste auswählen.</div>
+                <div className="doctpl-empty">Layout aus der Liste auswählen.</div>
               )}
             </div>
           </div>
