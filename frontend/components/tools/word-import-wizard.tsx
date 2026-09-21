@@ -2380,6 +2380,9 @@ export function WordImportWizard({
       });
       setCreatedProtocolId(result.id);
       setStep("done");
+      // Drop the client router cache so the protocol list / queue overview show the new
+      // protocol when the user navigates back to them (browser back restores cached pages).
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Protokoll konnte nicht erstellt werden");
     } finally {

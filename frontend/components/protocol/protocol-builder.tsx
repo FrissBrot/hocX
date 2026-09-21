@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useRefreshOnRestore } from "@/lib/hooks/use-refresh-on-restore";
 
 import { Badge } from "@/components/ui/badge";
 import { DateInput } from "@/components/ui/date-input";
@@ -45,6 +46,7 @@ type ProtocolFormState = {
 
 export function ProtocolBuilder({ initialProtocols, templates, readOnly = false }: ProtocolBuilderProps) {
   const router = useRouter();
+  useRefreshOnRestore();
   const [protocols, setProtocols] = useState(initialProtocols);
   const [hasMore, setHasMore] = useState(initialProtocols.length === PAGE_SIZE);
 

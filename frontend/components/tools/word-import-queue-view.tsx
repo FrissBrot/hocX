@@ -1,10 +1,11 @@
 "use client";
 
 import type { Route } from "next";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { useConfirm } from "@/contexts/confirm-context";
+import { useRefreshOnRestore } from "@/lib/hooks/use-refresh-on-restore";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { FilterTabs } from "@/components/ui/filter-tabs";
@@ -53,7 +54,12 @@ type PendingUpload = {
 export function WordImportQueueView({ templates, initialDocuments, initialTemplateId }: Props) {
   const router = useRouter();
   const confirm = useConfirm();
+  useRefreshOnRestore();
   const [documents, setDocuments] = useState<WordImportDocumentSummary[]>(initialDocuments);
+  // Sync when router.refresh() / back-navigation delivers newer server data.
+  useEffect(() => {
+    setDocuments(initialDocuments);
+  }, [initialDocuments]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("eingelesen");
   // Zuletzt gewählte Vorlage (tenant.last_word_import_template_id) wird vorausgewählt,
   // solange sie noch existiert/aktiv ist - sonst Fallback auf die erste verfügbare.
