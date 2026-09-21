@@ -143,6 +143,12 @@ pre {
   letter-spacing: 0.08em;
 }
 
+.brand-mark-tenant {
+  flex-shrink: 0;
+  object-fit: contain;
+  background: transparent;
+}
+
 .sidebar-title {
   margin: var(--space-1) 0 0;
   font-size: var(--text-2xl);

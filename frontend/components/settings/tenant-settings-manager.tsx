@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
 import { DomainWizardModal } from "@/components/ui/domain-wizard-modal";
@@ -25,6 +26,7 @@ type TenantFormState = {
 };
 
 export function TenantSettingsManager({ initialTenant }: Props) {
+  const router = useRouter();
   const showToast = useToast();
   const confirm = useConfirm();
   const tenantId = initialTenant.id;
@@ -66,6 +68,7 @@ export function TenantSettingsManager({ initialTenant }: Props) {
       });
       setTenantForm((current) => ({ ...current, profileImage: null, profileImageUrl: updated.profile_image_url }));
       setTenantName(updated.name);
+      router.refresh();
       showToast("Mandant gespeichert", "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Mandant konnte nicht gespeichert werden", "error");

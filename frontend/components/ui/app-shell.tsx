@@ -238,7 +238,16 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
           }}
         >
           <div className="brand-lockup">
-            <div className="brand-mark">hX</div>
+            {session?.current_tenant?.profile_image_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                className="brand-mark brand-mark-tenant"
+                src={session.current_tenant.profile_image_url}
+                alt={`Logo von ${tenantName}`}
+              />
+            ) : (
+              <div className="brand-mark">hX</div>
+            )}
             <div className="brand-lockup-text">
               <div className="sidebar-wordmark">hocX</div>
               <div className="sidebar-tenant-name">{tenantName}</div>
