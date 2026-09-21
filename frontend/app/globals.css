@@ -11676,20 +11676,26 @@ input[type="radio"] {
 
 /* DateFieldButton - opens the styled DateEditorModal popup, formatted dd.mm.yyyy. */
 .word-import-filebar-date {
+  --button-bg: transparent;
+  --button-hover-bg: var(--panel);
   display: inline-block;
+  width: auto;
+  min-height: 0;
   border: 1px solid transparent;
   padding: 1px var(--space-1);
   margin: -1px calc(-1 * var(--space-1));
   border-radius: var(--radius-sm);
-  background: none;
+  background: var(--button-bg);
   color: var(--muted);
   font: inherit;
   font-size: var(--text-md);
+  font-weight: inherit;
+  letter-spacing: inherit;
   white-space: nowrap;
   cursor: pointer;
 }
 
-.word-import-filebar-date:hover,
+.word-import-filebar-date:hover:not(:disabled),
 .word-import-filebar-date:focus-visible {
   border-color: var(--border-strong);
   background: var(--panel);
