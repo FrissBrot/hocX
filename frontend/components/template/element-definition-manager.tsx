@@ -1791,6 +1791,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
         <div>
           <h1 className="page-title">Elemente</h1>
           <p className="muted">Elemente bündeln mehrere interne Blöcke wie Text, Todos, Bilder oder Tabellen. Vorlagen wählen später nur das fertige Element.</p>
+          <p className="muted">Fixe Inhalte legst du hier am besten als nicht editierbare Blöcke an. Im Protokoll erscheinen sie später automatisch schreibgeschützt.</p>
         </div>
         <button
           type="button"
@@ -1813,7 +1814,6 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
           <SearchInput value={search} onChange={setSearch} placeholder="Elemente durchsuchen" />
         </div>
       </div>
-      <p className="muted">Fixe Inhalte legst du hier am besten als nicht editierbare Blöcke an. Im Protokoll erscheinen sie später automatisch schreibgeschützt.</p>
 
       <DataTable className="data-table-lg" columns={["Element", "Blöcke", "Aktionen"]}>
         {filteredDefinitions.map((definition) => (
