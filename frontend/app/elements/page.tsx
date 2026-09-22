@@ -7,7 +7,8 @@ import { TEMPLATE_TABS } from "@/components/ui/section-tabs";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { ElementDefinition, EventSummary, FinanceAccount, ParticipantSummary, StructuredListDefinition } from "@/types/api";
 
-export default async function ElementsPage() {
+export default async function ElementsPage({ searchParams }: { searchParams: Promise<{ create?: string }> }) {
+  const { create } = await searchParams;
   const session = await requireSession();
   const canAdmin = session.current_role === "admin";
   if (!canAdmin) {
@@ -34,6 +35,7 @@ export default async function ElementsPage() {
           availableLists={lists}
           availableAccounts={accounts}
           tenantId={session.current_tenant?.id ?? null}
+          autoOpenCreate={create === "1"}
         />
       </section>
     </AppShell>

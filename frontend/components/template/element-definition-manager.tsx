@@ -27,6 +27,7 @@ type ElementDefinitionManagerProps = {
   availableLists?: StructuredListDefinition[];
   availableAccounts?: { id: string; name: string; currency_label: string }[];
   tenantId: string | null;
+  autoOpenCreate?: boolean;
 };
 
 type DefinitionFormState = {
@@ -833,6 +834,7 @@ export function ElementDefinitionManager({
   availableLists,
   availableAccounts = [],
   tenantId,
+  autoOpenCreate = false,
 }: ElementDefinitionManagerProps) {
   const { tagConfig, updateTagColor, renameTag } = useTagConfig();
   const showToast = useToast();
@@ -873,6 +875,20 @@ export function ElementDefinitionManager({
   const participantOptions = Array.isArray(availableParticipants) ? availableParticipants : [];
   const eventOptions = Array.isArray(availableEvents) ? availableEvents : [];
   const listOptions = Array.isArray(availableLists) ? availableLists : [];
+
+  // Erlaubt den Sprung von anderen Seiten (z. B. der Vorlagenbearbeitung) direkt in die
+  // Neuanlage eines Elements, ohne dass hier extra Zustand pro Aufrufer verdrahtet werden muss.
+  useEffect(() => {
+    if (!autoOpenCreate) {
+      return;
+    }
+    setCreateDefinitionForm(initialDefinitionForm);
+    setCreateBlockForm({ ...initialBlockForm, id: "1", sort_index: "10" });
+    setCreatingNewDefinition(true);
+    setShowCreateBlockModal(true);
+    setTypePickerMode("create");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenCreate]);
 
   const filteredDefinitions = useMemo(
     () =>

@@ -1525,9 +1525,10 @@ export function TemplateEditor({
 
   async function deleteTemplateItem(templateElementId: string) {
     const ok = await confirm({
-      message: "Element aus der Vorlage entfernen? Dies kann nicht rückgängig gemacht werden.",
+      title: "Element entfernen?",
+      message: "Das Element wird aus dieser Vorlage entfernt. Es bleibt bestehen und kann jederzeit wieder hinzugefügt werden, die Einstellungen in dieser Vorlage gehen aber verloren.",
       tone: "danger",
-      confirmLabel: "Löschen"
+      confirmLabel: "Entfernen"
     });
     if (!ok) return;
     try {
@@ -1831,13 +1832,20 @@ export function TemplateEditor({
           description="Waehle ein oder mehrere fertige Elemente aus und fuege sie gesammelt zum Template hinzu."
         >
           <form className="grid" onSubmit={addElementToTemplate}>
-            <SearchInput
-              value={elementPickerSearch}
-              onChange={setElementPickerSearch}
-              placeholder="Elemente durchsuchen"
-              aria-label="Elemente durchsuchen"
-              autoFocus
-            />
+            <div className="list-filter-row">
+              <div className="list-filter-search">
+                <SearchInput
+                  value={elementPickerSearch}
+                  onChange={setElementPickerSearch}
+                  placeholder="Elemente durchsuchen"
+                  aria-label="Elemente durchsuchen"
+                  autoFocus
+                />
+              </div>
+              <a href="/elements?create=1" target="_blank" rel="noreferrer" className="button-ghost button-secondary">
+                Neues Element erstellen
+              </a>
+            </div>
             <DataTable
               columns={["", "Element", "Typen", "Beschreibung", "Bloecke"]}
               emptyMessage="Keine passenden Elemente gefunden."
