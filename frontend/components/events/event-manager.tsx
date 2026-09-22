@@ -1173,14 +1173,13 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
 
           <div className="field-stack">
             <span className="field-label">Zeitraum</span>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
+            <div className="filter-pill-row">
               {(["all", "next-session", "until-event"] as const).map((mode) => {
                 const label = mode === "all" ? "Alle Termine" : mode === "next-session" ? "Nächste Sitzung" : "Bis Termin";
                 return (
                   <button key={mode} type="button"
                     className={`button-pill${exportDateMode === mode ? " button-pill-active" : ""}`}
                     onClick={() => { setExportDateMode(mode); setExportUrl(null); }}
-                    style={{ width: "auto", minHeight: 0 }}
                   >{label}</button>
                 );
               })}
