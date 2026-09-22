@@ -2,6 +2,14 @@
 
 Monorepo: `frontend/` (Next.js, Hauptapp + Plattform-Admin), `abgabebox-frontend/` (öffentliche Upload-Seite), `backend/` (FastAPI), `design/` (Design-Tokens und -Regeln). Sprache in UI-Texten und Kommentaren: Deutsch.
 
+## Codebase-Navigation und Kontext
+
+- Für Exploration und das Auffinden relevanter Implementierungen zuerst `context-engine`/CCE verwenden, statt breite `grep`-, `find`- oder Verzeichnis-Scans auszuführen.
+- CCE dient zur Navigation und Kontextauswahl. Bevor Code geändert wird, die konkret betroffenen Dateien normal lesen und die tatsächliche Implementierung sowie relevante Aufrufer/Tests verstehen.
+- Keine großen Dateien, Logs, Testausgaben oder Verzeichnisbäume vorsorglich vollständig einlesen. Nur den für die Aufgabe benötigten Kontext laden.
+- Bestehende Implementierungen und Tests bevorzugt über CCE auffinden; `grep`/`rg` gezielt einsetzen, wenn eine exakte Textsuche sinnvoller ist.
+- Tests zunächst möglichst nah an der Änderung und gezielt ausführen. Breitere Suites und E2E erst verwenden, wenn die Änderung oder Verifikation sie erfordert.
+
 ## Design-Regeln (verbindlich)
 
 @design/DESIGN.md
@@ -16,11 +24,12 @@ Kurzfassung, falls die Datei nicht geladen wurde:
 
 ## Prüfen
 
-Auf dem Host ist kein Node installiert, alles läuft in Containern:
+Projektabhängigkeiten und Projektbefehle laufen in Containern. Auf dem Host installiertes Node/Python dient auch Dev-Tools und ist kein Grund, Frontend- oder Backend-Abhängigkeiten auf dem Host zu installieren oder Projektbefehle dorthin zu verlagern.
 
 - Typecheck/Tests Frontend: `docker compose exec frontend node_modules/.bin/tsc --noEmit` bzw. `.../vitest run`
 - E2E-Stack (eigene DB, Wegwerf-Konten): `./scripts/e2e.sh up` / `test` / `down`
 - Für visuelle Vergleiche Playwright-Screenshots gegen den E2E-Stack (`mcr.microsoft.com/playwright:v1.55.0-noble`), Light/Dark, 1440 und 390 px.
+- Zuerst die kleinste relevante Prüfung ausführen; vollständige Test- oder E2E-Suites nur, wenn sie für die Änderung sinnvoll sind.
 
 ## Sonstiges
 
