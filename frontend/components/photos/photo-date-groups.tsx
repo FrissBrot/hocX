@@ -13,12 +13,14 @@ export function PhotoDateGroups({
   selectedIds,
   onOpen,
   onToggleSelect,
+  onToggleGroup,
 }: {
   items: FileOverviewItem[];
   grouped: boolean;
   selectedIds: Set<string>;
   onOpen: (item: FileOverviewItem) => void;
   onToggleSelect: (id: string) => void;
+  onToggleGroup: (ids: string[]) => void;
 }) {
   const groups = useMemo(() => groupPhotosByDate(items), [items]);
   const selectionMode = selectedIds.size > 0;
@@ -44,13 +46,19 @@ export function PhotoDateGroups({
     <>
       {groups.map((group) => (
         <div key={group.key} className="photo-date-group">
-          <div className="photo-date-header">
+          <button
+            type="button"
+            className="button-ghost photo-date-header"
+            aria-pressed={group.items.every((item) => selectedIds.has(item.id))}
+            title="Alle Fotos dieser Datumsgruppe markieren oder abwählen"
+            onClick={() => onToggleGroup(group.items.map((item) => item.id))}
+          >
             <span className="photo-date-weekday">{formatWeekdayDate(group.date)}</span>
             {group.contextLabel && <span className="photo-date-context">{group.contextLabel}</span>}
             <span className="photo-date-count">
               · {group.items.length} {group.items.length === 1 ? "Foto" : "Fotos"}
             </span>
-          </div>
+          </button>
           <div className="photo-grid">
             {group.items.map((item) => (
               <PhotoTile

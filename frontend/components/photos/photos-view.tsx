@@ -229,6 +229,18 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
     });
   }
 
+  function toggleGroup(ids: string[]) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      const allSelected = ids.every((id) => current.has(id));
+      for (const id of ids) {
+        if (allSelected) next.delete(id);
+        else next.add(id);
+      }
+      return next;
+    });
+  }
+
   useEffect(() => {
     if (selectedIds.size === 0 || viewerIndex !== null) return;
     function onKeyDown(event: KeyboardEvent) {
@@ -482,6 +494,7 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
               selectedIds={selectedIds}
               onOpen={(item) => setViewerIndex(items.findIndex((current) => current.id === item.id))}
               onToggleSelect={toggleSelect}
+              onToggleGroup={toggleGroup}
             />
           )}
 
