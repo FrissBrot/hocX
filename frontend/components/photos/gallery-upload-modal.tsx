@@ -209,9 +209,6 @@ export function GalleryUploadModal({
                 <span key={format}>{format}</span>
               ))}
             </div>
-            <p className="muted">
-              iPhone-Fotos (HEIC) werden als JPEG gespeichert. Für ein Live Photo Bild und Video (.mov) mit gleichem Namen zusammen wählen.
-            </p>
           </div>
 
           <div>
