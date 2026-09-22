@@ -221,12 +221,6 @@ export function UserManagement({ initialUsers }: Props) {
         </div>
       </div>
 
-      <div className="status-row">
-        <span className="pill">{visibleUsers.length} sichtbar</span>
-        <span className="pill">{tabUsers.length} im Tab</span>
-        <span className="pill">{users.length} gesamt</span>
-      </div>
-
       {userTab === "active" ? (
         <DataTable className="data-table-lg" columns={["Anzeigename", "Name", "E-Mail", "Rolle", "Aktionen"]}>
           {visibleUsers.map((user) => (

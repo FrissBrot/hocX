@@ -582,10 +582,7 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
       </Modal>
 
       <div className="list-filter-row">
-        <div className="status-row">
-          <span className="pill">{filteredTemplates.length} sichtbar</span>
-          <span className="pill">{templates.length} gesamt</span>
-        </div>
+        <div />
         <div className="list-filter-search">
           <SearchInput value={search} onChange={setSearch} placeholder="Vorlagen durchsuchen" />
         </div>

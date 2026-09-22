@@ -1808,10 +1808,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
       </div>
 
       <div className="list-filter-row">
-        <div className="status-row">
-          <span className="pill">{filteredDefinitions.length} sichtbar</span>
-          <span className="pill">{definitions.length} gesamt</span>
-        </div>
+        <div />
         <div className="list-filter-search">
           <SearchInput value={search} onChange={setSearch} placeholder="Elemente durchsuchen" />
         </div>
@@ -1870,7 +1867,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
               />
               <SettingsSection
                 title="Element-Grundlagen"
-                description="Passe Titel und Beschreibung des Elements an."
+                description="Passe den Titel des Elements an."
               >
                 <div className="two-col">
                   <label className="field-stack">
@@ -1879,10 +1876,6 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                     <span className="field-help">
                       Verfuegbare Zyklus-Platzhalter: {"{cycle_name}"}, {"{cycle_year_start}"}, {"{cycle_year_end}"} — werden beim Erstellen des Protokolls anhand des Zyklus der Vorlage ersetzt.
                     </span>
-                  </label>
-                  <label className="field-stack">
-                    <span className="field-label">Beschreibung</span>
-                    <input value={definitionForm.description} onChange={(event) => setDefinitionForm((current) => ({ ...current, description: event.target.value }))} />
                   </label>
                 </div>
               </SettingsSection>
@@ -1976,6 +1969,8 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
           }
         }}
         title={creatingNewDefinition ? "Element anlegen" : "Block anlegen"}
+        className="element-create-modal"
+        hideCloseButton
         description={
           creatingNewDefinition
             ? "Wähle den Blocktyp und lege Titel und Inhalt für das neue Element fest."
@@ -1983,12 +1978,17 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
         }
         size="wide"
         headerActions={
+          <>
           <button type="button" className="button-ghost" onClick={() => setShowCreateBlockHelp((current) => !current)}>
             Hilfe
           </button>
+          <button type="button" className="button-icon" aria-label="Schliessen" title="Schliessen" onClick={() => { setShowCreateBlockModal(false); setShowCreateBlockHelp(false); setCreatingNewDefinition(false); setMatrixDesignerMode(null); setTypePickerMode(null); }}>×</button>
+          </>
         }
       >
-        <form className="grid section-stack block-editor-form" onSubmit={creatingNewDefinition ? createDefinitionWithBlock : createBlock}>
+        <form className="grid element-create-form" onSubmit={creatingNewDefinition ? createDefinitionWithBlock : createBlock}>
+          <div className="element-create-layout">
+          <div className="element-create-fields">
           {showCreateBlockHelp ? (
             <div className="compact-info-pop">
               <strong>Block-Hinweis</strong>
@@ -1999,26 +1999,22 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
           {creatingNewDefinition ? (
             <SettingsSection
               title="Element"
-              description="Gemeinsame Überschrift für dieses neue Element."
+              description="Gemeinsame Überschrift für dieses Element — Blöcke hängen darunter."
             >
-              <div className="two-col">
+              <div className="grid">
                 <label className="field-stack">
                   <span className="field-label">Elementtitel</span>
                   <input value={createDefinitionForm.title} onChange={(event) => setCreateDefinitionForm((current) => ({ ...current, title: event.target.value }))} placeholder="z. B. Zusammenarbeit mit Blauring" required />
-                  <span className="field-help">
+                  <span className="field-help" hidden={!showCreateBlockHelp}>
                     Verfuegbare Zyklus-Platzhalter: {"{cycle_name}"}, {"{cycle_year_start}"}, {"{cycle_year_end}"} — werden beim Erstellen des Protokolls anhand des Zyklus der Vorlage ersetzt.
                   </span>
-                </label>
-                <label className="field-stack">
-                  <span className="field-label">Beschreibung</span>
-                  <input value={createDefinitionForm.description} onChange={(event) => setCreateDefinitionForm((current) => ({ ...current, description: event.target.value }))} placeholder="Optionale interne Notiz" />
                 </label>
               </div>
             </SettingsSection>
           ) : null}
           <SettingsSection
             title="Grundlagen"
-            description="Name, Untertitel und Startinhalt für diesen Block. Der Blocktyp kann jederzeit oben gewechselt werden."
+            description="Name, Untertitel und Startinhalt dieses Blocks."
           >
             <div className="two-col">
               <label className="field-stack">
@@ -2032,10 +2028,6 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 <span className="field-help">Optionaler Untertitel innerhalb des Elements im Protokoll.</span>
               </label>
             </div>
-            <label className="field-stack">
-              <span className="field-label">Beschreibung</span>
-              <input value={createBlockForm.description} onChange={(event) => setCreateBlockForm((current) => ({ ...current, description: event.target.value }))} placeholder="Optionale Notiz für Redakteure" />
-            </label>
             {/* Plain div, not <label>: the field-stack label pattern relies on there being exactly
                 one labelable descendant so a click focuses it. RichTextEditor renders its own
                 toolbar buttons before the contenteditable area, and a <label> forwards clicks to
@@ -2093,10 +2085,6 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                   <label className="field-stack">
                     <span className="field-label">Titelfilter</span>
                     <input value={createBlockForm.event_title_filter} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_title_filter: event.target.value }))} placeholder="enthaelt..." />
-                  </label>
-                  <label className="field-stack">
-                    <span className="field-label">Beschreibungsfilter</span>
-                    <input value={createBlockForm.event_description_filter} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_description_filter: event.target.value }))} placeholder="enthaelt..." />
                   </label>
                 </div>
                 <div className="three-col">
@@ -2576,8 +2564,50 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
               </div>
             </SettingsSection>
           ) : null}
-          <div className="block-editor-footer">
-            <button type="submit" className="button-secondary">{creatingNewDefinition ? "Element anlegen" : "Block anlegen"}</button>
+          </div>
+          <aside className="element-create-sidebar">
+            <section className="element-create-preview">
+              <h3>Vorschau im Protokoll</h3>
+              <div className="element-create-paper">
+                <h4>{(creatingNewDefinition ? createDefinitionForm.title : selectedDefinition?.title)?.trim() || "Neues Element"}</h4>
+                <p className="muted">{repeatSourceLabel(createBlockForm.repeat_source)}{createBlockForm.event_tag_filter ? ` · Tag «${createBlockForm.event_tag_filter}»` : ""}</p>
+                {createBlockForm.title ? <strong>{createBlockForm.title}</strong> : null}
+                {createBlockForm.block_title ? <p>{createBlockForm.block_title}</p> : null}
+                {createBlockForm.element_type_id === "6" ? (
+                  <DataTable columns={[{ key: "label", label: "Zeile" }, { key: "value", label: "Wert" }]} emptyMessage="Noch keine Zeilen angelegt.">
+                    {createBlockForm.table_fields.map((field, index) => (
+                      <tr key={field.id}><td>{field.label || `Zeile ${index + 1}`}</td><td>{tableRowPreviewValue(field)}</td></tr>
+                    ))}
+                  </DataTable>
+                ) : createBlockForm.default_content ? (
+                  <p className="element-create-content-preview">{createBlockForm.default_content}</p>
+                ) : renderBlockTypePreview(createBlockForm.element_type_id)}
+                <p className="element-create-preview-meta">element_type_id {createBlockForm.element_type_id} · {createBlockForm.is_editable ? "editierbar" : "fixiert"}</p>
+              </div>
+            </section>
+            <section className="element-create-behavior">
+              <h3>Verhalten</h3>
+              <div className="element-create-options">
+                <label className="element-create-option">
+                  <input type="checkbox" checked={createBlockForm.is_editable} onChange={(event) => setCreateBlockForm((current) => ({ ...current, is_editable: event.target.checked }))} />
+                  <span><strong>Im Protokoll bearbeitbar</strong><span className="field-help">Aus: der Inhalt bleibt fix und wird aus der Vorlage übernommen.</span></span>
+                </label>
+                <label className="element-create-option">
+                  <input type="checkbox" checked={createBlockForm.export_visible} onChange={(event) => setCreateBlockForm((current) => ({ ...current, export_visible: event.target.checked }))} />
+                  <span><strong>Im PDF ausgeben</strong><span className="field-help">Leere Blöcke werden beim Export automatisch weggelassen.</span></span>
+                </label>
+                <label className="element-create-option">
+                  <input type="checkbox" checked={createBlockForm.copy_from_last_protocol} onChange={(event) => setCreateBlockForm((current) => ({ ...current, copy_from_last_protocol: event.target.checked }))} />
+                  <span><strong>Aus letztem Protokoll übernehmen</strong><span className="field-help">Den letzten Inhalt als Startwert verwenden.</span></span>
+                </label>
+              </div>
+            </section>
+          </aside>
+          </div>
+          <div className="modal-actions element-create-footer">
+            <p className="muted">Weitere Blöcke fügst du nach dem Anlegen im Element hinzu.</p>
+            <button type="button" className="button-secondary" onClick={() => { setShowCreateBlockModal(false); setShowCreateBlockHelp(false); setCreatingNewDefinition(false); setMatrixDesignerMode(null); setTypePickerMode(null); }}>Abbrechen</button>
+            <button type="submit" className="button-primary" disabled={creatingNewDefinition && !createDefinitionForm.title.trim()}>{creatingNewDefinition ? "Element anlegen" : "Block anlegen"}</button>
           </div>
         </form>
       </Modal>
@@ -2625,10 +2655,6 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                   <input value={blockForm.block_title} onChange={(event) => setBlockForm((current) => ({ ...current, block_title: event.target.value }))} placeholder="Optionaler Untertitel" />
                 </label>
               </div>
-              <label className="field-stack">
-                <span className="field-label">Beschreibung</span>
-                <input value={blockForm.description} onChange={(event) => setBlockForm((current) => ({ ...current, description: event.target.value }))} />
-              </label>
               {/* Plain div, not <label> - see the create-form field above for why. */}
               <div className="field-stack">
                 <span className="field-label">Standard- oder Fixinhalt</span>
@@ -2680,10 +2706,6 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                     <label className="field-stack">
                       <span className="field-label">Titelfilter</span>
                       <input value={blockForm.event_title_filter} onChange={(event) => setBlockForm((current) => ({ ...current, event_title_filter: event.target.value }))} placeholder="enthaelt..." />
-                    </label>
-                    <label className="field-stack">
-                      <span className="field-label">Beschreibungsfilter</span>
-                      <input value={blockForm.event_description_filter} onChange={(event) => setBlockForm((current) => ({ ...current, event_description_filter: event.target.value }))} placeholder="enthaelt..." />
                     </label>
                   </div>
                   <div className="three-col">

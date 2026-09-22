@@ -630,11 +630,6 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
         </div>
       </div>
 
-      <div className="status-row">
-        <span className="pill">{filteredAssignments.length} sichtbar</span>
-        <span className="pill">{assignments.length} gesamt</span>
-      </div>
-
       <DataTable
         className="data-table-lg"
         columns={["Titel", "Quelle / Zeitraum", "Fortschritt", "Aktionen"]}

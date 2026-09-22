@@ -360,11 +360,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
       ) : (
       <>
       <div className="list-filter-row">
-        <div className="status-row">
-          <span className="pill">{selectedParticipantIds.length} ausgewählt</span>
-          <span className="pill">{filteredParticipants.length} sichtbar</span>
-          <span className="pill">{participants.length} geladen</span>
-        </div>
+        <div />
         <div className="list-filter-search">
           <SearchInput value={search} onChange={setSearch} placeholder="Teilnehmer durchsuchen" />
         </div>

@@ -730,12 +730,6 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
         </div>
       </div>
 
-      <div className="status-row">
-        <span className="pill">{filteredEvents.length} sichtbar</span>
-        <span className="pill">{events.length} gesamt</span>
-        <span className="pill">{knownTags.length} Tags</span>
-      </div>
-
       <DataTable
         className="data-table-lg"
         columns={[
