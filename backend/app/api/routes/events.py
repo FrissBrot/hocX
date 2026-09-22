@@ -15,6 +15,7 @@ from app.services import public_id_service
 from app.services.event_service import EventService
 from app.services.submission_service import SubmissionService
 from app.services.audit_service import AuditService
+from app.services import photo_event_link_service
 from app.models.entities import Event
 
 router = APIRouter()
@@ -47,6 +48,7 @@ def create_event(
         db.rollback()
         raise HTTPException(status_code=400, detail="Event could not be created") from exc
     submission_service.sync_todos_for_event(db, created)
+    photo_event_link_service.sync_photos_for_event(db, created)
     return created
 
 
@@ -87,10 +89,13 @@ async def import_events_csv(
     require_writer(user)
     try:
         content = (await file.read()).decode("utf-8-sig")
-        return service.import_csv(db, content, tenant_id=user.current_tenant_id, column_map=_parse_column_map(column_map))
+        created = service.import_csv(db, content, tenant_id=user.current_tenant_id, column_map=_parse_column_map(column_map))
     except (SQLAlchemyError, UnicodeDecodeError, ValueError) as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc) if isinstance(exc, ValueError) else "CSV import failed") from exc
+    for event in created:
+        photo_event_link_service.sync_photos_for_event(db, event)
+    return created
 
 
 @router.patch("/events/{event_id}", response_model=EventRead)
@@ -112,6 +117,7 @@ def patch_event(
     if updated is None:
         raise HTTPException(status_code=404, detail="Event not found")
     submission_service.sync_todos_for_event(db, updated)
+    photo_event_link_service.sync_photos_for_event(db, updated)
     return updated
 
 

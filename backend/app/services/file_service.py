@@ -30,6 +30,7 @@ from app.services.apple_media import (
     pair_live_clips,
     transcode_live_clip,
 )
+from app.services import photo_event_link_service
 from app.services.photo_quality import compute_quality_scores
 from app.services.photo_similarity import (
     MAX_GROUPING_IMAGES,
@@ -383,6 +384,7 @@ class FileService:
             metadata_url=metadata_url,
             ref_label=row.ref_label,
             ref_date=row.ref_date,
+            ref_end_date=row.ref_end_date,
             ref_href=ref_href,
             tags=list(row.tags or []),
             origin_tag=row.origin_tag,
@@ -905,6 +907,23 @@ class FileService:
 
             stored_file = result.stored_file
             stored_file.source_checksum_sha256 = source_checksum
+            _, _, taken_at, _ = _extract_image_metadata(content)
+            stored_file.exif_taken_at = taken_at
+            item_taken_at[stored_file.public_id] = taken_at
+
+            # Auto-link to a Termin by capture date only when the uploader didn't already
+            # target one themselves (GalleryUploadModal's Termin/Zyklus/Abgabe-Element
+            # picker) - an explicit choice always wins over date matching, and
+            # event_auto_linked is how photo_event_link_service.sync_photos_for_event later
+            # tells the two apart when a Termin's own dates change.
+            matched_event = (
+                photo_event_link_service.find_matching_event(
+                    db, tenant_id, photo_event_link_service.capture_date(stored_file)
+                )
+                if upload_event is None
+                else None
+            )
+            linked_event = upload_event or matched_event
 
             live_video_file: StoredFile | None = None
             if source_filename in live_clips:
@@ -924,7 +943,8 @@ class FileService:
                     tenant_id=tenant_id,
                     stored_file_id=stored_file.id,
                     live_video_stored_file_id=live_video_file.id if live_video_file is not None else None,
-                    event_id=upload_event_id,
+                    event_id=linked_event.id if linked_event is not None else None,
+                    event_auto_linked=matched_event is not None,
                     # Stored so the Abgabe's max_files_per_element also counts photos uploaded
                     # this way (see submission_upload_rules.load_rules).
                     submission_assignment_id=upload_assignment.id if upload_assignment is not None else None,
@@ -937,10 +957,6 @@ class FileService:
 
             if result.duplicate_warning is not None:
                 errors.append(f"{label}: Hinweis - ähnelt einem bereits im Mandanten hochgeladenen Bild")
-
-            if upload_cycle_config is not None:
-                _, _, taken_at, _ = _extract_image_metadata(content)
-                item_taken_at[stored_file.public_id] = taken_at
 
             items.append(
                 FileOverviewItem(
@@ -956,7 +972,8 @@ class FileService:
                     tags_url=self.build_tags_url(stored_file.public_id),
                     metadata_url=self.build_metadata_url(stored_file.public_id),
                     ref_label="",
-                    ref_date=None,
+                    ref_date=linked_event.event_date if linked_event is not None else None,
+                    ref_end_date=linked_event.event_end_date if linked_event is not None else None,
                     ref_href=None,
                     tags=list(stored_file.tags or []),
                     origin_tag="Direkt hochgeladen",
@@ -966,8 +983,8 @@ class FileService:
                     face_analyzed_at=stored_file.face_analyzed_at,
                     width=stored_file.width,
                     height=stored_file.height,
-                    group_date=upload_event.event_date if upload_event is not None else stored_file.created_at.date(),
-                    context_label=upload_event.title if upload_event is not None else None,
+                    group_date=photo_event_link_service.capture_date(stored_file),
+                    context_label=linked_event.title if linked_event is not None else None,
                     live_video_url=self.build_content_url(live_video_file.public_id) if live_video_file is not None else None,
                 )
             )

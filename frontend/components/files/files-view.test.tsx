@@ -55,6 +55,7 @@ function makeItem(overrides: Partial<FileOverviewItem> = {}): FileOverviewItem {
     metadata_url: `/api/stored-files/${id}/metadata`,
     ref_label: "1. Hock",
     ref_date: null,
+    ref_end_date: null,
     ref_href: null,
     tags: [],
     origin_tag: "Word-Import: 1. Hock",

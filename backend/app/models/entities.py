@@ -892,6 +892,12 @@ class StoredFile(Base, TimestampMixin):
     # whose thumbnail was never regenerated since.
     width: Mapped[int | None] = mapped_column(Integer)
     height: Mapped[int | None] = mapped_column(Integer)
+    # EXIF DateTimeOriginal/DigitizedDateTime (see file_service._extract_image_metadata),
+    # persisted at ingest time so it can drive the Fotos gallery's sort/grouping and its
+    # auto-link-to-Termin matching (see photo_event_link_service.py) without re-reading
+    # every file from disk on each request. None for non-images, images PIL couldn't
+    # decode, images without EXIF, and files uploaded before this column existed.
+    exif_taken_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     scan_status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'clean'"))
     # User-assigned tags for the "Dateien" overview page's filter/editor - separate from the
     # auto-derived "origin tag" (which protocol/word-import/submission this file came from,
@@ -1020,10 +1026,18 @@ class GalleryImage(Base, TimestampMixin):
     # Live Photo: the short H.264 clip (its own StoredFile, no gallery_image row of its own) the
     # Fotos grid plays on hover - see apple_media.py. NULL for every ordinary photo.
     live_video_stored_file_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("stored_file.id", ondelete="SET NULL"))
-    # The Termin the uploader optionally targeted in GalleryUploadModal, kept around (it
+    # The Termin this photo belongs to - either the one the uploader targeted in
+    # GalleryUploadModal (event_auto_linked False), or one photo_event_link_service matched
+    # automatically by comparing the photo's capture date against every Termin's
+    # event_date..event_end_date range (event_auto_linked True), either right after upload
+    # or retroactively when a matching Termin is created/its dates change. Kept around (it
     # used to be discarded once the file landed in that Termin's auto-album) so the Fotos
     # page's date-grouped headers can show which Termin/Zyklus a given date belongs to.
     event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("event.id", ondelete="SET NULL"))
+    # True when event_id was set by photo_event_link_service's date matching rather than
+    # picked explicitly by the uploader - lets that service re-sync (link/unlink) as Termine
+    # are created or their dates edited without ever overriding a manual choice.
+    event_auto_linked: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     # Bezug of a direct *document* upload on the "Dateien" page (POST /files/document-uploads) -
     # at most one of event_id / cycle_config_id / submission_assignment_id (+ element ref/label)
     # is ever set. Photo uploads don't write these: they link through auto-albums instead

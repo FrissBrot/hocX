@@ -271,11 +271,20 @@ def make_event(
     tenant_id: int,
     title: str = "Test Event",
     event_date: date = date(2026, 1, 1),
+    event_end_date: date | None = None,
     event_category_id: int = 1,
+    is_cancelled: bool = False,
 ) -> Event:
     # event_category is global seeded reference data (not tenant-scoped), id 1 ("camp")
     # already exists in every environment - no factory needed for it.
-    event = Event(tenant_id=tenant_id, title=title, event_date=event_date, event_category_id=event_category_id)
+    event = Event(
+        tenant_id=tenant_id,
+        title=title,
+        event_date=event_date,
+        event_end_date=event_end_date,
+        event_category_id=event_category_id,
+        is_cancelled=is_cancelled,
+    )
     db.add(event)
     db.flush()
     return event

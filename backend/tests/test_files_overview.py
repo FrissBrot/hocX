@@ -4,7 +4,7 @@ list_tenant_files (content_url/ref_href derivation on top). Route-level require_
 gating is tested by calling the route function directly as a plain callable, same
 convention as tests/test_protocol_element_list_snapshot_routes.py.
 """
-from datetime import date
+from datetime import UTC, date, datetime
 
 import pytest
 from fastapi import HTTPException
@@ -500,10 +500,41 @@ def test_list_tenant_files_gallery_upload_without_event_falls_back_to_created_at
     assert items[0].context_label is None
 
 
-def test_list_tenant_files_gallery_upload_with_event_uses_event_date_and_title(db):
+def test_list_tenant_files_gallery_upload_with_event_uses_own_capture_date_and_event_title(db):
     """Regression for the outer join in _files_overview_branches' gallery branch: an
     event-less gallery upload must still list (covered above), and one *with* an event
-    must pick up that event's date/title instead of falling back to created_at."""
+    must pick up that event's title while still grouping by the photo's own capture date
+    (not the Termin's event_date) - a multi-day Termin's photos need to land in one date
+    section per day, see grouping.ts's "Termin, Tag N" header."""
+    from app.models.entities import GalleryImage
+
+    from tests.factories import make_event
+
+    tenant = make_tenant(db)
+    event = make_event(db, tenant.id, title="Sommerlager", event_date=date(2026, 7, 10), event_end_date=date(2026, 7, 12))
+    stored_file = StoredFile(
+        tenant_id=tenant.id, original_name="lager.png", mime_type="image/png",
+        storage_path="uploads/tenant-x/gallery/lager.png", scan_status="clean",
+        exif_taken_at=datetime(2026, 7, 11, 9, 30, tzinfo=UTC),
+    )
+    db.add(stored_file)
+    db.flush()
+    db.add(GalleryImage(tenant_id=tenant.id, stored_file_id=stored_file.id, event_id=event.id, event_auto_linked=True))
+    db.flush()
+
+    items = service.list_tenant_files(db, tenant.id)
+
+    assert len(items) == 1
+    assert items[0].group_date == date(2026, 7, 11)
+    assert items[0].context_label == "Sommerlager"
+    assert items[0].ref_date == event.event_date
+    assert items[0].ref_end_date == event.event_end_date
+
+
+def test_list_tenant_files_gallery_upload_without_exif_falls_back_to_created_at_for_group_date(db):
+    """A gallery photo linked to a Termin but without a persisted EXIF capture date (taken
+    before exif_taken_at existed, or EXIF-less) groups by its upload date instead, same as
+    the event-less case above."""
     from app.models.entities import GalleryImage
 
     from tests.factories import make_event
@@ -522,7 +553,7 @@ def test_list_tenant_files_gallery_upload_with_event_uses_event_date_and_title(d
     items = service.list_tenant_files(db, tenant.id)
 
     assert len(items) == 1
-    assert items[0].group_date == event.event_date
+    assert items[0].group_date == stored_file.created_at.date()
     assert items[0].context_label == "Sommerlager"
 
 

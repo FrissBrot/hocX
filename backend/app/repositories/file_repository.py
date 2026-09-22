@@ -164,6 +164,7 @@ class StoredFileRepository:
                 Protocol.public_id.label("ref_public_id"),
                 Protocol.protocol_number.label("ref_label"),
                 Protocol.protocol_date.label("ref_date"),
+                cast(null(), Date).label("ref_end_date"),
                 cast(null(), BigInteger).label("upload_id"),
                 cast(null(), PG_UUID(as_uuid=True)).label("upload_public_id"),
                 func.concat(
@@ -206,6 +207,7 @@ class StoredFileRepository:
                 cast(null(), PG_UUID(as_uuid=True)).label("ref_public_id"),
                 WordImportDocument.display_name.label("ref_label"),
                 WordImportDocument.protocol_date.label("ref_date"),
+                cast(null(), Date).label("ref_end_date"),
                 cast(null(), BigInteger).label("upload_id"),
                 cast(null(), PG_UUID(as_uuid=True)).label("upload_public_id"),
                 func.concat("Word-Import: ", WordImportDocument.display_name).label("origin_tag"),
@@ -228,6 +230,7 @@ class StoredFileRepository:
                 cast(null(), PG_UUID(as_uuid=True)).label("ref_public_id"),
                 SubmissionAssignment.title.label("ref_label"),
                 cast(null(), Date).label("ref_date"),
+                cast(null(), Date).label("ref_end_date"),
                 SubmissionUpload.id.label("upload_id"),
                 SubmissionUpload.public_id.label("upload_public_id"),
                 func.concat("Abgabe: ", SubmissionAssignment.title).label("origin_tag"),
@@ -272,10 +275,16 @@ class StoredFileRepository:
                     else_=literal(""),
                 ).label("ref_label"),
                 Event.event_date.label("ref_date"),
+                Event.event_end_date.label("ref_end_date"),
                 cast(null(), BigInteger).label("upload_id"),
                 cast(null(), PG_UUID(as_uuid=True)).label("upload_public_id"),
                 literal("Direkt hochgeladen").label("origin_tag"),
-                func.coalesce(Event.event_date, cast(StoredFile.created_at, Date)).label("group_date"),
+                # The photo's own capture date (EXIF, falling back to the upload date for
+                # photos without EXIF or uploaded before exif_taken_at existed) - not the
+                # linked Termin's event_date, so a multi-day Termin's photos still land in
+                # one date-section per day (see photo-date-groups.tsx/grouping.ts for the
+                # "Termin, Tag 1/Tag 2/..." header built from this plus ref_date/ref_end_date).
+                func.coalesce(cast(StoredFile.exif_taken_at, Date), cast(StoredFile.created_at, Date)).label("group_date"),
                 Event.title.label("context_label"),
                 case(
                     (SubmissionAssignment.id.is_not(None), literal("submission_assignment")),

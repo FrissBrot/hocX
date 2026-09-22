@@ -182,6 +182,10 @@ export type FileOverviewItem = {
   metadata_url: string;
   ref_label: string;
   ref_date: string | null;
+  // End date of the linked Termin's range - null for a single-day Termin or when there's
+  // no linked Termin. Used with ref_date/group_date to label a multi-day Termin's date
+  // sections "Termin, Tag 1", "Termin, Tag 2", ... (see grouping.ts).
+  ref_end_date: string | null;
   ref_href: string | null;
   tags: string[];
   origin_tag: string;

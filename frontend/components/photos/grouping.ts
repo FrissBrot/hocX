@@ -23,18 +23,44 @@ function mostFrequent(values: string[]): string | undefined {
   return best;
 }
 
+// "2026-07-03" -> whole days between two ISO date strings (UTC midnight, so DST never
+// throws the count off by one) - used to turn a multi-day Termin's [ref_date, ref_end_date]
+// range plus this section's own groupDate into a 1-based "Tag N".
+function daysBetween(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+}
+
+// The group's "Tag N" within its linked Termin's range, when that Termin spans more than
+// one day - undefined for a single-day Termin or a group with no linked Termin at all.
+// Most-frequent (ref_date, ref_end_date) pair among the group's items, the same
+// vote-by-majority approach groupContextLabel uses for context_label/album name, in case a
+// date section ever mixes linked and unlinked photos.
+function multiDayTagLabel(items: FileOverviewItem[], groupDate: string): string | undefined {
+  const ranges = items
+    .filter((item) => item.ref_date && item.ref_end_date && item.ref_end_date > item.ref_date)
+    .map((item) => `${item.ref_date}|${item.ref_end_date}`);
+  const chosen = mostFrequent(ranges);
+  if (!chosen) return undefined;
+  const [refDate] = chosen.split("|");
+  const dayIndex = daysBetween(refDate, groupDate) + 1;
+  return dayIndex >= 1 ? `Tag ${dayIndex}` : undefined;
+}
+
 // Combines the group's auto-album name (Zyklus album only - a manual/submission album
 // isn't "the" context for a date the way a Zyklus period is) with the per-item context
 // label (protocol+block, word-import name, submission assignment, or event title) into
-// one header string, e.g. "Sommerlager 2026 · Tag 1" or, for a protocol block with no
-// album at all, just "Vorstandssitzung · Bilder im Protokoll".
-function groupContextLabel(items: FileOverviewItem[]): string | undefined {
+// one header string, e.g. "Vorstandssitzung · Bilder im Protokoll". When the group's photos
+// are linked to a multi-day Termin, appends that day's index within it, e.g.
+// "Sommerlager 2026, Tag 2".
+function groupContextLabel(items: FileOverviewItem[], groupDate: string): string | undefined {
   const cycleAlbumNames = items.flatMap((item) => item.albums.filter((album) => album.kind === "cycle").map((album) => album.name));
   const albumName = mostFrequent(cycleAlbumNames);
   const contextLabels = items.map((item) => item.context_label).filter((label): label is string => Boolean(label));
   const contextLabel = mostFrequent(contextLabels);
-  if (albumName && contextLabel && contextLabel !== albumName) return `${albumName} · ${contextLabel}`;
-  return albumName ?? contextLabel ?? undefined;
+  const base = albumName && contextLabel && contextLabel !== albumName ? `${albumName} · ${contextLabel}` : albumName ?? contextLabel ?? undefined;
+  if (!base) return undefined;
+  const dayLabel = multiDayTagLabel(items, groupDate);
+  return dayLabel ? `${base}, ${dayLabel}` : base;
 }
 
 // Groups a page of photos (already sorted by group_date, newest first) into contiguous
@@ -54,6 +80,6 @@ export function groupPhotosByDate(items: FileOverviewItem[]): PhotoDateGroup[] {
   }
   return order.map((key) => {
     const groupItems = byDate.get(key)!;
-    return { key, date: key, contextLabel: groupContextLabel(groupItems), items: groupItems };
+    return { key, date: key, contextLabel: groupContextLabel(groupItems, key), items: groupItems };
   });
 }

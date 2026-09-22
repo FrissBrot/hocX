@@ -23,6 +23,7 @@ function makeItem(overrides: Partial<FileOverviewItem> = {}): FileOverviewItem {
     metadata_url: `/api/stored-files/${id}/metadata`,
     ref_label: "",
     ref_date: null,
+    ref_end_date: null,
     ref_href: null,
     tags: [],
     origin_tag: "Direkt hochgeladen",
@@ -92,6 +93,39 @@ describe("groupPhotosByDate", () => {
     const groups = groupPhotosByDate(items);
 
     expect(groups[0].contextLabel).toBeUndefined();
+  });
+
+  it("labels a multi-day Termin's date sections with their day index", () => {
+    const items = [
+      makeItem({
+        id: "a",
+        group_date: "2026-07-11",
+        context_label: "Sommerlager",
+        ref_date: "2026-07-10",
+        ref_end_date: "2026-07-13",
+      }),
+      makeItem({
+        id: "b",
+        group_date: "2026-07-11",
+        context_label: "Sommerlager",
+        ref_date: "2026-07-10",
+        ref_end_date: "2026-07-13",
+      }),
+    ];
+
+    const groups = groupPhotosByDate(items);
+
+    expect(groups[0].contextLabel).toBe("Sommerlager, Tag 2");
+  });
+
+  it("does not add a day index for a single-day Termin", () => {
+    const items = [
+      makeItem({ id: "a", group_date: "2026-07-10", context_label: "Vorstandssitzung", ref_date: "2026-07-10", ref_end_date: null }),
+    ];
+
+    const groups = groupPhotosByDate(items);
+
+    expect(groups[0].contextLabel).toBe("Vorstandssitzung");
   });
 
   it("preserves the input order of distinct dates", () => {

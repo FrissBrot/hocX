@@ -12,7 +12,7 @@ from fastapi import HTTPException, UploadFile
 from PIL import Image
 from starlette.datastructures import Headers
 
-from datetime import date
+from datetime import date, datetime
 
 from app.api.routes import files as files_routes
 from app.core.cycle_utils import get_cycle_year
@@ -21,7 +21,7 @@ from app.services import file_service as file_service_module
 from app.services import public_id_service
 from app.services.file_service import FileService
 from app.services.upload_pipeline import iter_gallery_zip_entries
-from tests.factories import make_current_user, make_cycle_config, make_tenant
+from tests.factories import make_current_user, make_cycle_config, make_event, make_tenant
 
 
 @pytest.fixture(autouse=True)
@@ -39,6 +39,17 @@ def _isolated_storage_root(monkeypatch, tmp_path):
 def _png_bytes(color=(10, 20, 30), size=(48, 48)) -> bytes:
     buffer = io.BytesIO()
     Image.new("RGB", size, color=color).save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def _jpeg_bytes_with_taken_at(taken_at: datetime, color=(10, 20, 30), size=(48, 48)) -> bytes:
+    """A minimal JPEG carrying EXIF tag 306 (DateTime) - the plain fallback
+    FileService._extract_image_metadata reads when the more specific DateTimeOriginal/
+    DigitizedDateTime sub-IFD tags aren't present, simplest to write via PIL's Exif dict."""
+    buffer = io.BytesIO()
+    exif = Image.Exif()
+    exif[306] = taken_at.strftime("%Y:%m:%d %H:%M:%S")
+    Image.new("RGB", size, color=color).save(buffer, format="JPEG", exif=exif)
     return buffer.getvalue()
 
 
@@ -137,6 +148,82 @@ def test_save_gallery_uploads_stores_image_with_tags_and_creates_gallery_image_r
     gallery_row = db.query(GalleryImage).filter_by(stored_file_id=stored_file.id).one_or_none()
     assert gallery_row is not None
     assert gallery_row.tenant_id == tenant.id
+
+
+def test_save_gallery_uploads_persists_exif_taken_at_and_uses_it_as_group_date(db):
+    tenant = make_tenant(db)
+    content = _jpeg_bytes_with_taken_at(datetime(2026, 3, 4, 12, 0))
+
+    items, errors = asyncio.run(
+        service.save_gallery_uploads(db, tenant_id=tenant.id, files=[("bild.jpg", content)], tags=[], created_by=None)
+    )
+
+    assert errors == []
+    stored_file = public_id_service.get_by_public_id(db, StoredFile, items[0].id)
+    assert stored_file.exif_taken_at is not None
+    assert stored_file.exif_taken_at.date() == date(2026, 3, 4)
+    assert items[0].group_date == date(2026, 3, 4)
+
+
+def test_save_gallery_uploads_auto_links_a_photo_to_the_termin_on_its_capture_date(db):
+    """The Termin -> Bild direction of the auto-link feature: uploading without an
+    explicit Termin target still links the photo when its EXIF capture date falls inside
+    an existing (possibly multi-day) Termin's range."""
+    tenant = make_tenant(db)
+    event = make_event(db, tenant.id, title="Sommerlager", event_date=date(2026, 7, 10), event_end_date=date(2026, 7, 13))
+    content = _jpeg_bytes_with_taken_at(datetime(2026, 7, 12, 15, 0))
+
+    items, errors = asyncio.run(
+        service.save_gallery_uploads(db, tenant_id=tenant.id, files=[("lager.jpg", content)], tags=[], created_by=None)
+    )
+
+    assert errors == []
+    stored_file = public_id_service.get_by_public_id(db, StoredFile, items[0].id)
+    gallery_row = db.query(GalleryImage).filter_by(stored_file_id=stored_file.id).one()
+    assert gallery_row.event_id == event.id
+    assert gallery_row.event_auto_linked is True
+    assert items[0].context_label == "Sommerlager"
+    assert items[0].ref_date == event.event_date
+    assert items[0].ref_end_date == event.event_end_date
+
+
+def test_save_gallery_uploads_does_not_auto_link_when_capture_date_matches_no_termin(db):
+    tenant = make_tenant(db)
+    make_event(db, tenant.id, title="Sommerlager", event_date=date(2026, 7, 10), event_end_date=date(2026, 7, 13))
+    content = _jpeg_bytes_with_taken_at(datetime(2026, 9, 1, 15, 0))
+
+    items, errors = asyncio.run(
+        service.save_gallery_uploads(db, tenant_id=tenant.id, files=[("herbst.jpg", content)], tags=[], created_by=None)
+    )
+
+    assert errors == []
+    stored_file = public_id_service.get_by_public_id(db, StoredFile, items[0].id)
+    gallery_row = db.query(GalleryImage).filter_by(stored_file_id=stored_file.id).one()
+    assert gallery_row.event_id is None
+    assert gallery_row.event_auto_linked is False
+
+
+def test_save_gallery_uploads_with_an_explicit_event_target_is_not_marked_auto_linked(db):
+    """A manually picked Termin (GalleryUploadModal's picker) must win over date matching
+    and never be flagged as if photo_event_link_service had auto-matched it - otherwise a
+    later Termin date edit could unlink this deliberate choice."""
+    tenant = make_tenant(db)
+    picked_event = make_event(db, tenant.id, title="Elternabend", event_date=date(2026, 1, 1))
+    # EXIF date deliberately doesn't match picked_event's date at all.
+    content = _jpeg_bytes_with_taken_at(datetime(2026, 7, 12, 15, 0))
+
+    items, errors = asyncio.run(
+        service.save_gallery_uploads(
+            db, tenant_id=tenant.id, files=[("bild.jpg", content)], tags=[], created_by=None,
+            upload_event_id=picked_event.id,
+        )
+    )
+
+    assert errors == []
+    stored_file = public_id_service.get_by_public_id(db, StoredFile, items[0].id)
+    gallery_row = db.query(GalleryImage).filter_by(stored_file_id=stored_file.id).one()
+    assert gallery_row.event_id == picked_event.id
+    assert gallery_row.event_auto_linked is False
 
 
 def test_save_gallery_uploads_with_a_cycle_config_target_files_photos_into_the_cycle_album(db):

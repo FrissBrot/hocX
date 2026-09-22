@@ -59,6 +59,7 @@ function makeItem(overrides: Partial<FileOverviewItem> = {}): FileOverviewItem {
     metadata_url: `/api/stored-files/${id}/metadata`,
     ref_label: "",
     ref_date: null,
+    ref_end_date: null,
     ref_href: null,
     tags: [],
     origin_tag: "Direkt hochgeladen",

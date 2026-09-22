@@ -36,6 +36,11 @@ class FileOverviewItem(BaseModel):
     metadata_url: str
     ref_label: str
     ref_date: date | None
+    # End date of the linked Termin's range (Event.event_end_date) - None for a single-day
+    # Termin or when there's no linked Termin at all. Together with ref_date and group_date,
+    # lets the Fotos gallery label a multi-day Termin's date sections "Termin, Tag 1",
+    # "Termin, Tag 2", ... (see grouping.ts's groupContextLabel).
+    ref_end_date: date | None = None
     ref_href: str | None
     # User-assigned tags (editable, see PATCH .../tags) - does not include origin_tag below.
     tags: list[str]
