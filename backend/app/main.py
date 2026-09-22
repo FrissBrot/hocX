@@ -11,7 +11,7 @@ from sqlalchemy import select, text
 
 from app.api.routes import admin, admin_auth, auth, collaboration_ws, cycle_configs, document_templates, events, exports, files, finance, fines, lists, participants, protocol_elements, protocols, statistics, storage, submission_assignments, table_snapshots, tag_config, templates, tenants, todos, users, word_import
 from app.core.background_loops import BACKGROUND_LOCK_IDS, run_advisory_locked_loop
-from app.core.db import SessionLocal
+from app.core.db import SessionLocal, engine
 from app.core.config import settings
 from app.core.error_log import best_effort_actor_from_request, record_system_error
 from app.core.redis_client import close_redis_pool
@@ -111,14 +111,11 @@ def ensure_startup_seed_data() -> None:
     fresh database being seeded by multiple concurrent uvicorn workers (--workers 2)
     can't race on the same check-then-insert (e.g. two workers both seeing an empty
     platform_admin table and both trying to insert the bootstrap admin)."""
-    with SessionLocal() as db:
-        db.execute(text("SELECT pg_advisory_lock(202600004)"))
-        try:
-            ensure_roles()
-            ensure_platform_admin_bootstrap()
-            ensure_lookup_values()
-        finally:
-            db.execute(text("SELECT pg_advisory_unlock(202600004)"))
+    with engine.begin() as conn:
+        conn.execute(text("SELECT pg_advisory_xact_lock(202600004)"))
+        ensure_roles()
+        ensure_platform_admin_bootstrap()
+        ensure_lookup_values()
 
 
 def ensure_lookup_values() -> None:
@@ -161,14 +158,12 @@ def ensure_runtime_columns() -> None:
 
 def ensure_default_document_templates() -> None:
     service = DocumentTemplateService()
-    with SessionLocal() as db:
-        db.execute(text("SELECT pg_advisory_lock(202600002)"))
-        try:
+    with engine.begin() as conn:
+        conn.execute(text("SELECT pg_advisory_xact_lock(202600002)"))
+        with SessionLocal() as db:
             tenants = list(db.scalars(select(Tenant).order_by(Tenant.id.asc())))
             for tenant in tenants:
                 service.ensure_default_template_for_tenant(db, tenant.id, tenant.name)
-        finally:
-            db.execute(text("SELECT pg_advisory_unlock(202600002)"))
 
 
 def ensure_traefik_dynamic_config() -> None:

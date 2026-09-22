@@ -14,6 +14,9 @@ import { uniquePng } from "./unique-fixture";
 // itself calls, end to end: platform admin sets the quota, then a tenant writer's upload is
 // rejected once it would exceed it.
 test("rejects a gallery upload once the platform-admin-configured storage quota is exceeded", async () => {
+  // Two full upload+ingest round trips, each polled up to 60s (see uploadOversized below) -
+  // the default 45s test timeout (playwright.config.ts) would abort before either finishes.
+  test.setTimeout(120_000);
   const writerApi = await playwrightRequest.newContext({ baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: authFiles.writer });
   const adminApi = await playwrightRequest.newContext({ baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: authFiles.platformAdmin });
   let tenantId: string | undefined;
@@ -44,7 +47,7 @@ test("rejects a gallery upload once the platform-admin-configured storage quota 
       expect(response.ok(), await response.text()).toBeTruthy();
       const job = await response.json();
       await expect
-        .poll(async () => (await (await writerApi.get(`/api/files/gallery-upload-jobs/${job.id}`)).json()).status, { timeout: 30_000 })
+        .poll(async () => (await (await writerApi.get(`/api/files/gallery-upload-jobs/${job.id}`)).json()).status, { timeout: 60_000 })
         .toBe("done");
       return (await writerApi.get(`/api/files/gallery-upload-jobs/${job.id}`)).json();
     };

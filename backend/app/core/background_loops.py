@@ -18,7 +18,7 @@ from collections.abc import Callable
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.core.db import SessionLocal
+from app.core.db import SessionLocal, engine
 from app.core.error_log import record_system_error
 
 BACKGROUND_LOCK_IDS: dict[str, int] = {
@@ -67,20 +67,30 @@ async def run_advisory_locked_loop(
     lifetime of the process, with nothing but an asyncio "exception was never retrieved"
     warning to show for it.
 
+    Guarded by a transaction-scoped Postgres advisory lock (pg_try_advisory_xact_lock) on
+    a dedicated connection. A session-scoped pg_try_advisory_lock/pg_advisory_unlock pair
+    is unsafe with connection pooling: when task(db) commits or rolls back, its underlying
+    connection is returned to the pool, so a subsequent unlock attempt can execute on a
+    different connection and silently fail, leaking the lock indefinitely on the pooled
+    connection. Transaction scope releases the lock automatically when the dedicated
+    connection's transaction ends.
+
     should_run, if given, is checked before even trying the lock - for a loop that must
     skip a tick entirely rather than acquire-then-no-op (e.g. a low-traffic-window/host-load
     gate that shouldn't fire just because it's due). Optional so callers with no such gate
     don't pay for the extra check."""
     while True:
         if should_run is None or should_run():
-            with SessionLocal() as db:
-                acquired = db.execute(text("SELECT pg_try_advisory_lock(:lock_id)"), {"lock_id": lock_id}).scalar()
+            with engine.begin() as lock_conn:
+                acquired = lock_conn.execute(
+                    text("SELECT pg_try_advisory_xact_lock(:lock_id)"),
+                    {"lock_id": lock_id},
+                ).scalar()
                 if acquired:
-                    try:
-                        await asyncio.to_thread(task, db)
-                    except Exception as exc:
-                        db.rollback()
-                        record_system_error(db, exc=exc, source="background_loop")
-                    finally:
-                        db.execute(text("SELECT pg_advisory_unlock(:lock_id)"), {"lock_id": lock_id})
+                    with SessionLocal() as db:
+                        try:
+                            await asyncio.to_thread(task, db)
+                        except Exception as exc:
+                            db.rollback()
+                            record_system_error(db, exc=exc, source="background_loop")
         await asyncio.sleep(interval_seconds)

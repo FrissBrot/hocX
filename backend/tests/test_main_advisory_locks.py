@@ -30,7 +30,7 @@ def test_background_lock_ids_are_unique():
 
 def test_one_shot_startup_locks_in_main_do_not_collide_with_a_periodic_loop_or_each_other():
     source = MAIN_PY.read_text(encoding="utf-8")
-    literal_ids = [int(match) for match in re.findall(r"pg_(?:try_)?advisory_lock\((\d+)\)", source)]
+    literal_ids = [int(match) for match in re.findall(r"pg_(?:try_)?advisory_(?:xact_)?lock\((\d+)\)", source)]
     assert literal_ids, "expected to find main.py's one-shot startup advisory locks"
 
     duplicates = {lock_id for lock_id in literal_ids if literal_ids.count(lock_id) > 1}
