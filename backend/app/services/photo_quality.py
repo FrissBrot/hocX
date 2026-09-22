@@ -13,6 +13,7 @@ these same two numbers rather than replacing them.
 from __future__ import annotations
 
 import io
+import math
 
 import numpy as np
 from PIL import Image, ImageOps
@@ -34,6 +35,9 @@ _CLIPPED_BIN_WIDTH = 3
 # sharpest tiles asks "is anything in focus" rather than "is everything in focus".
 _SHARPNESS_TILE_SIZE = 64
 _SHARPNESS_PERCENTILE = 90
+
+# Gute Gesichter erhalten Vorrang; ein unscharfes Gesicht bleibt niedrig bewertet.
+_FACE_QUALITY_WEIGHT = 2.0
 
 
 def _load_grayscale_array(content: bytes) -> np.ndarray | None:
@@ -123,12 +127,14 @@ def composite_quality_score(
     different "best" frame than the album picker for the same photos, and that picker's
     choice drives a destructive delete).
 
-    Prefers face_quality (Phase 3, only present for images with a detected face) when
-    available, since it's the most informative signal; otherwise falls back to sharpness
-    scaled down by up to half for poor exposure, so an unscored-for-faces photo still
-    lands on a comparable scale to a scored one rather than always losing to it."""
+    Die Quadratwurzel reduziert den Einfluss extremer Detail-/Schaerfewerte auf die
+    relative Best-of-Schwelle. Gesichtsqualitaet wird doppelt gewichtet: Ein scharfes,
+    gut belichtetes Gesicht darf vor einem detailreicheren Gesamtbild liegen.
+    Hintergrundschaerfe kann ein unscharfes Gesicht nicht ausgleichen. Die vorhandenen
+    Rohwerte bleiben unveraendert; die Gewichtung gilt auch fuer bereits analysierte
+    Fotos, sobald die Auswahl neu berechnet wird."""
     if face_quality is not None:
-        return face_quality
+        return _FACE_QUALITY_WEIGHT * math.sqrt(max(0.0, face_quality))
     if sharpness is not None and exposure is not None:
-        return sharpness * (0.5 + 0.5 * exposure)
+        return math.sqrt(max(0.0, sharpness * (0.5 + 0.5 * exposure)))
     return None

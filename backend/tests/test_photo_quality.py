@@ -7,7 +7,7 @@ import io
 import numpy as np
 from PIL import Image, ImageFilter
 
-from app.services.photo_quality import compute_exposure_score, compute_quality_scores, compute_sharpness_score
+from app.services.photo_quality import composite_quality_score, compute_exposure_score, compute_quality_scores, compute_sharpness_score
 
 
 def _png_bytes(image: Image.Image) -> bytes:
@@ -89,3 +89,22 @@ def test_compute_quality_scores_matches_the_individual_functions():
 
 def test_compute_quality_scores_is_none_none_for_undecodable_content():
     assert compute_quality_scores(b"not an image") == (None, None)
+
+
+def test_good_portrait_outranks_a_more_detailed_scene():
+    assert composite_quality_score(20, 0.9, 100) > composite_quality_score(300, 1.0, None)
+
+
+def test_sharp_background_cannot_rescue_a_blurry_face():
+    assert composite_quality_score(1000, 1.0, 1) < composite_quality_score(100, 1.0, None)
+
+
+def test_portrait_ranking_ignores_background_sharpness():
+    assert composite_quality_score(10, 0.9, 100) == composite_quality_score(1000, 0.9, 100)
+
+
+def test_quality_score_preserves_missing_and_zero_scores():
+    assert composite_quality_score(None, None, None) is None
+    assert composite_quality_score(100, None, None) is None
+    assert composite_quality_score(None, None, 0) == 0
+    assert composite_quality_score(0, 1, None) == 0

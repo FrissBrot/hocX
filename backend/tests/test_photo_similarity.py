@@ -71,16 +71,15 @@ def test_group_ranking_uses_the_same_formula_as_album_best_of_selection():
     it never looks at face_quality_score at all."""
     base = 0x5555_5555_5555_5555
     images = [
-        # No detected face - composite_quality_score falls back to sharpness * (0.5 + 0.5 * exposure) = 10 * 0.6 = 6.0.
-        GroupableImage(id=1, perceptual_hash=_hex_hash(base), sharpness_score=10.0, exposure_score=0.2, face_quality_score=None),
-        # Detected face - composite_quality_score returns face_quality_score directly, tied at 6.0.
-        GroupableImage(id=2, perceptual_hash=_hex_hash(base), sharpness_score=999.0, exposure_score=0.01, face_quality_score=6.0),
+        # Gleicher Gesamtscore trotz unterschiedlicher Rohwerte und Gesichtsvorrang.
+        GroupableImage(id=1, perceptual_hash=_hex_hash(base), sharpness_score=60.0, exposure_score=0.2, face_quality_score=None),
+        GroupableImage(id=2, perceptual_hash=_hex_hash(base), sharpness_score=999.0, exposure_score=0.01, face_quality_score=9.0),
     ]
 
     groups = group_similar_images(images)
 
     assert {image.id for image in groups[0]} == {1, 2}
-    assert composite_quality_score(10.0, 0.2, None) == composite_quality_score(None, None, 6.0) == 6.0
+    assert composite_quality_score(60.0, 0.2, None) == composite_quality_score(None, None, 9.0) == 6.0
 
 
 def test_images_without_a_perceptual_hash_never_join_a_group():

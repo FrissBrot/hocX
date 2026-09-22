@@ -115,6 +115,27 @@ def test_recompute_best_of_stars_the_top_scoring_fraction(db):
     assert starred == top_two
 
 
+def test_recompute_best_of_includes_good_portrait_among_detailed_scenes(db):
+    tenant = make_tenant(db)
+    items = _upload_images(db, tenant.id, 10)
+    album = PhotoAlbum(tenant_id=tenant.id, name="Portraits", kind="manual")
+    db.add(album)
+    db.flush()
+    photo_album_service.add_items(db, album, [item.id for item in items])
+    db.commit()
+
+    for item in items:
+        _set_scores(db, item.id, sharpness=300, exposure=1.0)
+    _set_scores(db, items[0].id, sharpness=20, exposure=0.9, face_quality=100)
+    _set_scores(db, items[1].id, sharpness=1000, exposure=1.0, face_quality=1)
+    _set_scores(db, items[2].id, sharpness=400, exposure=1.0)
+
+    photo_album_service.recompute_best_of(db, service, album)
+
+    starred = {row.file_id for row in db.query(PhotoAlbumItem).filter_by(album_id=album.id, is_best=True)}
+    assert starred == {items[0].id, items[2].id}
+
+
 def test_recompute_best_of_respects_manual_override(db):
     tenant = make_tenant(db)
     items = _upload_images(db, tenant.id, 10)
