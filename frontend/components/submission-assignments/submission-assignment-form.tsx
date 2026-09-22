@@ -79,6 +79,7 @@ const FILE_TYPE_GROUPS = [
   { label: "PDF", types: ["pdf"] },
   { label: "Office-Dateien", types: ["doc", "docx", "xls", "xlsx", "ppt", "pptx"] },
   { label: "Bilddateien", types: ["jpg", "jpeg", "png", "gif", "webp"] },
+  { label: "Apple-Dateien", types: ["pages", "key", "numbers", "heic", "heif"] },
 ];
 
 const SOURCE_OPTIONS: { value: SubmissionSourceType; title: string; description: string }[] = [

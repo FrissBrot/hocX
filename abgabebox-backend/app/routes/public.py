@@ -57,6 +57,11 @@ _EXTENSION_MIME_MAP = {
     "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "ppt": "application/vnd.ms-powerpoint",
     "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "pages": "application/vnd.apple.pages",
+    "key": "application/vnd.apple.keynote",
+    "numbers": "application/vnd.apple.numbers",
+    "heic": "image/heic",
+    "heif": "image/heif",
 }
 _OLE_SIGNATURE = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"  # legacy .doc/.xls/.ppt (Compound File Binary)
 # M20 (2026-08-12 audit): .doc/.xls/.ppt all share this one generic OLE/CFB container signature,
@@ -79,6 +84,13 @@ _OLE_SIGNATURE = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"  # legacy .doc/.xls/.ppt (C
 # CLSID constants against real sample files first, or take a dependency on a maintained parser
 # (e.g. olefile) instead of a hand-rolled one - either beats guessing.
 _ZIP_SIGNATURE = b"PK\x03\x04"  # modern .docx/.xlsx/.pptx (all just zip containers)
+# .pages/.key/.numbers exported as a single file (the normal case, no "Package" option) are
+# also just zip containers, like .docx/.xlsx/.pptx above - same signature, different extension.
+
+# ftyp-Hauptmarken (Bytes 8-12) von HEIC/HEIF-Bildern; identische Liste wie in
+# backend/app/services/apple_media.py. Absichtlich hier dupliziert statt importiert - siehe
+# _read_upload_within_limit weiter unten zur Isolation von abgabebox-backend vom Hauptbackend.
+_HEIF_BRANDS = {b"heic", b"heix", b"heim", b"heis", b"hevc", b"hevx", b"mif1", b"msf1"}
 
 
 def _content_matches_extension(content: bytes, extension: str) -> bool:
@@ -93,10 +105,12 @@ def _content_matches_extension(content: bytes, extension: str) -> bool:
         return head.startswith((b"GIF87a", b"GIF89a"))
     if extension == "webp":
         return head.startswith(b"RIFF") and content[8:12] == b"WEBP"
-    if extension in ("docx", "xlsx", "pptx"):
+    if extension in ("docx", "xlsx", "pptx", "pages", "key", "numbers"):
         return head.startswith(_ZIP_SIGNATURE)
     if extension in ("doc", "xls", "ppt"):
         return head.startswith(_OLE_SIGNATURE)
+    if extension in ("heic", "heif"):
+        return len(content) >= 12 and content[4:8] == b"ftyp" and content[8:12] in _HEIF_BRANDS
     return False
 
 
