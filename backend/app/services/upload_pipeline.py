@@ -63,9 +63,11 @@ MAX_ZIP_TOTAL_BYTES = 100 * 1024 * 1024  # 100 MB kombinierte entpackte Grösse
 # werden Eintrag fuer Eintrag von der bereits auf Platte gestagten ZIP-Datei gelesen (siehe
 # iter_gallery_zip_entries unten) statt komplett im Arbeitsspeicher zu liegen - deshalb
 # koennen diese beiden Limits deutlich grosszuegiger sein als MAX_ZIP_TOTAL_BYTES/
-# MAX_ZIP_ENTRIES oben, ohne den frueheren In-Memory-Speicherdruck zurueckzubringen.
-GALLERY_ZIP_MAX_BYTES = 5 * 1024**3  # 5 GiB kombinierte entpackte Grösse
-GALLERY_ZIP_MAX_ENTRIES = 5000
+# MAX_ZIP_ENTRIES oben, ohne den frueheren In-Memory-Speicherdruck zurueckzubringen. Auf
+# Wunsch (2026-09-22) soll es hier praktisch kein Limit mehr geben - Werte entsprechend
+# grosszuegig (1 TiB / 1 Mio. Dateien), die einzige tatsaechliche Grenze ist der Plattenplatz.
+GALLERY_ZIP_MAX_BYTES = 1024**4  # 1 TiB kombinierte entpackte Grösse
+GALLERY_ZIP_MAX_ENTRIES = 1_000_000
 
 # Hamming-Distanz (von 64 Bit) zweier pHashes, ab der zwei Bilder als "wahrscheinlich
 # dasselbe Motiv" gelten - empirischer Richtwert, bei Bedarf anhand echter Fehlalarme
