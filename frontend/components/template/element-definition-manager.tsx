@@ -154,6 +154,57 @@ const ALL_EVENT_FIELDS = [
 
 type EventFieldConfig = { field: string; label: string; enabled: boolean };
 
+function selectedEventFields(form: BlockFormState): EventFieldConfig[] {
+  return form.element_type_id === "6" && form.repeat_source === "event" && !form.linked_list_id
+    ? form.event_fields.filter((field) => field.enabled)
+    : [];
+}
+
+function eventFieldPreviewRows(form: BlockFormState) {
+  return selectedEventFields(form).map((field) => {
+    const definition = ALL_EVENT_FIELDS.find((entry) => entry.field === field.field);
+    return (
+      <tr key={`event-field-${field.field}`}>
+        <td><strong>{field.label.trim() || definition?.defaultLabel || field.field}</strong></td>
+        <td className="muted">Aus Termin: {definition?.defaultLabel ?? field.field}</td>
+      </tr>
+    );
+  });
+}
+
+function EventFieldSelector({ fields, onChange }: { fields: EventFieldConfig[]; onChange: (fields: EventFieldConfig[]) => void }) {
+  return (
+    <div className="element-event-fields">
+      <span className="field-label">Terminfelder</span>
+      <SearchableMultiSelect
+        options={ALL_EVENT_FIELDS.slice()}
+        getId={(field) => field.field as string}
+        getLabel={(field) => field.defaultLabel}
+        values={fields.filter((field) => field.enabled).map((field) => field.field)}
+        onChange={(selected) => onChange(fields.map((field) => ({ ...field, enabled: selected.includes(field.field) })))}
+        placeholder="Terminfelder auswählen"
+        triggerProps={{ "aria-label": "Terminfelder auswählen" }}
+      />
+      <div className="element-event-field-labels">
+        {fields.filter((field) => field.enabled).map((field) => {
+          const definition = ALL_EVENT_FIELDS.find((entry) => entry.field === field.field);
+          return (
+            <label key={field.field} className="field-stack">
+              <span className="field-label">{definition?.defaultLabel ?? field.field}</span>
+              <input
+                aria-label={`Zeilenbezeichnung: ${definition?.defaultLabel ?? field.field}`}
+                value={field.label}
+                placeholder={definition?.defaultLabel}
+                onChange={(event) => onChange(fields.map((entry) => entry.field === field.field ? { ...entry, label: event.target.value } : entry))}
+              />
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function defaultEventFields(): EventFieldConfig[] {
   return ALL_EVENT_FIELDS.map((f) => ({ field: f.field, label: f.defaultLabel, enabled: false }));
 }
@@ -667,8 +718,8 @@ function blockPayload(form: BlockFormState): ElementDefinitionBlock {
       linked_list_sort_direction:
         form.element_type_id === "6" && form.linked_list_id && form.linked_list_sort_by ? form.linked_list_sort_direction : null,
       event_fields:
-        form.element_type_id === "6" && form.repeat_source === "event"
-          ? form.event_fields.filter((f) => f.enabled)
+        form.element_type_id === "6" && form.repeat_source === "event" && !form.linked_list_id
+          ? selectedEventFields(form)
           : null,
       rows:
         (String(form.element_type_id) === "11" || (String(form.element_type_id) === "6" && !form.linked_list_id))
@@ -2428,53 +2479,8 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 </div>
               ) : (
                 <>
-                {createBlockForm.repeat_source === "event" && (
-                  <div className="grid">
-                    <div className="eyebrow" style={{ marginBottom: "var(--space-1)" }}>Terminfelder</div>
-                    <p className="muted" style={{ fontSize: "var(--text-base)", margin: 0 }}>
-                      Diese Felder des Termins erscheinen als bearbeitbare Zeilen in der Tabelle und werden direkt im Termin gespeichert.
-                    </p>
-                    <div style={{ display: "grid", gap: "var(--space-2)", marginTop: "var(--space-2)" }}>
-                      {createBlockForm.event_fields.map((entry) => {
-                        const def = ALL_EVENT_FIELDS.find((d) => d.field === entry.field);
-                        if (!def) return null;
-                        return (
-                          <div key={entry.field} style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
-                            <label style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", minWidth: 160, cursor: "pointer" }}>
-                              <input
-                                type="checkbox"
-                                checked={entry.enabled}
-                                onChange={(e) =>
-                                  setCreateBlockForm((current) => ({
-                                    ...current,
-                                    event_fields: current.event_fields.map((f) =>
-                                      f.field === entry.field ? { ...f, enabled: e.target.checked } : f
-                                    ),
-                                  }))
-                                }
-                              />
-                              <span style={{ fontSize: "var(--text-base)" }}>{def.defaultLabel}</span>
-                            </label>
-                            {entry.enabled && (
-                              <input
-                                value={entry.label}
-                                placeholder={def.defaultLabel}
-                                style={{ flex: 1, minHeight: 0, padding: "var(--space-1) var(--space-2)", fontSize: "var(--text-base)" }}
-                                onChange={(e) =>
-                                  setCreateBlockForm((current) => ({
-                                    ...current,
-                                    event_fields: current.event_fields.map((f) =>
-                                      f.field === entry.field ? { ...f, label: e.target.value } : f
-                                    ),
-                                  }))
-                                }
-                              />
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+                {createBlockForm.repeat_source === "event" && !createBlockForm.linked_list_id && (
+                  <EventFieldSelector fields={createBlockForm.event_fields} onChange={(event_fields) => setCreateBlockForm((current) => ({ ...current, event_fields }))} />
                 )}
                 <div className="two-col">
                   <label className="field-stack">
@@ -2486,8 +2492,9 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                     <input value={createBlockForm.value_column_heading} onChange={(event) => setCreateBlockForm((current) => ({ ...current, value_column_heading: event.target.value }))} placeholder="Leer lassen fuer keine Ueberschrift" />
                   </label>
                 </div>
-                {createBlockForm.table_fields.length ? (
+                {createBlockForm.table_fields.length || selectedEventFields(createBlockForm).length ? (
                   <DataTable columns={[createBlockForm.left_column_heading || "Zeile", createBlockForm.value_column_heading || "Wert"]}>
+                    {eventFieldPreviewRows(createBlockForm)}
                     {createBlockForm.table_fields.map((field, index) => (
                       <tr
                         key={`create-table-row-preview-${field.id}`}
@@ -2604,6 +2611,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 {createBlockForm.block_title ? <p>{createBlockForm.block_title}</p> : null}
                 {createBlockForm.element_type_id === "6" ? (
                   <DataTable columns={[{ key: "label", label: "Zeile" }, { key: "value", label: "Wert" }]} emptyMessage="Noch keine Zeilen angelegt.">
+                    {eventFieldPreviewRows(createBlockForm)}
                     {createBlockForm.table_fields.map((field, index) => (
                       <tr key={field.id}><td>{field.label || `Zeile ${index + 1}`}</td><td>{tableRowPreviewValue(field)}</td></tr>
                     ))}
@@ -2643,6 +2651,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
 
       <Modal
         open={showEditBlockModal && !!selectedBlock}
+        className="element-edit-modal"
         onClose={() => {
           setShowEditBlockModal(false);
           setShowEditBlockHelp(false);
@@ -3062,53 +3071,8 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                   </div>
                 ) : (
                   <>
-                    {blockForm.repeat_source === "event" && (
-                      <div className="grid">
-                        <div className="eyebrow" style={{ marginBottom: "var(--space-1)" }}>Terminfelder</div>
-                        <p className="muted" style={{ fontSize: "var(--text-base)", margin: 0 }}>
-                          Diese Felder des Termins erscheinen als bearbeitbare Zeilen in der Tabelle und werden direkt im Termin gespeichert.
-                        </p>
-                        <div style={{ display: "grid", gap: "var(--space-2)", marginTop: "var(--space-2)" }}>
-                          {blockForm.event_fields.map((entry) => {
-                            const def = ALL_EVENT_FIELDS.find((d) => d.field === entry.field);
-                            if (!def) return null;
-                            return (
-                              <div key={entry.field} style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
-                                <label style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", minWidth: 160, cursor: "pointer" }}>
-                                  <input
-                                    type="checkbox"
-                                    checked={entry.enabled}
-                                    onChange={(e) =>
-                                      setBlockForm((current) => ({
-                                        ...current,
-                                        event_fields: current.event_fields.map((f) =>
-                                          f.field === entry.field ? { ...f, enabled: e.target.checked } : f
-                                        ),
-                                      }))
-                                    }
-                                  />
-                                  <span style={{ fontSize: "var(--text-base)" }}>{def.defaultLabel}</span>
-                                </label>
-                                {entry.enabled && (
-                                  <input
-                                    value={entry.label}
-                                    placeholder={def.defaultLabel}
-                                    style={{ flex: 1, minHeight: 0, padding: "var(--space-1) var(--space-2)", fontSize: "var(--text-base)" }}
-                                    onChange={(e) =>
-                                      setBlockForm((current) => ({
-                                        ...current,
-                                        event_fields: current.event_fields.map((f) =>
-                                          f.field === entry.field ? { ...f, label: e.target.value } : f
-                                        ),
-                                      }))
-                                    }
-                                  />
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
+                    {blockForm.repeat_source === "event" && !blockForm.linked_list_id && (
+                      <EventFieldSelector fields={blockForm.event_fields} onChange={(event_fields) => setBlockForm((current) => ({ ...current, event_fields }))} />
                     )}
                     <div className="two-col">
                       <label className="field-stack">
@@ -3128,8 +3092,9 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                         />
                       </label>
                     </div>
-                {blockForm.table_fields.length ? (
+                {blockForm.table_fields.length || selectedEventFields(blockForm).length ? (
                   <DataTable columns={[blockForm.left_column_heading || "Zeile", blockForm.value_column_heading || "Wert"]}>
+                    {eventFieldPreviewRows(blockForm)}
                     {blockForm.table_fields.map((field, index) => (
                       <tr
                         key={`edit-table-row-preview-${field.id}`}
@@ -3859,6 +3824,11 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
             <div className="table-designer-body">
               <div className="matrix-designer-grid-scroll">
                 <div className="table-designer-row-list">
+                  {selectedEventFields(tableDesignerForm).length > 0 ? (
+                    <DataTable columns={[tableDesignerForm.left_column_heading || "Zeile", tableDesignerForm.value_column_heading || "Wert"]}>
+                      {eventFieldPreviewRows(tableDesignerForm)}
+                    </DataTable>
+                  ) : null}
                   {tableDesignerRows.map((row, index) => (
                     <button
                       key={`table-row-${row.id}`}
