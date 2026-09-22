@@ -501,11 +501,10 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
           {hasMore && (
             <div className="load-more-row" ref={loadMoreSentinelRef}>
               {isLoadingMore ? (
-                <span className="muted" role="status" aria-label="Lädt weitere Fotos">
-                  <svg className="word-import-spinner" viewBox="0 0 24 24" fill="none" aria-hidden="true" width={18} height={18}>
-                    <circle cx="12" cy="12" r="9.5" stroke="currentColor" strokeOpacity="0.2" strokeWidth="3" />
-                    <path d="M21.5 12a9.5 9.5 0 0 0-9.5-9.5" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-                  </svg>
+                <span className="photo-loading-glow" role="status" aria-label="Lädt weitere Fotos">
+                  <span aria-hidden="true" />
+                  <span aria-hidden="true" />
+                  <span aria-hidden="true" />
                 </span>
               ) : (
                 <button type="button" className="button-secondary button-ghost" disabled={isReloading} onClick={() => void loadMore()}>
