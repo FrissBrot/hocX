@@ -1505,6 +1505,34 @@ input[type="radio"] {
   background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, transparent 90%), transparent);
 }
 
+.event-window-box {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--panel-solid);
+}
+
+.event-window-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.event-window-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.event-window-stepper-value {
+  min-width: 1.5em;
+  text-align: center;
+  font-weight: 600;
+}
+
 .two-col,
 .three-col,
 .four-col {
@@ -2065,6 +2093,8 @@ input[type="radio"] {
   gap: var(--space-4);
 }
 
+.element-create-modal.modal-shell,
+.element-edit-modal.modal-shell { width: min(1320px, 100%); }
 .element-create-modal.modal-shell { padding: 0; background: var(--panel-solid); }
 .element-create-modal .modal-header h2 { font-family: Georgia, serif; font-size: var(--text-2xl); }
 .element-create-modal .modal-header-actions { flex-shrink: 0; gap: var(--space-2); }

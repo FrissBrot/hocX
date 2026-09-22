@@ -4,6 +4,7 @@ import { FormEvent, Fragment, ReactNode, useEffect, useMemo, useState } from "re
 
 import { DataTable } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
+import { FilterTabOption, FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { SearchableMultiSelect, SearchableSelect } from "@/components/ui/searchable-select";
@@ -116,6 +117,21 @@ type BlockFormState = {
     title_placeholder?: string;
   }>;
 };
+
+const EVENT_DATE_MODE_OPTIONS: FilterTabOption<"relative_window" | "all_future">[] = [
+  { value: "relative_window", label: "Zeitfenster" },
+  { value: "all_future", label: "Alle künftigen" },
+];
+
+function DayOffsetStepper({ value, onChange, ariaLabel, min = 0 }: { value: number; onChange: (value: number) => void; ariaLabel: string; min?: number }) {
+  return (
+    <span className="event-window-stepper">
+      <button type="button" className="button-icon-soft" aria-label={`${ariaLabel} verringern`} onClick={() => onChange(Math.max(min, value - 1))}>−</button>
+      <span className="event-window-stepper-value">{value}</span>
+      <button type="button" className="button-icon-soft" aria-label={`${ariaLabel} erhöhen`} onClick={() => onChange(value + 1)}>+</button>
+    </span>
+  );
+}
 
 const ALL_EVENT_FIELDS = [
   { field: "title", defaultLabel: "Titel", type: "text" },
@@ -2083,27 +2099,40 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                       />
                   </label>
                   <label className="field-stack">
-                    <span className="field-label">Titelfilter</span>
+                    <span className="field-label">Titelfilter (optional)</span>
                     <input value={createBlockForm.event_title_filter} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_title_filter: event.target.value }))} placeholder="enthaelt..." />
                   </label>
                 </div>
-                <div className="three-col">
-                  <label className="field-stack">
-                    <span className="field-label">Datumsmodus</span>
-                    <select value={createBlockForm.event_date_mode} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_date_mode: event.target.value as "relative_window" | "all_future" }))}>
-                      <option value="relative_window">Relatives Fenster</option>
-                      <option value="all_future">Alle künftigen Termine</option>
-                    </select>
-                  </label>
-                  <label className="field-stack">
-                    <span className="field-label">Fenster Start (Tage)</span>
-                    <input type="number" value={createBlockForm.event_window_start_days} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_window_start_days: event.target.value }))} />
-                  </label>
-                  <label className="field-stack">
-                    <span className="field-label">Fenster Ende (Tage)</span>
-                    <input type="number" value={createBlockForm.event_window_end_days} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_window_end_days: event.target.value }))} />
-                  </label>
+                <div className="field-stack">
+                  <span className="field-label">Welche Termine?</span>
+                  <FilterTabs
+                    options={EVENT_DATE_MODE_OPTIONS}
+                    value={createBlockForm.event_date_mode}
+                    onChange={(value) => setCreateBlockForm((current) => ({ ...current, event_date_mode: value }))}
+                  />
                 </div>
+                {createBlockForm.event_date_mode === "relative_window" ? (
+                  <div className="event-window-box">
+                    <div className="event-window-row">
+                      Termine von
+                      <DayOffsetStepper
+                        value={Math.max(0, -Number(createBlockForm.event_window_start_days || "0"))}
+                        onChange={(days) => setCreateBlockForm((current) => ({ ...current, event_window_start_days: String(-days) }))}
+                        ariaLabel="Tage vor dem Protokolldatum"
+                      />
+                      Tagen <strong>vor</strong> bis
+                      <DayOffsetStepper
+                        value={Math.max(0, Number(createBlockForm.event_window_end_days || "0"))}
+                        onChange={(days) => setCreateBlockForm((current) => ({ ...current, event_window_end_days: String(days) }))}
+                        ariaLabel="Tage nach dem Protokolldatum"
+                      />
+                      Tagen <strong>nach</strong> dem Protokolldatum.
+                    </div>
+                    <span className="field-help">
+                      Gezählt ab dem Datum des Protokolls — der Block entsteht für jeden Termin in diesem Fenster neu.
+                    </span>
+                  </div>
+                ) : null}
                 <label className="checkbox-row">
                   <input type="checkbox" checked={createBlockForm.event_include_unlisted_past} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_include_unlisted_past: event.target.checked }))} />
                   Vergangene passende Termine nachziehen, wenn sie in den letzten 3 Protokollen unter diesem Element noch nicht gelistet wurden
@@ -2704,27 +2733,40 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                       />
                     </label>
                     <label className="field-stack">
-                      <span className="field-label">Titelfilter</span>
+                      <span className="field-label">Titelfilter (optional)</span>
                       <input value={blockForm.event_title_filter} onChange={(event) => setBlockForm((current) => ({ ...current, event_title_filter: event.target.value }))} placeholder="enthaelt..." />
                     </label>
                   </div>
-                  <div className="three-col">
-                    <label className="field-stack">
-                      <span className="field-label">Datumsmodus</span>
-                      <select value={blockForm.event_date_mode} onChange={(event) => setBlockForm((current) => ({ ...current, event_date_mode: event.target.value as "relative_window" | "all_future" }))}>
-                        <option value="relative_window">Relatives Fenster</option>
-                        <option value="all_future">Alle künftigen Termine</option>
-                      </select>
-                    </label>
-                    <label className="field-stack">
-                      <span className="field-label">Fenster Start (Tage)</span>
-                      <input type="number" value={blockForm.event_window_start_days} onChange={(event) => setBlockForm((current) => ({ ...current, event_window_start_days: event.target.value }))} />
-                    </label>
-                    <label className="field-stack">
-                      <span className="field-label">Fenster Ende (Tage)</span>
-                      <input type="number" value={blockForm.event_window_end_days} onChange={(event) => setBlockForm((current) => ({ ...current, event_window_end_days: event.target.value }))} />
-                    </label>
+                  <div className="field-stack">
+                    <span className="field-label">Welche Termine?</span>
+                    <FilterTabs
+                      options={EVENT_DATE_MODE_OPTIONS}
+                      value={blockForm.event_date_mode}
+                      onChange={(value) => setBlockForm((current) => ({ ...current, event_date_mode: value }))}
+                    />
                   </div>
+                  {blockForm.event_date_mode === "relative_window" ? (
+                    <div className="event-window-box">
+                      <div className="event-window-row">
+                        Termine von
+                        <DayOffsetStepper
+                          value={Math.max(0, -Number(blockForm.event_window_start_days || "0"))}
+                          onChange={(days) => setBlockForm((current) => ({ ...current, event_window_start_days: String(-days) }))}
+                          ariaLabel="Tage vor dem Protokolldatum"
+                        />
+                        Tagen <strong>vor</strong> bis
+                        <DayOffsetStepper
+                          value={Math.max(0, Number(blockForm.event_window_end_days || "0"))}
+                          onChange={(days) => setBlockForm((current) => ({ ...current, event_window_end_days: String(days) }))}
+                          ariaLabel="Tage nach dem Protokolldatum"
+                        />
+                        Tagen <strong>nach</strong> dem Protokolldatum.
+                      </div>
+                      <span className="field-help">
+                        Gezählt ab dem Datum des Protokolls — der Block entsteht für jeden Termin in diesem Fenster neu.
+                      </span>
+                    </div>
+                  ) : null}
                   <label className="checkbox-row">
                     <input type="checkbox" checked={blockForm.event_include_unlisted_past} onChange={(event) => setBlockForm((current) => ({ ...current, event_include_unlisted_past: event.target.checked }))} />
                     Vergangene passende Termine nachziehen, wenn sie in den letzten 3 Protokollen unter diesem Element noch nicht gelistet wurden
