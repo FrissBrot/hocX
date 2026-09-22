@@ -2208,14 +2208,18 @@ class WordImportService:
                 saved_target.get("template_element_id"), saved_target.get("block_sort_index")
             ) if saved_target else None
             # Old profiles also contain automatic low-confidence assignments. Reuse a
-            # saved target only when it still exists and remains textually plausible;
-            # this actively sheds earlier "assigned somewhere" mistakes.
+            # saved target only when it still exists and is either confirmed by a
+            # reviewer's commit ("confirmed") or remains textually plausible; this
+            # actively sheds earlier unconfirmed "assigned somewhere" mistakes.
             saved_label = text_target_labels.get(saved_key) if saved_key else None
             if remembered_create_new or remembered_dismissed:
                 template_element_id = None
                 block_sort_index = None
                 confidence = 1.0
-            elif saved_target and saved_label and _similarity(section.heading, saved_label) >= _SECTION_ELEMENT_MATCH_THRESHOLD:
+            elif saved_target and saved_label and (
+                saved_target.get("confirmed")
+                or _similarity(section.heading, saved_label) >= _SECTION_ELEMENT_MATCH_THRESHOLD
+            ):
                 template_element_id = saved_target.get("template_element_id")
                 block_sort_index = saved_target.get("block_sort_index")
                 confidence = 1.0
@@ -4042,6 +4046,11 @@ class WordImportService:
                 _normalize(tc.extracted_heading): {
                     "template_element_id": tc.template_element_id,
                     "block_sort_index": tc.block_sort_index,
+                    # Reviewed and committed by a person - analyze() then reuses it even
+                    # when the heading isn't textually similar to the target's label (e.g.
+                    # "Kurse (Scharleitung)" -> "Kurse"), which the plausibility check
+                    # below would otherwise shed like an old automatic mistake.
+                    "confirmed": True,
                 }
                 for tc in payload.texts
                 # Event-repeat headings (e.g. "Rückblick Elternabend") name a specific

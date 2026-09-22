@@ -50,7 +50,7 @@ from tests.factories import (
     make_template_participant,
     make_tenant,
 )
-from tests.word_import_fixtures import default_spec, render_docx, render_pdf
+from tests.word_import_fixtures import TextSpec, default_spec, render_docx, render_pdf
 
 RENDER_TYPE_KEY_VALUE = 5
 RENDER_TYPE_PARAGRAPH = 2
@@ -453,3 +453,53 @@ def test_parse_document_dispatches_by_content_not_filename():
     assert parse_document(pdf_bytes).tables
     with pytest.raises(Exception):
         parse_document(b"not a real document")
+
+
+def test_manual_text_assignment_is_remembered_even_when_heading_differs_from_target(db):
+    """A reviewer assigning "Kurse (Scharleitung)" to the template's "Kurse" block is
+    a deliberate decision. The heading is not similar enough to the label for
+    analyze()'s own auto-match (which is what the plausibility gate on saved targets
+    mirrors), yet the next import of the same heading must reuse it."""
+    from dataclasses import replace
+
+    ctx = _build_template(db)
+    text_type = element_type_id(db, "text")
+    kurse_def = make_element_definition(
+        db, ctx["tenant"].id, "Kurse",
+        blocks=[{
+            "id": 1, "title": "Kurse", "description": None, "block_title": None,
+            "default_content": "", "copy_from_last_protocol": False,
+            "element_type_id": text_type, "render_type_id": RENDER_TYPE_PARAGRAPH,
+            "is_editable": True, "allows_multiple_values": False, "export_visible": True, "is_visible": True,
+            "sort_index": 10, "render_order": 10, "latex_template": None,
+            "configuration_json": {},
+        }],
+    )
+    kurse_element = make_template_element(db, ctx["template"].id, kurse_def.id, sort_index=60, section_name="Kurse")
+
+    spec = replace(default_spec(), extra_texts=[TextSpec(heading="Kurse (Scharleitung)", lines=["Kursleiter gesucht."])])
+    raw_bytes = render_docx(spec)
+    service = WordImportService()
+
+    def _analyze():
+        return service.analyze(
+            db, tenant_id=ctx["tenant"].id, template_id=ctx["template"].id,
+            protocol_date_hint=None, raw_bytes=raw_bytes,
+        )
+
+    def _mapping(analysis):
+        return next(m for m in analysis.text_mappings if m.extracted_heading == "Kurse (Scharleitung)")
+
+    first = _analyze()
+    assert _mapping(first).template_element_id is None
+
+    payload = _commit_payload_from_analysis(first, template_id=ctx["template"].id)
+    for text in payload.texts:
+        if text.extracted_heading == "Kurse (Scharleitung)":
+            text.template_element_id = kurse_element.id
+            text.block_sort_index = 10
+    service.commit(db, tenant_id=ctx["tenant"].id, user_id=1, payload=payload)
+
+    second = _mapping(_analyze())
+    assert second.template_element_id == kurse_element.id
+    assert second.block_sort_index == 10
