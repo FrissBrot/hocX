@@ -178,7 +178,16 @@ async def verify_captcha(solution: str) -> bool:
                     "sitekey": settings.friendly_captcha_sitekey,
                 },
             )
-        data = response.json() if response.status_code == 200 else None
+        # FriendlyCaptchas v1-API liefert auch bei 400/401 (secret_missing, secret_invalid,
+        # solution_missing, bad_request) einen JSON-Body mit "errors" - nicht nur bei 200. Der
+        # Body wurde hier bisher nur bei Status 200 ueberhaupt geparst, wodurch ausgerechnet die
+        # aussagekraeftigsten Fehler (z.B. "secret_invalid" bei falschem/fehlendem API-Key) als
+        # errors=None geloggt wurden und ein falsch konfigurierter Key aussah wie ein generischer
+        # Ablehnungsgrund statt wie das eigentliche Konfigurationsproblem.
+        try:
+            data = response.json()
+        except ValueError:
+            data = None
         if not data or not data.get("success"):
             # Ohne dieses Log sieht ein kaputter Verify-Endpoint (404, ungueltiger Secret/Sitekey)
             # fuer Besucher nur wie ein endlos "laufender" Sicherheitscheck aus.
