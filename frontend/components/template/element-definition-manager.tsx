@@ -311,24 +311,6 @@ function defaultMatrixColumn(id = "matrix-column-1") {
 
 const elementTypeOptions = ELEMENT_TYPE_OPTIONS;
 
-const elementTypeCategories: Array<{ title: string; description: string; types: string[] }> = [
-  {
-    title: "Basics",
-    description: "Frei verfassbare Inhalte für Protokolle und Vorlagen.",
-    types: ["1", "2", "3", "6", "11"],
-  },
-  {
-    title: "Finanzen",
-    description: "Blöcke, die direkt aus einem Finanzkonto gespeist werden.",
-    types: ["12", "13", "14"],
-  },
-  {
-    title: "Organisation",
-    description: "Automatisch befüllte Inhalte rund um Termine und Anwesenheit.",
-    types: ["9", "10", "7", "15", "16"],
-  },
-];
-
 const matrixEmbeddedBlockOptions = [
   { value: "1", label: "Text" },
   { value: "6", label: "Tabelle" },
@@ -2233,6 +2215,24 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
               </label>
             ) : null}
           </SettingsSection>
+          {createBlockForm.element_type_id === "1" ? (
+            <SettingsSection
+              title="Text"
+              description="Wie der Startinhalt ins nächste Protokoll kommt und wie der Blocktitel im PDF erscheint."
+            >
+              <div className="element-create-options">
+                <label className="element-create-option">
+                  <input type="checkbox" checked={createBlockForm.copy_from_last_protocol} onChange={(event) => setCreateBlockForm((current) => ({ ...current, copy_from_last_protocol: event.target.checked }))} />
+                  <span><strong>Daten aus letzter Sitzung übernehmen</strong><span className="field-help">Beim Erstellen wird der Inhalt des gleichen Blocks aus dem letzten Protokoll vorausgefüllt statt des Startinhalts.</span></span>
+                </label>
+                <label className="element-create-option">
+                  <input type="checkbox" checked={createBlockForm.title_as_subtitle} onChange={(event) => setCreateBlockForm((current) => ({ ...current, title_as_subtitle: event.target.checked }))} />
+                  <span><strong>Blocktitel im PDF als Untertitel rendern</strong><span className="field-help">Aus: der Blocktitel wird im Export weggelassen und der Text hängt direkt unter dem Elementtitel.</span></span>
+                </label>
+              </div>
+              <p className="muted">Ist der Block nicht bearbeitbar, erscheint dieser Text im Protokoll fix — sonst dient er als Startinhalt, der überschrieben werden kann.</p>
+            </SettingsSection>
+          ) : null}
           {createBlockForm.element_type_id === "2" ? (
             <SettingsSection
               title="Todo-Einstellungen"
@@ -2252,6 +2252,14 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                   />
                 </label>
               </div>
+            </SettingsSection>
+          ) : null}
+          {createBlockForm.element_type_id === "3" ? (
+            <SettingsSection
+              title="Bild"
+              description="Bilder werden direkt im Protokoll hochgeladen."
+            >
+              <p className="info-note">Keine zusätzlichen Einstellungen — im Protokoll erscheint ein Upload-Feld mit Vorschau und Lightbox.</p>
             </SettingsSection>
           ) : null}
           {createBlockForm.element_type_id === "9" ? (
@@ -2284,6 +2292,14 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                   </>
                 ) : null}
               </div>
+            </SettingsSection>
+          ) : null}
+          {createBlockForm.element_type_id === "10" ? (
+            <SettingsSection
+              title="Sitzungsdatum"
+              description="Setzt das nächste Sitzungsdatum direkt im Protokoll."
+            >
+              <p className="info-note">Keine zusätzlichen Einstellungen — im Protokoll erscheint ein Datumsfeld für die nächste Sitzung.</p>
             </SettingsSection>
           ) : null}
           {(createBlockForm.element_type_id === "12" || createBlockForm.element_type_id === "13") ? (
@@ -2334,12 +2350,19 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
               </div>
             </SettingsSection>
           ) : null}
+          {createBlockForm.element_type_id === "14" ? (
+            <SettingsSection
+              title="Bussenliste"
+              description="Zeigt die offenen Bussen aus der Anwesenheitskontrolle."
+            >
+              <p className="info-note">Keine zusätzlichen Einstellungen — die Liste kommt aus den Anwesenheits-Blöcken und dem dort gewählten Bussen-Konto.</p>
+            </SettingsSection>
+          ) : null}
           {createBlockForm.element_type_id === "7" ? (
             <SettingsSection
               title="Terminliste"
-              description="Steuere Filter, Sichtbarkeit und Tabellenspalten der automatisch angezeigten Termine."
+              description="Filter, Sichtbarkeit und Tabellenspalten der automatisch angezeigten Termine."
             >
-              <div className="three-col">
               <label className="field-stack">
                 <span className="field-label">Termin-Tagfilter</span>
                 <TagInput
@@ -2351,31 +2374,65 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                   onTagRename={renameTag}
                   placeholder="z. B. Sitzung"
                 />
-                </label>
-              <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.event_only_from_protocol_date} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_only_from_protocol_date: event.target.checked, event_only_before_protocol_date: false }))} />Nur Termine ab Protokolldatum anzeigen</label>
-              <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.event_only_before_protocol_date} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_only_before_protocol_date: event.target.checked, event_only_from_protocol_date: false }))} />Nur Termine vor Protokolldatum anzeigen (Rückblick)</label>
-              <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.event_only_current_cycle} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_only_current_cycle: event.target.checked }))} />Nur Termine im aktuellen Zyklus dieses Protokolls anzeigen</label>
-              <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.event_gray_past} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_gray_past: event.target.checked }))} />Vergangene Termine ausgegraut darstellen</label>
-              <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.event_allow_end_date} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_allow_end_date: event.target.checked }))} />Mehrtägige Termine erlauben</label>
+              </label>
+              <div className="field-stack">
+                <span className="field-label">Sichtbarkeit & Filter</span>
+                <div className="element-create-options">
+                  <label className="element-create-option">
+                    <input type="checkbox" checked={createBlockForm.event_only_from_protocol_date} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_only_from_protocol_date: event.target.checked, event_only_before_protocol_date: false }))} />
+                    <span><strong>Nur Termine ab Protokolldatum anzeigen</strong></span>
+                  </label>
+                  <label className="element-create-option">
+                    <input type="checkbox" checked={createBlockForm.event_only_before_protocol_date} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_only_before_protocol_date: event.target.checked, event_only_from_protocol_date: false }))} />
+                    <span><strong>Nur Termine vor Protokolldatum anzeigen (Rückblick)</strong></span>
+                  </label>
+                  <label className="element-create-option">
+                    <input type="checkbox" checked={createBlockForm.event_only_current_cycle} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_only_current_cycle: event.target.checked }))} />
+                    <span><strong>Nur Termine im aktuellen Zyklus dieses Protokolls anzeigen</strong></span>
+                  </label>
+                  <label className="element-create-option">
+                    <input type="checkbox" checked={createBlockForm.event_gray_past} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_gray_past: event.target.checked }))} />
+                    <span><strong>Vergangene Termine ausgegraut darstellen</strong></span>
+                  </label>
+                  <label className="element-create-option">
+                    <input type="checkbox" checked={createBlockForm.event_allow_end_date} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_allow_end_date: event.target.checked }))} />
+                    <span><strong>Mehrtägige Termine erlauben</strong></span>
+                  </label>
+                </div>
               </div>
-              <div className="three-col">
-                <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.event_show_date} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_show_date: event.target.checked }))} />Spalte Datum</label>
-                <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.event_show_tag} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_show_tag: event.target.checked }))} />Spalte Tag</label>
-                <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.event_show_title} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_show_title: event.target.checked }))} />Spalte Titel</label>
-                <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.event_show_description} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_show_description: event.target.checked }))} />Spalte Beschreibung</label>
-                <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.event_show_participant_count} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_show_participant_count: event.target.checked }))} />Spalte Teilnehmerzahl</label>
-                <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.event_show_cancelled} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_show_cancelled: event.target.checked }))} />Spalte Abgesagt</label>
-                <label className="checkbox-row"><input type="checkbox" checked={createBlockForm.event_show_tag_colors} onChange={(event) => setCreateBlockForm((current) => ({ ...current, event_show_tag_colors: event.target.checked }))} />Tag-Farben anzeigen</label>
+              <div className="field-stack">
+                <span className="field-label">Tabellenspalten</span>
+                <span className="field-help">Diese Spalten erscheinen in der Terminliste — im Protokoll und im PDF-Export.</span>
+                <div className="table-pill-wrap">
+                  {[
+                    { key: "event_show_date" as const, label: "Datum" },
+                    { key: "event_show_tag" as const, label: "Tag" },
+                    { key: "event_show_title" as const, label: "Titel" },
+                    { key: "event_show_description" as const, label: "Beschreibung" },
+                    { key: "event_show_participant_count" as const, label: "Teilnehmerzahl" },
+                    { key: "event_show_cancelled" as const, label: "Abgesagt" },
+                    { key: "event_show_tag_colors" as const, label: "Tag-Farben" },
+                  ].map((column) => (
+                    <button
+                      key={column.key}
+                      type="button"
+                      className={`button-pill${createBlockForm[column.key] ? " button-pill-active" : ""}`}
+                      onClick={() => setCreateBlockForm((current) => ({ ...current, [column.key]: !current[column.key] }))}
+                    >
+                      {createBlockForm[column.key] ? "✓" : "+"} {column.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </SettingsSection>
           ) : null}
           {createBlockForm.element_type_id === "6" ? (
             <SettingsSection
-              title="Tabellenblock"
+              title="Tabelle"
               description={
                 createBlockForm.linked_list_id
                   ? "Dieser Tabellenblock ist mit einer globalen Liste gekoppelt."
-                  : "Definiere Spaltenüberschriften, Zeilen und Datentypen für die Tabelle."
+                  : "Spaltenüberschriften, Datenquelle und die Zeilen dieser Tabelle."
               }
               actions={
                 createBlockForm.linked_list_id ? null : (
@@ -2484,12 +2541,12 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                 )}
                 <div className="two-col">
                   <label className="field-stack">
-                    <span className="field-label">Linke Spaltenueberschrift</span>
-                    <input value={createBlockForm.left_column_heading} onChange={(event) => setCreateBlockForm((current) => ({ ...current, left_column_heading: event.target.value }))} placeholder="Leer lassen fuer keine Ueberschrift" />
+                    <span className="field-label">Linke Spaltenüberschrift</span>
+                    <input value={createBlockForm.left_column_heading} onChange={(event) => setCreateBlockForm((current) => ({ ...current, left_column_heading: event.target.value }))} placeholder="Standard: Zeile" />
                   </label>
                   <label className="field-stack">
-                    <span className="field-label">Rechte Spaltenueberschrift</span>
-                    <input value={createBlockForm.value_column_heading} onChange={(event) => setCreateBlockForm((current) => ({ ...current, value_column_heading: event.target.value }))} placeholder="Leer lassen fuer keine Ueberschrift" />
+                    <span className="field-label">Wertspaltenüberschrift</span>
+                    <input value={createBlockForm.value_column_heading} onChange={(event) => setCreateBlockForm((current) => ({ ...current, value_column_heading: event.target.value }))} placeholder="Standard: Wert" />
                   </label>
                 </div>
                 {createBlockForm.table_fields.length || selectedEventFields(createBlockForm).length ? (
@@ -2505,7 +2562,10 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                           <strong>{field.label || `Zeile ${index + 1}`}</strong>
                           <div className="muted">{valueTypeLabel(field.row_type as Parameters<typeof valueTypeLabel>[0])}</div>
                         </td>
-                        <td>{tableRowPreviewValue(field)}</td>
+                        <td>
+                          {tableRowPreviewValue(field)}
+                          {field.locked_in_protocol ? <span className="pill">gesperrt</span> : null}
+                        </td>
                       </tr>
                     ))}
                   </DataTable>
@@ -2606,14 +2666,24 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
               <h3>Vorschau im Protokoll</h3>
               <div className="element-create-paper">
                 <h4>{(creatingNewDefinition ? createDefinitionForm.title : selectedDefinition?.title)?.trim() || "Neues Element"}</h4>
-                <p className="muted">{repeatSourceLabel(createBlockForm.repeat_source)}{createBlockForm.event_tag_filter ? ` · Tag «${createBlockForm.event_tag_filter}»` : ""}</p>
+                <p className="muted">
+                  {createBlockForm.repeat_source === "none"
+                    ? `${optionLabel(elementTypeOptions, createBlockForm.element_type_id)} · einmalig`
+                    : `${repeatSourceLabel(createBlockForm.repeat_source)}${createBlockForm.event_tag_filter ? ` · Tag «${createBlockForm.event_tag_filter}»` : ""}`}
+                </p>
                 {createBlockForm.title ? <strong>{createBlockForm.title}</strong> : null}
                 {createBlockForm.block_title ? <p>{createBlockForm.block_title}</p> : null}
                 {createBlockForm.element_type_id === "6" ? (
                   <DataTable columns={[{ key: "label", label: "Zeile" }, { key: "value", label: "Wert" }]} emptyMessage="Noch keine Zeilen angelegt.">
                     {eventFieldPreviewRows(createBlockForm)}
                     {createBlockForm.table_fields.map((field, index) => (
-                      <tr key={field.id}><td>{field.label || `Zeile ${index + 1}`}</td><td>{tableRowPreviewValue(field)}</td></tr>
+                      <tr key={field.id}>
+                        <td>{field.label || `Zeile ${index + 1}`}</td>
+                        <td>
+                          {tableRowPreviewValue(field)}
+                          {field.locked_in_protocol ? <span className="pill">gesperrt</span> : null}
+                        </td>
+                      </tr>
                     ))}
                   </DataTable>
                 ) : createBlockForm.default_content ? (
@@ -2633,11 +2703,16 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                   <input type="checkbox" checked={createBlockForm.export_visible} onChange={(event) => setCreateBlockForm((current) => ({ ...current, export_visible: event.target.checked }))} />
                   <span><strong>Im PDF ausgeben</strong><span className="field-help">Leere Blöcke werden beim Export automatisch weggelassen.</span></span>
                 </label>
-                <label className="element-create-option">
-                  <input type="checkbox" checked={createBlockForm.copy_from_last_protocol} onChange={(event) => setCreateBlockForm((current) => ({ ...current, copy_from_last_protocol: event.target.checked }))} />
-                  <span><strong>Aus letztem Protokoll übernehmen</strong><span className="field-help">Den letzten Inhalt als Startwert verwenden.</span></span>
-                </label>
               </div>
+            </section>
+            <section className="element-create-cycle-hints">
+              <h3>Zyklus-Platzhalter</h3>
+              <div className="element-create-cycle-tokens">
+                <code>{"{cycle_name}"}</code>
+                <code>{"{cycle_year_start}"}</code>
+                <code>{"{cycle_year_end}"}</code>
+              </div>
+              <p className="muted">In Titeln und Inhalten nutzbar — beim Erstellen des Protokolls anhand des Zyklus der Vorlage ersetzt.</p>
             </section>
           </aside>
           </div>
@@ -3211,40 +3286,31 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
         open={typePickerMode !== null}
         onClose={() => setTypePickerMode(null)}
         title="Blocktyp auswählen"
-        description="Wähle die Art des Blocks. Danach erscheinen die passenden Einstellungen automatisch."
-        size="fullscreen"
+        description="Der Typ bestimmt, was im Protokoll bearbeitet wird. Er lässt sich später jederzeit wechseln."
       >
-        <div className="block-type-category-stack">
-          {elementTypeCategories.map((category) => {
-            const activeType = typePickerMode === "create" ? createBlockForm.element_type_id : blockForm.element_type_id;
-            const options = category.types
-              .map((typeId) => elementTypeOptions.find((option) => option.value === typeId))
-              .filter((option): option is (typeof elementTypeOptions)[number] => Boolean(option));
-            return (
-              <section key={category.title} className="block-type-category">
-                <div className="block-type-category-head">
-                  <h3>{category.title}</h3>
-                  <p className="muted">{category.description}</p>
-                </div>
-                <div className="block-type-grid">
-                  {options.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className={`block-type-card${activeType === option.value ? " block-type-card-active" : ""}`}
-                      onClick={() => applyBlockType(option.value, typePickerMode ?? "create")}
-                    >
-                      {renderBlockTypePreview(option.value)}
-                      <div className="block-type-summary">
-                        <strong>{option.label}</strong>
-                        <span className="muted">{option.description}</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </section>
-            );
-          })}
+        <div className="grid">
+          <div className="block-type-grid">
+            {elementTypeOptions.map((option) => {
+              const activeType = typePickerMode === "create" ? createBlockForm.element_type_id : blockForm.element_type_id;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`block-type-card${activeType === option.value ? " block-type-card-active" : ""}`}
+                  onClick={() => applyBlockType(option.value, typePickerMode ?? "create")}
+                >
+                  <div className="block-type-card-head">
+                    <strong>{option.label}</strong>
+                    <span className="block-type-card-number">#{option.value}</span>
+                  </div>
+                  <span className="muted">{option.description}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="modal-actions">
+            <button type="button" className="button-ghost" onClick={() => setTypePickerMode(null)}>Abbrechen</button>
+          </div>
         </div>
       </Modal>
 
@@ -3884,6 +3950,21 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                         }
                         placeholder={selectedTableRow.row_type === "list_entry" ? "Leer lassen für Listenwert" : "z. B. Verantwortlich"}
                       />
+                    </label>
+                    <label className="checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(selectedTableRow.locked_in_protocol)}
+                        onChange={(event) =>
+                          updateTableDesignerForm((current) => ({
+                            ...current,
+                            table_fields: current.table_fields.map((entry) =>
+                              entry.id === selectedTableRow.id ? { ...entry, locked_in_protocol: event.target.checked } : entry
+                            ),
+                          }))
+                        }
+                      />
+                      Diese Zeile ist im Protokoll gesperrt
                     </label>
                     <label className="field-stack">
                       <span className="field-label">Datentyp</span>
