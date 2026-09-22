@@ -8,12 +8,65 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+## [1.1.2] - 2026-09-22
+
+Wartungsrelease auf 1.1.1 mit Verbesserungen an Fotos, Word-Import und Elementeditor
+sowie automatischen GitHub-Releases. Enthält Migration `0083`; sie läuft beim Deploy
+automatisch. Für das Update von 1.1.1 sind keine neuen Umgebungsvariablen nötig.
+
+### Update von 1.1.1 auf 1.1.2
+
+Nach Veröffentlichung der Release-Images `HOCX_VERSION` in `.env` auf `v1.1.2` setzen,
+dann `./scripts/update_deploy_code.sh` und `./scripts/deploy.sh <test|prod>` ausführen.
+Wer von einer älteren Version kommt, beachtet zusätzlich die Upgrade-Hinweise zu
+1.1.0 und 1.1.1 weiter unten.
+
+- Migration `0083_photo_capture_event_link` ergänzt das optionale EXIF-Aufnahmedatum
+  samt Index in `stored_file` und das Kennzeichen `event_auto_linked` in `gallery_image`.
+  Bestehende Fotos und manuelle Terminzuordnungen bleiben erhalten; vorhandene
+  Zuordnungen werden als manuell behandelt.
+- EXIF-Aufnahmedaten werden bei neuen Galerie-Uploads gespeichert. Bestehende Fotos
+  werden nicht nachträglich ausgelesen; ohne gespeichertes Aufnahmedatum gilt das
+  Upload-Datum. Die Migration ordnet alte Fotos nicht automatisch Terminen zu.
+  Die Zuordnung erfolgt bei neuen Uploads sowie beim Anlegen oder Ändern von Terminen.
+- Vor dem Update das Datenbankbackup prüfen. Ein Image-Rollback nimmt die Migration
+  nicht zurück; die zusätzlichen Spalten sind mit 1.1.1 kompatibel. Für eine vollständige
+  Wiederherstellung des vorherigen Datenstands gilt der Backup-Ablauf im RUNBOOK.
+- Git-Tag und GitHub-Release entstehen erst nach erfolgreicher Promotion aller Images
+  durch den Release-Workflow. Der Push dieser Vorbereitung veröffentlicht noch kein Release.
+
 ### Neu
 
+- Fotos werden nach Aufnahmedatum gruppiert und beim Upload automatisch passenden
+  Terminen zugeordnet, auch innerhalb mehrtägiger Termine. Manuelle Zuordnungen haben Vorrang.
+- Die Galerie trennt «Duplikate» und «Ähnliche» mit unterschiedlichen Ähnlichkeitsschwellen;
+  ganze Datumsgruppen lassen sich gemeinsam auswählen.
+- Im Vorlageneditor können neue Elemente direkt aus der Elementauswahl angelegt werden.
 - Nach erfolgreicher Promotion aller Container-Images wird automatisch ein GitHub-Release
   mit dem Changelog der Version und einem Git-Tag auf dem getesteten Commit veröffentlicht.
 - Die Versionsnummer auf der Login-Seite öffnet den zugehörigen GitHub-Release mit
   Changelog in einem neuen Tab; Entwicklungs- und Teststände verlinken die Release-Übersicht.
+
+### Geändert
+
+- Die Foto-Qualitätsbewertung gewichtet gute Porträts stärker.
+- Galerie-ZIP-Uploads haben grosszügigere Grössenlimits statt der bisherigen 5-GiB-Grenze;
+  Speicherkontingente und Schutzgrenzen für Archive bleiben wirksam.
+- Der Elementdialog ist zweispaltig und breiter, die Termin-Zeitfenster sind übersichtlicher.
+  Ausgewählte Terminfelder erscheinen direkt als Tabellenzeilen; Beschreibungsfelder im
+  Elementdialog entfallen.
+- Abgaben können Apple-Dateiformate (`.pages`, `.key`, `.numbers`, `.heic`, `.heif`) zulassen.
+- Bestätigte Textabschnitt-Zuordnungen werden bei späteren Word-Importen wiederverwendet,
+  auch wenn Überschrift und Elementname unterschiedlich lauten.
+- Beim Nachladen von Fotos zeigt die Galerie eine dezente, auf den Fotobereich begrenzte
+  Ladeanimation. Überflüssige Upload-Hinweise wurden entfernt.
+
+### Behoben
+
+- Die Protokollliste aktualisiert sich beim Zurücknavigieren nach einem Word-Import.
+- FriendlyCaptcha-Fehlerantworten werden auch bei HTTP-Fehlerstatus ausgewertet.
+- Der Link «Protokoll ansehen» und Datums-Schaltflächen im Word-Import verwenden die
+  vorgesehenen Schaltflächen- und Hover-Stile.
 
 ## [1.1.1] - 2026-09-21
 
