@@ -12761,12 +12761,12 @@ input[type="radio"] {
 }
 
 .photo-loading-glow {
-  position: fixed;
-  inset: auto 0 0;
+  position: relative;
+  display: block;
+  width: 100%;
   height: var(--space-4);
   overflow: hidden;
   pointer-events: none;
-  z-index: var(--z-sticky);
 }
 
 .photo-loading-glow > span {
