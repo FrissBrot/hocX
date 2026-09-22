@@ -33,7 +33,13 @@ concurrency:
 jobs:
   verify-tested-candidate:
     runs-on: ubuntu-latest
+    outputs:
+      candidate_sha: ${{ steps.proof.outputs.candidate_sha }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Validate production confirmation and tags
         env:
           SOURCE_TAG: ${{ inputs.source_tag }}
@@ -49,13 +55,14 @@ jobs:
             echo "source_tag ist kein hocX Candidate-Tag: $SOURCE_TAG" >&2
             exit 1
           }
-          tag_regex='^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$'
+          tag_regex='^v?[0-9]+\.[0-9]+\.[0-9]+$'
           [[ "$RELEASE_TAG" =~ $tag_regex ]] || {
             echo "Ungueltiger release_tag: $RELEASE_TAG" >&2
             exit 1
           }
 
       - name: Require successful test-host verification
+        id: proof
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_TAG: ${{ inputs.source_tag }}
@@ -81,6 +88,30 @@ jobs:
             exit 1
           }
           echo "Testnachweis $deployment_id fuer $SOURCE_TAG ist erfolgreich."
+          echo "candidate_sha=$deployment_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare changelog and check existing tag
+        env:
+          CANDIDATE_SHA: ${{ steps.proof.outputs.candidate_sha }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          git fetch origin "$CANDIDATE_SHA"
+          if git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+            [ "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" = "$CANDIDATE_SHA" ] || {
+              echo "Release-Tag zeigt auf einen anderen Commit." >&2
+              exit 1
+            }
+          fi
+          git show "$CANDIDATE_SHA:CHANGELOG.md" > "$RUNNER_TEMP/candidate-changelog.md"
+          python3 scripts/release_notes.py "$RELEASE_TAG" "$RUNNER_TEMP/candidate-changelog.md" > release-notes.md
+
+      - name: Preserve verified release notes
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: release-notes.md
+          retention-days: 7
 
   promote:
     needs: verify-tested-candidate
@@ -160,3 +191,54 @@ jobs:
             echo "- latest aktualisiert: \`${UPDATE_LATEST}\`"
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
+
+  publish-release:
+    needs: [verify-tested-candidate, promote]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+
+      - name: Publish GitHub release with changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CANDIDATE_SHA: ${{ needs.verify-tested-candidate.outputs.candidate_sha }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_TAG: ${{ inputs.source_tag }}
+          UPDATE_LATEST: ${{ inputs.update_latest }}
+        run: |
+          set -euo pipefail
+          # Auch bei Wiederholungen niemals einen vorhandenen Tag verschieben.
+          if git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+            [ "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" = "$CANDIDATE_SHA" ] || {
+              echo "Release-Tag zeigt auf einen anderen Commit." >&2
+              exit 1
+            }
+          else
+            gh api "repos/$GH_REPO/git/refs" -f ref="refs/tags/$RELEASE_TAG" -f sha="$CANDIDATE_SHA"
+          fi
+          {
+            printf '\n## Build\n\n- Getesteter Commit: `%s`\n- Testkandidat: `%s`\n' "$CANDIDATE_SHA" "$SOURCE_TAG"
+            printf '\n### Container-Images\n\n'
+            for service in backend frontend abgabebox-backend abgabebox-frontend docs photo-analysis-worker; do
+              printf -- '- `ghcr.io/%s/hocx-%s:%s`\n' "${GITHUB_REPOSITORY_OWNER,,}" "$service" "$RELEASE_TAG"
+            done
+          } >> release-notes.md
+          if gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft' > "$RUNNER_TEMP/release-draft"; then
+            if [ "$(cat "$RUNNER_TEMP/release-draft")" = true ]; then
+              gh release edit "$RELEASE_TAG" --draft=false --title "hocX $RELEASE_TAG" --notes-file release-notes.md --latest="$UPDATE_LATEST"
+            else
+              echo "Release bereits veröffentlicht; bleibt unverändert."
+            fi
+          else
+            gh release create "$RELEASE_TAG" --verify-tag --title "hocX $RELEASE_TAG" --notes-file release-notes.md --latest="$UPDATE_LATEST"
+          fi
+          gh release view "$RELEASE_TAG" --json url --jq '.url' >> "$GITHUB_STEP_SUMMARY"

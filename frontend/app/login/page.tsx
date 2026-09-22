@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { attemptBridgeRedirect } from "@/lib/bridge-redirect";
 import { browserApiFetch } from "@/lib/api/client";
+import { getReleaseUrl } from "@/lib/release-url";
 import { getRuntimeConfig } from "@/lib/runtime-config";
 import { browserSupportsPasskeys, createPasskeyCredential, getPasskeyAssertion } from "@/lib/webauthn";
 import { LoginResponse, PasskeyAssertionStart, PasskeyRegistrationStart, PendingMfaLogin, SessionInfo, TotpEnrollmentStart } from "@/types/api";
@@ -761,9 +762,9 @@ export default function LoginPage() {
         ) : null}
 
         {statusMsg && <p className={isVerifyScreen ? "login-status login-status-mfa" : "login-status"}>{statusMsg}</p>}
-        {appVersion && isVerifyScreen ? <p className="login-version login-version-in-panel">hocX {appVersion}</p> : null}
+        {appVersion && isVerifyScreen ? <p className="login-version login-version-in-panel"><a href={getReleaseUrl(appVersion)} target="_blank" rel="noopener noreferrer" title="Release und Changelog auf GitHub öffnen (neuer Tab)">hocX {appVersion}</a></p> : null}
       </section>
-      {appVersion && !isVerifyScreen ? <p className="login-version">hocX {appVersion}</p> : null}
+      {appVersion && !isVerifyScreen ? <p className="login-version"><a href={getReleaseUrl(appVersion)} target="_blank" rel="noopener noreferrer" title="Release und Changelog auf GitHub öffnen (neuer Tab)">hocX {appVersion}</a></p> : null}
       {!isVerifyScreen ? <CopyrightNotice className="login-copyright" /> : null}
     </main>
   );

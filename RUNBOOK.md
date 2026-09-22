@@ -106,8 +106,19 @@ Wenn Test erfolgreich war:
    konfiguriert werden.
 4. Der Workflow baut **nicht** neu, sondern setzt die finalen GHCR-Tags auf dieselben
    bereits getesteten Images.
-5. Optional danach ein GitHub-Release fuer Release Notes / Changelog anlegen. Das ist
-   rein dokumentarisch; Images sind zu diesem Zeitpunkt schon gepromoted.
+5. Nach erfolgreicher Promotion aller sechs Images erstellt der Workflow automatisch
+   den GitHub-Release mit Git-Tag auf dem getesteten Commit. Die Release Notes enthalten
+   den passenden Versionsabschnitt aus `CHANGELOG.md` dieses Commits sowie die Image-Tags.
+   Der Abschnitt (z.B. `## [1.2.0]`) muss bereits im Testkandidaten vorhanden und gefuellt
+   sein; sonst stoppt der Workflow vor der Promotion. `Unveröffentlicht` wird nicht verwendet.
+   Erlaubt sind stabile Versionen wie `v1.2.0` oder `1.2.0`; `update_latest` steuert auch
+   die GitHub-Markierung als neuester Release. Bereits veroeffentlichte Releases werden
+   bei Wiederholungen beibehalten; ein Tag auf einem anderen Commit fuehrt zum Abbruch.
+
+Die Versionsnummer auf der Login-Seite oeffnet den passenden GitHub-Release samt
+Changelog in einem neuen Tab. Entwicklungs-, Test- und moving tags oeffnen die
+Release-Uebersicht. Fuer den direkten Versionslink `HOCX_VERSION` auf den exakten
+Release-Tag setzen.
 
 Die GitHub-Umgebung wird beim ersten Workflow-Lauf automatisch angelegt. In
 **Settings → Environments → production** keine Reviewer-Regel aktivieren, solange du

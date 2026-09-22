@@ -8,6 +8,13 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+### Neu
+
+- Nach erfolgreicher Promotion aller Container-Images wird automatisch ein GitHub-Release
+  mit dem Changelog der Version und einem Git-Tag auf dem getesteten Commit veröffentlicht.
+- Die Versionsnummer auf der Login-Seite öffnet den zugehörigen GitHub-Release mit
+  Changelog in einem neuen Tab; Entwicklungs- und Teststände verlinken die Release-Übersicht.
+
 ## [1.1.1] - 2026-09-21
 
 Wartungsrelease auf 1.1.0 mit iPhone-Foto-Support, manuellen Abgaben, Zyklusfilter für
