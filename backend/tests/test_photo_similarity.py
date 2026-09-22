@@ -9,6 +9,8 @@ import pytest
 from app.services.photo_quality import composite_quality_score
 from app.services.photo_similarity import (
     MAX_GROUPING_IMAGES,
+    SERIES_HAMMING_THRESHOLD,
+    SIMILARITY_HAMMING_THRESHOLD,
     GroupableImage,
     group_similar_images,
 )
@@ -105,6 +107,26 @@ def test_missing_scores_rank_last_but_are_still_returned():
     groups = group_similar_images(images)
 
     assert [image.id for image in groups[0]] == [2, 1]
+
+
+def test_series_threshold_groups_images_too_far_apart_for_the_default_duplicate_threshold():
+    """The "Ähnliche" tab passes threshold=SERIES_HAMMING_THRESHOLD (looser than the
+    "Duplikate" tab's default SIMILARITY_HAMMING_THRESHOLD) so related-but-distinct frames of
+    a series still cluster, without the default call's behavior changing."""
+    base = 0x0000_0000_0000_0000
+    mid_distance = base ^ 0b1111_1110  # Hamming distance 7: over the default 5, within 14.
+
+    images = [
+        GroupableImage(id=1, perceptual_hash=_hex_hash(base), sharpness_score=10.0, exposure_score=0.9),
+        GroupableImage(id=2, perceptual_hash=_hex_hash(mid_distance), sharpness_score=5.0, exposure_score=0.9),
+    ]
+
+    assert len(group_similar_images(images, threshold=SIMILARITY_HAMMING_THRESHOLD)) == 2
+    assert len(group_similar_images(images)) == 2  # default matches SIMILARITY_HAMMING_THRESHOLD
+
+    series_groups = group_similar_images(images, threshold=SERIES_HAMMING_THRESHOLD)
+    assert len(series_groups) == 1
+    assert {image.id for image in series_groups[0]} == {1, 2}
 
 
 def test_transitive_chain_merges_into_one_group():

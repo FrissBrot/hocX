@@ -12864,6 +12864,7 @@ input[type="radio"] {
 }
 
 .photo-tile:hover .photo-tile-select,
+.photo-series-thumb-wrap:hover .photo-tile-select,
 .photo-tile-select:focus-visible,
 .photo-tile-select-checked {
   opacity: 1;
@@ -13346,6 +13347,11 @@ input[type="radio"] {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--panel-solid);
+  /* Both a CSS grid item (the page's .grid) and a column-flex item default to a content-based
+     min-width, so a wide .photo-series-strip (three or more 150px thumbnails, e.g. a burst
+     series on the "Ähnliche" tab) can otherwise force this card - and the whole page - wider
+     than the viewport instead of scrolling internally via the strip's own overflow-x. */
+  min-width: 0;
 }
 
 .photo-series-header {
@@ -13373,6 +13379,7 @@ input[type="radio"] {
   gap: var(--space-3);
   overflow-x: auto;
   padding-bottom: var(--space-1);
+  min-width: 0;
 }
 
 .photo-series-item {
@@ -13400,6 +13407,29 @@ input[type="radio"] {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* "Ähnliche"-Tab: photo-series-thumb-wrap ist dort ein div (statt button), damit die
+   "Behalten"-Checkbox (.photo-tile-select, siehe photo-tile.tsx) als eigenständiger,
+   absolut positionierter Button daneben Platz hat - zwei verschachtelte <button> wären
+   ungültiges HTML. Dieser Button deckt die Vorschau ab und öffnet den Viewer. */
+.photo-series-thumb-open {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* "Beste Wahl" (.photo-series-badge) sitzt hier oben links - die wiederverwendete
+   .photo-tile-select-Checkbox (sonst oben links, siehe photo-tile.tsx) rückt hier auf die
+   gegenüberliegende obere Ecke, damit sich beide nicht überlappen. */
+.photo-series-thumb-wrap .photo-tile-select {
+  left: auto;
+  right: 8px;
 }
 
 .photo-series-item-best .photo-series-thumb-wrap {

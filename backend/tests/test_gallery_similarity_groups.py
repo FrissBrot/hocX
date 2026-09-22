@@ -115,3 +115,32 @@ def test_min_size_excludes_singleton_groups(db):
     multi_only = service.group_similar_gallery_images(db, tenant.id, min_size=2)
     assert len(multi_only) == 1
     assert len(multi_only[0].images) == 2
+
+
+def test_kind_series_groups_more_loosely_than_kind_duplicate(db):
+    """"Duplikate" (kind="duplicate", the default) only clusters near-identical re-encodes;
+    "Ähnliche" (kind="series") uses the looser SERIES_HAMMING_THRESHOLD so a shifted frame of
+    the same scene - not just a re-encode - still lands in the same series. The two shapes
+    below have a real perceptual-hash distance of 10 (measured against
+    SIMILARITY_HAMMING_THRESHOLD=5 / SERIES_HAMMING_THRESHOLD=14): too far apart for
+    "duplicate", close enough for "series". `far` (distance 36 from `base`) stays separate
+    under both - the looser threshold must not turn into "group everything"."""
+    tenant = make_tenant(db)
+    base = _circle_png_bytes(100, 75, 50)
+    shifted = _circle_png_bytes(120, 75, 50)
+    far = _circle_png_bytes(40, 110, 45)
+    items, _errors = asyncio.run(service.save_gallery_uploads(
+        db, tenant_id=tenant.id, files=[("base.png", base), ("shifted.png", shifted), ("far.png", far)], tags=[], created_by=None
+    ))
+    assert len(items) == 3
+    db.commit()
+
+    duplicate_groups = service.group_similar_gallery_images(db, tenant.id, kind="duplicate")
+    assert sorted(len(g.images) for g in duplicate_groups) == [1, 1, 1]
+
+    series_groups = service.group_similar_gallery_images(db, tenant.id, kind="series")
+    by_size = sorted(series_groups, key=lambda g: len(g.images))
+    assert [len(g.images) for g in by_size] == [1, 2]
+    singleton, series_group = by_size
+    assert singleton.images[0].original_name == "far.png"
+    assert {image.original_name for image in series_group.images} == {"base.png", "shifted.png"}

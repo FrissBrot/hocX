@@ -102,10 +102,10 @@ describe("PhotosView", () => {
     vi.restoreAllMocks();
   });
 
-  it("shows the Alle Fotos / Alben / Ähnliche tabs", () => {
+  it("shows the Alle Fotos / Alben / Duplikate / Ähnliche tabs", () => {
     mockFilesAndProgress([], NO_PROGRESS);
     render(<PhotosView />);
-    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Alle Fotos", "Alben", "Ähnliche"]);
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Alle Fotos", "Alben", "Duplikate", "Ähnliche"]);
   });
 
   it("preserves photos after a pagination failure, pauses automatic loading and retries the same page", async () => {

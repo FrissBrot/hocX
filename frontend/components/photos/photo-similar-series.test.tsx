@@ -209,6 +209,17 @@ describe("PhotoSimilarSeries", () => {
     expect(screen.queryByText(/STALE-LABEL/)).toBeNull();
   });
 
+  it("requests the tight duplicate threshold, not the looser series one", async () => {
+    browserApiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(url.startsWith("/api/files/similarity-groups") ? [] : null)
+    );
+    render(<PhotoSimilarSeries search="" tagFilter={[]} />);
+
+    await waitFor(() =>
+      expect(browserApiFetchMock).toHaveBeenCalledWith(expect.stringContaining("kind=duplicate"))
+    );
+  });
+
   it("keeping the series just dismisses the card without any request", async () => {
     const group = makeGroup();
     browserApiFetchMock.mockImplementation((url: string) => {

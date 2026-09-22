@@ -10,6 +10,7 @@ import { PhotoAlbums } from "./photo-albums";
 import { PhotoAnalysisProgress } from "./photo-analysis-progress";
 import { PhotoBulkBar } from "./photo-bulk-bar";
 import { PhotoDateGroups } from "./photo-date-groups";
+import { PhotoSimilarGroups } from "./photo-similar-groups";
 import { PhotoSimilarSeries } from "./photo-similar-series";
 import { PhotoViewer } from "./photo-viewer";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -28,7 +29,7 @@ const PAGE_SIZE = 60;
 const SYNC_INTERVAL_MS = 15000;
 
 type SortKey = "group_date" | "created_at" | "sharpness_score" | "exposure_score" | "face_quality_score";
-type Tab = "all" | "albums" | "similar";
+type Tab = "all" | "albums" | "duplicates" | "series";
 
 type SortOption = { id: string; label: string; key: SortKey; dir: "asc" | "desc" };
 
@@ -331,7 +332,8 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
               options={[
                 { value: "all", label: "Alle Fotos" },
                 { value: "albums", label: "Alben" },
-                { value: "similar", label: "Ähnliche" },
+                { value: "duplicates", label: "Duplikate" },
+                { value: "series", label: "Ähnliche" },
               ]}
               value={tab}
               onChange={setTab}
@@ -366,8 +368,10 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
 
       {tab === "albums" && !embedded ? (
         <PhotoAlbums />
-      ) : tab === "similar" && !embedded ? (
+      ) : tab === "duplicates" && !embedded ? (
         <PhotoSimilarSeries search={search} tagFilter={tagFilter} onDeleted={handleDeletedElsewhere} />
+      ) : tab === "series" && !embedded ? (
+        <PhotoSimilarGroups search={search} tagFilter={tagFilter} onDeleted={handleDeletedElsewhere} />
       ) : (
         <>
           {!embedded && <PhotoAnalysisProgress onUpdate={setAnalysisProgress} />}

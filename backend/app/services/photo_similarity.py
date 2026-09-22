@@ -25,7 +25,16 @@ from app.services.upload_pipeline import PERCEPTUAL_DUPLICATE_THRESHOLD
 # tuned SIMILARITY_HAMMING_THRESHOLD constant, despite the module docstring already
 # claiming they were unified - no circular import actually blocks this: upload_pipeline.py
 # has no reason to import this module back).
+# Used for the "Duplikate" tab: same shot, just re-encoded/cropped/resized.
 SIMILARITY_HAMMING_THRESHOLD = PERCEPTUAL_DUPLICATE_THRESHOLD
+
+# Looser threshold for the "Ähnliche" tab: photo series (e.g. burst shots of the same scene)
+# where the individual frames differ - pose, expression, framing - rather than just being a
+# re-encode of one another. Wide enough to still catch those as one series, tight enough that
+# unrelated photos of two different scenes don't merge. A hand-picked, adjustable value (out
+# of the 64-bit hash's max distance of 64) rather than derived from SIMILARITY_HAMMING_THRESHOLD -
+# revisit if real-world galleries turn out to need a different band.
+SERIES_HAMMING_THRESHOLD = 14
 
 # Safety cap for the synchronous grouping endpoint/service method - protects the shared,
 # memory-constrained backend container from an unbounded O(n^2) computation blocking one of
@@ -59,13 +68,18 @@ def _hash_as_int(perceptual_hash: imagehash.ImageHash) -> int:
     return int("".join("1" if bit else "0" for bit in perceptual_hash.hash.flatten()), 2)
 
 
-def group_similar_images(images: list[GroupableImage]) -> list[list[GroupableImage]]:
+def group_similar_images(
+    images: list[GroupableImage], *, threshold: int = SIMILARITY_HAMMING_THRESHOLD
+) -> list[list[GroupableImage]]:
     """Union-find clustering by perceptual-hash Hamming distance. Images without a
     perceptual_hash (a decode failure at upload time - see _compute_perceptual_hash) never
     join a group, each becomes its own singleton. Returns groups in first-seen order (the
     order `images` was given in), each group's images sorted best-first (see _quality_rank).
     Raises ValueError above MAX_GROUPING_IMAGES - callers should catch this and ask the user
-    to narrow their filter rather than let it silently run long."""
+    to narrow their filter rather than let it silently run long.
+
+    `threshold` picks which "closeness" band this call groups by - SIMILARITY_HAMMING_THRESHOLD
+    (default, "Duplikate" tab) or the looser SERIES_HAMMING_THRESHOLD ("Ähnliche" tab)."""
     if len(images) > MAX_GROUPING_IMAGES:
         raise ValueError(f"too many images to group synchronously (max {MAX_GROUPING_IMAGES}, got {len(images)})")
 
@@ -95,7 +109,7 @@ def group_similar_images(images: list[GroupableImage]) -> list[list[GroupableIma
     hashed = [(image, _hash_as_int(imagehash.hex_to_hash(image.perceptual_hash))) for image in images if image.perceptual_hash]
     for i, (image_a, bits_a) in enumerate(hashed):
         for image_b, bits_b in hashed[i + 1 :]:
-            if (bits_a ^ bits_b).bit_count() <= SIMILARITY_HAMMING_THRESHOLD:
+            if (bits_a ^ bits_b).bit_count() <= threshold:
                 union(image_a.id, image_b.id)
 
     groups: dict[int, list[GroupableImage]] = {}

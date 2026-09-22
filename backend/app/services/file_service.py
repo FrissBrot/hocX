@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from datetime import UTC, date, datetime
 from io import BytesIO
 from pathlib import Path, PurePosixPath
-from typing import Iterator
+from typing import Iterator, Literal
 
 from fastapi import HTTPException, UploadFile
 from PIL import Image
@@ -31,7 +31,13 @@ from app.services.apple_media import (
     transcode_live_clip,
 )
 from app.services.photo_quality import compute_quality_scores
-from app.services.photo_similarity import MAX_GROUPING_IMAGES, GroupableImage, group_similar_images
+from app.services.photo_similarity import (
+    MAX_GROUPING_IMAGES,
+    SERIES_HAMMING_THRESHOLD,
+    SIMILARITY_HAMMING_THRESHOLD,
+    GroupableImage,
+    group_similar_images,
+)
 from app.services.upload_lock import UPLOAD_LOCK_NAMESPACE, acquire_upload_lock, acquire_upload_lock_sync
 from app.services.upload_pipeline import (
     ALLOWED_IMAGE_MIME_TYPES,
@@ -401,6 +407,7 @@ class FileService:
         tags: list[str] | None = None,
         file_ids: list[uuid.UUID] | None = None,
         min_size: int = 1,
+        kind: Literal["duplicate", "series"] = "duplicate",
     ) -> list[SimilarityGroup]:
         """Photo-culling Phase 2: clusters the tenant's images (same filters as list_tenant_files,
         always only_images) by perceptual-hash similarity and ranks each cluster by the Phase 1
@@ -408,7 +415,10 @@ class FileService:
         needing the async worker later phases will need. group_similar_images() also returns
         singleton "groups" (an image with nothing similar to it) per its own docstring;
         min_size lets a caller that only cares about actual near-duplicate series (the
-        "Ähnliche" tab) filter those out without re-deriving the grouping itself."""
+        "Duplikate"/"Ähnliche" tabs) filter those out without re-deriving the grouping itself.
+        `kind` picks the clustering threshold: "duplicate" (default, SIMILARITY_HAMMING_THRESHOLD -
+        same shot, re-encoded/cropped) backs the "Duplikate" tab, "series" (the looser
+        SERIES_HAMMING_THRESHOLD - related but distinct shots, e.g. a burst) backs "Ähnliche"."""
         rows = self.stored_file_repository.list_tenant_files(
             db,
             tenant_id,
@@ -437,7 +447,8 @@ class FileService:
             )
             for row in rows
         ]
-        groups = group_similar_images(groupable)
+        threshold = SIMILARITY_HAMMING_THRESHOLD if kind == "duplicate" else SERIES_HAMMING_THRESHOLD
+        groups = group_similar_images(groupable, threshold=threshold)
         return [
             SimilarityGroup(
                 best_id=rows_by_id[group[0].id].public_id,

@@ -175,6 +175,7 @@ def list_similarity_groups(
     search: str | None = Query(default=None),
     tags: list[str] | None = Query(default=None),
     min_size: int = Query(default=1, ge=1),
+    kind: Literal["duplicate", "series"] = Query(default="duplicate"),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -182,8 +183,11 @@ def list_similarity_groups(
     nach visueller Ähnlichkeit (Perceptual Hash) und markiert pro Gruppe das nach Schärfe/
     Belichtung beste Bild. Gleiche Filter wie GET /files, aber immer nur Bilder und ohne
     Pagination - siehe FileService.group_similar_gallery_images für die Grössenbeschränkung.
-    min_size=2 (die "Ähnliche"-Tab im Frontend) blendet Einzelbilder ohne ähnliches
-    Gegenstück aus - der Default 1 behält das bisherige Verhalten für andere Aufrufer bei."""
+    min_size=2 (die "Duplikate"- und "Ähnliche"-Tabs im Frontend) blendet Einzelbilder ohne
+    ähnliches Gegenstück aus - der Default 1 behält das bisherige Verhalten für andere
+    Aufrufer bei. kind unterscheidet die beiden Tabs: "duplicate" (enger Schwellwert, gleiches
+    Bild in anderem Ausschnitt/Qualität) vs. "series" (lockerer Schwellwert, Fotoserie mit
+    mehreren unterschiedlichen Aufnahmen derselben Szene)."""
     require_writer(user)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
@@ -199,6 +203,7 @@ def list_similarity_groups(
         tags=tags,
         file_ids=file_ids,
         min_size=min_size,
+        kind=kind,
     )
 
 
