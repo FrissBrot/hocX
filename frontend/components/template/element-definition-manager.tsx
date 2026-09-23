@@ -1899,7 +1899,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
               <div className="table-actions">
                 <button
                   type="button"
-                  className="button-secondary"
+                  className="button-secondary button-ghost"
                   disabled={duplicatingDefinitionId !== null}
                   onClick={(event) => {
                     event.stopPropagation();
