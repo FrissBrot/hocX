@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { FilterTabOption, FilterTabs } from "@/components/ui/filter-tabs";
 import { SearchInput } from "@/components/ui/search-input";
 import { TagInput } from "@/components/ui/tag-input";
+import { DateInput } from "@/components/ui/date-input";
 import { TodoEditModal } from "@/components/todos/todo-edit-modal";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { TODO_STATUS } from "@/components/protocol/protocol-editor-shared";
@@ -743,11 +744,9 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
             )}
             {exportDateMode === "custom-date" && (
               <div style={{ marginTop: "var(--space-2)" }}>
-                <input
-                  className="input"
-                  type="date"
+                <DateInput
                   value={exportCustomDate}
-                  onChange={(e) => { setExportCustomDate(e.target.value); clearExportState(); }}
+                  onChange={(value) => { setExportCustomDate(value); clearExportState(); }}
                 />
               </div>
             )}
