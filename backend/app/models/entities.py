@@ -63,6 +63,16 @@ class Tenant(Base, TimestampMixin):
     # gesetzt (siehe AdminTenantStorageQuotaUpdate), gegen StorageService.breakdown_for_tenant
     # geprueft.
     storage_quota_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    # Preismodell (0085_plan_pricing): plan_code ist der aktuelle Vertrag, tenant_feature bleibt
+    # aber die alleinige Quelle der Wahrheit fuers Enforcement - ein Plan-Wechsel im Adminportal
+    # traegt seine plan_feature-Zeilen nur als Baseline in tenant_feature ein, entfernt aber keine
+    # einzeln zugebuchten Zusatzmodule. NULL = kein Plan zugewiesen (sollte nach dem Backfill
+    # praktisch nie vorkommen, siehe Migration).
+    plan_code: Mapped[str | None] = mapped_column(Text, ForeignKey("plan.code", ondelete="SET NULL"))
+    billing_cycle: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'monthly'"))
+    # Ueberschreibt plan.included_user_limit, wenn gesetzt (analog zu storage_quota_bytes als
+    # Override-Mechanismus). NULL = das Limit des Plans gilt.
+    user_limit_override: Mapped[int | None] = mapped_column(Integer)
 
 
 class PlatformOidcConfig(Base, TimestampMixin, UpdatedAtMixin):
@@ -119,6 +129,33 @@ class Feature(Base):
     code: Mapped[str] = mapped_column(Text, primary_key=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
+    # Rappen, nicht Franken (Rundungsfehler) - NULL, wenn das Feature nie einzeln zugebucht
+    # werden kann, sondern nur gebuendelt ueber einen Plan verfuegbar ist.
+    standalone_price_monthly_rp: Mapped[int | None] = mapped_column(Integer)
+
+
+class Plan(Base):
+    """Preiskatalog-Eintrag. Ein Plan bundlet Features (plan_feature) und Limits; die Zuweisung
+    an einen Mandanten (Tenant.plan_code) traegt beim Wechsel nur eine Baseline in
+    tenant_feature ein - siehe Kommentar an Tenant.plan_code."""
+
+    __tablename__ = "plan"
+
+    code: Mapped[str] = mapped_column(Text, primary_key=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    price_monthly_rp: Mapped[int | None] = mapped_column(Integer)
+    price_yearly_rp: Mapped[int | None] = mapped_column(Integer)
+    # NULL = kein Limit (z.B. der 'legacy'-Plan fuer Bestandsmandanten oder ein Premium-Tarif).
+    included_user_limit: Mapped[int | None] = mapped_column(Integer)
+    included_storage_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+
+
+class PlanFeature(Base):
+    __tablename__ = "plan_feature"
+
+    plan_code: Mapped[str] = mapped_column(Text, ForeignKey("plan.code", ondelete="CASCADE"), primary_key=True)
+    feature_code: Mapped[str] = mapped_column(Text, ForeignKey("feature.code", ondelete="CASCADE"), primary_key=True)
 
 
 class TenantFeature(Base, TimestampMixin):
