@@ -29,6 +29,7 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
   const isAdmin = role === "admin";
   const isWriter = isAdmin || role === "writer";
   const hasFinance = role !== null && (session?.current_tenant?.enabled_features?.includes("finance") ?? false);
+  const hasAbgabebox = role !== null && (session?.current_tenant?.enabled_features?.includes("abgabebox") ?? false);
 
   // `match` lists the sibling routes that share a section's tab strip (see RouteTabs), so the
   // section stays highlighted while one of its other tabs is open.
@@ -40,7 +41,7 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
         { href: "/protocols", label: "Protokolle", icon: "protocols" },
         ...(isWriter ? [{ href: "/events", label: "Termine", icon: "events" as const }] : []),
         { href: "/todos", label: "Todos", icon: "todos" },
-        ...(isWriter ? [{ href: "/submission-assignments", label: "Abgaben", icon: "submissions" as const }] : []),
+        ...(isWriter && hasAbgabebox ? [{ href: "/submission-assignments", label: "Abgaben", icon: "submissions" as const }] : []),
         ...(hasFinance ? [{ href: "/finances", label: "Finanzen", icon: "finances" as const, match: ["/fines"] }] : []),
       ],
     },

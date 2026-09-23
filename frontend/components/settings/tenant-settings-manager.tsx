@@ -10,13 +10,14 @@ import { FilterTabs } from "@/components/ui/filter-tabs";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
-import { TenantDomain, TenantSummary } from "@/types/api";
+import { formatFileSize, formatRappen } from "@/lib/utils/format";
+import { TenantDomain, TenantSubscription, TenantSummary } from "@/types/api";
 
 type Props = {
   initialTenant: TenantSummary;
 };
 
-type Tab = "general" | "domains";
+type Tab = "general" | "domains" | "subscription";
 
 type TenantFormState = {
   name: string;
@@ -46,10 +47,26 @@ export function TenantSettingsManager({ initialTenant }: Props) {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardDomain, setWizardDomain] = useState<TenantDomain | null>(null);
 
+  const [subscription, setSubscription] = useState<TenantSubscription | null>(null);
+  const [subscriptionLoading, setSubscriptionLoading] = useState(false);
+
   useEffect(() => {
     void loadDomains();
+    void loadSubscription();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId]);
+
+  async function loadSubscription() {
+    setSubscriptionLoading(true);
+    try {
+      const result = await browserApiFetch<TenantSubscription>(`/api/tenants/${tenantId}/subscription`);
+      setSubscription(result);
+    } catch {
+      // kein Abo bzw. Fehler beim Laden - Abschnitt zeigt dann nur den Ladehinweis
+    } finally {
+      setSubscriptionLoading(false);
+    }
+  }
 
   async function submitTenant(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -125,6 +142,7 @@ export function TenantSettingsManager({ initialTenant }: Props) {
         options={[
           { value: "general", label: "Allgemein" },
           { value: "domains", label: `Domains${domains.some((d) => d.status === "pending") ? " ·" : ""}` },
+          { value: "subscription", label: "Abo" },
         ]}
         value={activeTab}
         onChange={setActiveTab}
@@ -224,6 +242,82 @@ export function TenantSettingsManager({ initialTenant }: Props) {
           <button type="button" className="domain-add-trigger" onClick={openWizardForNewDomain}>
             + Domain hinzufügen
           </button>
+        </section>
+      )}
+
+      {activeTab === "subscription" && (
+        <section className="card">
+          <div className="eyebrow">Abo</div>
+          {subscriptionLoading && !subscription ? (
+            <div className="muted">Wird geladen…</div>
+          ) : !subscription ? (
+            <div className="muted">Abo-Daten konnten nicht geladen werden.</div>
+          ) : (
+            <div className="grid">
+              <div className="two-col">
+                <div>
+                  <div className="field-label">Plan</div>
+                  <strong>{subscription.plan_name ?? "Kein Plan zugewiesen"}</strong>
+                </div>
+                <div>
+                  <div className="field-label">Abrechnung</div>
+                  <strong>{subscription.billing_cycle === "monthly" ? "Monatlich" : "Jährlich"}</strong>
+                </div>
+              </div>
+
+              <div className="two-col">
+                <div>
+                  <div className="field-label">Geschätzte Kosten</div>
+                  <strong>
+                    {formatRappen(
+                      subscription.billing_cycle === "monthly"
+                        ? subscription.estimated_monthly_cost_rp
+                        : subscription.estimated_yearly_cost_rp
+                    )}
+                  </strong>
+                </div>
+                <div>
+                  <div className="field-label">Nutzer</div>
+                  <strong>
+                    {subscription.user_count} / {subscription.effective_user_limit ?? "Kein Limit"}
+                  </strong>
+                  {subscription.effective_user_limit !== null && subscription.user_count >= subscription.effective_user_limit ? (
+                    <div className="muted">Nutzerlimit erreicht - bitte mit dem Verein/hocX-Support das Abo anpassen.</div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div>
+                <div className="field-label">Speicher</div>
+                <strong>
+                  {formatFileSize(subscription.storage_used_bytes)} /{" "}
+                  {subscription.storage_quota_bytes !== null
+                    ? formatFileSize(subscription.storage_quota_bytes)
+                    : subscription.included_storage_bytes !== null
+                      ? formatFileSize(subscription.included_storage_bytes)
+                      : "Kein Limit"}
+                </strong>
+              </div>
+
+              <div className="field-stack">
+                <span className="field-label">Gebuchte Module</span>
+                {subscription.features.length === 0 ? (
+                  <div className="muted">Keine Module gebucht.</div>
+                ) : (
+                  <div className="status-row">
+                    {subscription.features.map((feature) => (
+                      <Badge key={feature.code} variant={feature.included_in_plan ? "neutral" : "info"}>
+                        {feature.name}
+                        {!feature.included_in_plan && feature.standalone_price_monthly_rp !== null
+                          ? ` (+${formatRappen(feature.standalone_price_monthly_rp)}/Monat)`
+                          : ""}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </section>
       )}
 

@@ -8,8 +8,9 @@ import { CycleConfigSummary, EventSummary, ParticipantSummary, StructuredListDef
 export default async function SubmissionAssignmentsPage() {
   const session = await requireSession();
   const canWrite = session.current_role === "admin" || session.current_role === "writer";
+  const hasAbgabeboxFeature = session.current_tenant?.enabled_features?.includes("abgabebox") ?? false;
 
-  if (!canWrite) {
+  if (!canWrite || !hasAbgabeboxFeature) {
     redirect("/");
   }
 
