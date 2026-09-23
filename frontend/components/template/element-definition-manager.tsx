@@ -889,6 +889,7 @@ export function ElementDefinitionManager({
   const showToast = useToast();
   const confirm = useConfirm();
   const [definitions, setDefinitions] = useState(initialDefinitions);
+  const [duplicatingDefinitionId, setDuplicatingDefinitionId] = useState<string | null>(null);
   const [selectedDefinitionId, setSelectedDefinitionId] = useState<string | null>(initialDefinitions[0]?.id ?? null);
   const [definitionForm, setDefinitionForm] = useState<DefinitionFormState>(
     initialDefinitions[0] ? definitionFormFromDefinition(initialDefinitions[0]) : initialDefinitionForm
@@ -1358,6 +1359,29 @@ export function ElementDefinitionManager({
       showToast(`Element "${created.title}" wurde angelegt`, "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Element konnte nicht angelegt werden", "error");
+    }
+  }
+
+  async function duplicateDefinition(definition: ElementDefinition) {
+    if (duplicatingDefinitionId) return;
+    setDuplicatingDefinitionId(definition.id);
+    try {
+      const created = await browserApiFetch<ElementDefinition>("/api/element-definitions", {
+        method: "POST",
+        body: JSON.stringify({
+          title: `${definition.title} (Kopie)`,
+          description: definition.description,
+          is_active: definition.is_active,
+          blocks: definition.blocks,
+        }),
+      });
+      setDefinitions((current) => [created, ...current]);
+      selectDefinition(created);
+      showToast(`Element "${created.title}" wurde dupliziert`, "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Element konnte nicht dupliziert werden", "error");
+    } finally {
+      setDuplicatingDefinitionId(null);
     }
   }
 
@@ -1873,6 +1897,17 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
             <td>{definition.blocks.length} {definition.blocks.length === 1 ? "Block" : "Blöcke"}</td>
             <td>
               <div className="table-actions">
+                <button
+                  type="button"
+                  className="button-secondary"
+                  disabled={duplicatingDefinitionId !== null}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void duplicateDefinition(definition);
+                  }}
+                >
+                  {duplicatingDefinitionId === definition.id ? "Wird dupliziert…" : "Duplizieren"}
+                </button>
                 <button type="button" className="button-secondary button-danger" onClick={(event) => {
                   event.stopPropagation();
                   void deleteDefinition(definition.id);
