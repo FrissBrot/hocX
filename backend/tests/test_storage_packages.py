@@ -130,3 +130,35 @@ def test_manual_quota_override_survives_plan_and_package_changes(db):
     assert result_after_package is not None
     assert result_after_package.storage_quota_bytes == 999_999
     assert result_after_package.storage_quota_manual_override is True
+
+
+def test_clearing_manual_quota_falls_back_to_plan_and_package_total(db):
+    """Emptying the admin panel's manual-quota field (quota_mb=None) must remove the override
+    and restore the automatically computed plan+package total, matching its "leer =
+    automatische Berechnung" label - not leave the tenant stuck on an explicit unlimited
+    override, which is what set_quota used to do unconditionally."""
+    admin_service = AdminTenantService()
+    storage_service = StorageService()
+    admin = make_platform_admin(db)
+    tenant = make_tenant(db)
+
+    admin_service.upsert_plan(
+        db,
+        "test_plan_storage_d",
+        AdminPlanWrite(name="Plan D", price_monthly_rp=None, price_yearly_rp=None, included_user_limit=None, included_storage_bytes=2000, sort_order=0, feature_codes=[]),
+    )
+    admin_service.update_tenant_subscription(
+        db, tenant.id, AdminTenantSubscriptionUpdate(plan_code="test_plan_storage_d", billing_cycle="monthly", user_limit_override=None), admin_id=admin.id
+    )
+
+    overridden = storage_service.set_quota(db, tenant.id, 999_999)
+    assert overridden.storage_quota_manual_override is True
+
+    cleared = storage_service.set_quota(db, tenant.id, None)
+    assert cleared.storage_quota_manual_override is False
+
+    admin_service.recompute_effective_storage_quota(db, tenant.id)
+    result = admin_service.get_tenant(db, tenant.id)
+    assert result is not None
+    assert result.storage_quota_bytes == 2000
+    assert result.storage_quota_manual_override is False

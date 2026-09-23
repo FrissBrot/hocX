@@ -353,6 +353,9 @@ def update_tenant_storage_quota(
     tenant = storage_service.set_quota(db, internal_tenant_id, quota_bytes)
     if tenant is None:
         raise HTTPException(status_code=404, detail="Tenant not found")
+    if payload.quota_mb is None:
+        # Override wurde entfernt (leeres Feld) - Kontingent wieder aus Plan + Paketen ableiten.
+        tenant_service.recompute_effective_storage_quota(db, internal_tenant_id)
     audit.log(
         db, action="admin.tenant_storage_quota_updated", actor_email=current_admin.email, tenant_id=internal_tenant_id,
         entity_type="tenant", entity_id=internal_tenant_id, details={"quota_mb": payload.quota_mb},

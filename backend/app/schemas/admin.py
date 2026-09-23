@@ -105,7 +105,8 @@ class AdminTenantRead(BaseModel):
 
 
 class AdminTenantStorageQuotaUpdate(BaseModel):
-    # None = Limit entfernen (Feld ist bewusst ohne Default, damit ein Client es nicht aus
+    # None = manuellen Override entfernen, Kontingent wird wieder automatisch aus Plan +
+    # Paketen berechnet (Feld ist bewusst ohne Default, damit ein Client es nicht aus
     # Versehen weglassen kann - anders als bei PATCH /tenants/{id} ist das hier der gesamte
     # Payload, nicht ein optionales Teilfeld eines groesseren Formulars).
     quota_mb: int | None = Field(ge=1)

@@ -182,10 +182,12 @@ def test_set_quota_persists_and_clears(db):
 
     updated = service.set_quota(db, tenant.id, 1024 * 1024)
     assert updated.storage_quota_bytes == 1024 * 1024
+    assert updated.storage_quota_manual_override is True
     assert service.breakdown_for_tenant(db, tenant.id).quota_bytes == 1024 * 1024
 
     cleared = service.set_quota(db, tenant.id, None)
     assert cleared.storage_quota_bytes is None
+    assert cleared.storage_quota_manual_override is False
 
 
 def test_set_quota_returns_none_for_unknown_tenant(db):
@@ -261,6 +263,7 @@ def test_admin_update_tenant_storage_quota_clears_with_none(db):
     result = admin_routes.update_tenant_storage_quota(tenant.public_id, AdminTenantStorageQuotaUpdate(quota_mb=None), db=db, current_admin=_admin())
 
     assert result.storage_quota_bytes is None
+    assert result.storage_quota_manual_override is False
 
 
 def test_admin_update_tenant_storage_quota_404s_for_unknown_tenant(db):

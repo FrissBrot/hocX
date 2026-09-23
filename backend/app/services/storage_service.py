@@ -98,16 +98,17 @@ class StorageService:
         return StorageUsageRead(total_bytes=total, quota_bytes=quota_bytes, categories=categories)
 
     def set_quota(self, db: Session, tenant_id: int, quota_bytes: int | None) -> Tenant | None:
-        """The Admin panel's manual quota field (0087_storage_packages: this is the only
-        caller). Marks the tenant as a manual override so a later plan/package change
-        (AdminTenantService.recompute_effective_storage_quota) doesn't silently overwrite an
-        admin's individually set limit - including an explicit "no limit" (quota_bytes=None),
-        since that's a deliberate choice too, not "nothing configured yet"."""
+        """The Admin panel's manual quota field. A value marks the tenant as a manual override
+        so a later plan/package change (AdminTenantService.recompute_effective_storage_quota)
+        doesn't silently overwrite an admin's individually set limit (e.g. a bespoke enterprise
+        agreement). Clearing the field (quota_bytes=None) instead removes the override - the
+        route then calls recompute_effective_storage_quota so the tenant falls back to its
+        plan/package total, matching the field's "leer = automatische Berechnung" label."""
         tenant = db.get(Tenant, tenant_id)
         if tenant is None:
             return None
         tenant.storage_quota_bytes = quota_bytes
-        tenant.storage_quota_manual_override = True
+        tenant.storage_quota_manual_override = quota_bytes is not None
         db.add(tenant)
         db.commit()
         db.refresh(tenant)
