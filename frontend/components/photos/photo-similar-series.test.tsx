@@ -94,7 +94,8 @@ describe("PhotoSimilarSeries", () => {
     const firstPhoto = screen.getByRole("dialog", { name: "serie-0.jpg" });
     expect(within(firstPhoto).queryByRole("button", { name: "Vorheriges Foto" })).not.toBeInTheDocument();
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    // Escape wartet auf den ausstehenden Speicherpfad (useDeferredPopupSave.flush), bevor geschlossen wird.
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
   it("shows a confirmation naming the number of photos that will be deleted", async () => {
