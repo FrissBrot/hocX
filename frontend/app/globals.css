@@ -4368,7 +4368,7 @@ input[type="radio"] {
 }
 
 .protocol-search-item-active {
-  --button-bg: var(--accent-soft);
+  --button-bg: var(--neutral-bg);
 }
 
 .protocol-search-item-index {
@@ -4389,21 +4389,12 @@ input[type="radio"] {
   flex-shrink: 0;
 }
 
-.protocol-search-item-active .protocol-search-item-index {
-  background: color-mix(in srgb, var(--accent) 22%, transparent 78%);
-  color: var(--accent);
-}
-
 .protocol-search-item-title {
   grid-column: 2;
   font-size: var(--text-base);
   font-weight: 600;
   line-height: 1.25;
   color: var(--text);
-}
-
-.protocol-search-item-active .protocol-search-item-title {
-  color: var(--accent);
 }
 
 .protocol-search-item-subtitle,
