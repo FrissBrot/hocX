@@ -24,6 +24,7 @@ from app.services.submission_service import SubmissionService
 from app.services.document_template_service import DocumentTemplateService
 from app.services.export_service import ExportService
 from app.services.file_service import FileService
+from app.services.isolated_parse import shutdown_pool as shutdown_word_import_parse_pool
 from app.services.isolated_parse import warm_up_pool as warm_up_word_import_parse_pool
 from app.services import photo_album_service
 from app.services.table_snapshot_service import TableSnapshotService, run_due_cycle_snapshots
@@ -344,33 +345,36 @@ async def gallery_upload_ingest_loop() -> None:
 async def lifespan(_: FastAPI):
     FileService().ensure_storage()
     warm_up_word_import_parse_pool()
-    ensure_runtime_columns()
-    ensure_no_production_demo_data()
-    ensure_startup_seed_data()
-    ensure_default_document_templates()
-    ensure_traefik_dynamic_config()
-    health_check_task = asyncio.create_task(domain_health_check_loop())
-    rescan_task = asyncio.create_task(abgabebox_rescan_loop())
-    upload_pipeline_rescan_task = asyncio.create_task(upload_pipeline_rescan_loop())
-    export_cleanup_task = asyncio.create_task(export_cleanup_loop())
-    log_cleanup_task = asyncio.create_task(log_cleanup_loop())
-    cycle_snapshot_task = asyncio.create_task(cycle_snapshot_loop())
-    photo_analysis_auto_queue_task = asyncio.create_task(photo_analysis_auto_queue_loop())
-    photo_quality_backfill_task = asyncio.create_task(photo_quality_backfill_loop())
-    photo_album_sync_task = asyncio.create_task(photo_album_sync_loop())
-    gallery_upload_ingest_task = asyncio.create_task(gallery_upload_ingest_loop())
-    yield
-    health_check_task.cancel()
-    photo_analysis_auto_queue_task.cancel()
-    photo_quality_backfill_task.cancel()
-    photo_album_sync_task.cancel()
-    gallery_upload_ingest_task.cancel()
-    rescan_task.cancel()
-    upload_pipeline_rescan_task.cancel()
-    export_cleanup_task.cancel()
-    log_cleanup_task.cancel()
-    cycle_snapshot_task.cancel()
-    await close_redis_pool()
+    try:
+        ensure_runtime_columns()
+        ensure_no_production_demo_data()
+        ensure_startup_seed_data()
+        ensure_default_document_templates()
+        ensure_traefik_dynamic_config()
+        health_check_task = asyncio.create_task(domain_health_check_loop())
+        rescan_task = asyncio.create_task(abgabebox_rescan_loop())
+        upload_pipeline_rescan_task = asyncio.create_task(upload_pipeline_rescan_loop())
+        export_cleanup_task = asyncio.create_task(export_cleanup_loop())
+        log_cleanup_task = asyncio.create_task(log_cleanup_loop())
+        cycle_snapshot_task = asyncio.create_task(cycle_snapshot_loop())
+        photo_analysis_auto_queue_task = asyncio.create_task(photo_analysis_auto_queue_loop())
+        photo_quality_backfill_task = asyncio.create_task(photo_quality_backfill_loop())
+        photo_album_sync_task = asyncio.create_task(photo_album_sync_loop())
+        gallery_upload_ingest_task = asyncio.create_task(gallery_upload_ingest_loop())
+        yield
+        health_check_task.cancel()
+        photo_analysis_auto_queue_task.cancel()
+        photo_quality_backfill_task.cancel()
+        photo_album_sync_task.cancel()
+        gallery_upload_ingest_task.cancel()
+        rescan_task.cancel()
+        upload_pipeline_rescan_task.cancel()
+        export_cleanup_task.cancel()
+        log_cleanup_task.cancel()
+        cycle_snapshot_task.cancel()
+        await close_redis_pool()
+    finally:
+        shutdown_word_import_parse_pool()
 
 
 app = FastAPI(
