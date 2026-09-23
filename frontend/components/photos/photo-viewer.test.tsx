@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { FileOverviewItem } from "@/types/api";
@@ -153,13 +153,14 @@ describe("PhotoViewer", () => {
     expect(screen.queryByLabelText("Vorheriges Foto")).not.toBeInTheDocument();
   });
 
-  it("closes on Escape", () => {
+  it("closes on Escape", async () => {
     const onClose = vi.fn();
     const item = makeItem();
     render(<PhotoViewer items={[item]} index={0} onIndexChange={vi.fn()} onClose={onClose} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
 
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(onClose).toHaveBeenCalled();
+    // Escape wartet auf den ausstehenden Speicherpfad (useDeferredPopupSave.flush), bevor geschlossen wird.
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 });
 

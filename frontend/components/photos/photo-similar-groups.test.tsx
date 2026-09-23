@@ -192,6 +192,7 @@ describe("PhotoSimilarGroups", () => {
     fireEvent.click(await screen.findByRole("button", { name: "serie-1.jpg öffnen" }));
     expect(screen.getByRole("dialog", { name: "serie-1.jpg" })).toBeInTheDocument();
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    // Escape wartet auf den ausstehenden Speicherpfad (useDeferredPopupSave.flush), bevor geschlossen wird.
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 });

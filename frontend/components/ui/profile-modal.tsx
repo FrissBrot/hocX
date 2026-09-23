@@ -13,7 +13,7 @@ type Props = {
   onLanguageChange: (lang: string) => void;
   protocolAccordionEnabled: boolean;
   onProtocolAccordionChange: (enabled: boolean) => void;
-  onSave: () => void;
+  onSave: () => void | Promise<void>;
   onLogout: () => void;
 };
 
@@ -39,6 +39,7 @@ export function ProfileModal({
     <Modal
       open={open}
       onClose={onClose}
+      onEscape={onSave}
       title="Benutzerprofil"
       description="Persönliche Einstellungen, Sprache und Sicherheit deines Kontos."
       size="wide"

@@ -5,7 +5,7 @@ import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
@@ -531,7 +531,7 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
         title="Vorlage erstellen"
         description="Legt eine neue leere Vorlage an, der anschliessend wiederverwendbare Elemente zugewiesen werden."
       >
-        <form className="grid" onSubmit={createTemplate}>
+        <ModalSaveForm className="grid" onSubmit={createTemplate}>
           <label className="field-stack">
             <span className="field-label">Vorlagenname</span>
             <input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="Vorlagenname" required />
@@ -576,9 +576,9 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
             Tokens: {"{n}"} = alle Protokolle, {"{n_year}"} = in diesem Jahr, {"{n_month}"} = in diesem Monat, {"{n_cycle}"} = im eigenen Zyklus. Datums-Tokens: {"{date}"}, {"{date:DD.MM.YYYY}"}, {"{dd}"}, {"{mm}"}, {"{yyyy}"}.
           </div>
           <div className="table-toolbar-actions">
-            <button type="submit" className="button-secondary">Vorlage erstellen</button>
+            <button data-modal-save type="submit" className="button-secondary">Vorlage erstellen</button>
           </div>
-        </form>
+        </ModalSaveForm>
       </Modal>
 
       <div className="list-filter-row">
@@ -635,17 +635,17 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
         title={duplicateTarget ? `"${duplicateTarget.name}" duplizieren` : "Vorlage duplizieren"}
         description="Erstellt eine unabhängige Kopie mit allen Elementen, deren Einstellungen und den zugewiesenen Teilnehmenden."
       >
-        <form className="grid" onSubmit={submitDuplicate}>
+        <ModalSaveForm className="grid" onSubmit={submitDuplicate}>
           <label className="field-stack">
             <span className="field-label">Name der neuen Vorlage</span>
             <input value={duplicateName} onChange={(event) => setDuplicateName(event.target.value)} required />
           </label>
           <div className="table-toolbar-actions">
-            <button type="submit" className="button-secondary" disabled={duplicateBusy}>
+            <button data-modal-save type="submit" className="button-secondary" disabled={duplicateBusy}>
               {duplicateBusy ? "Wird dupliziert…" : "Duplizieren"}
             </button>
           </div>
-        </form>
+        </ModalSaveForm>
       </Modal>
     </div>
   );
@@ -1252,6 +1252,7 @@ export function TemplateEditor({
       });
       setTemplate(updated);
       showToast("Vorlage gespeichert", "success");
+      setShowSettingsModal(false);
       router.refresh();
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Vorlage konnte nicht gespeichert werden", "error");
@@ -1562,7 +1563,7 @@ export function TemplateEditor({
         description="Allgemeine Angaben zu dieser Vorlage und dem verwendeten Dokumentlayout."
         size="wide"
       >
-        <form className="grid" onSubmit={saveTemplate}>
+        <ModalSaveForm className="grid" onSubmit={saveTemplate}>
           <label className="field-stack">
             <span className="field-label">Template name</span>
             <input value={templateMeta.name} onChange={(event) => setTemplateMeta((current) => ({ ...current, name: event.target.value }))} />
@@ -1633,9 +1634,9 @@ export function TemplateEditor({
             <span className="field-help">Wird beim PDF-Export verwendet. Kann in den Einstellungen → Dokumentlayouts konfiguriert werden.</span>
           </label>
           <div className="table-toolbar-actions">
-            <button type="submit" className="button-secondary">Vorlage speichern</button>
+            <button data-modal-save type="submit" className="button-secondary">Vorlage speichern</button>
           </div>
-        </form>
+        </ModalSaveForm>
       </Modal>
 
       <Modal
@@ -1828,7 +1829,7 @@ export function TemplateEditor({
           title="Element zum Template hinzufügen"
           description="Waehle ein oder mehrere fertige Elemente aus und fuege sie gesammelt zum Template hinzu."
         >
-          <form className="grid" onSubmit={addElementToTemplate}>
+          <ModalSaveForm className="grid" onSubmit={addElementToTemplate}>
             <div className="list-filter-row">
               <div className="list-filter-search">
                 <SearchInput
@@ -1882,9 +1883,9 @@ export function TemplateEditor({
             </DataTable>
             <span className="field-help">Neue Elemente werden automatisch hinten angehaengt. Die Reihenfolge kannst du danach per Drag and Drop oder direkt ueber die Positionszahl anpassen.</span>
             <div className="table-toolbar-actions">
-              <button type="submit" className="button-secondary" disabled={newItemForm.element_definition_ids.length === 0}>Ausgewaehlte Elemente hinzufuegen</button>
+              <button data-modal-save type="submit" className="button-secondary" disabled={newItemForm.element_definition_ids.length === 0}>Ausgewaehlte Elemente hinzufuegen</button>
             </div>
-          </form>
+          </ModalSaveForm>
         </Modal>
 
         <Modal

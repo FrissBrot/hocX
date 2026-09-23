@@ -140,6 +140,7 @@ export function DocumentUploadModal({
       title="Dateien hochladen"
       description="Die Dateien landen unter Dateien, werden beim Upload virengeprüft und lassen sich mit einem Termin, einer Abgabe oder einem Zyklus verknüpfen."
       onClose={onClose}
+      onEscape={() => selectedFiles.length ? handleUpload() : onClose()}
       className="gallery-upload-modal"
     >
       <div className="gallery-upload">

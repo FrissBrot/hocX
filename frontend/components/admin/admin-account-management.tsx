@@ -3,7 +3,7 @@
 import { FormEvent, useState } from "react";
 
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -132,7 +132,7 @@ export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props)
       </DataTable>
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Neuer Admin-Account" description="Legt einen weiteren Zugang zum Platform-Admin-Panel an.">
-        <form className="grid" onSubmit={submit}>
+        <ModalSaveForm className="grid" onSubmit={submit}>
           <label className="field-stack">
             <span className="field-label">Name</span>
             <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} required />
@@ -153,11 +153,11 @@ export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props)
             </select>
           </label>
           <div className="table-actions table-actions-start">
-            <button type="submit" className="button-secondary">
+            <button data-modal-save type="submit" className="button-secondary">
               Erstellen
             </button>
           </div>
-        </form>
+        </ModalSaveForm>
       </Modal>
     </div>
   );

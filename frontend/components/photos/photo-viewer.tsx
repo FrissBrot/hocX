@@ -3,8 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { usePopupEscape, usePopupScrollLock } from "@/lib/hooks/use-popup-escape";
 import { LivePhotoClip } from "@/components/photos/live-photo-clip";
 import { TagInput } from "@/components/ui/tag-input";
+import { useDeferredPopupSave } from "@/lib/hooks/use-deferred-popup-save";
 import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { formatDateTime, formatFileSize, formatWeekdayDate } from "@/lib/utils/format";
 import { FileOverviewItem, StoredFileMetadata } from "@/types/api";
@@ -59,12 +61,18 @@ export function PhotoViewer({
   const loadingOriginal = readyUrl !== fileUrl && failedUrl !== fileUrl;
   const [metadata, setMetadata] = useState<StoredFileMetadata | null>(null);
   const [tagsValue, setTagsValue] = useState(item.tags.join(","));
-  const [saving, setSaving] = useState(false);
+  const { schedule, flush, saving, saveError } = useDeferredPopupSave();
   // Live Photo: spielt, solange der Zeiger über der Bühne liegt, oder per LIVE-Knopf (Touch/Tastatur).
   const [liveHover, setLiveHover] = useState(false);
   const [livePinned, setLivePinned] = useState(false);
   const [downloadOpen, setDownloadOpen] = useState(false);
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+
+  const rootRef = useRef<HTMLDivElement>(null);
+  const downloadRef = useRef<HTMLDivElement>(null);
+  usePopupEscape(true, saveAndClose, rootRef);
+  usePopupEscape(downloadOpen, () => setDownloadOpen(false), downloadRef);
+  usePopupScrollLock(true);
 
   const hasPrev = index > 0;
   const hasNext = index < items.length - 1;
@@ -95,15 +103,12 @@ export function PhotoViewer({
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
       if (event.key === "ArrowLeft" && hasPrev) onIndexChange(index - 1);
       if (event.key === "ArrowRight" && hasNext) onIndexChange(index + 1);
     }
     window.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
     return () => {
       window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
     };
   }, [hasPrev, hasNext, index, onClose, onIndexChange]);
 
@@ -122,25 +127,17 @@ export function PhotoViewer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id]);
 
-  useEffect(() => {
-    return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    };
-  }, []);
-
   function handleTagsChange(value: string) {
     setTagsValue(value);
     const tags = value ? value.split(",").map((t) => t.trim()).filter(Boolean) : [];
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(async () => {
-      setSaving(true);
-      try {
-        const saved = await browserApiFetch<string[]>(item.tags_url, { method: "PATCH", body: JSON.stringify({ tags }) });
-        onTagsSaved(item.id, saved ?? tags);
-      } finally {
-        setSaving(false);
-      }
-    }, 500);
+    schedule(async () => {
+      const saved = await browserApiFetch<string[]>(item.tags_url, { method: "PATCH", body: JSON.stringify({ tags }) });
+      onTagsSaved(item.id, saved ?? tags);
+    });
+  }
+
+  async function saveAndClose() {
+    if (await flush()) onClose();
   }
 
   const dimensions = metadata?.width && metadata?.height ? `${metadata.width} × ${metadata.height} px` : null;
@@ -155,10 +152,11 @@ export function PhotoViewer({
   }
 
   return createPortal(
-    <div className="photo-viewer" role="dialog" aria-modal="true" aria-label={item.original_name}>
+    <div ref={rootRef} className="photo-viewer" role="dialog" aria-modal="true" aria-label={item.original_name}>
+      {saveError && <p role="alert">{saveError}</p>}
       <div className="photo-viewer-header">
         <div className="photo-viewer-header-left">
-          <button type="button" className="photo-viewer-close" aria-label="Schliessen" onClick={onClose}>
+          <button type="button" className="photo-viewer-close" aria-label="Schliessen" onClick={() => void saveAndClose()}>
             ✕
           </button>
           <div>
@@ -170,12 +168,12 @@ export function PhotoViewer({
           </div>
         </div>
         <div className="photo-viewer-actions">
-          <button type="button" className="pill" onClick={onClose}>Galerie</button>
+          <button type="button" className="pill" onClick={() => void saveAndClose()}>Galerie</button>
           <button type="button" className="pill photo-viewer-pill-accent" onClick={() => onToggleBest(item)}>
             {item.is_best ? "★ Best-of" : "☆ Best-of"}
           </button>
           {item.live_video_url && (
-            <div className="photo-viewer-download">
+            <div ref={downloadRef} className="photo-viewer-download">
               <button
                 type="button"
                 className="pill"

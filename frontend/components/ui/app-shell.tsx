@@ -382,7 +382,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
         onLanguageChange={setLanguage}
         protocolAccordionEnabled={protocolAccordionEnabled}
         onProtocolAccordionChange={setProtocolAccordionEnabled}
-        onSave={() => void saveProfile()}
+        onSave={saveProfile}
         onLogout={() => void logout()}
       />
     </main>

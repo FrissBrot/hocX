@@ -57,7 +57,7 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
     } finally { setBusy(false); }
   }
 
-  return <Modal open title={todo.task} className="todo-edit-modal" hideCloseButton onClose={() => { if (!busy) onClose(); }}>
+  return <Modal open title={todo.task} className="todo-edit-modal" hideCloseButton onEscape={canEdit ? save : onClose} onClose={() => { if (!busy) onClose(); }}>
     <header className="todo-edit-heading">
       <div className="todo-edit-eyebrow">Todo bearbeiten {todo.protocol_number && <><span>·</span><span className="todo-edit-number">{todo.protocol_number}</span></>}</div>
       <input aria-label="Aufgabe" className="todo-edit-title" value={draft.task} disabled={!editable} onChange={(e) => setDraft({ ...draft, task: e.target.value })} />

@@ -1,5 +1,7 @@
 "use client";
 
+import { usePopupEscape } from "@/lib/hooks/use-popup-escape";
+import { useDeferredPopupSave } from "@/lib/hooks/use-deferred-popup-save";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { browserApiFetch } from "@/lib/api/client";
 import { clearDraft, queueMutation, readDraft, removeMutation, saveDraft } from "@/lib/offline-store";
@@ -77,7 +79,9 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
     const [dueConfirmed, setDueConfirmed] = useState(false);
     const [dueHighlighted, setDueHighlighted] = useState(0);
 
-    const notesTimerRef = useRef<number | undefined>(undefined);
+    const { schedule: scheduleNotes, flush: flushNotes } = useDeferredPopupSave();
+    const notesPanelRef = useRef<HTMLDivElement>(null);
+    const todoPanelRef = useRef<HTMLDivElement>(null);
     const leaveTimerRef = useRef<number | undefined>(undefined);
     const todoInputRef = useRef<HTMLInputElement | null>(null);
     const dueInputRef = useRef<HTMLInputElement | null>(null);
@@ -190,7 +194,6 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
     // PATCH request.
     useEffect(() => {
       return () => {
-        if (notesTimerRef.current) window.clearTimeout(notesTimerRef.current);
         if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current);
       };
     }, []);
@@ -205,9 +208,9 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
           method: "PATCH",
           body: JSON.stringify({ session_notes: value, expected_session_notes: expectedSessionNotes }),
         });
-        if (notesTimerRef.current) window.clearTimeout(notesTimerRef.current);
         setNotesSaveState("saving");
-        notesTimerRef.current = window.setTimeout(async () => {
+        scheduleNotes(async () => {
+          const expectedSessionNotes = notesServerValueRef.current;
           try {
             const updated = await browserApiFetch<ProtocolSummary>(`/api/protocols/${protocol.id}`, {
               method: "PATCH",
@@ -228,8 +231,9 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
               body: JSON.stringify({ session_notes: value, expected_session_notes: expectedSessionNotes }),
               lastError: error instanceof Error ? error.message : "Notizen konnten nicht gespeichert werden",
             });
+            throw error;
           }
-        }, 700);
+        });
       },
       [protocol.id, onSessionNotesChange, notesMutationKey]
     );
@@ -241,7 +245,7 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
 
     const handleCreateTodo = async () => {
       const task = todoTask.trim();
-      if (!task) return;
+      if (!task || creatingTodo) return false;
       setCreatingTodo(true);
       try {
         const result = await browserApiFetch<{ block_id: string; todo_id: string; element_id: string }>(
@@ -272,8 +276,10 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
         setTodoSaved(true);
         window.setTimeout(() => setTodoSaved(false), 2000);
         todoInputRef.current?.focus();
+        return true;
       } catch (error) {
         showToast(error instanceof Error ? error.message : "Todo konnte nicht erstellt werden", "error");
+        return false;
       } finally {
         setCreatingTodo(false);
       }
@@ -286,7 +292,6 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
         window.setTimeout(() => assigneeInputRef.current?.focus(), 0);
         return;
       }
-      if (e.key === "Escape") setActive(null);
     }
 
     function handleAssigneeKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -315,15 +320,6 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
           }
         }
         return;
-      }
-      if (e.key === "Escape") {
-        if (assigneeConfirmed) {
-          setAssigneeConfirmed(false);
-          setAssigneeSearch("");
-          setAssigneeId(null);
-        } else {
-          setActive(null);
-        }
       }
       if (e.key === "Tab") {
         e.preventDefault();
@@ -369,15 +365,6 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
         }
         return;
       }
-      if (e.key === "Escape") {
-        if (dueConfirmed) {
-          setDueConfirmed(false);
-          setDueSearch("");
-          setNewDue({ type: "none" });
-        } else {
-          setActive(null);
-        }
-      }
       if (e.key === "Tab") {
         e.preventDefault();
         todoInputRef.current?.focus();
@@ -415,9 +402,19 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
     const [dueFocused, setDueFocused] = useState(false);
     const showDueDropdown = dueFocused && !dueConfirmed && filteredDueOptions.length > 0;
 
+    usePopupEscape(active === "notes", async () => {
+      if (await flushNotes()) setActive(null);
+    }, notesPanelRef);
+    usePopupEscape(active === "todo", async () => {
+      if (!todoTask.trim() || await handleCreateTodo()) setActive(null);
+    }, todoPanelRef);
+    usePopupEscape(active === "todo" && Boolean(showAssigneeDropdown), () => setAssigneeConfirmed(true), assigneeInputRef);
+    usePopupEscape(active === "todo" && showDueDropdown, () => setDueFocused(false), dueInputRef);
+
     return (
       <>
         <div
+          ref={notesPanelRef}
           className={`quick-flyout${active === "notes" ? " quick-flyout-open" : ""}`}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
@@ -453,6 +450,7 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
         </div>
 
         <div
+          ref={todoPanelRef}
           className={`quick-flyout${active === "todo" ? " quick-flyout-open" : ""}`}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}

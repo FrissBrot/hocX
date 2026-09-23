@@ -3,6 +3,8 @@
 import { createContext, useCallback, useContext, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { usePopupEscape, usePopupScrollLock } from "@/lib/hooks/use-popup-escape";
+
 export type ConfirmTone = "default" | "danger";
 
 export interface ConfirmOptions {
@@ -61,17 +63,18 @@ function ConfirmDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  usePopupEscape(true, onCancel, rootRef);
+  usePopupScrollLock(true);
   const cancelRef = useRef<HTMLButtonElement | null>(null);
   const confirmRef = useRef<HTMLButtonElement | null>(null);
 
   return createPortal(
     <div
+      ref={rootRef}
       className="confirm-backdrop"
       role="presentation"
       onClick={onCancel}
-      onKeyDown={(event) => {
-        if (event.key === "Escape") onCancel();
-      }}
     >
       <div
         className={`confirm-shell confirm-${request.tone}`}

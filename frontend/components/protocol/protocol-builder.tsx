@@ -9,7 +9,7 @@ import { DateInput } from "@/components/ui/date-input";
 import { FilterTabOption, FilterTabs } from "@/components/ui/filter-tabs";
 import { ActionMenu, ActionMenuItem } from "@/components/ui/action-menu";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { browserApiFetch } from "@/lib/api/client";
@@ -241,7 +241,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
         title="Protokoll erstellen"
         description="Template auswählen und neues Protokoll anlegen."
       >
-        <form className="grid" onSubmit={createProtocol}>
+        <ModalSaveForm className="grid" onSubmit={createProtocol}>
           <label className="field-stack">
             <span className="field-label">Template</span>
             <SearchableSelect
@@ -285,11 +285,11 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
             ) : null}
           </div>
           <div className="table-toolbar-actions">
-            <button type="submit" className="button-secondary" disabled={!form.template_id}>
+            <button data-modal-save type="submit" className="button-secondary" disabled={!form.template_id}>
               Erstellen
             </button>
           </div>
-        </form>
+        </ModalSaveForm>
       </Modal>
 
       {hasNoProtocols ? (

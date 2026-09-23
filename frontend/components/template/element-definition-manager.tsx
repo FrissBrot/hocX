@@ -5,7 +5,7 @@ import { FormEvent, Fragment, ReactNode, useEffect, useMemo, useState } from "re
 import { DataTable } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { FilterTabOption, FilterTabs } from "@/components/ui/filter-tabs";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { SearchableMultiSelect, SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
@@ -1467,7 +1467,7 @@ export function ElementDefinitionManager({
     return Boolean(updated);
   }
 
-  // Closing (X / Escape / backdrop click) only closes the designer - it no longer silently
+  // Closing (X / backdrop click) only closes the designer - it no longer silently
   // saves. Edits made here live in the same blockForm/createBlockForm state as every other
   // field in the surrounding "Block bearbeiten"/"Block anlegen" form, so nothing is lost:
   // they're picked up by that form's own explicit "Speichern"/"anlegen" submit exactly like a
@@ -1579,8 +1579,8 @@ export function ElementDefinitionManager({
         (left, right) => left.sort_index - right.sort_index
       )
     );
-    await saveBlocks(nextBlocks, "Block wurde hinzugefügt");
-    setShowCreateBlockModal(false);
+    const saved = await saveBlocks(nextBlocks, "Block wurde hinzugefügt");
+    if (saved) setShowCreateBlockModal(false);
   }
 
   async function updateBlock(event: FormEvent<HTMLFormElement>) {
@@ -1935,7 +1935,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
             <button type="button" className="button-ghost modal-close" onClick={() => setShowDetailModal(false)}>
               Abbrechen
             </button>
-            <button type="submit" form="element-definition-form" className="button-secondary">
+            <button data-modal-save type="submit" form="element-definition-form" className="button-secondary">
               Speichern
             </button>
           </>
@@ -1943,7 +1943,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
       >
         {selectedDefinition ? (
           <div className="section-stack">
-            <form id="element-definition-form" className="grid section-stack" onSubmit={saveDefinition}>
+            <ModalSaveForm id="element-definition-form" className="grid section-stack" onSubmit={saveDefinition}>
               <ElementEditorSummary
                 title={definitionForm.title}
                 description={definitionForm.description}
@@ -1963,7 +1963,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                   </label>
                 </div>
               </SettingsSection>
-            </form>
+            </ModalSaveForm>
 
             <SettingsSection
               title={`Blöcke in ${selectedDefinition.title}`}
@@ -2070,7 +2070,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
           </>
         }
       >
-        <form className="grid element-create-form" onSubmit={creatingNewDefinition ? createDefinitionWithBlock : createBlock}>
+        <ModalSaveForm className="grid element-create-form" onSubmit={creatingNewDefinition ? createDefinitionWithBlock : createBlock}>
           <div className="element-create-layout">
           <div className="element-create-fields">
           {showCreateBlockHelp ? (
@@ -2754,9 +2754,9 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
           <div className="modal-actions element-create-footer">
             <p className="muted">Weitere Blöcke fügst du nach dem Anlegen im Element hinzu.</p>
             <button type="button" className="button-secondary" onClick={() => { setShowCreateBlockModal(false); setShowCreateBlockHelp(false); setCreatingNewDefinition(false); setMatrixDesignerMode(null); setTypePickerMode(null); }}>Abbrechen</button>
-            <button type="submit" className="button-primary" disabled={creatingNewDefinition && !createDefinitionForm.title.trim()}>{creatingNewDefinition ? "Element anlegen" : "Block anlegen"}</button>
+            <button data-modal-save type="submit" className="button-primary" disabled={creatingNewDefinition && !createDefinitionForm.title.trim()}>{creatingNewDefinition ? "Element anlegen" : "Block anlegen"}</button>
           </div>
-        </form>
+        </ModalSaveForm>
       </Modal>
 
       <Modal
@@ -2780,7 +2780,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
         }
       >
         {selectedBlock ? (
-          <form className="grid section-stack block-editor-form" onSubmit={updateBlock}>
+          <ModalSaveForm className="grid section-stack block-editor-form" onSubmit={updateBlock}>
             {showEditBlockHelp ? (
               <div className="compact-info-pop">
                 <strong>Block-Hinweis</strong>
@@ -3311,9 +3311,9 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
               </SettingsSection>
             ) : null}
             <div className="block-editor-footer">
-              <button type="submit" className="button-secondary">Block speichern</button>
+              <button data-modal-save type="submit" className="button-secondary">Block speichern</button>
             </div>
-          </form>
+          </ModalSaveForm>
         ) : null}
       </Modal>
 
@@ -3351,6 +3351,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
 
       <Modal
         open={matrixDesignerMode !== null && !!matrixDesignerForm}
+        onEscape={saveMatrixDesigner}
         onClose={closeMatrixDesigner}
         title="Matrix konfigurieren"
         description="Füge Spalten und Zeilen direkt als Matrix hinzu. Klick auf eine Zeile oder eine Zelle, um Datentypen und Inhalte zu setzen."
@@ -3900,6 +3901,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
 
       <Modal
         open={tableDesignerMode !== null && !!tableDesignerForm}
+        onEscape={saveTableDesigner}
         onClose={closeTableDesigner}
         title="Tabelle konfigurieren"
         description="Verwalte die Zeilen dieser Tabelle. Klick auf eine Zeile, um Alias, Datentyp und Inhalt zu setzen."

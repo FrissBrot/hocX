@@ -905,7 +905,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
         availableLists={availableLists}
         availableTags={availableTags}
         availableCycleConfigs={availableCycleConfigs}
-        onSubmit={() => void submit()}
+        onSubmit={submit}
         onClose={() => setModalOpen(false)}
         onManageLinks={openLinksFromForm}
       />

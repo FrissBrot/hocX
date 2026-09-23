@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { TagInput } from "@/components/ui/tag-input";
+import { useDeferredPopupSave } from "@/lib/hooks/use-deferred-popup-save";
 import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { formatDate, formatDateTime, formatFileSize } from "@/lib/utils/format";
 import { FileOverviewItem, FileOverviewSource, StoredFileMetadata } from "@/types/api";
@@ -39,9 +40,9 @@ export function FileDetailModal({
   const [metadata, setMetadata] = useState<StoredFileMetadata | null>(null);
   const [loadingMetadata, setLoadingMetadata] = useState(true);
   const [tagsValue, setTagsValue] = useState(item.tags.join(","));
-  const [saving, setSaving] = useState(false);
+  const { schedule, flush, saving, saveError } = useDeferredPopupSave();
   const [previewFailed, setPreviewFailed] = useState(false);
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
 
   const fileUrl = `${browserApiBaseUrl}${item.content_url}`;
 
@@ -57,28 +58,17 @@ export function FileDetailModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id]);
 
-  useEffect(() => {
-    return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    };
-  }, []);
-
   function handleTagsChange(value: string) {
     setTagsValue(value);
     const tags = value ? value.split(",").map((t) => t.trim()).filter(Boolean) : [];
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(async () => {
-      setSaving(true);
-      try {
-        const saved = await browserApiFetch<string[]>(item.tags_url, {
-          method: "PATCH",
-          body: JSON.stringify({ tags }),
-        });
-        onTagsSaved(saved ?? tags);
-      } finally {
-        setSaving(false);
-      }
-    }, 500);
+    schedule(async () => {
+      const saved = await browserApiFetch<string[]>(item.tags_url, { method: "PATCH", body: JSON.stringify({ tags }) });
+      onTagsSaved(saved ?? tags);
+    });
+  }
+
+  async function saveAndClose() {
+    if (await flush()) onClose();
   }
 
   const dimensions = metadata?.width && metadata?.height ? `${metadata.width} × ${metadata.height} px` : null;
@@ -86,7 +76,8 @@ export function FileDetailModal({
   const isImage = Boolean(item.mime_type?.startsWith("image/")) && !previewFailed;
 
   return (
-    <Modal open title={item.original_name} onClose={onClose} size="wide" className="file-detail-modal">
+    <Modal open title={item.original_name} onEscape={saveAndClose} onClose={() => void saveAndClose()} size="wide" className="file-detail-modal">
+      {saveError && <p role="alert">{saveError}</p>}
       <div className="file-detail">
         <div className="file-detail-preview">
           <a href={fileUrl} target="_blank" rel="noreferrer" className={isImage ? "file-detail-preview-link" : "file-detail-preview-icon"}>

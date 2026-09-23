@@ -8,7 +8,7 @@ import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterTabs } from "@/components/ui/filter-tabs";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { computePopoverPosition, Popover, usePopoverDismiss } from "@/components/ui/popover";
 import { SearchInput } from "@/components/ui/search-input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -927,7 +927,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
         title={form.id ? "Termin bearbeiten" : "Termin erstellen"}
         description="Der Tag hilft spaeter beim Verknuepfen mit passenden Protokollpunkten."
       >
-        <form className="grid" onSubmit={saveEvent}>
+        <ModalSaveForm className="grid" onSubmit={saveEvent}>
           <div className="two-col">
             <label className="field-stack">
               <span className="field-label">Startdatum</span>
@@ -1045,8 +1045,8 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
             )}
             <span className="field-help">Zyklen, denen dieser Termin zugeordnet werden soll. Optional.</span>
           </div>
-          <button type="submit">{form.id ? "Termin speichern" : "Termin erstellen"}</button>
-        </form>
+          <button data-modal-save type="submit">{form.id ? "Termin speichern" : "Termin erstellen"}</button>
+        </ModalSaveForm>
       </Modal>
 
       <Modal

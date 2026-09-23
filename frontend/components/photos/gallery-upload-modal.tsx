@@ -162,6 +162,7 @@ export function GalleryUploadModal({
       title="Bilder hochladen"
       description="Die Bilder landen in der Galerie und werden beim Upload virengeprüft."
       onClose={onClose}
+      onEscape={() => selectedFiles.length ? handleUpload() : onClose()}
       className="gallery-upload-modal"
     >
       <div className="gallery-upload">

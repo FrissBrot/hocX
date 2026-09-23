@@ -16,7 +16,7 @@ import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { formatDate } from "@/lib/utils/format";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { usePopoverDismiss } from "@/components/ui/popover";
 import { DocumentTemplate, EventSummary, ParticipantSummary, TodoBlock, TodoListItem } from "@/types/api";
 
@@ -565,12 +565,12 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
         description="Erfasse eine neue Aufgabe und ordne sie bei Bedarf einem Protokoll zu."
         onClose={() => setShowCreate(false)}
       >
-        <form
+        <ModalSaveForm
           className="grid"
           style={{ gap: "var(--space-4)", minWidth: 320 }}
           onSubmit={(event) => {
             event.preventDefault();
-            void createTodo();
+            return createTodo();
           }}
         >
           <label className="field-stack">
@@ -608,10 +608,10 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
             <span className="field-help">Optional. Verknüpft das Todo direkt mit einem Protokollpunkt.</span>
           </div>
 
-          <button type="submit" disabled={creating || !createTask.trim()}>
+          <button data-modal-save type="submit" disabled={creating || !createTask.trim()}>
             {creating ? "Wird erstellt…" : "Todo erstellen"}
           </button>
-        </form>
+        </ModalSaveForm>
       </Modal>
 
       {editingTodo && <TodoEditModal

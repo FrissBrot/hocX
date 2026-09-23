@@ -5,7 +5,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ROLE_OPTIONS } from "@/components/admin/admin-tenant-settings-modal";
 import { MfaAdminModal } from "@/components/security/mfa-admin-modal";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
@@ -262,7 +262,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
         description=""
         size="wide"
       >
-        <form className="grid" onSubmit={submitUser} id="user-form">
+        <ModalSaveForm className="grid" onSubmit={submitUser} id="user-form">
           <div className="three-col">
             <label className="field-stack">
               <span className="field-label">Vorname</span>
@@ -349,11 +349,11 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
           {formError && <div className="form-error-banner">{formError}</div>}
 
           <div className="table-actions table-actions-start">
-            <button type="submit" className="button-secondary">
+            <button data-modal-save type="submit" className="button-secondary">
               Speichern
             </button>
           </div>
-        </form>
+        </ModalSaveForm>
       </Modal>
 
       <MfaAdminModal

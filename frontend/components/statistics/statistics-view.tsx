@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 
@@ -20,6 +20,8 @@ import {
 } from "recharts";
 import { StatisticsOverview } from "@/types/api";
 import { CHART_COLORS, CHART_PIE_PALETTE } from "@/lib/constants/chart-colors";
+
+import { usePopupEscape, usePopupScrollLock } from "@/lib/hooks/use-popup-escape";
 
 type Props = { data: StatisticsOverview | null };
 
@@ -124,15 +126,12 @@ function CycleDropdown({ value, onChange, options }: { value: string; onChange: 
 function ChartCard({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
   const [fullscreen, setFullscreen] = useState(false);
 
-  useEffect(() => {
-    if (!fullscreen) return;
-    function onKey(e: KeyboardEvent) { if (e.key === "Escape") setFullscreen(false); }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [fullscreen]);
+  const rootRef = useRef<HTMLDivElement>(null);
+  usePopupEscape(fullscreen, () => setFullscreen(false), rootRef);
+  usePopupScrollLock(fullscreen);
 
   const overlay = fullscreen && typeof document !== "undefined" ? createPortal(
-    <div className="stats-fs-backdrop" onClick={() => setFullscreen(false)}>
+    <div ref={rootRef} className="stats-fs-backdrop" onClick={() => setFullscreen(false)}>
       <div className="stats-fs-card" onClick={(e) => e.stopPropagation()}>
         <div className="stats-fs-header">
           <span className="stats-chart-title">{title}</span>

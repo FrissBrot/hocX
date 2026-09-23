@@ -5,7 +5,7 @@ import { FormEvent, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StructuredListTable } from "@/components/lists/structured-list-table";
 import { HistoricalEditConfirmModal, HistoricalViewBanner, ReconstructionBanner } from "@/components/ui/historical-view-banner";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { usePopoverDismiss } from "@/components/ui/popover";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
@@ -823,7 +823,7 @@ export function ListManager({
         title={editingListId ? "Liste bearbeiten" : "Liste erstellen"}
         description="Jede Liste hat genau zwei Spalten. Der Datentyp bestimmt, welche Eingabe spaeter im Tabellenblock und im Protokoll sichtbar ist."
       >
-        <form className="grid" onSubmit={saveDefinition}>
+        <ModalSaveForm className="grid" onSubmit={saveDefinition}>
           <div className="two-col">
             <label className="field-stack">
               <span className="field-label">Listenname</span>
@@ -907,11 +907,11 @@ export function ListManager({
             </div>
           </div>
           <div className="table-toolbar-actions">
-            <button type="submit" className="button-secondary">
+            <button data-modal-save type="submit" className="button-secondary">
               {editingListId ? "Liste speichern" : "Liste erstellen"}
             </button>
           </div>
-        </form>
+        </ModalSaveForm>
       </Modal>
 
       <HistoricalEditConfirmModal

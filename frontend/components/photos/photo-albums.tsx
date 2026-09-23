@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { PhotosView } from "./photos-view";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { PhotoAlbum as Album, PhotoAlbumKind } from "@/types/api";
@@ -119,10 +119,10 @@ export function PhotoAlbums() {
       )}
       {creating && (
         <Modal open title="Fotoalbum erstellen" onClose={() => { if (!busy) setCreating(false); }}>
-          <form className="grid" onSubmit={createAlbum}>
+          <ModalSaveForm className="grid" onSubmit={createAlbum}>
             <label>Albumname<input autoFocus required maxLength={120} value={name} onChange={(event) => setName(event.target.value)} /></label>
-            <button className="button-secondary" type="submit" disabled={busy || !name.trim()}>{busy ? "Wird erstellt…" : "Album erstellen"}</button>
-          </form>
+            <button className="button-secondary" data-modal-save type="submit" disabled={busy || !name.trim()}>{busy ? "Wird erstellt…" : "Album erstellen"}</button>
+          </ModalSaveForm>
         </Modal>
       )}
     </div>

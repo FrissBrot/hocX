@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { DateInput } from "@/components/ui/date-input";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { FinanceAccount, FinanceTransaction } from "@/types/api";
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -209,7 +209,7 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
         className="finance-account-modal"
         onClose={() => setShowAccountForm(false)}
       >
-        <form className="grid finance-form-modal" onSubmit={(event) => { event.preventDefault(); void saveAccount(); }}>
+        <ModalSaveForm className="grid finance-form-modal" onSubmit={(event) => { event.preventDefault(); return saveAccount(); }}>
           <label className="field-stack">
             <span className="field-label">Name</span>
             <input value={accountDraft.name} onChange={(e) => setAccountDraft((d) => ({ ...d, name: e.target.value }))} placeholder="z. B. Vereinskasse" required autoFocus />
@@ -224,11 +224,11 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
           </label>
           <div className="modal-actions">
             <button type="button" className="button-ghost" onClick={() => setShowAccountForm(false)}>Abbrechen</button>
-            <button type="submit" className="button-primary" disabled={savingAccount || !accountDraft.name.trim()}>
+            <button data-modal-save type="submit" className="button-primary" disabled={savingAccount || !accountDraft.name.trim()}>
               {savingAccount ? "Speichern…" : "Speichern"}
             </button>
           </div>
-        </form>
+        </ModalSaveForm>
       </Modal>
     )}
     </>
