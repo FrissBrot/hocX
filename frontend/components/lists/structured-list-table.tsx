@@ -369,18 +369,23 @@ export function StructuredListTable({
     setParticipantSearch("");
   }
 
-  function applyParticipantPicker() {
-    if (!participantPicker) {
-      return;
-    }
-    const nextValue = { participant_ids: [...participantPicker.selectedIds] };
-    if (participantPicker.isNewRow) {
-      patchNewRow({ [participantPicker.columnKey]: nextValue });
-    } else if (participantPicker.entryId) {
-      queueRowSave(participantPicker.entryId, { [participantPicker.columnKey]: nextValue });
-    }
-    setParticipantPicker(null);
-    setParticipantSearch("");
+  function toggleParticipantPickerSelection(participantId: string) {
+    setParticipantPicker((current) => {
+      if (!current) {
+        return current;
+      }
+      const nextIds = current.selectedIds.includes(participantId)
+        ? current.selectedIds.filter((id) => id !== participantId)
+        : [...current.selectedIds, participantId];
+      const next = { ...current, selectedIds: nextIds };
+      const nextValue = { participant_ids: [...nextIds] };
+      if (next.isNewRow) {
+        patchNewRow({ [next.columnKey]: nextValue });
+      } else if (next.entryId) {
+        queueRowSave(next.entryId, { [next.columnKey]: nextValue });
+      }
+      return next;
+    });
   }
 
   function renderEditableCell(
@@ -810,28 +815,12 @@ export function StructuredListTable({
                   <input
                     type="checkbox"
                     checked={checked}
-                    onChange={(event) =>
-                      setParticipantPicker((current) =>
-                        current
-                          ? {
-                              ...current,
-                              selectedIds: event.target.checked
-                                ? [...current.selectedIds, participant.id]
-                                : current.selectedIds.filter((entryId) => entryId !== participant.id),
-                            }
-                          : current
-                      )
-                    }
+                    onChange={() => toggleParticipantPickerSelection(participant.id)}
                   />
                   <span>{participant.display_name}</span>
                 </label>
               );
             })}
-          </div>
-          <div className="table-toolbar-actions">
-            <button type="button" className="button-secondary" onClick={applyParticipantPicker}>
-              Auswahl uebernehmen
-            </button>
           </div>
         </div>
       </Modal>

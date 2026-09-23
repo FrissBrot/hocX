@@ -161,7 +161,6 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
   const cyclesLoadedRef = useRef(false);
 
   const [pickerField, setPickerField] = useState<ParticipantPickerField | null>(null);
-  const [pickerSelected, setPickerSelected] = useState<string[]>([]);
   const [pickerSearch, setPickerSearch] = useState("");
 
   const [eventContextMenu, setEventContextMenu] = useState<{ x: number; y: number; event: EventSummary } | null>(null);
@@ -398,14 +397,19 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
 
   function openParticipantPicker(field: ParticipantPickerField) {
     setPickerField(field);
-    setPickerSelected([...(form[field] as string[])]);
     setPickerSearch("");
   }
 
-  function applyParticipantPicker() {
-    if (!pickerField) return;
-    setForm((current) => ({ ...current, [pickerField]: pickerSelected }));
-    setPickerField(null);
+  function togglePickerParticipant(field: ParticipantPickerField, participantId: string) {
+    setForm((current) => {
+      const selected = current[field] as string[];
+      return {
+        ...current,
+        [field]: selected.includes(participantId)
+          ? selected.filter((id) => id !== participantId)
+          : [...selected, participantId],
+      };
+    });
   }
 
   function participantLabel(ids: string[]): string {
@@ -1088,27 +1092,18 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
             {availableParticipants
               .filter((p) => !pickerSearch.trim() || p.display_name.toLowerCase().includes(pickerSearch.toLowerCase()))
               .map((p) => {
-                const checked = pickerSelected.includes(p.id);
+                const checked = pickerField ? (form[pickerField] as string[]).includes(p.id) : false;
                 return (
                   <label key={p.id} className={`participant-check-card${checked ? " participant-check-card-active" : ""}`}>
                     <input
                       type="checkbox"
                       checked={checked}
-                      onChange={(e) =>
-                        setPickerSelected((current) =>
-                          e.target.checked ? [...current, p.id] : current.filter((id) => id !== p.id)
-                        )
-                      }
+                      onChange={() => pickerField && togglePickerParticipant(pickerField, p.id)}
                     />
                     <span>{p.display_name}</span>
                   </label>
                 );
               })}
-          </div>
-          <div className="table-toolbar-actions">
-            <button type="button" className="button-secondary" onClick={applyParticipantPicker}>
-              Auswahl übernehmen
-            </button>
           </div>
         </div>
       </Modal>

@@ -429,12 +429,20 @@ export function FocusedElementEditor({
       if (!current) {
         return current;
       }
-      return {
+      const next = {
         ...current,
         selectedIds: current.selectedIds.includes(participantId)
           ? current.selectedIds.filter((id) => id !== participantId)
           : [...current.selectedIds, participantId],
       };
+      const currentBlock = element.blocks.find((b) => b.id === next.blockId);
+      if (currentBlock) {
+        applyMultiParticipantSelection(currentBlock.id, asObject(currentBlock.configuration_snapshot_json), {
+          picker: next,
+          closeAfter: false,
+        });
+      }
+      return next;
     });
   }
 
@@ -528,38 +536,44 @@ export function FocusedElementEditor({
     }
   }
 
-  function applyMultiParticipantSelection(currentBlockId: string, currentConfig: Record<string, unknown>) {
-    if (!multiParticipantPicker || multiParticipantPicker.blockId !== currentBlockId) {
+  function applyMultiParticipantSelection(
+    currentBlockId: string,
+    currentConfig: Record<string, unknown>,
+    options?: { picker?: NonNullable<typeof multiParticipantPicker>; closeAfter?: boolean }
+  ) {
+    const picker = options?.picker ?? multiParticipantPicker;
+    const closeAfter = options?.closeAfter ?? true;
+    if (!picker || picker.blockId !== currentBlockId) {
       return;
     }
-    if (multiParticipantPicker.kind === "event_field" && multiParticipantPicker.eventId && multiParticipantPicker.eventFieldName) {
-      void updateEventFromBlock(currentBlockId, multiParticipantPicker.eventId, {
-        [multiParticipantPicker.eventFieldName]: multiParticipantPicker.selectedIds,
+    if (picker.kind === "event_field" && picker.eventId && picker.eventFieldName) {
+      void updateEventFromBlock(currentBlockId, picker.eventId, {
+        [picker.eventFieldName]: picker.selectedIds,
       } as Partial<EventSummary>);
-      closeParticipantPicker();
+      if (closeAfter) closeParticipantPicker();
       return;
     }
-    if (multiParticipantPicker.kind === "list_entry" && multiParticipantPicker.listDefinitionId && multiParticipantPicker.listEntryId && multiParticipantPicker.listColumnKey) {
-      void updateListEntryFromBlock(currentBlockId, multiParticipantPicker.listDefinitionId, multiParticipantPicker.listEntryId, {
-        [multiParticipantPicker.listColumnKey]: { participant_ids: [...multiParticipantPicker.selectedIds] },
+    if (picker.kind === "list_entry" && picker.listDefinitionId && picker.listEntryId && picker.listColumnKey) {
+      void updateListEntryFromBlock(currentBlockId, picker.listDefinitionId, picker.listEntryId, {
+        [picker.listColumnKey]: { participant_ids: [...picker.selectedIds] },
       });
-      closeParticipantPicker();
+      if (closeAfter) closeParticipantPicker();
       return;
     }
-    if (multiParticipantPicker.kind === "form") {
+    if (picker.kind === "form") {
       const nextRows = [...((Array.isArray(currentConfig.rows) ? currentConfig.rows : []) as Array<Record<string, any>>)];
-      const targetIndex = nextRows.findIndex((row) => String(row.id ?? "") === multiParticipantPicker.rowId);
+      const targetIndex = nextRows.findIndex((row) => String(row.id ?? "") === picker.rowId);
       if (targetIndex === -1) {
         return;
       }
       nextRows[targetIndex] = {
         ...nextRows[targetIndex],
-        participant_ids: [...multiParticipantPicker.selectedIds],
+        participant_ids: [...picker.selectedIds],
       };
       void saveBlockConfiguration(currentBlockId, { ...currentConfig, rows: nextRows });
-    } else if (multiParticipantPicker.kind === "matrix") {
+    } else if (picker.kind === "matrix") {
       const nextColumns = [...((Array.isArray(currentConfig.columns) ? currentConfig.columns : []) as Array<Record<string, any>>)];
-      const targetColumnIndex = nextColumns.findIndex((column) => String(column.id ?? "") === String(multiParticipantPicker.columnId ?? ""));
+      const targetColumnIndex = nextColumns.findIndex((column) => String(column.id ?? "") === String(picker.columnId ?? ""));
       if (targetColumnIndex === -1) {
         return;
       }
@@ -569,41 +583,41 @@ export function FocusedElementEditor({
         ...targetColumn,
         values: {
           ...currentValues,
-          [multiParticipantPicker.rowId]: {
-            ...asObject(currentValues[multiParticipantPicker.rowId]),
-            participant_ids: [...multiParticipantPicker.selectedIds],
+          [picker.rowId]: {
+            ...asObject(currentValues[picker.rowId]),
+            participant_ids: [...picker.selectedIds],
           },
         },
       };
       void saveBlockConfiguration(currentBlockId, { ...currentConfig, columns: nextColumns });
     } else {
       const nextColumns = [...((Array.isArray(currentConfig.columns) ? currentConfig.columns : []) as Array<Record<string, any>>)];
-      const targetColumnIndex = nextColumns.findIndex((column) => String(column.id ?? "") === String(multiParticipantPicker.columnId ?? ""));
+      const targetColumnIndex = nextColumns.findIndex((column) => String(column.id ?? "") === String(picker.columnId ?? ""));
       if (targetColumnIndex === -1) {
         return;
       }
       const targetColumn = nextColumns[targetColumnIndex];
       const currentValues = asObject(targetColumn.values);
-      const targetCell = asObject(currentValues[multiParticipantPicker.rowId]);
+      const targetCell = asObject(currentValues[picker.rowId]);
       const embeddedBlock = readMatrixEmbeddedBlock(targetCell);
       if (!embeddedBlock) {
         return;
       }
       const embeddedConfig = asObject(embeddedBlock.configuration_snapshot_json);
       const embeddedRows = [...((Array.isArray(embeddedConfig.rows) ? embeddedConfig.rows : []) as Array<Record<string, any>>)];
-      const targetEmbeddedRowIndex = embeddedRows.findIndex((row) => String(row.id ?? "") === String(multiParticipantPicker.embeddedRowId ?? ""));
+      const targetEmbeddedRowIndex = embeddedRows.findIndex((row) => String(row.id ?? "") === String(picker.embeddedRowId ?? ""));
       if (targetEmbeddedRowIndex === -1) {
         return;
       }
       embeddedRows[targetEmbeddedRowIndex] = {
         ...embeddedRows[targetEmbeddedRowIndex],
-        participant_ids: [...multiParticipantPicker.selectedIds],
+        participant_ids: [...picker.selectedIds],
       };
       nextColumns[targetColumnIndex] = {
         ...targetColumn,
         values: {
           ...currentValues,
-          [multiParticipantPicker.rowId]: {
+          [picker.rowId]: {
             ...targetCell,
             embedded_block: {
               ...embeddedBlock,
@@ -617,7 +631,7 @@ export function FocusedElementEditor({
       };
       void saveBlockConfiguration(currentBlockId, { ...currentConfig, columns: nextColumns });
     }
-    closeParticipantPicker();
+    if (closeAfter) closeParticipantPicker();
   }
 
   function eventRowsForBlock(blockConfig: Record<string, any>) {
@@ -3521,10 +3535,7 @@ export function FocusedElementEditor({
                 if (multiParticipantPicker?.singleSelect) {
                   if (filteredParticipants.length === 1) selectSingleParticipant(filteredParticipants[0].id);
                 } else if (multiParticipantPicker) {
-                  const currentBlock = element.blocks.find((b) => b.id === multiParticipantPicker.blockId);
-                  if (currentBlock) {
-                    applyMultiParticipantSelection(currentBlock.id, asObject(currentBlock.configuration_snapshot_json));
-                  }
+                  closeParticipantPicker();
                 }
               }
             }}
@@ -3563,12 +3574,7 @@ export function FocusedElementEditor({
                       multiParticipantSearchRef.current?.select();
                     } else if (e.key === "Enter") {
                       e.preventDefault();
-                      if (multiParticipantPicker) {
-                        const currentBlock = element.blocks.find((b) => b.id === multiParticipantPicker.blockId);
-                        if (currentBlock) {
-                          applyMultiParticipantSelection(currentBlock.id, asObject(currentBlock.configuration_snapshot_json));
-                        }
-                      }
+                      closeParticipantPicker();
                     }
                   }}
                 />
@@ -3582,24 +3588,6 @@ export function FocusedElementEditor({
             );
           })}
         </div>
-        {!multiParticipantPicker?.singleSelect && (
-          <div className="table-toolbar-actions table-actions-end">
-            <button
-              type="button"
-              className="button-secondary"
-              onClick={() => {
-                if (multiParticipantPicker) {
-                  const currentBlock = element.blocks.find((block) => block.id === multiParticipantPicker.blockId);
-                  if (currentBlock) {
-                    applyMultiParticipantSelection(currentBlock.id, asObject(currentBlock.configuration_snapshot_json));
-                  }
-                }
-              }}
-            >
-              Auswahl uebernehmen
-            </button>
-          </div>
-        )}
       </div>
     </Modal>
     </>

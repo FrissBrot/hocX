@@ -58,7 +58,7 @@ Alle in `frontend/components/ui/` (Import: `@/components/ui/<name>`). Erst hier 
 
 | Aufgabe | Baustein | Hinweis |
 |---|---|---|
-| Dialog/Formular im Overlay | `Modal` (`open`, `title`, `onClose`, `size="default"\|"wide"\|"fullscreen"`) | Titel Pflicht. Aktionen unten in `<div className="modal-actions">` |
+| Dialog/Formular im Overlay | `Modal` (`open`, `title`, `onClose`, `size="default"\|"wide"\|"fullscreen"`) | Titel Pflicht. Schliessen-Button oben rechts ist Teil von `Modal` selbst (Icon-Button, kein Text). Aktionen unten in `<div className="modal-actions">`, nur wenn eine echte Aktion nötig ist (Abschnitt 8) |
 | Ja/Nein-Rückfrage | `useConfirm()` aus `@/contexts/confirm-context` | `await confirm({ message, tone: "danger", confirmLabel: "Löschen" })`. Löschen immer mit `tone: "danger"` |
 | Rückmeldung nach Aktion | `useToast().showToast(text, "success" \| "error" \| "info")` | Fehler immer mit `"error"` und der Meldung aus dem Backend |
 | Dauerhafter Hinweis im Inhalt | `StatusBanner` (`tone`, `message`) | Kein `<p style={{color: …}}>` |
@@ -180,6 +180,10 @@ Karten: `.panel` / `.card` / `.section-card` (Innenabstand kommt aus der Klasse,
 **Tabellen**: immer `DataTable` (+ `DataToolbar` für Titel/Aktionen). Zellen-Padding, Zeilenhöhe und Trennlinien kommen aus `.data-table`, nie pro Zelle überschreiben. Sortierbare Spalten über `columns[].sortable/onSort`. Zeilenaktionen: bis zu 2 direkt als Button (`button-danger` für Löschen, sonst `button-secondary`/`button-icon-soft`), mehr als 2 im `ActionMenu`. Leerer Zustand über `emptyMessage`.
 
 **Modals**: `Modal` mit `title`; Inhalt als Formular (oben) und `modal-actions` (unten). Kein zweites Modal im Modal: dafür `useConfirm`.
+
+Der Schliessen-Button oben rechts ist immer der Icon-Button (`✕`, `button-icon`, `aria-label="Schliessen"`) aus `Modal` selbst — nie ein Text-Button "Schliessen" nachbauen, auch nicht in `headerActions`.
+
+**Reine Auswahl-Popups** (Checkbox-/Radio-Liste zum An-/Abwählen, z. B. "Teilnehmer wählen"): jeder Klick speichert sofort (wie ein Formularfeld), kein "Auswahl übernehmen"/"Übernehmen"-Button unten. Schliessen (Icon-Button oder Escape/Backdrop) ist die einzige Aktion, die das Popup verlässt — nichts geht dabei verloren, weil schon gespeichert ist. Vorbild: `CheckboxCandidateModal`. Das gilt nicht für Formulare, die mehrere Felder gemeinsam anlegen/senden (z. B. "Termin anlegen") — die behalten `modal-actions` mit Abbrechen/Speichern, weil ein Klick dort keinen sinnvollen Einzel-Speicherpunkt hat.
 
 ## 9. Dark Mode, Fokus, Barrierefreiheit
 

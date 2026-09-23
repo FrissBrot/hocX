@@ -57,8 +57,10 @@ export function Modal({ open, title, description, children, onClose, size = "def
           <div className="modal-header-actions">
             {headerActions}
             {!hideCloseButton ? (
-              <button type="button" className="button-ghost modal-close" onClick={onClose}>
-                Schliessen
+              <button type="button" className="button-icon modal-close" onClick={onClose} aria-label="Schliessen">
+                <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="16" height="16">
+                  <path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                </svg>
               </button>
             ) : null}
           </div>
