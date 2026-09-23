@@ -54,6 +54,7 @@ import {
 } from "@/components/protocol/protocol-editor-shared";
 import { CollaborationStatusPanel } from "@/components/protocol/collaboration-status-panel";
 import { FocusedElementEditor } from "@/components/protocol/focused-element-editor";
+import { ProtocolSearchModal } from "@/components/protocol/protocol-search";
 
 type ProtocolEditorProps = {
   protocol: ProtocolSummary;
@@ -98,6 +99,7 @@ export function ProtocolEditor({
   const [lists, setLists] = useState(availableLists);
   const [eventContextMenu, setEventContextMenu] = useState<{ x: number; y: number; eventRow: EventSummary; blockId: string } | null>(null);
   const eventContextMenuRef = useRef<HTMLDivElement | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   usePopoverDismiss(!!eventContextMenu, () => setEventContextMenu(null), [eventContextMenuRef]);
 
@@ -723,6 +725,14 @@ export function ProtocolEditor({
     function onKeyDown(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
       const inFormField = target && (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) || target.isContentEditable);
+
+      // Ctrl+F → Kapitel-/Volltextsuche öffnen (statt der nativen Browsersuche), auch
+      // während in einem Textfeld getippt wird.
+      if (event.key.toLowerCase() === "f" && (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey) {
+        event.preventDefault();
+        setSearchOpen(true);
+        return;
+      }
 
       // Ctrl+Alt+T → open session panel and focus todo input
       if (event.key === "t" && (event.ctrlKey || event.metaKey) && event.altKey) {
@@ -1562,6 +1572,9 @@ export function ProtocolEditor({
           </Badge>
           <h1 className="protocol-document-title">{protocol.title || protocol.protocol_number}</h1>
           <div className="protocol-document-actions">
+            <button type="button" className="button-ghost protocol-document-search-trigger" onClick={() => setSearchOpen(true)}>
+              Suchen <span className="dropdown-hint">Strg+F</span>
+            </button>
             <button
               type="button"
               className="button-ghost"
@@ -2034,6 +2047,16 @@ export function ProtocolEditor({
         </div>,
         document.body
       )}
+
+      <ProtocolSearchModal
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        onSelect={focusElement}
+        elements={visibleElements}
+        todosByBlock={todosByBlock}
+        textDrafts={textDrafts}
+        protocolNumber={protocol.protocol_number}
+      />
     </div>
   );
 }
