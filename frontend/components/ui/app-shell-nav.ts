@@ -73,7 +73,6 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
         links: [
           { href: "/users", label: "Benutzer", icon: "users" },
           { href: "/tenant-settings", label: "Mandant-Einstellungen", icon: "tenant" },
-          { href: "/storage", label: "Speicher", icon: "storage" },
           { href: "/tools/import", label: "Import", icon: "tools", match: ["/tools"] },
         ],
       }

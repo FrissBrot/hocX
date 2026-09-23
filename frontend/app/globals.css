@@ -12562,6 +12562,232 @@ input[type="radio"] {
   box-shadow: none;
 }
 
+/* ── Mandant-Einstellungen: Abo & Nutzung ── */
+.tenant-usage-plan-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+}
+
+.tenant-usage-plan-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.tenant-usage-plan-name {
+  margin: 0;
+  font-family: "Canela", "Iowan Old Style", "Palatino Linotype", serif;
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.tenant-usage-plan-stats {
+  display: flex;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.tenant-usage-stat-label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.tenant-usage-stat-value {
+  margin-top: var(--space-1);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.tenant-usage-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.tenant-usage-big-number {
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.1;
+}
+
+.tenant-usage-big-number-unit {
+  margin-left: var(--space-2);
+  font-size: var(--text-md);
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.tenant-user-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.tenant-user-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: var(--radius-xs);
+  background: var(--border);
+}
+
+.tenant-user-dot-filled {
+  background: var(--accent);
+}
+
+.tenant-user-avatars {
+  display: flex;
+}
+
+.tenant-user-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: var(--on-solid);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  border: 2px solid var(--panel-solid);
+  margin-left: calc(-1 * var(--space-2));
+}
+
+.tenant-user-avatars .tenant-user-avatar:first-child {
+  margin-left: 0;
+}
+
+.tenant-user-avatar-overflow {
+  background: var(--neutral-bg);
+  color: var(--neutral-fg);
+}
+
+.tenant-usage-link {
+  justify-self: start;
+  margin-top: auto;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: var(--text-sm);
+}
+
+.tenant-usage-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.tenant-storage-legend {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.tenant-storage-legend-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-weight: 600;
+}
+
+.tenant-storage-legend-hint {
+  margin-left: calc(9px + var(--space-2));
+  font-size: var(--text-sm);
+}
+
+.tenant-module-list {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.tenant-module-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+}
+
+.tenant-module-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  color: var(--primary);
+  background: var(--accent-soft);
+}
+
+.tenant-module-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.tenant-module-status {
+  flex-shrink: 0;
+}
+
+.tenant-avatar-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.tenant-avatar-preview {
+  width: 64px;
+  height: 64px;
+  font-size: var(--text-xl);
+}
+
+.tenant-domain-list {
+  gap: var(--space-3);
+}
+
+.tenant-domain-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+}
+
+.tenant-domain-row-host {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 700;
+  font-size: var(--text-md);
+}
+
+.tenant-domain-row-status {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.tenant-domain-row-status-success {
+  color: var(--success-fg);
+}
+
+.tenant-domain-row-status-danger {
+  color: var(--danger-fg);
+}
+
+.tenant-domain-row-trailing {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
 /* ── Listen: sidebar + content split ── */
 .list-manager-layout {
   display: grid;

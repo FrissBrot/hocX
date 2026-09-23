@@ -23,6 +23,7 @@ class TenantRead(BaseModel):
 class TenantSubscriptionFeatureRead(BaseModel):
     code: str
     name: str
+    description: str | None = None
     standalone_price_monthly_rp: int | None = None
     # Teil des aktuellen Plans (kostet nicht zusaetzlich) vs. einzeln zugebucht.
     included_in_plan: bool = False
@@ -45,6 +46,13 @@ class TenantSubscriptionRead(BaseModel):
     user_count: int = 0
     storage_used_bytes: int = 0
     storage_quota_bytes: int | None = None
+    # Aufschluesselung des Kontingents (0087_storage_packages): included_storage_bytes oben ist
+    # bereits der Plan-Anteil, package_storage_bytes die Summe der zugewiesenen Zusatzpakete.
+    # storage_quota_manual_override zeigt an, dass ein Platform-Admin storage_quota_bytes von
+    # Hand gesetzt hat - dann stimmt included_storage_bytes + package_storage_bytes nicht mehr
+    # mit storage_quota_bytes ueberein, das ist kein Fehler.
+    package_storage_bytes: int = 0
+    storage_quota_manual_override: bool = False
     features: list[TenantSubscriptionFeatureRead] = []
     # None, wenn der Plan selbst keinen Preis hat (z.B. 'legacy') und keine zusaetzlichen
     # bepreisten Features gebucht sind - dann gibt es schlicht nichts zu beziffern.

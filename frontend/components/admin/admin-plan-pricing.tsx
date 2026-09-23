@@ -8,11 +8,12 @@ import { Modal } from "@/components/ui/modal";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { formatFileSize, formatRappen } from "@/lib/utils/format";
-import { AdminFeature, AdminFeatureUpdate, AdminPlan, AdminPlanWrite } from "@/types/api";
+import { AdminFeature, AdminFeatureUpdate, AdminPlan, AdminPlanWrite, AdminStoragePackage, AdminStoragePackageWrite } from "@/types/api";
 
 type Props = {
   initialPlans: AdminPlan[];
   initialFeatures: AdminFeature[];
+  initialStoragePackages: AdminStoragePackage[];
 };
 
 type PlanFormState = {
@@ -32,6 +33,38 @@ type FeatureFormState = {
   name: string;
   description: string;
   priceMonthlyChf: string;
+};
+
+type StoragePackageFormState = {
+  code: string;
+  isNew: boolean;
+  name: string;
+  storageMb: string;
+  priceMonthlyChf: string;
+  priceYearlyChf: string;
+  sortOrder: string;
+};
+
+function storagePackageToForm(pkg: AdminStoragePackage): StoragePackageFormState {
+  return {
+    code: pkg.code,
+    isNew: false,
+    name: pkg.name,
+    storageMb: String(Math.round(pkg.bytes / (1024 * 1024))),
+    priceMonthlyChf: rpToChfInput(pkg.price_monthly_rp),
+    priceYearlyChf: rpToChfInput(pkg.price_yearly_rp),
+    sortOrder: String(pkg.sort_order),
+  };
+}
+
+const emptyStoragePackageForm: StoragePackageFormState = {
+  code: "",
+  isNew: true,
+  name: "",
+  storageMb: "",
+  priceMonthlyChf: "",
+  priceYearlyChf: "",
+  sortOrder: "0",
 };
 
 function rpToChfInput(rp: number | null): string {
@@ -80,15 +113,18 @@ function featureToForm(feature: AdminFeature): FeatureFormState {
   };
 }
 
-export function AdminPlanPricing({ initialPlans, initialFeatures }: Props) {
+export function AdminPlanPricing({ initialPlans, initialFeatures, initialStoragePackages }: Props) {
   const showToast = useToast();
   const [plans, setPlans] = useState<AdminPlan[]>(initialPlans);
   const [features, setFeatures] = useState<AdminFeature[]>(initialFeatures);
+  const [storagePackages, setStoragePackages] = useState<AdminStoragePackage[]>(initialStoragePackages);
 
   const [planForm, setPlanForm] = useState<PlanFormState | null>(null);
   const [planBusy, setPlanBusy] = useState(false);
   const [featureForm, setFeatureForm] = useState<FeatureFormState | null>(null);
   const [featureBusy, setFeatureBusy] = useState(false);
+  const [storagePackageForm, setStoragePackageForm] = useState<StoragePackageFormState | null>(null);
+  const [storagePackageBusy, setStoragePackageBusy] = useState(false);
 
   function featureName(code: string): string {
     return features.find((f) => f.code === code)?.name ?? code;
@@ -154,6 +190,40 @@ export function AdminPlanPricing({ initialPlans, initialFeatures }: Props) {
     }
   }
 
+  async function submitStoragePackage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!storagePackageForm) return;
+    const code = storagePackageForm.code.trim();
+    if (!code) {
+      showToast("Code darf nicht leer sein", "error");
+      return;
+    }
+    setStoragePackageBusy(true);
+    try {
+      const payload: AdminStoragePackageWrite = {
+        name: storagePackageForm.name,
+        bytes: Number(storagePackageForm.storageMb) * 1024 * 1024,
+        price_monthly_rp: chfInputToRp(storagePackageForm.priceMonthlyChf),
+        price_yearly_rp: chfInputToRp(storagePackageForm.priceYearlyChf),
+        sort_order: Number(storagePackageForm.sortOrder) || 0,
+      };
+      const updated = await browserApiFetch<AdminStoragePackage>(`/api/admin/storage-packages/${encodeURIComponent(code)}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      setStoragePackages((current) => {
+        const withoutCurrent = current.filter((p) => p.code !== updated.code);
+        return [...withoutCurrent, updated].sort((a, b) => a.sort_order - b.sort_order || a.code.localeCompare(b.code));
+      });
+      setStoragePackageForm(null);
+      showToast("Speicherpaket gespeichert", "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Speicherpaket konnte nicht gespeichert werden", "error");
+    } finally {
+      setStoragePackageBusy(false);
+    }
+  }
+
   function toggleFeatureCode(code: string) {
     setPlanForm((current) => {
       if (!current) return current;
@@ -209,6 +279,33 @@ export function AdminPlanPricing({ initialPlans, initialFeatures }: Props) {
             <td>{formatRappen(feature.standalone_price_monthly_rp)}</td>
             <td>
               <ActionMenu items={[{ label: "Bearbeiten", onClick: () => setFeatureForm(featureToForm(feature)) }]} />
+            </td>
+          </tr>
+        ))}
+      </DataTable>
+
+      <DataToolbar
+        title="Speicherpakete"
+        description="Zusatzpakete, die Mandanten zusätzlich zum Plan-Kontingent zubuchen können."
+        actions={
+          <button type="button" className="button-primary" onClick={() => setStoragePackageForm(emptyStoragePackageForm)}>
+            + Speicherpaket
+          </button>
+        }
+      />
+
+      <DataTable columns={["Paket", "Grösse", "Preis/Monat", "Preis/Jahr", ""]} emptyMessage="Noch keine Speicherpakete angelegt.">
+        {storagePackages.map((pkg) => (
+          <tr key={pkg.code}>
+            <td>
+              <strong>{pkg.name}</strong>
+              <div className="muted">{pkg.code}</div>
+            </td>
+            <td>{formatFileSize(pkg.bytes)}</td>
+            <td>{formatRappen(pkg.price_monthly_rp)}</td>
+            <td>{formatRappen(pkg.price_yearly_rp)}</td>
+            <td>
+              <ActionMenu items={[{ label: "Bearbeiten", onClick: () => setStoragePackageForm(storagePackageToForm(pkg)) }]} />
             </td>
           </tr>
         ))}
@@ -362,6 +459,92 @@ export function AdminPlanPricing({ initialPlans, initialFeatures }: Props) {
               </button>
               <button type="submit" className="button-primary" disabled={featureBusy}>
                 {featureBusy ? "Wird gespeichert…" : "Speichern"}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      <Modal
+        open={storagePackageForm !== null}
+        onClose={() => setStoragePackageForm(null)}
+        title={storagePackageForm?.isNew ? "Speicherpaket anlegen" : `Speicherpaket bearbeiten – ${storagePackageForm?.name ?? ""}`}
+        size="default"
+      >
+        {storagePackageForm && (
+          <form className="grid" onSubmit={submitStoragePackage}>
+            <div className="two-col">
+              <label className="field-stack">
+                <span className="field-label">Code</span>
+                <input
+                  value={storagePackageForm.code}
+                  onChange={(event) =>
+                    setStoragePackageForm((current) => (current ? { ...current, code: event.target.value.toLowerCase() } : current))
+                  }
+                  pattern="[a-z0-9_-]+"
+                  required
+                  disabled={!storagePackageForm.isNew}
+                />
+              </label>
+              <label className="field-stack">
+                <span className="field-label">Name</span>
+                <input
+                  value={storagePackageForm.name}
+                  onChange={(event) => setStoragePackageForm((current) => (current ? { ...current, name: event.target.value } : current))}
+                  required
+                />
+              </label>
+            </div>
+            <label className="field-stack">
+              <span className="field-label">Grösse (MB)</span>
+              <input
+                type="number"
+                min={1}
+                value={storagePackageForm.storageMb}
+                onChange={(event) => setStoragePackageForm((current) => (current ? { ...current, storageMb: event.target.value } : current))}
+                required
+              />
+            </label>
+            <div className="two-col">
+              <label className="field-stack">
+                <span className="field-label">Preis pro Monat (CHF, leer = kein Preis)</span>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.05"
+                  value={storagePackageForm.priceMonthlyChf}
+                  onChange={(event) =>
+                    setStoragePackageForm((current) => (current ? { ...current, priceMonthlyChf: event.target.value } : current))
+                  }
+                />
+              </label>
+              <label className="field-stack">
+                <span className="field-label">Preis pro Jahr (CHF, leer = kein Preis)</span>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.05"
+                  value={storagePackageForm.priceYearlyChf}
+                  onChange={(event) =>
+                    setStoragePackageForm((current) => (current ? { ...current, priceYearlyChf: event.target.value } : current))
+                  }
+                />
+              </label>
+            </div>
+            <label className="field-stack">
+              <span className="field-label">Reihenfolge (kleiner = weiter vorne)</span>
+              <input
+                type="number"
+                value={storagePackageForm.sortOrder}
+                onChange={(event) => setStoragePackageForm((current) => (current ? { ...current, sortOrder: event.target.value } : current))}
+              />
+            </label>
+            <div className="modal-actions">
+              <button type="button" className="button-ghost" onClick={() => setStoragePackageForm(null)}>
+                Abbrechen
+              </button>
+              <button type="submit" className="button-primary" disabled={storagePackageBusy}>
+                {storagePackageBusy ? "Wird gespeichert…" : "Speichern"}
               </button>
             </div>
           </form>

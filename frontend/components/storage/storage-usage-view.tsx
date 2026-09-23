@@ -3,10 +3,6 @@
 import { formatFileSize } from "@/lib/utils/format";
 import { StorageCategoryKey, StorageUsageRead } from "@/types/api";
 
-type Props = {
-  usage: StorageUsageRead | null;
-};
-
 export const CATEGORY_COLORS: Record<StorageCategoryKey, string> = {
   photos: "#db2777",
   files: "#6366f1",
@@ -14,7 +10,7 @@ export const CATEGORY_COLORS: Record<StorageCategoryKey, string> = {
   other: "#9ca3af",
 };
 
-const CATEGORY_HINTS: Record<StorageCategoryKey, string> = {
+export const CATEGORY_HINTS: Record<StorageCategoryKey, string> = {
   photos: "Galerie, Protokoll-Bilder und Abgabebox-Bilder",
   files: "Word-Importe, Abgabebox-Dokumente und weitere Uploads",
   protocols: "Erzeugte PDF-/LaTeX-Exporte",
@@ -24,6 +20,33 @@ const CATEGORY_HINTS: Record<StorageCategoryKey, string> = {
 export function formatPercent(part: number, total: number): string {
   if (total <= 0) return "0%";
   return `${((part / total) * 100).toFixed(part / total >= 0.1 ? 0 : 1)}%`;
+}
+
+/** Wie sich das Speicherkontingent zusammensetzt (Plan-Anteil + Zusatzpakete,
+ * 0087_storage_packages) - eigenständig von der Nutzungs-Aufschlüsselung oben (Fotos/Dateien/…),
+ * weil sie das Kontingent selbst erklärt statt dessen Belegung. Einmal hier definiert, damit
+ * Admin-Tenant-Modal und Mandanten-Abo-Tab dieselbe Aufschlüsselung zeigen. */
+export function StorageQuotaComposition({
+  planStorageBytes,
+  packageStorageBytes,
+  manualOverride,
+}: {
+  planStorageBytes: number | null;
+  packageStorageBytes: number;
+  manualOverride: boolean;
+}) {
+  if (manualOverride) {
+    return <div className="muted">Manuell gesetztes Kontingent (nicht aus Abo/Paketen berechnet)</div>;
+  }
+  if (planStorageBytes === null && packageStorageBytes === 0) {
+    return null;
+  }
+  return (
+    <div className="muted">
+      {formatFileSize(planStorageBytes ?? 0)} aus Abo
+      {packageStorageBytes > 0 ? ` + ${formatFileSize(packageStorageBytes)} aus Zusatzpaketen` : ""}
+    </div>
+  );
 }
 
 /** The usage bar (with a free-space segment once a quota is set) plus its Kategorie/
@@ -93,63 +116,5 @@ export function StorageBreakdown({ total_bytes, quota_bytes, categories }: Stora
         </table>
       </div>
     </>
-  );
-}
-
-export function StorageUsageView({ usage }: Props) {
-  if (!usage) {
-    return (
-      <div className="grid">
-        <div className="page-header">
-          <div>
-            <h1 className="page-title">Speicher</h1>
-            <p className="muted">Speicherverbrauch dieses Mandanten.</p>
-          </div>
-        </div>
-        <div className="card muted">Speicherdaten konnten nicht geladen werden.</div>
-      </div>
-    );
-  }
-
-  const { total_bytes, quota_bytes } = usage;
-  const overQuota = quota_bytes !== null && total_bytes > quota_bytes;
-  const freeBytes = quota_bytes !== null ? Math.max(quota_bytes - total_bytes, 0) : null;
-
-  return (
-    <div className="grid">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Speicher</h1>
-          <p className="muted">Speicherverbrauch dieses Mandanten, aufgeteilt nach Herkunft der Dateien.</p>
-        </div>
-      </div>
-
-      {overQuota ? (
-        <div className="form-error-banner">
-          Das Speicherkontingent ist überschritten ({formatFileSize(total_bytes)} von {formatFileSize(quota_bytes)}
-          {" "}belegt). Bitte nicht mehr benötigte Dateien löschen oder das Kontingent erhöhen lassen.
-        </div>
-      ) : null}
-
-      <div className="grid stats">
-        <div className="stats-card">
-          <div className="stats-card-label">Belegt</div>
-          <div className="stats-card-value">{formatFileSize(total_bytes)}</div>
-        </div>
-        <div className="stats-card">
-          <div className="stats-card-label">Kontingent</div>
-          <div className="stats-card-value">{quota_bytes !== null ? formatFileSize(quota_bytes) : "Kein Limit"}</div>
-        </div>
-        <div className="stats-card">
-          <div className="stats-card-label">Frei</div>
-          <div className="stats-card-value">{freeBytes !== null ? formatFileSize(freeBytes) : "—"}</div>
-          {overQuota ? <div className="stats-card-sub">Kontingent überschritten</div> : null}
-        </div>
-      </div>
-
-      <article className="card grid">
-        <StorageBreakdown {...usage} />
-      </article>
-    </div>
   );
 }

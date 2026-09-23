@@ -1,7 +1,7 @@
 import { test, expect, request as playwrightRequest } from "@playwright/test";
 import { authFiles } from "./auth";
 
-const ALL_DEMO_FEATURES = ["finance", "abgabebox"];
+const ALL_DEMO_FEATURES = ["finance", "abgabebox", "custom_domain"];
 
 // Feature-Gating pro Mandant (Finanzen als Pilot-Feature, seit 0085_plan_pricing auch
 // Abgabebox): orthogonal zur Rollenpruefung (roles-and-tenants.spec.ts). Der Nav-Link
@@ -14,9 +14,11 @@ const ALL_DEMO_FEATURES = ["finance", "abgabebox"];
 // storage-quota.spec.ts fuer dasselbe Muster bei der Speicherkontingent-Zeile).
 test("disabling finance/abgabebox hides the nav links and blocks the routes", async ({ page }) => {
   const writerApi = await playwrightRequest.newContext({ baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: authFiles.writer });
+  const tenantAdminApi = await playwrightRequest.newContext({ baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: authFiles.admin });
   const adminApi = await playwrightRequest.newContext({ baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: authFiles.platformAdmin });
   let tenantId: string | undefined;
   let publicApi: Awaited<ReturnType<typeof playwrightRequest.newContext>> | undefined;
+  let createdDomainId: string | undefined;
   try {
     const session = await (await writerApi.get("/api/auth/session")).json();
     tenantId = session.current_tenant.id as string;
@@ -55,6 +57,12 @@ test("disabling finance/abgabebox hides the nav links and blocks the routes", as
     expect((await writerApi.get("/api/finance/accounts")).status()).toBe(403);
     expect((await writerApi.get("/api/fines")).status()).toBe(403);
     expect((await writerApi.get("/api/submission-assignments")).status()).toBe(403);
+    // Self-Service-Domain-Einrichtung (tenant_service.py::create_domain) ist seit
+    // 0086_custom_domain_enforcement ebenfalls per require_feature gegated - vorher konnte
+    // jeder Mandanten-Admin unabhaengig vom gebuchten Plan eine eigene Domain anlegen.
+    expect(
+      (await tenantAdminApi.post(`/api/tenants/${tenantId}/domains`, { data: { purpose: "app", domain: "e2e-custom-domain-gating.example.com" } })).status(),
+    ).toBe(403);
 
     // Der Link-Token bleibt gueltig, aber der externe Teilnehmer soll "nicht verfuegbar" statt
     // eines rohen 404 sehen (siehe FEATURE_DISABLED in abgabebox-backend/app/routes/public.py).
@@ -80,7 +88,18 @@ test("disabling finance/abgabebox hides the nav links and blocks the routes", as
     expect((await writerApi.get("/api/fines")).status()).toBe(200);
     expect((await writerApi.get("/api/submission-assignments")).status()).toBe(200);
     expect((await publicApi.get(`/api/public/${linkToken}/assignments`)).status()).toBe(200);
+
+    const createDomain = await tenantAdminApi.post(`/api/tenants/${tenantId}/domains`, {
+      data: { purpose: "app", domain: "e2e-custom-domain-gating.example.com" },
+    });
+    expect(createDomain.ok(), await createDomain.text()).toBeTruthy();
+    createdDomainId = (await createDomain.json()).id as string;
   } finally {
+    // Die im Test angelegte Domain wieder entfernen, sonst haengt sie am geteilten
+    // Demo-Mandanten und stoert eine spaetere Domain-Wizard-Zuweisung fuer denselben Zweck.
+    if (tenantId && createdDomainId) {
+      await tenantAdminApi.delete(`/api/tenants/${tenantId}/domains/${createdDomainId}`).catch(() => {});
+    }
     await publicApi?.dispose().catch(() => {});
     // Immer mit allen Demo-Features zurücklassen - sonst brechen andere e2e-Specs, die auf
     // dem geteilten Demo-Mandanten Finanzen/Bussen/Abgabebox ansprechen.
@@ -88,6 +107,7 @@ test("disabling finance/abgabebox hides the nav links and blocks the routes", as
       await adminApi.put(`/api/admin/tenants/${tenantId}/features`, { data: { enabled_codes: ALL_DEMO_FEATURES } }).catch(() => {});
     }
     await writerApi.dispose();
+    await tenantAdminApi.dispose();
     await adminApi.dispose();
   }
 });

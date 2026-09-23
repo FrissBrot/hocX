@@ -1,10 +1,10 @@
-import { TenantGeneralSettings } from "@/components/settings/tenant-general-settings";
+import { TenantDomainsManager } from "@/components/settings/tenant-domains-manager";
 import { AppShell } from "@/components/ui/app-shell";
 import { RouteTabs } from "@/components/ui/route-tabs";
 import { TENANT_SETTINGS_TABS } from "@/components/ui/section-tabs";
 import { requireSession, resolveManageableTenant } from "@/lib/api/server";
 
-export default async function TenantSettingsPage({ searchParams }: { searchParams: Promise<{ tenantId?: string }> }) {
+export default async function TenantDomainsPage({ searchParams }: { searchParams: Promise<{ tenantId?: string }> }) {
   const { tenantId } = await searchParams;
   const session = await requireSession();
   const tenant = await resolveManageableTenant(session, tenantId);
@@ -19,8 +19,8 @@ export default async function TenantSettingsPage({ searchParams }: { searchParam
               <p className="muted">Stammdaten, Domains und Abo für {tenant.name}.</p>
             </div>
           </div>
-          <RouteTabs tabs={TENANT_SETTINGS_TABS} activeHref="/tenant-settings" variant="pill" />
-          <TenantGeneralSettings initialTenant={tenant} />
+          <RouteTabs tabs={TENANT_SETTINGS_TABS} activeHref="/tenant-settings/domains" variant="pill" />
+          <TenantDomainsManager initialTenant={tenant} />
         </div>
       </section>
     </AppShell>

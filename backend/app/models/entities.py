@@ -73,6 +73,11 @@ class Tenant(Base, TimestampMixin):
     # Ueberschreibt plan.included_user_limit, wenn gesetzt (analog zu storage_quota_bytes als
     # Override-Mechanismus). NULL = das Limit des Plans gilt.
     user_limit_override: Mapped[int | None] = mapped_column(Integer)
+    # True, sobald ein Admin storage_quota_bytes manuell ueber PATCH .../storage-quota gesetzt
+    # hat (0087_storage_packages) - AdminTenantService.recompute_effective_storage_quota()
+    # ueberspringt den Mandanten dann, statt den manuellen Sonderwert (z.B. eine individuelle
+    # Enterprise-Grenze) bei jedem Plan-/Paketwechsel wieder zu ueberschreiben.
+    storage_quota_manual_override: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
 
 
 class PlatformOidcConfig(Base, TimestampMixin, UpdatedAtMixin):
@@ -172,6 +177,39 @@ class TenantFeature(Base, TimestampMixin):
     feature_code: Mapped[str] = mapped_column(Text, ForeignKey("feature.code", ondelete="CASCADE"), nullable=False)
     enabled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
     enabled_by_admin_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("platform_admin.id", ondelete="SET NULL"))
+
+
+class StoragePackage(Base):
+    """Zusatzpaket-Katalogeintrag (0087_storage_packages), analog zu Plan: ein fester Preis fuer
+    ein festes Bytes-Kontingent, das ein Mandant zusaetzlich zum Plan zubuchen kann."""
+
+    __tablename__ = "storage_package"
+
+    code: Mapped[str] = mapped_column(Text, primary_key=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    price_monthly_rp: Mapped[int | None] = mapped_column(Integer)
+    price_yearly_rp: Mapped[int | None] = mapped_column(Integer)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+
+
+class TenantStoragePackage(Base):
+    """Zuweisung eines Zusatzpakets an einen Mandanten inkl. Menge - geht in
+    AdminTenantService.recompute_effective_storage_quota() ein, das Tenant.storage_quota_bytes
+    neu berechnet (Plan-Kontingent + Summe dieser Zeilen), ausser
+    Tenant.storage_quota_manual_override ist gesetzt."""
+
+    __tablename__ = "tenant_storage_package"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "package_code", name="uq_tenant_storage_package_tenant_code"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    package_code: Mapped[str] = mapped_column(Text, ForeignKey("storage_package.code", ondelete="CASCADE"), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
+    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    added_by_admin_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("platform_admin.id", ondelete="SET NULL"))
 
 
 class Role(Base):

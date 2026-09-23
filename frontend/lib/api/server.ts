@@ -2,7 +2,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { backendFetch } from "@/lib/api/client";
-import { SessionInfo } from "@/types/api";
+import { SessionInfo, TenantSummary } from "@/types/api";
 
 export async function cookieHeader(): Promise<string> {
   const cookieStore = await cookies();
@@ -44,4 +44,17 @@ export async function requireSession(): Promise<SessionInfo> {
     redirect("/login");
   }
   return session;
+}
+
+// Shared by the /tenant-settings/* pages (Allgemein, Domains, Abo & Nutzung each get their own
+// route): resolves which tenant to show from an optional `?tenantId=` override, falling back to
+// the session's current tenant. `/api/tenants` is already scoped to tenants the current user
+// administers.
+export async function resolveManageableTenant(session: SessionInfo, tenantId: string | undefined): Promise<TenantSummary> {
+  const manageableTenants = await backendFetchWithSession<TenantSummary[]>("/api/tenants");
+  if (!manageableTenants || manageableTenants.length === 0) {
+    redirect("/");
+  }
+  const requestedId = tenantId ? tenantId : session.current_tenant?.id;
+  return manageableTenants.find((t) => t.id === requestedId) ?? manageableTenants[0];
 }

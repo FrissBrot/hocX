@@ -225,10 +225,11 @@ def make_current_user(
     that need a public_id to line up with a real row already fetch it themselves from the
     ORM object made via make_tenant/make_app_user.
 
-    features defaults to {"finance", "abgabebox"} rather than empty - every existing tenant is
-    backfilled with both (see migrations 0084_tenant_feature/0085_plan_pricing), so this default
-    keeps every pre-existing role/permission test green without needing to know about
-    feature-gating. Tests for feature-gating itself pass an explicit `features` set."""
+    features defaults to {"finance", "abgabebox", "custom_domain"} rather than empty - every
+    existing tenant is backfilled with all three (see migrations
+    0084_tenant_feature/0085_plan_pricing/0086_custom_domain_enforcement), so this default keeps
+    every pre-existing role/permission test green without needing to know about feature-gating.
+    Tests for feature-gating itself pass an explicit `features` set."""
     return CurrentUser(
         user_id=user_id,
         user_public_id=uuid.uuid4(),
@@ -243,7 +244,7 @@ def make_current_user(
         current_tenant_name="Test Tenant",
         current_tenant_profile_image_path=None,
         current_role=role,
-        current_tenant_features=features if features is not None else frozenset({"finance", "abgabebox"}),
+        current_tenant_features=features if features is not None else frozenset({"finance", "abgabebox", "custom_domain"}),
     )
 
 

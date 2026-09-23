@@ -62,6 +62,14 @@ class AdminTenantCreate(BaseModel):
     name: str
 
 
+class AdminTenantStoragePackageRead(BaseModel):
+    package_code: str
+    name: str
+    bytes: int
+    quantity: int
+    total_bytes: int
+
+
 class AdminTenantRead(BaseModel):
     # Built via explicit keyword construction (AdminTenantService - participant_count/
     # user_count are aggregate query results, not plain ORM attributes).
@@ -83,6 +91,17 @@ class AdminTenantRead(BaseModel):
     # override ?? plan.included_user_limit - None bedeutet "kein Limit". Rein informativ fuers
     # Adminportal (Phase-0-Entscheidung: erst Anzeige/Warnung, keine harte Sperre).
     effective_user_limit: int | None = None
+    # Aufschluesselung des Speicherkontingents (0087_storage_packages): plan_storage_bytes ist
+    # das Plan-Kontingent, package_storage_bytes die Summe der zugewiesenen Zusatzpakete
+    # (bytes * quantity). storage_quota_bytes bleibt der tatsaechlich durchgesetzte Wert -
+    # effective_storage_quota_bytes ist derselbe Wert, hier nur explizit benannt, damit die UI
+    # nicht raten muss, ob "das enforcte Kontingent" gemeint ist. Weichen sie je auseinander,
+    # war das ein Bug in recompute_effective_storage_quota().
+    plan_storage_bytes: int | None = None
+    package_storage_bytes: int = 0
+    effective_storage_quota_bytes: int | None = None
+    storage_quota_manual_override: bool = False
+    assigned_storage_packages: list[AdminTenantStoragePackageRead] = []
 
 
 class AdminTenantStorageQuotaUpdate(BaseModel):
@@ -136,6 +155,35 @@ class AdminPlanWrite(BaseModel):
     included_storage_bytes: int | None = None
     sort_order: int = 0
     feature_codes: list[str] = []
+
+
+class AdminStoragePackageRead(BaseModel):
+    code: str
+    name: str
+    bytes: int
+    price_monthly_rp: int | None = None
+    price_yearly_rp: int | None = None
+    sort_order: int = 0
+
+
+class AdminStoragePackageWrite(BaseModel):
+    # Full-Replace wie bei AdminPlanWrite - der Code (PK) kommt aus dem Pfad.
+    name: str
+    bytes: int
+    price_monthly_rp: int | None = None
+    price_yearly_rp: int | None = None
+    sort_order: int = 0
+
+
+class AdminTenantStoragePackageItem(BaseModel):
+    package_code: str
+    quantity: int = Field(ge=1, default=1)
+
+
+class AdminTenantStoragePackagesUpdate(BaseModel):
+    # Full-Replace wie bei AdminTenantFeaturesUpdate: die gesamte Paketzuweisung des Mandanten,
+    # kein Teil-Patch.
+    items: list[AdminTenantStoragePackageItem] = []
 
 
 class AdminTenantSubscriptionUpdate(BaseModel):

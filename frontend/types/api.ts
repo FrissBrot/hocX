@@ -91,6 +91,7 @@ export type TenantSummary = {
 export type TenantSubscriptionFeature = {
   code: string;
   name: string;
+  description: string | null;
   standalone_price_monthly_rp: number | null;
   included_in_plan: boolean;
 };
@@ -108,6 +109,8 @@ export type TenantSubscription = {
   user_count: number;
   storage_used_bytes: number;
   storage_quota_bytes: number | null;
+  package_storage_bytes: number;
+  storage_quota_manual_override: boolean;
   features: TenantSubscriptionFeature[];
   estimated_monthly_cost_rp: number | null;
   estimated_yearly_cost_rp: number | null;
@@ -404,6 +407,45 @@ export type AdminTenantSummary = {
   billing_cycle: "monthly" | "yearly";
   user_limit_override: number | null;
   effective_user_limit: number | null;
+  plan_storage_bytes: number | null;
+  package_storage_bytes: number;
+  effective_storage_quota_bytes: number | null;
+  storage_quota_manual_override: boolean;
+  assigned_storage_packages: AdminTenantStoragePackage[];
+};
+
+export type AdminTenantStoragePackage = {
+  package_code: string;
+  name: string;
+  bytes: number;
+  quantity: number;
+  total_bytes: number;
+};
+
+export type AdminStoragePackage = {
+  code: string;
+  name: string;
+  bytes: number;
+  price_monthly_rp: number | null;
+  price_yearly_rp: number | null;
+  sort_order: number;
+};
+
+export type AdminStoragePackageWrite = {
+  name: string;
+  bytes: number;
+  price_monthly_rp: number | null;
+  price_yearly_rp: number | null;
+  sort_order: number;
+};
+
+export type AdminTenantStoragePackageItem = {
+  package_code: string;
+  quantity: number;
+};
+
+export type AdminTenantStoragePackagesUpdate = {
+  items: AdminTenantStoragePackageItem[];
 };
 
 export type AdminFeature = {

@@ -7,12 +7,20 @@ const { fetchMock, editorMock, settingsMock } = vi.hoisted(() => ({
 vi.mock("@/lib/api/server", () => ({
   backendFetchWithSession: fetchMock,
   requireSession: async () => ({ current_role: "admin", current_tenant: { id: "first-tenant" } }),
+  // Mirrors the real resolveManageableTenant (lib/api/server.ts) closely enough for this test:
+  // picks the requested tenant by id out of the (mocked) manageable-tenants list, falling back
+  // to the first one.
+  resolveManageableTenant: async (session: { current_tenant?: { id: string } | null }, tenantId?: string) => {
+    const manageableTenants = await fetchMock("/api/tenants");
+    const requestedId = tenantId ? tenantId : session.current_tenant?.id;
+    return manageableTenants.find((t: { id: string }) => t.id === requestedId) ?? manageableTenants[0];
+  },
 }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("@/components/ui/app-shell", () => ({ AppShell: ({ children }: any) => children }));
 vi.mock("@/components/protocol/protocol-editor", () => ({ ProtocolEditor: editorMock }));
 vi.mock("@/components/protocol/protocol-builder", () => ({ ProtocolOverview: () => null }));
-vi.mock("@/components/settings/tenant-settings-manager", () => ({ TenantSettingsManager: settingsMock }));
+vi.mock("@/components/settings/tenant-general-settings", () => ({ TenantGeneralSettings: settingsMock }));
 
 import ProtocolDetailPage from "./protocols/[id]/page";
 import TenantSettingsPage from "./tenant-settings/page";

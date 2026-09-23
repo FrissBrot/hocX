@@ -16,6 +16,7 @@ from app.models import (
     Plan,
     PlanFeature,
     Protocol,
+    StoragePackage,
     StoredFile,
     SubmissionAssignment,
     SubmissionUpload,
@@ -23,6 +24,7 @@ from app.models import (
     Template,
     Tenant,
     TenantFeature,
+    TenantStoragePackage,
     WordImportDocument,
 )
 from app.schemas.admin import (
@@ -30,9 +32,13 @@ from app.schemas.admin import (
     AdminFeatureUpdate,
     AdminPlanRead,
     AdminPlanWrite,
+    AdminStoragePackageRead,
+    AdminStoragePackageWrite,
     AdminTenantCreate,
     AdminTenantPage,
     AdminTenantRead,
+    AdminTenantStoragePackageItem,
+    AdminTenantStoragePackageRead,
     AdminTenantSubscriptionUpdate,
 )
 from app.schemas.user import TenantUpdate
@@ -64,6 +70,7 @@ class AdminTenantService:
         storage_used_bytes: int | None = None,
         enabled_features: list[str] | None = None,
         plans_by_code: dict[str, Plan] | None = None,
+        assigned_storage_packages: list[AdminTenantStoragePackageRead] | None = None,
     ) -> AdminTenantRead:
         participant_count = int(
             db.scalar(select(func.count(Participant.id)).where(Participant.tenant_id == tenant.id)) or 0
@@ -79,12 +86,15 @@ class AdminTenantService:
             enabled_features = sorted(
                 db.scalars(select(TenantFeature.feature_code).where(TenantFeature.tenant_id == tenant.id))
             )
+        if assigned_storage_packages is None:
+            assigned_storage_packages = self._assigned_storage_packages(db, tenant.id)
         plan: Plan | None = None
         if tenant.plan_code is not None:
             plan = plans_by_code.get(tenant.plan_code) if plans_by_code is not None else db.get(Plan, tenant.plan_code)
         effective_user_limit = tenant.user_limit_override if tenant.user_limit_override is not None else (
             plan.included_user_limit if plan is not None else None
         )
+        package_storage_bytes = sum(p.total_bytes for p in assigned_storage_packages)
         return AdminTenantRead(
             id=tenant.public_id,
             name=tenant.name,
@@ -102,7 +112,24 @@ class AdminTenantService:
             billing_cycle=tenant.billing_cycle,
             user_limit_override=tenant.user_limit_override,
             effective_user_limit=effective_user_limit,
+            plan_storage_bytes=plan.included_storage_bytes if plan is not None else None,
+            package_storage_bytes=package_storage_bytes,
+            effective_storage_quota_bytes=tenant.storage_quota_bytes,
+            storage_quota_manual_override=tenant.storage_quota_manual_override,
+            assigned_storage_packages=assigned_storage_packages,
         )
+
+    def _assigned_storage_packages(self, db: Session, tenant_id: int) -> list[AdminTenantStoragePackageRead]:
+        rows = db.execute(
+            select(TenantStoragePackage.package_code, TenantStoragePackage.quantity, StoragePackage.name, StoragePackage.bytes)
+            .join(StoragePackage, StoragePackage.code == TenantStoragePackage.package_code)
+            .where(TenantStoragePackage.tenant_id == tenant_id)
+            .order_by(StoragePackage.sort_order.asc(), StoragePackage.code.asc())
+        ).all()
+        return [
+            AdminTenantStoragePackageRead(package_code=code, name=name, bytes=pkg_bytes, quantity=quantity, total_bytes=pkg_bytes * quantity)
+            for code, quantity, name, pkg_bytes in rows
+        ]
 
     def list_tenants(self, db: Session, *, limit: int | None = None, offset: int = 0, q: str | None = None) -> AdminTenantPage:
         query = db.query(Tenant).order_by(Tenant.name.asc())
@@ -116,13 +143,30 @@ class AdminTenantService:
         if limit is not None:
             query = query.limit(limit)
         tenants = query.all()
-        # One query for every tenant's storage total / booked features / plan instead of N+1 -
-        # list_tenants can return up to 500 rows (see the route's `le=500` cap).
+        # One query for every tenant's storage total / booked features / plan / storage
+        # packages instead of N+1 - list_tenants can return up to 500 rows (see the route's
+        # `le=500` cap).
         storage_totals = self.storage_service.total_bytes_by_tenant(db)
         features_by_tenant: dict[int, list[str]] = {}
         for tenant_id, feature_code in db.execute(select(TenantFeature.tenant_id, TenantFeature.feature_code)).all():
             features_by_tenant.setdefault(tenant_id, []).append(feature_code)
         plans_by_code = {plan.code: plan for plan in db.query(Plan).all()}
+        packages_by_tenant: dict[int, list[AdminTenantStoragePackageRead]] = {}
+        package_rows = db.execute(
+            select(
+                TenantStoragePackage.tenant_id,
+                TenantStoragePackage.package_code,
+                TenantStoragePackage.quantity,
+                StoragePackage.name,
+                StoragePackage.bytes,
+            )
+            .join(StoragePackage, StoragePackage.code == TenantStoragePackage.package_code)
+            .order_by(StoragePackage.sort_order.asc(), StoragePackage.code.asc())
+        ).all()
+        for tenant_id, package_code, quantity, name, pkg_bytes in package_rows:
+            packages_by_tenant.setdefault(tenant_id, []).append(
+                AdminTenantStoragePackageRead(package_code=package_code, name=name, bytes=pkg_bytes, quantity=quantity, total_bytes=pkg_bytes * quantity)
+            )
         return AdminTenantPage(
             items=[
                 self._read_model(
@@ -131,6 +175,7 @@ class AdminTenantService:
                     storage_used_bytes=storage_totals.get(tenant.id, 0),
                     enabled_features=sorted(features_by_tenant.get(tenant.id, [])),
                     plans_by_code=plans_by_code,
+                    assigned_storage_packages=packages_by_tenant.get(tenant.id, []),
                 )
                 for tenant in tenants
             ],
@@ -231,6 +276,91 @@ class AdminTenantService:
             for feature_code in plan_feature_codes - already_booked:
                 db.add(TenantFeature(tenant_id=tenant_id, feature_code=feature_code, enabled_by_admin_id=admin_id))
         db.commit()
+        self.recompute_effective_storage_quota(db, tenant_id)
+        return self._read_model(db, tenant)
+
+    def recompute_effective_storage_quota(self, db: Session, tenant_id: int) -> None:
+        """effective = plan.included_storage_bytes + sum(package.bytes * quantity) - called
+        after a plan change or a storage-package assignment change (0087_storage_packages).
+        Skipped when storage_quota_manual_override is set, so an admin's individually set
+        quota (e.g. a bespoke enterprise limit) survives the next plan/package change instead
+        of being silently overwritten.
+
+        If the plan has no storage limit (included_storage_bytes is NULL, e.g. the 'legacy'
+        plan) and no packages are assigned, the quota is left at NULL (unlimited) rather than
+        0 - upload_pipeline.py's _enforce_tenant_storage_quota treats NULL as "no limit" and 0
+        as "no uploads allowed at all", and naively defaulting a NULL plan limit to 0 would
+        silently lock out every tenant on a plan without a storage cap."""
+        tenant = db.get(Tenant, tenant_id)
+        if tenant is None or tenant.storage_quota_manual_override:
+            return
+        plan = db.get(Plan, tenant.plan_code) if tenant.plan_code is not None else None
+        plan_bytes = plan.included_storage_bytes if plan is not None else None
+        package_bytes = int(
+            db.scalar(
+                select(func.coalesce(func.sum(StoragePackage.bytes * TenantStoragePackage.quantity), 0))
+                .select_from(TenantStoragePackage)
+                .join(StoragePackage, StoragePackage.code == TenantStoragePackage.package_code)
+                .where(TenantStoragePackage.tenant_id == tenant_id)
+            )
+            or 0
+        )
+        tenant.storage_quota_bytes = None if plan_bytes is None and package_bytes == 0 else (plan_bytes or 0) + package_bytes
+        db.add(tenant)
+        db.commit()
+
+    def list_storage_packages(self, db: Session) -> list[AdminStoragePackageRead]:
+        packages = db.query(StoragePackage).order_by(StoragePackage.sort_order.asc(), StoragePackage.code.asc()).all()
+        return [self._storage_package_read_model(package) for package in packages]
+
+    def _storage_package_read_model(self, package: StoragePackage) -> AdminStoragePackageRead:
+        return AdminStoragePackageRead(
+            code=package.code,
+            name=package.name,
+            bytes=package.bytes,
+            price_monthly_rp=package.price_monthly_rp,
+            price_yearly_rp=package.price_yearly_rp,
+            sort_order=package.sort_order,
+        )
+
+    def upsert_storage_package(self, db: Session, code: str, payload: AdminStoragePackageWrite) -> AdminStoragePackageRead:
+        package = db.get(StoragePackage, code)
+        if package is None:
+            package = StoragePackage(code=code)
+        package.name = payload.name
+        package.bytes = payload.bytes
+        package.price_monthly_rp = payload.price_monthly_rp
+        package.price_yearly_rp = payload.price_yearly_rp
+        package.sort_order = payload.sort_order
+        db.add(package)
+        db.commit()
+        return self._storage_package_read_model(package)
+
+    def update_tenant_storage_packages(
+        self, db: Session, tenant_id: int, items: list[AdminTenantStoragePackageItem], *, admin_id: int
+    ) -> AdminTenantRead | None:
+        tenant = db.get(Tenant, tenant_id)
+        if tenant is None:
+            return None
+        wanted = {item.package_code: item.quantity for item in items}
+        current = {
+            row.package_code: row
+            for row in db.query(TenantStoragePackage).filter(TenantStoragePackage.tenant_id == tenant_id).all()
+        }
+        for package_code, row in current.items():
+            if package_code not in wanted:
+                db.delete(row)
+            elif row.quantity != wanted[package_code]:
+                row.quantity = wanted[package_code]
+                db.add(row)
+        for package_code in wanted.keys() - current.keys():
+            db.add(
+                TenantStoragePackage(
+                    tenant_id=tenant_id, package_code=package_code, quantity=wanted[package_code], added_by_admin_id=admin_id
+                )
+            )
+        db.commit()
+        self.recompute_effective_storage_quota(db, tenant_id)
         return self._read_model(db, tenant)
 
     def update_tenant_features(

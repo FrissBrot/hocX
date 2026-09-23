@@ -13,8 +13,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.security import CurrentUser, require_admin
-from app.models import AppUser, Feature, Plan, PlanFeature, Tenant, TenantDomain
+from app.core.security import CurrentUser, require_admin, require_feature
+from app.models import AppUser, Feature, Plan, PlanFeature, StoragePackage, Tenant, TenantDomain, TenantStoragePackage
 from app.schemas.user import (
     TenantDomainCreate,
     TenantDomainRead,
@@ -102,6 +102,7 @@ class TenantService:
             TenantSubscriptionFeatureRead(
                 code=code,
                 name=catalog[code].name if code in catalog else code,
+                description=catalog[code].description if code in catalog else None,
                 standalone_price_monthly_rp=catalog[code].standalone_price_monthly_rp if code in catalog else None,
                 included_in_plan=code in plan_feature_codes,
             )
@@ -124,6 +125,15 @@ class TenantService:
             plan.included_user_limit if plan is not None else None
         )
         storage_used_bytes = self.storage_service.breakdown_for_tenant(db, tenant_id).total_bytes
+        package_storage_bytes = int(
+            db.scalar(
+                select(func.coalesce(func.sum(StoragePackage.bytes * TenantStoragePackage.quantity), 0))
+                .select_from(TenantStoragePackage)
+                .join(StoragePackage, StoragePackage.code == TenantStoragePackage.package_code)
+                .where(TenantStoragePackage.tenant_id == tenant_id)
+            )
+            or 0
+        )
 
         return TenantSubscriptionRead(
             plan_code=tenant.plan_code,
@@ -138,6 +148,8 @@ class TenantService:
             user_count=user_count,
             storage_used_bytes=storage_used_bytes,
             storage_quota_bytes=tenant.storage_quota_bytes,
+            package_storage_bytes=package_storage_bytes,
+            storage_quota_manual_override=tenant.storage_quota_manual_override,
             features=features,
             estimated_monthly_cost_rp=estimated_monthly_cost_rp,
             estimated_yearly_cost_rp=estimated_yearly_cost_rp,
@@ -199,6 +211,7 @@ class TenantService:
         self, db: Session, tenant_id: int, actor: CurrentUser, payload: TenantDomainCreate
     ) -> TenantDomainRead:
         self._require_manageable(tenant_id, actor)
+        require_feature(actor, "custom_domain")
 
         domain = domain_verification_service.normalize_domain(payload.domain)
         if not domain_verification_service.is_valid_domain_format(domain):

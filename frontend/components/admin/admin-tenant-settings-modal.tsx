@@ -9,11 +9,13 @@ import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
 import { formatFileSize } from "@/lib/utils/format";
-import { StorageBreakdown } from "@/components/storage/storage-usage-view";
+import { StorageBreakdown, StorageQuotaComposition } from "@/components/storage/storage-usage-view";
 import { formatRappen } from "@/lib/utils/format";
 import {
   AdminFeature,
   AdminPlan,
+  AdminStoragePackage,
+  AdminTenantStoragePackageItem,
   AdminTenantSubscriptionUpdate,
   AdminTenantSummary,
   AdminTenantUser,
@@ -116,6 +118,10 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
   });
   const [subscriptionBusy, setSubscriptionBusy] = useState(false);
 
+  const [storagePackageCatalog, setStoragePackageCatalog] = useState<AdminStoragePackage[]>([]);
+  const [packageQuantities, setPackageQuantities] = useState<Record<string, string>>({});
+  const [packagesBusy, setPackagesBusy] = useState(false);
+
   useEffect(() => {
     if (!open || !tenant) {
       return;
@@ -146,7 +152,45 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
       user_limit_override: tenant.user_limit_override,
     });
     void loadPlanCatalog();
+
+    setPackageQuantities(
+      Object.fromEntries(tenant.assigned_storage_packages.map((p) => [p.package_code, String(p.quantity)]))
+    );
+    void loadStoragePackageCatalog();
   }, [open, tenant]);
+
+  async function loadStoragePackageCatalog() {
+    try {
+      const result = await browserApiFetch<AdminStoragePackage[]>("/api/admin/storage-packages");
+      setStoragePackageCatalog(result);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Speicherpaket-Katalog konnte nicht geladen werden", "error");
+    }
+  }
+
+  async function submitStoragePackages(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!tenant) return;
+    setPackagesBusy(true);
+    try {
+      const items: AdminTenantStoragePackageItem[] = Object.entries(packageQuantities)
+        .map(([package_code, quantity]) => ({ package_code, quantity: Number(quantity) }))
+        .filter((item) => Number.isFinite(item.quantity) && item.quantity > 0);
+      const updated = await browserApiFetch<AdminTenantSummary>(`/api/admin/tenants/${tenant.id}/storage-packages`, {
+        method: "PUT",
+        body: JSON.stringify({ items }),
+      });
+      onSaved(updated);
+      setPackageQuantities(
+        Object.fromEntries(updated.assigned_storage_packages.map((p) => [p.package_code, String(p.quantity)]))
+      );
+      showToast("Speicherpakete gespeichert", "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Speicherpakete konnten nicht gespeichert werden", "error");
+    } finally {
+      setPackagesBusy(false);
+    }
+  }
 
   async function loadFeatureCatalog() {
     try {
@@ -560,113 +604,151 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
             )
           },
           {
-            id: "speicher",
-            label: "Speicher",
+            id: "abo-speicher",
+            label: "Abo & Speicher",
             content: (
-              <div className="grid">
-                {storageUsage ? (
-                  <>
-                    {/* Shared with the tenant-facing Speicher page (audit fix,
-                        2026-09-17) - this used to hand-roll its own bar/table with a
-                        divergent quota denominator and no free-space segment. */}
-                    <StorageBreakdown {...storageUsage} />
-                    <div className="muted">Gesamt belegt: {formatFileSize(storageUsage.total_bytes)}</div>
-                  </>
-                ) : (
-                  <div className="muted">{storageLoading ? "Wird geladen…" : "Keine Daten verfügbar."}</div>
-                )}
-
-                <form className="grid" onSubmit={submitQuota}>
+              <div className="section-stack">
+                <form className="grid" onSubmit={submitSubscription}>
+                  <div className="two-col">
+                    <label className="field-stack">
+                      <span className="field-label">Plan</span>
+                      <select
+                        value={subscriptionForm.plan_code ?? ""}
+                        onChange={(event) =>
+                          setSubscriptionForm((current) => ({ ...current, plan_code: event.target.value || null }))
+                        }
+                      >
+                        <option value="">Kein Plan</option>
+                        {planCatalog.map((plan) => (
+                          <option key={plan.code} value={plan.code}>
+                            {plan.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="field-stack">
+                      <span className="field-label">Abrechnung</span>
+                      <select
+                        value={subscriptionForm.billing_cycle}
+                        onChange={(event) =>
+                          setSubscriptionForm((current) => ({ ...current, billing_cycle: event.target.value as "monthly" | "yearly" }))
+                        }
+                      >
+                        <option value="monthly">Monatlich</option>
+                        <option value="yearly">Jährlich</option>
+                      </select>
+                    </label>
+                  </div>
+                  {subscriptionForm.plan_code ? (
+                    <p className="muted">
+                      {formatRappen(
+                        subscriptionForm.billing_cycle === "monthly"
+                          ? planCatalog.find((p) => p.code === subscriptionForm.plan_code)?.price_monthly_rp ?? null
+                          : planCatalog.find((p) => p.code === subscriptionForm.plan_code)?.price_yearly_rp ?? null
+                      )}{" "}
+                      · Nutzerlimit: {planCatalog.find((p) => p.code === subscriptionForm.plan_code)?.included_user_limit ?? "Kein Limit"}
+                      {" · Speicher: "}
+                      {planCatalog.find((p) => p.code === subscriptionForm.plan_code)?.included_storage_bytes != null
+                        ? formatFileSize(planCatalog.find((p) => p.code === subscriptionForm.plan_code)!.included_storage_bytes!)
+                        : "Kein Limit"}
+                    </p>
+                  ) : null}
                   <label className="field-stack">
-                    <span className="field-label">Speicherkontingent (MB, leer = kein Limit)</span>
+                    <span className="field-label">Nutzerlimit überschreiben (leer = Plan-Limit gilt)</span>
                     <input
                       type="number"
                       min={1}
-                      value={quotaMbInput}
-                      onChange={(event) => setQuotaMbInput(event.target.value)}
-                      placeholder="z.B. 5120"
+                      value={subscriptionForm.user_limit_override ?? ""}
+                      onChange={(event) =>
+                        setSubscriptionForm((current) => ({
+                          ...current,
+                          user_limit_override: event.target.value.trim() === "" ? null : Number(event.target.value),
+                        }))
+                      }
                     />
                   </label>
+                  <p className="muted">
+                    Aktuell {tenant.user_count} Nutzer, effektives Limit: {tenant.effective_user_limit ?? "Kein Limit"}.
+                    {tenant.effective_user_limit !== null && tenant.user_count >= tenant.effective_user_limit
+                      ? " Limit erreicht oder überschritten."
+                      : ""}
+                  </p>
                   <div className="table-actions table-actions-start">
-                    <button type="submit" className="button-secondary" disabled={quotaBusy}>
-                      {quotaBusy ? "Wird gespeichert…" : "Kontingent speichern"}
+                    <button type="submit" className="button-secondary" disabled={subscriptionBusy}>
+                      {subscriptionBusy ? "Wird gespeichert…" : "Abo speichern"}
                     </button>
                   </div>
                 </form>
-              </div>
-            )
-          },
-          {
-            id: "abo",
-            label: "Abo",
-            content: (
-              <form className="grid" onSubmit={submitSubscription}>
-                <div className="two-col">
-                  <label className="field-stack">
-                    <span className="field-label">Plan</span>
-                    <select
-                      value={subscriptionForm.plan_code ?? ""}
-                      onChange={(event) =>
-                        setSubscriptionForm((current) => ({ ...current, plan_code: event.target.value || null }))
-                      }
-                    >
-                      <option value="">Kein Plan</option>
-                      {planCatalog.map((plan) => (
-                        <option key={plan.code} value={plan.code}>
-                          {plan.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="field-stack">
-                    <span className="field-label">Abrechnung</span>
-                    <select
-                      value={subscriptionForm.billing_cycle}
-                      onChange={(event) =>
-                        setSubscriptionForm((current) => ({ ...current, billing_cycle: event.target.value as "monthly" | "yearly" }))
-                      }
-                    >
-                      <option value="monthly">Monatlich</option>
-                      <option value="yearly">Jährlich</option>
-                    </select>
-                  </label>
-                </div>
-                {subscriptionForm.plan_code ? (
-                  <p className="muted">
-                    {formatRappen(
-                      subscriptionForm.billing_cycle === "monthly"
-                        ? planCatalog.find((p) => p.code === subscriptionForm.plan_code)?.price_monthly_rp ?? null
-                        : planCatalog.find((p) => p.code === subscriptionForm.plan_code)?.price_yearly_rp ?? null
-                    )}{" "}
-                    · Nutzerlimit: {planCatalog.find((p) => p.code === subscriptionForm.plan_code)?.included_user_limit ?? "Kein Limit"}
-                  </p>
-                ) : null}
-                <label className="field-stack">
-                  <span className="field-label">Nutzerlimit überschreiben (leer = Plan-Limit gilt)</span>
-                  <input
-                    type="number"
-                    min={1}
-                    value={subscriptionForm.user_limit_override ?? ""}
-                    onChange={(event) =>
-                      setSubscriptionForm((current) => ({
-                        ...current,
-                        user_limit_override: event.target.value.trim() === "" ? null : Number(event.target.value),
-                      }))
-                    }
+
+                <form className="grid" onSubmit={submitStoragePackages}>
+                  <div className="field-stack">
+                    <span className="field-label">Zusatz-Speicherpakete</span>
+                    {storagePackageCatalog.length === 0 ? (
+                      <div className="muted">Keine Speicherpakete im Katalog.</div>
+                    ) : (
+                      storagePackageCatalog.map((pkg) => (
+                        <div key={pkg.code} className="two-col">
+                          <span>
+                            {pkg.name} <span className="muted">({formatFileSize(pkg.bytes)} je Stück)</span>
+                          </span>
+                          <input
+                            type="number"
+                            min={0}
+                            value={packageQuantities[pkg.code] ?? ""}
+                            placeholder="0"
+                            onChange={(event) =>
+                              setPackageQuantities((current) => ({ ...current, [pkg.code]: event.target.value }))
+                            }
+                          />
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div className="table-actions table-actions-start">
+                    <button type="submit" className="button-secondary" disabled={packagesBusy}>
+                      {packagesBusy ? "Wird gespeichert…" : "Speicherpakete speichern"}
+                    </button>
+                  </div>
+                </form>
+
+                <div className="grid">
+                  <div className="eyebrow">Speicher</div>
+                  <StorageQuotaComposition
+                    planStorageBytes={tenant.plan_storage_bytes}
+                    packageStorageBytes={tenant.package_storage_bytes}
+                    manualOverride={tenant.storage_quota_manual_override}
                   />
-                </label>
-                <p className="muted">
-                  Aktuell {tenant.user_count} Nutzer, effektives Limit: {tenant.effective_user_limit ?? "Kein Limit"}.
-                  {tenant.effective_user_limit !== null && tenant.user_count >= tenant.effective_user_limit
-                    ? " Limit erreicht oder überschritten."
-                    : ""}
-                </p>
-                <div className="table-actions table-actions-start">
-                  <button type="submit" className="button-secondary" disabled={subscriptionBusy}>
-                    {subscriptionBusy ? "Wird gespeichert…" : "Abo speichern"}
-                  </button>
+                  {storageUsage ? (
+                    <>
+                      {/* Shared with the tenant-facing Speicher page (audit fix,
+                          2026-09-17) - this used to hand-roll its own bar/table with a
+                          divergent quota denominator and no free-space segment. */}
+                      <StorageBreakdown {...storageUsage} />
+                      <div className="muted">Gesamt belegt: {formatFileSize(storageUsage.total_bytes)}</div>
+                    </>
+                  ) : (
+                    <div className="muted">{storageLoading ? "Wird geladen…" : "Keine Daten verfügbar."}</div>
+                  )}
+
+                  <form className="grid" onSubmit={submitQuota}>
+                    <label className="field-stack">
+                      <span className="field-label">Manuelles Kontingent überschreiben (MB, leer = automatische Berechnung)</span>
+                      <input
+                        type="number"
+                        min={1}
+                        value={quotaMbInput}
+                        onChange={(event) => setQuotaMbInput(event.target.value)}
+                        placeholder="z.B. 5120"
+                      />
+                    </label>
+                    <div className="table-actions table-actions-start">
+                      <button type="submit" className="button-secondary" disabled={quotaBusy}>
+                        {quotaBusy ? "Wird gespeichert…" : "Kontingent speichern"}
+                      </button>
+                    </div>
+                  </form>
                 </div>
-              </form>
+              </div>
             )
           },
           {

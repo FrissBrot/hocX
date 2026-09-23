@@ -13,7 +13,9 @@ from app.core.security import (
     require_finance_read,
     require_finance_write,
 )
-from tests.factories import make_current_user
+from app.schemas.user import TenantDomainCreate
+from app.services.tenant_service import TenantService
+from tests.factories import make_current_user, make_tenant
 
 
 def test_require_feature_allows_booked_feature():
@@ -86,3 +88,28 @@ def test_default_factory_user_has_abgabebox_booked():
     migration 0085's backfill: every pre-existing tenant keeps Abgabebox booked."""
     user = make_current_user(tenant_id=1, role="writer")
     assert require_abgabebox_write(user) is user
+
+
+def test_create_domain_blocked_when_tenant_has_not_booked_custom_domain(db):
+    """create_domain (tenant_service.py) was Self-Service for any tenant admin, gated only by
+    _require_manageable() - not by plan. 0086_custom_domain_enforcement closes that gap the same
+    way 0085 did for Abgabebox."""
+    tenant = make_tenant(db)
+    actor = make_current_user(tenant_id=tenant.id, role="admin", features=frozenset())
+    with pytest.raises(HTTPException) as exc_info:
+        TenantService().create_domain(db, tenant.id, actor, TenantDomainCreate(purpose="app", domain="app.example.com"))
+    assert exc_info.value.status_code == 403
+
+
+def test_create_domain_allowed_when_tenant_has_booked_custom_domain(db):
+    tenant = make_tenant(db)
+    actor = make_current_user(tenant_id=tenant.id, role="admin", features=frozenset({"custom_domain"}))
+    created = TenantService().create_domain(db, tenant.id, actor, TenantDomainCreate(purpose="app", domain="app.example.com"))
+    assert created.domain == "app.example.com"
+
+
+def test_default_factory_user_has_custom_domain_booked():
+    """make_current_user's default (features=None -> includes 'custom_domain') mirrors
+    migration 0086's backfill: every pre-existing tenant keeps its Self-Service domain setup."""
+    user = make_current_user(tenant_id=1, role="admin")
+    assert require_feature(user, "custom_domain") is user
