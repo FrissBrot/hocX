@@ -393,6 +393,21 @@ def list_plans(db: Session = Depends(get_db)):
     return tenant_service.list_plans(db)
 
 
+@router.post("/plans", response_model=AdminPlanRead, status_code=201)
+def create_plan(
+    payload: AdminPlanWrite,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
+    # Code wird aus dem Namen abgeleitet - das Adminportal fragt keinen Code mehr ab.
+    result = tenant_service.create_plan(db, payload)
+    audit.log(
+        db, action="admin.plan_upserted", actor_email=current_admin.email,
+        entity_type="plan", entity_id=None, details={"code": result.code},
+    )
+    return result
+
+
 @router.put("/plans/{code}", response_model=AdminPlanRead)
 def upsert_plan(
     code: str,
@@ -411,6 +426,20 @@ def upsert_plan(
 @router.get("/storage-packages", response_model=list[AdminStoragePackageRead])
 def list_storage_packages(db: Session = Depends(get_db)):
     return tenant_service.list_storage_packages(db)
+
+
+@router.post("/storage-packages", response_model=AdminStoragePackageRead, status_code=201)
+def create_storage_package(
+    payload: AdminStoragePackageWrite,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
+    result = tenant_service.create_storage_package(db, payload)
+    audit.log(
+        db, action="admin.storage_package_upserted", actor_email=current_admin.email,
+        entity_type="storage_package", entity_id=None, details={"code": result.code},
+    )
+    return result
 
 
 @router.put("/storage-packages/{code}", response_model=AdminStoragePackageRead)

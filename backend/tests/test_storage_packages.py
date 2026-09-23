@@ -162,3 +162,17 @@ def test_clearing_manual_quota_falls_back_to_plan_and_package_total(db):
     assert result is not None
     assert result.storage_quota_bytes == 2000
     assert result.storage_quota_manual_override is False
+
+
+def test_create_storage_package_generates_unique_code_from_name(db):
+    """The admin portal no longer asks for a code - create_storage_package derives it from the
+    name and appends a suffix instead of overwriting an existing package with the same name."""
+    service = AdminTenantService()
+    payload = AdminStoragePackageWrite(name="Zusatz 50 GB (Ü)", bytes=50, price_monthly_rp=None, price_yearly_rp=None)
+    first = service.create_storage_package(db, payload)
+    second = service.create_storage_package(db, payload)
+
+    assert first.code == "zusatz_50_gb_u"
+    assert second.code == "zusatz_50_gb_u_2"
+    codes = [p.code for p in service.list_storage_packages(db)]
+    assert first.code in codes and second.code in codes

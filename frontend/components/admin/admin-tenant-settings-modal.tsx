@@ -103,8 +103,6 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
 
   const [storageUsage, setStorageUsage] = useState<StorageUsageRead | null>(null);
   const [storageLoading, setStorageLoading] = useState(false);
-  const [quotaMbInput, setQuotaMbInput] = useState("");
-  const [quotaBusy, setQuotaBusy] = useState(false);
 
   const [featureCatalog, setFeatureCatalog] = useState<AdminFeature[]>([]);
   const [selectedFeatures, setSelectedFeatures] = useState<Set<string>>(new Set());
@@ -119,7 +117,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
   const [subscriptionBusy, setSubscriptionBusy] = useState(false);
 
   const [storagePackageCatalog, setStoragePackageCatalog] = useState<AdminStoragePackage[]>([]);
-  const [packageQuantities, setPackageQuantities] = useState<Record<string, string>>({});
+  const [packageToAdd, setPackageToAdd] = useState("");
   const [packagesBusy, setPackagesBusy] = useState(false);
 
   useEffect(() => {
@@ -140,7 +138,6 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     setCleanupLastResult(null);
     void loadCleanupPreview(tenant.id);
 
-    setQuotaMbInput(tenant.storage_quota_bytes !== null ? String(Math.round(tenant.storage_quota_bytes / (1024 * 1024))) : "");
     void loadStorageUsage(tenant.id);
 
     setSelectedFeatures(new Set(tenant.enabled_features));
@@ -153,9 +150,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     });
     void loadPlanCatalog();
 
-    setPackageQuantities(
-      Object.fromEntries(tenant.assigned_storage_packages.map((p) => [p.package_code, String(p.quantity)]))
-    );
+    setPackageToAdd("");
     void loadStoragePackageCatalog();
   }, [open, tenant]);
 
@@ -163,28 +158,29 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     try {
       const result = await browserApiFetch<AdminStoragePackage[]>("/api/admin/storage-packages");
       setStoragePackageCatalog(result);
+      setPackageToAdd((current) => current || (result[0]?.code ?? ""));
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Speicherpaket-Katalog konnte nicht geladen werden", "error");
     }
   }
 
-  async function submitStoragePackages(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!tenant) return;
+  // Im GUI wird jedes Paket einzeln hinzugefügt/entfernt; das Backend speichert weiterhin
+  // eine Anzahl pro Paket, deshalb wird hier nur quantity +1 / -1 gerechnet.
+  async function changeStoragePackage(packageCode: string, delta: 1 | -1) {
+    if (!tenant || !packageCode) return;
+    const quantities = new Map(tenant.assigned_storage_packages.map((p) => [p.package_code, p.quantity]));
+    quantities.set(packageCode, (quantities.get(packageCode) ?? 0) + delta);
+    const items: AdminTenantStoragePackageItem[] = Array.from(quantities)
+      .filter(([, quantity]) => quantity > 0)
+      .map(([package_code, quantity]) => ({ package_code, quantity }));
     setPackagesBusy(true);
     try {
-      const items: AdminTenantStoragePackageItem[] = Object.entries(packageQuantities)
-        .map(([package_code, quantity]) => ({ package_code, quantity: Number(quantity) }))
-        .filter((item) => Number.isFinite(item.quantity) && item.quantity > 0);
       const updated = await browserApiFetch<AdminTenantSummary>(`/api/admin/tenants/${tenant.id}/storage-packages`, {
         method: "PUT",
         body: JSON.stringify({ items }),
       });
       onSaved(updated);
-      setPackageQuantities(
-        Object.fromEntries(updated.assigned_storage_packages.map((p) => [p.package_code, String(p.quantity)]))
-      );
-      showToast("Speicherpakete gespeichert", "success");
+      showToast(delta > 0 ? "Speicherpaket hinzugefügt" : "Speicherpaket entfernt", "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Speicherpakete konnten nicht gespeichert werden", "error");
     } finally {
@@ -269,31 +265,6 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
       showToast(error instanceof Error ? error.message : "Speicherverbrauch konnte nicht geladen werden", "error");
     } finally {
       setStorageLoading(false);
-    }
-  }
-
-  async function submitQuota(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!tenant) return;
-    const trimmed = quotaMbInput.trim();
-    const quotaMb = trimmed === "" ? null : Number(trimmed);
-    if (quotaMb !== null && (!Number.isFinite(quotaMb) || quotaMb < 1)) {
-      showToast("Kontingent muss eine Zahl grösser 0 sein", "error");
-      return;
-    }
-    setQuotaBusy(true);
-    try {
-      const updated = await browserApiFetch<AdminTenantSummary>(`/api/admin/tenants/${tenant.id}/storage-quota`, {
-        method: "PATCH",
-        body: JSON.stringify({ quota_mb: quotaMb }),
-      });
-      onSaved(updated);
-      setStorageUsage((current) => (current ? { ...current, quota_bytes: updated.storage_quota_bytes } : current));
-      showToast("Speicherkontingent gespeichert", "success");
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "Speicherkontingent konnte nicht gespeichert werden", "error");
-    } finally {
-      setQuotaBusy(false);
     }
   }
 
@@ -680,43 +651,59 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                   </div>
                 </form>
 
-                <form className="grid" onSubmit={submitStoragePackages}>
+                <div className="grid">
                   <div className="field-stack">
                     <span className="field-label">Zusatz-Speicherpakete</span>
-                    {storagePackageCatalog.length === 0 ? (
-                      <div className="muted">Keine Speicherpakete im Katalog.</div>
+                    {tenant.assigned_storage_packages.length === 0 ? (
+                      <div className="muted">Keine Zusatzpakete gebucht.</div>
                     ) : (
-                      storagePackageCatalog.map((pkg) => (
-                        <div key={pkg.code} className="two-col">
-                          <span>
-                            {pkg.name} <span className="muted">({formatFileSize(pkg.bytes)} je Stück)</span>
-                          </span>
-                          <input
-                            type="number"
-                            min={0}
-                            value={packageQuantities[pkg.code] ?? ""}
-                            placeholder="0"
-                            onChange={(event) =>
-                              setPackageQuantities((current) => ({ ...current, [pkg.code]: event.target.value }))
-                            }
-                          />
-                        </div>
-                      ))
+                      tenant.assigned_storage_packages.flatMap((pkg) =>
+                        Array.from({ length: pkg.quantity }, (_, index) => (
+                          <div key={`${pkg.package_code}-${index}`} className="table-actions table-actions-start">
+                            <span>
+                              {pkg.name} <span className="muted">({formatFileSize(pkg.bytes)})</span>
+                            </span>
+                            <button
+                              type="button"
+                              className="button-ghost"
+                              disabled={packagesBusy}
+                              onClick={() => void changeStoragePackage(pkg.package_code, -1)}
+                            >
+                              Entfernen
+                            </button>
+                          </div>
+                        ))
+                      )
                     )}
                   </div>
-                  <div className="table-actions table-actions-start">
-                    <button type="submit" className="button-secondary" disabled={packagesBusy}>
-                      {packagesBusy ? "Wird gespeichert…" : "Speicherpakete speichern"}
-                    </button>
-                  </div>
-                </form>
+                  {storagePackageCatalog.length === 0 ? (
+                    <div className="muted">Keine Speicherpakete im Katalog.</div>
+                  ) : (
+                    <div className="table-actions table-actions-start">
+                      <select value={packageToAdd} onChange={(event) => setPackageToAdd(event.target.value)}>
+                        {storagePackageCatalog.map((pkg) => (
+                          <option key={pkg.code} value={pkg.code}>
+                            {pkg.name} ({formatFileSize(pkg.bytes)})
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="button-secondary"
+                        disabled={packagesBusy || !packageToAdd}
+                        onClick={() => void changeStoragePackage(packageToAdd, 1)}
+                      >
+                        {packagesBusy ? "Wird gespeichert…" : "+ Paket hinzufügen"}
+                      </button>
+                    </div>
+                  )}
+                </div>
 
                 <div className="grid">
                   <div className="eyebrow">Speicher</div>
                   <StorageQuotaComposition
                     planStorageBytes={tenant.plan_storage_bytes}
                     packageStorageBytes={tenant.package_storage_bytes}
-                    manualOverride={tenant.storage_quota_manual_override}
                   />
                   {storageUsage ? (
                     <>
@@ -730,23 +717,6 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                     <div className="muted">{storageLoading ? "Wird geladen…" : "Keine Daten verfügbar."}</div>
                   )}
 
-                  <form className="grid" onSubmit={submitQuota}>
-                    <label className="field-stack">
-                      <span className="field-label">Manuelles Kontingent überschreiben (MB, leer = automatische Berechnung)</span>
-                      <input
-                        type="number"
-                        min={1}
-                        value={quotaMbInput}
-                        onChange={(event) => setQuotaMbInput(event.target.value)}
-                        placeholder="z.B. 5120"
-                      />
-                    </label>
-                    <div className="table-actions table-actions-start">
-                      <button type="submit" className="button-secondary" disabled={quotaBusy}>
-                        {quotaBusy ? "Wird gespeichert…" : "Kontingent speichern"}
-                      </button>
-                    </div>
-                  </form>
                 </div>
               </div>
             )

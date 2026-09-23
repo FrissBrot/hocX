@@ -163,7 +163,6 @@ export function TenantSubscriptionView({ initialTenant }: Props) {
               <StorageQuotaComposition
                 planStorageBytes={subscription.included_storage_bytes}
                 packageStorageBytes={subscription.package_storage_bytes}
-                manualOverride={subscription.storage_quota_manual_override}
               />
 
               {storageUsage && storageUsage.categories.some((c) => c.bytes > 0) ? (

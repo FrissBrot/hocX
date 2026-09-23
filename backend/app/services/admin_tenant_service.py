@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import re
 import shutil
+import unicodedata
 import uuid
 from pathlib import Path
 
@@ -124,7 +126,7 @@ class AdminTenantService:
             select(TenantStoragePackage.package_code, TenantStoragePackage.quantity, StoragePackage.name, StoragePackage.bytes)
             .join(StoragePackage, StoragePackage.code == TenantStoragePackage.package_code)
             .where(TenantStoragePackage.tenant_id == tenant_id)
-            .order_by(StoragePackage.sort_order.asc(), StoragePackage.code.asc())
+            .order_by(StoragePackage.bytes.asc(), StoragePackage.code.asc())
         ).all()
         return [
             AdminTenantStoragePackageRead(package_code=code, name=name, bytes=pkg_bytes, quantity=quantity, total_bytes=pkg_bytes * quantity)
@@ -161,7 +163,7 @@ class AdminTenantService:
                 StoragePackage.bytes,
             )
             .join(StoragePackage, StoragePackage.code == TenantStoragePackage.package_code)
-            .order_by(StoragePackage.sort_order.asc(), StoragePackage.code.asc())
+            .order_by(StoragePackage.bytes.asc(), StoragePackage.code.asc())
         ).all()
         for tenant_id, package_code, quantity, name, pkg_bytes in package_rows:
             packages_by_tenant.setdefault(tenant_id, []).append(
@@ -223,8 +225,29 @@ class AdminTenantService:
         )
 
     def list_plans(self, db: Session) -> list[AdminPlanRead]:
-        plans = db.query(Plan).order_by(Plan.sort_order.asc(), Plan.code.asc()).all()
+        # Guenstigster Plan zuoberst; Plaene ohne Preis (z.B. 'legacy') vorneweg.
+        plans = (
+            db.query(Plan)
+            .order_by(
+                Plan.price_yearly_rp.asc().nulls_first(), Plan.price_monthly_rp.asc().nulls_first(), Plan.code.asc()
+            )
+            .all()
+        )
         return [self._plan_read_model(db, plan) for plan in plans]
+
+    @staticmethod
+    def _generate_code(db: Session, model: type, name: str) -> str:
+        """Katalog-Code (PK) aus dem Namen ableiten - im Adminportal wird kein Code mehr
+        eingegeben. Bei Kollision wird _2, _3, ... angehaengt."""
+        base = re.sub(r"[^a-z0-9]+", "_", unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode().lower()).strip("_")
+        base = base or "item"
+        code, suffix = base, 2
+        while db.get(model, code) is not None:
+            code, suffix = f"{base}_{suffix}", suffix + 1
+        return code
+
+    def create_plan(self, db: Session, payload: AdminPlanWrite) -> AdminPlanRead:
+        return self.upsert_plan(db, self._generate_code(db, Plan, payload.name), payload)
 
     def upsert_plan(self, db: Session, code: str, payload: AdminPlanWrite) -> AdminPlanRead:
         plan = db.get(Plan, code)
@@ -310,7 +333,7 @@ class AdminTenantService:
         db.commit()
 
     def list_storage_packages(self, db: Session) -> list[AdminStoragePackageRead]:
-        packages = db.query(StoragePackage).order_by(StoragePackage.sort_order.asc(), StoragePackage.code.asc()).all()
+        packages = db.query(StoragePackage).order_by(StoragePackage.bytes.asc(), StoragePackage.code.asc()).all()
         return [self._storage_package_read_model(package) for package in packages]
 
     def _storage_package_read_model(self, package: StoragePackage) -> AdminStoragePackageRead:
@@ -322,6 +345,9 @@ class AdminTenantService:
             price_yearly_rp=package.price_yearly_rp,
             sort_order=package.sort_order,
         )
+
+    def create_storage_package(self, db: Session, payload: AdminStoragePackageWrite) -> AdminStoragePackageRead:
+        return self.upsert_storage_package(db, self._generate_code(db, StoragePackage, payload.name), payload)
 
     def upsert_storage_package(self, db: Session, code: str, payload: AdminStoragePackageWrite) -> AdminStoragePackageRead:
         package = db.get(StoragePackage, code)

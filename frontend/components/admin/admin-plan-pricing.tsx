@@ -23,8 +23,8 @@ type PlanFormState = {
   priceMonthlyChf: string;
   priceYearlyChf: string;
   userLimit: string;
-  storageMb: string;
-  sortOrder: string;
+  storageGb: string;
+  monthlyTouched: boolean;
   featureCodes: Set<string>;
 };
 
@@ -39,10 +39,10 @@ type StoragePackageFormState = {
   code: string;
   isNew: boolean;
   name: string;
-  storageMb: string;
+  storageGb: string;
   priceMonthlyChf: string;
   priceYearlyChf: string;
-  sortOrder: string;
+  monthlyTouched: boolean;
 };
 
 function storagePackageToForm(pkg: AdminStoragePackage): StoragePackageFormState {
@@ -50,10 +50,10 @@ function storagePackageToForm(pkg: AdminStoragePackage): StoragePackageFormState
     code: pkg.code,
     isNew: false,
     name: pkg.name,
-    storageMb: String(Math.round(pkg.bytes / (1024 * 1024))),
+    storageGb: bytesToGbInput(pkg.bytes),
     priceMonthlyChf: rpToChfInput(pkg.price_monthly_rp),
     priceYearlyChf: rpToChfInput(pkg.price_yearly_rp),
-    sortOrder: String(pkg.sort_order),
+    monthlyTouched: isManualMonthly(pkg.price_monthly_rp, pkg.price_yearly_rp),
   };
 }
 
@@ -61,11 +61,60 @@ const emptyStoragePackageForm: StoragePackageFormState = {
   code: "",
   isNew: true,
   name: "",
-  storageMb: "",
+  storageGb: "",
   priceMonthlyChf: "",
   priceYearlyChf: "",
-  sortOrder: "0",
+  monthlyTouched: false,
 };
+
+// Monatspreis-Vorschlag: Jahrespreis / 12 + 20 % Aufschlag, auf 5 Rappen gerundet.
+function suggestMonthlyRp(yearlyRp: number): number {
+  return Math.round(((yearlyRp / 12) * 1.2) / 5) * 5;
+}
+
+function suggestMonthlyChf(yearlyChf: string): string {
+  const yearlyRp = chfInputToRp(yearlyChf);
+  return yearlyRp === null ? "" : rpToChfInput(suggestMonthlyRp(yearlyRp));
+}
+
+// Ein bestehender Monatspreis, der vom Vorschlag abweicht, gilt als bewusst gesetzt und wird
+// beim Ändern des Jahrespreises nicht mehr automatisch überschrieben.
+function isManualMonthly(monthlyRp: number | null, yearlyRp: number | null): boolean {
+  if (monthlyRp === null) return false;
+  return yearlyRp === null || monthlyRp !== suggestMonthlyRp(yearlyRp);
+}
+
+function comparePrice(a: number | null, b: number | null): number {
+  if (a === b) return 0;
+  if (a === null) return -1;
+  if (b === null) return 1;
+  return a - b;
+}
+
+// Gleiche Reihenfolge wie das Backend: günstigster Plan zuoberst, Pläne ohne Preis vorneweg.
+function comparePlans(a: AdminPlan, b: AdminPlan): number {
+  return (
+    comparePrice(a.price_yearly_rp, b.price_yearly_rp) ||
+    comparePrice(a.price_monthly_rp, b.price_monthly_rp) ||
+    a.code.localeCompare(b.code)
+  );
+}
+
+// Kleinstes Paket zuoberst.
+function compareStoragePackages(a: AdminStoragePackage, b: AdminStoragePackage): number {
+  return a.bytes - b.bytes || a.code.localeCompare(b.code);
+}
+
+const BYTES_PER_GB = 1024 * 1024 * 1024;
+
+// Speichergrössen werden in GB eingegeben (1 GB = 1024 MB, gleich wie formatFileSize anzeigt).
+function bytesToGbInput(bytes: number): string {
+  return String(Math.round((bytes / BYTES_PER_GB) * 100) / 100);
+}
+
+function gbInputToBytes(value: string): number {
+  return Math.round(Number(value.trim().replace(",", ".")) * BYTES_PER_GB);
+}
 
 function rpToChfInput(rp: number | null): string {
   return rp === null ? "" : (rp / 100).toFixed(2);
@@ -86,8 +135,8 @@ function planToForm(plan: AdminPlan): PlanFormState {
     priceMonthlyChf: rpToChfInput(plan.price_monthly_rp),
     priceYearlyChf: rpToChfInput(plan.price_yearly_rp),
     userLimit: plan.included_user_limit === null ? "" : String(plan.included_user_limit),
-    storageMb: plan.included_storage_bytes === null ? "" : String(Math.round(plan.included_storage_bytes / (1024 * 1024))),
-    sortOrder: String(plan.sort_order),
+    storageGb: plan.included_storage_bytes === null ? "" : bytesToGbInput(plan.included_storage_bytes),
+    monthlyTouched: isManualMonthly(plan.price_monthly_rp, plan.price_yearly_rp),
     featureCodes: new Set(plan.feature_codes),
   };
 }
@@ -99,8 +148,8 @@ const emptyPlanForm: PlanFormState = {
   priceMonthlyChf: "",
   priceYearlyChf: "",
   userLimit: "",
-  storageMb: "",
-  sortOrder: "0",
+  storageGb: "",
+  monthlyTouched: false,
   featureCodes: new Set(),
 };
 
@@ -115,9 +164,11 @@ function featureToForm(feature: AdminFeature): FeatureFormState {
 
 export function AdminPlanPricing({ initialPlans, initialFeatures, initialStoragePackages }: Props) {
   const showToast = useToast();
-  const [plans, setPlans] = useState<AdminPlan[]>(initialPlans);
+  const [plans, setPlans] = useState<AdminPlan[]>(() => [...initialPlans].sort(comparePlans));
   const [features, setFeatures] = useState<AdminFeature[]>(initialFeatures);
-  const [storagePackages, setStoragePackages] = useState<AdminStoragePackage[]>(initialStoragePackages);
+  const [storagePackages, setStoragePackages] = useState<AdminStoragePackage[]>(() =>
+    [...initialStoragePackages].sort(compareStoragePackages)
+  );
 
   const [planForm, setPlanForm] = useState<PlanFormState | null>(null);
   const [planBusy, setPlanBusy] = useState(false);
@@ -133,11 +184,6 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
   async function submitPlan(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!planForm) return;
-    const code = planForm.code.trim();
-    if (!code) {
-      showToast("Code darf nicht leer sein", "error");
-      return;
-    }
     setPlanBusy(true);
     try {
       const payload: AdminPlanWrite = {
@@ -145,18 +191,16 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
         price_monthly_rp: chfInputToRp(planForm.priceMonthlyChf),
         price_yearly_rp: chfInputToRp(planForm.priceYearlyChf),
         included_user_limit: planForm.userLimit.trim() === "" ? null : Number(planForm.userLimit),
-        included_storage_bytes: planForm.storageMb.trim() === "" ? null : Number(planForm.storageMb) * 1024 * 1024,
-        sort_order: Number(planForm.sortOrder) || 0,
+        included_storage_bytes: planForm.storageGb.trim() === "" ? null : gbInputToBytes(planForm.storageGb),
+        sort_order: 0,
         feature_codes: Array.from(planForm.featureCodes),
       };
-      const updated = await browserApiFetch<AdminPlan>(`/api/admin/plans/${encodeURIComponent(code)}`, {
-        method: "PUT",
-        body: JSON.stringify(payload),
-      });
-      setPlans((current) => {
-        const withoutCurrent = current.filter((p) => p.code !== updated.code);
-        return [...withoutCurrent, updated].sort((a, b) => a.sort_order - b.sort_order || a.code.localeCompare(b.code));
-      });
+      // Neue Pläne per POST - der Code wird im Backend aus dem Namen erzeugt.
+      const updated = await browserApiFetch<AdminPlan>(
+        planForm.isNew ? "/api/admin/plans" : `/api/admin/plans/${encodeURIComponent(planForm.code)}`,
+        { method: planForm.isNew ? "POST" : "PUT", body: JSON.stringify(payload) }
+      );
+      setPlans((current) => [...current.filter((p) => p.code !== updated.code), updated].sort(comparePlans));
       setPlanForm(null);
       showToast("Plan gespeichert", "success");
     } catch (error) {
@@ -193,28 +237,24 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
   async function submitStoragePackage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!storagePackageForm) return;
-    const code = storagePackageForm.code.trim();
-    if (!code) {
-      showToast("Code darf nicht leer sein", "error");
-      return;
-    }
     setStoragePackageBusy(true);
     try {
       const payload: AdminStoragePackageWrite = {
         name: storagePackageForm.name,
-        bytes: Number(storagePackageForm.storageMb) * 1024 * 1024,
+        bytes: gbInputToBytes(storagePackageForm.storageGb),
         price_monthly_rp: chfInputToRp(storagePackageForm.priceMonthlyChf),
         price_yearly_rp: chfInputToRp(storagePackageForm.priceYearlyChf),
-        sort_order: Number(storagePackageForm.sortOrder) || 0,
+        sort_order: 0,
       };
-      const updated = await browserApiFetch<AdminStoragePackage>(`/api/admin/storage-packages/${encodeURIComponent(code)}`, {
-        method: "PUT",
-        body: JSON.stringify(payload),
-      });
-      setStoragePackages((current) => {
-        const withoutCurrent = current.filter((p) => p.code !== updated.code);
-        return [...withoutCurrent, updated].sort((a, b) => a.sort_order - b.sort_order || a.code.localeCompare(b.code));
-      });
+      const updated = await browserApiFetch<AdminStoragePackage>(
+        storagePackageForm.isNew
+          ? "/api/admin/storage-packages"
+          : `/api/admin/storage-packages/${encodeURIComponent(storagePackageForm.code)}`,
+        { method: storagePackageForm.isNew ? "POST" : "PUT", body: JSON.stringify(payload) }
+      );
+      setStoragePackages((current) =>
+        [...current.filter((p) => p.code !== updated.code), updated].sort(compareStoragePackages)
+      );
       setStoragePackageForm(null);
       showToast("Speicherpaket gespeichert", "success");
     } catch (error) {
@@ -247,17 +287,16 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
       />
 
       <DataTable
-        columns={["Plan", "Preis/Monat", "Preis/Jahr", "Nutzerlimit", "Speicher", "Enthaltene Module", ""]}
+        columns={["Plan", "Preis/Jahr", "Preis/Monat", "Nutzerlimit", "Speicher", "Enthaltene Module", ""]}
         emptyMessage="Noch keine Pläne angelegt."
       >
         {plans.map((plan) => (
           <tr key={plan.code}>
             <td>
               <strong>{plan.name}</strong>
-              <div className="muted">{plan.code}</div>
             </td>
-            <td>{formatRappen(plan.price_monthly_rp)}</td>
             <td>{formatRappen(plan.price_yearly_rp)}</td>
+            <td>{formatRappen(plan.price_monthly_rp)}</td>
             <td>{plan.included_user_limit === null ? "Kein Limit" : plan.included_user_limit}</td>
             <td>{plan.included_storage_bytes === null ? "Kein Limit" : formatFileSize(plan.included_storage_bytes)}</td>
             <td className="muted">{plan.feature_codes.map(featureName).join(", ") || "–"}</td>
@@ -294,16 +333,15 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
         }
       />
 
-      <DataTable columns={["Paket", "Grösse", "Preis/Monat", "Preis/Jahr", ""]} emptyMessage="Noch keine Speicherpakete angelegt.">
+      <DataTable columns={["Paket", "Grösse", "Preis/Jahr", "Preis/Monat", ""]} emptyMessage="Noch keine Speicherpakete angelegt.">
         {storagePackages.map((pkg) => (
           <tr key={pkg.code}>
             <td>
               <strong>{pkg.name}</strong>
-              <div className="muted">{pkg.code}</div>
             </td>
             <td>{formatFileSize(pkg.bytes)}</td>
-            <td>{formatRappen(pkg.price_monthly_rp)}</td>
             <td>{formatRappen(pkg.price_yearly_rp)}</td>
+            <td>{formatRappen(pkg.price_monthly_rp)}</td>
             <td>
               <ActionMenu items={[{ label: "Bearbeiten", onClick: () => setStoragePackageForm(storagePackageToForm(pkg)) }]} />
             </td>
@@ -319,48 +357,20 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
       >
         {planForm && (
           <form className="grid" onSubmit={submitPlan}>
-            <div className="two-col">
-              <label className="field-stack">
-                <span className="field-label">Code</span>
-                <input
-                  value={planForm.code}
-                  onChange={(event) => setPlanForm((current) => (current ? { ...current, code: event.target.value.toLowerCase() } : current))}
-                  pattern="[a-z0-9_-]+"
-                  required
-                  disabled={!planForm.isNew}
-                />
-              </label>
-              <label className="field-stack">
-                <span className="field-label">Name</span>
-                <input
-                  value={planForm.name}
-                  onChange={(event) => setPlanForm((current) => (current ? { ...current, name: event.target.value } : current))}
-                  required
-                />
-              </label>
-            </div>
-            <div className="two-col">
-              <label className="field-stack">
-                <span className="field-label">Preis pro Monat (CHF, leer = kein Preis)</span>
-                <input
-                  type="number"
-                  min={0}
-                  step="0.05"
-                  value={planForm.priceMonthlyChf}
-                  onChange={(event) => setPlanForm((current) => (current ? { ...current, priceMonthlyChf: event.target.value } : current))}
-                />
-              </label>
-              <label className="field-stack">
-                <span className="field-label">Preis pro Jahr (CHF, leer = kein Preis)</span>
-                <input
-                  type="number"
-                  min={0}
-                  step="0.05"
-                  value={planForm.priceYearlyChf}
-                  onChange={(event) => setPlanForm((current) => (current ? { ...current, priceYearlyChf: event.target.value } : current))}
-                />
-              </label>
-            </div>
+            <label className="field-stack">
+              <span className="field-label">Name</span>
+              <input
+                value={planForm.name}
+                onChange={(event) => setPlanForm((current) => (current ? { ...current, name: event.target.value } : current))}
+                required
+              />
+            </label>
+            <PriceFields
+              yearlyChf={planForm.priceYearlyChf}
+              monthlyChf={planForm.priceMonthlyChf}
+              monthlyTouched={planForm.monthlyTouched}
+              onChange={(prices) => setPlanForm((current) => (current ? { ...current, ...prices } : current))}
+            />
             <div className="two-col">
               <label className="field-stack">
                 <span className="field-label">Nutzerlimit (leer = kein Limit)</span>
@@ -372,23 +382,16 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
                 />
               </label>
               <label className="field-stack">
-                <span className="field-label">Speicherlimit (MB, leer = kein Limit)</span>
+                <span className="field-label">Speicherlimit (GB, leer = kein Limit)</span>
                 <input
                   type="number"
-                  min={1}
-                  value={planForm.storageMb}
-                  onChange={(event) => setPlanForm((current) => (current ? { ...current, storageMb: event.target.value } : current))}
+                  min={0.01}
+                  step="any"
+                  value={planForm.storageGb}
+                  onChange={(event) => setPlanForm((current) => (current ? { ...current, storageGb: event.target.value } : current))}
                 />
               </label>
             </div>
-            <label className="field-stack">
-              <span className="field-label">Reihenfolge (kleiner = weiter vorne)</span>
-              <input
-                type="number"
-                value={planForm.sortOrder}
-                onChange={(event) => setPlanForm((current) => (current ? { ...current, sortOrder: event.target.value } : current))}
-              />
-            </label>
             <div className="field-stack">
               <span className="field-label">Enthaltene Module</span>
               {features.length === 0 ? (
@@ -475,18 +478,6 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
           <form className="grid" onSubmit={submitStoragePackage}>
             <div className="two-col">
               <label className="field-stack">
-                <span className="field-label">Code</span>
-                <input
-                  value={storagePackageForm.code}
-                  onChange={(event) =>
-                    setStoragePackageForm((current) => (current ? { ...current, code: event.target.value.toLowerCase() } : current))
-                  }
-                  pattern="[a-z0-9_-]+"
-                  required
-                  disabled={!storagePackageForm.isNew}
-                />
-              </label>
-              <label className="field-stack">
                 <span className="field-label">Name</span>
                 <input
                   value={storagePackageForm.name}
@@ -494,51 +485,26 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
                   required
                 />
               </label>
-            </div>
-            <label className="field-stack">
-              <span className="field-label">Grösse (MB)</span>
-              <input
-                type="number"
-                min={1}
-                value={storagePackageForm.storageMb}
-                onChange={(event) => setStoragePackageForm((current) => (current ? { ...current, storageMb: event.target.value } : current))}
-                required
-              />
-            </label>
-            <div className="two-col">
               <label className="field-stack">
-                <span className="field-label">Preis pro Monat (CHF, leer = kein Preis)</span>
+                <span className="field-label">Grösse (GB)</span>
                 <input
                   type="number"
-                  min={0}
-                  step="0.05"
-                  value={storagePackageForm.priceMonthlyChf}
+                  min={0.01}
+                  step="any"
+                  value={storagePackageForm.storageGb}
                   onChange={(event) =>
-                    setStoragePackageForm((current) => (current ? { ...current, priceMonthlyChf: event.target.value } : current))
+                    setStoragePackageForm((current) => (current ? { ...current, storageGb: event.target.value } : current))
                   }
-                />
-              </label>
-              <label className="field-stack">
-                <span className="field-label">Preis pro Jahr (CHF, leer = kein Preis)</span>
-                <input
-                  type="number"
-                  min={0}
-                  step="0.05"
-                  value={storagePackageForm.priceYearlyChf}
-                  onChange={(event) =>
-                    setStoragePackageForm((current) => (current ? { ...current, priceYearlyChf: event.target.value } : current))
-                  }
+                  required
                 />
               </label>
             </div>
-            <label className="field-stack">
-              <span className="field-label">Reihenfolge (kleiner = weiter vorne)</span>
-              <input
-                type="number"
-                value={storagePackageForm.sortOrder}
-                onChange={(event) => setStoragePackageForm((current) => (current ? { ...current, sortOrder: event.target.value } : current))}
-              />
-            </label>
+            <PriceFields
+              yearlyChf={storagePackageForm.priceYearlyChf}
+              monthlyChf={storagePackageForm.priceMonthlyChf}
+              monthlyTouched={storagePackageForm.monthlyTouched}
+              onChange={(prices) => setStoragePackageForm((current) => (current ? { ...current, ...prices } : current))}
+            />
             <div className="modal-actions">
               <button type="button" className="button-ghost" onClick={() => setStoragePackageForm(null)}>
                 Abbrechen
@@ -550,6 +516,60 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
           </form>
         )}
       </Modal>
+    </div>
+  );
+}
+
+type PriceFieldsValue = { priceYearlyChf: string; priceMonthlyChf: string; monthlyTouched: boolean };
+
+/** Jahrespreis zuerst; der Monatspreis wird daraus vorgeschlagen (Jahr / 12 + 20 %), solange er
+ * nicht von Hand geändert wurde. */
+function PriceFields({
+  yearlyChf,
+  monthlyChf,
+  monthlyTouched,
+  onChange,
+}: {
+  yearlyChf: string;
+  monthlyChf: string;
+  monthlyTouched: boolean;
+  onChange: (value: PriceFieldsValue) => void;
+}) {
+  return (
+    <div className="two-col">
+      <label className="field-stack">
+        <span className="field-label">Preis pro Jahr (CHF, leer = kein Preis)</span>
+        <input
+          type="number"
+          min={0}
+          step="0.05"
+          value={yearlyChf}
+          onChange={(event) =>
+            onChange({
+              priceYearlyChf: event.target.value,
+              priceMonthlyChf: monthlyTouched ? monthlyChf : suggestMonthlyChf(event.target.value),
+              monthlyTouched,
+            })
+          }
+        />
+      </label>
+      <label className="field-stack">
+        <span className="field-label">Preis pro Monat (CHF, Vorschlag: Jahr / 12 + 20 %)</span>
+        <input
+          type="number"
+          min={0}
+          step="0.05"
+          value={monthlyChf}
+          onChange={(event) =>
+            onChange({
+              priceYearlyChf: yearlyChf,
+              priceMonthlyChf: event.target.value,
+              // Leeren schaltet den automatischen Vorschlag wieder ein.
+              monthlyTouched: event.target.value.trim() !== "",
+            })
+          }
+        />
+      </label>
     </div>
   );
 }

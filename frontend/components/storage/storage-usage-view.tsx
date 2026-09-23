@@ -29,15 +29,10 @@ export function formatPercent(part: number, total: number): string {
 export function StorageQuotaComposition({
   planStorageBytes,
   packageStorageBytes,
-  manualOverride,
 }: {
   planStorageBytes: number | null;
   packageStorageBytes: number;
-  manualOverride: boolean;
 }) {
-  if (manualOverride) {
-    return <div className="muted">Manuell gesetztes Kontingent (nicht aus Abo/Paketen berechnet)</div>;
-  }
   if (planStorageBytes === null && packageStorageBytes === 0) {
     return null;
   }
