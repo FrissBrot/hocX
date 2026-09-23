@@ -79,7 +79,13 @@ services:
     # app/main.py's gallery_upload_ingest_loop) - streaming/batched now, so no longer O(ZIP
     # size), but still real per-batch work (ClamAV + PIL decodes) on top of normal traffic,
     # on a host that already has a documented OOM history at the previous limit.
-    mem_limit: 2560m
+    # 2560m -> 6144m (2026-09-23): a direct (non-ZIP) gallery photo can now be up to
+    # GALLERY_DIRECT_IMAGE_MAX_BYTES (4 GiB, see upload_pipeline.py) - _run_gallery_upload_job
+    # reads that file fully into memory via read_bytes() before ingest_file's PIL decode/
+    # thumbnail/perceptual-hash work runs on it, and this container's cgroup limit is shared
+    # by both uvicorn workers. Still comfortably inside the 16 GB this host was already
+    # resized to (see the OOM history above) alongside the other services' mem_limits.
+    mem_limit: 6144m
     cpus: 3.0
     init: true
     read_only: true
@@ -261,9 +267,15 @@ services:
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-word-import-ratelimit.ratelimit.period=1m"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-word-import-body-limit.buffering.maxRequestBodyBytes=157286400"
       # Dedicated router for the gallery ("Bilder hochladen") upload endpoint - supports
-      # ZIPs up to GALLERY_ZIP_MAX_BYTES (5 GiB, see upload_pipeline.py) now that the
-      # request only streams bytes to disk and queues a background job (see
-      # gallery_upload_ingest_loop) instead of holding the whole batch in memory.
+      # ZIPs up to GALLERY_ZIP_MAX_BYTES (1 TiB, see upload_pipeline.py) and direct (non-ZIP)
+      # photos up to GALLERY_DIRECT_IMAGE_MAX_BYTES (4 GiB) now that the request only streams
+      # bytes to disk and queues a background job (see gallery_upload_ingest_loop) instead of
+      # holding the whole batch in memory.
+      # 2026-09-23: this middleware's own maxRequestBodyBytes was still the old 5-GiB-ish cap
+      # from before GALLERY_ZIP_MAX_BYTES was raised to 1 TiB (commit aab6251) - stale enough
+      # that it silently overruled the new backend/Next.js limits, since this router (unlike
+      # the generic one) forwards straight to the backend. Matches GALLERY_ZIP_MAX_BYTES/
+      # proxyClientMaxBodySize now instead of being out of sync with them.
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-gallery-upload.rule=Host(`${TRAEFIK_DOMAIN}`) && Path(`/api/files/gallery-uploads`) && Method(`POST`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-gallery-upload.entrypoints=websecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-gallery-upload.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
@@ -272,7 +284,9 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-gallery-upload.middlewares=${ROUTER_PREFIX:-hocx}-gallery-upload-body-limit"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-gallery-upload.loadbalancer.server.port=8000"
       # 5 GiB + ~100 MiB slack for multipart/form-data overhead around the largest accepted ZIP
-      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-gallery-upload-body-limit.buffering.maxRequestBodyBytes=5474304000"
+      # 1 TiB, matching GALLERY_ZIP_MAX_BYTES/proxyClientMaxBodySize - the ZIP content is
+      # streamed to disk regardless of this number, so the only real ceiling left is disk space.
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-gallery-upload-body-limit.buffering.maxRequestBodyBytes=1099511627776"
 
   # Photo-culling Phase 3: scores face quality for photo_analysis_job batches. Own
   # container/resource budget, not inside `backend` - see photo-analysis-worker/README.md.

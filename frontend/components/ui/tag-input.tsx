@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { usePopupEscape } from "@/lib/hooks/use-popup-escape";
 import type { TagConfig } from "@/lib/hooks/use-tag-config";
 
 export const TAG_COLORS = [
@@ -69,8 +70,7 @@ export function TagInput({
       addTag(inputVal);
     } else if (e.key === "Backspace" && !inputVal && tags.length > 0) {
       removeTag(tags[tags.length - 1]);
-    } else if (e.key === "Escape") {
-      setOpen(false);
+
     }
   }
 
@@ -109,6 +109,15 @@ export function TagInput({
 
   const showInput = !readOnly && (multi || tags.length === 0);
   const showDropdown = open && (filtered.length > 0 || editingTag !== null || (onTagColorChange && suggestions.length > 0));
+
+  usePopupEscape(Boolean(showDropdown), async () => {
+    if (editingTag && renameVal.trim() !== editingTag) {
+      await handleRenameConfirm();
+      return;
+    }
+    setEditingTag(null);
+    setOpen(false);
+  }, wrapRef);
 
   function tagDot(tag: string, size = 10) {
     const color = tagConfig?.[tag]?.color;

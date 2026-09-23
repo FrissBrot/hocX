@@ -10,7 +10,7 @@ Vor dem Commit: `python3 scripts/check-design-rules.py` muss `Design-Regeln: ok`
 1. **Erst wiederverwenden, dann bauen.** Gibt es einen Baustein in Abschnitt 4, wird er benutzt. Ein Nachbau mit Inline-Styles ist ein Fehler, auch wenn er "schneller" geht.
 2. **Nur Tokens, keine Literale.** Farben, Radien, Schriftgrößen, Abstände, Schatten, z-index und Dauern kommen aus `design/tokens.css`.
 3. **Beide Themes.** Jede Änderung muss in Light **und** Dark stimmen. Keine festen Farben, die nur in einem Theme funktionieren.
-4. **Tastatur first.** Alles Klickbare ist per Tab erreichbar und zeigt Fokus (Abschnitt 8).
+4. **Tastatur first.** Alles Klickbare ist per Tab erreichbar und zeigt Fokus (Abschnitt 9).
 5. **Klasse vor Inline-Style.** `style={{ ... }}` ist nur für dynamische Werte erlaubt (Breite in %, berechnete Position, Laufzeitfarbe), nie für wiederkehrende Optik.
 
 ## 2. Tokens
@@ -30,7 +30,7 @@ Quelle ist `design/tokens.css`. Nach jeder Änderung: `./scripts/sync-design-tok
 | Gewicht | 400 Text · 500 Betonung · 600 Buttons/Labels · 700 Überschriften | Kein 650/800 |
 | Abstand | `--space-1` 4 · `-2` 8 · `-3` 12 · `-4` 16 · `-5` 24 · `-6` 32 | `gap`, `padding`, `margin` in diesen Stufen. 1–3 px Feinabstände und Werte >36 px sind frei |
 | Schatten | `--shadow-soft` (Karte) · `--shadow` · `--shadow-popover` (Dropdowns) · `--shadow-overlay` (Modals) | Kein eigenes `rgba(...)` |
-| Fokus | `--focus-ring` (Felder) · `--focus-ring-color` (Outline) | Abschnitt 8 |
+| Fokus | `--focus-ring` (Felder) · `--focus-ring-color` (Outline) | Abschnitt 9 |
 | Bewegung | `--dur-fast` 120 · `-base` 160 · `-slow` 240 ms, `--ease-out` | Kein `0.15s` |
 | Ebenen | `--z-dropdown` < `--z-sticky` < `--z-flyout` < `--z-popover` < `--z-overlay` < `--z-modal` < `--z-confirm` < `--z-portal` < `--z-fullscreen` < `--z-menu` < `--z-toast` | Lokales Stapeln (0–5) darf literal bleiben, alles darüber ist ein Token |
 | Tabellenbreite | `--table-max-width` 1200 px | Gemeinsame Maximalbreite für `.table-shell`, in beiden Themes gleich |
@@ -58,7 +58,7 @@ Alle in `frontend/components/ui/` (Import: `@/components/ui/<name>`). Erst hier 
 
 | Aufgabe | Baustein | Hinweis |
 |---|---|---|
-| Dialog/Formular im Overlay | `Modal` (`open`, `title`, `onClose`, `size="default"\|"wide"\|"fullscreen"`) | Titel Pflicht. Aktionen unten in `<div className="modal-actions">` |
+| Dialog/Formular im Overlay | `Modal` (`open`, `title`, `onClose`, `size="default"\|"wide"\|"fullscreen"`) | Titel Pflicht. Schliessen-Button oben rechts ist Teil von `Modal` selbst (Icon-Button, kein Text). Aktionen unten in `<div className="modal-actions">`, nur wenn eine echte Aktion nötig ist (Abschnitt 8) |
 | Ja/Nein-Rückfrage | `useConfirm()` aus `@/contexts/confirm-context` | `await confirm({ message, tone: "danger", confirmLabel: "Löschen" })`. Löschen immer mit `tone: "danger"` |
 | Rückmeldung nach Aktion | `useToast().showToast(text, "success" \| "error" \| "info")` | Fehler immer mit `"error"` und der Meldung aus dem Backend |
 | Dauerhafter Hinweis im Inhalt | `StatusBanner` (`tone`, `message`) | Kein `<p style={{color: …}}>` |
@@ -69,7 +69,7 @@ Alle in `frontend/components/ui/` (Import: `@/components/ui/<name>`). Erst hier 
 | Kurze feste Auswahl (<7 Optionen, ohne Suche) | natives `<select>` | Kein Nachbau |
 | Aktionen einer Zeile/Karte | `ActionMenu` (`items: {label, onClick, danger?}[]`) | Kebab-Menü statt vieler Buttons |
 | Tags | `TagInput` | Farben aus `TAG_COLORS` |
-| Datum | `DateInput` | Nie `<input type="date">` roh |
+| Datum | `DateInput` | Nie `<input type="date">` roh, Details in Abschnitt 6 |
 | Suche | `SearchInput` | Nie eigenes Suchfeld |
 | Filter (wenige Werte) | `FilterTabs` (`options`, `value`, `onChange`, optional `count`) | |
 | Umschalten von Ansichten | `Tabs` (Inhalt) oder `RouteTabs` (eigene Route) | |
@@ -112,7 +112,25 @@ Varianten: `dropdown-panel-up` (öffnet nach oben), `dropdown-trigger` (Auslöse
 
 Dropdowns in einem `Modal` oder über anderen Ebenen brauchen die Portal-Ebene (`--z-portal`); `SearchableSelect` macht das schon.
 
-## 6. Buttons
+## 6. Datum
+
+Für **jedes** Datumsfeld: `DateInput` aus `@/components/ui/date-input`. Nie `<input type="date">` roh, auch nicht versteckt hinter eigenem CSS — die native Optik unterscheidet sich je Browser/OS und lässt sich nicht themen.
+
+```tsx
+<label className="field-stack">
+  <span className="field-label">Datum</span>
+  <DateInput value={event.event_date} onChange={(value) => onUpdate({ event_date: value })} />
+</label>
+```
+
+- **Anzeige/Eingabe** `TT.MM.JJJJ` per Tastatur, **Wert** immer ISO (`JJJJ-MM-TT`) über `onChange`. Kein eigenes Parsen/Formatieren von Daten in Komponenten, das übernehmen `formatDateInputValue`/`parseDateInputValue` aus `lib/utils/format.ts`.
+- Der runde Kalender-Button rechts öffnet den nativen Picker über `showPicker()`. Er ist Teil von `DateInput` selbst (`.date-input-picker`) und bekommt **keine** eigene Klasse oder Nachbau.
+- Einschränkungen (kein Datum vor/nach X) über `min`/`max` (ISO-Strings), nicht per Validierung nach dem Speichern.
+- **Zeitraum (von/bis):** zwei eigenständige `DateInput`-Felder nebeneinander in `.two-col`, je mit eigenem `field-label` ("Datum" / "Enddatum" o. ä.). Kein kombiniertes Range-Picker-Widget.
+- **Tabellenzeile/kompakter Kontext:** `DateInput` bleibt gleich, nur der Picker-Button darf über eine Feature-Klasse verschmälert werden (z. B. `.event-field-date .date-input-picker { width: 40px; }`), niemals Inline-Style.
+- Optionales Datum (z. B. Enddatum): leerer String bzw. `null` beim Speichern, nicht `undefined` oder ein Platzhalterdatum.
+
+## 7. Buttons
 
 | Klasse | Wofür |
 |---|---|
@@ -129,7 +147,7 @@ Regeln: Pro Bereich höchstens **ein** `button-primary`. Reihenfolge in Aktionsl
 
 Native `<button>` ohne Klasse ist ein Primärbutton (globaler Stil). Immer `type="button"` setzen, außer echtes Submit.
 
-## 7. Formulare, Tabellen, Seitenaufbau
+## 8. Formulare, Tabellen, Seitenaufbau
 
 **Seitenaufbau**
 ```tsx
@@ -163,7 +181,11 @@ Karten: `.panel` / `.card` / `.section-card` (Innenabstand kommt aus der Klasse,
 
 **Modals**: `Modal` mit `title`; Inhalt als Formular (oben) und `modal-actions` (unten). Kein zweites Modal im Modal: dafür `useConfirm`.
 
-## 8. Dark Mode, Fokus, Barrierefreiheit
+Der Schliessen-Button oben rechts ist immer der Icon-Button (`✕`, `button-icon`, `aria-label="Schliessen"`) aus `Modal` selbst — nie ein Text-Button "Schliessen" nachbauen, auch nicht in `headerActions`.
+
+**Reine Auswahl-Popups** (Checkbox-/Radio-Liste zum An-/Abwählen, z. B. "Teilnehmer wählen"): jeder Klick speichert sofort (wie ein Formularfeld), kein "Auswahl übernehmen"/"Übernehmen"-Button unten. Schliessen (Icon-Button oder Escape/Backdrop) ist die einzige Aktion, die das Popup verlässt — nichts geht dabei verloren, weil schon gespeichert ist. Vorbild: `CheckboxCandidateModal`. Das gilt nicht für Formulare, die mehrere Felder gemeinsam anlegen/senden (z. B. "Termin anlegen") — die behalten `modal-actions` mit Abbrechen/Speichern, weil ein Klick dort keinen sinnvollen Einzel-Speicherpunkt hat.
+
+## 9. Dark Mode, Fokus, Barrierefreiheit
 
 - Farben nur über Tokens (sie haben Dark-Werte). Kein `@media (prefers-color-scheme)` in Komponenten-CSS, das Theme steuert `data-theme`.
 - Tastaturfokus: Buttons/Links bekommen ihn automatisch (`:focus-visible` global). Eigene Formularfelder: `outline: none; border-color: var(--accent); box-shadow: var(--focus-ring);`. Nie `outline: none` ohne Ersatz.
@@ -171,7 +193,7 @@ Karten: `.panel` / `.card` / `.section-card` (Innenabstand kommt aus der Klasse,
 - Kontrast: Text auf `--x-bg` immer `--x-fg`, Text auf Vollfarbe immer `--on-solid`.
 - Interaktive Flächen mindestens 28 px hoch (`button-icon-soft`), Standard 36–48 px.
 
-## 9. Arbeitsablauf bei UI-Änderungen
+## 10. Arbeitsablauf bei UI-Änderungen
 
 1. Bestehenden Baustein (Abschnitt 4) oder eine ähnliche Seite suchen und **deren Struktur übernehmen**.
 2. Neue Optik als Klasse in `frontend/app/globals.css` (Tokens verwenden), Klassennamen mit Feature-Präfix (`finance-…`).

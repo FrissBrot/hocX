@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DataTable } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -513,7 +513,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
         title={selectedParticipant ? "Teilnehmer bearbeiten" : "Teilnehmer erstellen"}
         description="Teilnehmer koennen direkt Templates zugewiesen und spaeter in Todos ausgewaehlt werden."
       >
-        <form className="grid" onSubmit={saveParticipant}>
+        <ModalSaveForm className="grid" onSubmit={saveParticipant}>
           <div className="two-col">
             <label className="field-stack">
               <span className="field-label">Anzeigename</span>
@@ -584,11 +584,11 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
             </div>
           </div>
           <div className="table-toolbar-actions">
-            <button type="submit" className="button-secondary">
+            <button data-modal-save type="submit" className="button-secondary">
               {selectedParticipant ? "Teilnehmer speichern" : "Teilnehmer erstellen"}
             </button>
           </div>
-        </form>
+        </ModalSaveForm>
       </Modal>
     </div>
   );

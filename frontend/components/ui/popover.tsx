@@ -3,6 +3,8 @@
 import { CSSProperties, ReactNode, RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { usePopupEscape } from "@/lib/hooks/use-popup-escape";
+
 export type Align = "start" | "end";
 
 type PopoverPositionOptions = {
@@ -65,6 +67,7 @@ export function usePopoverPosition(
 }
 
 export function usePopoverDismiss(open: boolean, onClose: () => void, refs: RefObject<HTMLElement | null>[]) {
+  usePopupEscape(open, onClose, refs[refs.length - 1]);
   useEffect(() => {
     if (!open) {
       return;
@@ -76,16 +79,9 @@ export function usePopoverDismiss(open: boolean, onClose: () => void, refs: RefO
       }
       onClose();
     }
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    }
     document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
     return () => {
       document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, onClose]);

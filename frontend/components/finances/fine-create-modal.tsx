@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
@@ -83,6 +83,7 @@ export function FineCreateModal({ open, accounts, onClose, onCreated }: Props) {
       setParticipantId(null);
       setAmount("");
       onCreated();
+      onClose();
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Busse konnte nicht erfasst werden", "error");
     } finally {
@@ -92,7 +93,7 @@ export function FineCreateModal({ open, accounts, onClose, onCreated }: Props) {
 
   return (
     <Modal open={open} onClose={onClose} title="Busse erfassen" description="Eine Busse einem Protokoll und einer Person zuordnen.">
-      <form className="grid" onSubmit={save}>
+      <ModalSaveForm className="grid" onSubmit={save}>
         <div className="field-stack">
           <span className="field-label">Protokoll</span>
           <SearchableSelect
@@ -140,9 +141,9 @@ export function FineCreateModal({ open, accounts, onClose, onCreated }: Props) {
         </label>
         <div className="modal-actions">
           <button type="button" className="button-ghost" onClick={onClose}>Abbrechen</button>
-          <button type="submit" className="button-primary" disabled={!canSave}>Erfassen</button>
+          <button data-modal-save type="submit" className="button-primary" disabled={!canSave}>Erfassen</button>
         </div>
-      </form>
+      </ModalSaveForm>
     </Modal>
   );
 }

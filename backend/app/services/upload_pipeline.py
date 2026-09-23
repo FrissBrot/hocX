@@ -53,6 +53,18 @@ WORD_IMPORT_ALLOWED_MIME_TYPES = {WORD_IMPORT_MIME_TYPE, PDF_MIME_TYPE}
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
 
+# Direkter (nicht gezippter) Bild-Upload in die "Fotos"-Galerie: bewusst eigener, deutlich
+# grosszuegigerer Wert statt MAX_UPLOAD_BYTES - anders als bei Protokollbildern/Word-Import
+# (die synchron auf dem Request-Event-Loop komplett in den Speicher gelesen werden) laeuft
+# der Galerie-Upload immer ueber stage_upload_to_disk (Streaming) und einen Hintergrund-Job,
+# genau wie ein Galerie-ZIP. Ein einzelnes grosses Foto (z.B. Scan/Drohnenbild) durfte bisher
+# trotzdem nicht groesser als 20 MB sein, obwohl ein gleich grosses Bild in einem ZIP schon
+# lange kein solches Limit mehr hatte (Nutzerbericht 2026-09-22/23: 3-GB-Foto abgelehnt).
+# Nicht so grosszuegig wie GALLERY_ZIP_MAX_BYTES (1 TiB), weil der Hintergrund-Job die Datei
+# per read_bytes() komplett in den Speicher laedt (siehe _run_gallery_upload_job) - 4 GiB
+# passt zusammen mit dem auf 6144m erhoehten backend mem_limit (siehe docker-compose.yml).
+GALLERY_DIRECT_IMAGE_MAX_BYTES = 4 * 1024**3  # 4 GiB
+
 # ZIP-Uploads (Galerie/Word-Import): Einträge werden nur im Arbeitsspeicher entpackt (nie auf
 # Platte geschrieben) und einzeln per Magic-Bytes geprüft - Limits gegen Zip-Bomben.
 MAX_ZIP_ENTRIES = 300

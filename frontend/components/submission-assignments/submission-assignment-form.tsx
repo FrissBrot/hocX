@@ -3,7 +3,7 @@
 import { Dispatch, FormEvent, SetStateAction } from "react";
 
 import { DateInput } from "@/components/ui/date-input";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { formatDateInputValue } from "@/lib/utils/format";
 import {
@@ -175,7 +175,7 @@ type Props = {
   availableLists: StructuredListDefinition[];
   availableTags: string[];
   availableCycleConfigs: CycleConfigSummary[];
-  onSubmit: () => void;
+  onSubmit: () => void | Promise<void>;
   onClose: () => void;
   onManageLinks: () => void;
 };
@@ -246,7 +246,7 @@ export function SubmissionAssignmentFormModal({
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (problem === null) onSubmit();
+    if (problem === null) return onSubmit();
   }
 
   const fileTypeCount = form.allowed_file_types.length;
@@ -254,7 +254,7 @@ export function SubmissionAssignmentFormModal({
 
   return (
     <Modal open={open} title={editing ? "Abgabe bearbeiten" : "Abgabe erstellen"} className="subm-edit-modal" hideCloseButton onClose={onClose}>
-      <form className="subm-edit-form" onSubmit={handleSubmit}>
+      <ModalSaveForm className="subm-edit-form" onSubmit={handleSubmit}>
         <header className="subm-edit-heading">
           <div className="subm-edit-eyebrow">
             {editing ? "Abgabe bearbeiten" : "Neue Abgabe"}
@@ -555,12 +555,12 @@ export function SubmissionAssignmentFormModal({
           <button type="button" className="subm-edit-manage" onClick={onManageLinks}>Abgabe-Links verwalten</button>
           <div className="subm-edit-actions">
             <button type="button" className="button-secondary" onClick={onClose}>Abbrechen</button>
-            <button type="submit" className="button-primary" disabled={problem !== null} title={problem ?? undefined}>
+            <button data-modal-save type="submit" className="button-primary" disabled={problem !== null} title={problem ?? undefined}>
               {editing ? "Abgabe speichern" : "Abgabe erstellen"}
             </button>
           </div>
         </footer>
-      </form>
+      </ModalSaveForm>
     </Modal>
   );
 }

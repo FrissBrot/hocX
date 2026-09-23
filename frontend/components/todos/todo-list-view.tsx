@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { FilterTabOption, FilterTabs } from "@/components/ui/filter-tabs";
 import { SearchInput } from "@/components/ui/search-input";
 import { TagInput } from "@/components/ui/tag-input";
+import { DateInput } from "@/components/ui/date-input";
 import { TodoEditModal } from "@/components/todos/todo-edit-modal";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { TODO_STATUS } from "@/components/protocol/protocol-editor-shared";
@@ -15,7 +16,7 @@ import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { formatDate } from "@/lib/utils/format";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { usePopoverDismiss } from "@/components/ui/popover";
 import { DocumentTemplate, EventSummary, ParticipantSummary, TodoBlock, TodoListItem } from "@/types/api";
 
@@ -564,12 +565,12 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
         description="Erfasse eine neue Aufgabe und ordne sie bei Bedarf einem Protokoll zu."
         onClose={() => setShowCreate(false)}
       >
-        <form
+        <ModalSaveForm
           className="grid"
           style={{ gap: "var(--space-4)", minWidth: 320 }}
           onSubmit={(event) => {
             event.preventDefault();
-            void createTodo();
+            return createTodo();
           }}
         >
           <label className="field-stack">
@@ -607,10 +608,10 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
             <span className="field-help">Optional. Verknüpft das Todo direkt mit einem Protokollpunkt.</span>
           </div>
 
-          <button type="submit" disabled={creating || !createTask.trim()}>
+          <button data-modal-save type="submit" disabled={creating || !createTask.trim()}>
             {creating ? "Wird erstellt…" : "Todo erstellen"}
           </button>
-        </form>
+        </ModalSaveForm>
       </Modal>
 
       {editingTodo && <TodoEditModal
@@ -743,11 +744,9 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
             )}
             {exportDateMode === "custom-date" && (
               <div style={{ marginTop: "var(--space-2)" }}>
-                <input
-                  className="input"
-                  type="date"
+                <DateInput
                   value={exportCustomDate}
-                  onChange={(e) => { setExportCustomDate(e.target.value); clearExportState(); }}
+                  onChange={(value) => { setExportCustomDate(value); clearExportState(); }}
                 />
               </div>
             )}

@@ -221,7 +221,7 @@ function DateEditorModal({
   }, [open, initialValue]);
 
   return (
-    <Modal open={open} title="Protokolldatum anpassen" onClose={onCancel}>
+    <Modal open={open} title="Protokolldatum anpassen" onClose={onCancel} onEscape={() => { if (!busy && draft) onConfirm(draft); }}>
       <div className="grid" style={{ gap: "0.75rem" }}>
         <p className="muted" style={{ margin: 0 }}>
           Das im Dokument erkannte Datum kann falsch sein - hier von Hand korrigieren. Das Dokument wird danach mit dem neuen

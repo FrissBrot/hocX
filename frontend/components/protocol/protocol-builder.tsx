@@ -1,15 +1,15 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useRefreshOnRestore } from "@/lib/hooks/use-refresh-on-restore";
 
 import { Badge } from "@/components/ui/badge";
 import { DateInput } from "@/components/ui/date-input";
 import { FilterTabOption, FilterTabs } from "@/components/ui/filter-tabs";
-import { Menu, MenuItem, Popover } from "@/components/ui/popover";
+import { ActionMenu, ActionMenuItem } from "@/components/ui/action-menu";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { browserApiFetch } from "@/lib/api/client";
@@ -60,10 +60,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
   const confirm = useConfirm();
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [availableTemplates, setAvailableTemplates] = useState(templates);
-  const { busyByProtocol: pdfBusyByProtocol, generatePdf, openOrGeneratePdf } = usePdfExport();
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const menuBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const activeMenuAnchorRef = useRef<HTMLButtonElement | null>(null);
+  const { busyByProtocol: pdfBusyByProtocol, openOrGeneratePdf } = usePdfExport();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -173,14 +170,16 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
   }
 
   function handlePdfExported(protocolId: string, result: PdfExportResult) {
-    // Update version in local protocol list
-    if (result.version_major != null && result.version_minor != null) {
-      setProtocols((current) =>
-        current.map((p) =>
-          p.id === protocolId ? { ...p, version_major: result.version_major!, version_minor: result.version_minor! } : p
-        )
-      );
-    }
+    setProtocols((current) =>
+      current.map((p) =>
+        p.id === protocolId ? {
+          ...p,
+          latest_pdf_url: result.content_url ?? p.latest_pdf_url,
+          version_major: result.version_major ?? p.version_major,
+          version_minor: result.version_minor ?? p.version_minor,
+        } : p
+      )
+    );
   }
 
   async function loadMore() {
@@ -206,7 +205,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
     try {
       const updated = await browserApiFetch<ProtocolSummary>(`/api/protocols/${protocolId}/revert-status`, { method: "POST" });
       setProtocols((current) => current.map((p) => (p.id === protocolId ? updated : p)));
-      showToast(`Status zurückgesetzt`, "success");
+      showToast(`Status: ${protocolStatusLabel(updated.status)}`, "success");
       router.refresh();
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Zurücksetzen fehlgeschlagen", "error");
@@ -242,7 +241,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
         title="Protokoll erstellen"
         description="Template auswählen und neues Protokoll anlegen."
       >
-        <form className="grid" onSubmit={createProtocol}>
+        <ModalSaveForm className="grid" onSubmit={createProtocol}>
           <label className="field-stack">
             <span className="field-label">Template</span>
             <SearchableSelect
@@ -286,11 +285,11 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
             ) : null}
           </div>
           <div className="table-toolbar-actions">
-            <button type="submit" className="button-secondary" disabled={!form.template_id}>
+            <button data-modal-save type="submit" className="button-secondary" disabled={!form.template_id}>
               Erstellen
             </button>
           </div>
-        </form>
+        </ModalSaveForm>
       </Modal>
 
       {hasNoProtocols ? (
@@ -316,7 +315,30 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
         <div className="record-list">
           {sortedProtocols.map((protocol) => {
             const isFinal = protocol.status === "abgeschlossen";
-            const menuOpen = openMenuId === protocol.id;
+            const previousStatus = ({
+              vorbereitet: "geplant",
+              durchgeführt: "vorbereitet",
+              abgeschlossen: "durchgeführt",
+            } as Record<string, string>)[protocol.status];
+            const pdfLabel = "PDF öffnen";
+            const actions: ActionMenuItem[] = [];
+            if (!isFinal && !pdfBusyByProtocol[protocol.id]) {
+              actions.push({
+                label: pdfLabel,
+                onClick: () => void openOrGeneratePdf(protocol, (result) => handlePdfExported(protocol.id, result)),
+              });
+            }
+            if (previousStatus) {
+              actions.push({
+                label: `Zurück auf „${protocolStatusLabel(previousStatus)}“`,
+                onClick: () => void revertStatus(protocol.id),
+              });
+            }
+            actions.push({
+              label: "Protokoll löschen",
+              danger: true,
+              onClick: () => void deleteProtocol(protocol.id),
+            });
             const statusVariant = protocolStatusVariant(protocol.status);
             const subtitle = [
               protocol.protocol_number,
@@ -344,8 +366,8 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
                       type="button"
                       className={`pdf-icon-link pdf-icon-link-success pdf-icon-link-sm${pdfBusyByProtocol[protocol.id] ? " pdf-icon-disabled" : ""}`}
                       onClick={() => openOrGeneratePdf(protocol, (result) => handlePdfExported(protocol.id, result))}
-                      aria-label={`PDF exportieren für ${protocol.protocol_number}`}
-                      title="PDF exportieren"
+                      aria-label={`${pdfLabel} für ${protocol.protocol_number}`}
+                      title={pdfLabel}
                       disabled={pdfBusyByProtocol[protocol.id]}
                     >
                       {pdfBusyByProtocol[protocol.id] ? "..." : "PDF"}
@@ -354,22 +376,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
                     <span className="record-list-row-pdf-spacer" aria-hidden="true" />
                   )}
                   {!readOnly && (
-                    <button
-                      type="button"
-                      className="button-ghost button-icon"
-                      title="Weitere Aktionen"
-                      ref={(el) => { menuBtnRefs.current[protocol.id] = el; }}
-                      onClick={() => {
-                        if (menuOpen) {
-                          setOpenMenuId(null);
-                        } else {
-                          activeMenuAnchorRef.current = menuBtnRefs.current[protocol.id] ?? null;
-                          setOpenMenuId(protocol.id);
-                        }
-                      }}
-                    >
-                      ⋯
-                    </button>
+                    <ActionMenu items={actions} ariaLabel={`Aktionen für ${protocol.protocol_number}`} />
                   )}
                 </div>
               </div>
@@ -393,61 +400,6 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
         </div>
       )}
 
-      {!readOnly && (
-        <Popover
-          open={openMenuId !== null}
-          onOpenChange={(open) => { if (!open) setOpenMenuId(null); }}
-          anchorRef={activeMenuAnchorRef}
-          align="end"
-        >
-          <Menu>
-            {(() => {
-              const protocol = sortedProtocols.find((p) => p.id === openMenuId);
-              if (!protocol) return null;
-              const canRevert = protocol.status !== "geplant";
-              return (
-                <>
-                  <MenuItem
-                    onSelect={() => {
-                      setOpenMenuId(null);
-                      openOrGeneratePdf(protocol, (result) => handlePdfExported(protocol.id, result));
-                    }}
-                  >
-                    {pdfBusyByProtocol[protocol.id] ? "Generiere…" : "PDF"}
-                  </MenuItem>
-                  <MenuItem
-                    onSelect={() => {
-                      setOpenMenuId(null);
-                      void generatePdf(protocol.id, protocol.protocol_number, (result) => handlePdfExported(protocol.id, result));
-                    }}
-                  >
-                    {pdfBusyByProtocol[protocol.id] ? "Generiere…" : "PDF neu generieren"}
-                  </MenuItem>
-                  {canRevert && (
-                    <MenuItem
-                      onSelect={() => {
-                        setOpenMenuId(null);
-                        void revertStatus(protocol.id);
-                      }}
-                    >
-                      Status zurücksetzen
-                    </MenuItem>
-                  )}
-                  <MenuItem
-                    danger
-                    onSelect={() => {
-                      setOpenMenuId(null);
-                      void deleteProtocol(protocol.id);
-                    }}
-                  >
-                    Löschen
-                  </MenuItem>
-                </>
-              );
-            })()}
-          </Menu>
-        </Popover>
-      )}
     </div>
   );
 }

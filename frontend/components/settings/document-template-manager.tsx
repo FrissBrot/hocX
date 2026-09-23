@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterTabs } from "@/components/ui/filter-tabs";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
@@ -1419,12 +1419,12 @@ export function DocumentTemplateManager({ initialTemplates, initialParts, tenant
       <PartUploadModal open={showPartForm} onClose={closePartForm} form={partForm} setForm={setPartForm} onSubmit={createPart} />
 
       <Modal open={showTemplateForm} onClose={() => setShowTemplateForm(false)} title="Neues Layout erstellen" size="wide">
-        <form className="grid" onSubmit={createTemplate}>
+        <ModalSaveForm className="grid" onSubmit={createTemplate}>
           <TemplateForm form={templateForm} setForm={setTemplateForm} partsByType={partsByType} allParts={parts} />
           <div className="table-toolbar-actions">
-            <button type="submit" className="button-secondary">Layout erstellen</button>
+            <button data-modal-save type="submit" className="button-secondary">Layout erstellen</button>
           </div>
-        </form>
+        </ModalSaveForm>
       </Modal>
 
       {hasNothingYet ? (

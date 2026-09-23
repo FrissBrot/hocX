@@ -9,6 +9,59 @@
             "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/hooks/design-check-hook.sh"
           }
         ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CCE_PORT_FILE=/root/.cce/projects/hocX-82f597/serve.port /root/.cce/hooks/cce_hook.sh PostToolUse"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CCE_PORT_FILE=/root/.cce/projects/hocX-82f597/serve.port /root/.cce/hooks/cce_hook.sh SessionStart"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CCE_PORT_FILE=/root/.cce/projects/hocX-82f597/serve.port /root/.cce/hooks/cce_hook.sh UserPromptSubmit"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CCE_PORT_FILE=/root/.cce/projects/hocX-82f597/serve.port /root/.cce/hooks/cce_hook.sh Stop"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CCE_PORT_FILE=/root/.cce/projects/hocX-82f597/serve.port /root/.cce/hooks/cce_hook.sh SessionEnd"
+          }
+        ]
       }
     ]
   }

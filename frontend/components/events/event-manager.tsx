@@ -8,7 +8,7 @@ import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterTabs } from "@/components/ui/filter-tabs";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { computePopoverPosition, Popover, usePopoverDismiss } from "@/components/ui/popover";
 import { SearchInput } from "@/components/ui/search-input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -161,7 +161,6 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
   const cyclesLoadedRef = useRef(false);
 
   const [pickerField, setPickerField] = useState<ParticipantPickerField | null>(null);
-  const [pickerSelected, setPickerSelected] = useState<string[]>([]);
   const [pickerSearch, setPickerSearch] = useState("");
 
   const [eventContextMenu, setEventContextMenu] = useState<{ x: number; y: number; event: EventSummary } | null>(null);
@@ -398,14 +397,19 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
 
   function openParticipantPicker(field: ParticipantPickerField) {
     setPickerField(field);
-    setPickerSelected([...(form[field] as string[])]);
     setPickerSearch("");
   }
 
-  function applyParticipantPicker() {
-    if (!pickerField) return;
-    setForm((current) => ({ ...current, [pickerField]: pickerSelected }));
-    setPickerField(null);
+  function togglePickerParticipant(field: ParticipantPickerField, participantId: string) {
+    setForm((current) => {
+      const selected = current[field] as string[];
+      return {
+        ...current,
+        [field]: selected.includes(participantId)
+          ? selected.filter((id) => id !== participantId)
+          : [...selected, participantId],
+      };
+    });
   }
 
   function participantLabel(ids: string[]): string {
@@ -923,7 +927,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
         title={form.id ? "Termin bearbeiten" : "Termin erstellen"}
         description="Der Tag hilft spaeter beim Verknuepfen mit passenden Protokollpunkten."
       >
-        <form className="grid" onSubmit={saveEvent}>
+        <ModalSaveForm className="grid" onSubmit={saveEvent}>
           <div className="two-col">
             <label className="field-stack">
               <span className="field-label">Startdatum</span>
@@ -1041,8 +1045,8 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
             )}
             <span className="field-help">Zyklen, denen dieser Termin zugeordnet werden soll. Optional.</span>
           </div>
-          <button type="submit">{form.id ? "Termin speichern" : "Termin erstellen"}</button>
-        </form>
+          <button data-modal-save type="submit">{form.id ? "Termin speichern" : "Termin erstellen"}</button>
+        </ModalSaveForm>
       </Modal>
 
       <Modal
@@ -1088,27 +1092,18 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
             {availableParticipants
               .filter((p) => !pickerSearch.trim() || p.display_name.toLowerCase().includes(pickerSearch.toLowerCase()))
               .map((p) => {
-                const checked = pickerSelected.includes(p.id);
+                const checked = pickerField ? (form[pickerField] as string[]).includes(p.id) : false;
                 return (
                   <label key={p.id} className={`participant-check-card${checked ? " participant-check-card-active" : ""}`}>
                     <input
                       type="checkbox"
                       checked={checked}
-                      onChange={(e) =>
-                        setPickerSelected((current) =>
-                          e.target.checked ? [...current, p.id] : current.filter((id) => id !== p.id)
-                        )
-                      }
+                      onChange={() => pickerField && togglePickerParticipant(pickerField, p.id)}
                     />
                     <span>{p.display_name}</span>
                   </label>
                 );
               })}
-          </div>
-          <div className="table-toolbar-actions">
-            <button type="button" className="button-secondary" onClick={applyParticipantPicker}>
-              Auswahl übernehmen
-            </button>
           </div>
         </div>
       </Modal>

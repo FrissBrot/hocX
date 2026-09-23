@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useRef } from "react";
 import { NavIcon } from "@/components/ui/nav-icons";
 import { CollaboratorAvatar } from "@/components/protocol/collaboration-presence";
 import type { CollaboratorInfo } from "@/lib/hooks/use-protocol-collaboration";
 import type { AttendanceTally } from "@/components/protocol/protocol-editor-shared";
+
+import { usePopupEscape } from "@/lib/hooks/use-popup-escape";
 
 type CollaborationStatusPanelProps = {
   open: boolean;
@@ -35,19 +37,12 @@ export function CollaborationStatusPanel({
   onMouseEnter,
   onMouseLeave,
 }: CollaborationStatusPanelProps) {
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open, onClose]);
+  const rootRef = useRef<HTMLDivElement>(null);
+  usePopupEscape(open, onClose, rootRef);
 
   return (
       <div
+        ref={rootRef}
         className={`quick-flyout${open ? " quick-flyout-open" : ""}`}
         role="dialog"
         aria-hidden={!open}

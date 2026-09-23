@@ -8,7 +8,7 @@ import { formatRoleLabel } from "@/components/ui/app-shell-nav";
 import { DataTable } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterTabs } from "@/components/ui/filter-tabs";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
@@ -309,7 +309,7 @@ export function UserManagement({ initialUsers }: Props) {
         description="Kontodaten und Rolle pflegen."
         size="wide"
       >
-        <form className="grid" onSubmit={submitUser}>
+        <ModalSaveForm className="grid" onSubmit={submitUser}>
           <div className="three-col">
             <label className="field-stack">
               <span className="field-label">Vorname</span>
@@ -380,11 +380,11 @@ export function UserManagement({ initialUsers }: Props) {
             <button type="button" className="button-ghost" onClick={() => setUserModalOpen(false)}>
               Abbrechen
             </button>
-            <button type="submit" className="button-primary">
+            <button data-modal-save type="submit" className="button-primary">
               Speichern
             </button>
           </div>
-        </form>
+        </ModalSaveForm>
       </Modal>
 
       <Modal
@@ -393,7 +393,7 @@ export function UserManagement({ initialUsers }: Props) {
         title={`Login aktivieren${loginModalUser ? ` für ${loginModalUser.display_name}` : ""}`}
         description="Vergib E-Mail und Passwort, damit sich dieser Teilnehmer einloggen kann. Er bleibt weiterhin als Teilnehmer verknüpft."
       >
-        <form className="grid" onSubmit={submitEnableLogin}>
+        <ModalSaveForm className="grid" onSubmit={submitEnableLogin}>
           <label className="field-stack">
             <span className="field-label">E-Mail</span>
             <input type="email" value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} required />
@@ -413,11 +413,11 @@ export function UserManagement({ initialUsers }: Props) {
           {loginError && <div className="form-error-banner">{loginError}</div>}
 
           <div className="table-actions table-actions-start">
-            <button type="submit" className="button-secondary">
+            <button data-modal-save type="submit" className="button-secondary">
               Login aktivieren
             </button>
           </div>
-        </form>
+        </ModalSaveForm>
       </Modal>
 
       <MfaAdminModal
