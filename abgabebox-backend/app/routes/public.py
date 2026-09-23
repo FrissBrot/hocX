@@ -34,6 +34,7 @@ def _client_ip(request: Request) -> str | None:
 router = APIRouter()
 
 NOT_FOUND = HTTPException(status_code=404, detail="Nicht gefunden")
+FEATURE_DISABLED = HTTPException(status_code=403, detail="Die Abgabebox ist für diesen Verein aktuell nicht verfügbar.")
 
 # SECURITY: the client-sent Content-Type header (upload_file.content_type) is fully attacker
 # controlled and must never be trusted or stored - a file named "x.pdf" with real HTML/JS
@@ -200,12 +201,19 @@ def _get_tenant_or_404(db: Session, link_token: str) -> dict:
     """Resolves the link token (the URL's only credential) to the tenant it belongs to. The
     returned dict carries the link id too, so every later lookup is scoped to what THIS link may
     reach - an unknown/malformed token and a token without any matching Abgabe both end in the
-    same 404, revealing nothing about which tenants or Abgaben exist."""
+    same 404, revealing nothing about which tenants or Abgaben exist.
+
+    A resolved-but-unbooked tenant (Feature-Gating, 0085_plan_pricing) is a different case: the
+    link token itself is real, so a flat 404 would look like a broken/expired link to the
+    external participant instead of telling them the club currently has Abgabebox switched off -
+    a 403 with FEATURE_DISABLED's clear message instead."""
     if not _LINK_TOKEN_PATTERN.fullmatch(link_token):
         raise NOT_FOUND
     link = repository.get_link_by_token(db, token=link_token)
     if link is None:
         raise NOT_FOUND
+    if not repository.is_feature_enabled(db, tenant_id=link["tenant_id"], feature_code="abgabebox"):
+        raise FEATURE_DISABLED
     return {"id": link["tenant_id"], "link_id": link["id"]}
 
 

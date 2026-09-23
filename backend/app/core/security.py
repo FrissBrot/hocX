@@ -247,6 +247,22 @@ def require_finance_write(user: CurrentUser) -> CurrentUser:
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Finance write access required")
 
 
+def require_abgabebox_read(user: CurrentUser) -> CurrentUser:
+    """Every tenant role may inspect Abgabebox data, if the tenant has Abgabebox booked."""
+    require_feature(user, "abgabebox")
+    if user.current_role in {"reader", "kassier", "writer", "admin"}:
+        return user
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Abgabebox read access required")
+
+
+def require_abgabebox_write(user: CurrentUser) -> CurrentUser:
+    """Only writer/admin may manage Abgaben, if the tenant has Abgabebox booked."""
+    require_feature(user, "abgabebox")
+    if user.current_role in {"writer", "admin"}:
+        return user
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Abgabebox write access required")
+
+
 def require_all_fines_read(user: CurrentUser) -> CurrentUser:
     """Reader accounts may only use the self-scoped fines listing."""
     if user.current_role in {"writer", "kassier", "admin"}:

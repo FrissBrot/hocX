@@ -39,6 +39,18 @@ submission_assignment_link_table = Table(
     Column("link_id", BigInteger, primary_key=True),
 )
 
+# Feature-Gating (0085_plan_pricing): die restricted Rolle darf nur pruefen, ob ein
+# Mandant 'abgabebox' gebucht hat - column-level SELECT auf (tenant_id, feature_code), nie
+# id/enabled_at/enabled_by_admin_id. Die echte Tabelle hat eine eigene id-Spalte als PK
+# (siehe Migration 0084) - hier absichtlich nicht abgebildet, diese Spalten-Teilmenge wird nie
+# per db.get()/db.refresh() angesprochen (siehe Modul-Docstring oben).
+tenant_feature_table = Table(
+    "tenant_feature",
+    metadata,
+    Column("tenant_id", BigInteger),
+    Column("feature_code", Text),
+)
+
 submission_assignment_table = Table(
     "submission_assignment",
     metadata,

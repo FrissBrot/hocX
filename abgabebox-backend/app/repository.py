@@ -24,6 +24,7 @@ from app.models import (
     submission_upload_log_table,
     submission_upload_table,
     system_error_log_table,
+    tenant_feature_table,
 )
 
 
@@ -33,6 +34,19 @@ def get_link_by_token(db: Session, *, token: str) -> dict | None:
     without one."""
     row = db.execute(select(submission_link_table).where(submission_link_table.c.token == token)).mappings().first()
     return dict(row) if row else None
+
+
+def is_feature_enabled(db: Session, *, tenant_id: int, feature_code: str) -> bool:
+    """Feature-Gating (0085_plan_pricing): tenant_feature bleibt die alleinige Quelle der
+    Wahrheit, auch hier im Public-Service - kein Cross-Service-Call in den Haupt-Backend noetig,
+    beide teilen sich dieselbe Postgres-DB (settings.database_url identisch)."""
+    row = db.execute(
+        select(tenant_feature_table.c.tenant_id).where(
+            tenant_feature_table.c.tenant_id == tenant_id,
+            tenant_feature_table.c.feature_code == feature_code,
+        )
+    ).first()
+    return row is not None
 
 
 def _linked_to(link_id: int):
