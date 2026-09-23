@@ -14,6 +14,7 @@ import { CopyrightNotice } from "@/components/ui/copyright-notice";
 const navLinks = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/tenants", label: "Mandanten" },
+  { href: "/admin/plans", label: "Preise" },
   { href: "/admin/users", label: "Benutzer" },
   { href: "/admin/domains", label: "Domains" },
   { href: "/admin/error-logs", label: "Fehlerprotokoll" },

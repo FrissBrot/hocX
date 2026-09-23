@@ -13,6 +13,8 @@ from app.models import (
     AppUser,
     Feature,
     Participant,
+    Plan,
+    PlanFeature,
     Protocol,
     StoredFile,
     SubmissionAssignment,
@@ -23,7 +25,16 @@ from app.models import (
     TenantFeature,
     WordImportDocument,
 )
-from app.schemas.admin import AdminFeatureRead, AdminTenantCreate, AdminTenantPage, AdminTenantRead
+from app.schemas.admin import (
+    AdminFeatureRead,
+    AdminFeatureUpdate,
+    AdminPlanRead,
+    AdminPlanWrite,
+    AdminTenantCreate,
+    AdminTenantPage,
+    AdminTenantRead,
+    AdminTenantSubscriptionUpdate,
+)
 from app.schemas.user import TenantUpdate
 from app.services.document_template_service import DocumentTemplateService
 from app.services.file_service import _safe_storage_path
@@ -52,6 +63,7 @@ class AdminTenantService:
         *,
         storage_used_bytes: int | None = None,
         enabled_features: list[str] | None = None,
+        plans_by_code: dict[str, Plan] | None = None,
     ) -> AdminTenantRead:
         participant_count = int(
             db.scalar(select(func.count(Participant.id)).where(Participant.tenant_id == tenant.id)) or 0
@@ -67,6 +79,12 @@ class AdminTenantService:
             enabled_features = sorted(
                 db.scalars(select(TenantFeature.feature_code).where(TenantFeature.tenant_id == tenant.id))
             )
+        plan: Plan | None = None
+        if tenant.plan_code is not None:
+            plan = plans_by_code.get(tenant.plan_code) if plans_by_code is not None else db.get(Plan, tenant.plan_code)
+        effective_user_limit = tenant.user_limit_override if tenant.user_limit_override is not None else (
+            plan.included_user_limit if plan is not None else None
+        )
         return AdminTenantRead(
             id=tenant.public_id,
             name=tenant.name,
@@ -79,6 +97,11 @@ class AdminTenantService:
             storage_used_bytes=storage_used_bytes,
             storage_quota_bytes=tenant.storage_quota_bytes,
             enabled_features=enabled_features,
+            plan_code=tenant.plan_code,
+            plan_name=plan.name if plan is not None else None,
+            billing_cycle=tenant.billing_cycle,
+            user_limit_override=tenant.user_limit_override,
+            effective_user_limit=effective_user_limit,
         )
 
     def list_tenants(self, db: Session, *, limit: int | None = None, offset: int = 0, q: str | None = None) -> AdminTenantPage:
@@ -93,12 +116,13 @@ class AdminTenantService:
         if limit is not None:
             query = query.limit(limit)
         tenants = query.all()
-        # One query for every tenant's storage total / booked features instead of N+1 -
+        # One query for every tenant's storage total / booked features / plan instead of N+1 -
         # list_tenants can return up to 500 rows (see the route's `le=500` cap).
         storage_totals = self.storage_service.total_bytes_by_tenant(db)
         features_by_tenant: dict[int, list[str]] = {}
         for tenant_id, feature_code in db.execute(select(TenantFeature.tenant_id, TenantFeature.feature_code)).all():
             features_by_tenant.setdefault(tenant_id, []).append(feature_code)
+        plans_by_code = {plan.code: plan for plan in db.query(Plan).all()}
         return AdminTenantPage(
             items=[
                 self._read_model(
@@ -106,6 +130,7 @@ class AdminTenantService:
                     tenant,
                     storage_used_bytes=storage_totals.get(tenant.id, 0),
                     enabled_features=sorted(features_by_tenant.get(tenant.id, [])),
+                    plans_by_code=plans_by_code,
                 )
                 for tenant in tenants
             ],
@@ -114,7 +139,99 @@ class AdminTenantService:
 
     def list_features(self, db: Session) -> list[AdminFeatureRead]:
         features = db.query(Feature).order_by(Feature.code.asc()).all()
-        return [AdminFeatureRead(code=f.code, name=f.name, description=f.description) for f in features]
+        return [
+            AdminFeatureRead(
+                code=f.code, name=f.name, description=f.description, standalone_price_monthly_rp=f.standalone_price_monthly_rp
+            )
+            for f in features
+        ]
+
+    def update_feature(self, db: Session, code: str, payload: AdminFeatureUpdate) -> AdminFeatureRead | None:
+        feature = db.get(Feature, code)
+        if feature is None:
+            return None
+        feature.name = payload.name
+        feature.description = payload.description
+        feature.standalone_price_monthly_rp = payload.standalone_price_monthly_rp
+        db.add(feature)
+        db.commit()
+        return AdminFeatureRead(
+            code=feature.code,
+            name=feature.name,
+            description=feature.description,
+            standalone_price_monthly_rp=feature.standalone_price_monthly_rp,
+        )
+
+    def _plan_read_model(self, db: Session, plan: Plan) -> AdminPlanRead:
+        feature_codes = sorted(
+            db.scalars(select(PlanFeature.feature_code).where(PlanFeature.plan_code == plan.code))
+        )
+        return AdminPlanRead(
+            code=plan.code,
+            name=plan.name,
+            price_monthly_rp=plan.price_monthly_rp,
+            price_yearly_rp=plan.price_yearly_rp,
+            included_user_limit=plan.included_user_limit,
+            included_storage_bytes=plan.included_storage_bytes,
+            sort_order=plan.sort_order,
+            feature_codes=feature_codes,
+        )
+
+    def list_plans(self, db: Session) -> list[AdminPlanRead]:
+        plans = db.query(Plan).order_by(Plan.sort_order.asc(), Plan.code.asc()).all()
+        return [self._plan_read_model(db, plan) for plan in plans]
+
+    def upsert_plan(self, db: Session, code: str, payload: AdminPlanWrite) -> AdminPlanRead:
+        plan = db.get(Plan, code)
+        if plan is None:
+            plan = Plan(code=code)
+        plan.name = payload.name
+        plan.price_monthly_rp = payload.price_monthly_rp
+        plan.price_yearly_rp = payload.price_yearly_rp
+        plan.included_user_limit = payload.included_user_limit
+        plan.included_storage_bytes = payload.included_storage_bytes
+        plan.sort_order = payload.sort_order
+        db.add(plan)
+        db.flush()
+
+        wanted = set(payload.feature_codes)
+        current = {
+            row.feature_code: row for row in db.query(PlanFeature).filter(PlanFeature.plan_code == code).all()
+        }
+        for feature_code, row in current.items():
+            if feature_code not in wanted:
+                db.delete(row)
+        for feature_code in wanted - current.keys():
+            db.add(PlanFeature(plan_code=code, feature_code=feature_code))
+        db.commit()
+        return self._plan_read_model(db, plan)
+
+    def update_tenant_subscription(
+        self, db: Session, tenant_id: int, payload: AdminTenantSubscriptionUpdate, *, admin_id: int
+    ) -> AdminTenantRead | None:
+        tenant = db.get(Tenant, tenant_id)
+        if tenant is None:
+            return None
+        tenant.plan_code = payload.plan_code
+        tenant.billing_cycle = payload.billing_cycle
+        tenant.user_limit_override = payload.user_limit_override
+        db.add(tenant)
+        db.flush()
+
+        # Ein Plan-Wechsel traegt nur eine Baseline ein - bereits gebuchte Zusatzmodule, die
+        # nicht Teil des neuen Plans sind, bleiben unangetastet (siehe Tenant.plan_code-Kommentar
+        # in entities.py). Kein Feature wird hier je entfernt.
+        if payload.plan_code is not None:
+            plan_feature_codes = set(
+                db.scalars(select(PlanFeature.feature_code).where(PlanFeature.plan_code == payload.plan_code))
+            )
+            already_booked = set(
+                db.scalars(select(TenantFeature.feature_code).where(TenantFeature.tenant_id == tenant_id))
+            )
+            for feature_code in plan_feature_codes - already_booked:
+                db.add(TenantFeature(tenant_id=tenant_id, feature_code=feature_code, enabled_by_admin_id=admin_id))
+        db.commit()
+        return self._read_model(db, tenant)
 
     def update_tenant_features(
         self, db: Session, tenant_id: int, enabled_codes: list[str], *, admin_id: int

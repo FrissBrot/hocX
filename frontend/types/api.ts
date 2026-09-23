@@ -88,6 +88,31 @@ export type TenantSummary = {
   enabled_features: string[];
 };
 
+export type TenantSubscriptionFeature = {
+  code: string;
+  name: string;
+  standalone_price_monthly_rp: number | null;
+  included_in_plan: boolean;
+};
+
+export type TenantSubscription = {
+  plan_code: string | null;
+  plan_name: string | null;
+  billing_cycle: "monthly" | "yearly";
+  plan_price_monthly_rp: number | null;
+  plan_price_yearly_rp: number | null;
+  included_user_limit: number | null;
+  included_storage_bytes: number | null;
+  user_limit_override: number | null;
+  effective_user_limit: number | null;
+  user_count: number;
+  storage_used_bytes: number;
+  storage_quota_bytes: number | null;
+  features: TenantSubscriptionFeature[];
+  estimated_monthly_cost_rp: number | null;
+  estimated_yearly_cost_rp: number | null;
+};
+
 export type TenantDomainPurpose = "app" | "abgabebox";
 
 export type TenantDomain = {
@@ -374,12 +399,51 @@ export type AdminTenantSummary = {
   storage_used_bytes: number;
   storage_quota_bytes: number | null;
   enabled_features: string[];
+  plan_code: string | null;
+  plan_name: string | null;
+  billing_cycle: "monthly" | "yearly";
+  user_limit_override: number | null;
+  effective_user_limit: number | null;
 };
 
 export type AdminFeature = {
   code: string;
   name: string;
   description: string | null;
+  standalone_price_monthly_rp: number | null;
+};
+
+export type AdminFeatureUpdate = {
+  name: string;
+  description: string | null;
+  standalone_price_monthly_rp: number | null;
+};
+
+export type AdminPlan = {
+  code: string;
+  name: string;
+  price_monthly_rp: number | null;
+  price_yearly_rp: number | null;
+  included_user_limit: number | null;
+  included_storage_bytes: number | null;
+  sort_order: number;
+  feature_codes: string[];
+};
+
+export type AdminPlanWrite = {
+  name: string;
+  price_monthly_rp: number | null;
+  price_yearly_rp: number | null;
+  included_user_limit: number | null;
+  included_storage_bytes: number | null;
+  sort_order: number;
+  feature_codes: string[];
+};
+
+export type AdminTenantSubscriptionUpdate = {
+  plan_code: string | null;
+  billing_cycle: "monthly" | "yearly";
+  user_limit_override: number | null;
 };
 
 export type AdminTenantPage = {

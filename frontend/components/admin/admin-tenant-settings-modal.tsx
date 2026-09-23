@@ -10,7 +10,17 @@ import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
 import { formatFileSize } from "@/lib/utils/format";
 import { StorageBreakdown } from "@/components/storage/storage-usage-view";
-import { AdminFeature, AdminTenantSummary, AdminTenantUser, StorageUsageRead, TenantCleanupCategory, TenantCleanupCounts } from "@/types/api";
+import { formatRappen } from "@/lib/utils/format";
+import {
+  AdminFeature,
+  AdminPlan,
+  AdminTenantSubscriptionUpdate,
+  AdminTenantSummary,
+  AdminTenantUser,
+  StorageUsageRead,
+  TenantCleanupCategory,
+  TenantCleanupCounts,
+} from "@/types/api";
 
 type Props = {
   open: boolean;
@@ -98,6 +108,14 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
   const [selectedFeatures, setSelectedFeatures] = useState<Set<string>>(new Set());
   const [featuresBusy, setFeaturesBusy] = useState(false);
 
+  const [planCatalog, setPlanCatalog] = useState<AdminPlan[]>([]);
+  const [subscriptionForm, setSubscriptionForm] = useState<AdminTenantSubscriptionUpdate>({
+    plan_code: null,
+    billing_cycle: "monthly",
+    user_limit_override: null,
+  });
+  const [subscriptionBusy, setSubscriptionBusy] = useState(false);
+
   useEffect(() => {
     if (!open || !tenant) {
       return;
@@ -121,6 +139,13 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
 
     setSelectedFeatures(new Set(tenant.enabled_features));
     void loadFeatureCatalog();
+
+    setSubscriptionForm({
+      plan_code: tenant.plan_code,
+      billing_cycle: tenant.billing_cycle,
+      user_limit_override: tenant.user_limit_override,
+    });
+    void loadPlanCatalog();
   }, [open, tenant]);
 
   async function loadFeatureCatalog() {
@@ -129,6 +154,34 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
       setFeatureCatalog(result);
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Feature-Katalog konnte nicht geladen werden", "error");
+    }
+  }
+
+  async function loadPlanCatalog() {
+    try {
+      const result = await browserApiFetch<AdminPlan[]>("/api/admin/plans");
+      setPlanCatalog(result);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Plan-Katalog konnte nicht geladen werden", "error");
+    }
+  }
+
+  async function submitSubscription(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!tenant) return;
+    setSubscriptionBusy(true);
+    try {
+      const updated = await browserApiFetch<AdminTenantSummary>(`/api/admin/tenants/${tenant.id}/subscription`, {
+        method: "PATCH",
+        body: JSON.stringify(subscriptionForm),
+      });
+      onSaved(updated);
+      setSelectedFeatures(new Set(updated.enabled_features));
+      showToast("Abo gespeichert", "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Abo konnte nicht gespeichert werden", "error");
+    } finally {
+      setSubscriptionBusy(false);
     }
   }
 
@@ -541,6 +594,79 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                   </div>
                 </form>
               </div>
+            )
+          },
+          {
+            id: "abo",
+            label: "Abo",
+            content: (
+              <form className="grid" onSubmit={submitSubscription}>
+                <div className="two-col">
+                  <label className="field-stack">
+                    <span className="field-label">Plan</span>
+                    <select
+                      value={subscriptionForm.plan_code ?? ""}
+                      onChange={(event) =>
+                        setSubscriptionForm((current) => ({ ...current, plan_code: event.target.value || null }))
+                      }
+                    >
+                      <option value="">Kein Plan</option>
+                      {planCatalog.map((plan) => (
+                        <option key={plan.code} value={plan.code}>
+                          {plan.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field-stack">
+                    <span className="field-label">Abrechnung</span>
+                    <select
+                      value={subscriptionForm.billing_cycle}
+                      onChange={(event) =>
+                        setSubscriptionForm((current) => ({ ...current, billing_cycle: event.target.value as "monthly" | "yearly" }))
+                      }
+                    >
+                      <option value="monthly">Monatlich</option>
+                      <option value="yearly">Jährlich</option>
+                    </select>
+                  </label>
+                </div>
+                {subscriptionForm.plan_code ? (
+                  <p className="muted">
+                    {formatRappen(
+                      subscriptionForm.billing_cycle === "monthly"
+                        ? planCatalog.find((p) => p.code === subscriptionForm.plan_code)?.price_monthly_rp ?? null
+                        : planCatalog.find((p) => p.code === subscriptionForm.plan_code)?.price_yearly_rp ?? null
+                    )}{" "}
+                    · Nutzerlimit: {planCatalog.find((p) => p.code === subscriptionForm.plan_code)?.included_user_limit ?? "Kein Limit"}
+                  </p>
+                ) : null}
+                <label className="field-stack">
+                  <span className="field-label">Nutzerlimit überschreiben (leer = Plan-Limit gilt)</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={subscriptionForm.user_limit_override ?? ""}
+                    onChange={(event) =>
+                      setSubscriptionForm((current) => ({
+                        ...current,
+                        user_limit_override: event.target.value.trim() === "" ? null : Number(event.target.value),
+                      }))
+                    }
+                  />
+                </label>
+                <p className="muted">
+                  Aktuell {tenant.user_count} Nutzer, effektives Limit: {tenant.effective_user_limit ?? "Kein Limit"}.
+                  {tenant.effective_user_limit !== null && tenant.user_count >= tenant.effective_user_limit
+                    ? " Limit erreicht oder überschritten."
+                    : ""}
+                </p>
+                <div className="table-actions table-actions-start">
+                  <button type="submit" className="button-secondary" disabled={subscriptionBusy}>
+                    {subscriptionBusy ? "Wird gespeichert…" : "Abo speichern"}
+                  </button>
+                </div>
+              </form>
             )
           },
           {

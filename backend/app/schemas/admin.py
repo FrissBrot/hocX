@@ -76,6 +76,13 @@ class AdminTenantRead(BaseModel):
     storage_used_bytes: int = 0
     storage_quota_bytes: int | None = None
     enabled_features: list[str] = []
+    plan_code: str | None = None
+    plan_name: str | None = None
+    billing_cycle: Literal["monthly", "yearly"] = "monthly"
+    user_limit_override: int | None = None
+    # override ?? plan.included_user_limit - None bedeutet "kein Limit". Rein informativ fuers
+    # Adminportal (Phase-0-Entscheidung: erst Anzeige/Warnung, keine harte Sperre).
+    effective_user_limit: int | None = None
 
 
 class AdminTenantStorageQuotaUpdate(BaseModel):
@@ -89,12 +96,52 @@ class AdminFeatureRead(BaseModel):
     code: str
     name: str
     description: str | None = None
+    # Rappen, nicht Franken. None = nur gebuendelt ueber einen Plan verfuegbar, nie einzeln
+    # zubuchbar (z.B. 'finance' heute).
+    standalone_price_monthly_rp: int | None = None
+
+
+class AdminFeatureUpdate(BaseModel):
+    # Full-Replace wie bei AdminTenantStorageQuotaUpdate - der Code selbst (PK) bleibt fest,
+    # alles andere wird komplett ersetzt.
+    name: str
+    description: str | None = None
+    standalone_price_monthly_rp: int | None = None
 
 
 class AdminTenantFeaturesUpdate(BaseModel):
     # Full-Replace wie bei AdminTenantStorageQuotaUpdate: der gesamte gebuchte Featureumfang,
     # kein Teil-Patch.
     enabled_codes: list[str]
+
+
+class AdminPlanRead(BaseModel):
+    code: str
+    name: str
+    price_monthly_rp: int | None = None
+    price_yearly_rp: int | None = None
+    included_user_limit: int | None = None
+    included_storage_bytes: int | None = None
+    sort_order: int = 0
+    feature_codes: list[str] = []
+
+
+class AdminPlanWrite(BaseModel):
+    # Full-Replace, auch fuers Anlegen (PUT /api/admin/plans/{code}, Code kommt aus dem Pfad,
+    # nicht aus dem Body - analog zu AdminTenantStorageQuotaUpdate).
+    name: str
+    price_monthly_rp: int | None = None
+    price_yearly_rp: int | None = None
+    included_user_limit: int | None = None
+    included_storage_bytes: int | None = None
+    sort_order: int = 0
+    feature_codes: list[str] = []
+
+
+class AdminTenantSubscriptionUpdate(BaseModel):
+    plan_code: str | None = None
+    billing_cycle: Literal["monthly", "yearly"] = "monthly"
+    user_limit_override: int | None = None
 
 
 class AdminTenantPage(BaseModel):
