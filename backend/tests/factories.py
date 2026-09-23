@@ -211,7 +211,9 @@ def make_app_user(
     return user
 
 
-def make_current_user(tenant_id: int, role: str = "writer", user_id: int = 1) -> CurrentUser:
+def make_current_user(
+    tenant_id: int, role: str = "writer", user_id: int = 1, features: frozenset[str] | None = None
+) -> CurrentUser:
     """A plain CurrentUser for calling route functions directly (bypassing Depends/auth
     entirely - route functions are still ordinary callables, no ASGI/TestClient needed).
 
@@ -221,7 +223,12 @@ def make_current_user(tenant_id: int, role: str = "writer", user_id: int = 1) ->
     UUIDs, consistent with this factory's existing "plain, not DB-backed" contract. Route
     logic under test cares about the internal ids (tenant isolation, role checks); tests
     that need a public_id to line up with a real row already fetch it themselves from the
-    ORM object made via make_tenant/make_app_user."""
+    ORM object made via make_tenant/make_app_user.
+
+    features defaults to {"finance"} rather than empty - every existing tenant is backfilled
+    with Finanzen (see migration 0084_tenant_feature), so this default keeps every pre-existing
+    role/permission test green without needing to know about feature-gating. Tests for
+    feature-gating itself pass an explicit `features` set."""
     return CurrentUser(
         user_id=user_id,
         user_public_id=uuid.uuid4(),
@@ -236,6 +243,7 @@ def make_current_user(tenant_id: int, role: str = "writer", user_id: int = 1) ->
         current_tenant_name="Test Tenant",
         current_tenant_profile_image_path=None,
         current_role=role,
+        current_tenant_features=features if features is not None else frozenset({"finance"}),
     )
 
 

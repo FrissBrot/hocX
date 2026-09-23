@@ -75,6 +75,7 @@ class AdminTenantRead(BaseModel):
     created_at: datetime
     storage_used_bytes: int = 0
     storage_quota_bytes: int | None = None
+    enabled_features: list[str] = []
 
 
 class AdminTenantStorageQuotaUpdate(BaseModel):
@@ -82,6 +83,18 @@ class AdminTenantStorageQuotaUpdate(BaseModel):
     # Versehen weglassen kann - anders als bei PATCH /tenants/{id} ist das hier der gesamte
     # Payload, nicht ein optionales Teilfeld eines groesseren Formulars).
     quota_mb: int | None = Field(ge=1)
+
+
+class AdminFeatureRead(BaseModel):
+    code: str
+    name: str
+    description: str | None = None
+
+
+class AdminTenantFeaturesUpdate(BaseModel):
+    # Full-Replace wie bei AdminTenantStorageQuotaUpdate: der gesamte gebuchte Featureumfang,
+    # kein Teil-Patch.
+    enabled_codes: list[str]
 
 
 class AdminTenantPage(BaseModel):

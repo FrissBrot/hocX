@@ -9,8 +9,9 @@ import { FinanceAccount } from "@/types/api";
 
 export default async function FinancesPage() {
   const session = await requireSession();
-  const hasFinance = ["reader", "admin", "writer", "kassier"].includes(session.current_role ?? "");
-  if (!hasFinance) redirect("/");
+  const hasFinanceRole = ["reader", "admin", "writer", "kassier"].includes(session.current_role ?? "");
+  const hasFinanceFeature = session.current_tenant?.enabled_features?.includes("finance") ?? false;
+  if (!hasFinanceRole || !hasFinanceFeature) redirect("/");
 
   const accounts = await backendFetchWithSession<FinanceAccount[]>("/api/finance/accounts") ?? [];
 

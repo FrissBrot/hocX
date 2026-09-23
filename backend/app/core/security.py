@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.db import get_db
-from app.models import AppUser, Role, Tenant, UserMfaFactor
+from app.models import AppUser, Role, Tenant, TenantFeature, UserMfaFactor
 
 
 PASSWORD_SCHEME = "pbkdf2_sha256"
@@ -41,6 +41,10 @@ class CurrentUser:
     current_role: str
     protocol_accordion_enabled: bool = True
     mfa_verified: bool = False
+    # Feature-Gating pro Mandant (orthogonal zur Rolle): welche Features fuer
+    # current_tenant_id gebucht sind. Leer per Default (deny-by-default) - build_current_user
+    # laedt den echten Stand aus tenant_feature.
+    current_tenant_features: frozenset[str] = frozenset()
 
     def has_tenant_role(self, *allowed_roles: str) -> bool:
         return self.current_role in allowed_roles
@@ -138,6 +142,9 @@ def build_current_user(db: Session, user: AppUser, *, mfa_verified: bool = False
     tenant, role = db.execute(
         select(Tenant, Role).where(Tenant.id == user.tenant_id, Role.id == user.role_id)
     ).one()
+    tenant_features = frozenset(
+        db.scalars(select(TenantFeature.feature_code).where(TenantFeature.tenant_id == tenant.id))
+    )
     return CurrentUser(
         user_id=user.id,
         user_public_id=user.public_id,
@@ -154,6 +161,7 @@ def build_current_user(db: Session, user: AppUser, *, mfa_verified: bool = False
         current_tenant_profile_image_path=tenant.profile_image_path,
         current_role=role.code,
         mfa_verified=mfa_verified,
+        current_tenant_features=tenant_features,
     )
 
 
@@ -214,15 +222,26 @@ def require_writer(user: CurrentUser) -> CurrentUser:
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Writer role required")
 
 
+def require_feature(user: CurrentUser, code: str) -> CurrentUser:
+    """Feature-Gating pro Mandant - orthogonal zur Rollenpruefung. Ein 403 hier bedeutet "fuer
+    diesen Mandanten nicht gebucht", nicht "diese Rolle darf das nicht"."""
+    if code not in user.current_tenant_features:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Feature '{code}' nicht gebucht")
+    return user
+
+
 def require_finance_read(user: CurrentUser) -> CurrentUser:
-    """Every tenant role may inspect finance data."""
+    """Every tenant role may inspect finance data, if the tenant has Finanzen booked."""
+    require_feature(user, "finance")
     if user.current_role in {"reader", "kassier", "writer", "admin"}:
         return user
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Finance read access required")
 
 
 def require_finance_write(user: CurrentUser) -> CurrentUser:
-    """Only the dedicated cashier role and tenant admins may mutate finance data."""
+    """Only the dedicated cashier role and tenant admins may mutate finance data, if the tenant
+    has Finanzen booked."""
+    require_feature(user, "finance")
     if user.current_role in {"kassier", "admin"}:
         return user
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Finance write access required")

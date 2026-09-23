@@ -17,6 +17,7 @@ class TenantRead(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
     tag_config_json: dict[str, Any] = {}
+    enabled_features: list[str] = []
 
 
 class UserBase(BaseModel):

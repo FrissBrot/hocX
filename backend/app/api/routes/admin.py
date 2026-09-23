@@ -19,7 +19,9 @@ from app.services import public_id_service
 from app.schemas.admin import (
     AdminDomainPage,
     AdminDomainRead,
+    AdminFeatureRead,
     AdminTenantCreate,
+    AdminTenantFeaturesUpdate,
     AdminTenantPage,
     AdminTenantRead,
     AdminTenantStorageQuotaUpdate,
@@ -351,6 +353,29 @@ def update_tenant_storage_quota(
     result = tenant_service.get_tenant(db, internal_tenant_id)
     if result is None:
         raise HTTPException(status_code=500, detail="Tenant could not be reloaded")
+    return result
+
+
+@router.get("/features", response_model=list[AdminFeatureRead])
+def list_features(db: Session = Depends(get_db)):
+    return tenant_service.list_features(db)
+
+
+@router.put("/tenants/{tenant_id}/features", response_model=AdminTenantRead)
+def update_tenant_features(
+    tenant_id: uuid.UUID,
+    payload: AdminTenantFeaturesUpdate,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
+    internal_tenant_id = _resolve_tenant_id(db, tenant_id)
+    result = tenant_service.update_tenant_features(db, internal_tenant_id, payload.enabled_codes, admin_id=current_admin.admin_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    audit.log(
+        db, action="admin.tenant_features_updated", actor_email=current_admin.email, tenant_id=internal_tenant_id,
+        entity_type="tenant", entity_id=internal_tenant_id, details={"enabled_codes": payload.enabled_codes},
+    )
     return result
 
 

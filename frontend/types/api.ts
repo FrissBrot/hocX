@@ -85,6 +85,7 @@ export type TenantSummary = {
   public_slug: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+  enabled_features: string[];
 };
 
 export type TenantDomainPurpose = "app" | "abgabebox";
@@ -372,6 +373,13 @@ export type AdminTenantSummary = {
   created_at: string;
   storage_used_bytes: number;
   storage_quota_bytes: number | null;
+  enabled_features: string[];
+};
+
+export type AdminFeature = {
+  code: string;
+  name: string;
+  description: string | null;
 };
 
 export type AdminTenantPage = {

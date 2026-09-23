@@ -107,6 +107,36 @@ class TenantDomain(Base, TimestampMixin):
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class Feature(Base):
+    """Katalog buchbarer Mandanten-Features (Feature-Gating), orthogonal zu Rollen: eine Rolle
+    steuert, was ein Nutzer innerhalb seines Mandanten darf, `tenant_feature` steuert, ob ein
+    Feature für den Mandanten überhaupt gebucht ist. Seed-Zeilen kommen aus der zugehörigen
+    Migration, nicht aus baseline_lookup_data.sql (dieser Katalog existiert erst seit der
+    Feature-Gating-Einführung, nach dem 0001-Baseline-Squash)."""
+
+    __tablename__ = "feature"
+
+    code: Mapped[str] = mapped_column(Text, primary_key=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+
+
+class TenantFeature(Base, TimestampMixin):
+    __tablename__ = "tenant_feature"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "feature_code", name="uq_tenant_feature_tenant_code"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    feature_code: Mapped[str] = mapped_column(Text, ForeignKey("feature.code", ondelete="CASCADE"), nullable=False)
+    enabled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    enabled_by_admin_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("platform_admin.id", ondelete="SET NULL"))
+
+
 class Role(Base):
     __tablename__ = "role"
 

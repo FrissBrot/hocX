@@ -45,7 +45,10 @@ class TenantService:
         """The one tenant the actor administers (none unless they are an admin of it)."""
         return {actor.current_tenant_id} if actor.current_role == "admin" else set()
 
-    def _read_model(self, tenant: Tenant) -> TenantRead:
+    def _read_model(self, tenant: Tenant, actor: CurrentUser) -> TenantRead:
+        # actor.current_tenant_features already reflects tenant_feature for this exact tenant
+        # (_manageable_tenant_ids only ever admits the actor's own tenant, see below) - no
+        # extra DB join needed here, unlike the platform-admin service which spans tenants.
         return TenantRead(
             id=tenant.public_id,
             name=tenant.name,
@@ -54,12 +57,13 @@ class TenantService:
             public_slug=tenant.public_slug,
             created_at=tenant.created_at,
             updated_at=tenant.updated_at,
+            enabled_features=sorted(actor.current_tenant_features),
         )
 
     def list_tenants(self, db: Session, actor: CurrentUser) -> list[TenantRead]:
         tenant_ids = self._manageable_tenant_ids(actor)
         tenants = db.query(Tenant).filter(Tenant.id.in_(tenant_ids)).order_by(Tenant.name.asc()).all()
-        return [self._read_model(tenant) for tenant in tenants]
+        return [self._read_model(tenant, actor) for tenant in tenants]
 
     def get_tenant(self, db: Session, tenant_id: int, actor: CurrentUser) -> TenantRead | None:
         tenant = db.get(Tenant, tenant_id)
@@ -67,7 +71,7 @@ class TenantService:
             return None
         if tenant_id not in self._manageable_tenant_ids(actor):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant not accessible")
-        return self._read_model(tenant)
+        return self._read_model(tenant, actor)
 
     async def update_tenant(
         self,
@@ -95,7 +99,7 @@ class TenantService:
         db.add(tenant)
         db.commit()
         db.refresh(tenant)
-        return self._read_model(tenant)
+        return self._read_model(tenant, actor)
 
     def _require_manageable(self, tenant_id: int, actor: CurrentUser) -> None:
         if tenant_id not in self._manageable_tenant_ids(actor):

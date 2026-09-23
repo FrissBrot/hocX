@@ -28,7 +28,7 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
   const role = session?.current_role ?? null;
   const isAdmin = role === "admin";
   const isWriter = isAdmin || role === "writer";
-  const hasFinance = role !== null;
+  const hasFinance = role !== null && (session?.current_tenant?.enabled_features?.includes("finance") ?? false);
 
   // `match` lists the sibling routes that share a section's tab strip (see RouteTabs), so the
   // section stays highlighted while one of its other tabs is open.

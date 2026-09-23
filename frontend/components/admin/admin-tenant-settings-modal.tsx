@@ -10,7 +10,7 @@ import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
 import { formatFileSize } from "@/lib/utils/format";
 import { StorageBreakdown } from "@/components/storage/storage-usage-view";
-import { AdminTenantSummary, AdminTenantUser, StorageUsageRead, TenantCleanupCategory, TenantCleanupCounts } from "@/types/api";
+import { AdminFeature, AdminTenantSummary, AdminTenantUser, StorageUsageRead, TenantCleanupCategory, TenantCleanupCounts } from "@/types/api";
 
 type Props = {
   open: boolean;
@@ -94,6 +94,10 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
   const [quotaMbInput, setQuotaMbInput] = useState("");
   const [quotaBusy, setQuotaBusy] = useState(false);
 
+  const [featureCatalog, setFeatureCatalog] = useState<AdminFeature[]>([]);
+  const [selectedFeatures, setSelectedFeatures] = useState<Set<string>>(new Set());
+  const [featuresBusy, setFeaturesBusy] = useState(false);
+
   useEffect(() => {
     if (!open || !tenant) {
       return;
@@ -114,7 +118,50 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
 
     setQuotaMbInput(tenant.storage_quota_bytes !== null ? String(Math.round(tenant.storage_quota_bytes / (1024 * 1024))) : "");
     void loadStorageUsage(tenant.id);
+
+    setSelectedFeatures(new Set(tenant.enabled_features));
+    void loadFeatureCatalog();
   }, [open, tenant]);
+
+  async function loadFeatureCatalog() {
+    try {
+      const result = await browserApiFetch<AdminFeature[]>("/api/admin/features");
+      setFeatureCatalog(result);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Feature-Katalog konnte nicht geladen werden", "error");
+    }
+  }
+
+  function toggleFeature(code: string) {
+    setSelectedFeatures((current) => {
+      const next = new Set(current);
+      if (next.has(code)) {
+        next.delete(code);
+      } else {
+        next.add(code);
+      }
+      return next;
+    });
+  }
+
+  async function submitFeatures(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!tenant) return;
+    setFeaturesBusy(true);
+    try {
+      const updated = await browserApiFetch<AdminTenantSummary>(`/api/admin/tenants/${tenant.id}/features`, {
+        method: "PUT",
+        body: JSON.stringify({ enabled_codes: Array.from(selectedFeatures) }),
+      });
+      onSaved(updated);
+      setSelectedFeatures(new Set(updated.enabled_features));
+      showToast("Features gespeichert", "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Features konnten nicht gespeichert werden", "error");
+    } finally {
+      setFeaturesBusy(false);
+    }
+  }
 
   async function loadStorageUsage(tenantId: string) {
     setStorageLoading(true);
@@ -494,6 +541,39 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                   </div>
                 </form>
               </div>
+            )
+          },
+          {
+            id: "features",
+            label: "Features",
+            content: (
+              <form className="grid" onSubmit={submitFeatures}>
+                <div className="field-stack">
+                  <span className="field-label">Gebuchte Features</span>
+                  {featureCatalog.length === 0 ? (
+                    <div className="muted">Keine Features im Katalog.</div>
+                  ) : (
+                    featureCatalog.map((feature) => (
+                      <label key={feature.code} className="field-radio-option">
+                        <input
+                          type="checkbox"
+                          checked={selectedFeatures.has(feature.code)}
+                          onChange={() => toggleFeature(feature.code)}
+                        />
+                        <span>
+                          <strong>{feature.name}</strong>
+                          {feature.description ? <div className="muted">{feature.description}</div> : null}
+                        </span>
+                      </label>
+                    ))
+                  )}
+                </div>
+                <div className="table-actions table-actions-start">
+                  <button type="submit" className="button-secondary" disabled={featuresBusy}>
+                    {featuresBusy ? "Wird gespeichert…" : "Features speichern"}
+                  </button>
+                </div>
+              </form>
             )
           }
         ]}
