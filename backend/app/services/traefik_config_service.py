@@ -19,14 +19,14 @@ def _app_routers(domain: str, domain_id: int) -> dict:
         f"{base}-frontend": {
             "rule": f"Host(`{domain}`)",
             "entryPoints": ["websecure"],
-            "service": "hocx-frontend@docker",
+            "service": f"{settings.router_prefix}-frontend@docker",
             "priority": 10,
             "tls": {"certResolver": "letsencrypt"},
         },
         f"{base}-backend": {
             "rule": f"Host(`{domain}`) && (PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`))",
             "entryPoints": ["websecure"],
-            "service": "hocx-backend@docker",
+            "service": f"{settings.router_prefix}-backend@docker",
             "priority": 100,
             "tls": {"certResolver": "letsencrypt"},
         },
@@ -36,9 +36,17 @@ def _app_routers(domain: str, domain_id: int) -> dict:
             # polled on every page load.
             "rule": f"Host(`{domain}`) && Path(`/api/auth/login`) && Method(`POST`)",
             "entryPoints": ["websecure"],
-            "service": "hocx-auth@docker",
+            "service": f"{settings.router_prefix}-auth@docker",
             "priority": 200,
-            "middlewares": ["auth-ratelimit@docker"],
+            "middlewares": [f"{settings.traefik_middleware_prefix}auth-ratelimit@docker"],
+            "tls": {"certResolver": "letsencrypt"},
+        },
+        f"{base}-gallery-upload": {
+            "rule": f"Host(`{domain}`) && Path(`/api/files/gallery-uploads`) && Method(`POST`)",
+            "entryPoints": ["websecure"],
+            "service": f"{settings.router_prefix}-gallery-upload@docker",
+            "priority": 200,
+            "middlewares": [f"{settings.traefik_middleware_prefix}{name}@docker" for name in ("gallery-upload-inflight", "gallery-upload-body-limit")],
             "tls": {"certResolver": "letsencrypt"},
         },
         f"{base}-word-import": {
@@ -46,9 +54,9 @@ def _app_routers(domain: str, domain_id: int) -> dict:
             # router, but for a tenant's own custom domain - see routes/word_import.py.
             "rule": f"Host(`{domain}`) && PathPrefix(`/api/tools/word-import`) && Method(`POST`)",
             "entryPoints": ["websecure"],
-            "service": "hocx-word-import@docker",
+            "service": f"{settings.router_prefix}-word-import@docker",
             "priority": 200,
-            "middlewares": ["word-import-ratelimit@docker", "word-import-body-limit@docker"],
+            "middlewares": [f"{settings.traefik_middleware_prefix}word-import-ratelimit@docker", f"{settings.traefik_middleware_prefix}word-import-body-limit@docker"],
             "tls": {"certResolver": "letsencrypt"},
         },
     }
@@ -60,23 +68,23 @@ def _abgabebox_routers(domain: str, domain_id: int) -> dict:
         f"{base}-frontend": {
             "rule": f"Host(`{domain}`)",
             "entryPoints": ["websecure"],
-            "service": "hocx-abgabebox-frontend@docker",
+            "service": f"{settings.router_prefix}-abgabebox-frontend@docker",
             "priority": 10,
             "tls": {"certResolver": "letsencrypt"},
         },
         f"{base}-backend": {
             "rule": f"Host(`{domain}`) && PathPrefix(`/api`)",
             "entryPoints": ["websecure"],
-            "service": "hocx-abgabebox-backend@docker",
+            "service": f"{settings.router_prefix}-abgabebox-backend@docker",
             "priority": 100,
             "tls": {"certResolver": "letsencrypt"},
         },
         f"{base}-upload": {
             "rule": f"Host(`{domain}`) && PathPrefix(`/api/public`) && Method(`POST`)",
             "entryPoints": ["websecure"],
-            "service": "hocx-abgabebox-backend@docker",
+            "service": f"{settings.router_prefix}-abgabebox-backend@docker",
             "priority": 200,
-            "middlewares": ["abgabebox-upload-ratelimit@docker"],
+            "middlewares": [f"{settings.traefik_middleware_prefix}{name}@docker" for name in ("abgabebox-upload-ratelimit", "abgabebox-upload-inflight", "abgabebox-upload-body-limit")],
             "tls": {"certResolver": "letsencrypt"},
         },
         f"{base}-public-get": {
@@ -85,9 +93,9 @@ def _abgabebox_routers(domain: str, domain_id: int) -> dict:
             # GET endpoints from unbounded enumeration.
             "rule": f"Host(`{domain}`) && PathPrefix(`/api/public`) && Method(`GET`)",
             "entryPoints": ["websecure"],
-            "service": "hocx-abgabebox-backend@docker",
+            "service": f"{settings.router_prefix}-abgabebox-backend@docker",
             "priority": 200,
-            "middlewares": ["abgabebox-public-ratelimit@docker"],
+            "middlewares": [f"{settings.traefik_middleware_prefix}abgabebox-public-ratelimit@docker"],
             "tls": {"certResolver": "letsencrypt"},
         },
     }

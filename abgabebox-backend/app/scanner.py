@@ -1,49 +1,52 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+from pathlib import Path
+
+_SCAN_CONCURRENCY = 4
+MAX_SCAN_BYTES = 100 * 1024**2
+_logger = logging.getLogger(__name__)
 
 
-def scan_bytes(content: bytes, *, host: str, port: int = 3310) -> str:
-    """Scan file bytes via clamd stream. Returns 'clean', 'infected', or 'pending'.
-
-    'pending' is returned when clamd is unreachable — the file is quarantined for later
-    rescanning by the main backend. This prevents a clamd outage from blocking all uploads.
-
-    This is a plain blocking call (pyclamd.ClamdNetworkSocket uses a raw synchronous socket,
-    with up to a 30s timeout per call) - never call this directly from an `async def` route.
-    Use scan_many() below, which runs each call off the event loop via asyncio.to_thread.
-    """
+def _scan(content, *, host: str, port: int) -> str:
+    import pyclamd
     try:
-        import pyclamd
-        cd = pyclamd.ClamdNetworkSocket(host=host, port=port, timeout=30)
-        result = cd.scan_stream(content)
-        # result is None when clean; {'stream': ('FOUND', 'VirusName')} when infected
-        return "clean" if result is None else "infected"
+        result = pyclamd.ClamdNetworkSocket(host=host, port=port, timeout=60).scan_stream(content)
+        if result is None:
+            return "clean"
+        if any(status == "FOUND" for status, _reason in result.values()):
+            return "infected"
+        _logger.error("ClamAV konnte die Datei nicht prüfen: %s", result)
+        return "error"
+    except pyclamd.BufferTooLongError:
+        return "error"
     except Exception:
+        _logger.warning("ClamAV vorübergehend nicht erreichbar", exc_info=True)
         return "pending"
 
 
-# (Critical, audit finding 2026-08-27): routes/public.py's upload() is an `async def` served by
-# uvicorn (--workers 2, docker-compose.yml) - one event loop per worker, shared by every tenant's
-# and every other endpoint's in-flight requests on that worker. scan_bytes() above used to be
-# called directly from there, so a single scan (up to a 30s clamd timeout) froze that ENTIRE
-# worker for its duration, not just the uploading request - a slow/unresponsive clamd could stall
-# every other request landing on that worker. asyncio.to_thread moves the blocking call onto a
-# worker thread, leaving the event loop free. A small bounded semaphore (not unlimited
-# gather/asyncio.to_thread per file) keeps a single large batch from opening dozens of concurrent
-# clamd connections at once; the real ceiling on batch size is the separate hard cap on files per
-# request in routes/public.py (settings.max_files_per_upload_request), which this function does
-# not itself enforce.
-_SCAN_CONCURRENCY = 4
+def scan_bytes(content: bytes, *, host: str, port: int = 3310) -> str:
+    """Nur Verbindungsfehler bleiben pending; Scanfehler sind keine Virenfunde."""
+    if len(content) > MAX_SCAN_BYTES:
+        return "error"
+    return _scan(content, host=host, port=port)
+
+
+def scan_file(path: str | Path, *, host: str, port: int = 3310) -> str:
+    try:
+        path = Path(path)
+        if path.stat().st_size > MAX_SCAN_BYTES:
+            return "error"
+        with path.open("rb") as source:
+            return _scan(source, host=host, port=port)
+    except OSError:
+        return "error"
 
 
 async def scan_many(contents: list[bytes], *, host: str, port: int = 3310) -> list[str]:
-    """Scans multiple files concurrently (bounded by _SCAN_CONCURRENCY), each off the event loop
-    via asyncio.to_thread. Returns results in the same order as `contents`."""
     semaphore = asyncio.Semaphore(_SCAN_CONCURRENCY)
-
-    async def _scan_one(content: bytes) -> str:
+    async def scan_one(content: bytes) -> str:
         async with semaphore:
             return await asyncio.to_thread(scan_bytes, content, host=host, port=port)
-
-    return await asyncio.gather(*(_scan_one(content) for content in contents))
+    return await asyncio.gather(*(scan_one(content) for content in contents))

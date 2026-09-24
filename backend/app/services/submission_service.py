@@ -644,6 +644,10 @@ class SubmissionService:
                 self.repository.update_stored_file_scan(db, stored_file, scan_status="clean", storage_path=new_path)
                 self.repository.create_upload_log(db, assignment_id=assignment_id, element_ref=element_ref, status="rescan_clean")
                 results["clean"] += 1
+            elif result == "error":
+                self.repository.update_stored_file_scan(db, stored_file, scan_status="error")
+                self.repository.create_upload_log(db, assignment_id=assignment_id, element_ref=element_ref, status="scan_error", error_message="Datei konnte nicht geprüft werden")
+                results["still_pending"] += 1
             elif result == "infected":
                 self.repository.update_stored_file_scan(db, stored_file, scan_status="infected")
                 self.repository.create_upload_log(db, assignment_id=assignment_id, element_ref=element_ref, status="rescan_infected", error_message=stored_file.original_name)

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import func, insert, select
+from sqlalchemy import func, insert, select, text
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -333,3 +333,11 @@ def insert_error_log(
         )
     )
     db.commit()
+
+
+def get_tenant_storage_usage_bytes(db: Session, *, tenant_id: int) -> int:
+    return int(db.scalar(text("SELECT public.upload_storage_usage(:tenant_id)"), {"tenant_id": tenant_id}) or 0)
+
+
+def upload_path_referenced(db: Session, path: str) -> bool:
+    return bool(db.scalar(text("SELECT public.upload_path_referenced(:path)"), {"path": path}))

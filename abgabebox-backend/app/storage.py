@@ -74,27 +74,10 @@ def save_to_quarantine(content: bytes, *, tenant_id: int, assignment_id: int, su
     return str(target_path.relative_to(settings.storage_root)), checksum
 
 
-def cleanup_stale_quarantine_files(max_age_seconds: int) -> int:
-    """Deletes files sitting in quarantine/ longer than max_age_seconds and returns how many
-    were removed.
-
-    DECISION (see abgabebox_quarantine_cleanup_loop in app/main.py for the full rationale):
-    this is purely filesystem-age-based, with NO database lookup to confirm orphan status.
-    The restricted 'hocx_abgabebox' DB role this service runs as has only INSERT on
-    submission_upload/submission_upload_file/stored_file - no SELECT at all (see
-    backend/alembic/versions/0020_abgabebox.py, "bewusst OHNE jeglichen Zugriff auf
-    stored_file/submission_upload_file"), so there is no query this service could run to check
-    whether a quarantine file already made it into a DB row. Age-based deletion is therefore the
-    only mechanism available here, not a chosen shortcut. This is safe because every quarantine
-    file is normally alive for seconds (upload -> ClamAV scan -> move-or-reject, all inside one
-    request): a real in-flight upload never gets close to max_age_seconds, so anything still
-    there that old can only be debris from a crashed/interrupted request (see public.upload's
-    quarantine-then-DB-insert flow) - a real, but never-recovered, file scanned clean and still
-    stuck in quarantine (rather than moved to regular storage) is the one case this can't
-    distinguish from an orphan; that combination is not expected to occur in practice given the
-    request is a single synchronous flow, and the pending-scan/DB-insert-success case is instead
-    cleaned up by the main backend's abgabebox_rescan_loop, which does have full DB access.
-    """
+def cleanup_stale_quarantine_files(max_age_seconds: int, *, is_referenced=None) -> int:
+    """Nur nachweislich verwaiste Dateien löschen; DB-Ausfall darf keine Daten löschen."""
+    if is_referenced is None:
+        return 0
     quarantine_root = Path(settings.storage_root) / "quarantine"
     if not quarantine_root.exists():
         return 0
@@ -104,7 +87,7 @@ def cleanup_stale_quarantine_files(max_age_seconds: int) -> int:
         if not path.is_file():
             continue
         try:
-            if path.stat().st_mtime < cutoff:
+            if path.stat().st_mtime < cutoff and not is_referenced(str(path.relative_to(settings.storage_root))):
                 path.unlink(missing_ok=True)
                 removed += 1
         except OSError:

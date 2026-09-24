@@ -18,8 +18,12 @@ from starlette.background import BackgroundTask
 from app.core.db import get_db
 from app.core.config import settings
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
-from app.models import GalleryImage, ProtocolElementBlock, ProtocolImage, StoredFile
+from app.models import GalleryImage, ProtocolElementBlock, ProtocolImage, StoredFile, Tenant
 from app.schemas.files import (
+    AlbumShareCreate,
+    AlbumShareRequestRead,
+    AlbumShareRespond,
+    AlbumTenantShareStatus,
     DocumentUploadResult,
     FileBulkDelete,
     FileBulkDeleteResult,
@@ -37,13 +41,16 @@ from app.schemas.files import (
     StoredFileTagsUpdate,
 )
 from app.schemas.protocol import ProtocolImageRead
-from app.services import photo_album_service, public_id_service
+from app.services import photo_album_service, photo_album_share_service, public_id_service
 from app.services.access_service import AccessService
-from app.services.apple_media import pair_live_clips
+from app.services.apple_media import pair_live_clips, MAX_LIVE_CLIP_BYTES
 from app.services.file_service import MAX_UPLOAD_BYTES, FileService, _safe_storage_path
 from app.services import submission_upload_rules
 from app.services.submission_service import SubmissionService, _element_ref, _parse_element_ref
-from app.services.upload_pipeline import GALLERY_DIRECT_IMAGE_MAX_BYTES, GALLERY_ZIP_MAX_BYTES, stage_upload_to_disk
+from app.services.upload_pipeline import GALLERY_DIRECT_IMAGE_MAX_BYTES, GALLERY_ZIP_MAX_BYTES, stage_upload_to_disk, inspect_gallery_zip, _enforce_tenant_storage_quota
+from app.repositories.file_repository import StoredFileRepository
+from app.services.upload_lock import acquire_upload_lock
+from starlette.concurrency import run_in_threadpool
 
 router = APIRouter()
 service = FileService()
@@ -93,7 +100,10 @@ def list_files(
         _get_album(db, user, album_id)
     items = service.list_tenant_files(
         db,
-        user.current_tenant_id,
+        # None when album_id is set: the album_id JOIN already fully scopes the result to an
+        # album _get_album just verified this tenant may see - a plain tenant_id filter on top
+        # would silently drop a mandantenuebergreifend geteiltes Album's partner-tenant photos.
+        None if album_id is not None else user.current_tenant_id,
         skip=skip,
         limit=limit,
         source=source,
@@ -413,26 +423,28 @@ async def upload_gallery_images(
     original_filenames: list[str] = []
     batch_bytes = 0
     has_zip = False
+    reserved_bytes = 0
     try:
         for position, file in enumerate(files):
             name = file.filename or ""
             is_zip = name.lower().endswith(".zip")
             has_zip = has_zip or is_zip
-            max_bytes = GALLERY_ZIP_MAX_BYTES if is_zip else GALLERY_DIRECT_IMAGE_MAX_BYTES
+            max_bytes = GALLERY_ZIP_MAX_BYTES if is_zip else (MAX_LIVE_CLIP_BYTES if position in clip_positions else GALLERY_DIRECT_IMAGE_MAX_BYTES)
             if rules is not None and not is_zip and position not in clip_positions:
                 max_bytes = min(max_bytes, rules.max_bytes)
             staged_path = await stage_upload_to_disk(
                 file, target_dir=staging_dir, max_bytes=max_bytes, suffix=Path(name).suffix.lower() or ".bin"
             )
+            staged_paths.append(str(staged_path.relative_to(settings.storage_root)))
             batch_bytes += staged_path.stat().st_size
+            reserved_bytes += await run_in_threadpool(inspect_gallery_zip, staged_path) if is_zip else staged_path.stat().st_size
             if batch_bytes > MAX_GALLERY_UPLOAD_BATCH_BYTES:
                 raise HTTPException(
                     status_code=413,
                     detail=f"Gesamtgrösse des Batches überschritten (maximal {MAX_GALLERY_UPLOAD_BATCH_BYTES // 1024 // 1024} MB)",
                 )
-            staged_paths.append(str(staged_path.relative_to(settings.storage_root)))
             original_filenames.append(name)
-    except HTTPException:
+    except BaseException:
         for relative_path in staged_paths:
             (Path(settings.storage_root) / relative_path).unlink(missing_ok=True)
         raise
@@ -442,6 +454,7 @@ async def upload_gallery_images(
 
     job = GalleryUploadJob(
         tenant_id=user.current_tenant_id,
+        reserved_bytes=reserved_bytes,
         staged_paths=staged_paths,
         original_filenames=original_filenames,
         tags=tag_list,
@@ -455,9 +468,17 @@ async def upload_gallery_images(
         # of individually-selected images (no ZIP at all) knows its count immediately.
         total_files=None if has_zip else len(staged_paths) - len(clip_positions),
     )
-    db.add(job)
-    db.commit()
-    db.refresh(job)
+    try:
+        await acquire_upload_lock(db, user.current_tenant_id)
+        _enforce_tenant_storage_quota(db, tenant_id=user.current_tenant_id, repo=StoredFileRepository(), incoming_bytes=reserved_bytes)
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+    except BaseException:
+        db.rollback()
+        for relative_path in staged_paths:
+            (Path(settings.storage_root) / relative_path).unlink(missing_ok=True)
+        raise
     return _gallery_upload_job_to_read(job)
 
 
@@ -672,6 +693,8 @@ def get_stored_file_content(
     access_service.ensure_can_read_stored_file(db, user, stored_file.id)
     if stored_file.scan_status == "infected":
         raise HTTPException(status_code=403, detail="Datei wurde von der Virenprüfung als infiziert erkannt und ist gesperrt")
+    if stored_file.scan_status == "error":
+        raise HTTPException(422, "Virenprüfung fehlgeschlagen – Datei ist gesperrt")
     if stored_file.scan_status == "pending":
         raise HTTPException(status_code=425, detail="Datei wird noch auf Schadsoftware geprüft, bitte in Kürze erneut versuchen")
     file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
@@ -746,6 +769,8 @@ def get_stored_file_thumbnail(
     access_service.ensure_can_read_stored_file(db, user, stored_file.id)
     if stored_file.scan_status == "infected":
         raise HTTPException(status_code=403, detail="Datei wurde von der Virenprüfung als infiziert erkannt und ist gesperrt")
+    if stored_file.scan_status == "error":
+        raise HTTPException(422, "Virenprüfung fehlgeschlagen – Datei ist gesperrt")
     if stored_file.scan_status == "pending":
         raise HTTPException(status_code=425, detail="Datei wird noch auf Schadsoftware geprüft, bitte in Kürze erneut versuchen")
     thumbnail_path = service.ensure_thumbnail(db, stored_file, settings.storage_root)
@@ -778,6 +803,8 @@ def download_stored_file(
     access_service.ensure_can_read_stored_file(db, user, stored_file.id)
     if stored_file.scan_status == "infected":
         raise HTTPException(status_code=403, detail="Datei wurde von der Virenprüfung als infiziert erkannt und ist gesperrt")
+    if stored_file.scan_status == "error":
+        raise HTTPException(422, "Virenprüfung fehlgeschlagen – Datei ist gesperrt")
     if stored_file.scan_status == "pending":
         raise HTTPException(status_code=425, detail="Datei wird noch auf Schadsoftware geprüft, bitte in Kürze erneut versuchen")
 
@@ -834,7 +861,7 @@ def download_stored_file(
 
 def _get_album(db: Session, user: CurrentUser, album_id: uuid.UUID):
     require_writer(user)
-    album = db.scalar(select(PhotoAlbum).where(PhotoAlbum.id == album_id, PhotoAlbum.tenant_id == user.current_tenant_id))
+    album = photo_album_share_service.get_accessible_album(db, album_id, user.current_tenant_id)
     if album is None:
         raise HTTPException(status_code=404, detail="Album nicht gefunden")
     return album
@@ -845,17 +872,116 @@ def list_albums(db: Session = Depends(get_db), user: CurrentUser = Depends(get_c
     require_writer(user)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
-    return [
-        PhotoAlbumRead(
-            id=entry.album.id,
-            name=entry.album.name,
-            kind=entry.album.kind,
-            photo_count=entry.photo_count,
-            best_of_count=entry.best_of_count,
-            cover_thumbnail_urls=entry.cover_thumbnail_urls,
+    results = []
+    for entry in photo_album_service.list_albums_with_stats(db, service, user.current_tenant_id):
+        is_owner = entry.album.tenant_id == user.current_tenant_id
+        owner_tenant_name = None
+        shared_with: list[AlbumTenantShareStatus] = []
+        if is_owner:
+            shared_with = [
+                AlbumTenantShareStatus(tenant_public_id=row.tenant_public_id, tenant_name=row.tenant_name, status=row.status)
+                for row in photo_album_share_service.list_shares_for_album(db, entry.album.id)
+            ]
+        else:
+            owner_tenant_name = db.scalar(select(Tenant.name).where(Tenant.id == entry.album.tenant_id))
+        results.append(
+            PhotoAlbumRead(
+                id=entry.album.id,
+                name=entry.album.name,
+                kind=entry.album.kind,
+                photo_count=entry.photo_count,
+                best_of_count=entry.best_of_count,
+                cover_thumbnail_urls=entry.cover_thumbnail_urls,
+                owner_tenant_name=owner_tenant_name,
+                shared_with=shared_with,
+            )
         )
-        for entry in photo_album_service.list_albums_with_stats(db, service, user.current_tenant_id)
+    return results
+
+
+@router.get("/files/album-share-requests", response_model=list[AlbumShareRequestRead])
+def list_album_share_requests(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Offene Einladungen ANDERER Mandanten an den eigenen, fuer die "Anfragen"-Sektion auf
+    der Fotos-Seite."""
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    return [
+        AlbumShareRequestRead(
+            album_id=row.album_id, album_name=row.album_name, owner_tenant_name=row.owner_tenant_name, created_at=row.created_at
+        )
+        for row in photo_album_share_service.list_pending_for_tenant(db, user.current_tenant_id)
     ]
+
+
+@router.post("/files/albums/{album_id}/shares", status_code=204)
+def create_album_share(
+    album_id: uuid.UUID, payload: AlbumShareCreate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)
+):
+    """Laedt einen anderen Mandanten (per public_id) zu diesem - eigenen - Album ein. Nur der
+    Besitzer-Mandant darf einladen, daher hier bewusst PhotoAlbum.tenant_id statt _get_album
+    (die eingeladene Seite soll das Album ja gerade noch NICHT sehen können)."""
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    album = db.scalar(select(PhotoAlbum).where(PhotoAlbum.id == album_id, PhotoAlbum.tenant_id == user.current_tenant_id))
+    if album is None:
+        raise HTTPException(status_code=404, detail="Album nicht gefunden")
+    target_tenant = public_id_service.get_by_public_id(db, Tenant, payload.target_tenant_public_id)
+    if target_tenant is None:
+        raise HTTPException(status_code=404, detail="Kein Mandant mit dieser ID gefunden")
+    try:
+        photo_album_share_service.invite(db, album, target_tenant_id=target_tenant.id, invited_by=user.user_id)
+    except photo_album_share_service.AlbumShareError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+
+
+@router.post("/files/albums/{album_id}/respond", status_code=204)
+def respond_album_share(
+    album_id: uuid.UUID,
+    payload: AlbumShareRespond,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Beantwortet eine offene Einladung an den EIGENEN Mandanten - keine tenant_public_id im
+    Pfad noetig, da nur der eingeladene Mandant selbst (user.current_tenant_id) je antworten
+    darf, siehe photo_album_share_service.respond."""
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    try:
+        photo_album_share_service.respond(
+            db, album_id=album_id, tenant_id=user.current_tenant_id, accept=payload.accept, responded_by=user.user_id
+        )
+    except photo_album_share_service.AlbumShareError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+
+
+@router.delete("/files/albums/{album_id}/shares/{tenant_public_id}", status_code=204)
+def delete_album_share(
+    album_id: uuid.UUID, tenant_public_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)
+):
+    """Besitzer widerruft eine Freigabe, oder der geteilte Mandant verlaesst sie selbst -
+    beides die gleiche Operation, siehe photo_album_share_service.revoke."""
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    album = db.get(PhotoAlbum, album_id)
+    if album is None:
+        raise HTTPException(status_code=404, detail="Album nicht gefunden")
+    shared_tenant = public_id_service.get_by_public_id(db, Tenant, tenant_public_id)
+    if shared_tenant is None:
+        raise HTTPException(status_code=404, detail="Mandant nicht gefunden")
+    try:
+        photo_album_share_service.revoke(
+            db,
+            album_id=album_id,
+            tenant_id=shared_tenant.id,
+            acting_tenant_id=user.current_tenant_id,
+            album_owner_tenant_id=album.tenant_id,
+        )
+    except photo_album_share_service.AlbumShareError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from None
 
 
 @router.post("/files/albums", response_model=PhotoAlbumRead, status_code=201)
@@ -938,7 +1064,12 @@ def bulk_delete_files(payload: FileBulkDelete, db: Session = Depends(get_db), us
     ids = list(dict.fromkeys(payload.file_ids))
     if not ids or len(ids) > 200:
         raise HTTPException(status_code=422, detail="Bitte 1 bis 200 Dateien auswählen")
-    touched_album_ids = photo_album_service.drop_items_for_files(db, ids)
+    # Nur die eigenen Dateien duerfen aus einem (ggf. mandantenuebergreifend geteilten) Album
+    # entfernt werden - drop_items_for_files ist selbst nicht mandantengescoped (photo_album_item
+    # hat keine FK), ein fremder file_id in payload.file_ids darf also nicht einfach aus dem
+    # Album verschwinden, nur weil delete_gallery_images ihn ohnehin nicht loeschen wird.
+    owned_ids = {item.id for item in service.list_tenant_files(db, user.current_tenant_id, file_ids=ids, limit=len(ids))}
+    touched_album_ids = photo_album_service.drop_items_for_files(db, [file_id for file_id in ids if file_id in owned_ids])
     deleted, errors = service.delete_gallery_images(db, user.current_tenant_id, ids)
     db.commit()
     for album_id in touched_album_ids:

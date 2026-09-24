@@ -21,7 +21,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import date
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -38,6 +38,7 @@ from app.models.entities import (
     SubmissionUpload,
     SubmissionUploadFile,
 )
+from app.services import photo_album_share_service
 from app.services.photo_quality import composite_quality_score
 from app.services.submission_service import SubmissionService, _element_ref
 
@@ -66,9 +67,10 @@ def recompute_best_of(db: Session, file_service, album: PhotoAlbum) -> None:
 
     overrides = {row.file_id: row.best_override for row in item_rows if row.best_override is not None}
     file_ids = [row.file_id for row in item_rows]
-    overview_items = file_service.list_tenant_files(
-        db, album.tenant_id, only_images=True, file_ids=file_ids, limit=len(file_ids)
-    )
+    # tenant_id=None: file_ids already fully scopes this to the album's own items, which for a
+    # mandantenuebergreifend geteiltes Album can span both participating tenants' StoredFile
+    # rows - album.tenant_id alone would silently drop the partner tenant's photos from scoring.
+    overview_items = file_service.list_tenant_files(db, None, only_images=True, file_ids=file_ids, limit=len(file_ids))
     scores: dict[uuid.UUID, float | None] = {}
     exposures: dict[uuid.UUID, float | None] = {}
     for item in overview_items:
@@ -135,12 +137,16 @@ class AlbumWithStats:
 
 
 def list_albums_with_stats(db: Session, file_service, tenant_id: int) -> list[AlbumWithStats]:
-    """Every album for this tenant plus its item/best-of counts and up to 4 cover
-    thumbnails (best-of items first, then newest) - backs the Alben tab's cards."""
+    """Every album owned by this tenant, PLUS every "manual" album another tenant has shared
+    with it (accepted photo_album_tenant_share - see photo_album_share_service.py), with
+    item/best-of counts and up to 4 cover thumbnails (best-of items first, then newest) -
+    backs the Alben tab's cards. Cover photos can belong to either participating tenant, so
+    thumbnails are resolved per the file's OWNING tenant, not just `tenant_id`."""
+    shared_album_ids = photo_album_share_service.accessible_album_ids_for_tenant(db, tenant_id)
     albums = list(
         db.scalars(
             select(PhotoAlbum)
-            .where(PhotoAlbum.tenant_id == tenant_id)
+            .where(or_(PhotoAlbum.tenant_id == tenant_id, PhotoAlbum.id.in_(shared_album_ids)) if shared_album_ids else PhotoAlbum.tenant_id == tenant_id)
             .order_by(PhotoAlbum.created_at.desc(), PhotoAlbum.id.desc())
         )
     )
@@ -168,6 +174,7 @@ def list_albums_with_stats(db: Session, file_service, tenant_id: int) -> list[Al
         select(
             PhotoAlbumItem.album_id,
             PhotoAlbumItem.file_id,
+            StoredFile.tenant_id,
             func.row_number()
             .over(
                 partition_by=PhotoAlbumItem.album_id,
@@ -180,19 +187,21 @@ def list_albums_with_stats(db: Session, file_service, tenant_id: int) -> list[Al
         .where(PhotoAlbumItem.album_id.in_(album_ids))
         .subquery()
     )
-    cover_rows = db.execute(select(ranked.c.album_id, ranked.c.file_id).where(ranked.c.rn <= 4)).all()
+    cover_rows = db.execute(select(ranked.c.album_id, ranked.c.file_id, ranked.c.tenant_id).where(ranked.c.rn <= 4)).all()
     cover_ids_by_album: dict[uuid.UUID, list[uuid.UUID]] = {}
-    all_cover_ids: list[uuid.UUID] = []
-    for album_id, file_id in cover_rows:
+    cover_ids_by_owning_tenant: dict[int, list[uuid.UUID]] = {}
+    for album_id, file_id, owning_tenant_id in cover_rows:
         cover_ids_by_album.setdefault(album_id, []).append(file_id)
-        all_cover_ids.append(file_id)
+        cover_ids_by_owning_tenant.setdefault(owning_tenant_id, []).append(file_id)
 
     # Resolved through file_service (not a hand-built /api/stored-files/.../thumbnail URL)
     # since a submission-upload image's thumbnail lives at a different URL shape - see
-    # FileService._build_overview_item.
+    # FileService._build_overview_item. Grouped by the file's OWNING tenant (not `tenant_id`,
+    # the viewer) since a shared album's cover photos can belong to either participating
+    # tenant - list_tenant_files is itself tenant-scoped, so each group needs its own call.
     thumbnail_by_id: dict[uuid.UUID, str] = {}
-    if all_cover_ids:
-        for item in file_service.list_tenant_files(db, tenant_id, file_ids=all_cover_ids, limit=len(all_cover_ids)):
+    for owning_tenant_id, ids in cover_ids_by_owning_tenant.items():
+        for item in file_service.list_tenant_files(db, owning_tenant_id, file_ids=ids, limit=len(ids)):
             thumbnail_by_id[item.id] = item.thumbnail_url or item.content_url
 
     results = []

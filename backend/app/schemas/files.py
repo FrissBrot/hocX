@@ -177,6 +177,12 @@ class PhotoAlbumCreate(BaseModel):
     name: str
 
 
+class AlbumTenantShareStatus(BaseModel):
+    tenant_public_id: uuid.UUID
+    tenant_name: str
+    status: Literal["pending", "accepted", "declined"]
+
+
 class PhotoAlbumRead(BaseModel):
     id: uuid.UUID
     name: str
@@ -190,6 +196,30 @@ class PhotoAlbumRead(BaseModel):
     # Up to 4 thumbnail URLs (best-of first, then newest) for the Alben tab's cover
     # collage - empty for an album with no items yet.
     cover_thumbnail_urls: list[str] = []
+    # Set when the viewing tenant isn't the album's owner (i.e. it sees this album through an
+    # accepted photo_album_tenant_share) - name of the tenant that actually owns it.
+    owner_tenant_name: str | None = None
+    # Partner tenants this album has been shared with - only populated for the owning tenant
+    # (see files.py's list_albums), drives the "Freigabe verwalten" section.
+    shared_with: list[AlbumTenantShareStatus] = []
+
+
+class AlbumShareCreate(BaseModel):
+    target_tenant_public_id: uuid.UUID
+
+
+class AlbumShareRespond(BaseModel):
+    accept: bool
+
+
+class AlbumShareRequestRead(BaseModel):
+    """One open cross-tenant share invitation for the current tenant - backs the "Anfragen"
+    section on the Fotos page (see files.py's GET /files/album-share-requests)."""
+
+    album_id: uuid.UUID
+    album_name: str
+    owner_tenant_name: str
+    created_at: datetime
 
 
 class PhotoAlbumItemsUpdate(BaseModel):
@@ -236,3 +266,42 @@ class FileBulkTagsUpdate(BaseModel):
     file_ids: list[uuid.UUID]
     add_tags: list[str] = []
     remove_tags: list[str] = []
+
+
+class ShareLinkCreate(BaseModel):
+    """Exactly one of file_ids/album_id must be set (files.py validates this) - a fixed
+    selection vs. a "live" link that always shows an album's current contents."""
+
+    name: str
+    expires_at: datetime | None = None
+    file_ids: list[uuid.UUID] | None = None
+    album_id: uuid.UUID | None = None
+
+
+class ShareLinkRead(BaseModel):
+    id: uuid.UUID
+    name: str
+    url: str
+    album_name: str | None = None
+    file_count: int
+    created_at: datetime
+    created_by_name: str | None = None
+    expires_at: datetime | None = None
+    revoked_at: datetime | None = None
+    status: Literal["active", "expired", "revoked"]
+
+
+class PublicShareFile(BaseModel):
+    id: uuid.UUID
+    original_name: str
+    mime_type: str | None
+    file_size_bytes: int | None
+    is_image: bool
+    thumbnail_url: str | None
+    download_url: str
+
+
+class PublicShareRead(BaseModel):
+    name: str
+    files: list[PublicShareFile]
+    download_all_url: str | None = None

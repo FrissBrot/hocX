@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { initials } from "@/components/protocol/collaboration-presence";
 import { domainStatus, TenantDomainRowContent } from "@/components/settings/tenant-domain-row";
+import { CopyField } from "@/components/ui/copy-field";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { TenantDomain, TenantSummary } from "@/types/api";
@@ -115,6 +116,11 @@ export function TenantGeneralSettings({ initialTenant }: Props) {
               />
             </label>
           </div>
+          <label className="field-stack">
+            <span className="field-label">Mandanten-ID</span>
+            <CopyField label="Mandanten-ID" value={initialTenant.id} />
+            <span className="field-help">Wird benötigt, um dieser Organisation z.B. ein Fotoalbum freizugeben.</span>
+          </label>
           {primaryDomain ? (
             <div className="tenant-domain-row">
               <TenantDomainRowContent domain={primaryDomain} />

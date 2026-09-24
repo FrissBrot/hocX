@@ -2,11 +2,14 @@
 
 import { useEffect, useState } from "react";
 
+import { AlbumShareModal } from "./album-share-modal";
 import { PhotosView } from "./photos-view";
+import { Badge } from "@/components/ui/badge";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
+import { ShareLinkModal } from "@/components/ui/share-link-modal";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
-import { PhotoAlbum as Album, PhotoAlbumKind } from "@/types/api";
+import { AlbumShareRequest, PhotoAlbum as Album, PhotoAlbumKind } from "@/types/api";
 
 const ALBUM_KIND_LABEL: Record<PhotoAlbumKind, string> = {
   manual: "Manuell erstellt",
@@ -15,11 +18,54 @@ const ALBUM_KIND_LABEL: Record<PhotoAlbumKind, string> = {
   submission_element: "Abgabe-Element",
 };
 
+function PendingAlbumShareRequests({ requests, onDone }: { requests: AlbumShareRequest[]; onDone: () => void }) {
+  const toast = useToast();
+  const [busyAlbumId, setBusyAlbumId] = useState<string | null>(null);
+
+  async function respond(albumId: string, accept: boolean) {
+    if (busyAlbumId) return;
+    setBusyAlbumId(albumId);
+    try {
+      await browserApiFetch(`/api/files/albums/${albumId}/respond`, { method: "POST", body: JSON.stringify({ accept }) });
+      toast(accept ? "Album-Freigabe angenommen." : "Anfrage abgelehnt.", "success");
+      onDone();
+    } catch {
+      toast("Anfrage konnte nicht beantwortet werden.", "error");
+    } finally {
+      setBusyAlbumId(null);
+    }
+  }
+
+  if (requests.length === 0) return null;
+
+  return (
+    <div className="card album-share-requests">
+      <div className="eyebrow">Anfragen</div>
+      {requests.map((request) => (
+        <div key={request.album_id} className="record-list-row album-share-row">
+          <span className="album-share-row-name">
+            <strong>{request.owner_tenant_name}</strong> möchte das Album „{request.album_name}“ mit dir teilen.
+          </span>
+          <button type="button" className="button-primary" disabled={busyAlbumId === request.album_id} onClick={() => void respond(request.album_id, true)}>
+            Annehmen
+          </button>
+          <button type="button" className="button-ghost" disabled={busyAlbumId === request.album_id} onClick={() => void respond(request.album_id, false)}>
+            Ablehnen
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function PhotoAlbums() {
   const [albums, setAlbums] = useState<Album[]>([]);
   const [active, setActive] = useState<Album | null>(null);
+  const [pendingRequests, setPendingRequests] = useState<AlbumShareRequest[]>([]);
   const [creating, setCreating] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [sharingLink, setSharingLink] = useState(false);
+  const [sharingTenant, setSharingTenant] = useState(false);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -29,9 +75,15 @@ export function PhotoAlbums() {
 
   useEffect(() => {
     browserApiFetch<Album[]>("/api/files/albums")
-      .then((data) => setAlbums(data ?? []))
+      .then((data) => {
+        setAlbums(data ?? []);
+        setActive((current) => (current ? data?.find((album) => album.id === current.id) ?? current : current));
+      })
       .catch(() => setError("Alben konnten nicht geladen werden."))
       .finally(() => setLoading(false));
+    browserApiFetch<AlbumShareRequest[]>("/api/files/album-share-requests")
+      .then((data) => setPendingRequests(data ?? []))
+      .catch(() => {});
   }, [revision]);
 
   async function createAlbum(event: React.FormEvent) {
@@ -61,9 +113,23 @@ export function PhotoAlbums() {
           <div>
             <button type="button" className="button-ghost" onClick={() => { setActive(null); setRevision((value) => value + 1); }}>← Alle Alben</button>
             <h2>{active.name}</h2>
-            <p className="muted">{ALBUM_KIND_LABEL[active.kind]}{active.kind !== "manual" ? " (automatisch geführt)" : ""}</p>
+            <p className="muted">
+              {ALBUM_KIND_LABEL[active.kind]}{active.kind !== "manual" ? " (automatisch geführt)" : ""}
+              {active.owner_tenant_name ? ` · Geteilt von ${active.owner_tenant_name}` : ""}
+            </p>
+            {active.shared_with.length > 0 && (
+              <p className="muted">
+                Geteilt mit: {active.shared_with.map((share) => `${share.tenant_name} (${share.status === "accepted" ? "aktiv" : share.status === "pending" ? "angefragt" : "abgelehnt"})`).join(", ")}
+              </p>
+            )}
           </div>
-          <button type="button" className="button-secondary" onClick={() => setPicking(true)}>Vorhandene Fotos hinzufügen</button>
+          <div className="table-toolbar-actions">
+            <button type="button" className="button-secondary" onClick={() => setPicking(true)}>Vorhandene Fotos hinzufügen</button>
+            <button type="button" className="button-secondary" onClick={() => setSharingLink(true)}>Link teilen</button>
+            {active.kind === "manual" && !active.owner_tenant_name && (
+              <button type="button" className="button-secondary" onClick={() => setSharingTenant(true)}>Mit anderem Mandanten teilen</button>
+            )}
+          </div>
         </div>
         <PhotosView key={active.id + revision} albumId={active.id} />
         {picking && (
@@ -77,6 +143,15 @@ export function PhotoAlbums() {
             }} />
           </Modal>
         )}
+        <ShareLinkModal open={sharingLink} onClose={() => setSharingLink(false)} albumId={active.id} defaultName={active.name} />
+        {sharingTenant && (
+          <AlbumShareModal
+            open={sharingTenant}
+            album={active}
+            onClose={() => setSharingTenant(false)}
+            onChanged={() => setRevision((value) => value + 1)}
+          />
+        )}
       </div>
     );
   }
@@ -84,6 +159,7 @@ export function PhotoAlbums() {
   return (
     <div className="grid">
       {error && <p role="alert" className="form-error-banner">{error}</p>}
+      <PendingAlbumShareRequests requests={pendingRequests} onDone={() => setRevision((value) => value + 1)} />
       <div><button type="button" className="button-secondary" onClick={() => { setError(""); setCreating(true); }}>+ Album erstellen</button></div>
       {loading ? (
         <p className="muted">Alben werden geladen…</p>
@@ -112,6 +188,11 @@ export function PhotoAlbums() {
                 <span className="album-card-kind muted">
                   {ALBUM_KIND_LABEL[album.kind]}{album.kind !== "manual" ? " · automatisch geführt" : ""}
                 </span>
+                {album.owner_tenant_name ? (
+                  <Badge variant="info" className="album-card-badge">Geteilt von {album.owner_tenant_name}</Badge>
+                ) : album.shared_with.some((share) => share.status === "accepted") ? (
+                  <Badge variant="neutral" className="album-card-badge">Geteilt</Badge>
+                ) : null}
               </div>
             </button>
           ))}

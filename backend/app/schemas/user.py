@@ -20,6 +20,14 @@ class TenantRead(BaseModel):
     enabled_features: list[str] = []
 
 
+class TenantLookupRead(BaseModel):
+    """Minimal cross-tenant result for GET /tenants/lookup - just enough to confirm "is this
+    the right organisation?" before sending it a photo-album share invitation, never more."""
+
+    id: uuid.UUID
+    name: str
+
+
 class TenantSubscriptionFeatureRead(BaseModel):
     code: str
     name: str

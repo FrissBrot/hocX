@@ -20,6 +20,10 @@ export function validateUploadFiles(
     alreadyUploaded = 0,
   }: { maxFiles: number | null; allowedFileTypes: string[]; maxFileSizeMb: number; alreadyUploaded?: number }
 ): UploadValidationResult {
+  if (selected.length > 50) return { ok: false, error: "Maximal 50 Dateien pro Upload erlaubt." };
+  if (selected.reduce((sum, file) => sum + file.size, 0) > 150 * 1024 ** 2) {
+    return { ok: false, error: "Die Auswahl ist grösser als 150 MiB. Bitte auf mehrere Uploads aufteilen." };
+  }
   // maxFiles = null bedeutet unbegrenzt viele Dateien (siehe Admin-Bereich, Feld "Max.
   // Dateien" leer gelassen). Das Limit gilt kumulativ ueber alle bisherigen Uploads dieses
   // Elements hinweg, nicht nur fuer diese eine Auswahl - siehe alreadyUploaded.

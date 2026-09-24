@@ -130,7 +130,8 @@ def _content_matches_extension(content: bytes, extension: str) -> bool:
 # assumes the whole batch is available in memory at once; recalibrating the cap is the safe,
 # contained fix for this pass. The abgabebox-upload-body-limit Traefik middleware
 # (docker-compose.yml) enforces the same number one layer earlier; keep both in sync.
-MAX_UPLOAD_REQUEST_BYTES = 150 * 1024 * 1024  # 150 MB
+MAX_UPLOAD_REQUEST_BYTES = 150 * 1024 * 1024  # Nutzdaten
+MAX_UPLOAD_BODY_BYTES = MAX_UPLOAD_REQUEST_BYTES + 1024 * 1024
 
 _IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 # Hamming-Distanz (von 64 Bit) zweier pHashes, ab der zwei Bilder als "wahrscheinlich
@@ -439,7 +440,7 @@ async def upload(
 
         incoming_bytes = sum(len(content) for content, _, _ in contents)
         tenant_quota_bytes = repository.get_tenant_storage_quota_bytes(db, tenant_id=tenant["id"])
-        quota_bytes = _effective_upload_quota_bytes(tenant_quota_bytes, settings.tenant_storage_quota_mb * 1024 * 1024)
+        quota_bytes = settings.tenant_storage_quota_mb * 1024 * 1024
 
         def _slugify(text: str) -> str:
             text = text.lower()
@@ -485,6 +486,9 @@ async def upload(
             # shared with backend/app/services/submission_service.py's rescan/move flow), so an
             # in-process counter maintained only here could not stay accurate; asyncio.to_thread is
             # the safe, contained fix for this pass.
+            total_usage = repository.get_tenant_storage_usage_bytes(db, tenant_id=tenant["id"])
+            if tenant_quota_bytes is not None and total_usage + incoming_bytes > tenant_quota_bytes:
+                raise HTTPException(400, "Speicherkontingent des Vereins erreicht")
             if await asyncio.to_thread(tenant_storage_bytes, tenant["id"]) + incoming_bytes > quota_bytes:
                 _log("validation_failed", f"Speicherlimit des Mandanten erreicht (max. {quota_bytes // 1024 // 1024} MB)")
                 raise HTTPException(status_code=400, detail="Speicherlimit erreicht - bitte den Verein kontaktieren")
@@ -542,12 +546,15 @@ async def upload(
         )
 
         # Step 3: Infected → delete quarantine files, reject upload.
-        if "infected" in scan_results:
+        if "infected" in scan_results or "error" in scan_results:
             for f in quarantine_files:
                 try:
                     (Path(settings.storage_root) / f["storage_path"]).unlink(missing_ok=True)
                 except Exception:
                     pass
+            if "error" in scan_results and "infected" not in scan_results:
+                _log("scan_error", "Virenprüfung konnte nicht abgeschlossen werden")
+                raise HTTPException(422, "Datei konnte nicht auf Schadsoftware geprüft werden (maximal 100 MiB)")
             _log("scan_infected", "Schadware gefunden – Upload abgelehnt")
             raise HTTPException(status_code=400, detail="Eine oder mehrere Dateien wurden als Schadware eingestuft")
 

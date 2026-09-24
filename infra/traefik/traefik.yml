@@ -17,6 +17,10 @@ entryPoints:
           scheme: https
   websecure:
     address: ":443"
+    transport:
+      respondingTimeouts:
+        readTimeout: 3h
+        writeTimeout: 0s
     http:
       # Audit finding (Low), 2026-08-27: baseline security headers (HSTS etc., defined in
       # infra/traefik/dynamic/security.yml) for every router on this entrypoint, so origins

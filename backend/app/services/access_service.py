@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import CurrentUser
+from app.models.entities import PhotoAlbumItem, StoredFile
 from app.repositories.access_repository import AccessRepository
+from app.services import photo_album_share_service
 
 
 class AccessService:
@@ -93,8 +96,25 @@ class AccessService:
         tenant_id = self.repository.tenant_id_for_stored_file(db, stored_file_id=stored_file_id)
         if tenant_id is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stored file not found")
-        if user.current_role not in {"admin", "writer", "kassier"} or user.current_tenant_id != tenant_id:
+        if user.current_role not in {"admin", "writer", "kassier"}:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Stored file not accessible")
+        if user.current_tenant_id == tenant_id:
+            return
+        # Cross-tenant read: allowed if this file is an item of a "manual" album the current
+        # tenant can see via an accepted photo_album_tenant_share (see
+        # photo_album_share_service.py) - e.g. viewing/downloading a partner tenant's photo in
+        # a mandantenuebergreifend geteiltes Album.
+        if user.current_tenant_id is not None and self._can_read_via_shared_album(db, user.current_tenant_id, stored_file_id):
+            return
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Stored file not accessible")
+
+    def _can_read_via_shared_album(self, db: Session, tenant_id: int, stored_file_id: int) -> bool:
+        album_ids = db.scalars(
+            select(PhotoAlbumItem.album_id)
+            .join(StoredFile, StoredFile.public_id == PhotoAlbumItem.file_id)
+            .where(StoredFile.id == stored_file_id)
+        )
+        return any(tenant_id in photo_album_share_service.accessible_tenant_ids_for_album(db, album_id) for album_id in album_ids)
 
     def sync_user_access_from_participants(self, db: Session, *, user_id: int, tenant_id: int) -> None:
         template_ids = self.repository.linked_template_ids_for_user(db, user_id=user_id, tenant_id=tenant_id)

@@ -63,6 +63,7 @@ const nextConfig = {
   // outside dev.
   allowedDevOrigins: ["127.0.0.1"],
   experimental: {
+    proxyClientMaxBodySize: 158334976,
     staleTimes: {
       dynamic: 0,
     },

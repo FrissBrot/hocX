@@ -13,7 +13,7 @@ from sqlalchemy import text
 from app.captcha import captcha_configured, captcha_partially_configured
 from app.config import is_dev_or_test_environment, settings
 from app.db import SessionLocal, engine
-from app.repository import insert_error_log
+from app.repository import insert_error_log, upload_path_referenced
 from app.routes import public
 from app.storage import cleanup_stale_quarantine_files
 
@@ -64,12 +64,13 @@ async def quarantine_cleanup_loop() -> None:
     even though it has no SELECT/UPDATE/DELETE on any table.
     """
     interval_seconds = settings.quarantine_cleanup_interval_minutes * 60
-    max_age_seconds = settings.quarantine_max_age_minutes * 60
+    max_age_seconds = max(24 * 60 * 60, settings.quarantine_max_age_minutes * 60)
     while True:
         with engine.begin() as conn:
             acquired = conn.execute(text("SELECT pg_try_advisory_xact_lock(202600007)")).scalar()
             if acquired:
-                cleanup_stale_quarantine_files(max_age_seconds)
+                with SessionLocal() as db:
+                    await asyncio.to_thread(cleanup_stale_quarantine_files, max_age_seconds, is_referenced=lambda path: upload_path_referenced(db, path))
         await asyncio.sleep(interval_seconds)
 
 
@@ -81,6 +82,9 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title=settings.app_name, version="1.1.2", lifespan=lifespan)
+
+from app.upload_admission import UploadAdmissionMiddleware
+app.add_middleware(UploadAdmissionMiddleware, path="/api/public/", max_bytes=public.MAX_UPLOAD_BODY_BYTES)
 
 app.add_middleware(
     CORSMiddleware,

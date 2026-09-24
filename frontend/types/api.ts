@@ -243,6 +243,12 @@ export type FileOverviewItem = {
   is_best: boolean | null;
 };
 
+export type AlbumTenantShareStatus = {
+  tenant_public_id: string;
+  tenant_name: string;
+  status: "pending" | "accepted" | "declined";
+};
+
 export type PhotoAlbum = {
   id: string;
   name: string;
@@ -250,6 +256,51 @@ export type PhotoAlbum = {
   photo_count: number;
   best_of_count: number;
   cover_thumbnail_urls: string[];
+  owner_tenant_name: string | null;
+  shared_with: AlbumTenantShareStatus[];
+};
+
+export type AlbumShareRequest = {
+  album_id: string;
+  album_name: string;
+  owner_tenant_name: string;
+  created_at: string;
+};
+
+export type TenantLookup = {
+  id: string;
+  name: string;
+};
+
+export type ShareLinkStatus = "active" | "expired" | "revoked";
+
+export type ShareLink = {
+  id: string;
+  name: string;
+  url: string;
+  album_name: string | null;
+  file_count: number;
+  created_at: string;
+  created_by_name: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+  status: ShareLinkStatus;
+};
+
+export type PublicShareFile = {
+  id: string;
+  original_name: string;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  is_image: boolean;
+  thumbnail_url: string | null;
+  download_url: string;
+};
+
+export type PublicShare = {
+  name: string;
+  files: PublicShareFile[];
+  download_all_url: string | null;
 };
 
 export type SimilarityGroup = {

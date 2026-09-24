@@ -12,6 +12,7 @@ import { FileDropOverlay } from "@/components/ui/file-drop-overlay";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
+import { ShareLinkModal } from "@/components/ui/share-link-modal";
 import { TagInput } from "@/components/ui/tag-input";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
@@ -61,6 +62,7 @@ export function FilesView({ initialItems }: Props) {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isReloading, setIsReloading] = useState(false);
   const [detailItem, setDetailItem] = useState<FileOverviewItem | null>(null);
+  const [shareItem, setShareItem] = useState<FileOverviewItem | null>(null);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   // Files dropped onto the page - they open the upload dialog with these already queued.
   const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
@@ -236,7 +238,7 @@ export function FilesView({ initialItems }: Props) {
         <span className="muted list-filter-count">{items.length} {items.length === 1 ? "Datei" : "Dateien"}</span>
       </div>
 
-      <FilesTable items={items} onOpenDetail={setDetailItem} onNavigate={(href) => router.push(href as Route)} />
+      <FilesTable items={items} onOpenDetail={setDetailItem} onNavigate={(href) => router.push(href as Route)} onShare={setShareItem} />
       </>
       )}
 
@@ -262,6 +264,13 @@ export function FilesView({ initialItems }: Props) {
       )}
 
       <FileDropOverlay active={isFileDragging} title="Zum Hochladen loslassen" hint="Danach stellst du den Upload ein." />
+
+      <ShareLinkModal
+        open={shareItem !== null}
+        onClose={() => setShareItem(null)}
+        fileIds={shareItem ? [shareItem.id] : []}
+        defaultName={shareItem?.original_name ?? ""}
+      />
 
       {detailItem && (
         <FileDetailModal

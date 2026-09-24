@@ -8,6 +8,7 @@ import { TagInput } from "@/components/ui/tag-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { formatFileSize } from "@/lib/utils/format";
 import { isHeicName, isLiveClipName, pairLiveClips } from "@/lib/utils/live-photo";
+import { photoUploadProblem, PHOTO_UPLOAD_TIMEOUT_MS } from "@/lib/utils/upload-limits";
 import { GalleryUploadJob } from "@/types/api";
 
 // HEIC/HEIF (iPhone) und .mov (Live-Photo-Clip) stehen mit Endung da, weil Browser ausser Safari dafür
@@ -124,6 +125,9 @@ export function GalleryUploadModal({
     true,
   );
 
+  const sizeProblem = photoUploadProblem(selectedFiles, clipIndexes);
+  if (sizeProblem) ruleProblems.push(sizeProblem);
+
   const totalBytes = selectedFiles.reduce((sum, file) => sum + file.size, 0);
 
   async function handleUpload() {
@@ -145,7 +149,7 @@ export function GalleryUploadModal({
         // browserApiFetch's default 15s timeout is far too short for a multi-GB ZIP
         // transfer - mirrors the same fix already applied to admin-tenant-management.tsx's
         // import upload.
-        signal: AbortSignal.timeout(600_000),
+        signal: AbortSignal.timeout(PHOTO_UPLOAD_TIMEOUT_MS),
       });
       if (job) onQueued(job);
       onClose();
@@ -160,7 +164,7 @@ export function GalleryUploadModal({
     <Modal
       open
       title="Bilder hochladen"
-      description="Die Bilder landen in der Galerie und werden beim Upload virengeprüft."
+      description="Bilder bis 100 MiB, ZIPs und gesamte Auswahl bis 10 GiB. Maximal 50 Dateien; im ZIP bis 10 000 Einträge und 20 GiB entpackt. Die Bilder werden virengeprüft."
       onClose={onClose}
       onEscape={() => selectedFiles.length ? handleUpload() : onClose()}
       className="gallery-upload-modal"

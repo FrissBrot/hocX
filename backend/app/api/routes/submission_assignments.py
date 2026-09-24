@@ -256,6 +256,8 @@ def get_submission_file_content(
     assignment = service.get_assignment(db, upload.assignment_id)
     if assignment is None or assignment.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Datei nicht gefunden")
+    if stored_file.scan_status == "error":
+        raise HTTPException(422, "Virenprüfung fehlgeschlagen – Datei ist gesperrt")
     if stored_file.scan_status == "pending":
         raise HTTPException(status_code=423, detail="Datei wird noch auf Viren geprüft")
     if stored_file.scan_status == "infected":
@@ -304,6 +306,8 @@ def get_submission_file_thumbnail(
         raise HTTPException(status_code=404, detail="Datei nicht gefunden")
     if stored_file.scan_status == "infected":
         raise HTTPException(status_code=403, detail="Datei wurde als Schadware eingestuft und gesperrt")
+    if stored_file.scan_status == "error":
+        raise HTTPException(422, "Virenprüfung fehlgeschlagen – Datei ist gesperrt")
     if stored_file.scan_status == "pending":
         raise HTTPException(status_code=423, detail="Datei wird noch auf Viren geprüft")
     thumbnail_path = file_service.ensure_thumbnail(db, stored_file, settings.abgabebox_storage_root)

@@ -30,11 +30,12 @@ from uuid import uuid4
 import imagehash
 from fastapi import HTTPException, UploadFile
 from PIL import Image, ImageChops, ImageOps
-from sqlalchemy import text
+from sqlalchemy import text, select, func
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models import StoredFile, Tenant
+from app.models.entities import GalleryUploadJob
 from app.repositories.file_repository import StoredFileRepository
 from app.services.apple_media import MAX_LIVE_CLIP_BYTES, is_heic, is_live_clip, pair_live_clips
 from app.services.photo_quality import compute_quality_scores
@@ -53,33 +54,16 @@ WORD_IMPORT_ALLOWED_MIME_TYPES = {WORD_IMPORT_MIME_TYPE, PDF_MIME_TYPE}
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
 
-# Direkter (nicht gezippter) Bild-Upload in die "Fotos"-Galerie: bewusst eigener, deutlich
-# grosszuegigerer Wert statt MAX_UPLOAD_BYTES - anders als bei Protokollbildern/Word-Import
-# (die synchron auf dem Request-Event-Loop komplett in den Speicher gelesen werden) laeuft
-# der Galerie-Upload immer ueber stage_upload_to_disk (Streaming) und einen Hintergrund-Job,
-# genau wie ein Galerie-ZIP. Ein einzelnes grosses Foto (z.B. Scan/Drohnenbild) durfte bisher
-# trotzdem nicht groesser als 20 MB sein, obwohl ein gleich grosses Bild in einem ZIP schon
-# lange kein solches Limit mehr hatte (Nutzerbericht 2026-09-22/23: 3-GB-Foto abgelehnt).
-# Nicht so grosszuegig wie GALLERY_ZIP_MAX_BYTES (1 TiB), weil der Hintergrund-Job die Datei
-# per read_bytes() komplett in den Speicher laedt (siehe _run_gallery_upload_job) - 4 GiB
-# passt zusammen mit dem auf 6144m erhoehten backend mem_limit (siehe docker-compose.yml).
-GALLERY_DIRECT_IMAGE_MAX_BYTES = 4 * 1024**3  # 4 GiB
+# Galerie: gleiche Bildgrenze direkt und im ZIP; passend zum ClamAV-Streamlimit.
+GALLERY_DIRECT_IMAGE_MAX_BYTES = 100 * 1024**2
+GALLERY_ZIP_MAX_BYTES = 10 * 1024**3
+GALLERY_ZIP_MAX_EXPANDED_BYTES = 20 * 1024**3
+GALLERY_ZIP_MAX_ENTRIES = 10_000
+GALLERY_REQUEST_MAX_BYTES = GALLERY_ZIP_MAX_BYTES + 1024**2  # Multipart-Overhead
 
-# ZIP-Uploads (Galerie/Word-Import): Einträge werden nur im Arbeitsspeicher entpackt (nie auf
-# Platte geschrieben) und einzeln per Magic-Bytes geprüft - Limits gegen Zip-Bomben.
+# Protokollbilder und Word-Import behalten ihre kleineren Grenzen.
 MAX_ZIP_ENTRIES = 300
-MAX_ZIP_TOTAL_BYTES = 100 * 1024 * 1024  # 100 MB kombinierte entpackte Grösse
-
-# Galerie-ZIPs laufen (anders als Word-Import) nicht mehr inline im Request, sondern als
-# gallery_upload_job im Hintergrund (siehe FileService.process_pending_gallery_upload_jobs) und
-# werden Eintrag fuer Eintrag von der bereits auf Platte gestagten ZIP-Datei gelesen (siehe
-# iter_gallery_zip_entries unten) statt komplett im Arbeitsspeicher zu liegen - deshalb
-# koennen diese beiden Limits deutlich grosszuegiger sein als MAX_ZIP_TOTAL_BYTES/
-# MAX_ZIP_ENTRIES oben, ohne den frueheren In-Memory-Speicherdruck zurueckzubringen. Auf
-# Wunsch (2026-09-22) soll es hier praktisch kein Limit mehr geben - Werte entsprechend
-# grosszuegig (1 TiB / 1 Mio. Dateien), die einzige tatsaechliche Grenze ist der Plattenplatz.
-GALLERY_ZIP_MAX_BYTES = 1024**4  # 1 TiB kombinierte entpackte Grösse
-GALLERY_ZIP_MAX_ENTRIES = 1_000_000
+MAX_ZIP_TOTAL_BYTES = 100 * 1024 * 1024
 
 # Hamming-Distanz (von 64 Bit) zweier pHashes, ab der zwei Bilder als "wahrscheinlich
 # dasselbe Motiv" gelten - empirischer Richtwert, bei Bedarf anhand echter Fehlalarme
@@ -258,109 +242,99 @@ class GalleryZipClip:
     content: bytes
 
 
-def iter_gallery_zip_entries(path: Path) -> Iterator[tuple[str, bytes] | GalleryZipClip | str]:
-    """ZIP upload for the gallery upload window (see FileService.process_pending_gallery_upload_jobs):
-    reads a ZIP already staged on disk and yields one matching (filename, content) image at
-    a time, or a plain str note for a skipped/oversized/corrupt entry (only genuine images,
-    by magic bytes not filename, ever match - folders/junk/wrong-type entries are silently
-    skipped, same as _extract_matching_files_from_zip's word-import counterpart). Callers
-    tell a match from a note with isinstance(item, tuple). A Live Photo's .mov/.mp4 (same name
-    as its image, see apple_media.pair_live_clips) is yielded as a GalleryZipClip right after
-    its image; clips without an image are skipped like any other non-image entry.
-
-    Deliberately not built on _extract_matching_files_from_zip: that helper takes the whole
-    ZIP as one `content: bytes` and returns one fully-materialized `matched` list, which is
-    exactly the "hold the whole batch in memory at once" cost this job exists to avoid.
-    zipfile.ZipFile(path) instead seeks/reads each entry from the file handle on demand, so
-    only one entry's decompressed bytes are ever live at a time - bounded by MAX_UPLOAD_BYTES
-    regardless of how large the ZIP itself is. Uses the much larger GALLERY_ZIP_MAX_BYTES/
-    GALLERY_ZIP_MAX_ENTRIES caps since there's no more per-request memory cost to guard
-    against, only a sane upper bound against zip bombs."""
+def inspect_gallery_zip(path: Path) -> int:
+    """Prüft Metadaten ohne Entpacken; liefert eine konservative Speicherreservierung."""
     try:
-        archive = zipfile.ZipFile(path)
-    except zipfile.BadZipFile:
-        yield "ZIP-Datei ist beschädigt oder ungültig"
+        with zipfile.ZipFile(path) as archive:
+            entries = archive.infolist()
+            if len(entries) > GALLERY_ZIP_MAX_ENTRIES:
+                raise HTTPException(413, f"ZIP enthält mehr als {GALLERY_ZIP_MAX_ENTRIES} Einträge")
+            if any(info.flag_bits & 1 for info in entries):
+                raise HTTPException(400, "Passwortgeschützte ZIP-Dateien werden nicht unterstützt")
+            expanded = sum(info.file_size for info in entries)
+            if expanded > GALLERY_ZIP_MAX_EXPANDED_BYTES:
+                raise HTTPException(413, "ZIP ist entpackt grösser als 20 GiB")
+            return expanded
+    except (zipfile.BadZipFile, OSError) as exc:
+        raise HTTPException(400, "ZIP-Datei ist beschädigt oder ungültig") from exc
+
+
+def iter_gallery_zip_entries(path: Path) -> Iterator[tuple[str, bytes] | GalleryZipClip | str]:
+    """Entpackt einzeln und begrenzt; direkte Bilder und ZIP-Bilder haben dieselbe Grenze."""
+    try:
+        inspect_gallery_zip(path)
+    except HTTPException as exc:
+        yield str(exc.detail)
         return
-
-    all_entries = [info for info in archive.infolist() if not info.is_dir()]
-    total_entries = len(all_entries)
-    entries = all_entries[:GALLERY_ZIP_MAX_ENTRIES]
-    # Live Photos: the clip is read together with its image (below), never on its own.
-    clip_for_image = pair_live_clips([info.filename for info in entries])
-    paired_clip_indexes = set(clip_for_image.values())
-    total_bytes = 0
-    for index, info in enumerate(entries):
-        if index in paired_clip_indexes:
-            continue
-        name = Path(info.filename).name
-        if not name or name.startswith("."):
-            continue
-        if info.file_size > MAX_UPLOAD_BYTES:
-            yield f"{name}: zu gross, übersprungen"
-            continue
-        total_bytes += info.file_size
-        if total_bytes > GALLERY_ZIP_MAX_BYTES:
-            yield "ZIP-Inhalt zu gross - restliche Dateien wurden ignoriert"
-            return
-        try:
-            entry_bytes = archive.read(info)
-        except (zipfile.BadZipFile, zlib.error, OSError):
-            yield f"{name}: beschädigter ZIP-Eintrag, übersprungen"
-            continue
-        if _sniff_image_mime(entry_bytes) is None:
-            continue
-        yield (name, entry_bytes)
-
-        clip_index = clip_for_image.get(index)
-        if clip_index is None:
-            continue
-        clip_info = entries[clip_index]
-        if clip_info.file_size > MAX_LIVE_CLIP_BYTES:
-            yield f"{name}: Live-Photo-Video zu gross, als normales Foto gespeichert"
-            continue
-        total_bytes += clip_info.file_size
-        try:
-            clip_bytes = archive.read(clip_info)
-        except (zipfile.BadZipFile, zlib.error, OSError):
-            yield f"{name}: Live-Photo-Video beschädigt, als normales Foto gespeichert"
-            continue
-        if _sniff_live_clip_mime(clip_bytes) is not None:
-            yield GalleryZipClip(image_name=name, content=clip_bytes)
-
-    if total_entries > GALLERY_ZIP_MAX_ENTRIES:
-        yield f"ZIP enthält mehr als {GALLERY_ZIP_MAX_ENTRIES} Dateien - restliche wurden ignoriert"
+    with zipfile.ZipFile(path) as archive:
+        entries = [info for info in archive.infolist() if not info.is_dir()]
+        clip_for_image = pair_live_clips([info.filename for info in entries])
+        paired_clip_indexes = set(clip_for_image.values())
+        for index, info in enumerate(entries):
+            if index in paired_clip_indexes:
+                continue
+            name = Path(info.filename).name
+            if not name or name.startswith("."):
+                continue
+            if info.file_size > GALLERY_DIRECT_IMAGE_MAX_BYTES:
+                yield f"{name}: zu gross (maximal 100 MiB), übersprungen"
+                continue
+            try:
+                with archive.open(info) as source:
+                    entry_bytes = source.read(GALLERY_DIRECT_IMAGE_MAX_BYTES + 1)
+                if len(entry_bytes) > GALLERY_DIRECT_IMAGE_MAX_BYTES:
+                    yield f"{name}: zu gross, übersprungen"
+                    continue
+            except (zipfile.BadZipFile, zlib.error, OSError, RuntimeError, NotImplementedError):
+                yield f"{name}: beschädigter oder nicht unterstützter ZIP-Eintrag, übersprungen"
+                continue
+            if _sniff_image_mime(entry_bytes) is None:
+                continue
+            yield (name, entry_bytes)
+            clip_index = clip_for_image.get(index)
+            if clip_index is None:
+                continue
+            clip_info = entries[clip_index]
+            if clip_info.file_size > MAX_LIVE_CLIP_BYTES:
+                yield f"{name}: Live-Photo-Video zu gross, als normales Foto gespeichert"
+                continue
+            try:
+                with archive.open(clip_info) as source:
+                    clip_bytes = source.read(MAX_LIVE_CLIP_BYTES + 1)
+            except (zipfile.BadZipFile, zlib.error, OSError, RuntimeError, NotImplementedError):
+                yield f"{name}: Live-Photo-Video beschädigt, als normales Foto gespeichert"
+                continue
+            if len(clip_bytes) <= MAX_LIVE_CLIP_BYTES and _sniff_live_clip_mime(clip_bytes) is not None:
+                yield GalleryZipClip(image_name=name, content=clip_bytes)
 
 
 STAGE_CHUNK_BYTES = 4 * 1024 * 1024  # 4 MB
 
 
 async def stage_upload_to_disk(file: UploadFile, *, target_dir: Path, max_bytes: int, suffix: str) -> Path:
-    """Streams an UploadFile straight to `target_dir` in fixed-size chunks instead of the
-    `content = await file.read()` every other upload path in this codebase uses - the one
-    thing that actually keeps a multi-GB gallery ZIP upload (see GALLERY_ZIP_MAX_BYTES)
-    from being held in a single in-memory `bytes` object. Aborts (deletes the partial file,
-    raises 413) as soon as the running byte count crosses max_bytes, rather than only
-    checking after the whole transfer finished.
+    """Kopiert begrenzt auf Platte und räumt auch bei Abbruch/Plattenfehlern auf."""
+    import shutil
+    from starlette.concurrency import run_in_threadpool
 
-    target_dir must be a real, disk-backed directory (a subdirectory of settings.upload_root
-    - see FileService.ensure_storage), never the process's default tempfile location: the
-    release deployment mounts /tmp as RAM-backed tmpfs, which would silently turn this
-    streaming write back into an in-memory buffer."""
+    if file.size is not None and file.size > max_bytes:
+        raise HTTPException(413, f"{file.filename or 'Datei'}: zu gross (maximal {max_bytes // 1024**2} MiB)")
     target_dir.mkdir(parents=True, exist_ok=True)
+    if shutil.disk_usage(target_dir).free < (file.size or max_bytes) + 256 * 1024**2:
+        raise HTTPException(507, "Zu wenig freier Speicher für den Upload")
     target_path = target_dir / f"{uuid4().hex}{suffix}"
     written = 0
-    with target_path.open("wb") as handle:
-        while chunk := await file.read(STAGE_CHUNK_BYTES):
-            written += len(chunk)
-            if written > max_bytes:
-                handle.close()
-                target_path.unlink(missing_ok=True)
-                raise HTTPException(
-                    status_code=413,
-                    detail=f"{file.filename or 'Datei'}: zu gross (maximal {max_bytes // 1024 // 1024} MB)",
-                )
-            handle.write(chunk)
-    return target_path
+    try:
+        with target_path.open("wb") as handle:
+            while chunk := await file.read(STAGE_CHUNK_BYTES):
+                written += len(chunk)
+                if written > max_bytes:
+                    raise HTTPException(413, f"{file.filename or 'Datei'}: zu gross (maximal {max_bytes // 1024**2} MiB)")
+                await run_in_threadpool(handle.write, chunk)
+        return target_path
+    except BaseException:
+        target_path.unlink(missing_ok=True)
+        raise
+
 
 
 def _compute_perceptual_hash(content: bytes, mime: str) -> str | None:
@@ -476,7 +450,7 @@ def generate_thumbnail_bytes(content: bytes) -> tuple[bytes, int, int] | None:
 # file_service.py's _PROTOCOL_IMAGE_QUOTA_LOCK_NAMESPACE and the background loops' fixed
 # single-bigint ids (202600xxx range) - guards the tenant-wide storage-quota check/write
 # race below.
-_TENANT_STORAGE_QUOTA_LOCK_NAMESPACE = 909100002
+_TENANT_STORAGE_QUOTA_LOCK_NAMESPACE = 909100001
 
 
 def _enforce_tenant_storage_quota(db: Session, *, tenant_id: int, repo: StoredFileRepository, incoming_bytes: int) -> None:
@@ -504,7 +478,11 @@ def _enforce_tenant_storage_quota(db: Session, *, tenant_id: int, repo: StoredFi
         text("SELECT pg_advisory_xact_lock(:ns, :tenant_id)"),
         {"ns": _TENANT_STORAGE_QUOTA_LOCK_NAMESPACE, "tenant_id": tenant_id},
     )
-    current_bytes = repo.total_bytes_for_tenant(db, tenant_id)
+    db.flush()
+    reservations = select(func.coalesce(func.sum(GalleryUploadJob.reserved_bytes), 0)).where(
+        GalleryUploadJob.tenant_id == tenant_id, GalleryUploadJob.status.in_(["queued", "running"])
+    )
+    current_bytes = repo.total_bytes_for_tenant(db, tenant_id) + int(db.scalar(reservations) or 0)
     if current_bytes + incoming_bytes > tenant.storage_quota_bytes:
         raise HTTPException(
             status_code=400,
@@ -569,6 +547,8 @@ def ingest_file(
     mime = sniff(content)
     if mime is None:
         raise HTTPException(status_code=400, detail=unsupported_format_message)
+    if scan_status == "error":
+        raise HTTPException(422, "Datei konnte nicht auf Schadsoftware geprüft werden (maximal 100 MiB)")
     if scan_status == "infected":
         raise HTTPException(status_code=400, detail=infected_message)
 

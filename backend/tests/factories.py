@@ -5,7 +5,9 @@ from datetime import date
 
 from sqlalchemy import select
 
+from app.core.secret_crypto import encrypt_secret
 from app.core.security import CurrentUser, hash_password
+from app.core.totp import generate_totp_secret
 from app.models.entities import (
     AppUser,
     AttendanceFine,
@@ -29,6 +31,7 @@ from app.models.entities import (
     TemplateParticipant,
     Tenant,
     TodoStatus,
+    UserMfaFactor,
     WordImportProfile,
 )
 
@@ -209,6 +212,39 @@ def make_app_user(
     db.add(user)
     db.flush()
     return user
+
+
+def make_mfa_enrolled_user(
+    db,
+    email: str = "mfa-test@example.com",
+    password: str = "correct horse battery staple",
+    *,
+    tenant_id: int | None = None,
+    role_code: str = "admin",
+) -> tuple[AppUser, str]:
+    """An AppUser with a TOTP factor already enrolled - mirrors what
+    MfaService._complete_totp_enrollment persists, so tests can exercise the "MFA verification
+    required" login branch (mfa_service.prepare_login) directly, without driving the
+    interactive QR-code enrollment flow first.
+
+    Returns (user, raw_secret): pass raw_secret to app.core.totp.current_totp_code(secret) to
+    compute a valid 6-digit code for AuthService.verify_login_totp()/MfaService.verify_login_totp()
+    at the point of use (a code is only valid for a ~30s window, so don't compute it ahead of
+    time)."""
+    user = make_app_user(db, email=email, password=password, tenant_id=tenant_id, role_code=role_code)
+    secret = generate_totp_secret()
+    db.add(
+        UserMfaFactor(
+            user_id=user.id,
+            factor_type="totp",
+            label="Test Authenticator",
+            secret_encrypted=encrypt_secret(secret),
+            totp_last_counter=0,
+        )
+    )
+    user.preferred_mfa_factor_type = "totp"
+    db.flush()
+    return user, secret
 
 
 def make_current_user(

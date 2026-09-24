@@ -1,45 +1,52 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from pathlib import Path
 
-# Matches abgabebox-backend/app/scanner.py's concurrency bound - deliberately not a Setting,
-# see that module's docstring for why 4 is the right number of concurrent clamd connections.
 _SCAN_CONCURRENCY = 4
+MAX_SCAN_BYTES = 100 * 1024**2
+_logger = logging.getLogger(__name__)
+
+
+def _scan(content, *, host: str, port: int) -> str:
+    import pyclamd
+    try:
+        result = pyclamd.ClamdNetworkSocket(host=host, port=port, timeout=60).scan_stream(content)
+        if result is None:
+            return "clean"
+        if any(status == "FOUND" for status, _reason in result.values()):
+            return "infected"
+        _logger.error("ClamAV konnte die Datei nicht prüfen: %s", result)
+        return "error"
+    except pyclamd.BufferTooLongError:
+        return "error"
+    except Exception:
+        _logger.warning("ClamAV vorübergehend nicht erreichbar", exc_info=True)
+        return "pending"
 
 
 def scan_bytes(content: bytes, *, host: str, port: int = 3310) -> str:
-    """Scan file bytes via clamd stream. Returns 'clean', 'infected', or 'pending'."""
-    try:
-        import pyclamd
-        cd = pyclamd.ClamdNetworkSocket(host=host, port=port, timeout=30)
-        result = cd.scan_stream(content)
-        return "clean" if result is None else "infected"
-    except Exception:
-        return "pending"
+    """Nur Verbindungsfehler bleiben pending; Scanfehler sind keine Virenfunde."""
+    if len(content) > MAX_SCAN_BYTES:
+        return "error"
+    return _scan(content, host=host, port=port)
 
 
 def scan_file(path: str | Path, *, host: str, port: int = 3310) -> str:
-    """Read file from disk and scan via clamd. Returns 'clean', 'infected', or 'pending'."""
     try:
-        content = Path(path).read_bytes()
+        path = Path(path)
+        if path.stat().st_size > MAX_SCAN_BYTES:
+            return "error"
+        with path.open("rb") as source:
+            return _scan(source, host=host, port=port)
     except OSError:
-        return "pending"
-    return scan_bytes(content, host=host, port=port)
+        return "error"
 
 
 async def scan_many(contents: list[bytes], *, host: str, port: int = 3310) -> list[str]:
-    """Scan multiple files concurrently without blocking the event loop. scan_bytes() itself
-    is a blocking clamd call (up to the 30s timeout) - calling it directly from an async route
-    handler freezes the whole uvicorn worker (every tenant, every request) for that long.
-    asyncio.to_thread offloads each scan to a worker thread; the semaphore bounds how many
-    clamd connections run at once. Independent implementation of the same pattern as
-    abgabebox-backend/app/scanner.py::scan_many - deliberately not imported from there, see
-    the upload-pipeline unification plan for why the two services don't share code."""
     semaphore = asyncio.Semaphore(_SCAN_CONCURRENCY)
-
-    async def _scan_one(content: bytes) -> str:
+    async def scan_one(content: bytes) -> str:
         async with semaphore:
             return await asyncio.to_thread(scan_bytes, content, host=host, port=port)
-
-    return await asyncio.gather(*(_scan_one(content) for content in contents))
+    return await asyncio.gather(*(scan_one(content) for content in contents))

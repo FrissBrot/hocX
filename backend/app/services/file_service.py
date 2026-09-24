@@ -264,7 +264,7 @@ class FileService:
     def list_tenant_files(
         self,
         db: Session,
-        tenant_id: int,
+        tenant_id: int | None,
         *,
         skip: int = 0,
         limit: int = 50,
@@ -278,6 +278,12 @@ class FileService:
         file_ids: list[uuid.UUID] | None = None,
         album_id: uuid.UUID | None = None,
     ) -> list[FileOverviewItem]:
+        """tenant_id=None drops the tenant filter entirely (see
+        StoredFileRepository._files_overview_branches) - used when album_id or file_ids
+        already fully scope the result to a specific, already-access-checked set (a
+        mandantenuebergreifend geteiltes Album's items can span two tenants' StoredFile
+        rows; recompute_best_of/cover-thumbnail lookups pass an explicit file_ids list),
+        so no separate single-tenant filter is needed on top."""
         rows = self.stored_file_repository.list_tenant_files(
             db,
             tenant_id,
@@ -1050,6 +1056,8 @@ class FileService:
     ) -> tuple[StoredFile | None, str | None]:
         """(StoredFile, None) for a stored Live-Photo clip, else (None, Hinweis) - see
         save_gallery_uploads for why a bad clip only ever costs the "live" part."""
+        if scan_status == "error":
+            return None, "Live-Photo-Video konnte nicht auf Schadsoftware geprüft werden"
         if scan_status == "infected":
             return None, "Live-Photo-Video wurde von der Virenprüfung als infiziert erkannt und nicht gespeichert"
         transcoded = await asyncio.to_thread(transcode_live_clip, clip)
@@ -1186,7 +1194,7 @@ class FileService:
     # bounds peak memory to roughly this many decoded images at once (each up to
     # MAX_UPLOAD_BYTES), independent of the job's total size, instead of the old route's
     # "decode the whole batch, then ingest all of it" shape.
-    GALLERY_INGEST_BATCH_SIZE = 20
+    GALLERY_INGEST_BATCH_SIZE = 4
 
     def process_pending_gallery_upload_jobs(self, db: Session) -> None:
         """Background-loop task (see app/main.py's gallery_upload_ingest_loop): works
@@ -1198,6 +1206,14 @@ class FileService:
         _run_gallery_upload_job is async (it awaits save_gallery_uploads' scan_many), so
         each job gets its own asyncio.run() here rather than this whole method being async
         itself."""
+        # Der aufrufende Hintergrundloop hält den globalen Ingest-Lock. Ein running-Job
+        # kann hier nur von einem abgebrochenen Vorgänger stammen. Quelldateien bleiben
+        # bis zum erfolgreichen Abschluss erhalten; exakte Duplikate machen Replay sicher.
+        for interrupted in db.scalars(select(GalleryUploadJob).where(GalleryUploadJob.status == "running")):
+            interrupted.status = "queued"
+            interrupted.processed_files = 0
+            interrupted.total_files = None
+        db.commit()
         while True:
             job = db.scalars(
                 select(GalleryUploadJob).where(GalleryUploadJob.status == "queued").order_by(GalleryUploadJob.created_at).limit(1)
@@ -1219,11 +1235,15 @@ class FileService:
                 for relative_path in job.staged_paths:
                     (Path(settings.storage_root) / relative_path).unlink(missing_ok=True)
                 job.status = "failed"
+                job.reserved_bytes = 0
                 job.error = str(exc)
                 job.finished_at = datetime.now(UTC)
                 db.commit()
             else:
+                for relative_path in job.staged_paths:
+                    (Path(settings.storage_root) / relative_path).unlink(missing_ok=True)
                 job.status = "done"
+                job.reserved_bytes = 0
                 job.finished_at = datetime.now(UTC)
                 db.commit()
 
@@ -1276,9 +1296,7 @@ class FileService:
                         job.total_files += 1
                         db.commit()
             finally:
-                staged_path.unlink(missing_ok=True)
-                if clip_path is not None:
-                    clip_path.unlink(missing_ok=True)
+                pass  # Rohdaten erst nach vollständigem Jobabschluss entfernen.
 
     async def _ingest_gallery_zip(
         self,
@@ -1349,6 +1367,11 @@ class FileService:
         live_clips: dict[str, bytes] | None = None,
     ) -> None:
         await acquire_upload_lock(db, job.tenant_id)
+        # Die Reservierung dieses Batches wird in derselben Transaktion durch StoredFiles
+        # ersetzt. Abgewiesene/Duplikat-Dateien geben ihre Reservierung ebenfalls frei.
+        db.refresh(job)
+        job.reserved_bytes = max(0, (job.reserved_bytes or 0) - sum(len(data) for _, data in batch) - sum(len(data) for data in (live_clips or {}).values()))
+        db.flush()
         rule_errors: list[str] = []
         if upload_assignment is not None and job.upload_element_ref is not None:
             from app.services import submission_upload_rules  # deferred: import cycle, see photo_album_service below
@@ -1469,7 +1492,7 @@ class FileService:
                 results["still_pending"] += 1
                 continue
             self.stored_file_repository.update_scan_status(db, stored_file, scan_status=result)
-            results["clean" if result == "clean" else "infected"] += 1
+            results[result if result in ("clean", "infected") else "still_pending"] += 1
         db.commit()
         return results
 

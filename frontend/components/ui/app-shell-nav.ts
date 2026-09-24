@@ -55,6 +55,7 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
         { href: "/lists", label: "Stammlisten", icon: "lists" },
         { href: "/photos", label: "Fotos", icon: "photos" },
         { href: "/files", label: "Dateien", icon: "files" },
+        { href: "/shared-links", label: "Geteilte Links", icon: "share" },
       ],
     });
   }

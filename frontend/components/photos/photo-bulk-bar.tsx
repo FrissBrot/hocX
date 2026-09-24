@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { ShareLinkModal } from "@/components/ui/share-link-modal";
 import { TagInput } from "@/components/ui/tag-input";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
@@ -27,6 +28,7 @@ export function PhotoBulkBar({
   const [taggingOpen, setTaggingOpen] = useState(false);
   const [tagsValue, setTagsValue] = useState("");
   const [busy, setBusy] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => {
     browserApiFetch<PhotoAlbum[]>("/api/files/albums").then((data) => setAlbums(data ?? [])).catch(() => {});
@@ -143,6 +145,9 @@ export function PhotoBulkBar({
         <button type="button" className="button-ghost button-secondary" onClick={() => void toggleBest("exclude")} disabled={busy}>
           ☆ Best-of entfernen
         </button>
+        <button type="button" className="button-secondary" onClick={() => setShareOpen(true)} disabled={busy}>
+          Teilen
+        </button>
         <button type="button" className="button-secondary button-danger" onClick={() => void deleteSelected()} disabled={busy}>
           Löschen
         </button>
@@ -150,6 +155,12 @@ export function PhotoBulkBar({
           Auswahl aufheben
         </button>
       </div>
+      <ShareLinkModal
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        fileIds={selectedIds}
+        defaultName={selectedIds.length === 1 ? "1 Foto" : `${selectedIds.length} Fotos`}
+      />
       {taggingOpen && (
         <div className="photo-bulk-bar-tagging">
           <TagInput value={tagsValue} onChange={setTagsValue} suggestions={tagSuggestions} placeholder="Tag hinzufügen…" />

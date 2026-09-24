@@ -1514,6 +1514,57 @@ class PhotoAlbumItem(Base):
     best_override: Mapped[str | None] = mapped_column(Text)
 
 
+class PhotoAlbumTenantShare(Base, TimestampMixin):
+    """Ladet einen ANDEREN Mandanten in ein eigenes ("manual") Fotoalbum ein - der Besitzer
+    bleibt `photo_album.tenant_id`, hier steht nur der eingeladene Partner-Mandant und der
+    Stand der Einladung. Erst nach `status = 'accepted'` darf der eingeladene Mandant das
+    Album sehen bzw. eigene Fotos hinzufuegen/loeschen (siehe access_service.py,
+    photo_album_share_service.py)."""
+
+    __tablename__ = "photo_album_tenant_share"
+    __table_args__ = (
+        CheckConstraint("status IN ('pending', 'accepted', 'declined')", name="ck_photo_album_tenant_share_status"),
+    )
+
+    album_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("photo_album.id", ondelete="CASCADE"), primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), primary_key=True)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'pending'"))
+    invited_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    responded_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ShareLink(Base, TimestampMixin):
+    """Oeffentlicher Download-Link fuer Dateien/Fotos - `token` ist selbst die Authentifizierung
+    (Teil der URL: <app-domain>/share/<token>), analog zu SubmissionLink. Zeigt entweder auf ein
+    Album (`album_id` gesetzt - "live", immer der aktuelle Album-Inhalt) oder auf eine feste
+    Dateiauswahl (`share_link_file`, wenn `album_id` NULL ist)."""
+
+    __tablename__ = "share_link"
+
+    id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()"))
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    token: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    album_id: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("photo_album.id", ondelete="CASCADE"))
+    created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Widerruf ist soft (statt DELETE), damit die Uebersicht "Geteilte Links" auch widerrufene
+    # Links mit ihrem Status weiter anzeigen kann.
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ShareLinkFile(Base):
+    """Feste Dateiauswahl eines ShareLink - nur relevant, wenn share_link.album_id NULL ist.
+    Wie PhotoAlbumItem.file_id bewusst ohne FK: deckt sowohl StoredFile.public_id als auch
+    SubmissionUploadFile-Overview-IDs ab."""
+
+    __tablename__ = "share_link_file"
+
+    share_link_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("share_link.id", ondelete="CASCADE"), primary_key=True)
+    file_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
+
+
 class PhotoAnalysisJob(Base, TimestampMixin):
     """Phase 3 of the photo-culling feature: a batch of stored_file rows queued for the
     separate photo-analysis-worker container to score (currently: face_quality_score).
@@ -1552,6 +1603,7 @@ class GalleryUploadJob(Base, TimestampMixin):
 
     id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()"))
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    reserved_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"))
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'queued'"))
     # Storage-relative paths of the raw upload(s) staged by the request handler - see
     # upload_pipeline.stage_upload_to_disk. Filenames on disk are randomized

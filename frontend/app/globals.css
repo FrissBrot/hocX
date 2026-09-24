@@ -13963,11 +13963,37 @@ input[type="radio"] {
   font-size: var(--text-sm);
 }
 
+.album-card-badge {
+  align-self: flex-start;
+  margin-top: var(--space-1);
+}
+
+.album-share-requests {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.album-share-row {
+  cursor: default;
+  flex-wrap: wrap;
+}
+
+.album-share-row-name {
+  flex: 1;
+  min-width: 200px;
+}
+
 /* Dateien table */
 
 .files-table-name {
   display: flex;
   align-items: center;
+  gap: var(--space-2);
+}
+
+.files-table-actions {
+  display: flex;
   gap: var(--space-2);
 }
 
@@ -15993,4 +16019,69 @@ input[type="radio"] {
   .admin-tenant-modal .modal-close { grid-column: 2; grid-row: 1; }
   .admin-tenant-modal .two-col { grid-template-columns: minmax(0, 1fr); }
   .admin-tenant-modal .modal-footer-actions { flex-wrap: wrap; }
+}
+
+/* Oeffentliche Freigabe-Seite (/share/[token]) - kein AppShell, eigener Seitenrahmen */
+
+.public-share-page {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding: var(--space-6) var(--space-4);
+  background: var(--bg);
+}
+
+.public-share-card {
+  width: 100%;
+  max-width: 960px;
+  height: fit-content;
+}
+
+.public-share-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--space-4);
+}
+
+.public-share-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.public-share-item:hover {
+  border-color: var(--border-strong);
+}
+
+.public-share-thumb {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--panel-solid);
+}
+
+.public-share-thumb-file {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
+
+.public-share-item-name {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.public-share-item-size {
+  font-size: var(--text-xs);
 }

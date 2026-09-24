@@ -93,8 +93,6 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
-    tmpfs:
-      - /tmp:rw,noexec,nosuid,nodev,mode=1777
     logging:
       driver: json-file
       options:
@@ -127,6 +125,8 @@ services:
       CLAMAV_HOST: clamav
       REDIS_URL: redis://redis:6379/0
       TRAEFIK_DYNAMIC_CONFIG_DIR: /app/traefik_dynamic
+      ROUTER_PREFIX: ${ROUTER_PREFIX:-hocx}
+      TRAEFIK_MIDDLEWARE_PREFIX: ${ROUTER_PREFIX:-hocx}-
       DOMAIN_HEALTH_CHECK_INTERVAL_MINUTES: ${DOMAIN_HEALTH_CHECK_INTERVAL_MINUTES:-30}
       PHOTO_ANALYSIS_AUTO_QUEUE_INTERVAL_MINUTES: ${PHOTO_ANALYSIS_AUTO_QUEUE_INTERVAL_MINUTES:-30}
       PHOTO_ANALYSIS_AUTO_QUEUE_START_HOUR: ${PHOTO_ANALYSIS_AUTO_QUEUE_START_HOUR:-1}
@@ -168,6 +168,8 @@ services:
       redis:
         condition: service_healthy
     volumes:
+      # Multipart-Parser puffert grosse Dateien hier auf Platte, niemals im RAM.
+      - backend_upload_tmp:/tmp
       # HOCX_STORAGE_PATH (.env) zeigt lokal auf ./storage; sobald ein Cloud Volume gemountet
       # ist, dort umbiegen - kein Compose-/Code-Aendern noetig.
       - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
@@ -281,12 +283,13 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-gallery-upload.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-gallery-upload.priority=200"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-gallery-upload.service=${ROUTER_PREFIX:-hocx}-gallery-upload"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-gallery-upload.middlewares=${ROUTER_PREFIX:-hocx}-gallery-upload-body-limit"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-gallery-upload.middlewares=${ROUTER_PREFIX:-hocx}-gallery-upload-inflight,${ROUTER_PREFIX:-hocx}-gallery-upload-body-limit"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-gallery-upload.loadbalancer.server.port=8000"
       # 5 GiB + ~100 MiB slack for multipart/form-data overhead around the largest accepted ZIP
       # 1 TiB, matching GALLERY_ZIP_MAX_BYTES/proxyClientMaxBodySize - the ZIP content is
       # streamed to disk regardless of this number, so the only real ceiling left is disk space.
-      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-gallery-upload-body-limit.buffering.maxRequestBodyBytes=1099511627776"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-gallery-upload-body-limit.buffering.maxRequestBodyBytes=10738466816"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-gallery-upload-inflight.inflightreq.amount=2"
 
   # Photo-culling Phase 3: scores face quality for photo_analysis_job batches. Own
   # container/resource budget, not inside `backend` - see photo-analysis-worker/README.md.
@@ -398,8 +401,6 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
-    tmpfs:
-      - /tmp:rw,noexec,nosuid,nodev,mode=1777
     logging:
       driver: json-file
       options:
@@ -422,6 +423,7 @@ services:
       FRIENDLY_CAPTCHA_VERIFY_URL: ${FRIENDLY_CAPTCHA_VERIFY_URL:-https://api.friendlycaptcha.com/api/v1/siteverify}
       ABGABEBOX_CAPTCHA_SESSION_TTL_MINUTES: ${ABGABEBOX_CAPTCHA_SESSION_TTL_MINUTES:-120}
       ABGABEBOX_TENANT_STORAGE_QUOTA_MB: ${ABGABEBOX_TENANT_STORAGE_QUOTA_MB:-2048}
+      ABGABEBOX_MAX_FILES_PER_UPLOAD_REQUEST: ${ABGABEBOX_MAX_FILES_PER_UPLOAD_REQUEST:-50}
       ABGABEBOX_QUARANTINE_MAX_AGE_MINUTES: ${ABGABEBOX_QUARANTINE_MAX_AGE_MINUTES:-60}
       ABGABEBOX_QUARANTINE_CLEANUP_INTERVAL_MINUTES: ${ABGABEBOX_QUARANTINE_CLEANUP_INTERVAL_MINUTES:-30}
     secrets:
@@ -434,6 +436,8 @@ services:
       backend:
         condition: service_started
     volumes:
+      # Multipart-Parser puffert grosse Dateien hier auf Platte, niemals im RAM.
+      - abgabebox_upload_tmp:/tmp
       - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/storage
     healthcheck:
       # Kein curl im python:3.13-slim-Image (siehe Audit) - urllib aus der Stdlib genuegt fuer
@@ -456,9 +460,9 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-upload.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-upload.priority=200"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-upload.service=${ROUTER_PREFIX:-hocx}-abgabebox-backend"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-upload.middlewares=${ROUTER_PREFIX:-hocx}-abgabebox-upload-ratelimit,${ROUTER_PREFIX:-hocx}-abgabebox-upload-body-limit"
-      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-ratelimit.ratelimit.average=5"
-      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-ratelimit.ratelimit.burst=3"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-upload.middlewares=${ROUTER_PREFIX:-hocx}-abgabebox-upload-ratelimit,${ROUTER_PREFIX:-hocx}-abgabebox-upload-inflight,${ROUTER_PREFIX:-hocx}-abgabebox-upload-body-limit"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-ratelimit.ratelimit.average=30"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-ratelimit.ratelimit.burst=10"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-ratelimit.ratelimit.period=1m"
       # Audit A2, 2026-08-16: was missing here (present in docker-compose.yml, which is
       # what the regression test in abgabebox-backend/tests/test_upload_size_limits.py
@@ -469,7 +473,17 @@ services:
       # in memory at once, and 2000 MB reliably OOM-kills the abgabebox-backend container
       # (384m mem_limit, 2 workers) for every tenant at once. Keep in sync with
       # MAX_UPLOAD_REQUEST_BYTES in abgabebox-backend/app/routes/public.py.
-      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-body-limit.buffering.maxRequestBodyBytes=157286400"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-body-limit.buffering.maxRequestBodyBytes=158334976"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-inflight.inflightreq.amount=2"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-public-ratelimit.ratelimit.average=60"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-public-ratelimit.ratelimit.burst=20"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-public-ratelimit.ratelimit.period=1m"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && PathPrefix(`/api/public`) && Method(`GET`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.entrypoints=websecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.priority=200"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.service=${ROUTER_PREFIX:-hocx}-abgabebox-backend"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.middlewares=${ROUTER_PREFIX:-hocx}-abgabebox-public-ratelimit"
 
   abgabebox-frontend:
     image: ${HOCX_ABGABEBOX_FRONTEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-frontend:${HOCX_VERSION}}
@@ -561,6 +575,8 @@ services:
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-docs.loadbalancer.server.port=80"
 
 volumes:
+  backend_upload_tmp:
+  abgabebox_upload_tmp:
   postgres_data:
 
 secrets:

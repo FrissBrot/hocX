@@ -161,6 +161,8 @@ services:
       CLAMAV_HOST: clamav
       REDIS_URL: redis://redis:6379/0
       TRAEFIK_DYNAMIC_CONFIG_DIR: /app/traefik_dynamic
+      ROUTER_PREFIX: hocx
+      TRAEFIK_MIDDLEWARE_PREFIX: ""
     depends_on:
       db:
         condition: service_healthy
@@ -311,11 +313,12 @@ services:
       - "traefik.http.routers.hocx-gallery-upload.tls.certresolver=letsencrypt"
       - "traefik.http.routers.hocx-gallery-upload.priority=200"
       - "traefik.http.routers.hocx-gallery-upload.service=hocx-gallery-upload"
-      - "traefik.http.routers.hocx-gallery-upload.middlewares=gallery-upload-body-limit"
+      - "traefik.http.routers.hocx-gallery-upload.middlewares=gallery-upload-inflight,gallery-upload-body-limit"
       - "traefik.http.services.hocx-gallery-upload.loadbalancer.server.port=8000"
       # 1 TiB, matching GALLERY_ZIP_MAX_BYTES/proxyClientMaxBodySize - the ZIP content is
       # streamed to disk regardless of this number, so the only real ceiling left is disk space.
-      - "traefik.http.middlewares.gallery-upload-body-limit.buffering.maxRequestBodyBytes=1099511627776"
+      - "traefik.http.middlewares.gallery-upload-body-limit.buffering.maxRequestBodyBytes=10738466816"
+      - "traefik.http.middlewares.gallery-upload-inflight.inflightreq.amount=2"
 
   # Photo-culling Phase 3: scores face quality for photo_analysis_job batches. Its own
   # container/resource budget rather than living inside `backend` - see
@@ -479,9 +482,9 @@ services:
       - "traefik.http.routers.abgabebox-upload.tls.certresolver=letsencrypt"
       - "traefik.http.routers.abgabebox-upload.priority=200"
       - "traefik.http.routers.abgabebox-upload.service=abgabebox-backend"
-      - "traefik.http.routers.abgabebox-upload.middlewares=abgabebox-upload-ratelimit,abgabebox-upload-body-limit"
-      - "traefik.http.middlewares.abgabebox-upload-ratelimit.ratelimit.average=5"
-      - "traefik.http.middlewares.abgabebox-upload-ratelimit.ratelimit.burst=3"
+      - "traefik.http.routers.abgabebox-upload.middlewares=abgabebox-upload-ratelimit,abgabebox-upload-inflight,abgabebox-upload-body-limit"
+      - "traefik.http.middlewares.abgabebox-upload-ratelimit.ratelimit.average=30"
+      - "traefik.http.middlewares.abgabebox-upload-ratelimit.ratelimit.burst=10"
       - "traefik.http.middlewares.abgabebox-upload-ratelimit.ratelimit.period=1m"
       # Lowered from 2000 MB (audit finding, 2026-08-25) - that figure was the worst-case
       # legitimate total per the assignment's own max_file_size_mb/max_files_per_element
@@ -490,7 +493,8 @@ services:
       # (mem_limit above) across 2 workers - a request anywhere near 2000 MB reliably OOM-
       # kills the whole service for every tenant. Keep in sync with
       # abgabebox-backend/app/routes/public.py's MAX_UPLOAD_REQUEST_BYTES.
-      - "traefik.http.middlewares.abgabebox-upload-body-limit.buffering.maxRequestBodyBytes=157286400"
+      - "traefik.http.middlewares.abgabebox-upload-body-limit.buffering.maxRequestBodyBytes=158334976"
+      - "traefik.http.middlewares.abgabebox-upload-inflight.inflightreq.amount=2"
       # Dedizierter Router fuer die oeffentlichen, unauthentifizierten GET-Endpunkte
       # (assignments/elements listing+detail) - ohne dieses Limit liessen sich Mandanten-
       # Slugs, Auftraege und Elemente unbegrenzt durchprobieren/enumerieren. Grosszuegiger

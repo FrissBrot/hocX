@@ -57,6 +57,8 @@ class Settings(BaseSettings):
     abgabebox_base_url: str = "https://upload.example.com"
     traefik_domain: str | None = None
     traefik_abgabebox_domain: str | None = None
+    router_prefix: str = "hocx"
+    traefik_middleware_prefix: str = ""
     traefik_dynamic_config_dir: str = "/app/traefik_dynamic"
     domain_health_check_interval_minutes: int = 30
     abgabebox_rescan_interval_minutes: int = 15

@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 
-from app.api.routes import admin, admin_auth, auth, collaboration_ws, cycle_configs, document_templates, events, exports, files, finance, fines, lists, participants, protocol_elements, protocols, statistics, storage, submission_assignments, table_snapshots, tag_config, templates, tenants, todos, users, word_import
+from app.api.routes import admin, admin_auth, auth, collaboration_ws, cycle_configs, document_templates, events, exports, files, finance, fines, lists, participants, protocol_elements, protocols, public_share, share_links, statistics, storage, submission_assignments, table_snapshots, tag_config, templates, tenants, todos, users, word_import
 from app.core.background_loops import BACKGROUND_LOCK_IDS, run_advisory_locked_loop
 from app.core.db import SessionLocal, engine
 from app.core.config import settings
@@ -386,6 +386,10 @@ app = FastAPI(
     openapi_url=None if settings.is_production else "/openapi.json",
 )
 
+from app.upload_admission import UploadAdmissionMiddleware
+from app.services.upload_pipeline import GALLERY_REQUEST_MAX_BYTES
+app.add_middleware(UploadAdmissionMiddleware, path="/api/files/gallery-uploads", max_bytes=GALLERY_REQUEST_MAX_BYTES)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o for o in [
@@ -456,6 +460,8 @@ app.include_router(protocols.router, prefix="/api", tags=["protocols"])
 app.include_router(protocol_elements.router, prefix="/api", tags=["protocol-elements"])
 app.include_router(todos.router, prefix="/api", tags=["todos"])
 app.include_router(files.router, prefix="/api", tags=["files"])
+app.include_router(share_links.router, prefix="/api", tags=["share-links"])
+app.include_router(public_share.router, prefix="/api", tags=["public-share"])
 app.include_router(storage.router, prefix="/api", tags=["storage"])
 app.include_router(exports.router, prefix="/api", tags=["exports"])
 app.include_router(finance.router, prefix="/api", tags=["finance"])

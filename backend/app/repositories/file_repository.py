@@ -316,7 +316,7 @@ class StoredFileRepository:
     def list_tenant_files(
         self,
         db: Session,
-        tenant_id: int,
+        tenant_id: int | None,
         *,
         skip: int = 0,
         limit: int = 50,

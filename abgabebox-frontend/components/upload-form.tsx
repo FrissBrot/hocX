@@ -97,7 +97,7 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
         publicApiUrl(
           `/api/public/${encodeURIComponent(linkToken)}/assignments/${encodeURIComponent(assignmentSlug)}/elements/${encodeURIComponent(elementRef)}/captcha-verify`
         ),
-        { method: "POST", body: formData }
+        { method: "POST", body: formData, signal: AbortSignal.timeout(3 * 60 * 60 * 1000) }
       );
       if (!response.ok) {
         // Eintausch fehlgeschlagen (z.B. FriendlyCaptcha-Loesung inzwischen abgelaufen) - Widget
@@ -157,7 +157,7 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
         publicApiUrl(
           `/api/public/${encodeURIComponent(linkToken)}/assignments/${encodeURIComponent(assignmentSlug)}/elements/${encodeURIComponent(elementRef)}/upload`
         ),
-        { method: "POST", body: formData }
+        { method: "POST", body: formData, signal: AbortSignal.timeout(3 * 60 * 60 * 1000) }
       );
       if (!response.ok) {
         if (response.status === 429) {

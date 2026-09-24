@@ -11,10 +11,12 @@ export function FilesTable({
   items,
   onOpenDetail,
   onNavigate,
+  onShare,
 }: {
   items: FileOverviewItem[];
   onOpenDetail: (item: FileOverviewItem) => void;
   onNavigate: (href: string) => void;
+  onShare: (item: FileOverviewItem) => void;
 }) {
   return (
     <DataTable
@@ -47,10 +49,13 @@ export function FilesTable({
             </td>
             <td>{formatDate(item.created_at)}</td>
             <td>{item.file_size_bytes ? formatFileSize(item.file_size_bytes) : <span className="muted">–</span>}</td>
-            <td onClick={(event) => event.stopPropagation()}>
+            <td className="files-table-actions" onClick={(event) => event.stopPropagation()}>
               <a href={`${browserApiBaseUrl}${item.content_url}`} target="_blank" rel="noreferrer" className="button-secondary button-ghost">
                 Download
               </a>
+              <button type="button" className="button-secondary button-ghost" onClick={() => onShare(item)}>
+                Teilen
+              </button>
             </td>
           </tr>
         );

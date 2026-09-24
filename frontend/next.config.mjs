@@ -52,13 +52,8 @@ const nextConfig = {
   // outside dev (only read when `next dev` is running).
   allowedDevOrigins: ["127.0.0.1"],
   experimental: {
-    // Lokale/Test-Requests laufen ueber den Next-Proxy. Der Next-Standard von 10 MB
-    // schneidet grosse multipart-Uploads (z.B. Galerie-ZIPs, siehe GALLERY_ZIP_MAX_BYTES
-    // im Backend) ab und endet dann mit ECONNRESET / "Internal Server Error" bzw. 413
-    // "Request Entity Too Large". Soll hier praktisch keine Grenze geben (2026-09-22) -
-    // 1 TB lässt jeden realistischen Upload durch, ohne den Wert faktisch unendlich zu
-    // machen.
-    proxyClientMaxBodySize: "1tb",
+    // 10 GiB Fotos + 1 MiB Multipart-Overhead, wie der Release-Router.
+    proxyClientMaxBodySize: 10738466816,
     staleTimes: {
       dynamic: 0,
     },
