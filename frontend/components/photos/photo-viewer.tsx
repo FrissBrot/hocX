@@ -103,8 +103,16 @@ export function PhotoViewer({
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (event.key === "ArrowLeft" && hasPrev) onIndexChange(index - 1);
-      if (event.key === "ArrowRight" && hasNext) onIndexChange(index + 1);
+      // j/l nur ohne Modifier und nicht beim Tippen in Eingabefeldern
+      const target = event.target as HTMLElement | null;
+      const typing =
+        !!target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+      const plainLetter = !typing && !event.ctrlKey && !event.metaKey && !event.altKey;
+      const key = event.key.toLowerCase();
+      const prev = event.key === "ArrowLeft" || (plainLetter && key === "j");
+      const next = event.key === "ArrowRight" || (plainLetter && key === "l");
+      if (prev && hasPrev) onIndexChange(index - 1);
+      if (next && hasNext) onIndexChange(index + 1);
     }
     window.addEventListener("keydown", onKey);
     return () => {
