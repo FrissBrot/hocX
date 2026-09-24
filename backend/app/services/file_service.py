@@ -277,6 +277,7 @@ class FileService:
         sort_dir: str = "desc",
         file_ids: list[uuid.UUID] | None = None,
         album_id: uuid.UUID | None = None,
+        exclude_album_id: uuid.UUID | None = None,
     ) -> list[FileOverviewItem]:
         """tenant_id=None drops the tenant filter entirely (see
         StoredFileRepository._files_overview_branches) - used when album_id or file_ids
@@ -298,6 +299,7 @@ class FileService:
             sort_dir=sort_dir,
             file_ids=file_ids,
             album_id=album_id,
+            exclude_album_id=exclude_album_id,
         )
         return [self._build_overview_item(row) for row in rows]
 

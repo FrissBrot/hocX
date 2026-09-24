@@ -16085,3 +16085,465 @@ input[type="radio"] {
 .public-share-item-size {
   font-size: var(--text-xs);
 }
+
+/* Album: "Fotos hinzufügen" (AlbumPhotoPicker) - feste Werkzeugleiste, darunter scrollen nur
+   die Datumsgruppen; Trennlinie und Scrollbar laufen bis an den Modalrand. */
+.album-picker-modal .modal-header {
+  margin-bottom: var(--space-4);
+}
+
+.album-picker-modal .modal-header h2 {
+  margin-top: var(--space-1);
+  font-family: Georgia, serif;
+  font-size: var(--text-xl);
+}
+
+.album-picker-modal .modal-header .eyebrow {
+  letter-spacing: 0.06em;
+}
+
+.album-picker-modal .modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+  padding-right: 0;
+}
+
+.album-picker-modal .modal-footer {
+  margin-top: 0;
+}
+
+.album-picker-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+}
+
+.album-picker-search {
+  flex: 0 1 336px;
+  min-width: 200px;
+}
+
+.album-picker-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+  font-size: var(--text-base);
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.album-picker-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.album-picker-switch-track {
+  position: relative;
+  flex-shrink: 0;
+  width: 34px;
+  height: 20px;
+  border-radius: var(--radius-pill);
+  background: var(--border-strong);
+  transition: background var(--dur-base) var(--ease-out);
+}
+
+.album-picker-switch-track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--panel-solid);
+  box-shadow: var(--shadow-soft);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.album-picker-switch input:checked + .album-picker-switch-track {
+  background: var(--accent);
+}
+
+.album-picker-switch input:checked + .album-picker-switch-track::after {
+  transform: translateX(14px);
+}
+
+.album-picker-switch input:focus-visible + .album-picker-switch-track {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+
+.album-picker-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  margin: 0 -22px; /* design-ok: an das Modal-Shell-Padding gekoppelt */
+  padding: var(--space-5) 22px; /* design-ok: an das Modal-Shell-Padding gekoppelt */
+  border-top: 1px solid var(--border);
+}
+
+.album-picker-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.album-picker-group-header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.album-picker-group-title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.album-picker-group-count {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.album-picker-group-toggle,
+.album-picker-group-toggle:hover {
+  --button-bg: transparent;
+  --button-hover-bg: transparent;
+  flex-shrink: 0;
+  width: auto;
+  margin-left: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-strong);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.album-picker-group-toggle:hover:not(:disabled) {
+  text-decoration: underline;
+  text-underline-offset: var(--space-1);
+}
+
+.album-picker-group-toggle:disabled {
+  color: var(--muted);
+  opacity: 0.6;
+}
+
+.album-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: var(--space-1);
+}
+
+.album-picker-tile {
+  position: relative;
+  display: block;
+  aspect-ratio: 1;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--neutral-bg);
+  cursor: pointer;
+}
+
+.album-picker-tile img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--dur-base) var(--ease-out), opacity var(--dur-base) var(--ease-out);
+}
+
+.album-picker-tile:hover:not(.album-picker-tile-contained) img {
+  transform: scale(1.03);
+}
+
+.album-picker-tile-selected {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.album-picker-tile-selected img {
+  transform: scale(0.94);
+}
+
+.album-picker-tile-selected:hover img {
+  transform: scale(0.94);
+}
+
+.album-picker-tile-contained {
+  cursor: default;
+}
+
+.album-picker-tile-contained img {
+  opacity: 0.45;
+}
+
+.album-picker-tile-skeleton {
+  cursor: default;
+}
+
+.album-picker-tile-check {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--on-solid);
+  background: color-mix(in srgb, var(--on-solid) 25%, transparent);
+  color: var(--on-solid);
+}
+
+.album-picker-tile-selected .album-picker-tile-check {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.album-picker-selection {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.album-picker-empty {
+  margin: 0;
+  padding: var(--space-6) 0;
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .album-picker-search {
+    flex: 1 1 100%;
+  }
+
+  .album-picker-switch {
+    margin-left: 0;
+  }
+
+  .album-picker-toolbar .filter-tabs {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .album-picker-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Album: "Mit anderem Mandanten teilen" (AlbumShareModal) */
+.album-share-modal .modal-header h2 {
+  margin-top: var(--space-1);
+  font-family: Georgia, serif;
+  font-size: var(--text-xl);
+}
+
+.album-share-modal .modal-header .eyebrow {
+  letter-spacing: 0.06em;
+}
+
+.album-share-modal .modal-header p {
+  max-width: 52ch;
+}
+
+.album-share-modal .modal-content {
+  gap: var(--space-5);
+  padding-top: var(--space-5);
+  margin: 0 -22px; /* design-ok: an das Modal-Shell-Padding gekoppelt */
+  padding-left: 22px; /* design-ok: an das Modal-Shell-Padding gekoppelt */
+  padding-right: 22px; /* design-ok: an das Modal-Shell-Padding gekoppelt */
+  border-top: 1px solid var(--border);
+}
+
+.album-share-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.album-share-field-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+}
+
+.album-share-field-hint {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.album-share-input {
+  position: relative;
+}
+
+.album-share-modal .album-share-input input {
+  width: 100%;
+  min-width: 0;
+  padding-right: 40px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--text-base);
+}
+
+.album-share-input-clear {
+  position: absolute;
+  top: 50%;
+  right: var(--space-2);
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+}
+
+.album-share-input-clear:hover {
+  background: var(--neutral-bg);
+  color: var(--text);
+}
+
+.album-share-found {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--success) 35%, transparent);
+  border-radius: var(--radius-md);
+  background: var(--success-bg);
+}
+
+.album-share-found-mark {
+  margin-left: auto;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--success-fg);
+  white-space: nowrap;
+}
+
+.album-share-avatar {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.album-share-found .album-share-avatar {
+  width: 40px;
+  height: 40px;
+}
+
+.album-share-avatar-success { background: var(--success-bg); color: var(--success-fg); }
+.album-share-found .album-share-avatar-success { background: color-mix(in srgb, var(--success) 18%, transparent); }
+.album-share-avatar-danger { background: var(--danger-bg); color: var(--danger-fg); }
+.album-share-avatar-warning { background: var(--warning-bg); color: var(--warning-fg); }
+.album-share-avatar-info { background: var(--info-bg); color: var(--info-fg); }
+.album-share-avatar-neutral { background: var(--neutral-bg); color: var(--neutral-fg); }
+
+.album-share-entry-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.album-share-entry-text strong {
+  font-size: var(--text-md);
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.album-share-entry-meta {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.album-share-list-section {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-2);
+}
+
+.album-share-list-section h3 {
+  margin: 0;
+}
+
+.album-share-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.album-share-entry {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+
+.album-share-entry + .album-share-entry {
+  border-top: 1px solid var(--border);
+}
+
+.album-share-entry .badge {
+  margin-left: auto;
+}
+
+.album-share-entry-action {
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .album-share-entry {
+    flex-wrap: wrap;
+  }
+
+  .album-share-entry-text {
+    flex: 1 1 calc(100% - 48px);
+  }
+
+  .album-share-entry .badge {
+    margin-left: 48px;
+  }
+
+  .album-share-entry-action {
+    margin-left: auto;
+  }
+}

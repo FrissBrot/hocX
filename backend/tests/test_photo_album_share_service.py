@@ -221,3 +221,20 @@ def test_list_shares_for_album_reports_every_status(db):
     rows = {row.tenant_name: row.status for row in photo_album_share_service.list_shares_for_album(db, album.id)}
 
     assert rows == {"Akzeptiert AG": "accepted", "Abgelehnt AG": "declined"}
+
+
+def test_list_shares_for_album_reports_invited_and_responded_dates(db):
+    owner = make_tenant(db)
+    accepted = make_tenant(db, "Akzeptiert AG")
+    pending = make_tenant(db, "Offen AG")
+    album = _make_album(db, owner.id)
+    photo_album_share_service.invite(db, album, target_tenant_id=accepted.id, invited_by=None)
+    photo_album_share_service.respond(db, album_id=album.id, tenant_id=accepted.id, accept=True, responded_by=None)
+    photo_album_share_service.invite(db, album, target_tenant_id=pending.id, invited_by=None)
+
+    rows = {row.tenant_name: row for row in photo_album_share_service.list_shares_for_album(db, album.id)}
+
+    assert rows["Akzeptiert AG"].invited_at is not None
+    assert rows["Akzeptiert AG"].responded_at is not None
+    assert rows["Offen AG"].invited_at is not None
+    assert rows["Offen AG"].responded_at is None

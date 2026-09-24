@@ -67,16 +67,35 @@ class AlbumShareRow:
     tenant_public_id: uuid.UUID
     tenant_name: str
     status: str
+    # "eingeladen am" (created_at) bzw. "seit" (responded_at, beim Annehmen/Ablehnen gesetzt)
+    # im Teilen-Dialog.
+    invited_at: datetime
+    responded_at: datetime | None
 
 
 def list_shares_for_album(db: Session, album_id: uuid.UUID) -> list[AlbumShareRow]:
     rows = db.execute(
-        select(PhotoAlbumTenantShare.status, Tenant.public_id, Tenant.name)
+        select(
+            PhotoAlbumTenantShare.status,
+            PhotoAlbumTenantShare.created_at,
+            PhotoAlbumTenantShare.responded_at,
+            Tenant.public_id,
+            Tenant.name,
+        )
         .join(Tenant, Tenant.id == PhotoAlbumTenantShare.tenant_id)
         .where(PhotoAlbumTenantShare.album_id == album_id)
         .order_by(Tenant.name)
     ).all()
-    return [AlbumShareRow(tenant_public_id=row.public_id, tenant_name=row.name, status=row.status) for row in rows]
+    return [
+        AlbumShareRow(
+            tenant_public_id=row.public_id,
+            tenant_name=row.name,
+            status=row.status,
+            invited_at=row.created_at,
+            responded_at=row.responded_at,
+        )
+        for row in rows
+    ]
 
 
 def invite(db: Session, album: PhotoAlbum, *, target_tenant_id: int, invited_by: int | None) -> PhotoAlbumTenantShare:

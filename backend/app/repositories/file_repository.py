@@ -329,6 +329,7 @@ class StoredFileRepository:
         sort_dir: str = "desc",
         file_ids: list[uuid.UUID] | None = None,
         album_id: uuid.UUID | None = None,
+        exclude_album_id: uuid.UUID | None = None,
     ) -> list[Row]:
         """Every "Dateien"/"Fotos" the tenant has produced by uploading something - protocol
         images, the raw .docx/.pdf a word-import was read from, abgabebox submission uploads,
@@ -347,7 +348,11 @@ class StoredFileRepository:
         page). file_ids stays available for every other caller of this method (an
         already-known, typically small/bounded id set - recompute_best_of, cover-photo
         lookups, bulk-action targets), which genuinely needs an explicit id list rather
-        than an album join."""
+        than an album join.
+
+        exclude_album_id is the opposite filter for the "Fotos hinzufuegen" picker's
+        "Bereits enthaltene ausblenden": done in SQL rather than client-side so paging stays
+        dense (a client-side filter would leave pages that are mostly or entirely empty)."""
         branches = self._files_overview_branches(tenant_id)
         selected = [branch for key, branch in branches.items() if source is None or source == key]
         union_query = union_all(*selected).subquery("files_overview")
@@ -358,6 +363,12 @@ class StoredFileRepository:
                 PhotoAlbumItem,
                 and_(PhotoAlbumItem.file_id == union_query.c.public_id, PhotoAlbumItem.album_id == album_id),
             )
+        if exclude_album_id is not None:
+            query = query.where(
+                ~select(PhotoAlbumItem.file_id)
+                .where(PhotoAlbumItem.file_id == union_query.c.public_id, PhotoAlbumItem.album_id == exclude_album_id)
+                .exists()
+            )
         if file_ids is not None:
             query = query.where(union_query.c.public_id.in_(file_ids))
         if only_images:
@@ -367,7 +378,19 @@ class StoredFileRepository:
                 or_(union_query.c.mime_type.is_(None), union_query.c.mime_type.notlike("image/%"))
             )
         if search:
-            query = query.where(union_query.c.original_name.ilike(f"%{search}%"))
+            # Name, Tag oder Termin: besides the file name also the linked protocol/abgabe/
+            # Termin (ref_label/context_label), the computed origin_tag and the user tags
+            # (jsonb array matched as its text form - good enough for a substring search).
+            pattern = f"%{search}%"
+            query = query.where(
+                or_(
+                    union_query.c.original_name.ilike(pattern),
+                    cast(union_query.c.ref_label, String).ilike(pattern),
+                    cast(union_query.c.context_label, String).ilike(pattern),
+                    cast(union_query.c.origin_tag, String).ilike(pattern),
+                    cast(union_query.c.tags, String).ilike(pattern),
+                )
+            )
         if tags:
             # AND across selected tags (each further tag narrows the result), OR within a
             # single tag between a user-assigned tag (jsonb containment) and the computed

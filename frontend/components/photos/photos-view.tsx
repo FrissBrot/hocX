@@ -43,11 +43,10 @@ const SORT_OPTIONS: SortOption[] = [
 
 type Props = {
   albumId?: string;
-  onSelectPhoto?: (item: FileOverviewItem) => void;
 };
 
-export function PhotosView({ albumId, onSelectPhoto }: Props) {
-  const embedded = Boolean(albumId) || Boolean(onSelectPhoto);
+export function PhotosView({ albumId }: Props) {
+  const embedded = Boolean(albumId);
   const router = useRouter();
   const showToast = useToast();
 
@@ -355,7 +354,7 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
                 <SearchInput value={search} onChange={setSearch} placeholder="Fotos durchsuchen" />
               </div>
             )}
-            {tab === "all" && !onSelectPhoto && (
+            {tab === "all" && (
               <SearchableSelect
                 className="files-sort-select"
                 options={SORT_OPTIONS}
@@ -393,27 +392,25 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
               <div className="list-filter-search">
                 <SearchInput value={search} onChange={setSearch} placeholder="Fotos durchsuchen" />
               </div>
-              {!onSelectPhoto && (
-                <SearchableSelect
-                  className="files-sort-select"
-                  options={SORT_OPTIONS}
-                  getId={(option) => option.id}
-                  getLabel={(option) => option.label}
-                  value={`${sortKey}:${sortDir}`}
-                  onChange={(option) => {
-                    if (!option) return;
-                    setSortKey(option.key);
-                    setSortDir(option.dir);
-                  }}
-                />
-              )}
+              <SearchableSelect
+                className="files-sort-select"
+                options={SORT_OPTIONS}
+                getId={(option) => option.id}
+                getLabel={(option) => option.label}
+                value={`${sortKey}:${sortDir}`}
+                onChange={(option) => {
+                  if (!option) return;
+                  setSortKey(option.key);
+                  setSortDir(option.dir);
+                }}
+              />
               <div className="list-filter-tags">
                 <TagInput value={tagFilter.join(",")} onChange={(value) => setTagFilter(value ? value.split(",").map((t) => t.trim()).filter(Boolean) : [])} suggestions={tagSuggestions} placeholder="Tag wählen oder eingeben…" />
               </div>
             </div>
           )}
 
-          {!onSelectPhoto && selectedIds.size > 0 && (
+          {selectedIds.size > 0 && (
             <PhotoBulkBar
               selectedIds={Array.from(selectedIds)}
               tagSuggestions={tagSuggestions}
@@ -471,22 +468,6 @@ export function PhotosView({ albumId, onSelectPhoto }: Props) {
             />
           ) : items.length === 0 ? (
             <p className="muted">Keine Fotos gefunden.</p>
-          ) : onSelectPhoto ? (
-            <div className="photo-grid">
-              {items.map((item) => (
-                <div key={item.id}>
-                  <button type="button" className="button-secondary" onClick={() => onSelectPhoto(item)}>Zum Album hinzufügen</button>
-                  <img
-                    alt={item.original_name}
-                    src={item.thumbnail_url ?? item.content_url}
-                    loading="lazy"
-                    decoding="async"
-                    className={item.width && item.height ? "photo-tile-img photo-tile-img-fitted" : "photo-tile-img"}
-                    style={item.width && item.height ? { aspectRatio: item.width / item.height } : undefined}
-                  />
-                </div>
-              ))}
-            </div>
           ) : (
             <PhotoDateGroups
               items={items}

@@ -7,10 +7,11 @@ import pytest
 from fastapi import HTTPException
 
 from app.api.routes import files as files_routes
+from app.api.routes import tenants as tenants_routes
 from app.models.entities import GalleryImage, PhotoAlbum, PhotoAlbumItem, StoredFile
 from app.schemas.files import AlbumShareCreate, AlbumShareRespond, FileBulkDelete, PhotoAlbumItemsUpdate
 from app.services.access_service import AccessService
-from tests.factories import make_current_user, make_cycle_config, make_tenant
+from tests.factories import make_current_user, make_cycle_config, make_participant, make_tenant
 
 
 def _make_album(db, tenant_id: int, name: str = "Album", kind: str = "manual") -> PhotoAlbum:
@@ -313,3 +314,19 @@ def test_ensure_can_read_stored_file_still_denies_photos_outside_any_shared_albu
     with pytest.raises(HTTPException) as exc_info:
         AccessService().ensure_can_read_stored_file(db, partner_user, unrelated_photo.id)
     assert exc_info.value.status_code == 403
+
+
+def test_lookup_tenant_returns_slug_and_active_participant_count(db):
+    owner = make_tenant(db)
+    partner = make_tenant(db, "Jubla Sonnenberg")
+    partner.public_slug = "jubla-sonnenberg"
+    make_participant(db, partner.id, "Aktiv 1")
+    make_participant(db, partner.id, "Aktiv 2")
+    make_participant(db, partner.id, "Ausgetreten").is_active = False
+    db.commit()
+
+    result = tenants_routes.lookup_tenant(public_id=partner.public_id, db=db, user=make_current_user(owner.id, role="writer"))
+
+    assert result.name == "Jubla Sonnenberg"
+    assert result.slug == "jubla-sonnenberg"
+    assert result.participant_count == 2

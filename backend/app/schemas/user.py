@@ -26,6 +26,8 @@ class TenantLookupRead(BaseModel):
 
     id: uuid.UUID
     name: str
+    slug: str | None = None
+    participant_count: int = 0
 
 
 class TenantSubscriptionFeatureRead(BaseModel):

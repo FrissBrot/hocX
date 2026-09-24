@@ -181,6 +181,8 @@ class AlbumTenantShareStatus(BaseModel):
     tenant_public_id: uuid.UUID
     tenant_name: str
     status: Literal["pending", "accepted", "declined"]
+    invited_at: datetime
+    responded_at: datetime | None = None
 
 
 class PhotoAlbumRead(BaseModel):

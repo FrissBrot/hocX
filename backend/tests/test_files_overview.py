@@ -247,6 +247,40 @@ def test_list_tenant_files_search_matches_original_name_case_insensitively(db):
     assert len(misses) == 0
 
 
+def test_list_tenant_files_search_matches_tags_and_linked_protocol(db):
+    """Suchfeld "Name, Tag oder Termin" im Album-Picker: neben dem Dateinamen auch
+    eigene Tags und das verknuepfte Protokoll/Abgabe/Termin."""
+    tenant = make_tenant(db)
+    _, stored_file = _make_protocol_image(db, tenant.id)
+    _make_word_import_document(db, tenant.id, display_name="Jahresbericht 2026.docx")
+    service.update_stored_file_tags(db, stored_file, ["Sommerlager"])
+
+    by_tag = service.list_tenant_files(db, tenant.id, search="sommerl")
+    by_protocol = service.list_tenant_files(db, tenant.id, search="7/2026")
+
+    assert [item.id for item in by_tag] == [stored_file.public_id]
+    assert [item.id for item in by_protocol] == [stored_file.public_id]
+
+
+def test_list_files_route_exclude_album_id_hides_album_members(db):
+    tenant = make_tenant(db)
+    writer = make_current_user(tenant.id, role="writer")
+    in_album = _make_gallery_image(db, tenant.id)
+    not_in_album = _make_gallery_image(db, tenant.id)
+    album = PhotoAlbum(tenant_id=tenant.id, name="Vereinsheft", kind="manual")
+    db.add(album)
+    db.flush()
+    db.add(PhotoAlbumItem(album_id=album.id, file_id=in_album.public_id, is_best=False))
+    db.commit()
+
+    items = files_routes.list_files(
+        skip=0, limit=60, source=None, only_images=False, exclude_images=False, search=None, tags=None,
+        sort_by="created_at", sort_dir="desc", db=db, user=writer, exclude_album_id=album.id,
+    )
+
+    assert [item.id for item in items] == [not_in_album.public_id]
+
+
 def test_list_tenant_files_excludes_infected_files(db):
     tenant = make_tenant(db)
     _make_protocol_image(db, tenant.id, scan_status="infected")

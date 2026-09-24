@@ -2,6 +2,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -9,7 +10,7 @@ from app.core.config import settings
 from app.core.db import get_db
 from app.core.rate_limit import enforce_rate_limit
 from app.core.security import CurrentUser, get_current_user, require_writer
-from app.models import Tenant, TenantDomain
+from app.models import Participant, Tenant, TenantDomain
 from app.schemas.user import TenantDomainCreate, TenantDomainRead, TenantLookupRead, TenantRead, TenantSubscriptionRead, TenantUpdate
 from app.services import public_id_service
 from app.services.file_service import _safe_storage_path
@@ -33,13 +34,18 @@ def lookup_tenant(public_id: uuid.UUID, db: Session = Depends(get_db), user: Cur
     Ausnahme vom in public_id_service.py dokumentierten Grundsatz "public_id-Lookups immer auf
     den eigenen Mandanten scopen": der mandantenuebergreifende Lookup ist hier der Zweck
     (siehe photo_album_share_service.invite - Vorschau des Zielmandanten vor einer
-    Album-Freigabe-Einladung). Gibt bewusst nur {id, name} zurück, require_writer-geschützt,
-    damit nicht jeder authentifizierte Nutzer beliebige Mandanten-IDs durchprobieren kann."""
+    Album-Freigabe-Einladung). Gibt bewusst nur {id, name, slug, Anzahl aktiver Teilnehmer}
+    zurück - genug, um zwei gleichnamige Organisationen zu unterscheiden, keine Personendaten -
+    require_writer-geschützt, damit nicht jeder authentifizierte Nutzer beliebige
+    Mandanten-IDs durchprobieren kann."""
     require_writer(user)
     tenant = public_id_service.get_by_public_id(db, Tenant, public_id)
     if tenant is None:
         raise HTTPException(status_code=404, detail="Kein Mandant mit dieser ID gefunden")
-    return TenantLookupRead(id=tenant.public_id, name=tenant.name)
+    participant_count = db.scalar(
+        select(func.count()).select_from(Participant).where(Participant.tenant_id == tenant.id, Participant.is_active.is_(True))
+    )
+    return TenantLookupRead(id=tenant.public_id, name=tenant.name, slug=tenant.public_slug, participant_count=participant_count or 0)
 
 
 @router.patch("/tenants/{tenant_id}", response_model=TenantRead)

@@ -77,6 +77,7 @@ def list_files(
     limit: int = Query(default=60, ge=1, le=200),
     source: FileOverviewSource | None = Query(default=None),
     album_id: Annotated[uuid.UUID | None, Query()] = None,
+    exclude_album_id: Annotated[uuid.UUID | None, Query()] = None,
     only_images: bool = Query(default=False),
     exclude_images: bool = Query(default=False),
     search: str | None = Query(default=None),
@@ -98,6 +99,8 @@ def list_files(
         raise HTTPException(status_code=400, detail="No active tenant")
     if album_id is not None:
         _get_album(db, user, album_id)
+    if exclude_album_id is not None:
+        _get_album(db, user, exclude_album_id)
     items = service.list_tenant_files(
         db,
         # None when album_id is set: the album_id JOIN already fully scopes the result to an
@@ -114,6 +117,7 @@ def list_files(
         sort_by=sort_by,
         sort_dir=sort_dir,
         album_id=album_id,
+        exclude_album_id=exclude_album_id,
     )
     if album_id is not None:
         # is_best fetched only for this page's items (at most `limit`), not the whole
@@ -879,7 +883,13 @@ def list_albums(db: Session = Depends(get_db), user: CurrentUser = Depends(get_c
         shared_with: list[AlbumTenantShareStatus] = []
         if is_owner:
             shared_with = [
-                AlbumTenantShareStatus(tenant_public_id=row.tenant_public_id, tenant_name=row.tenant_name, status=row.status)
+                AlbumTenantShareStatus(
+                    tenant_public_id=row.tenant_public_id,
+                    tenant_name=row.tenant_name,
+                    status=row.status,
+                    invited_at=row.invited_at,
+                    responded_at=row.responded_at,
+                )
                 for row in photo_album_share_service.list_shares_for_album(db, entry.album.id)
             ]
         else:

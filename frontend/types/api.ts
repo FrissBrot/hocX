@@ -247,6 +247,8 @@ export type AlbumTenantShareStatus = {
   tenant_public_id: string;
   tenant_name: string;
   status: "pending" | "accepted" | "declined";
+  invited_at: string;
+  responded_at: string | null;
 };
 
 export type PhotoAlbum = {
@@ -270,6 +272,8 @@ export type AlbumShareRequest = {
 export type TenantLookup = {
   id: string;
   name: string;
+  slug: string | null;
+  participant_count: number;
 };
 
 export type ShareLinkStatus = "active" | "expired" | "revoked";

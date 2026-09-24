@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { AlbumPhotoPicker } from "./album-photo-picker";
 import { AlbumShareModal } from "./album-share-modal";
 import { PhotosView } from "./photos-view";
 import { Badge } from "@/components/ui/badge";
@@ -71,7 +72,6 @@ export function PhotoAlbums() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
-  const toast = useToast();
 
   useEffect(() => {
     browserApiFetch<Album[]>("/api/files/albums")
@@ -133,15 +133,7 @@ export function PhotoAlbums() {
         </div>
         <PhotosView key={active.id + revision} albumId={active.id} />
         {picking && (
-          <Modal open title="Fotos zum Album hinzufügen" size="wide" onClose={() => setPicking(false)}>
-            <PhotosView onSelectPhoto={async (item) => {
-              try {
-                await browserApiFetch(`/api/files/albums/${active.id}/items`, { method: "POST", body: JSON.stringify({ file_ids: [item.id] }) });
-                setRevision((value) => value + 1);
-                toast("Foto zum Album hinzugefügt.", "success");
-              } catch { toast("Foto konnte nicht hinzugefügt werden.", "error"); }
-            }} />
-          </Modal>
+          <AlbumPhotoPicker album={active} onClose={() => setPicking(false)} onAdded={() => setRevision((value) => value + 1)} />
         )}
         <ShareLinkModal open={sharingLink} onClose={() => setSharingLink(false)} albumId={active.id} defaultName={active.name} />
         {sharingTenant && (
