@@ -13,7 +13,7 @@ import { CopyrightNotice } from "@/components/ui/copyright-notice";
 
 type AdminIconKey = "dashboard" | "tenants" | "pricing" | "users" | "domains" | "errors" | "pipeline" | "admins" | "sso" | "security";
 
-type AdminNavLink = { href: string; label: string; icon: AdminIconKey; badge?: "count" | "new" };
+type AdminNavLink = { href: string; label: string; icon: AdminIconKey; badge?: "count" };
 
 const navGroups: { title: string | null; links: AdminNavLink[] }[] = [
   { title: null, links: [{ href: "/admin", label: "Dashboard", icon: "dashboard" }] },
@@ -21,7 +21,7 @@ const navGroups: { title: string | null; links: AdminNavLink[] }[] = [
     title: "Mandanten",
     links: [
       { href: "/admin/tenants", label: "Mandanten", icon: "tenants", badge: "count" },
-      { href: "/admin/plans", label: "Preise", icon: "pricing", badge: "new" },
+      { href: "/admin/plans", label: "Preise", icon: "pricing" },
       { href: "/admin/users", label: "Benutzer", icon: "users" },
       { href: "/admin/domains", label: "Domains", icon: "domains" },
     ],
@@ -179,7 +179,6 @@ export function AdminShell({ children, session }: { children: ReactNode; session
                       <AdminNavIcon name={link.icon} />
                       <span className="nav-link-label">{link.label}</span>
                       {link.badge === "count" && tenantTotal !== null ? <span className="admin-nav-count">{tenantTotal}</span> : null}
-                      {link.badge === "new" ? <span className="admin-nav-new">Neu</span> : null}
                     </Link>
                   ))}
                 </div>
