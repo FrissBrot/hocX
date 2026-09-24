@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -17,6 +17,47 @@ class TenantRead(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
     tag_config_json: dict[str, Any] = {}
+    enabled_features: list[str] = []
+
+
+class TenantSubscriptionFeatureRead(BaseModel):
+    code: str
+    name: str
+    description: str | None = None
+    standalone_price_monthly_rp: int | None = None
+    # Teil des aktuellen Plans (kostet nicht zusaetzlich) vs. einzeln zugebucht.
+    included_in_plan: bool = False
+
+
+class TenantSubscriptionRead(BaseModel):
+    """Fuer den Abo-Abschnitt in TenantSettingsManager (Phase 4) - eigenes Schema statt einer
+    Erweiterung von TenantRead, weil das hier eine bewusst separate, seltener aufgerufene
+    Abfrage ist (Plan-Join, Nutzerzahl, Speicherverbrauch), nicht Teil von jedem Session-Fetch."""
+
+    plan_code: str | None = None
+    plan_name: str | None = None
+    billing_cycle: Literal["monthly", "yearly"] = "monthly"
+    plan_price_monthly_rp: int | None = None
+    plan_price_yearly_rp: int | None = None
+    included_user_limit: int | None = None
+    included_storage_bytes: int | None = None
+    user_limit_override: int | None = None
+    effective_user_limit: int | None = None
+    user_count: int = 0
+    storage_used_bytes: int = 0
+    storage_quota_bytes: int | None = None
+    # Aufschluesselung des Kontingents (0087_storage_packages): included_storage_bytes oben ist
+    # bereits der Plan-Anteil, package_storage_bytes die Summe der zugewiesenen Zusatzpakete.
+    # storage_quota_manual_override zeigt an, dass ein Platform-Admin storage_quota_bytes von
+    # Hand gesetzt hat - dann stimmt included_storage_bytes + package_storage_bytes nicht mehr
+    # mit storage_quota_bytes ueberein, das ist kein Fehler.
+    package_storage_bytes: int = 0
+    storage_quota_manual_override: bool = False
+    features: list[TenantSubscriptionFeatureRead] = []
+    # None, wenn der Plan selbst keinen Preis hat (z.B. 'legacy') und keine zusaetzlichen
+    # bepreisten Features gebucht sind - dann gibt es schlicht nichts zu beziffern.
+    estimated_monthly_cost_rp: int | None = None
+    estimated_yearly_cost_rp: int | None = None
 
 
 class UserBase(BaseModel):

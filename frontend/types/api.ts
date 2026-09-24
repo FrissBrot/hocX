@@ -85,6 +85,35 @@ export type TenantSummary = {
   public_slug: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+  enabled_features: string[];
+};
+
+export type TenantSubscriptionFeature = {
+  code: string;
+  name: string;
+  description: string | null;
+  standalone_price_monthly_rp: number | null;
+  included_in_plan: boolean;
+};
+
+export type TenantSubscription = {
+  plan_code: string | null;
+  plan_name: string | null;
+  billing_cycle: "monthly" | "yearly";
+  plan_price_monthly_rp: number | null;
+  plan_price_yearly_rp: number | null;
+  included_user_limit: number | null;
+  included_storage_bytes: number | null;
+  user_limit_override: number | null;
+  effective_user_limit: number | null;
+  user_count: number;
+  storage_used_bytes: number;
+  storage_quota_bytes: number | null;
+  package_storage_bytes: number;
+  storage_quota_manual_override: boolean;
+  features: TenantSubscriptionFeature[];
+  estimated_monthly_cost_rp: number | null;
+  estimated_yearly_cost_rp: number | null;
 };
 
 export type TenantDomainPurpose = "app" | "abgabebox";
@@ -372,6 +401,109 @@ export type AdminTenantSummary = {
   created_at: string;
   storage_used_bytes: number;
   storage_quota_bytes: number | null;
+  enabled_features: string[];
+  plan_code: string | null;
+  plan_name: string | null;
+  billing_cycle: "monthly" | "yearly";
+  user_limit_override: number | null;
+  effective_user_limit: number | null;
+  plan_storage_bytes: number | null;
+  package_storage_bytes: number;
+  effective_storage_quota_bytes: number | null;
+  storage_quota_manual_override: boolean;
+  assigned_storage_packages: AdminTenantStoragePackage[];
+  discount_percent: number;
+  billing_note: string | null;
+};
+
+export type AdminTenantStoragePackage = {
+  package_code: string;
+  name: string;
+  bytes: number;
+  quantity: number;
+  total_bytes: number;
+};
+
+export type AdminStoragePackage = {
+  code: string;
+  name: string;
+  bytes: number;
+  price_monthly_rp: number | null;
+  price_yearly_rp: number | null;
+  sort_order: number;
+};
+
+export type AdminStoragePackageWrite = {
+  name: string;
+  bytes: number;
+  price_monthly_rp: number | null;
+  price_yearly_rp: number | null;
+  sort_order: number;
+};
+
+export type AdminTenantStoragePackageItem = {
+  package_code: string;
+  quantity: number;
+};
+
+export type AdminTenantStoragePackagesUpdate = {
+  items: AdminTenantStoragePackageItem[];
+};
+
+export type AdminFeature = {
+  code: string;
+  name: string;
+  description: string | null;
+  standalone_price_monthly_rp: number | null;
+};
+
+export type AdminFeatureUpdate = {
+  name: string;
+  description: string | null;
+  standalone_price_monthly_rp: number | null;
+};
+
+export type AdminPlan = {
+  code: string;
+  name: string;
+  price_monthly_rp: number | null;
+  price_yearly_rp: number | null;
+  included_user_limit: number | null;
+  included_storage_bytes: number | null;
+  sort_order: number;
+  feature_codes: string[];
+  description: string | null;
+  is_bookable: boolean;
+  tenant_count: number;
+};
+
+export type AdminPlanWrite = {
+  name: string;
+  price_monthly_rp: number | null;
+  price_yearly_rp: number | null;
+  included_user_limit: number | null;
+  included_storage_bytes: number | null;
+  sort_order: number;
+  feature_codes: string[];
+  description: string | null;
+  is_bookable: boolean;
+  /** Nur beim Anlegen ausgewertet; leer = aus dem Namen erzeugt. */
+  code?: string | null;
+};
+
+export type AdminTenantSubscriptionUpdate = {
+  plan_code: string | null;
+  billing_cycle: "monthly" | "yearly";
+  user_limit_override: number | null;
+  discount_percent: number;
+  billing_note: string | null;
+};
+
+export type AdminTenantCreate = {
+  name: string;
+  public_slug: string | null;
+  plan_code: string | null;
+  billing_cycle: "monthly" | "yearly";
 };
 
 export type AdminTenantPage = {

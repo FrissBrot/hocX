@@ -43,7 +43,7 @@ from app.services.apple_media import pair_live_clips
 from app.services.file_service import MAX_UPLOAD_BYTES, FileService, _safe_storage_path
 from app.services import submission_upload_rules
 from app.services.submission_service import SubmissionService, _element_ref, _parse_element_ref
-from app.services.upload_pipeline import GALLERY_ZIP_MAX_BYTES, stage_upload_to_disk
+from app.services.upload_pipeline import GALLERY_DIRECT_IMAGE_MAX_BYTES, GALLERY_ZIP_MAX_BYTES, stage_upload_to_disk
 
 router = APIRouter()
 service = FileService()
@@ -418,7 +418,7 @@ async def upload_gallery_images(
             name = file.filename or ""
             is_zip = name.lower().endswith(".zip")
             has_zip = has_zip or is_zip
-            max_bytes = GALLERY_ZIP_MAX_BYTES if is_zip else MAX_UPLOAD_BYTES
+            max_bytes = GALLERY_ZIP_MAX_BYTES if is_zip else GALLERY_DIRECT_IMAGE_MAX_BYTES
             if rules is not None and not is_zip and position not in clip_positions:
                 max_bytes = min(max_bytes, rules.max_bytes)
             staged_path = await stage_upload_to_disk(

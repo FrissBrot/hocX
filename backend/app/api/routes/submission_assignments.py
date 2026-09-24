@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 
 from app.core.config import settings
 from app.core.db import get_db
-from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
+from app.core.security import CurrentUser, get_current_user, require_abgabebox_read, require_abgabebox_write
 from app.models.entities import SubmissionAssignment, SubmissionUpload, StoredFile
 from app.schemas.files import StoredFileMetadata, StoredFileTagsUpdate
 from app.schemas.submission import (
@@ -57,7 +57,7 @@ def list_links(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_abgabebox_write(user)
     return link_service.list_links(db, tenant_id=user.current_tenant_id)
 
 
@@ -67,7 +67,7 @@ def create_link(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_abgabebox_write(user)
     try:
         return link_service.create_link(db, payload, tenant_id=user.current_tenant_id)
     except (SQLAlchemyError, ValueError) as exc:
@@ -83,7 +83,7 @@ def patch_link(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_abgabebox_write(user)
     link = _get_link_or_404(db, link_id, user)
     try:
         return link_service.update_link(db, link, payload)
@@ -100,7 +100,7 @@ def regenerate_link(
     user: CurrentUser = Depends(get_current_user),
 ):
     """Issues a new token - the old URL stops working immediately."""
-    require_writer(user)
+    require_abgabebox_write(user)
     link = _get_link_or_404(db, link_id, user)
     try:
         result = link_service.regenerate_token(db, link)
@@ -118,7 +118,7 @@ def delete_link(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_abgabebox_write(user)
     link = _get_link_or_404(db, link_id, user)
     affected = link_service.assignments_for_link(db, link)
     try:
@@ -136,7 +136,7 @@ def list_assignments(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_abgabebox_write(user)
     return service.list_assignments(db, tenant_id=user.current_tenant_id)
 
 
@@ -146,7 +146,7 @@ def create_assignment(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_abgabebox_write(user)
     try:
         return service.create_assignment(db, payload, tenant_id=user.current_tenant_id)
     except (SQLAlchemyError, ValueError) as exc:
@@ -162,7 +162,7 @@ def patch_assignment(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_abgabebox_write(user)
     current = _get_assignment_or_404(db, assignment_id, user)
     try:
         updated = service.update_assignment(db, current.id, payload)
@@ -181,7 +181,7 @@ def delete_assignment(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_abgabebox_write(user)
     current = _get_assignment_or_404(db, assignment_id, user)
     try:
         deleted = service.delete_assignment(db, current.id)
@@ -199,7 +199,7 @@ def list_elements(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
+    require_abgabebox_read(user)
     assignment = _get_assignment_or_404(db, assignment_id, user)
     return service.get_assignment_elements(db, assignment)
 
@@ -211,7 +211,7 @@ def reopen_element(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_abgabebox_write(user)
     assignment = _get_assignment_or_404(db, assignment_id, user)
     try:
         return service.reopen_element(db, assignment, element_ref)
@@ -228,7 +228,7 @@ def close_element(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_abgabebox_write(user)
     assignment = _get_assignment_or_404(db, assignment_id, user)
     try:
         return service.close_element(db, assignment, element_ref)
@@ -245,7 +245,7 @@ def get_submission_file_content(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
+    require_abgabebox_read(user)
     upload = public_id_service.get_by_public_id(db, SubmissionUpload, upload_id)
     stored_file = public_id_service.get_by_public_id(db, StoredFile, file_id)
     if upload is None or stored_file is None:
@@ -291,7 +291,7 @@ def get_submission_file_thumbnail(
     """Small JPEG preview for the "Dateien" grid - same access rules as
     get_submission_file_content. Generated lazily on first request since abgabebox-backend's
     restricted DB role never sets thumbnail_path itself (see FileService.ensure_thumbnail)."""
-    require_reader(user)
+    require_abgabebox_read(user)
     upload_public = public_id_service.get_by_public_id(db, SubmissionUpload, upload_id)
     stored_file_public = public_id_service.get_by_public_id(db, StoredFile, file_id)
     if upload_public is None or stored_file_public is None:
@@ -330,7 +330,7 @@ def update_submission_file_tags(
     unabhaengig von abgabebox-backends eigener restricted Rolle, die diesen Endpoint nie
     aufruft (Tags werden ausschliesslich von Mandanten-Writern auf der "Dateien"-Seite
     gesetzt, nie beim Hochladen selbst)."""
-    require_writer(user)
+    require_abgabebox_write(user)
     upload_public = public_id_service.get_by_public_id(db, SubmissionUpload, upload_id)
     stored_file_public = public_id_service.get_by_public_id(db, StoredFile, file_id)
     if upload_public is None or stored_file_public is None:
@@ -351,7 +351,7 @@ def get_submission_file_metadata(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
+    require_abgabebox_read(user)
     upload_public = public_id_service.get_by_public_id(db, SubmissionUpload, upload_id)
     stored_file_public = public_id_service.get_by_public_id(db, StoredFile, file_id)
     if upload_public is None or stored_file_public is None:
@@ -372,7 +372,7 @@ def get_submission_file_metadata(
 def get_clamav_status(
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
+    require_abgabebox_read(user)
     try:
         import pyclamd
         cd = pyclamd.ClamdNetworkSocket(host=settings.clamav_host, port=settings.clamav_port, timeout=5)
@@ -388,7 +388,7 @@ def get_assignment_summary(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
+    require_abgabebox_read(user)
     assignment = _get_assignment_or_404(db, assignment_id, user)
     counts = service.repository.count_submissions_summary(db, assignment_id=assignment.id)
     total = None
@@ -412,7 +412,7 @@ def rescan_pending(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_abgabebox_write(user)
     assignment = _get_assignment_or_404(db, assignment_id, user)
     return service.rescan_pending(db, assignment.id)
 
@@ -424,7 +424,7 @@ def get_upload_log(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
+    require_abgabebox_read(user)
     assignment = _get_assignment_or_404(db, assignment_id, user)
     return service.get_upload_log(db, assignment_id=assignment.id, element_ref=element_ref)
 
@@ -435,7 +435,7 @@ def sync_todos(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_abgabebox_write(user)
     assignment = _get_assignment_or_404(db, assignment_id, user)
     try:
         result = service.sync_submission_todos(db, assignment)
@@ -450,7 +450,7 @@ def download_all_files_zip(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
+    require_abgabebox_read(user)
     assignment = _get_assignment_or_404(db, assignment_id, user)
 
     elements = service.get_assignment_elements(db, assignment)

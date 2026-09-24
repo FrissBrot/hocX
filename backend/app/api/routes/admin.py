@@ -19,10 +19,19 @@ from app.services import public_id_service
 from app.schemas.admin import (
     AdminDomainPage,
     AdminDomainRead,
+    AdminFeatureRead,
+    AdminFeatureUpdate,
+    AdminPlanRead,
+    AdminPlanWrite,
+    AdminStoragePackageRead,
+    AdminStoragePackageWrite,
     AdminTenantCreate,
+    AdminTenantFeaturesUpdate,
     AdminTenantPage,
     AdminTenantRead,
+    AdminTenantStoragePackagesUpdate,
     AdminTenantStorageQuotaUpdate,
+    AdminTenantSubscriptionUpdate,
     AdminTenantUserGrant,
     AdminTenantUserRead,
     AdminUserMergeRequest,
@@ -136,9 +145,10 @@ def list_tenants(
     limit: int | None = Query(None, gt=0, le=500),
     offset: int = Query(0, ge=0),
     q: str | None = Query(None),
+    plan: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
-    return tenant_service.list_tenants(db, limit=limit, offset=offset, q=q)
+    return tenant_service.list_tenants(db, limit=limit, offset=offset, q=q, plan_code=plan)
 
 
 @router.get("/domains", response_model=AdminDomainPage)
@@ -221,14 +231,17 @@ def create_tenant(
     current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
     try:
-        tenant = tenant_service.create_tenant(db, payload)
+        tenant = tenant_service.create_tenant(db, payload, admin_id=current_admin.admin_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Tenant could not be created") from exc
     internal_tenant_id = public_id_service.resolve_internal_id(db, Tenant, tenant.id)
     audit.log(
         db, action="admin.tenant_created", actor_email=current_admin.email, tenant_id=internal_tenant_id,
-        entity_type="tenant", entity_id=internal_tenant_id, details={"name": payload.name},
+        entity_type="tenant", entity_id=internal_tenant_id,
+        details={"name": payload.name, "public_slug": payload.public_slug, "plan_code": payload.plan_code},
     )
     return tenant
 
@@ -344,6 +357,9 @@ def update_tenant_storage_quota(
     tenant = storage_service.set_quota(db, internal_tenant_id, quota_bytes)
     if tenant is None:
         raise HTTPException(status_code=404, detail="Tenant not found")
+    if payload.quota_mb is None:
+        # Override wurde entfernt (leeres Feld) - Kontingent wieder aus Plan + Paketen ableiten.
+        tenant_service.recompute_effective_storage_quota(db, internal_tenant_id)
     audit.log(
         db, action="admin.tenant_storage_quota_updated", actor_email=current_admin.email, tenant_id=internal_tenant_id,
         entity_type="tenant", entity_id=internal_tenant_id, details={"quota_mb": payload.quota_mb},
@@ -351,6 +367,167 @@ def update_tenant_storage_quota(
     result = tenant_service.get_tenant(db, internal_tenant_id)
     if result is None:
         raise HTTPException(status_code=500, detail="Tenant could not be reloaded")
+    return result
+
+
+@router.get("/features", response_model=list[AdminFeatureRead])
+def list_features(db: Session = Depends(get_db)):
+    return tenant_service.list_features(db)
+
+
+@router.put("/features/{code}", response_model=AdminFeatureRead)
+def update_feature(
+    code: str,
+    payload: AdminFeatureUpdate,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
+    result = tenant_service.update_feature(db, code, payload)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Feature not found")
+    audit.log(
+        db, action="admin.feature_updated", actor_email=current_admin.email,
+        entity_type="feature", entity_id=None, details={"code": code, "standalone_price_monthly_rp": payload.standalone_price_monthly_rp},
+    )
+    return result
+
+
+@router.get("/plans", response_model=list[AdminPlanRead])
+def list_plans(db: Session = Depends(get_db)):
+    return tenant_service.list_plans(db)
+
+
+@router.post("/plans", response_model=AdminPlanRead, status_code=201)
+def create_plan(
+    payload: AdminPlanWrite,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
+    # Code optional aus dem Formular, sonst aus dem Namen abgeleitet.
+    try:
+        result = tenant_service.create_plan(db, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    audit.log(
+        db, action="admin.plan_upserted", actor_email=current_admin.email,
+        entity_type="plan", entity_id=None, details={"code": result.code},
+    )
+    return result
+
+
+@router.put("/plans/{code}", response_model=AdminPlanRead)
+def upsert_plan(
+    code: str,
+    payload: AdminPlanWrite,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
+    result = tenant_service.upsert_plan(db, code, payload)
+    audit.log(
+        db, action="admin.plan_upserted", actor_email=current_admin.email,
+        entity_type="plan", entity_id=None, details={"code": code},
+    )
+    return result
+
+
+@router.get("/storage-packages", response_model=list[AdminStoragePackageRead])
+def list_storage_packages(db: Session = Depends(get_db)):
+    return tenant_service.list_storage_packages(db)
+
+
+@router.post("/storage-packages", response_model=AdminStoragePackageRead, status_code=201)
+def create_storage_package(
+    payload: AdminStoragePackageWrite,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
+    result = tenant_service.create_storage_package(db, payload)
+    audit.log(
+        db, action="admin.storage_package_upserted", actor_email=current_admin.email,
+        entity_type="storage_package", entity_id=None, details={"code": result.code},
+    )
+    return result
+
+
+@router.put("/storage-packages/{code}", response_model=AdminStoragePackageRead)
+def upsert_storage_package(
+    code: str,
+    payload: AdminStoragePackageWrite,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
+    result = tenant_service.upsert_storage_package(db, code, payload)
+    audit.log(
+        db, action="admin.storage_package_upserted", actor_email=current_admin.email,
+        entity_type="storage_package", entity_id=None, details={"code": code},
+    )
+    return result
+
+
+@router.put("/tenants/{tenant_id}/features", response_model=AdminTenantRead)
+def update_tenant_features(
+    tenant_id: uuid.UUID,
+    payload: AdminTenantFeaturesUpdate,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
+    internal_tenant_id = _resolve_tenant_id(db, tenant_id)
+    result = tenant_service.update_tenant_features(db, internal_tenant_id, payload.enabled_codes, admin_id=current_admin.admin_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    audit.log(
+        db, action="admin.tenant_features_updated", actor_email=current_admin.email, tenant_id=internal_tenant_id,
+        entity_type="tenant", entity_id=internal_tenant_id, details={"enabled_codes": payload.enabled_codes},
+    )
+    return result
+
+
+@router.patch("/tenants/{tenant_id}/subscription", response_model=AdminTenantRead)
+def update_tenant_subscription(
+    tenant_id: uuid.UUID,
+    payload: AdminTenantSubscriptionUpdate,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
+    internal_tenant_id = _resolve_tenant_id(db, tenant_id)
+    try:
+        result = tenant_service.update_tenant_subscription(db, internal_tenant_id, payload, admin_id=current_admin.admin_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Subscription could not be updated") from exc
+    if result is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    audit.log(
+        db, action="admin.tenant_subscription_updated", actor_email=current_admin.email, tenant_id=internal_tenant_id,
+        entity_type="tenant", entity_id=internal_tenant_id,
+        details={
+            "plan_code": payload.plan_code,
+            "billing_cycle": payload.billing_cycle,
+            "user_limit_override": payload.user_limit_override,
+            "discount_percent": payload.discount_percent,
+        },
+    )
+    return result
+
+
+@router.put("/tenants/{tenant_id}/storage-packages", response_model=AdminTenantRead)
+def update_tenant_storage_packages(
+    tenant_id: uuid.UUID,
+    payload: AdminTenantStoragePackagesUpdate,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
+    internal_tenant_id = _resolve_tenant_id(db, tenant_id)
+    result = tenant_service.update_tenant_storage_packages(db, internal_tenant_id, payload.items, admin_id=current_admin.admin_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    audit.log(
+        db, action="admin.tenant_storage_packages_updated", actor_email=current_admin.email, tenant_id=internal_tenant_id,
+        entity_type="tenant", entity_id=internal_tenant_id,
+        details={"items": [item.model_dump() for item in payload.items]},
+    )
     return result
 
 

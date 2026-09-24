@@ -1,27 +1,27 @@
-import { redirect } from "next/navigation";
-
-import { TenantSettingsManager } from "@/components/settings/tenant-settings-manager";
+import { TenantGeneralSettings } from "@/components/settings/tenant-general-settings";
 import { AppShell } from "@/components/ui/app-shell";
-import { backendFetchWithSession, requireSession } from "@/lib/api/server";
-import { TenantSummary } from "@/types/api";
+import { RouteTabs } from "@/components/ui/route-tabs";
+import { TENANT_SETTINGS_TABS } from "@/components/ui/section-tabs";
+import { requireSession, resolveManageableTenant } from "@/lib/api/server";
 
 export default async function TenantSettingsPage({ searchParams }: { searchParams: Promise<{ tenantId?: string }> }) {
   const { tenantId } = await searchParams;
   const session = await requireSession();
-
-  // /api/tenants is already scoped to tenants the current user administers.
-  const manageableTenants = await backendFetchWithSession<TenantSummary[]>("/api/tenants");
-  if (!manageableTenants || manageableTenants.length === 0) {
-    redirect("/");
-  }
-
-  const requestedId = tenantId ? tenantId : session.current_tenant?.id;
-  const tenant = manageableTenants.find((t) => t.id === requestedId) ?? manageableTenants[0];
+  const tenant = await resolveManageableTenant(session, tenantId);
 
   return (
     <AppShell initialSession={session}>
       <section className="panel">
-        <TenantSettingsManager initialTenant={tenant} />
+        <div className="section-stack">
+          <div className="page-header">
+            <div>
+              <h1 className="page-title">Mandant-Einstellungen</h1>
+              <p className="muted">Stammdaten, Domains und Abo für {tenant.name}.</p>
+            </div>
+          </div>
+          <RouteTabs tabs={TENANT_SETTINGS_TABS} activeHref="/tenant-settings" variant="pill" />
+          <TenantGeneralSettings initialTenant={tenant} />
+        </div>
       </section>
     </AppShell>
   );

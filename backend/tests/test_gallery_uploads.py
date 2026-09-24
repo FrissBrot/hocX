@@ -291,7 +291,7 @@ def test_save_gallery_uploads_rejects_non_image_content(db):
 
 def test_save_gallery_uploads_rejects_oversized_file(db, monkeypatch):
     tenant = make_tenant(db)
-    monkeypatch.setattr(file_service_module, "MAX_UPLOAD_BYTES", 10)
+    monkeypatch.setattr(file_service_module, "GALLERY_DIRECT_IMAGE_MAX_BYTES", 10)
 
     items, errors = asyncio.run(
         service.save_gallery_uploads(

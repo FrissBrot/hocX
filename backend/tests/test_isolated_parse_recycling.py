@@ -44,3 +44,27 @@ def test_failed_worker_does_not_poison_later_documents(monkeypatch):
         parser.parse_document_isolated(b"first")
     original.kill.assert_called_once()
     assert parser.parse_document_isolated(b"next") == "parsed"
+
+
+def test_shutdown_kills_workers_and_allows_pool_restart(monkeypatch):
+    originals = [worker() for _ in range(parser.POOL_SIZE)]
+    pool = Queue()
+    for item in originals:
+        pool.put(item)
+    monkeypatch.setattr(parser, "_pool", pool)
+    monkeypatch.setattr(parser, "_pool_started", True)
+    factory = Mock(side_effect=lambda: worker())
+    monkeypatch.setattr(parser, "_Worker", factory)
+
+    parser.shutdown_pool()
+    parser.shutdown_pool()
+
+    for item in originals:
+        item.kill.assert_called_once()
+    assert pool.empty()
+    assert not parser._pool_started
+
+    parser.warm_up_pool()
+    assert factory.call_count == parser.POOL_SIZE
+    assert pool.qsize() == parser.POOL_SIZE
+    assert parser._pool_started

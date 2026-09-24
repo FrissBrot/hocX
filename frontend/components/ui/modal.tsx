@@ -35,10 +35,14 @@ type ModalProps = {
   /** Skips the title bar entirely (no h2, no close button) for shells that build their own
    * header, e.g. a command-palette-style search field. The dialog keeps its aria-label. */
   hideHeader?: boolean;
+  /** Ersetzt Titel + Beschreibung im Kopf (z.B. Avatar + Name); `title` bleibt das aria-label. */
+  header?: ReactNode;
+  /** Feste Aktionsleiste unten, scrollt nicht mit dem Inhalt (Submit per `form`-Attribut). */
+  footer?: ReactNode;
   className?: string;
 };
 
-export function Modal({ open, title, description, children, onClose, onEscape, size = "default", headerActions, hideCloseButton = false, hideHeader = false, className = "" }: ModalProps) {
+export function Modal({ open, title, description, children, onClose, onEscape, size = "default", headerActions, hideCloseButton = false, hideHeader = false, header, footer, className = "" }: ModalProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -67,13 +71,15 @@ export function Modal({ open, title, description, children, onClose, onEscape, s
   return createPortal(
     <ModalDepth.Provider value={depth + 1}>
     <div ref={rootRef} style={{ zIndex: `calc(var(--z-modal) + ${depth})` }} className="modal-backdrop" onClick={onClose} role="presentation">
-      <div className={`modal-shell modal-${size}${hideHeader ? " modal-noheader" : ""} ${className}`} onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-label={title}>
+      <div className={`modal-shell modal-${size}${hideHeader ? " modal-noheader" : ""}${footer ? " modal-has-footer" : ""} ${className}`} onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-label={title}>
         {!hideHeader ? (
           <div className="modal-header">
-            <div>
-              <h2>{title}</h2>
-              {description ? <p className="muted">{description}</p> : null}
-            </div>
+            {header ?? (
+              <div>
+                <h2>{title}</h2>
+                {description ? <p className="muted">{description}</p> : null}
+              </div>
+            )}
             <div className="modal-header-actions">
               {headerActions}
               {!hideCloseButton ? (
@@ -87,6 +93,7 @@ export function Modal({ open, title, description, children, onClose, onEscape, s
           </div>
         ) : null}
         <div className="modal-content">{children}</div>
+        {footer ? <div className="modal-footer">{footer}</div> : null}
       </div>
     </div>
     </ModalDepth.Provider>,

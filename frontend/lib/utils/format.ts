@@ -154,3 +154,13 @@ export function formatFileSize(bytes: number | null | undefined) {
   }
   return `${value.toFixed(value < 10 ? 1 : 0)} ${units[unitIndex]}`;
 }
+
+// Preise werden als Rappen (Integer) gespeichert, nie als Franken/Float (Rundungsfehler) -
+// siehe design/DESIGN.md-Nachbarschaft in tokens.css gibt es dafuer keinen Token, das ist reine
+// Zahlendarstellung. null = kein Preis hinterlegt.
+export function formatRappen(rp: number | null | undefined): string {
+  if (rp === null || rp === undefined || Number.isNaN(rp)) {
+    return "–";
+  }
+  return new Intl.NumberFormat("de-CH", { style: "currency", currency: "CHF" }).format(rp / 100);
+}

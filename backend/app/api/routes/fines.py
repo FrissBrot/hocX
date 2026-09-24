@@ -8,7 +8,14 @@ from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.db import get_db
-from app.core.security import CurrentUser, get_current_user, require_all_fines_read, require_finance_write, require_reader
+from app.core.security import (
+    CurrentUser,
+    get_current_user,
+    require_all_fines_read,
+    require_feature,
+    require_finance_write,
+    require_reader,
+)
 from app.models.entities import AttendanceFine, Protocol
 from app.repositories.fines_repository import DuplicateFineError, FinesRepository
 from app.schemas.fines import (
@@ -38,6 +45,7 @@ def list_fines(
     restricted to kassier and admin below.
     """
     require_reader(user)
+    require_feature(user, "finance")
     if user.current_role == "reader":
         return repo.list_fines_for_user(db, user.current_tenant_id, user.user_id, skip=skip, limit=limit)
     return repo.list_fines_for_tenant(db, user.current_tenant_id, skip=skip, limit=limit)
@@ -67,6 +75,7 @@ def list_pending_fines(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_all_fines_read(user)
+    require_feature(user, "finance")
     internal_id = _resolve_protocol_id(db, protocol_id, user)
     return repo.list_pending_fines_for_protocol(db, internal_id, user.current_tenant_id)
 
@@ -78,6 +87,7 @@ def list_protocol_fines(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_all_fines_read(user)
+    require_feature(user, "finance")
     internal_id = _resolve_protocol_id(db, protocol_id, user)
     return repo.list_fines_for_protocol(db, internal_id, user.current_tenant_id)
 

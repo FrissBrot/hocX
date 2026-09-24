@@ -8,11 +8,13 @@ type Props<T extends string> = {
   options: FilterTabOption<T>[];
   value: T;
   onChange: (value: T) => void;
+  /** "chips": einzelne Pills mit Rahmen statt der grauen Schiene (z.B. Plan-Filter). */
+  variant?: "segmented" | "chips";
 };
 
-export function FilterTabs<T extends string>({ options, value, onChange }: Props<T>) {
+export function FilterTabs<T extends string>({ options, value, onChange, variant = "segmented" }: Props<T>) {
   return (
-    <div className="filter-tabs" role="tablist">
+    <div className={variant === "chips" ? "filter-tabs filter-tabs-chips" : "filter-tabs"} role="tablist">
       {options.map((option) => {
         const isActive = option.value === value;
         return (

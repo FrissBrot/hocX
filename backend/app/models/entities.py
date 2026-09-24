@@ -63,6 +63,25 @@ class Tenant(Base, TimestampMixin):
     # gesetzt (siehe AdminTenantStorageQuotaUpdate), gegen StorageService.breakdown_for_tenant
     # geprueft.
     storage_quota_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    # Preismodell (0085_plan_pricing): plan_code ist der aktuelle Vertrag, tenant_feature bleibt
+    # aber die alleinige Quelle der Wahrheit fuers Enforcement - ein Plan-Wechsel im Adminportal
+    # traegt seine plan_feature-Zeilen nur als Baseline in tenant_feature ein, entfernt aber keine
+    # einzeln zugebuchten Zusatzmodule. NULL = kein Plan zugewiesen (sollte nach dem Backfill
+    # praktisch nie vorkommen, siehe Migration).
+    plan_code: Mapped[str | None] = mapped_column(Text, ForeignKey("plan.code", ondelete="SET NULL"))
+    billing_cycle: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'monthly'"))
+    # Ueberschreibt plan.included_user_limit, wenn gesetzt (analog zu storage_quota_bytes als
+    # Override-Mechanismus). NULL = das Limit des Plans gilt.
+    user_limit_override: Mapped[int | None] = mapped_column(Integer)
+    # True, sobald ein Admin storage_quota_bytes manuell ueber PATCH .../storage-quota gesetzt
+    # hat (0087_storage_packages) - AdminTenantService.recompute_effective_storage_quota()
+    # ueberspringt den Mandanten dann, statt den manuellen Sonderwert (z.B. eine individuelle
+    # Enterprise-Grenze) bei jedem Plan-/Paketwechsel wieder zu ueberschreiben.
+    storage_quota_manual_override: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
+    # Abo-Konditionen aus dem Adminportal (0089_plan_catalog_details): Rabatt in Prozent auf Plan
+    # + Zusatzmodule und eine nur intern sichtbare Notiz (z.B. "Vereinsrabatt bis 2027").
+    discount_percent: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("0"))
+    billing_note: Mapped[str | None] = mapped_column(Text)
 
 
 class PlatformOidcConfig(Base, TimestampMixin, UpdatedAtMixin):
@@ -105,6 +124,100 @@ class TenantDomain(Base, TimestampMixin):
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     is_healthy: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Feature(Base):
+    """Katalog buchbarer Mandanten-Features (Feature-Gating), orthogonal zu Rollen: eine Rolle
+    steuert, was ein Nutzer innerhalb seines Mandanten darf, `tenant_feature` steuert, ob ein
+    Feature für den Mandanten überhaupt gebucht ist. Seed-Zeilen kommen aus der zugehörigen
+    Migration, nicht aus baseline_lookup_data.sql (dieser Katalog existiert erst seit der
+    Feature-Gating-Einführung, nach dem 0001-Baseline-Squash)."""
+
+    __tablename__ = "feature"
+
+    code: Mapped[str] = mapped_column(Text, primary_key=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    # Rappen, nicht Franken (Rundungsfehler) - NULL, wenn das Feature nie einzeln zugebucht
+    # werden kann, sondern nur gebuendelt ueber einen Plan verfuegbar ist.
+    standalone_price_monthly_rp: Mapped[int | None] = mapped_column(Integer)
+
+
+class Plan(Base):
+    """Preiskatalog-Eintrag. Ein Plan bundlet Features (plan_feature) und Limits; die Zuweisung
+    an einen Mandanten (Tenant.plan_code) traegt beim Wechsel nur eine Baseline in
+    tenant_feature ein - siehe Kommentar an Tenant.plan_code."""
+
+    __tablename__ = "plan"
+
+    code: Mapped[str] = mapped_column(Text, primary_key=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    price_monthly_rp: Mapped[int | None] = mapped_column(Integer)
+    price_yearly_rp: Mapped[int | None] = mapped_column(Integer)
+    # NULL = kein Limit (z.B. der 'legacy'-Plan fuer Bestandsmandanten oder ein Premium-Tarif).
+    included_user_limit: Mapped[int | None] = mapped_column(Integer)
+    included_storage_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    description: Mapped[str | None] = mapped_column(Text)
+    # False = erscheint nicht bei "Neuer Mandant", kann aber einzelnen Mandanten zugewiesen
+    # werden (z.B. 'legacy' fuer Bestandsmandanten).
+    is_bookable: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
+
+
+class PlanFeature(Base):
+    __tablename__ = "plan_feature"
+
+    plan_code: Mapped[str] = mapped_column(Text, ForeignKey("plan.code", ondelete="CASCADE"), primary_key=True)
+    feature_code: Mapped[str] = mapped_column(Text, ForeignKey("feature.code", ondelete="CASCADE"), primary_key=True)
+
+
+class TenantFeature(Base, TimestampMixin):
+    __tablename__ = "tenant_feature"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "feature_code", name="uq_tenant_feature_tenant_code"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    feature_code: Mapped[str] = mapped_column(Text, ForeignKey("feature.code", ondelete="CASCADE"), nullable=False)
+    enabled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    enabled_by_admin_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("platform_admin.id", ondelete="SET NULL"))
+
+
+class StoragePackage(Base):
+    """Zusatzpaket-Katalogeintrag (0087_storage_packages), analog zu Plan: ein fester Preis fuer
+    ein festes Bytes-Kontingent, das ein Mandant zusaetzlich zum Plan zubuchen kann."""
+
+    __tablename__ = "storage_package"
+
+    code: Mapped[str] = mapped_column(Text, primary_key=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    price_monthly_rp: Mapped[int | None] = mapped_column(Integer)
+    price_yearly_rp: Mapped[int | None] = mapped_column(Integer)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+
+
+class TenantStoragePackage(Base):
+    """Zuweisung eines Zusatzpakets an einen Mandanten inkl. Menge - geht in
+    AdminTenantService.recompute_effective_storage_quota() ein, das Tenant.storage_quota_bytes
+    neu berechnet (Plan-Kontingent + Summe dieser Zeilen), ausser
+    Tenant.storage_quota_manual_override ist gesetzt."""
+
+    __tablename__ = "tenant_storage_package"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "package_code", name="uq_tenant_storage_package_tenant_code"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    package_code: Mapped[str] = mapped_column(Text, ForeignKey("storage_package.code", ondelete="CASCADE"), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
+    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    added_by_admin_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("platform_admin.id", ondelete="SET NULL"))
 
 
 class Role(Base):

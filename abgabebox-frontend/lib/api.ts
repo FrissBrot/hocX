@@ -36,12 +36,32 @@ async function fetchJson<T>(url: string): Promise<T | null> {
   return (await response.json()) as T;
 }
 
+// Ergebnis der Link-Aufloesung, das zwischen "Link existiert nicht" (echtes 404 - falscher/
+// abgelaufener Link) und "Abgabebox fuer diesen Mandanten nicht gebucht" (403 - Feature-Gating,
+// 0085_plan_pricing) unterscheidet, statt wie fetchJson beides auf null zu kollabieren. Nur an
+// diesem einen Einstiegspunkt gebraucht: jeder externe Teilnehmer landet zuerst hier.
+export type LinkResolution<T> =
+  | { status: "ok"; data: T }
+  | { status: "not_found" }
+  | { status: "feature_disabled" };
+
+async function fetchLinkResolution<T>(url: string): Promise<LinkResolution<T>> {
+  const response = await fetch(url, { cache: "no-store" });
+  if (response.status === 403) {
+    return { status: "feature_disabled" };
+  }
+  if (!response.ok) {
+    return { status: "not_found" };
+  }
+  return { status: "ok", data: (await response.json()) as T };
+}
+
 // Server-side (SSR) Aufrufe laufen ueber das interne Docker-Netzwerk, analog zu
 // INTERNAL_API_URL im Haupt-hocX-Frontend.
 const internalBase = process.env.INTERNAL_ABGABEBOX_API_URL ?? "http://abgabebox-backend:8000";
 
 export function listAssignments(linkToken: string) {
-  return fetchJson<AssignmentPublic[]>(`${internalBase}/api/public/${encodeURIComponent(linkToken)}/assignments`);
+  return fetchLinkResolution<AssignmentPublic[]>(`${internalBase}/api/public/${encodeURIComponent(linkToken)}/assignments`);
 }
 
 export function getAssignmentDetail(linkToken: string, assignmentSlug: string) {

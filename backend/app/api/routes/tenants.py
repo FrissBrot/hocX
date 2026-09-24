@@ -10,7 +10,7 @@ from app.core.db import get_db
 from app.core.rate_limit import enforce_rate_limit
 from app.core.security import CurrentUser, get_current_user
 from app.models import Tenant, TenantDomain
-from app.schemas.user import TenantDomainCreate, TenantDomainRead, TenantRead, TenantUpdate
+from app.schemas.user import TenantDomainCreate, TenantDomainRead, TenantRead, TenantSubscriptionRead, TenantUpdate
 from app.services import public_id_service
 from app.services.file_service import _safe_storage_path
 from app.services.tenant_service import TenantService
@@ -49,6 +49,21 @@ async def patch_tenant(
     if tenant is None:
         raise HTTPException(status_code=404, detail="Tenant not found")
     return tenant
+
+
+@router.get("/tenants/{tenant_id}/subscription", response_model=TenantSubscriptionRead)
+def get_tenant_subscription(
+    tenant_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    internal_id = public_id_service.resolve_internal_id(db, Tenant, tenant_id)
+    if internal_id is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    result = service.get_subscription(db, internal_id, user)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    return result
 
 
 @router.get("/tenants/{tenant_id}/profile-image")

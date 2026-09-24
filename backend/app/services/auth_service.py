@@ -211,6 +211,7 @@ class AuthService:
             name=user.current_tenant_name,
             profile_image_path=user.current_tenant_profile_image_path,
             profile_image_url=build_tenant_profile_image_url(user.current_tenant_public_id, user.current_tenant_profile_image_path),
+            enabled_features=sorted(user.current_tenant_features),
         )
 
         return SessionRead(

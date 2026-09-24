@@ -1,10 +1,12 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
+import { AdminAvatar, BillingCycleToggle, formatPlanPrice, PlanBadge, PlanOption, planTones } from "@/components/admin/admin-plan-utils";
 import { AdminTenantSettingsModal } from "@/components/admin/admin-tenant-settings-modal";
 import { ActionMenu } from "@/components/ui/action-menu";
-import { DataTable, DataToolbar } from "@/components/ui/data-table";
+import { DataTable } from "@/components/ui/data-table";
+import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import { SearchInput } from "@/components/ui/search-input";
@@ -12,23 +14,48 @@ import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
 import { formatFileSize } from "@/lib/utils/format";
-import { AdminTenantPage, AdminTenantSummary } from "@/types/api";
+import { AdminPlan, AdminTenantCreate, AdminTenantPage, AdminTenantSummary } from "@/types/api";
 
 type Props = {
   initialPage: AdminTenantPage;
+  initialPlans: AdminPlan[];
+  initialPlanFilter?: string;
 };
 
 const PAGE_SIZE = 50;
 
-export function AdminTenantManagement({ initialPage }: Props) {
+// Ab diesem Anteil wird der Speicherbalken in der Liste als Warnung eingefärbt.
+const STORAGE_WARNING_RATIO = 0.85;
+
+function slugify(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+const emptyCreateForm: AdminTenantCreate & { slugTouched: boolean } = {
+  name: "",
+  public_slug: "",
+  plan_code: null,
+  billing_cycle: "monthly",
+  slugTouched: false,
+};
+
+export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFilter = "" }: Props) {
   const showToast = useToast();
   const confirm = useConfirm();
   const [page, setPage] = useState(initialPage);
   const [offset, setOffset] = useState(0);
   const tenants = page.items;
   const [modalOpen, setModalOpen] = useState(false);
-  const [name, setName] = useState("");
+  const [createForm, setCreateForm] = useState(emptyCreateForm);
+  const [createBusy, setCreateBusy] = useState(false);
   const [search, setSearch] = useState("");
+  const [plans, setPlans] = useState<AdminPlan[]>(initialPlans);
+  const [planFilter, setPlanFilter] = useState(initialPlanFilter);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [settingsTenant, setSettingsTenant] = useState<AdminTenantSummary | null>(null);
   const [cloneModalOpen, setCloneModalOpen] = useState(false);
@@ -50,18 +77,41 @@ export function AdminTenantManagement({ initialPage }: Props) {
   // sends it as `q`), so page.items is already the matching set for the current page.
   const visibleTenants = tenants;
 
-  async function fetchPage(nextOffset: number, query: string) {
+  const tones = useMemo(() => planTones(plans), [plans]);
+  const plansByCode = useMemo(() => new Map(plans.map((plan) => [plan.code, plan])), [plans]);
+  const bookablePlans = useMemo(() => plans.filter((plan) => plan.is_bookable), [plans]);
+  const totalTenantCount = plans.reduce((sum, plan) => sum + plan.tenant_count, 0);
+
+  async function fetchPage(nextOffset: number, query: string, plan: string = planFilter) {
     setLoading(true);
     try {
       const q = query.trim();
       const result = await browserApiFetch<AdminTenantPage>(
-        `/api/admin/tenants?limit=${PAGE_SIZE}&offset=${nextOffset}${q ? `&q=${encodeURIComponent(q)}` : ""}`
+        `/api/admin/tenants?limit=${PAGE_SIZE}&offset=${nextOffset}${q ? `&q=${encodeURIComponent(q)}` : ""}${plan ? `&plan=${encodeURIComponent(plan)}` : ""}`
       );
       setPage(result);
     } catch {
       // keep showing the previous page rather than blanking the table on a transient error
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Zähler der Filter-Chips (tenant_count pro Plan) nach Anlegen/Löschen/Planwechsel auffrischen.
+  async function reloadPlans() {
+    try {
+      setPlans(await browserApiFetch<AdminPlan[]>("/api/admin/plans"));
+    } catch {
+      // Zähler bleiben dann auf dem letzten Stand
+    }
+  }
+
+  function changePlanFilter(value: string) {
+    setPlanFilter(value);
+    if (offset !== 0) {
+      setOffset(0);
+    } else {
+      void fetchPage(0, search, value);
     }
   }
 
@@ -84,19 +134,32 @@ export function AdminTenantManagement({ initialPage }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
+  function openCreate() {
+    setCreateForm({ ...emptyCreateForm, plan_code: bookablePlans.find((plan) => plan.tenant_count > 0)?.code ?? bookablePlans[0]?.code ?? null });
+    setModalOpen(true);
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setCreateBusy(true);
     try {
+      const payload: AdminTenantCreate = {
+        name: createForm.name.trim(),
+        public_slug: createForm.public_slug?.trim() || null,
+        plan_code: createForm.plan_code,
+        billing_cycle: createForm.billing_cycle,
+      };
       await browserApiFetch<AdminTenantSummary>("/api/admin/tenants", {
         method: "POST",
-        body: JSON.stringify({ name }),
+        body: JSON.stringify(payload),
       });
-      await fetchPage(offset, search);
+      await Promise.all([fetchPage(offset, search), reloadPlans()]);
       setModalOpen(false);
-      setName("");
       showToast("Mandant erstellt", "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Mandant konnte nicht erstellt werden", "error");
+    } finally {
+      setCreateBusy(false);
     }
   }
 
@@ -106,11 +169,13 @@ export function AdminTenantManagement({ initialPage }: Props) {
   }
 
   function handleTenantSaved(updated: AdminTenantSummary) {
+    const planChanged = page.items.find((tenant) => tenant.id === updated.id)?.plan_code !== updated.plan_code;
     setPage((current) => ({
       ...current,
       items: current.items.map((tenant) => (tenant.id === updated.id ? updated : tenant)),
     }));
     setSettingsTenant(updated);
+    if (planChanged) void reloadPlans();
   }
 
   function openClone(tenant: AdminTenantSummary) {
@@ -129,7 +194,7 @@ export function AdminTenantManagement({ initialPage }: Props) {
         method: "POST",
         body: JSON.stringify({ new_name: cloneName, mode: cloneMode }),
       });
-      await fetchPage(offset, search);
+      await Promise.all([fetchPage(offset, search), reloadPlans()]);
       setCloneModalOpen(false);
       showToast("Mandant geklont", "success");
     } catch (error) {
@@ -196,6 +261,7 @@ export function AdminTenantManagement({ initialPage }: Props) {
       } else {
         await fetchPage(offset, search);
       }
+      void reloadPlans();
       showToast("Mandant gelöscht", "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Mandant konnte nicht gelöscht werden", "error");
@@ -223,7 +289,7 @@ export function AdminTenantManagement({ initialPage }: Props) {
         // dafuer bei weitem nicht, was zuvor als "Zeitueberschreitung beim Server" fehlschlug.
         { method: "POST", body: formData, signal: AbortSignal.timeout(600_000) }
       );
-      await fetchPage(offset, search);
+      await Promise.all([fetchPage(offset, search), reloadPlans()]);
       setImportModalOpen(false);
       if (result.warnings.length > 0) {
         // Warnings only ever went to the browser console before this fix (audit finding,
@@ -244,95 +310,154 @@ export function AdminTenantManagement({ initialPage }: Props) {
 
   return (
     <div className="grid">
-      <DataToolbar
-        title="Mandanten"
-        description="Alle Mandanten im System. Neue Mandanten werden hier zentral angelegt."
-        actions={
-          <>
-            <button type="button" className="button-secondary button-ghost" onClick={openImport}>
-              Mandant importieren
-            </button>
-            <button type="button" className="button-secondary" onClick={() => setModalOpen(true)}>
-              Neuer Mandant
-            </button>
-          </>
-        }
-      />
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Mandanten</h1>
+          <p className="muted">Alle Mandanten im System. Neue Mandanten werden hier zentral angelegt.</p>
+        </div>
+        <div className="page-header-actions">
+          <button type="button" className="button-secondary" onClick={openImport}>
+            Mandant importieren
+          </button>
+          <button type="button" className="button-primary" onClick={openCreate}>
+            + Neuer Mandant
+          </button>
+        </div>
+      </div>
 
-      <article className="card">
-        <label className="field-stack">
-          <span className="field-label">Suche</span>
-          <SearchInput value={search} onChange={setSearch} placeholder="Mandanten durchsuchen" />
-        </label>
+      <article className="card admin-tenant-filter-card">
+        <SearchInput value={search} onChange={setSearch} placeholder="Mandanten durchsuchen" />
+        {plans.length > 0 ? (
+          <FilterTabs
+            variant="chips"
+            value={planFilter}
+            onChange={changePlanFilter}
+            options={[
+              { value: "", label: "Alle", count: totalTenantCount },
+              ...plans.map((plan) => ({ value: plan.code, label: plan.name, count: plan.tenant_count })),
+            ]}
+          />
+        ) : null}
       </article>
 
       <DataTable
-        columns={["Bild", "Mandant", "Teilnehmer", "Benutzer", "Speicher", "Erstellt am", "Aktionen"]}
+        columns={["Bild", "Mandant", "Plan", "Teilnehmer", "Benutzer", "Speicher", "Erstellt am", ""]}
         emptyMessage={loading ? "Wird geladen…" : "Keine Mandanten gefunden."}
       >
-        {visibleTenants.map((tenant) => (
-          <tr key={tenant.id} className="table-row-clickable" onClick={() => openSettings(tenant)}>
-            <td>
-              <div className="identity-avatar">
-                {tenant.profile_image_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={tenant.profile_image_url} alt={tenant.name} />
+        {visibleTenants.map((tenant) => {
+          const plan = tenant.plan_code ? plansByCode.get(tenant.plan_code) : undefined;
+          const usageRatio = tenant.storage_quota_bytes ? tenant.storage_used_bytes / tenant.storage_quota_bytes : 0;
+          const storageState = usageRatio > 1 ? "over" : usageRatio >= STORAGE_WARNING_RATIO ? "warning" : "ok";
+          return (
+            <tr key={tenant.id} className="table-row-clickable" onClick={() => openSettings(tenant)}>
+              <td>
+                <AdminAvatar name={tenant.name} imageUrl={tenant.profile_image_url} toneKey={tenant.id} />
+              </td>
+              <td>
+                <strong>{tenant.name}</strong>
+                {tenant.public_slug ? <div className="muted admin-cell-sub">/{tenant.public_slug}</div> : null}
+              </td>
+              <td>
+                {tenant.plan_code ? (
+                  <PlanBadge name={tenant.plan_name ?? tenant.plan_code} tone={tones.get(tenant.plan_code) ?? "neutral"} />
                 ) : (
-                  <span>{tenant.name.slice(0, 1) || "T"}</span>
+                  <span className="muted">–</span>
                 )}
-              </div>
-            </td>
-            <td>
-              <strong>{tenant.name}</strong>
-              {tenant.public_slug ? <div className="muted">/{tenant.public_slug}</div> : null}
-            </td>
-            <td>{tenant.participant_count}</td>
-            <td>{tenant.user_count}</td>
-            <td>
-              {tenant.storage_quota_bytes ? (
-                <>
-                  <div
-                    className={`storage-usage-bar-mini${tenant.storage_used_bytes > tenant.storage_quota_bytes ? " storage-usage-bar-mini-over" : ""}`}
-                  >
-                    <div
-                      className="storage-usage-segment-fill"
-                      style={{ width: `${Math.min((tenant.storage_used_bytes / tenant.storage_quota_bytes) * 100, 100)}%` }}
-                    />
+                <div className="muted admin-cell-sub">{formatPlanPrice(plan, tenant.billing_cycle)}</div>
+              </td>
+              <td className="admin-cell-number">{tenant.participant_count}</td>
+              <td className="admin-cell-number">{tenant.user_count}</td>
+              <td>
+                {tenant.storage_quota_bytes ? (
+                  <div className={`admin-storage-cell admin-storage-${storageState}`}>
+                    <div className="admin-storage-bar">
+                      <div className="admin-storage-bar-fill" style={{ width: `${Math.min(usageRatio * 100, 100)}%` }} />
+                    </div>
+                    <div className="admin-storage-label">
+                      {formatFileSize(tenant.storage_used_bytes)} / {formatFileSize(tenant.storage_quota_bytes)}
+                    </div>
                   </div>
-                  <div className="muted">
-                    {formatFileSize(tenant.storage_used_bytes)} / {formatFileSize(tenant.storage_quota_bytes)}
+                ) : (
+                  <div className="admin-storage-cell">
+                    <div className="admin-storage-bar admin-storage-bar-unlimited" />
+                    <div className="admin-storage-label">{formatFileSize(tenant.storage_used_bytes)} (kein Limit)</div>
                   </div>
-                </>
-              ) : (
-                <span className="muted">{formatFileSize(tenant.storage_used_bytes)} (kein Limit)</span>
-              )}
-            </td>
-            <td>{new Date(tenant.created_at).toLocaleDateString("de-CH")}</td>
-            <td>
-              <ActionMenu
-                items={[
-                  { label: "Einstellungen", onClick: () => openSettings(tenant) },
-                  { label: "Klonen", onClick: () => openClone(tenant) },
-                  { label: "Exportieren", onClick: () => openExport(tenant) },
-                  { label: "Löschen", onClick: () => deleteTenant(tenant), danger: true },
-                ]}
-              />
-            </td>
-          </tr>
-        ))}
+                )}
+              </td>
+              <td className="admin-cell-number">{new Date(tenant.created_at).toLocaleDateString("de-CH")}</td>
+              <td onClick={(event) => event.stopPropagation()}>
+                <ActionMenu
+                  items={[
+                    { label: "Einstellungen", onClick: () => openSettings(tenant) },
+                    { label: "Klonen", onClick: () => openClone(tenant) },
+                    { label: "Exportieren", onClick: () => openExport(tenant) },
+                    { label: "Löschen", onClick: () => deleteTenant(tenant), danger: true },
+                  ]}
+                />
+              </td>
+            </tr>
+          );
+        })}
       </DataTable>
 
       <Pagination offset={offset} limit={PAGE_SIZE} total={page.total} onOffsetChange={setOffset} />
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Neuer Mandant" description="Legt einen neuen Mandanten mit Standard-Dokumentvorlage an.">
         <form className="grid" onSubmit={submit}>
-          <label className="field-stack">
-            <span className="field-label">Mandantenname</span>
-            <input value={name} onChange={(event) => setName(event.target.value)} required />
-          </label>
-          <div className="table-actions table-actions-start">
-            <button type="submit" className="button-secondary">
-              Erstellen
+          <div className="two-col">
+            <label className="field-stack">
+              <span className="field-label">Mandantenname</span>
+              <input
+                value={createForm.name}
+                onChange={(event) => {
+                  const name = event.target.value;
+                  setCreateForm((current) => ({ ...current, name, public_slug: current.slugTouched ? current.public_slug : slugify(name) }));
+                }}
+                placeholder="z.B. Turnverein Muster"
+                required
+              />
+            </label>
+            <label className="field-stack">
+              <span className="field-label">Öffentlicher Slug</span>
+              <span className="admin-slug-input">
+                <span className="admin-slug-prefix" aria-hidden="true">/</span>
+                <input
+                  value={createForm.public_slug ?? ""}
+                  onChange={(event) =>
+                    setCreateForm((current) => ({ ...current, public_slug: event.target.value.toLowerCase(), slugTouched: event.target.value !== "" }))
+                  }
+                  pattern="[a-z0-9-]+"
+                  aria-label="Öffentlicher Slug"
+                />
+              </span>
+            </label>
+          </div>
+          <div className="field-stack">
+            <span className="field-label">Plan</span>
+            <div className="admin-plan-options" role="radiogroup" aria-label="Plan">
+              {bookablePlans.map((plan) => (
+                <PlanOption
+                  key={plan.code}
+                  plan={plan}
+                  name="create-plan"
+                  checked={createForm.plan_code === plan.code}
+                  cycle={createForm.billing_cycle}
+                  onSelect={() => setCreateForm((current) => ({ ...current, plan_code: plan.code }))}
+                />
+              ))}
+            </div>
+            <span className="field-help">Nicht buchbare Pläne (z.B. Bestandsmandanten) lassen sich danach in den Mandant-Einstellungen zuweisen.</span>
+          </div>
+          <div className="field-stack">
+            <span className="field-label">Abrechnung</span>
+            <BillingCycleToggle value={createForm.billing_cycle} onChange={(billing_cycle) => setCreateForm((current) => ({ ...current, billing_cycle }))} />
+          </div>
+          <div className="modal-actions">
+            <button type="button" className="button-ghost" onClick={() => setModalOpen(false)}>
+              Abbrechen
+            </button>
+            <button type="submit" className="button-primary" disabled={createBusy || createForm.name.trim() === ""}>
+              {createBusy ? "Wird erstellt…" : "Mandant erstellen"}
             </button>
           </div>
         </form>
@@ -385,8 +510,11 @@ export function AdminTenantManagement({ initialPage }: Props) {
               </span>
             </label>
           </div>
-          <div className="table-actions table-actions-start">
-            <button type="submit" className="button-secondary" disabled={cloneBusy}>
+          <div className="modal-actions">
+            <button type="button" className="button-ghost" onClick={() => setCloneModalOpen(false)}>
+              Abbrechen
+            </button>
+            <button type="submit" className="button-primary" disabled={cloneBusy}>
               {cloneBusy ? "Wird geklont…" : "Klonen"}
             </button>
           </div>
@@ -455,8 +583,11 @@ export function AdminTenantManagement({ initialPage }: Props) {
               </span>
             </label>
           </div>
-          <div className="table-actions table-actions-start">
-            <button type="submit" className="button-secondary">
+          <div className="modal-actions">
+            <button type="button" className="button-ghost" onClick={() => setExportModalOpen(false)}>
+              Abbrechen
+            </button>
+            <button type="submit" className="button-primary">
               Exportieren
             </button>
           </div>
@@ -506,8 +637,11 @@ export function AdminTenantManagement({ initialPage }: Props) {
               <span className="tenant-import-status-hint">Das kann je nach Dateigrösse einen Moment dauern.</span>
             </div>
           ) : null}
-          <div className="table-actions table-actions-start">
-            <button type="submit" className="button-secondary" disabled={importBusy || !importFile}>
+          <div className="modal-actions">
+            <button type="button" className="button-ghost" onClick={() => setImportModalOpen(false)} disabled={importBusy}>
+              Abbrechen
+            </button>
+            <button type="submit" className="button-primary" disabled={importBusy || !importFile}>
               {importBusy ? "Wird importiert…" : "Importieren"}
             </button>
           </div>
@@ -525,8 +659,8 @@ export function AdminTenantManagement({ initialPage }: Props) {
             <li key={index} className="muted">{warning}</li>
           ))}
         </ul>
-        <div className="table-actions table-actions-start">
-          <button type="button" className="button-secondary" onClick={() => setImportWarnings(null)}>
+        <div className="modal-actions">
+          <button type="button" className="button-ghost" onClick={() => setImportWarnings(null)}>
             Schliessen
           </button>
         </div>

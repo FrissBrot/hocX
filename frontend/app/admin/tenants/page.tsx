@@ -2,17 +2,20 @@ import { AdminTenantManagement } from "@/components/admin/admin-tenant-managemen
 import { AdminShell } from "@/components/ui/admin-shell";
 import { requireAdminSession } from "@/lib/api/admin-server";
 import { backendFetchWithSession } from "@/lib/api/server";
-import { AdminTenantPage } from "@/types/api";
+import { AdminPlan, AdminTenantPage } from "@/types/api";
 
-export default async function AdminTenantsPage() {
+export default async function AdminTenantsPage({ searchParams }: { searchParams: Promise<{ plan?: string }> }) {
   const session = await requireAdminSession();
-  const page = await backendFetchWithSession<AdminTenantPage>("/api/admin/tenants?limit=50&offset=0");
+  const { plan } = await searchParams;
+  const planQuery = plan ? `&plan=${encodeURIComponent(plan)}` : "";
+  const [page, plans] = await Promise.all([
+    backendFetchWithSession<AdminTenantPage>(`/api/admin/tenants?limit=50&offset=0${planQuery}`),
+    backendFetchWithSession<AdminPlan[]>("/api/admin/plans"),
+  ]);
 
   return (
     <AdminShell session={session}>
-      <section className="panel">
-        <AdminTenantManagement initialPage={page ?? { items: [], total: 0 }} />
-      </section>
+      <AdminTenantManagement initialPage={page ?? { items: [], total: 0 }} initialPlans={plans ?? []} initialPlanFilter={plan ?? ""} />
     </AdminShell>
   );
 }

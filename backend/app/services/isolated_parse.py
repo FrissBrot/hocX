@@ -124,6 +124,19 @@ def warm_up_pool() -> None:
     _ensure_pool()
 
 
+def shutdown_pool() -> None:
+    """Beendet nach dem Drain der Requests alle Parser-Prozesse vor einem Reload."""
+    global _pool_started
+    with _pool_lock:
+        while True:
+            try:
+                worker = _pool.get_nowait()
+            except queue_module.Empty:
+                break
+            worker.kill()
+        _pool_started = False
+
+
 def parse_document_isolated(raw_bytes: bytes) -> "ParsedDocx":
     """Runs parse_document() in an isolated child process from a small warm pool instead
     of directly in the calling (thread-pool-offloaded, see routes/word_import.py) worker.

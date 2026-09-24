@@ -34,6 +34,7 @@ def _client_ip(request: Request) -> str | None:
 router = APIRouter()
 
 NOT_FOUND = HTTPException(status_code=404, detail="Nicht gefunden")
+FEATURE_DISABLED = HTTPException(status_code=403, detail="Die Abgabebox ist für diesen Verein aktuell nicht verfügbar.")
 
 # SECURITY: the client-sent Content-Type header (upload_file.content_type) is fully attacker
 # controlled and must never be trusted or stored - a file named "x.pdf" with real HTML/JS
@@ -200,13 +201,32 @@ def _get_tenant_or_404(db: Session, link_token: str) -> dict:
     """Resolves the link token (the URL's only credential) to the tenant it belongs to. The
     returned dict carries the link id too, so every later lookup is scoped to what THIS link may
     reach - an unknown/malformed token and a token without any matching Abgabe both end in the
-    same 404, revealing nothing about which tenants or Abgaben exist."""
+    same 404, revealing nothing about which tenants or Abgaben exist.
+
+    A resolved-but-unbooked tenant (Feature-Gating, 0085_plan_pricing) is a different case: the
+    link token itself is real, so a flat 404 would look like a broken/expired link to the
+    external participant instead of telling them the club currently has Abgabebox switched off -
+    a 403 with FEATURE_DISABLED's clear message instead."""
     if not _LINK_TOKEN_PATTERN.fullmatch(link_token):
         raise NOT_FOUND
     link = repository.get_link_by_token(db, token=link_token)
     if link is None:
         raise NOT_FOUND
+    if not repository.is_feature_enabled(db, tenant_id=link["tenant_id"], feature_code="abgabebox"):
+        raise FEATURE_DISABLED
     return {"id": link["tenant_id"], "link_id": link["id"]}
+
+
+def _effective_upload_quota_bytes(tenant_quota_bytes: int | None, global_cap_bytes: int) -> int:
+    """Security fix (audit 2026-09-24): the upload quota check used to only compare against
+    settings.tenant_storage_quota_mb, a single global value for every tenant - a tenant on a small
+    plan could accumulate storage via this public channel far beyond their booked plan+packages.
+    The tenant's own effective quota (Tenant.storage_quota_bytes, same value the main backend
+    enforces on every other upload path - plan + packages, or a manual override) now always
+    applies, capped by the global constant as an absolute ceiling for this public, unauthenticated
+    channel. None means the main backend currently treats the tenant as unlimited (see
+    recompute_effective_storage_quota) - the global cap still applies in that case."""
+    return global_cap_bytes if tenant_quota_bytes is None else min(tenant_quota_bytes, global_cap_bytes)
 
 
 def _get_assignment_or_404(db: Session, tenant: dict, assignment_slug: str) -> dict:
@@ -418,7 +438,8 @@ async def upload(
                 image_duplicate_warnings.append(f"{original_name} ähnelt einem bereits im Mandanten hochgeladenen Bild.")
 
         incoming_bytes = sum(len(content) for content, _, _ in contents)
-        quota_bytes = settings.tenant_storage_quota_mb * 1024 * 1024
+        tenant_quota_bytes = repository.get_tenant_storage_quota_bytes(db, tenant_id=tenant["id"])
+        quota_bytes = _effective_upload_quota_bytes(tenant_quota_bytes, settings.tenant_storage_quota_mb * 1024 * 1024)
 
         def _slugify(text: str) -> str:
             text = text.lower()
@@ -465,7 +486,7 @@ async def upload(
             # in-process counter maintained only here could not stay accurate; asyncio.to_thread is
             # the safe, contained fix for this pass.
             if await asyncio.to_thread(tenant_storage_bytes, tenant["id"]) + incoming_bytes > quota_bytes:
-                _log("validation_failed", f"Speicherlimit des Mandanten erreicht (max. {settings.tenant_storage_quota_mb} MB)")
+                _log("validation_failed", f"Speicherlimit des Mandanten erreicht (max. {quota_bytes // 1024 // 1024} MB)")
                 raise HTTPException(status_code=400, detail="Speicherlimit erreicht - bitte den Verein kontaktieren")
 
             # Authoritative re-check of max_files_per_element, now inside the same per-tenant

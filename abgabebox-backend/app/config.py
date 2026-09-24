@@ -51,10 +51,13 @@ class Settings(BaseSettings):
     cors_allow_origin: str = Field(default="https://abgabe.example.com", validation_alias="ABGABEBOX_CORS_ORIGIN")
     clamav_host: str = Field(default="clamav", validation_alias="CLAMAV_HOST")
     clamav_port: int = Field(default=3310, validation_alias="CLAMAV_PORT")
-    # Total disk space (quarantine + accepted files combined) a single tenant's abgabebox may
-    # consume. The restricted DB role this service runs as has no SELECT on stored_file (see
-    # 0020_abgabebox.py), so a DB-side SUM(file_size_bytes) isn't available here - the quota is
-    # enforced by walking the tenant's storage directory instead.
+    # Absolute ceiling on disk space (quarantine + accepted files combined) any single tenant's
+    # abgabebox may consume, regardless of plan/packages - defense-in-depth for this public,
+    # unauthenticated channel. The actual per-tenant limit enforced in routes/public.py is
+    # min(this value, Tenant.storage_quota_bytes) (security fix, 2026-09-24: the tenant's real
+    # plan+package quota used to not be checked here at all, only this global constant). Usage
+    # itself is computed by walking the tenant's storage directory (tenant_storage_bytes), not a
+    # DB-side SUM(file_size_bytes) - see that function's docstring.
     tenant_storage_quota_mb: int = Field(default=2048, validation_alias="ABGABEBOX_TENANT_STORAGE_QUOTA_MB")
     # A normal upload clears quarantine (scan + move-or-reject) within seconds - anything still
     # there after this long is debris from a crashed/interrupted request, never a real in-flight

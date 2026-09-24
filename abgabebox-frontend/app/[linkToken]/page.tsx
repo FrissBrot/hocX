@@ -7,10 +7,21 @@ const COLORS = 4;
 
 export default async function LinkAssignmentsPage({ params }: { params: Promise<{ linkToken: string }> }) {
   const { linkToken } = await params;
-  const assignments = await listAssignments(linkToken);
-  if (assignments === null) {
+  const resolution = await listAssignments(linkToken);
+  if (resolution.status === "not_found") {
     notFound();
   }
+  if (resolution.status === "feature_disabled") {
+    return (
+      <div className="card">
+        <h1>Abgabebox nicht verfügbar</h1>
+        <p className="muted" style={{ margin: 0 }}>
+          Die Abgabebox ist für diesen Verein aktuell nicht verfügbar.
+        </p>
+      </div>
+    );
+  }
+  const assignments = resolution.data;
 
   return (
     <div>

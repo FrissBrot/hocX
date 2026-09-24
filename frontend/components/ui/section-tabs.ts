@@ -18,3 +18,10 @@ export const TEMPLATE_TABS: RouteTab[] = [
   { href: "/elements", label: "Elemente" },
   { href: "/settings", label: "Dokument-Layouts" },
 ];
+
+// Admin-only section: every route below redirects non-admins on its own.
+export const TENANT_SETTINGS_TABS: RouteTab[] = [
+  { href: "/tenant-settings", label: "Allgemein" },
+  { href: "/tenant-settings/domains", label: "Domains" },
+  { href: "/tenant-settings/abo", label: "Abo & Nutzung" },
+];
