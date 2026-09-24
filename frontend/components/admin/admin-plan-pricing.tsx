@@ -1,14 +1,29 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import Link from "next/link";
+import type { Route } from "next";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
+import { AdminAvatar, featureIcon, formatChfShort, hasPlanPrice, PlanBadge, planTones } from "@/components/admin/admin-plan-utils";
 import { ActionMenu } from "@/components/ui/action-menu";
-import { DataTable, DataToolbar } from "@/components/ui/data-table";
+import { Badge } from "@/components/ui/badge";
+import { DataTable } from "@/components/ui/data-table";
+import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
+import { NavIcon } from "@/components/ui/nav-icons";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { formatFileSize, formatRappen } from "@/lib/utils/format";
-import { AdminFeature, AdminFeatureUpdate, AdminPlan, AdminPlanWrite, AdminStoragePackage, AdminStoragePackageWrite } from "@/types/api";
+import {
+  AdminFeature,
+  AdminFeatureUpdate,
+  AdminPlan,
+  AdminPlanWrite,
+  AdminStoragePackage,
+  AdminStoragePackageWrite,
+  AdminTenantPage,
+  AdminTenantSummary,
+} from "@/types/api";
 
 type Props = {
   initialPlans: AdminPlan[];
@@ -20,10 +35,14 @@ type PlanFormState = {
   code: string;
   isNew: boolean;
   name: string;
+  description: string;
+  isBookable: boolean;
   priceMonthlyChf: string;
   priceYearlyChf: string;
   userLimit: string;
+  userUnlimited: boolean;
   storageGb: string;
+  storageUnlimited: boolean;
   monthlyTouched: boolean;
   featureCodes: Set<string>;
 };
@@ -132,10 +151,14 @@ function planToForm(plan: AdminPlan): PlanFormState {
     code: plan.code,
     isNew: false,
     name: plan.name,
+    description: plan.description ?? "",
+    isBookable: plan.is_bookable,
     priceMonthlyChf: rpToChfInput(plan.price_monthly_rp),
     priceYearlyChf: rpToChfInput(plan.price_yearly_rp),
     userLimit: plan.included_user_limit === null ? "" : String(plan.included_user_limit),
+    userUnlimited: plan.included_user_limit === null,
     storageGb: plan.included_storage_bytes === null ? "" : bytesToGbInput(plan.included_storage_bytes),
+    storageUnlimited: plan.included_storage_bytes === null,
     monthlyTouched: isManualMonthly(plan.price_monthly_rp, plan.price_yearly_rp),
     featureCodes: new Set(plan.feature_codes),
   };
@@ -145,10 +168,14 @@ const emptyPlanForm: PlanFormState = {
   code: "",
   isNew: true,
   name: "",
+  description: "",
+  isBookable: true,
   priceMonthlyChf: "",
   priceYearlyChf: "",
-  userLimit: "",
-  storageGb: "",
+  userLimit: "10",
+  userUnlimited: false,
+  storageGb: "5",
+  storageUnlimited: false,
   monthlyTouched: false,
   featureCodes: new Set(),
 };
@@ -162,8 +189,11 @@ function featureToForm(feature: AdminFeature): FeatureFormState {
   };
 }
 
+type PricingView = "plans" | "modules" | "packages";
+
 export function AdminPlanPricing({ initialPlans, initialFeatures, initialStoragePackages }: Props) {
   const showToast = useToast();
+  const [view, setView] = useState<PricingView>("plans");
   const [plans, setPlans] = useState<AdminPlan[]>(() => [...initialPlans].sort(comparePlans));
   const [features, setFeatures] = useState<AdminFeature[]>(initialFeatures);
   const [storagePackages, setStoragePackages] = useState<AdminStoragePackage[]>(() =>
@@ -172,13 +202,34 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
 
   const [planForm, setPlanForm] = useState<PlanFormState | null>(null);
   const [planBusy, setPlanBusy] = useState(false);
+  const [planTenants, setPlanTenants] = useState<AdminTenantSummary[] | null>(null);
   const [featureForm, setFeatureForm] = useState<FeatureFormState | null>(null);
   const [featureBusy, setFeatureBusy] = useState(false);
   const [storagePackageForm, setStoragePackageForm] = useState<StoragePackageFormState | null>(null);
   const [storagePackageBusy, setStoragePackageBusy] = useState(false);
 
-  function featureName(code: string): string {
-    return features.find((f) => f.code === code)?.name ?? code;
+  const tones = useMemo(() => planTones(plans), [plans]);
+
+  // "Mandanten mit diesem Plan" in der Vorschau des Plan-Editors.
+  const editedPlanCode = planForm && !planForm.isNew ? planForm.code : null;
+  useEffect(() => {
+    setPlanTenants(null);
+    if (!editedPlanCode) return;
+    let cancelled = false;
+    browserApiFetch<AdminTenantPage>(`/api/admin/tenants?limit=8&offset=0&plan=${encodeURIComponent(editedPlanCode)}`)
+      .then((page) => {
+        if (!cancelled) setPlanTenants(page.items);
+      })
+      .catch(() => {
+        if (!cancelled) setPlanTenants([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [editedPlanCode]);
+
+  function updatePlanForm(patch: Partial<PlanFormState>) {
+    setPlanForm((current) => (current ? { ...current, ...patch } : current));
   }
 
   async function submitPlan(event: FormEvent<HTMLFormElement>) {
@@ -187,15 +238,17 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
     setPlanBusy(true);
     try {
       const payload: AdminPlanWrite = {
-        name: planForm.name,
+        name: planForm.name.trim(),
+        description: planForm.description.trim() === "" ? null : planForm.description.trim(),
+        is_bookable: planForm.isBookable,
         price_monthly_rp: chfInputToRp(planForm.priceMonthlyChf),
         price_yearly_rp: chfInputToRp(planForm.priceYearlyChf),
-        included_user_limit: planForm.userLimit.trim() === "" ? null : Number(planForm.userLimit),
-        included_storage_bytes: planForm.storageGb.trim() === "" ? null : gbInputToBytes(planForm.storageGb),
+        included_user_limit: planForm.userUnlimited || planForm.userLimit.trim() === "" ? null : Number(planForm.userLimit),
+        included_storage_bytes: planForm.storageUnlimited || planForm.storageGb.trim() === "" ? null : gbInputToBytes(planForm.storageGb),
         sort_order: 0,
         feature_codes: Array.from(planForm.featureCodes),
       };
-      // Neue Pläne per POST - der Code wird im Backend aus dem Namen erzeugt.
+      // Neue Pläne per POST - ohne Code erzeugt das Backend ihn aus dem Namen.
       const updated = await browserApiFetch<AdminPlan>(
         planForm.isNew ? "/api/admin/plans" : `/api/admin/plans/${encodeURIComponent(planForm.code)}`,
         { method: planForm.isNew ? "POST" : "PUT", body: JSON.stringify(payload) }
@@ -226,9 +279,9 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
       });
       setFeatures((current) => current.map((f) => (f.code === updated.code ? updated : f)));
       setFeatureForm(null);
-      showToast("Feature gespeichert", "success");
+      showToast("Modul gespeichert", "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Feature konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : "Modul konnte nicht gespeichert werden", "error");
     } finally {
       setFeatureBusy(false);
     }
@@ -274,151 +327,374 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
     });
   }
 
+  const headerAction =
+    view === "plans" ? (
+      <button type="button" className="button-primary" onClick={() => setPlanForm(emptyPlanForm)}>
+        + Neuer Plan
+      </button>
+    ) : view === "packages" ? (
+      <button type="button" className="button-primary" onClick={() => setStoragePackageForm(emptyStoragePackageForm)}>
+        + Neues Speicherpaket
+      </button>
+    ) : null;
+
+  const previewMonthlyRp = planForm ? chfInputToRp(planForm.priceMonthlyChf) : null;
+
   return (
     <div className="grid">
-      <DataToolbar
-        title="Preise"
-        description="Pläne, Module und deren Preise für den Preiskatalog verwalten."
-        actions={
-          <button type="button" className="button-primary" onClick={() => setPlanForm(emptyPlanForm)}>
-            + Plan
-          </button>
-        }
-      />
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Preise</h1>
+          <p className="muted">Pläne und Module, die Mandanten zugewiesen werden. Alle Preise in CHF, exkl. MWST.</p>
+        </div>
+        {headerAction}
+      </div>
 
-      <DataTable
-        columns={["Plan", "Preis/Jahr", "Preis/Monat", "Nutzerlimit", "Speicher", "Enthaltene Module", ""]}
-        emptyMessage="Noch keine Pläne angelegt."
-      >
-        {plans.map((plan) => (
-          <tr key={plan.code}>
-            <td>
-              <strong>{plan.name}</strong>
-            </td>
-            <td>{formatRappen(plan.price_yearly_rp)}</td>
-            <td>{formatRappen(plan.price_monthly_rp)}</td>
-            <td>{plan.included_user_limit === null ? "Kein Limit" : plan.included_user_limit}</td>
-            <td>{plan.included_storage_bytes === null ? "Kein Limit" : formatFileSize(plan.included_storage_bytes)}</td>
-            <td className="muted">{plan.feature_codes.map(featureName).join(", ") || "–"}</td>
-            <td>
-              <ActionMenu items={[{ label: "Bearbeiten", onClick: () => setPlanForm(planToForm(plan)) }]} />
-            </td>
-          </tr>
-        ))}
-      </DataTable>
+      <div>
+        <FilterTabs
+          value={view}
+          onChange={setView}
+          options={[
+            { value: "plans", label: "Pläne", count: plans.length },
+            { value: "modules", label: "Module", count: features.length },
+            { value: "packages", label: "Speicherpakete", count: storagePackages.length },
+          ]}
+        />
+      </div>
 
-      <DataTable columns={["Modul", "Beschreibung", "Preis/Monat einzeln", ""]} emptyMessage="Kein Katalog-Feature vorhanden.">
-        {features.map((feature) => (
-          <tr key={feature.code}>
-            <td>
-              <strong>{feature.name}</strong>
-              <div className="muted">{feature.code}</div>
-            </td>
-            <td className="muted">{feature.description ?? "–"}</td>
-            <td>{formatRappen(feature.standalone_price_monthly_rp)}</td>
-            <td>
-              <ActionMenu items={[{ label: "Bearbeiten", onClick: () => setFeatureForm(featureToForm(feature)) }]} />
-            </td>
-          </tr>
-        ))}
-      </DataTable>
+      {view === "plans" ? (
+        <>
+          {plans.length === 0 ? (
+            <div className="card muted">Noch keine Pläne angelegt.</div>
+          ) : (
+            <div className="admin-plan-grid">
+              {plans.map((plan) => {
+                const tone = tones.get(plan.code) ?? "neutral";
+                return (
+                  <article key={plan.code} className={`card admin-plan-card admin-plan-card-${tone}`}>
+                    <div className="admin-plan-card-head">
+                      <h2>{plan.name}</h2>
+                      <Badge variant={plan.is_bookable ? "success" : "neutral"}>{plan.is_bookable ? "Buchbar" : "Nicht buchbar"}</Badge>
+                    </div>
+                    <p className="muted admin-plan-card-description">{plan.description ?? "\u00a0"}</p>
+                    {hasPlanPrice(plan) ? (
+                      <div className="admin-plan-card-price">
+                        <div>
+                          <span className="admin-plan-card-amount">{formatChfShort(plan.price_monthly_rp ?? plan.price_yearly_rp)}</span>
+                          <span className="muted"> / {plan.price_monthly_rp !== null ? "Monat" : "Jahr"}</span>
+                        </div>
+                        <div className="muted">
+                          {plan.price_monthly_rp !== null && plan.price_yearly_rp !== null
+                            ? `oder ${formatChfShort(plan.price_yearly_rp)} / Jahr`
+                            : "\u00a0"}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="admin-plan-card-price">
+                        <div>
+                          <span className="admin-plan-card-amount">–</span> <span className="muted">kein Preis festgelegt</span>
+                        </div>
+                        <div className="muted">Individuell pro Mandant</div>
+                      </div>
+                    )}
+                    <dl className="admin-limit-list">
+                      <div>
+                        <dt>Benutzer</dt>
+                        <dd>{plan.included_user_limit === null ? "Unbegrenzt" : `bis ${plan.included_user_limit}`}</dd>
+                      </div>
+                      <div>
+                        <dt>Speicher</dt>
+                        <dd>{plan.included_storage_bytes === null ? "Unbegrenzt" : formatFileSize(plan.included_storage_bytes)}</dd>
+                      </div>
+                    </dl>
+                    <ul className="admin-plan-card-features">
+                      {features.map((feature) => {
+                        const included = plan.feature_codes.includes(feature.code);
+                        return (
+                          <li key={feature.code} className={included ? "admin-plan-feature-included" : undefined}>
+                            <span className="admin-plan-feature-mark" aria-hidden="true">
+                              {included ? "✓" : "–"}
+                            </span>
+                            <span className="admin-sr-only">{included ? "Enthalten: " : "Nicht enthalten: "}</span>
+                            {feature.name}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    <div className="admin-plan-card-foot">
+                      <Link href={`/admin/tenants?plan=${encodeURIComponent(plan.code)}` as Route} className="admin-plan-card-link">
+                        {plan.tenant_count === 1 ? "1 Mandant" : `${plan.tenant_count} Mandanten`} →
+                      </Link>
+                      <button type="button" className="button-ghost" onClick={() => setPlanForm(planToForm(plan))}>
+                        Bearbeiten
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+          <p className="muted admin-page-footnote">
+            Nicht buchbare Pläne erscheinen nicht bei «Neuer Mandant», können aber einzelnen Mandanten zugewiesen werden.
+          </p>
+        </>
+      ) : null}
 
-      <DataToolbar
-        title="Speicherpakete"
-        description="Zusatzpakete, die Mandanten zusätzlich zum Plan-Kontingent zubuchen können."
-        actions={
-          <button type="button" className="button-primary" onClick={() => setStoragePackageForm(emptyStoragePackageForm)}>
-            + Speicherpaket
-          </button>
-        }
-      />
+      {view === "modules" ? (
+        <>
+          <DataTable columns={["Modul", "Add-on-Preis", "Enthalten in", "Als Add-on", ""]} emptyMessage="Kein Modul im Katalog.">
+            {features.map((feature) => {
+              const includedIn = plans.filter((plan) => plan.feature_codes.includes(feature.code));
+              return (
+                <tr key={feature.code}>
+                  <td>
+                    <div className="admin-module-name">
+                      <span className="tenant-module-icon admin-module-icon">
+                        <NavIcon name={featureIcon(feature)} />
+                      </span>
+                      <div>
+                        <strong>{feature.name}</strong>
+                        {feature.description ? <div className="muted admin-cell-sub">{feature.description}</div> : null}
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <strong>
+                      {feature.standalone_price_monthly_rp === null ? "–" : `${formatChfShort(feature.standalone_price_monthly_rp)} / Monat`}
+                    </strong>
+                  </td>
+                  <td>
+                    <div className="admin-badge-row">
+                      {includedIn.length === 0 ? <span className="muted">–</span> : null}
+                      {includedIn.map((plan) => (
+                        <PlanBadge key={plan.code} name={plan.name} tone={tones.get(plan.code) ?? "neutral"} />
+                      ))}
+                    </div>
+                  </td>
+                  <td>
+                    {feature.standalone_price_monthly_rp === null ? (
+                      <span className="admin-status-dot admin-status-dot-off">Nein</span>
+                    ) : (
+                      <span className="admin-status-dot admin-status-dot-on">Buchbar</span>
+                    )}
+                  </td>
+                  <td className="admin-cell-end">
+                    <button type="button" className="button-ghost" onClick={() => setFeatureForm(featureToForm(feature))}>
+                      Bearbeiten
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </DataTable>
+          <p className="muted admin-page-footnote">
+            Protokolle, Termine, Todos, Teilnehmer und Listen sind Kernfunktionen und in jedem Plan enthalten. Add-ons werden pro Mandant
+            im Tab «Plan &amp; Abo» der Mandant-Einstellungen zugebucht.
+          </p>
+        </>
+      ) : null}
 
-      <DataTable columns={["Paket", "Grösse", "Preis/Jahr", "Preis/Monat", ""]} emptyMessage="Noch keine Speicherpakete angelegt.">
-        {storagePackages.map((pkg) => (
-          <tr key={pkg.code}>
-            <td>
-              <strong>{pkg.name}</strong>
-            </td>
-            <td>{formatFileSize(pkg.bytes)}</td>
-            <td>{formatRappen(pkg.price_yearly_rp)}</td>
-            <td>{formatRappen(pkg.price_monthly_rp)}</td>
-            <td>
-              <ActionMenu items={[{ label: "Bearbeiten", onClick: () => setStoragePackageForm(storagePackageToForm(pkg)) }]} />
-            </td>
-          </tr>
-        ))}
-      </DataTable>
+      {view === "packages" ? (
+        <>
+          <DataTable columns={["Paket", "Grösse", "Preis/Jahr", "Preis/Monat", ""]} emptyMessage="Noch keine Speicherpakete angelegt.">
+            {storagePackages.map((pkg) => (
+              <tr key={pkg.code}>
+                <td>
+                  <strong>{pkg.name}</strong>
+                </td>
+                <td>{formatFileSize(pkg.bytes)}</td>
+                <td>{formatRappen(pkg.price_yearly_rp)}</td>
+                <td>{formatRappen(pkg.price_monthly_rp)}</td>
+                <td className="admin-cell-end">
+                  <ActionMenu items={[{ label: "Bearbeiten", onClick: () => setStoragePackageForm(storagePackageToForm(pkg)) }]} />
+                </td>
+              </tr>
+            ))}
+          </DataTable>
+          <p className="muted admin-page-footnote">Zusatzpakete, die Mandanten zusätzlich zum Plan-Kontingent im Tab «Speicher» zubuchen können.</p>
+        </>
+      ) : null}
 
       <Modal
         open={planForm !== null}
         onClose={() => setPlanForm(null)}
-        title={planForm?.isNew ? "Plan anlegen" : `Plan bearbeiten – ${planForm?.name ?? ""}`}
-        size="default"
-      >
-        {planForm && (
-          <form className="grid" onSubmit={submitPlan}>
-            <label className="field-stack">
-              <span className="field-label">Name</span>
+        title={planForm?.isNew ? "Neuer Plan" : `Plan bearbeiten – ${planForm?.name ?? ""}`}
+        size="wide"
+        className="admin-plan-modal"
+        header={
+          planForm ? (
+            <div className="admin-plan-modal-heading">
+              <div className="eyebrow">{planForm.isNew ? "Neuer Plan" : "Plan bearbeiten"}</div>
               <input
+                className="admin-plan-name-input"
+                form="admin-plan-form"
                 value={planForm.name}
-                onChange={(event) => setPlanForm((current) => (current ? { ...current, name: event.target.value } : current))}
+                onChange={(event) => updatePlanForm({ name: event.target.value })}
+                placeholder="Name des Plans"
+                aria-label="Name des Plans"
                 required
               />
-            </label>
-            <PriceFields
-              yearlyChf={planForm.priceYearlyChf}
-              monthlyChf={planForm.priceMonthlyChf}
-              monthlyTouched={planForm.monthlyTouched}
-              onChange={(prices) => setPlanForm((current) => (current ? { ...current, ...prices } : current))}
-            />
-            <div className="two-col">
-              <label className="field-stack">
-                <span className="field-label">Nutzerlimit (leer = kein Limit)</span>
-                <input
-                  type="number"
-                  min={1}
-                  value={planForm.userLimit}
-                  onChange={(event) => setPlanForm((current) => (current ? { ...current, userLimit: event.target.value } : current))}
-                />
-              </label>
-              <label className="field-stack">
-                <span className="field-label">Speicherlimit (GB, leer = kein Limit)</span>
-                <input
-                  type="number"
-                  min={0.01}
-                  step="any"
-                  value={planForm.storageGb}
-                  onChange={(event) => setPlanForm((current) => (current ? { ...current, storageGb: event.target.value } : current))}
-                />
-              </label>
             </div>
-            <div className="field-stack">
-              <span className="field-label">Enthaltene Module</span>
-              {features.length === 0 ? (
-                <div className="muted">Keine Module im Katalog.</div>
+          ) : null
+        }
+        footer={
+          <div className="modal-footer-actions">
+            <button type="button" className="button-ghost" onClick={() => setPlanForm(null)}>
+              Abbrechen
+            </button>
+            <button type="submit" form="admin-plan-form" className="button-primary" disabled={planBusy || !planForm || planForm.name.trim() === ""}>
+              {planBusy ? "Wird gespeichert…" : planForm?.isNew ? "Plan anlegen" : "Speichern"}
+            </button>
+          </div>
+        }
+      >
+        {planForm && (
+          <form id="admin-plan-form" className="grid admin-abo-layout" onSubmit={submitPlan}>
+            <div className="admin-abo-main">
+              <section className="admin-form-section">
+                <div className="admin-section-title">Grundlagen</div>
+                <div className="admin-plan-availability">
+                  <div className="field-stack">
+                    <span className="field-label">Verfügbarkeit</span>
+                    <div>
+                      <FilterTabs
+                        value={planForm.isBookable ? "bookable" : "hidden"}
+                        onChange={(value) => updatePlanForm({ isBookable: value === "bookable" })}
+                        options={[
+                          { value: "bookable", label: "Buchbar" },
+                          { value: "hidden", label: "Nicht buchbar" },
+                        ]}
+                      />
+                    </div>
+                  </div>
+                  <p className="field-help">{planForm.isBookable ? "Mandanten können diesen Plan selbst buchen." : "Dieser Plan kann nur durch die Administration zugewiesen werden."}</p>
+                </div>
+                <label className="field-stack">
+                  <span className="field-label">Beschreibung</span>
+                  <textarea rows={3} value={planForm.description} onChange={(event) => updatePlanForm({ description: event.target.value })} />
+                </label>
+              </section>
+
+              <section className="admin-form-section">
+                <div className="admin-section-title">Preis</div>
+                <PriceFields
+                  yearlyChf={planForm.priceYearlyChf}
+                  monthlyChf={planForm.priceMonthlyChf}
+                  monthlyTouched={planForm.monthlyTouched}
+                  onChange={(prices) => updatePlanForm(prices)}
+                />
+                <span className="field-help">
+                  Ohne festen Preis? Felder einfach leer lassen. Der Monatspreis wird aus dem Jahrespreis mit 20 % Aufschlag vorgeschlagen.
+                </span>
+              </section>
+
+              <section className="admin-form-section">
+                <div className="admin-section-title">Benutzer &amp; Speicher</div>
+                <div className="two-col">
+                  <div className="field-stack">
+                    <span className="field-label">Benutzer</span>
+                    <div className="admin-limit-input">
+                      <input
+                        type="number"
+                        min={1}
+                        placeholder={planForm.userUnlimited ? "Unbegrenzt" : "Anzahl Benutzer"}
+                        value={planForm.userUnlimited ? "" : planForm.userLimit}
+                        disabled={planForm.userUnlimited}
+                        onChange={(event) => updatePlanForm({ userLimit: event.target.value })}
+                        aria-label="Benutzerlimit"
+                      />
+                      <label className="admin-inline-check">
+                        <input type="checkbox" checked={planForm.userUnlimited} onChange={(event) => updatePlanForm({ userUnlimited: event.target.checked })} />
+                        unbegrenzt
+                      </label>
+                    </div>
+                  </div>
+                  <div className="field-stack">
+                    <span className="field-label">Speicher (GB)</span>
+                    <div className="admin-limit-input">
+                      <input
+                        type="number"
+                        min={0.01}
+                        step="any"
+                        placeholder={planForm.storageUnlimited ? "Unbegrenzt" : "Speicher in GB"}
+                        value={planForm.storageUnlimited ? "" : planForm.storageGb}
+                        disabled={planForm.storageUnlimited}
+                        onChange={(event) => updatePlanForm({ storageGb: event.target.value })}
+                        aria-label="Speicherlimit in GB"
+                      />
+                      <label className="admin-inline-check">
+                        <input
+                          type="checkbox"
+                          checked={planForm.storageUnlimited}
+                          onChange={(event) => updatePlanForm({ storageUnlimited: event.target.checked })}
+                        />
+                        unbegrenzt
+                      </label>
+                    </div>
+                  </div>
+                </div>
+                <span className="field-help">Das Speicherlimit wird als Kontingent auf die Mandanten übertragen, zusätzlich zu gebuchten Speicherpaketen.</span>
+              </section>
+
+              <section className="admin-form-section">
+                <div className="admin-section-title">Enthaltene Module</div>
+                {features.length === 0 ? (
+                  <div className="muted">Keine Module im Katalog.</div>
+                ) : (
+                  <div className="admin-module-options">
+                    {features.map((feature) => {
+                      const checked = planForm.featureCodes.has(feature.code);
+                      return (
+                        <label key={feature.code} className={checked ? "admin-module-option admin-module-option-checked" : "admin-module-option"}>
+                          <input type="checkbox" checked={checked} onChange={() => toggleFeatureCode(feature.code)} />
+                          <span>
+                            <strong>{feature.name}</strong>
+                            {feature.description ? <span className="muted">{feature.description}</span> : null}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+            </div>
+
+            <aside className="admin-abo-side">
+              <div className="admin-section-title">Vorschau für den Mandanten</div>
+              <div className="card admin-plan-preview">
+                <Badge variant={planForm.isBookable ? "success" : "neutral"}>{planForm.isBookable ? "Buchbar" : "Nicht buchbar"}</Badge>
+                <div className="admin-plan-preview-name">{planForm.name.trim() || "Neuer Plan"}</div>
+                <dl className="admin-plan-preview-stats">
+                  <div>
+                    <dt>Monatspreis</dt>
+                    <dd>{previewMonthlyRp === null ? "Noch nicht festgelegt" : `${formatChfShort(previewMonthlyRp)} / Monat`}</dd>
+                  </div>
+                  <div>
+                    <dt>Nutzer</dt>
+                    <dd>{planForm.userUnlimited || planForm.userLimit.trim() === "" ? "unbegrenzt" : planForm.userLimit}</dd>
+                  </div>
+                  <div>
+                    <dt>Speicher</dt>
+                    <dd>{planForm.storageUnlimited || planForm.storageGb.trim() === "" ? "unbegrenzt" : `${planForm.storageGb} GB`}</dd>
+                  </div>
+                </dl>
+              </div>
+              <div className="admin-section-title">Mandanten mit diesem Plan</div>
+              {planForm.isNew || (planTenants !== null && planTenants.length === 0) ? (
+                <p className="muted admin-side-note">Noch keinem Mandanten zugewiesen.</p>
+              ) : planTenants === null ? (
+                <p className="muted admin-side-note">Wird geladen…</p>
               ) : (
-                features.map((feature) => (
-                  <label key={feature.code} className="field-radio-option">
-                    <input
-                      type="checkbox"
-                      checked={planForm.featureCodes.has(feature.code)}
-                      onChange={() => toggleFeatureCode(feature.code)}
-                    />
-                    <span>
-                      <strong>{feature.name}</strong>
-                    </span>
-                  </label>
-                ))
+                <ul className="admin-plan-tenant-list">
+                  {planTenants.map((tenant) => (
+                    <li key={tenant.id}>
+                      <AdminAvatar name={tenant.name} imageUrl={tenant.profile_image_url} toneKey={tenant.id} size="sm" />
+                      <span>{tenant.name}</span>
+                    </li>
+                  ))}
+                </ul>
               )}
-            </div>
-            <div className="modal-actions">
-              <button type="button" className="button-ghost" onClick={() => setPlanForm(null)}>
-                Abbrechen
-              </button>
-              <button type="submit" className="button-primary" disabled={planBusy}>
-                {planBusy ? "Wird gespeichert…" : "Speichern"}
-              </button>
-            </div>
+            </aside>
           </form>
         )}
       </Modal>
@@ -447,7 +723,7 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
               />
             </label>
             <label className="field-stack">
-              <span className="field-label">Preis pro Monat einzeln (CHF, leer = nur gebündelt über einen Plan)</span>
+              <span className="field-label">Add-on-Preis pro Monat (CHF)</span>
               <input
                 type="number"
                 min={0}
@@ -455,6 +731,7 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
                 value={featureForm.priceMonthlyChf}
                 onChange={(event) => setFeatureForm((current) => (current ? { ...current, priceMonthlyChf: event.target.value } : current))}
               />
+              <span className="field-help">Leer = nicht als Add-on buchbar, nur gebündelt über einen Plan.</span>
             </label>
             <div className="modal-actions">
               <button type="button" className="button-ghost" onClick={() => setFeatureForm(null)}>
@@ -538,7 +815,7 @@ function PriceFields({
   return (
     <div className="two-col">
       <label className="field-stack">
-        <span className="field-label">Preis pro Jahr (CHF, leer = kein Preis)</span>
+        <span className="field-label">Jahrespreis (CHF)</span>
         <input
           type="number"
           min={0}
@@ -554,7 +831,7 @@ function PriceFields({
         />
       </label>
       <label className="field-stack">
-        <span className="field-label">Preis pro Monat (CHF, Vorschlag: Jahr / 12 + 20 %)</span>
+        <span className="field-label">Monatspreis (CHF)</span>
         <input
           type="number"
           min={0}

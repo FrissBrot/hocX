@@ -33,8 +33,7 @@ test("tenant Abo & Nutzung tab and admin tenant-settings Speicher tab show the s
       await adminPage.goto("/admin/tenants");
       await adminPage.getByRole("row", { name: tenantName }).click();
       await adminPage.getByRole("tab", { name: "Speicher" }).click();
-      const adminLine = await adminPage.getByText(/^Gesamt belegt: /).innerText();
-      const adminValue = adminLine.replace(/^Gesamt belegt:\s*/, "").trim();
+      const adminValue = (await adminPage.locator(".admin-storage-total-value").innerText()).trim();
 
       expect(adminValue).toBe(tenantValue);
     }).toPass({ timeout: 30_000 });

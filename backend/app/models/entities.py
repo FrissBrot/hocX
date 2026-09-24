@@ -78,6 +78,10 @@ class Tenant(Base, TimestampMixin):
     # ueberspringt den Mandanten dann, statt den manuellen Sonderwert (z.B. eine individuelle
     # Enterprise-Grenze) bei jedem Plan-/Paketwechsel wieder zu ueberschreiben.
     storage_quota_manual_override: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
+    # Abo-Konditionen aus dem Adminportal (0089_plan_catalog_details): Rabatt in Prozent auf Plan
+    # + Zusatzmodule und eine nur intern sichtbare Notiz (z.B. "Vereinsrabatt bis 2027").
+    discount_percent: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("0"))
+    billing_note: Mapped[str | None] = mapped_column(Text)
 
 
 class PlatformOidcConfig(Base, TimestampMixin, UpdatedAtMixin):
@@ -154,6 +158,10 @@ class Plan(Base):
     included_user_limit: Mapped[int | None] = mapped_column(Integer)
     included_storage_bytes: Mapped[int | None] = mapped_column(BigInteger)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    description: Mapped[str | None] = mapped_column(Text)
+    # False = erscheint nicht bei "Neuer Mandant", kann aber einzelnen Mandanten zugewiesen
+    # werden (z.B. 'legacy' fuer Bestandsmandanten).
+    is_bookable: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
 
 
 class PlanFeature(Base):

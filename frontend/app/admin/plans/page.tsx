@@ -14,9 +14,7 @@ export default async function AdminPlansPage() {
 
   return (
     <AdminShell session={session}>
-      <section className="panel">
-        <AdminPlanPricing initialPlans={plans ?? []} initialFeatures={features ?? []} initialStoragePackages={storagePackages ?? []} />
-      </section>
+      <AdminPlanPricing initialPlans={plans ?? []} initialFeatures={features ?? []} initialStoragePackages={storagePackages ?? []} />
     </AdminShell>
   );
 }

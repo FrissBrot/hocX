@@ -702,11 +702,16 @@ pre {
     0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent 76%);
 }
 
+/* Admin-Aboformulare erhalten die Feldstile auch ohne einen .grid-Vorfahren.
+   Modals werden per Portal ausserhalb des Seitenlayouts gerendert. */
 .block textarea,
 .block input,
 .grid input,
 .grid textarea,
 .grid select,
+.admin-abo-layout input,
+.admin-abo-layout textarea,
+.admin-abo-layout select,
 .matrix-designer-panel-section input,
 .matrix-designer-panel-section textarea,
 .matrix-designer-panel-section select,
@@ -731,6 +736,7 @@ input[type="number"] {
 }
 
 .grid select,
+.admin-abo-layout select,
 .block select,
 .matrix-designer-panel-section select {
   appearance: none;
@@ -748,6 +754,7 @@ input[type="number"] {
 }
 
 .grid textarea,
+.admin-abo-layout textarea,
 .block textarea,
 .matrix-designer-panel-section textarea {
   min-height: 120px;
@@ -757,6 +764,9 @@ input[type="number"] {
 .grid input:focus,
 .grid textarea:focus,
 .grid select:focus,
+.admin-abo-layout input:focus,
+.admin-abo-layout textarea:focus,
+.admin-abo-layout select:focus,
 .block input:focus,
 .block textarea:focus,
 .matrix-designer-panel-section input:focus,
@@ -14917,4 +14927,1082 @@ input[type="radio"] {
   .doctpl-part-footer {
     padding-inline: var(--space-4);
   }
+}
+
+/* ── Platform-Admin (Mandanten, Preise) ── */
+.badge-violet {
+  background: color-mix(in srgb, var(--chart-3) 16%, transparent);
+  color: color-mix(in srgb, var(--chart-3) 65%, var(--text));
+}
+
+.filter-tabs-chips {
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.filter-tabs-chips .filter-tabs-option {
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  font-weight: 600;
+}
+
+.filter-tabs-chips .filter-tabs-option-active {
+  border-color: var(--primary);
+  --button-bg: var(--accent-soft);
+  --button-hover-bg: var(--accent-soft);
+  box-shadow: none;
+}
+
+.filter-tabs-chips .filter-tabs-option-active:hover {
+  --button-bg: var(--accent-soft);
+}
+
+.filter-tabs-chips .filter-tabs-count {
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.filter-tabs-chips .filter-tabs-option-active .filter-tabs-count {
+  background: transparent;
+  color: var(--text);
+}
+
+/* Sidebar */
+.admin-sidebar-nav {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+}
+
+.admin-nav-group-title {
+  padding: 0 var(--space-3) var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.admin-nav-count {
+  margin-left: auto;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.admin-nav-new {
+  margin-left: auto;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-xs);
+  background: var(--success-bg);
+  color: var(--success-fg);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.admin-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.admin-identity-avatar {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--primary-contrast);
+}
+
+.admin-identity-copy {
+  min-width: 0;
+  flex: 1;
+  font-size: var(--text-sm);
+}
+
+.admin-identity-copy .identity-subtle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-identity-logout {
+  width: auto;
+  min-height: 32px;
+  padding: 0 var(--space-2);
+}
+
+.admin-breadcrumb {
+  font-size: var(--text-base);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.admin-breadcrumb .topbar-breadcrumb-group:hover {
+  color: var(--text);
+}
+
+.page-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Avatare: getönte Fläche mit dunklem Buchstaben, Ton aus avatarTone() */
+.admin-avatar {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+}
+
+.admin-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.admin-avatar-sm {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: var(--text-xs);
+}
+
+.admin-avatar-md {
+  width: 36px;
+  height: 36px;
+  font-size: var(--text-base);
+}
+
+.admin-avatar-lg {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-lg);
+}
+
+.admin-avatar-tone-0 { background: var(--info-bg); color: var(--info-fg); }
+.admin-avatar-tone-1 { background: var(--success-bg); color: var(--success-fg); }
+.admin-avatar-tone-2 { background: var(--warning-bg); color: var(--warning-fg); }
+.admin-avatar-tone-3 { background: var(--danger-bg); color: var(--danger-fg); }
+.admin-avatar-tone-4 { background: color-mix(in srgb, var(--chart-3) 16%, transparent); color: color-mix(in srgb, var(--chart-3) 65%, var(--text)); }
+
+/* Mandantenliste */
+.admin-tenant-filter-card {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.admin-cell-sub {
+  margin-top: 2px;
+  font-size: var(--text-sm);
+}
+
+.admin-cell-number {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.admin-cell-end {
+  text-align: right;
+}
+
+.admin-storage-cell {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 150px;
+}
+
+.admin-storage-bar {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  background: var(--border);
+}
+
+.admin-storage-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+}
+
+.admin-storage-bar-unlimited {
+  background: repeating-linear-gradient(90deg, var(--border) 0 6px, transparent 6px 10px);
+}
+
+.admin-storage-label {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.admin-storage-warning .admin-storage-bar-fill { background: var(--warning); }
+.admin-storage-warning .admin-storage-label { color: var(--warning-fg); }
+.admin-storage-over .admin-storage-bar-fill { background: var(--danger); }
+.admin-storage-over .admin-storage-label { color: var(--danger-fg); }
+
+.admin-slug-input {
+  position: relative;
+  display: block;
+}
+
+.admin-slug-prefix {
+  position: absolute;
+  top: 50%;
+  left: var(--space-3);
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.admin-slug-input input {
+  width: 100%;
+  padding-left: var(--space-5);
+}
+
+/* Plan-Auswahlkarten */
+.admin-plan-options {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.admin-plan-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel-solid);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) ease, background var(--dur-fast) ease;
+}
+
+.admin-plan-option:hover {
+  border-color: var(--border-strong);
+}
+
+.admin-plan-option-active,
+.admin-plan-option-active:hover {
+  border-color: var(--primary);
+  background: var(--accent-soft);
+}
+
+.admin-plan-option input {
+  flex-shrink: 0;
+}
+
+.admin-plan-option-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+  font-size: var(--text-sm);
+}
+
+.admin-plan-option-copy strong {
+  font-size: var(--text-base);
+}
+
+.admin-plan-option-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.admin-plan-option-price {
+  flex-shrink: 0;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.admin-badge-sm {
+  min-height: 20px;
+  padding: 0 var(--space-2);
+}
+
+/* Modal mit fester Fussleiste (Modal footer-Prop) */
+.modal-has-footer {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: var(--space-4) -22px -22px; /* design-ok: an das Modal-Shell-Padding gekoppelt */
+  padding: var(--space-4) 22px; /* design-ok: an das Modal-Shell-Padding gekoppelt */
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+}
+
+.modal-footer-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.admin-modal-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.admin-modal-heading h2 {
+  margin: 2px 0 0;
+  font-family: "Canela", "Iowan Old Style", "Palatino Linotype", serif;
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.admin-tenant-modal .modal-header,
+.admin-plan-modal .modal-header {
+  align-items: center;
+  margin-bottom: 0;
+}
+
+.admin-tenant-modal .modal-header-actions {
+  align-items: center;
+}
+
+.admin-tenant-modal .tabs {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.admin-tenant-modal .tabs-list {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: var(--panel);
+  margin-top: var(--space-4);
+}
+
+.admin-tenant-modal .tabs-trigger {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.admin-tenant-modal .tabs-trigger-active {
+  color: var(--text);
+  border-bottom-color: var(--primary);
+}
+
+.admin-tenant-form {
+  max-width: 720px;
+}
+
+.admin-image-drop {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  transition: border-color var(--dur-fast) ease, background var(--dur-fast) ease;
+}
+
+.admin-image-drop-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.admin-image-drop .muted {
+  font-size: var(--text-sm);
+}
+
+.admin-image-drop-input {
+  display: none;
+}
+
+.admin-inline-link {
+  width: auto;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  --button-bg: transparent;
+  --button-hover-bg: transparent;
+  background: var(--button-bg);
+  box-shadow: none;
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.admin-inline-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transform: none;
+}
+
+.admin-tenant-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.admin-tenant-meta strong {
+  color: var(--text);
+}
+
+/* Plan & Abo / Plan-Editor: Formular links, Zusammenfassung rechts */
+.admin-abo-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 380px);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.admin-abo-main {
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.admin-abo-side {
+  position: sticky;
+  top: 56px;
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+}
+
+.admin-plan-modal .admin-abo-side {
+  top: 0;
+}
+
+.admin-form-section {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.admin-section-title {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.admin-module-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-2);
+}
+
+.admin-module-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel-solid);
+  cursor: pointer;
+}
+
+.admin-module-option > span {
+  display: grid;
+  gap: 2px;
+  font-size: var(--text-sm);
+}
+
+.admin-module-option > span strong {
+  font-size: var(--text-base);
+}
+
+.admin-module-option input {
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.admin-module-option-checked {
+  border-color: var(--border-strong);
+  background: var(--accent-soft);
+}
+
+.admin-module-option-locked {
+  cursor: default;
+}
+
+.admin-input-suffix {
+  position: relative;
+  display: block;
+}
+
+.admin-input-suffix input {
+  width: 100%;
+  padding-right: var(--space-6);
+}
+
+.admin-input-suffix span {
+  position: absolute;
+  top: 50%;
+  right: var(--space-3);
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.admin-cost-card {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.admin-cost-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-sm);
+}
+
+.admin-cost-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+  font-weight: 600;
+}
+
+.admin-cost-total strong {
+  font-family: "Canela", "Iowan Old Style", "Palatino Linotype", serif;
+  font-size: var(--text-xl);
+  text-align: right;
+}
+
+.admin-cost-hint {
+  text-align: right;
+  font-size: var(--text-sm);
+}
+
+.admin-limit-list {
+  display: grid;
+  margin: 0;
+}
+
+.admin-limit-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-sm);
+}
+
+.admin-limit-list dt {
+  color: var(--muted);
+}
+
+.admin-limit-list dd {
+  margin: 0;
+  font-weight: 700;
+}
+
+.admin-side-note {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+/* Benutzer-Tab */
+.admin-user-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.admin-user-table select {
+  min-width: 140px;
+}
+
+.admin-user-table .button-ghost,
+.admin-user-table .button-danger {
+  width: auto;
+  min-height: 32px;
+  padding: 0 var(--space-2);
+}
+
+.admin-user-table .button-danger {
+  --button-bg: transparent;
+  background: var(--button-bg);
+  border-color: transparent;
+  color: var(--danger-fg);
+  box-shadow: none;
+}
+
+.admin-user-table .button-danger:hover {
+  --button-bg: var(--danger-bg);
+}
+
+.admin-cleanup-all {
+  background: var(--bg);
+}
+
+.admin-cleanup-count {
+  font-weight: 400;
+}
+
+/* Speicher-Tab */
+.admin-storage-overview {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.admin-storage-total {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.admin-storage-total-value {
+  font-family: "Canela", "Iowan Old Style", "Palatino Linotype", serif;
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.admin-storage-legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--space-2) var(--space-4);
+}
+
+.admin-storage-legend-item {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--border);
+  font-size: var(--text-sm);
+}
+
+.admin-package-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.admin-package-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.admin-package-row .button-ghost {
+  width: auto;
+  min-height: 32px;
+}
+
+/* Preise: Plan-Karten */
+.admin-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-4);
+}
+
+.admin-plan-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  border-top: 3px solid var(--neutral-fg);
+}
+
+.admin-plan-card-success { border-top-color: var(--success); }
+.admin-plan-card-info { border-top-color: var(--accent); }
+.admin-plan-card-violet { border-top-color: var(--chart-3); }
+.admin-plan-card-warning { border-top-color: var(--warning); }
+
+.admin-plan-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.admin-plan-card-head h2 {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: "Canela", "Iowan Old Style", "Palatino Linotype", serif;
+  font-size: var(--text-xl);
+  font-weight: 700;
+}
+
+.admin-plan-card-description {
+  margin: 0;
+  min-height: 3em;
+  font-size: var(--text-sm);
+}
+
+.admin-plan-card-price {
+  display: grid;
+  gap: 2px;
+  font-size: var(--text-sm);
+}
+
+.admin-plan-card-amount {
+  font-family: "Canela", "Iowan Old Style", "Palatino Linotype", serif;
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.admin-plan-card-features {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.admin-plan-card-features li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.admin-plan-feature-included {
+  color: var(--text);
+}
+
+.admin-plan-feature-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  font-size: var(--text-xs);
+}
+
+.admin-plan-feature-included .admin-plan-feature-mark {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.admin-plan-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.admin-plan-card-foot .button-ghost {
+  width: auto;
+  min-height: 32px;
+  padding: 0 var(--space-2);
+}
+
+.admin-plan-card-link {
+  color: var(--primary);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.admin-plan-card-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.admin-page-footnote {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.admin-module-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.admin-module-icon {
+  width: 36px;
+  height: 36px;
+}
+
+.admin-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.admin-status-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.admin-status-dot::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.admin-status-dot-on { color: var(--success-fg); }
+.admin-status-dot-off { color: var(--muted); }
+
+/* Plan-Editor */
+.admin-plan-modal-heading {
+  display: grid;
+  gap: var(--space-1);
+  flex: 1;
+  min-width: 0;
+}
+
+.modal-content input.admin-plan-name-input,
+.admin-plan-name-input {
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  font-family: "Canela", "Iowan Old Style", "Palatino Linotype", serif;
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.admin-plan-name-input:focus-visible {
+  outline: none;
+  box-shadow: 0 2px 0 var(--accent);
+}
+
+.admin-plan-modal .modal-header {
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-plan-modal .modal-content {
+  padding-top: var(--space-4);
+}
+
+.admin-limit-input {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.admin-limit-input input[type="number"] {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.admin-plan-preview {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.admin-plan-preview-name {
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border);
+  font-family: "Canela", "Iowan Old Style", "Palatino Linotype", serif;
+  font-size: var(--text-xl);
+  font-weight: 700;
+}
+
+.admin-plan-preview-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin: 0;
+}
+
+.admin-plan-preview-stats dt {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.admin-plan-preview-stats dd {
+  margin: 2px 0 0;
+  font-weight: 700;
+}
+
+.admin-plan-tenant-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+}
+
+.admin-plan-tenant-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.admin-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .admin-abo-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-abo-side {
+    position: static;
+  }
+}
+
+@media (max-width: 640px) {
+  .modal-footer {
+    flex-wrap: wrap;
+  }
+
+  .admin-limit-input {
+    flex-wrap: wrap;
+  }
+}
+
+/* Plan-Editor: klare Abschnitte und platzsparende, responsive Formularfelder. */
+.admin-plan-modal .admin-form-section {
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid var(--border);
+  gap: var(--space-4);
+}
+
+.admin-plan-modal .admin-form-section:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.admin-plan-modal .two-col {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
+.admin-plan-modal .field-stack { min-width: 0; }
+
+.admin-plan-availability {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.admin-plan-availability .field-help { margin: 0; }
+
+.admin-plan-modal .field-help {
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+
+.admin-plan-modal .admin-limit-input {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.admin-plan-modal .admin-inline-check {
+  min-height: 28px;
+  color: var(--muted);
+}
+
+.admin-plan-modal input[type="checkbox"] { accent-color: var(--accent); }
+
+.admin-plan-modal input:disabled {
+  color: var(--muted);
+  border-style: dashed;
+  cursor: not-allowed;
+}
+
+.admin-plan-modal .admin-plan-preview-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-plan-modal .admin-plan-preview-stats > div:first-child { grid-column: 1 / -1; }
+.admin-plan-modal .admin-plan-preview > .badge { justify-self: start; }
+.admin-plan-modal .admin-plan-preview-name { overflow-wrap: anywhere; }
+.admin-plan-modal .admin-module-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.admin-plan-modal .admin-module-option { padding: var(--space-4); }
+.admin-plan-modal .admin-module-option:has(:focus-visible) { box-shadow: var(--focus-ring); }
+
+@media (max-width: 640px) {
+  .admin-plan-modal .two-col,
+  .admin-plan-modal .admin-module-options { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Der Mandantendialog darf seine Formularspalte nicht durch Kopf-/Fusszeile verbreitern. */
+.admin-tenant-modal { grid-template-columns: minmax(0, 1fr); }
+.admin-tenant-modal .field-stack { min-width: 0; }
+.admin-tenant-modal .admin-modal-heading > div { min-width: 0; }
+.admin-tenant-modal .admin-modal-heading h2 { overflow-wrap: anywhere; }
+
+@media (max-width: 640px) {
+  .admin-tenant-modal .modal-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--space-3);
+  }
+  .admin-tenant-modal .modal-header-actions { display: contents; }
+  .admin-tenant-modal .modal-header-actions > .badge {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: start;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .admin-tenant-modal .modal-close { grid-column: 2; grid-row: 1; }
+  .admin-tenant-modal .two-col { grid-template-columns: minmax(0, 1fr); }
+  .admin-tenant-modal .modal-footer-actions { flex-wrap: wrap; }
 }

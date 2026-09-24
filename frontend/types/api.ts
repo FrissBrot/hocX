@@ -412,6 +412,8 @@ export type AdminTenantSummary = {
   effective_storage_quota_bytes: number | null;
   storage_quota_manual_override: boolean;
   assigned_storage_packages: AdminTenantStoragePackage[];
+  discount_percent: number;
+  billing_note: string | null;
 };
 
 export type AdminTenantStoragePackage = {
@@ -470,6 +472,9 @@ export type AdminPlan = {
   included_storage_bytes: number | null;
   sort_order: number;
   feature_codes: string[];
+  description: string | null;
+  is_bookable: boolean;
+  tenant_count: number;
 };
 
 export type AdminPlanWrite = {
@@ -480,12 +485,25 @@ export type AdminPlanWrite = {
   included_storage_bytes: number | null;
   sort_order: number;
   feature_codes: string[];
+  description: string | null;
+  is_bookable: boolean;
+  /** Nur beim Anlegen ausgewertet; leer = aus dem Namen erzeugt. */
+  code?: string | null;
 };
 
 export type AdminTenantSubscriptionUpdate = {
   plan_code: string | null;
   billing_cycle: "monthly" | "yearly";
   user_limit_override: number | null;
+  discount_percent: number;
+  billing_note: string | null;
+};
+
+export type AdminTenantCreate = {
+  name: string;
+  public_slug: string | null;
+  plan_code: string | null;
+  billing_cycle: "monthly" | "yearly";
 };
 
 export type AdminTenantPage = {

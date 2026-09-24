@@ -1,16 +1,26 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import { DragEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
+import {
+  AdminAvatar,
+  estimateSubscriptionCost,
+  formatChfShort,
+  hasPlanPrice,
+  PlanBadge,
+  planTones,
+  BillingCycleToggle,
+  PlanOption,
+} from "@/components/admin/admin-plan-utils";
 import { MfaAdminModal } from "@/components/security/mfa-admin-modal";
+import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Tabs } from "@/components/ui/tabs";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
 import { formatFileSize } from "@/lib/utils/format";
-import { StorageBreakdown, StorageQuotaComposition } from "@/components/storage/storage-usage-view";
-import { formatRappen } from "@/lib/utils/format";
+import { CATEGORY_COLORS, CATEGORY_HINTS, formatPercent, StorageQuotaComposition } from "@/components/storage/storage-usage-view";
 import {
   AdminFeature,
   AdminPlan,
@@ -85,10 +95,17 @@ const CLEANUP_CATEGORIES: { key: TenantCleanupCategory; title: string; descripti
   }
 ];
 
+type SettingsTab = "stammdaten" | "abo" | "benutzer" | "aufraeumen" | "speicher";
+
 export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Props) {
   const showToast = useToast();
   const confirm = useConfirm();
+  const [activeTab, setActiveTab] = useState<SettingsTab>("stammdaten");
   const [tenantForm, setTenantForm] = useState<TenantFormState>(emptyTenantForm);
+  const [tenantBusy, setTenantBusy] = useState(false);
+  const [profilePreviewUrl, setProfilePreviewUrl] = useState<string | null>(null);
+  const [dropActive, setDropActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [tenantUsers, setTenantUsers] = useState<AdminTenantUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
@@ -106,19 +123,37 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
 
   const [featureCatalog, setFeatureCatalog] = useState<AdminFeature[]>([]);
   const [selectedFeatures, setSelectedFeatures] = useState<Set<string>>(new Set());
-  const [featuresBusy, setFeaturesBusy] = useState(false);
 
   const [planCatalog, setPlanCatalog] = useState<AdminPlan[]>([]);
   const [subscriptionForm, setSubscriptionForm] = useState<AdminTenantSubscriptionUpdate>({
     plan_code: null,
     billing_cycle: "monthly",
     user_limit_override: null,
+    discount_percent: 0,
+    billing_note: null,
   });
   const [subscriptionBusy, setSubscriptionBusy] = useState(false);
 
   const [storagePackageCatalog, setStoragePackageCatalog] = useState<AdminStoragePackage[]>([]);
   const [packageToAdd, setPackageToAdd] = useState("");
   const [packagesBusy, setPackagesBusy] = useState(false);
+
+  // Nur beim Öffnen bzw. Wechsel des Mandanten auf den ersten Tab springen - nicht nach jedem
+  // Speichern (onSaved reicht ein neues tenant-Objekt herein).
+  useEffect(() => {
+    if (open) setActiveTab("stammdaten");
+  }, [open, tenant?.id]);
+
+  // Vorschau des gewählten, noch nicht gespeicherten Profilbilds.
+  useEffect(() => {
+    if (!tenantForm.profileImage) {
+      setProfilePreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(tenantForm.profileImage);
+    setProfilePreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [tenantForm.profileImage]);
 
   useEffect(() => {
     if (!open || !tenant) {
@@ -147,6 +182,8 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
       plan_code: tenant.plan_code,
       billing_cycle: tenant.billing_cycle,
       user_limit_override: tenant.user_limit_override,
+      discount_percent: tenant.discount_percent,
+      billing_note: tenant.billing_note,
     });
     void loadPlanCatalog();
 
@@ -206,14 +243,35 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     }
   }
 
+  const tones = useMemo(() => planTones(planCatalog), [planCatalog]);
+  const selectedPlan = planCatalog.find((plan) => plan.code === subscriptionForm.plan_code);
+  const planFeatureCodes = useMemo(() => new Set(selectedPlan?.feature_codes ?? []), [selectedPlan]);
+  // Zusatzmodule = gebucht, aber nicht im gewählten Plan enthalten.
+  const addOnFeatures = featureCatalog.filter(
+    (feature) => selectedFeatures.has(feature.code) && !planFeatureCodes.has(feature.code) && feature.standalone_price_monthly_rp !== null
+  );
+  const cost = estimateSubscriptionCost({
+    plan: selectedPlan,
+    cycle: subscriptionForm.billing_cycle,
+    addOns: addOnFeatures,
+    discountPercent: subscriptionForm.discount_percent,
+  });
+  const cycleUnit = subscriptionForm.billing_cycle === "monthly" ? "Monat" : "Jahr";
+
   async function submitSubscription(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!tenant) return;
     setSubscriptionBusy(true);
     try {
-      const updated = await browserApiFetch<AdminTenantSummary>(`/api/admin/tenants/${tenant.id}/subscription`, {
+      await browserApiFetch<AdminTenantSummary>(`/api/admin/tenants/${tenant.id}/subscription`, {
         method: "PATCH",
         body: JSON.stringify(subscriptionForm),
+      });
+      // Module als Full-Replace: Plan-Module sind immer dabei, Zusatzmodule nur wenn angehakt.
+      const enabledCodes = Array.from(new Set([...selectedFeatures, ...planFeatureCodes]));
+      const updated = await browserApiFetch<AdminTenantSummary>(`/api/admin/tenants/${tenant.id}/features`, {
+        method: "PUT",
+        body: JSON.stringify({ enabled_codes: enabledCodes }),
       });
       onSaved(updated);
       setSelectedFeatures(new Set(updated.enabled_features));
@@ -235,25 +293,6 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
       }
       return next;
     });
-  }
-
-  async function submitFeatures(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!tenant) return;
-    setFeaturesBusy(true);
-    try {
-      const updated = await browserApiFetch<AdminTenantSummary>(`/api/admin/tenants/${tenant.id}/features`, {
-        method: "PUT",
-        body: JSON.stringify({ enabled_codes: Array.from(selectedFeatures) }),
-      });
-      onSaved(updated);
-      setSelectedFeatures(new Set(updated.enabled_features));
-      showToast("Features gespeichert", "success");
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "Features konnten nicht gespeichert werden", "error");
-    } finally {
-      setFeaturesBusy(false);
-    }
   }
 
   async function loadStorageUsage(tenantId: string) {
@@ -341,9 +380,25 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     }
   }
 
+  function pickProfileImage(file: File | null | undefined) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      showToast("Bitte ein Bild (PNG oder JPG) wählen", "error");
+      return;
+    }
+    setTenantForm((current) => ({ ...current, profileImage: file }));
+  }
+
+  function handleProfileDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setDropActive(false);
+    pickProfileImage(event.dataTransfer.files?.[0]);
+  }
+
   async function submitTenant(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!tenant) return;
+    setTenantBusy(true);
     try {
       const formData = new FormData();
       formData.append("name", tenantForm.name);
@@ -362,6 +417,8 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
       onSaved(updated);
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Mandant konnte nicht gespeichert werden", "error");
+    } finally {
+      setTenantBusy(false);
     }
   }
 
@@ -400,19 +457,81 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     }
   }
 
+
   if (!tenant) {
     return null;
   }
 
+  const storageQuota = storageUsage?.quota_bytes ?? null;
+  const storageTotal = storageUsage?.total_bytes ?? tenant.storage_used_bytes;
+  const storageBarTotal = storageQuota !== null && storageQuota > storageTotal ? storageQuota : storageTotal;
+  const visibleCategories = storageUsage?.categories.filter((category) => category.bytes > 0) ?? [];
+  const effectiveUserLimit = subscriptionForm.user_limit_override ?? selectedPlan?.included_user_limit ?? null;
+  const effectiveStorageLimit =
+    selectedPlan?.included_storage_bytes == null && tenant.package_storage_bytes === 0
+      ? null
+      : (selectedPlan?.included_storage_bytes ?? 0) + tenant.package_storage_bytes;
+
+  const closeButton = (
+    <button type="button" className="button-ghost" onClick={onClose}>
+      Schliessen
+    </button>
+  );
+
+  const footer =
+    activeTab === "stammdaten" ? (
+      <div className="modal-footer-actions">
+        {closeButton}
+        <button type="submit" form="admin-tenant-stammdaten" className="button-primary" disabled={tenantBusy}>
+          {tenantBusy ? "Wird gespeichert…" : "Speichern"}
+        </button>
+      </div>
+    ) : activeTab === "abo" ? (
+      <>
+        <span className="muted">
+          {cost.totalRp === null ? "Plan ohne Preis" : `Total ${formatChfShort(cost.totalRp)} / ${cycleUnit}`}
+        </span>
+        <div className="modal-footer-actions">
+          {closeButton}
+          <button type="submit" form="admin-tenant-abo" className="button-primary" disabled={subscriptionBusy}>
+            {subscriptionBusy ? "Wird gespeichert…" : "Abo speichern"}
+          </button>
+        </div>
+      </>
+    ) : (
+      <div className="modal-footer-actions">{closeButton}</div>
+    );
+
   return (
-    <Modal open={open} onClose={onClose} title={`Mandant-Einstellungen – ${tenant.name}`} description="" size="wide">
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={`Mandant-Einstellungen – ${tenant.name}`}
+      size="wide"
+      className="admin-tenant-modal"
+      header={
+        <div className="admin-modal-heading">
+          <AdminAvatar name={tenant.name} imageUrl={tenant.profile_image_url} toneKey={tenant.id} size="lg" />
+          <div>
+            <div className="eyebrow">Mandant-Einstellungen</div>
+            <h2>{tenant.name}</h2>
+          </div>
+        </div>
+      }
+      headerActions={
+        tenant.plan_code ? <PlanBadge name={tenant.plan_name ?? tenant.plan_code} tone={tones.get(tenant.plan_code) ?? "neutral"} /> : null
+      }
+      footer={footer}
+    >
       <Tabs
+        activeId={activeTab}
+        onChange={(id) => setActiveTab(id as SettingsTab)}
         tabs={[
           {
             id: "stammdaten",
             label: "Stammdaten",
             content: (
-              <form className="grid" onSubmit={submitTenant}>
+              <form id="admin-tenant-stammdaten" className="grid admin-tenant-form" onSubmit={submitTenant}>
                 <div className="two-col">
                   <label className="field-stack">
                     <span className="field-label">Mandantenname</span>
@@ -428,27 +547,215 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                     />
                   </label>
                 </div>
-                <label className="field-stack">
+                <div className="field-stack">
                   <span className="field-label">Profilbild</span>
-                  {tenantForm.profileImageUrl ? (
-                    <div className="identity-avatar">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={tenantForm.profileImageUrl} alt={tenantForm.name} />
+                  <div
+                    className={dropActive ? "admin-image-drop admin-image-drop-active" : "admin-image-drop"}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      setDropActive(true);
+                    }}
+                    onDragLeave={() => setDropActive(false)}
+                    onDrop={handleProfileDrop}
+                  >
+                    <AdminAvatar name={tenant.name} imageUrl={profilePreviewUrl ?? tenantForm.profileImageUrl} toneKey={tenant.id} size="lg" />
+                    <div>
+                      <div>
+                        {tenantForm.profileImage ? `${tenantForm.profileImage.name} · ` : "Bild hierher ziehen oder "}
+                        <button type="button" className="admin-inline-link" onClick={() => fileInputRef.current?.click()}>
+                          {tenantForm.profileImage ? "anderes wählen" : "Datei wählen"}
+                        </button>
+                      </div>
+                      <div className="muted">PNG oder JPG, quadratisch</div>
                     </div>
-                  ) : null}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                      setTenantForm((current) => ({ ...current, profileImage: event.target.files?.[0] ?? null }))
-                    }
-                  />
-                </label>
-                <div className="table-actions table-actions-start">
-                  <button type="submit" className="button-secondary">
-                    Speichern
-                  </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg"
+                      className="admin-image-drop-input"
+                      aria-label="Profilbild wählen"
+                      onChange={(event) => pickProfileImage(event.target.files?.[0])}
+                    />
+                  </div>
                 </div>
+                <div className="admin-tenant-meta">
+                  <span>
+                    Erstellt am <strong>{new Date(tenant.created_at).toLocaleDateString("de-CH")}</strong>
+                  </span>
+                  <span>
+                    Teilnehmer <strong>{tenant.participant_count}</strong>
+                  </span>
+                </div>
+              </form>
+            )
+          },
+          {
+            id: "abo",
+            label: "Plan & Abo",
+            content: (
+              <form id="admin-tenant-abo" className="admin-abo-layout" onSubmit={submitSubscription}>
+                <div className="admin-abo-main">
+                  <section className="admin-form-section">
+                    <div className="admin-section-title">Plan</div>
+                    <div className="admin-plan-options" role="radiogroup" aria-label="Plan">
+                      {planCatalog.map((plan) => (
+                        <PlanOption
+                          key={plan.code}
+                          plan={plan}
+                          name="tenant-plan"
+                          checked={subscriptionForm.plan_code === plan.code}
+                          cycle={subscriptionForm.billing_cycle}
+                          onSelect={() => setSubscriptionForm((current) => ({ ...current, plan_code: plan.code }))}
+                        />
+                      ))}
+                    </div>
+                  </section>
+
+                  <section className="admin-form-section">
+                    <div className="admin-section-title">Abrechnung</div>
+                    <BillingCycleToggle
+                      value={subscriptionForm.billing_cycle}
+                      onChange={(billing_cycle) => setSubscriptionForm((current) => ({ ...current, billing_cycle }))}
+                    />
+                  </section>
+
+                  <section className="admin-form-section">
+                    <div className="admin-section-title">Module</div>
+                    {featureCatalog.length === 0 ? (
+                      <div className="muted">Keine Module im Katalog.</div>
+                    ) : (
+                      <div className="admin-module-options">
+                        {featureCatalog.map((feature) => {
+                          const inPlan = planFeatureCodes.has(feature.code);
+                          const booked = selectedFeatures.has(feature.code);
+                          // Ohne Einzelpreis nur über einen Plan buchbar - ein bereits gebuchtes Modul
+                          // bleibt aber abwählbar.
+                          const planOnly = !inPlan && feature.standalone_price_monthly_rp === null && !booked;
+                          return (
+                            <label
+                              key={feature.code}
+                              className={`admin-module-option${inPlan || booked ? " admin-module-option-checked" : ""}${inPlan || planOnly ? " admin-module-option-locked" : ""}`}
+                            >
+                              <input type="checkbox" checked={inPlan || booked} disabled={inPlan || planOnly} onChange={() => toggleFeature(feature.code)} />
+                              <span>
+                                <strong>{feature.name}</strong>
+                                <span className="muted">
+                                  {inPlan
+                                    ? "Im Plan enthalten"
+                                    : feature.standalone_price_monthly_rp !== null
+                                      ? `Add-on · +${formatChfShort(feature.standalone_price_monthly_rp)} / Monat`
+                                      : planOnly
+                                        ? "Nur in Plänen verfügbar"
+                                        : "Individuell gebucht"}
+                                </span>
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </section>
+
+                  <div className="two-col">
+                    <label className="field-stack">
+                      <span className="field-label">Rabatt</span>
+                      <span className="admin-input-suffix">
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={subscriptionForm.discount_percent}
+                          onChange={(event) =>
+                            setSubscriptionForm((current) => ({
+                              ...current,
+                              discount_percent: Math.min(100, Math.max(0, Math.round(Number(event.target.value) || 0))),
+                            }))
+                          }
+                        />
+                        <span aria-hidden="true">%</span>
+                      </span>
+                    </label>
+                    <label className="field-stack">
+                      <span className="field-label">Interne Notiz</span>
+                      <input
+                        value={subscriptionForm.billing_note ?? ""}
+                        onChange={(event) => setSubscriptionForm((current) => ({ ...current, billing_note: event.target.value }))}
+                        placeholder="z.B. Vereinsrabatt bis 2027"
+                      />
+                    </label>
+                  </div>
+                  <label className="field-stack">
+                    <span className="field-label">Benutzerlimit überschreiben</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={subscriptionForm.user_limit_override ?? ""}
+                      placeholder={selectedPlan?.included_user_limit != null ? `Plan-Limit: ${selectedPlan.included_user_limit}` : "Plan-Limit: unbegrenzt"}
+                      onChange={(event) =>
+                        setSubscriptionForm((current) => ({
+                          ...current,
+                          user_limit_override: event.target.value.trim() === "" ? null : Number(event.target.value),
+                        }))
+                      }
+                    />
+                    <span className="field-help">
+                      Leer = Plan-Limit gilt. Aktuell {tenant.user_count} Benutzer
+                      {effectiveUserLimit !== null && tenant.user_count >= effectiveUserLimit ? " – Limit erreicht oder überschritten." : "."}
+                    </span>
+                  </label>
+                </div>
+
+                <aside className="admin-abo-side">
+                  <div className="admin-section-title">Kosten</div>
+                  <div className="card admin-cost-card">
+                    <div className="admin-cost-row">
+                      <span>Plan {selectedPlan?.name ?? "–"}</span>
+                      <span>{cost.planRp === null ? "–" : formatChfShort(cost.planRp)}</span>
+                    </div>
+                    {addOnFeatures.map((feature) => (
+                      <div className="admin-cost-row" key={feature.code}>
+                        <span>+ {feature.name}</span>
+                        <span>
+                          {formatChfShort(
+                            (feature.standalone_price_monthly_rp ?? 0) * (subscriptionForm.billing_cycle === "monthly" ? 1 : 12)
+                          )}
+                        </span>
+                      </div>
+                    ))}
+                    {subscriptionForm.discount_percent > 0 ? (
+                      <div className="admin-cost-row">
+                        <span>Rabatt</span>
+                        <span>– {subscriptionForm.discount_percent}%</span>
+                      </div>
+                    ) : null}
+                    <div className="admin-cost-total">
+                      <span>Total</span>
+                      <strong>{cost.totalRp === null ? "Noch nicht festgelegt" : `${formatChfShort(cost.totalRp)}`}</strong>
+                    </div>
+                    <div className="muted admin-cost-hint">
+                      {cost.totalRp === null
+                        ? selectedPlan && !hasPlanPrice(selectedPlan)
+                          ? "Bestandsplan ohne Preis"
+                          : "Kein Plan gewählt"
+                        : `pro ${cycleUnit}, exkl. MWST`}
+                    </div>
+                  </div>
+
+                  <div className="admin-section-title">Limits nach Wechsel</div>
+                  <dl className="admin-limit-list">
+                    <div>
+                      <dt>Benutzer</dt>
+                      <dd>{effectiveUserLimit === null ? "unbegrenzt" : effectiveUserLimit}</dd>
+                    </div>
+                    <div>
+                      <dt>Speicher</dt>
+                      <dd>{effectiveStorageLimit === null ? "unbegrenzt" : formatFileSize(effectiveStorageLimit)}</dd>
+                    </div>
+                  </dl>
+                  <p className="muted admin-side-note">
+                    Der Mandant sieht Plan, Module und geschätzte Kosten unter Mandant-Einstellungen → Abo &amp; Nutzung.
+                  </p>
+                </aside>
               </form>
             )
           },
@@ -457,7 +764,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
             label: `Benutzer (${tenantUsers.length})`,
             content: (
               <div className="grid">
-                <div className="table-shell">
+                <div className="table-shell admin-user-table">
                   <table className="data-table">
                     <thead>
                       <tr>
@@ -465,19 +772,24 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                         <th>E-Mail</th>
                         <th>Rolle</th>
                         <th>MFA</th>
-                        <th>Aktion</th>
+                        <th aria-label="Aktion" />
                       </tr>
                     </thead>
                     <tbody>
                       {tenantUsers.map((u) => (
                         <tr key={u.user_id}>
                           <td>
-                            {u.display_name}
-                            {!u.login_enabled && <div className="muted">Login deaktiviert</div>}
+                            <div className="admin-user-name">
+                              <AdminAvatar name={u.display_name} toneKey={u.user_id} size="sm" />
+                              <div>
+                                <strong>{u.display_name}</strong>
+                                {!u.login_enabled && <div className="muted admin-cell-sub">Login deaktiviert</div>}
+                              </div>
+                            </div>
                           </td>
                           <td className="muted">{u.email}</td>
                           <td>
-                            <select value={u.role_code} onChange={(event) => changeUserRole(u.user_id, event.target.value)}>
+                            <select value={u.role_code} onChange={(event) => changeUserRole(u.user_id, event.target.value)} aria-label={`Rolle von ${u.display_name}`}>
                               {ROLE_OPTIONS.map((r) => (
                                 <option key={r.code} value={r.code}>
                                   {r.label}
@@ -486,12 +798,12 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                             </select>
                           </td>
                           <td>
-                            <button type="button" className="button-secondary button-ghost" onClick={() => setMfaModalUser(u)}>
+                            <button type="button" className="button-ghost" onClick={() => setMfaModalUser(u)}>
                               Anzeigen
                             </button>
                           </td>
-                          <td>
-                            <button type="button" className="button-secondary button-ghost" onClick={() => removeUser(u.user_id, u.display_name)}>
+                          <td className="admin-cell-end">
+                            <button type="button" className="button-danger" onClick={() => removeUser(u.user_id, u.display_name)}>
                               Löschen
                             </button>
                           </td>
@@ -502,7 +814,6 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                   {!usersLoading && tenantUsers.length === 0 && <div className="table-empty muted">Dieser Mandant hat noch keine Benutzer.</div>}
                 </div>
                 <p className="muted">Jedes Konto gehört genau einem Mandanten. Neue Benutzer legst du unter „Benutzer“ an und wählst dort den Mandanten.</p>
-
               </div>
             )
           },
@@ -510,7 +821,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
             id: "aufraeumen",
             label: "Aufräumen",
             content: (
-              <form className="grid" onSubmit={submitCleanup}>
+              <form className="grid admin-tenant-form" onSubmit={submitCleanup}>
                 <div className="form-error-banner">
                   Diese Aktion löscht Daten endgültig aus der Datenbank – es gibt kein Zurück. Der Mandant selbst, Vorlagen,
                   Formularfelder und Benutzerzugriffe bleiben in jedem Fall erhalten.
@@ -518,7 +829,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
 
                 <div className="field-stack">
                   <span className="field-label">Was soll gelöscht werden?</span>
-                  <label className="field-radio-option">
+                  <label className="field-radio-option admin-cleanup-all">
                     <input type="checkbox" checked={allCleanupSelected} onChange={toggleAllCleanupCategories} />
                     <span>
                       <strong>Alle Daten löschen</strong>
@@ -535,7 +846,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                       <span>
                         <strong>
                           {category.title}
-                          {cleanupCounts ? <span className="muted"> – {cleanupCounts[category.key]} vorhanden</span> : null}
+                          {cleanupCounts ? <span className="muted admin-cleanup-count"> – {cleanupCounts[category.key]} vorhanden</span> : null}
                         </strong>
                         <div className="muted">{category.description}</div>
                       </span>
@@ -575,93 +886,65 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
             )
           },
           {
-            id: "abo-speicher",
-            label: "Abo & Speicher",
+            id: "speicher",
+            label: "Speicher",
             content: (
-              <div className="section-stack">
-                <form className="grid" onSubmit={submitSubscription}>
-                  <div className="two-col">
-                    <label className="field-stack">
-                      <span className="field-label">Plan</span>
-                      <select
-                        value={subscriptionForm.plan_code ?? ""}
-                        onChange={(event) =>
-                          setSubscriptionForm((current) => ({ ...current, plan_code: event.target.value || null }))
-                        }
-                      >
-                        <option value="">Kein Plan</option>
-                        {planCatalog.map((plan) => (
-                          <option key={plan.code} value={plan.code}>
-                            {plan.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="field-stack">
-                      <span className="field-label">Abrechnung</span>
-                      <select
-                        value={subscriptionForm.billing_cycle}
-                        onChange={(event) =>
-                          setSubscriptionForm((current) => ({ ...current, billing_cycle: event.target.value as "monthly" | "yearly" }))
-                        }
-                      >
-                        <option value="monthly">Monatlich</option>
-                        <option value="yearly">Jährlich</option>
-                      </select>
-                    </label>
-                  </div>
-                  {subscriptionForm.plan_code ? (
-                    <p className="muted">
-                      {formatRappen(
-                        subscriptionForm.billing_cycle === "monthly"
-                          ? planCatalog.find((p) => p.code === subscriptionForm.plan_code)?.price_monthly_rp ?? null
-                          : planCatalog.find((p) => p.code === subscriptionForm.plan_code)?.price_yearly_rp ?? null
-                      )}{" "}
-                      · Nutzerlimit: {planCatalog.find((p) => p.code === subscriptionForm.plan_code)?.included_user_limit ?? "Kein Limit"}
-                      {" · Speicher: "}
-                      {planCatalog.find((p) => p.code === subscriptionForm.plan_code)?.included_storage_bytes != null
-                        ? formatFileSize(planCatalog.find((p) => p.code === subscriptionForm.plan_code)!.included_storage_bytes!)
-                        : "Kein Limit"}
-                    </p>
-                  ) : null}
-                  <label className="field-stack">
-                    <span className="field-label">Nutzerlimit überschreiben (leer = Plan-Limit gilt)</span>
-                    <input
-                      type="number"
-                      min={1}
-                      value={subscriptionForm.user_limit_override ?? ""}
-                      onChange={(event) =>
-                        setSubscriptionForm((current) => ({
-                          ...current,
-                          user_limit_override: event.target.value.trim() === "" ? null : Number(event.target.value),
-                        }))
-                      }
-                    />
-                  </label>
-                  <p className="muted">
-                    Aktuell {tenant.user_count} Nutzer, effektives Limit: {tenant.effective_user_limit ?? "Kein Limit"}.
-                    {tenant.effective_user_limit !== null && tenant.user_count >= tenant.effective_user_limit
-                      ? " Limit erreicht oder überschritten."
-                      : ""}
-                  </p>
-                  <div className="table-actions table-actions-start">
-                    <button type="submit" className="button-secondary" disabled={subscriptionBusy}>
-                      {subscriptionBusy ? "Wird gespeichert…" : "Abo speichern"}
-                    </button>
-                  </div>
-                </form>
-
-                <div className="grid">
-                  <div className="field-stack">
-                    <span className="field-label">Zusatz-Speicherpakete</span>
-                    {tenant.assigned_storage_packages.length === 0 ? (
-                      <div className="muted">Keine Zusatzpakete gebucht.</div>
+              <div className="grid admin-tenant-form">
+                {storageUsage ? (
+                  <section className="admin-storage-overview">
+                    <div className="admin-storage-total">
+                      <span className="admin-storage-total-value">{formatFileSize(storageUsage.total_bytes)}</span>
+                      <span className="muted">
+                        {storageQuota !== null
+                          ? `von ${formatFileSize(storageQuota)} belegt (${formatPercent(storageUsage.total_bytes, storageQuota)})`
+                          : "belegt · kein Speicherlimit"}
+                      </span>
+                      {storageQuota !== null && storageUsage.total_bytes > storageQuota ? <Badge variant="danger">Kontingent überschritten</Badge> : null}
+                    </div>
+                    <div className="storage-usage-bar admin-storage-usage-bar">
+                      {storageBarTotal > 0
+                        ? visibleCategories.map((category) => (
+                            <div
+                              key={category.key}
+                              className="storage-usage-segment"
+                              style={{ width: `${(category.bytes / storageBarTotal) * 100}%`, background: CATEGORY_COLORS[category.key] }}
+                              title={`${category.label}: ${formatFileSize(category.bytes)} – ${CATEGORY_HINTS[category.key]}`}
+                            />
+                          ))
+                        : null}
+                    </div>
+                    {visibleCategories.length === 0 ? (
+                      <div className="muted">Noch keine Dateien vorhanden.</div>
                     ) : (
-                      tenant.assigned_storage_packages.flatMap((pkg) =>
-                        Array.from({ length: pkg.quantity }, (_, index) => (
-                          <div key={`${pkg.package_code}-${index}`} className="table-actions table-actions-start">
+                      <div className="admin-storage-legend">
+                        {visibleCategories.map((category) => (
+                          <div key={category.key} className="admin-storage-legend-item" title={CATEGORY_HINTS[category.key]}>
                             <span>
-                              {pkg.name} <span className="muted">({formatFileSize(pkg.bytes)})</span>
+                              <span className="storage-legend-dot" style={{ background: CATEGORY_COLORS[category.key] }} />
+                              {category.label}
+                            </span>
+                            <strong>{formatFileSize(category.bytes)}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <StorageQuotaComposition planStorageBytes={tenant.plan_storage_bytes} packageStorageBytes={tenant.package_storage_bytes} />
+                  </section>
+                ) : (
+                  <div className="muted">{storageLoading ? "Wird geladen…" : "Keine Daten verfügbar."}</div>
+                )}
+
+                <section className="admin-form-section">
+                  <div className="admin-section-title">Zusatz-Speicherpakete</div>
+                  {tenant.assigned_storage_packages.length === 0 ? (
+                    <div className="muted">Keine Zusatzpakete gebucht.</div>
+                  ) : (
+                    <div className="admin-package-list">
+                      {tenant.assigned_storage_packages.flatMap((pkg) =>
+                        Array.from({ length: pkg.quantity }, (_, index) => (
+                          <div key={`${pkg.package_code}-${index}`} className="admin-package-row">
+                            <span>
+                              <strong>{pkg.name}</strong> <span className="muted">{formatFileSize(pkg.bytes)}</span>
                             </span>
                             <button
                               type="button"
@@ -673,14 +956,14 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                             </button>
                           </div>
                         ))
-                      )
-                    )}
-                  </div>
+                      )}
+                    </div>
+                  )}
                   {storagePackageCatalog.length === 0 ? (
                     <div className="muted">Keine Speicherpakete im Katalog.</div>
                   ) : (
                     <div className="table-actions table-actions-start">
-                      <select value={packageToAdd} onChange={(event) => setPackageToAdd(event.target.value)}>
+                      <select value={packageToAdd} onChange={(event) => setPackageToAdd(event.target.value)} aria-label="Speicherpaket">
                         {storagePackageCatalog.map((pkg) => (
                           <option key={pkg.code} value={pkg.code}>
                             {pkg.name} ({formatFileSize(pkg.bytes)})
@@ -697,61 +980,8 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                       </button>
                     </div>
                   )}
-                </div>
-
-                <div className="grid">
-                  <div className="eyebrow">Speicher</div>
-                  <StorageQuotaComposition
-                    planStorageBytes={tenant.plan_storage_bytes}
-                    packageStorageBytes={tenant.package_storage_bytes}
-                  />
-                  {storageUsage ? (
-                    <>
-                      {/* Shared with the tenant-facing Speicher page (audit fix,
-                          2026-09-17) - this used to hand-roll its own bar/table with a
-                          divergent quota denominator and no free-space segment. */}
-                      <StorageBreakdown {...storageUsage} />
-                      <div className="muted">Gesamt belegt: {formatFileSize(storageUsage.total_bytes)}</div>
-                    </>
-                  ) : (
-                    <div className="muted">{storageLoading ? "Wird geladen…" : "Keine Daten verfügbar."}</div>
-                  )}
-
-                </div>
+                </section>
               </div>
-            )
-          },
-          {
-            id: "features",
-            label: "Features",
-            content: (
-              <form className="grid" onSubmit={submitFeatures}>
-                <div className="field-stack">
-                  <span className="field-label">Gebuchte Features</span>
-                  {featureCatalog.length === 0 ? (
-                    <div className="muted">Keine Features im Katalog.</div>
-                  ) : (
-                    featureCatalog.map((feature) => (
-                      <label key={feature.code} className="field-radio-option">
-                        <input
-                          type="checkbox"
-                          checked={selectedFeatures.has(feature.code)}
-                          onChange={() => toggleFeature(feature.code)}
-                        />
-                        <span>
-                          <strong>{feature.name}</strong>
-                          {feature.description ? <div className="muted">{feature.description}</div> : null}
-                        </span>
-                      </label>
-                    ))
-                  )}
-                </div>
-                <div className="table-actions table-actions-start">
-                  <button type="submit" className="button-secondary" disabled={featuresBusy}>
-                    {featuresBusy ? "Wird gespeichert…" : "Features speichern"}
-                  </button>
-                </div>
-              </form>
             )
           }
         ]}

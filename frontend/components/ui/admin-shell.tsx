@@ -2,32 +2,138 @@
 
 import Link from "next/link";
 import type { Route } from "next";
-import { ReactNode, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { browserApiFetch } from "@/lib/api/client";
 import { ToastProvider } from "@/contexts/toast-context";
 import { ConfirmProvider } from "@/contexts/confirm-context";
-import { AdminSessionInfo } from "@/types/api";
+import { AdminSessionInfo, AdminTenantPage } from "@/types/api";
 import { CopyrightNotice } from "@/components/ui/copyright-notice";
 
-const navLinks = [
-  { href: "/admin", label: "Dashboard" },
-  { href: "/admin/tenants", label: "Mandanten" },
-  { href: "/admin/plans", label: "Preise" },
-  { href: "/admin/users", label: "Benutzer" },
-  { href: "/admin/domains", label: "Domains" },
-  { href: "/admin/error-logs", label: "Fehlerprotokoll" },
-  { href: "/admin/upload-pipeline", label: "Datei-Pipeline" },
-  { href: "/admin/admins", label: "Admin-Accounts" },
-  { href: "/admin/sso", label: "SSO" },
-  { href: "/admin/security", label: "Sicherheit" },
+type AdminIconKey = "dashboard" | "tenants" | "pricing" | "users" | "domains" | "errors" | "pipeline" | "admins" | "sso" | "security";
+
+type AdminNavLink = { href: string; label: string; icon: AdminIconKey; badge?: "count" | "new" };
+
+const navGroups: { title: string | null; links: AdminNavLink[] }[] = [
+  { title: null, links: [{ href: "/admin", label: "Dashboard", icon: "dashboard" }] },
+  {
+    title: "Mandanten",
+    links: [
+      { href: "/admin/tenants", label: "Mandanten", icon: "tenants", badge: "count" },
+      { href: "/admin/plans", label: "Preise", icon: "pricing", badge: "new" },
+      { href: "/admin/users", label: "Benutzer", icon: "users" },
+      { href: "/admin/domains", label: "Domains", icon: "domains" },
+    ],
+  },
+  {
+    title: "System",
+    links: [
+      { href: "/admin/error-logs", label: "Fehlerprotokoll", icon: "errors" },
+      { href: "/admin/upload-pipeline", label: "Datei-Pipeline", icon: "pipeline" },
+    ],
+  },
+  {
+    title: "Zugang",
+    links: [
+      { href: "/admin/admins", label: "Admin-Accounts", icon: "admins" },
+      { href: "/admin/sso", label: "SSO", icon: "sso" },
+      { href: "/admin/security", label: "Sicherheit", icon: "security" },
+    ],
+  },
 ];
+
+const allNavLinks = navGroups.flatMap((group) => group.links);
+
+function isActiveLink(href: string, pathname: string): boolean {
+  return pathname === href || (href !== "/admin" && pathname.startsWith(`${href}/`));
+}
+
+/** Linienicons im Stil von nav-icons.tsx, nur für die Admin-Navigation. */
+function AdminNavIcon({ name }: { name: AdminIconKey }) {
+  const paths: Record<AdminIconKey, ReactNode> = {
+    dashboard: (
+      <>
+        <rect x="3.5" y="3.5" width="7.5" height="7.5" rx="1.5" />
+        <rect x="13" y="3.5" width="7.5" height="7.5" rx="1.5" />
+        <rect x="3.5" y="13" width="7.5" height="7.5" rx="1.5" />
+        <rect x="13" y="13" width="7.5" height="7.5" rx="1.5" />
+      </>
+    ),
+    tenants: (
+      <>
+        <path d="M4 20V10l8-5.5L20 10v10" />
+        <path d="M9.5 20v-6h5v6M3 20h18" />
+      </>
+    ),
+    pricing: (
+      <>
+        <path d="M3.5 12.2V4.5a1 1 0 011-1h7.7l8.3 8.3a1.5 1.5 0 010 2.1l-6.4 6.4a1.5 1.5 0 01-2.1 0z" />
+        <circle cx="8" cy="8" r="1.4" />
+      </>
+    ),
+    users: (
+      <>
+        <circle cx="9" cy="8" r="3.5" />
+        <path d="M2.5 20c.6-3.4 3.2-5.5 6.5-5.5s5.9 2.1 6.5 5.5" />
+        <path d="M15.5 4.8a3.5 3.5 0 010 6.4M18 14.8c1.9.7 3.2 2.5 3.5 5.2" />
+      </>
+    ),
+    domains: (
+      <>
+        <circle cx="12" cy="12" r="8.5" />
+        <path d="M3.5 12h17M12 3.5c2.3 2.4 3.4 5.2 3.4 8.5s-1.1 6.1-3.4 8.5c-2.3-2.4-3.4-5.2-3.4-8.5s1.1-6.1 3.4-8.5z" />
+      </>
+    ),
+    errors: (
+      <>
+        <path d="M10.3 4.2L2.8 17.5a2 2 0 001.7 3h15a2 2 0 001.7-3L13.7 4.2a2 2 0 00-3.4 0z" />
+        <path d="M12 9.5v4M12 17h.01" />
+      </>
+    ),
+    pipeline: (
+      <>
+        <path d="M4 7h9M17 7h3M4 17h3M11 17h9M4 12h13M21 12h-.5" />
+        <circle cx="15" cy="7" r="2" />
+        <circle cx="9" cy="17" r="2" />
+        <circle cx="19" cy="12" r="2" />
+      </>
+    ),
+    admins: <path d="M12 3l7.5 3v5.5c0 4.6-3.1 8.1-7.5 9.5-4.4-1.4-7.5-4.9-7.5-9.5V6z" />,
+    sso: (
+      <>
+        <circle cx="7.5" cy="15.5" r="4" />
+        <path d="M10.4 12.6L20 3M16 7l2.5 2.5M13.5 9.5l2 2" />
+      </>
+    ),
+    security: (
+      <>
+        <rect x="4.5" y="10.5" width="15" height="10" rx="2" />
+        <path d="M8 10.5V7.5a4 4 0 018 0v3" />
+      </>
+    ),
+  };
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" width={18} height={18} aria-hidden="true" className="nav-link-icon">
+      {paths[name]}
+    </svg>
+  );
+}
 
 export function AdminShell({ children, session }: { children: ReactNode; session: AdminSessionInfo }) {
   const pathname = usePathname();
   const router = useRouter();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [tenantTotal, setTenantTotal] = useState<number | null>(null);
+
+  useEffect(() => {
+    // Nur für den Zähler in der Navigation - limit=1 hält die Antwort klein.
+    browserApiFetch<AdminTenantPage>("/api/admin/tenants?limit=1&offset=0")
+      .then((page) => setTenantTotal(page.total))
+      .catch(() => setTenantTotal(null));
+  }, []);
+
+  const activeLink = allNavLinks.find((link) => isActiveLink(link.href, pathname));
   // The backend's require_admin_write already rejects every create/update/delete for a
   // "support"-role admin with a 403 (see core/admin_security.py) - but until this fix,
   // nothing in the frontend ever read session.admin.role at all (audit finding,
@@ -58,48 +164,46 @@ export function AdminShell({ children, session }: { children: ReactNode; session
             </div>
           </div>
           <p className="muted sidebar-copy">Mandanten und Benutzer über das ganze System verwalten.</p>
-          <nav className="sidebar-nav">
-            <div className="nav-links">
-              {navLinks.map((link) => {
-                const isActive = pathname === link.href || (link.href !== "/admin" && pathname.startsWith(`${link.href}/`));
-                return (
-                  <Link
-                    href={link.href as Route}
-                    key={link.href}
-                    className={isActive ? "nav-link nav-link-active" : "nav-link"}
-                    onClick={() => setMobileNavOpen(false)}
-                  >
-                    {link.label}
-                  </Link>
-                );
-              })}
-            </div>
+          <nav className="sidebar-nav admin-sidebar-nav">
+            {navGroups.map((group) => (
+              <div className="admin-nav-group" key={group.title ?? "root"}>
+                {group.title ? <div className="admin-nav-group-title">{group.title}</div> : null}
+                <div className="nav-links">
+                  {group.links.map((link) => (
+                    <Link
+                      href={link.href as Route}
+                      key={link.href}
+                      className={isActiveLink(link.href, pathname) ? "nav-link nav-link-active" : "nav-link"}
+                      onClick={() => setMobileNavOpen(false)}
+                    >
+                      <AdminNavIcon name={link.icon} />
+                      <span className="nav-link-label">{link.label}</span>
+                      {link.badge === "count" && tenantTotal !== null ? <span className="admin-nav-count">{tenantTotal}</span> : null}
+                      {link.badge === "new" ? <span className="admin-nav-new">Neu</span> : null}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ))}
           </nav>
           <div className="sidebar-footer">
-            <div className="identity-panel">
-              <div className="identity-card">
-                <div className="identity-button">
-                  <div className="identity-avatar identity-avatar-user">
-                    <span>{session.admin?.display_name?.slice(0, 1) ?? "A"}</span>
-                  </div>
-                  <div>
-                    <div className="identity-heading">
-                      <span className="eyebrow">Admin</span>
-                    </div>
-                    <strong>{session.admin?.display_name ?? "..."}</strong>
-                    <div className="identity-subtle">{session.admin?.email}</div>
-                  </div>
-                </div>
-                <button type="button" className="button-ghost" onClick={() => void logout()}>
-                  Logout
-                </button>
+            <div className="admin-identity">
+              <div className="identity-avatar admin-identity-avatar">
+                <span>{session.admin?.display_name?.slice(0, 1) ?? "A"}</span>
               </div>
+              <div className="admin-identity-copy">
+                <strong>{session.admin?.display_name ?? "..."}</strong>
+                <div className="identity-subtle">{session.admin?.email}</div>
+              </div>
+              <button type="button" className="button-ghost admin-identity-logout" onClick={() => void logout()}>
+                Logout
+              </button>
             </div>
             <CopyrightNotice />
           </div>
         </aside>
         <div className="shell-main">
-          <header className="topbar">
+          <header className="topbar admin-topbar">
             <button
               type="button"
               className="button-ghost mobile-nav-toggle"
@@ -107,7 +211,19 @@ export function AdminShell({ children, session }: { children: ReactNode; session
             >
               {mobileNavOpen ? "Schliessen" : "☰"}
             </button>
-            <h1 className="topbar-title">Platform-Admin</h1>
+            <nav className="topbar-breadcrumb admin-breadcrumb" aria-label="Brotkrumen">
+              {activeLink && activeLink.href !== "/admin" ? (
+                <>
+                  <Link href="/admin" className="topbar-breadcrumb-group">
+                    Platform-Admin
+                  </Link>
+                  <span className="topbar-breadcrumb-sep" aria-hidden="true">/</span>
+                  <span aria-current="page">{activeLink.label}</span>
+                </>
+              ) : (
+                <span aria-current="page">Platform-Admin</span>
+              )}
+            </nav>
           </header>
           {isReadOnlyAdmin && (
             <div className="admin-readonly-banner">

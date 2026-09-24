@@ -99,7 +99,11 @@ export function TenantDomainsManager({ initialTenant }: Props) {
               </button>
             ) : undefined
           }
-          hint="Bis dahin bleibt der Mandant unter der Standard-Adresse erreichbar."
+          hint={
+            hasCustomDomainFeature
+              ? "Bis dahin bleibt der Mandant unter der Standard-Adresse erreichbar."
+              : "Eigene Domains müssen zum Abo dazugebucht werden (Tab «Abo & Nutzung»). Bis dahin bleibt der Mandant unter der Standard-Adresse erreichbar."
+          }
         />
       ) : (
         <section className="card">
