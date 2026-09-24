@@ -7,7 +7,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import UploadFile
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -119,6 +119,8 @@ class AdminTenantService:
             effective_storage_quota_bytes=tenant.storage_quota_bytes,
             storage_quota_manual_override=tenant.storage_quota_manual_override,
             assigned_storage_packages=assigned_storage_packages,
+            discount_percent=tenant.discount_percent,
+            billing_note=tenant.billing_note,
         )
 
     def _assigned_storage_packages(self, db: Session, tenant_id: int) -> list[AdminTenantStoragePackageRead]:
@@ -133,13 +135,19 @@ class AdminTenantService:
             for code, quantity, name, pkg_bytes in rows
         ]
 
-    def list_tenants(self, db: Session, *, limit: int | None = None, offset: int = 0, q: str | None = None) -> AdminTenantPage:
+    def list_tenants(
+        self, db: Session, *, limit: int | None = None, offset: int = 0, q: str | None = None, plan_code: str | None = None
+    ) -> AdminTenantPage:
         query = db.query(Tenant).order_by(Tenant.name.asc())
         # Applied before the offset/limit slice (audit A1, 2026-08-16) - the frontend used
         # to filter only the already-fetched current page, so a match on a later page was
         # invisible while browsing an earlier one.
         if q and q.strip():
-            query = query.filter(Tenant.name.ilike(f"%{q.strip()}%"))
+            pattern = f"%{q.strip()}%"
+            query = query.filter(or_(Tenant.name.ilike(pattern), Tenant.public_slug.ilike(pattern)))
+        # Plan-Filter der Mandantenliste (Chips "Alle / <Plan>") - ebenfalls vor der Paginierung.
+        if plan_code:
+            query = query.filter(Tenant.plan_code == plan_code)
         total = query.count()
         query = query.offset(offset)
         if limit is not None:
@@ -209,10 +217,12 @@ class AdminTenantService:
             standalone_price_monthly_rp=feature.standalone_price_monthly_rp,
         )
 
-    def _plan_read_model(self, db: Session, plan: Plan) -> AdminPlanRead:
+    def _plan_read_model(self, db: Session, plan: Plan, *, tenant_count: int | None = None) -> AdminPlanRead:
         feature_codes = sorted(
             db.scalars(select(PlanFeature.feature_code).where(PlanFeature.plan_code == plan.code))
         )
+        if tenant_count is None:
+            tenant_count = int(db.scalar(select(func.count(Tenant.id)).where(Tenant.plan_code == plan.code)) or 0)
         return AdminPlanRead(
             code=plan.code,
             name=plan.name,
@@ -222,6 +232,9 @@ class AdminTenantService:
             included_storage_bytes=plan.included_storage_bytes,
             sort_order=plan.sort_order,
             feature_codes=feature_codes,
+            description=plan.description,
+            is_bookable=plan.is_bookable,
+            tenant_count=tenant_count,
         )
 
     def list_plans(self, db: Session) -> list[AdminPlanRead]:
@@ -233,7 +246,10 @@ class AdminTenantService:
             )
             .all()
         )
-        return [self._plan_read_model(db, plan) for plan in plans]
+        tenant_counts = dict(
+            db.execute(select(Tenant.plan_code, func.count(Tenant.id)).where(Tenant.plan_code.is_not(None)).group_by(Tenant.plan_code)).all()
+        )
+        return [self._plan_read_model(db, plan, tenant_count=int(tenant_counts.get(plan.code, 0))) for plan in plans]
 
     @staticmethod
     def _generate_code(db: Session, model: type, name: str) -> str:
@@ -247,6 +263,12 @@ class AdminTenantService:
         return code
 
     def create_plan(self, db: Session, payload: AdminPlanWrite) -> AdminPlanRead:
+        """Legt einen neuen Plan an. Ein vorgegebener Code darf noch nicht existieren (ValueError),
+        sonst wuerde "Plan anlegen" still einen bestehenden Plan ueberschreiben."""
+        if payload.code:
+            if db.get(Plan, payload.code) is not None:
+                raise ValueError(f"Plan-Code '{payload.code}' ist bereits vergeben")
+            return self.upsert_plan(db, payload.code, payload)
         return self.upsert_plan(db, self._generate_code(db, Plan, payload.name), payload)
 
     def upsert_plan(self, db: Session, code: str, payload: AdminPlanWrite) -> AdminPlanRead:
@@ -259,6 +281,8 @@ class AdminTenantService:
         plan.included_user_limit = payload.included_user_limit
         plan.included_storage_bytes = payload.included_storage_bytes
         plan.sort_order = payload.sort_order
+        plan.description = (payload.description or "").strip() or None
+        plan.is_bookable = payload.is_bookable
         db.add(plan)
         db.flush()
 
@@ -275,14 +299,21 @@ class AdminTenantService:
         return self._plan_read_model(db, plan)
 
     def update_tenant_subscription(
-        self, db: Session, tenant_id: int, payload: AdminTenantSubscriptionUpdate, *, admin_id: int
+        self, db: Session, tenant_id: int, payload: AdminTenantSubscriptionUpdate, *, admin_id: int | None
     ) -> AdminTenantRead | None:
         tenant = db.get(Tenant, tenant_id)
         if tenant is None:
             return None
+        # Same validation as create_tenant - without it, an unknown/typo'd plan_code relied
+        # entirely on the plan_code FK constraint to reject the commit below, surfacing as an
+        # unhandled 500 instead of a clean 4xx (hardening fix, audit 2026-09-24).
+        if payload.plan_code is not None and db.get(Plan, payload.plan_code) is None:
+            raise ValueError(f"Plan '{payload.plan_code}' existiert nicht")
         tenant.plan_code = payload.plan_code
         tenant.billing_cycle = payload.billing_cycle
         tenant.user_limit_override = payload.user_limit_override
+        tenant.discount_percent = payload.discount_percent
+        tenant.billing_note = (payload.billing_note or "").strip() or None
         db.add(tenant)
         db.flush()
 
@@ -414,14 +445,32 @@ class AdminTenantService:
             return None
         return self._read_model(db, tenant)
 
-    def create_tenant(self, db: Session, payload: AdminTenantCreate) -> AdminTenantRead:
-        tenant = Tenant(name=payload.name, profile_image_path=None)
+    def create_tenant(self, db: Session, payload: AdminTenantCreate, *, admin_id: int | None = None) -> AdminTenantRead:
+        """Legt einen Mandanten an. Ungueltiger Plan oder vergebener Slug -> ValueError (die
+        Route macht daraus eine lesbare 4xx-Meldung statt des generischen DB-Fehlers)."""
+        public_slug = (payload.public_slug or "").strip() or None
+        if public_slug is not None and db.scalar(select(Tenant.id).where(Tenant.public_slug == public_slug)) is not None:
+            raise ValueError(f"Der Slug '{public_slug}' ist bereits vergeben")
+        if payload.plan_code is not None and db.get(Plan, payload.plan_code) is None:
+            raise ValueError(f"Plan '{payload.plan_code}' existiert nicht")
+        tenant = Tenant(name=payload.name, profile_image_path=None, public_slug=public_slug)
         db.add(tenant)
         db.commit()
         db.refresh(tenant)
         self.document_template_service.ensure_default_template_for_tenant(db, tenant.id, tenant.name)
         # Every new tenant starts with a default Abgabe link (preselected for new Abgaben).
         submission_link_service.create_default_link(db, tenant.id)
+        if payload.plan_code is not None:
+            # Gleicher Weg wie ein Plan-Wechsel im Adminportal: Plan-Module als Baseline
+            # eintragen und das Speicherkontingent aus dem Plan ableiten.
+            result = self.update_tenant_subscription(
+                db,
+                tenant.id,
+                AdminTenantSubscriptionUpdate(plan_code=payload.plan_code, billing_cycle=payload.billing_cycle),
+                admin_id=admin_id,
+            )
+            if result is not None:
+                return result
         return self._read_model(db, tenant)
 
     async def update_tenant(

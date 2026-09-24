@@ -4,12 +4,45 @@ keeps Tenant.storage_quota_bytes in sync with plan + assigned packages, unless a
 a manual override (storage_quota_manual_override)."""
 from __future__ import annotations
 
+import importlib.util
+from pathlib import Path
+
+import pytest
+import sqlalchemy as sa
+from pydantic import ValidationError
+
 from app.schemas.admin import AdminPlanWrite, AdminStoragePackageWrite, AdminTenantStoragePackageItem, AdminTenantSubscriptionUpdate
 from app.services.admin_tenant_service import AdminTenantService
 from app.services.storage_service import StorageService
 
 from tests.factories import make_tenant
 from tests.test_admin_plan_pricing import make_platform_admin
+
+_MIGRATION_0088_PATH = (
+    Path(__file__).resolve().parents[1] / "alembic/versions/0088_remove_manual_storage_quota.py"
+)
+
+
+def _load_migration_0088_reset_sql() -> str:
+    """The migration file's module name starts with a digit, so it can't be `import`ed normally -
+    load it by path instead, the same way Alembic itself resolves version files, to get the exact
+    SQL text 0088's upgrade() runs (RESET_GRANTED_OVERRIDES_SQL) without duplicating it here."""
+    spec = importlib.util.spec_from_file_location("migration_0088", _MIGRATION_0088_PATH)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.RESET_GRANTED_OVERRIDES_SQL
+
+
+def test_storage_package_write_rejects_negative_bytes_and_prices():
+    """Hardening fix (audit 2026-09-24): AdminStoragePackageWrite had no lower bound on
+    bytes/price fields, unlike sibling schemas (AdminTenantStorageQuotaUpdate.quota_mb,
+    AdminTenantSubscriptionUpdate.discount_percent) - a negative package size could drive
+    recompute_effective_storage_quota's sum negative. Only reachable by a platform-admin-owner,
+    but should fail validation the same way as everywhere else."""
+    with pytest.raises(ValidationError):
+        AdminStoragePackageWrite(name="Bad Package", bytes=-1, price_monthly_rp=None, price_yearly_rp=None)
+    with pytest.raises(ValidationError):
+        AdminStoragePackageWrite(name="Bad Package", bytes=1000, price_monthly_rp=-500, price_yearly_rp=None)
 
 
 def test_upsert_storage_package_creates_and_updates(db):
@@ -162,6 +195,87 @@ def test_clearing_manual_quota_falls_back_to_plan_and_package_total(db):
     assert result is not None
     assert result.storage_quota_bytes == 2000
     assert result.storage_quota_manual_override is False
+
+
+def test_migration_0088_resets_only_overrides_that_were_grants(db):
+    """Security fix (audit 2026-09-24): migration 0088's blanket reset used to widen ANY manual
+    override back to the auto-computed plan+package total, even one an admin had set BELOW that
+    total as a deliberate restriction (e.g. a billing/abuse measure) - silently granting that
+    tenant more storage at deploy time. It must now only reset an override that was a grant
+    (current value >= the computed total)."""
+    admin_service = AdminTenantService()
+    storage_service = StorageService()
+    admin = make_platform_admin(db)
+    granted_tenant = make_tenant(db, name="Granted Override Tenant")
+    restricted_tenant = make_tenant(db, name="Restricted Override Tenant")
+
+    admin_service.upsert_plan(
+        db,
+        "test_plan_storage_migration_0088",
+        AdminPlanWrite(
+            name="Plan 0088", price_monthly_rp=None, price_yearly_rp=None,
+            included_user_limit=None, included_storage_bytes=1000, sort_order=0, feature_codes=[],
+        ),
+    )
+    for tenant in (granted_tenant, restricted_tenant):
+        admin_service.update_tenant_subscription(
+            db, tenant.id,
+            AdminTenantSubscriptionUpdate(plan_code="test_plan_storage_migration_0088", billing_cycle="monthly", user_limit_override=None),
+            admin_id=admin.id,
+        )
+
+    # Granted: admin raised this tenant's quota above the plan's 1000 bytes (e.g. an enterprise
+    # deal) - the migration should reset this to the auto-computed total.
+    storage_service.set_quota(db, granted_tenant.id, 999_999)
+    # Restricted: admin capped this tenant BELOW the plan's 1000 bytes (e.g. a billing dispute) -
+    # the migration must leave this alone.
+    storage_service.set_quota(db, restricted_tenant.id, 100)
+    db.flush()
+
+    db.execute(sa.text(_load_migration_0088_reset_sql()))
+
+    reset_result = admin_service.get_tenant(db, granted_tenant.id)
+    assert reset_result is not None
+    assert reset_result.storage_quota_manual_override is False
+    assert reset_result.storage_quota_bytes == 1000
+
+    preserved_result = admin_service.get_tenant(db, restricted_tenant.id)
+    assert preserved_result is not None
+    assert preserved_result.storage_quota_manual_override is True
+    assert preserved_result.storage_quota_bytes == 100
+
+
+def test_migration_0088_preserves_restrictive_override_when_plan_would_be_unlimited(db):
+    """A plan+packages total of "unbegrenzt" (None) means any existing finite manual override was
+    necessarily a deliberate restriction, never a grant - the migration must not widen it to
+    unlimited."""
+    admin_service = AdminTenantService()
+    storage_service = StorageService()
+    admin = make_platform_admin(db)
+    tenant = make_tenant(db)
+
+    admin_service.upsert_plan(
+        db,
+        "test_plan_storage_migration_0088_unlimited",
+        AdminPlanWrite(
+            name="Plan 0088 Unlimited", price_monthly_rp=None, price_yearly_rp=None,
+            included_user_limit=None, included_storage_bytes=None, sort_order=0, feature_codes=[],
+        ),
+    )
+    admin_service.update_tenant_subscription(
+        db, tenant.id,
+        AdminTenantSubscriptionUpdate(plan_code="test_plan_storage_migration_0088_unlimited", billing_cycle="monthly", user_limit_override=None),
+        admin_id=admin.id,
+    )
+    storage_service.set_quota(db, tenant.id, 50_000)
+    db.flush()
+
+    db.execute(sa.text(_load_migration_0088_reset_sql()))
+
+    result = admin_service.get_tenant(db, tenant.id)
+    assert result is not None
+    assert result.storage_quota_manual_override is True
+    assert result.storage_quota_bytes == 50_000
 
 
 def test_create_storage_package_generates_unique_code_from_name(db):

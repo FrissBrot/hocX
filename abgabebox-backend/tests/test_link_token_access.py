@@ -110,8 +110,15 @@ def test_token_lookup_selects_only_the_granted_columns():
 
 
 def test_public_slug_of_the_tenant_is_no_longer_read_at_all():
-    assert not hasattr(models, "tenant_table")
+    """The tenant's public_slug/name must never be readable here - it was removed as an access
+    credential and must not come back through some other door. tenant_table itself is now
+    allowed to exist again (0090_abgabebox_quota_grant: the tenant's own effective storage quota,
+    needed so the upload quota check here matches the plan+package quota the main backend
+    enforces - see routes/public.py's _effective_upload_quota_bytes), but only with the exact
+    columns that migration grants."""
     assert not hasattr(repository, "get_tenant_by_slug")
+    if hasattr(models, "tenant_table"):
+        assert {c.name for c in models.tenant_table.c} == {"id", "storage_quota_bytes"}
 
 
 def test_captcha_session_token_is_bound_to_the_link(monkeypatch):

@@ -145,9 +145,10 @@ def list_tenants(
     limit: int | None = Query(None, gt=0, le=500),
     offset: int = Query(0, ge=0),
     q: str | None = Query(None),
+    plan: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
-    return tenant_service.list_tenants(db, limit=limit, offset=offset, q=q)
+    return tenant_service.list_tenants(db, limit=limit, offset=offset, q=q, plan_code=plan)
 
 
 @router.get("/domains", response_model=AdminDomainPage)
@@ -230,14 +231,17 @@ def create_tenant(
     current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
     try:
-        tenant = tenant_service.create_tenant(db, payload)
+        tenant = tenant_service.create_tenant(db, payload, admin_id=current_admin.admin_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Tenant could not be created") from exc
     internal_tenant_id = public_id_service.resolve_internal_id(db, Tenant, tenant.id)
     audit.log(
         db, action="admin.tenant_created", actor_email=current_admin.email, tenant_id=internal_tenant_id,
-        entity_type="tenant", entity_id=internal_tenant_id, details={"name": payload.name},
+        entity_type="tenant", entity_id=internal_tenant_id,
+        details={"name": payload.name, "public_slug": payload.public_slug, "plan_code": payload.plan_code},
     )
     return tenant
 
@@ -399,8 +403,11 @@ def create_plan(
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
-    # Code wird aus dem Namen abgeleitet - das Adminportal fragt keinen Code mehr ab.
-    result = tenant_service.create_plan(db, payload)
+    # Code optional aus dem Formular, sonst aus dem Namen abgeleitet.
+    try:
+        result = tenant_service.create_plan(db, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     audit.log(
         db, action="admin.plan_upserted", actor_email=current_admin.email,
         entity_type="plan", entity_id=None, details={"code": result.code},
@@ -483,13 +490,24 @@ def update_tenant_subscription(
     current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
     internal_tenant_id = _resolve_tenant_id(db, tenant_id)
-    result = tenant_service.update_tenant_subscription(db, internal_tenant_id, payload, admin_id=current_admin.admin_id)
+    try:
+        result = tenant_service.update_tenant_subscription(db, internal_tenant_id, payload, admin_id=current_admin.admin_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Subscription could not be updated") from exc
     if result is None:
         raise HTTPException(status_code=404, detail="Tenant not found")
     audit.log(
         db, action="admin.tenant_subscription_updated", actor_email=current_admin.email, tenant_id=internal_tenant_id,
         entity_type="tenant", entity_id=internal_tenant_id,
-        details={"plan_code": payload.plan_code, "billing_cycle": payload.billing_cycle, "user_limit_override": payload.user_limit_override},
+        details={
+            "plan_code": payload.plan_code,
+            "billing_cycle": payload.billing_cycle,
+            "user_limit_override": payload.user_limit_override,
+            "discount_percent": payload.discount_percent,
+        },
     )
     return result
 

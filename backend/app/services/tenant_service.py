@@ -117,6 +117,14 @@ class TenantService:
             estimated_monthly_cost_rp = (plan.price_monthly_rp or 0) + extra_monthly_rp
         if plan is not None and (plan.price_yearly_rp is not None or extra_monthly_rp > 0):
             estimated_yearly_cost_rp = (plan.price_yearly_rp or 0) + extra_monthly_rp * 12
+        # Rabatt aus dem Adminportal (0089_plan_catalog_details) - gleiche Rechnung wie die
+        # Kostenvorschau im Admin-Tab "Plan & Abo".
+        if tenant.discount_percent:
+            factor = (100 - tenant.discount_percent) / 100
+            if estimated_monthly_cost_rp is not None:
+                estimated_monthly_cost_rp = round(estimated_monthly_cost_rp * factor)
+            if estimated_yearly_cost_rp is not None:
+                estimated_yearly_cost_rp = round(estimated_yearly_cost_rp * factor)
 
         user_count = int(
             db.scalar(select(func.count(AppUser.id)).where(AppUser.tenant_id == tenant_id, AppUser.is_active.is_(True))) or 0
@@ -253,6 +261,13 @@ class TenantService:
 
     def verify_domain(self, db: Session, tenant_id: int, actor: CurrentUser, domain_id: int) -> TenantDomainRead:
         self._require_manageable(tenant_id, actor)
+        # Gated same as create_domain (security fix, audit 2026-09-24): activating a pending
+        # domain is the feature's actual value, not incidental - without this check, a tenant
+        # could create a pending domain while custom_domain was booked, lose the feature (plan
+        # downgrade/admin revoke), and still activate it afterwards via this route. Only
+        # delete_domain stays deliberately ungated, so an existing domain remains removable after
+        # a downgrade.
+        require_feature(actor, "custom_domain")
         row = db.query(TenantDomain).filter(TenantDomain.id == domain_id, TenantDomain.tenant_id == tenant_id).one_or_none()
         if row is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Domain nicht gefunden")

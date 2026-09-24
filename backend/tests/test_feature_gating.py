@@ -13,7 +13,9 @@ from app.core.security import (
     require_finance_read,
     require_finance_write,
 )
+from app.models.entities import TenantDomain
 from app.schemas.user import TenantDomainCreate
+from app.services import public_id_service
 from app.services.tenant_service import TenantService
 from tests.factories import make_current_user, make_tenant
 
@@ -113,3 +115,23 @@ def test_default_factory_user_has_custom_domain_booked():
     migration 0086's backfill: every pre-existing tenant keeps its Self-Service domain setup."""
     user = make_current_user(tenant_id=1, role="admin")
     assert require_feature(user, "custom_domain") is user
+
+
+def test_verify_domain_blocked_when_custom_domain_revoked_after_pending_domain_created(db):
+    """Security fix (audit 2026-09-24): verify_domain used to have no feature check at all, only
+    create_domain did. A tenant could create a pending domain while custom_domain was booked, have
+    the feature revoked (plan downgrade/admin action), and still activate it afterwards via
+    POST .../verify - permanently keeping a paid feature without the entitlement. The check must
+    reject before any DNS verification is attempted (this test would otherwise try real network
+    I/O), so it sits right after _require_manageable, same position as in create_domain."""
+    tenant = make_tenant(db)
+    booked_actor = make_current_user(tenant_id=tenant.id, role="admin", features=frozenset({"custom_domain"}))
+    created = TenantService().create_domain(
+        db, tenant.id, booked_actor, TenantDomainCreate(purpose="app", domain="app.example.com")
+    )
+    domain_internal_id = public_id_service.resolve_internal_id(db, TenantDomain, created.id)
+
+    revoked_actor = make_current_user(tenant_id=tenant.id, role="admin", features=frozenset())
+    with pytest.raises(HTTPException) as exc_info:
+        TenantService().verify_domain(db, tenant.id, revoked_actor, domain_internal_id)
+    assert exc_info.value.status_code == 403

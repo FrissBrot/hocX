@@ -51,6 +51,17 @@ tenant_feature_table = Table(
     Column("feature_code", Text),
 )
 
+# tenant: die restricted Rolle darf nur (id, storage_quota_bytes) lesen (Migration
+# 0090_abgabebox_tenant_storage_quota_grant) - das effektive, aus Plan+Paketen bzw. einer
+# manuellen Ueberschreibung berechnete Kontingent, fuer den Upload-Quota-Check in routes/public.py.
+# Kein Zugriff auf Name/Slug/Pricing-Felder.
+tenant_table = Table(
+    "tenant",
+    metadata,
+    Column("id", BigInteger, primary_key=True),
+    Column("storage_quota_bytes", BigInteger),
+)
+
 submission_assignment_table = Table(
     "submission_assignment",
     metadata,

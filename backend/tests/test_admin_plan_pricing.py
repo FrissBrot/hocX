@@ -4,9 +4,12 @@ seeded catalog rows (migrations 0084/0085), so these tests reuse them instead of
 throwaway features - only the plan itself is test-local."""
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
 from app.core.security import CurrentUser
 from app.models.entities import Feature, PlatformAdmin, TenantFeature
-from app.schemas.admin import AdminFeatureUpdate, AdminPlanWrite, AdminTenantSubscriptionUpdate
+from app.schemas.admin import AdminFeatureUpdate, AdminPlanWrite, AdminTenantCreate, AdminTenantSubscriptionUpdate
 from app.services.admin_tenant_service import AdminTenantService
 from app.services.tenant_service import TenantService
 
@@ -18,6 +21,18 @@ def make_platform_admin(db, email="pricing-admin@example.com") -> PlatformAdmin:
     db.add(admin)
     db.flush()
     return admin
+
+
+def test_plan_write_rejects_negative_price_and_limit_fields():
+    """Hardening fix (audit 2026-09-24): AdminPlanWrite had no lower bound on its price/limit
+    fields, unlike sibling schemas (AdminTenantStorageQuotaUpdate.quota_mb,
+    AdminTenantSubscriptionUpdate.discount_percent). Only reachable by a platform-admin-owner,
+    but should fail validation the same way as everywhere else instead of persisting a negative
+    price/limit that then flows into cost/quota calculations."""
+    with pytest.raises(ValidationError):
+        AdminPlanWrite(name="Bad Plan", price_monthly_rp=-100, price_yearly_rp=None, included_user_limit=None, included_storage_bytes=None, sort_order=0, feature_codes=[])
+    with pytest.raises(ValidationError):
+        AdminPlanWrite(name="Bad Plan", price_monthly_rp=None, price_yearly_rp=None, included_user_limit=None, included_storage_bytes=-1, sort_order=0, feature_codes=[])
 
 
 def test_upsert_plan_creates_and_updates_with_feature_bundle(db):
@@ -183,3 +198,134 @@ def test_tenant_subscription_view_computes_estimated_cost_including_extra_featur
         assert feature_by_code["abgabebox"].standalone_price_monthly_rp == 200
     finally:
         admin_service.update_feature(db, "abgabebox", AdminFeatureUpdate(name="Abgabebox", description=None, standalone_price_monthly_rp=None))
+
+
+def _plan_write(**overrides) -> AdminPlanWrite:
+    values = dict(
+        name="Katalog Plan",
+        price_monthly_rp=1000,
+        price_yearly_rp=10000,
+        included_user_limit=5,
+        included_storage_bytes=1_000_000,
+        sort_order=0,
+        feature_codes=["finance"],
+    )
+    values.update(overrides)
+    return AdminPlanWrite(**values)
+
+
+def test_plan_description_bookable_and_tenant_count(db):
+    """0089_plan_catalog_details: Beschreibung/Status werden gespeichert, tenant_count zählt die
+    Mandanten des Plans, und der Plan-Filter der Mandantenliste greift vor der Paginierung."""
+    service = AdminTenantService()
+    admin = make_platform_admin(db)
+    service.upsert_plan(db, "test_plan_cat", _plan_write(description="  Für Tests  ", is_bookable=False))
+    tenant = make_tenant(db, name="Plan Count Tenant")
+    make_tenant(db, name="Other Tenant")
+    service.update_tenant_subscription(
+        db, tenant.id, AdminTenantSubscriptionUpdate(plan_code="test_plan_cat"), admin_id=admin.id
+    )
+
+    plan = {p.code: p for p in service.list_plans(db)}["test_plan_cat"]
+    assert plan.description == "Für Tests"
+    assert plan.is_bookable is False
+    assert plan.tenant_count == 1
+
+    page = service.list_tenants(db, plan_code="test_plan_cat")
+    assert [t.name for t in page.items] == ["Plan Count Tenant"]
+    assert page.total == 1
+
+
+def test_create_plan_with_explicit_code_rejects_duplicates(db):
+    service = AdminTenantService()
+    created = service.create_plan(db, _plan_write(name="Irgendwas", code="test_code_explicit"))
+    assert created.code == "test_code_explicit"
+    try:
+        service.create_plan(db, _plan_write(name="Nochmal", code="test_code_explicit"))
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Doppelter Plan-Code muss abgelehnt werden")
+
+
+def test_create_tenant_with_plan_slug_and_billing(db):
+    service = AdminTenantService()
+    admin = make_platform_admin(db)
+    service.upsert_plan(db, "test_plan_new_tenant", _plan_write(feature_codes=["finance"]))
+
+    created = service.create_tenant(
+        db,
+        AdminTenantCreate(name="Neuer Verein", public_slug="neuer-verein-test", plan_code="test_plan_new_tenant", billing_cycle="yearly"),
+        admin_id=admin.id,
+    )
+    assert created.public_slug == "neuer-verein-test"
+    assert created.plan_code == "test_plan_new_tenant"
+    assert created.billing_cycle == "yearly"
+    assert "finance" in created.enabled_features
+    assert created.storage_quota_bytes == 1_000_000
+
+    try:
+        service.create_tenant(db, AdminTenantCreate(name="Kollision", public_slug="neuer-verein-test"))
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Vergebener Slug muss abgelehnt werden")
+
+
+def test_discount_and_note_are_stored_and_reduce_estimated_cost(db):
+    admin_service = AdminTenantService()
+    tenant_service = TenantService()
+    admin = make_platform_admin(db)
+    tenant = make_tenant(db)
+    admin_service.upsert_plan(db, "test_plan_discount", _plan_write(price_monthly_rp=2000, price_yearly_rp=20000, feature_codes=[]))
+
+    updated = admin_service.update_tenant_subscription(
+        db,
+        tenant.id,
+        AdminTenantSubscriptionUpdate(plan_code="test_plan_discount", discount_percent=25, billing_note=" Vereinsrabatt bis 2027 "),
+        admin_id=admin.id,
+    )
+    assert updated is not None
+    assert updated.discount_percent == 25
+    assert updated.billing_note == "Vereinsrabatt bis 2027"
+
+    actor = CurrentUser(
+        user_id=1,
+        user_public_id=tenant.public_id,
+        first_name="Test",
+        last_name="Admin",
+        display_name="Test Admin",
+        email="test@example.com",
+        preferred_language="de",
+        is_participant_account=False,
+        current_tenant_id=tenant.id,
+        current_tenant_public_id=tenant.public_id,
+        current_tenant_name=tenant.name,
+        current_tenant_profile_image_path=None,
+        current_role="admin",
+        current_tenant_features=frozenset(),
+    )
+    subscription = tenant_service.get_subscription(db, tenant.id, actor)
+    assert subscription is not None
+    assert subscription.estimated_monthly_cost_rp == 1500
+    assert subscription.estimated_yearly_cost_rp == 15000
+
+
+def test_update_tenant_subscription_rejects_unknown_plan_code(db):
+    """Hardening fix (audit 2026-09-24): update_tenant_subscription used to assign
+    payload.plan_code straight onto the tenant with no existence check (unlike create_tenant,
+    which already validates this) - an unknown/typo'd code relied entirely on the plan_code FK
+    constraint to fail the commit, surfacing as an unhandled IntegrityError instead of a clean
+    validation error. Only reachable by an already-authenticated platform-admin-owner (not a
+    tenant-facing bypass), but should fail predictably like every other admin-input path."""
+    admin_service = AdminTenantService()
+    admin = make_platform_admin(db)
+    tenant = make_tenant(db)
+
+    with pytest.raises(ValueError, match="existiert nicht"):
+        admin_service.update_tenant_subscription(
+            db,
+            tenant.id,
+            AdminTenantSubscriptionUpdate(plan_code="does_not_exist", billing_cycle="monthly", user_limit_override=None),
+            admin_id=admin.id,
+        )

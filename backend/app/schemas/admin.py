@@ -60,6 +60,11 @@ class PlatformAdminRead(PublicIdModel):
 
 class AdminTenantCreate(BaseModel):
     name: str
+    # Optional seit dem neuen "Neuer Mandant"-Dialog: Slug, Plan und Abrechnung koennen direkt
+    # beim Anlegen gesetzt werden (sonst wie bisher spaeter in den Mandant-Einstellungen).
+    public_slug: str | None = Field(default=None, pattern=r"^[a-z0-9-]+$")
+    plan_code: str | None = None
+    billing_cycle: Literal["monthly", "yearly"] = "monthly"
 
 
 class AdminTenantStoragePackageRead(BaseModel):
@@ -102,6 +107,8 @@ class AdminTenantRead(BaseModel):
     effective_storage_quota_bytes: int | None = None
     storage_quota_manual_override: bool = False
     assigned_storage_packages: list[AdminTenantStoragePackageRead] = []
+    discount_percent: int = 0
+    billing_note: str | None = None
 
 
 class AdminTenantStorageQuotaUpdate(BaseModel):
@@ -126,7 +133,7 @@ class AdminFeatureUpdate(BaseModel):
     # alles andere wird komplett ersetzt.
     name: str
     description: str | None = None
-    standalone_price_monthly_rp: int | None = None
+    standalone_price_monthly_rp: int | None = Field(default=None, ge=0)
 
 
 class AdminTenantFeaturesUpdate(BaseModel):
@@ -144,18 +151,26 @@ class AdminPlanRead(BaseModel):
     included_storage_bytes: int | None = None
     sort_order: int = 0
     feature_codes: list[str] = []
+    description: str | None = None
+    is_bookable: bool = True
+    # Anzahl Mandanten mit diesem Plan (Karten auf der Preisseite, Filter der Mandantenliste).
+    tenant_count: int = 0
 
 
 class AdminPlanWrite(BaseModel):
     # Full-Replace, auch fuers Anlegen (PUT /api/admin/plans/{code}, Code kommt aus dem Pfad,
     # nicht aus dem Body - analog zu AdminTenantStorageQuotaUpdate).
     name: str
-    price_monthly_rp: int | None = None
-    price_yearly_rp: int | None = None
-    included_user_limit: int | None = None
-    included_storage_bytes: int | None = None
+    price_monthly_rp: int | None = Field(default=None, ge=0)
+    price_yearly_rp: int | None = Field(default=None, ge=0)
+    included_user_limit: int | None = Field(default=None, ge=0)
+    included_storage_bytes: int | None = Field(default=None, ge=0)
     sort_order: int = 0
     feature_codes: list[str] = []
+    description: str | None = None
+    is_bookable: bool = True
+    # Nur bei POST /api/admin/plans ausgewertet: gewuenschter Code. Leer = aus dem Namen erzeugt.
+    code: str | None = Field(default=None, pattern=r"^[a-z0-9_]+$")
 
 
 class AdminStoragePackageRead(BaseModel):
@@ -170,9 +185,9 @@ class AdminStoragePackageRead(BaseModel):
 class AdminStoragePackageWrite(BaseModel):
     # Full-Replace wie bei AdminPlanWrite - der Code (PK) kommt aus dem Pfad.
     name: str
-    bytes: int
-    price_monthly_rp: int | None = None
-    price_yearly_rp: int | None = None
+    bytes: int = Field(ge=0)
+    price_monthly_rp: int | None = Field(default=None, ge=0)
+    price_yearly_rp: int | None = Field(default=None, ge=0)
     sort_order: int = 0
 
 
@@ -191,6 +206,8 @@ class AdminTenantSubscriptionUpdate(BaseModel):
     plan_code: str | None = None
     billing_cycle: Literal["monthly", "yearly"] = "monthly"
     user_limit_override: int | None = None
+    discount_percent: int = Field(default=0, ge=0, le=100)
+    billing_note: str | None = None
 
 
 class AdminTenantPage(BaseModel):
