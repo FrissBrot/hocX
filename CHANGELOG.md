@@ -8,6 +8,14 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+### Behoben
+
+- `deploy.sh` erstellt Traefik neu, wenn sich `infra/traefik/traefik.yml` geändert hat.
+  Bisher lief Traefik nach einem Update mit der alten statischen Konfiguration weiter
+  (u. a. 60-s-`readTimeout`), wodurch grosse Galerie-Uploads mit «Bad Gateway» abbrachen.
+  Beim ersten Deploy mit dieser Version wird Traefik einmalig neu erstellt (kurze
+  Unterbrechung von wenigen Sekunden).
+
 ## [1.1.3] - 2026-09-27
 
 Wartungsrelease auf 1.1.2 mit Feature-Gating und Preiskatalog im Plattform-Admin,

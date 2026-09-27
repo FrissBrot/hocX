@@ -596,6 +596,26 @@ service_exists() {
   "${DC[@]}" config --services | grep -Fxq "$1"
 }
 
+# Traefik liest infra/traefik/traefik.yml (statische Konfiguration: Entrypoints, Timeouts,
+# Provider) nur beim Start, und `compose up -d` erstellt den Container bei einer Aenderung
+# nur des gemounteten Dateiinhalts nicht neu. So lief Prod nach dem Update auf readTimeout 3h
+# weiter mit dem 60-s-Default, und grosse Galerie-Uploads brachen mit 502 ab. Der Hash der
+# zuletzt uebernommenen Datei liegt unter .releases/; weicht er ab (oder fehlt er), wird
+# Traefik neu erstellt. Die dynamische Konfiguration (infra/traefik/dynamic) laedt Traefik
+# per watch selbst nach und braucht das nicht.
+sync_traefik_static_config() {
+  local config="$PROJECT_DIR/infra/traefik/traefik.yml"
+  local state="$PROJECT_DIR/.releases/traefik-static.sha256"
+  local current
+
+  service_exists traefik || return 0
+  current="$(sha256sum "$config" | cut -d' ' -f1)"
+  [ "$(cat "$state" 2> /dev/null)" != "$current" ] || return 0
+  echo "==> [$ENVIRONMENT] Traefik-Konfiguration geaendert - Traefik neu erstellen"
+  "${DC[@]}" up -d --no-deps --force-recreate --pull never traefik || return 1
+  printf '%s\n' "$current" > "$state"
+}
+
 wait_for_exec() {
   local service="$1"
   local description="$2"
@@ -706,6 +726,11 @@ fi
 echo "==> [$ENVIRONMENT] Deploy"
 if ! "${DC[@]}" up -d --pull never; then
   rollback_apps || true
+  exit 1
+fi
+
+if ! sync_traefik_static_config; then
+  echo "Traefik konnte mit der neuen Konfiguration nicht gestartet werden; manueller Eingriff erforderlich." >&2
   exit 1
 fi
 
