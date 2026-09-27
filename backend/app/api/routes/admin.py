@@ -2,7 +2,7 @@ import os
 import tempfile
 import uuid
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
@@ -145,7 +145,7 @@ def list_tenants(
     limit: int | None = Query(None, gt=0, le=500),
     offset: int = Query(0, ge=0),
     q: str | None = Query(None),
-    plan: str | None = Query(None),
+    plan: Annotated[str | None, Query()] = None,
     db: Session = Depends(get_db),
 ):
     return tenant_service.list_tenants(db, limit=limit, offset=offset, q=q, plan_code=plan)
