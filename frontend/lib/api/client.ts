@@ -60,34 +60,84 @@ export async function browserApiFetch<T>(path: string, init?: RequestInit): Prom
     throw new ApiError("Backend nicht erreichbar", "backend");
   }
 
-  if (!response.ok) {
-    const text = await response.text();
-    let message = text || `Request failed with status ${response.status}`;
-    try {
-      const json = JSON.parse(text);
-      if (json?.detail) {
-        if (typeof json.detail === "string") {
-          message = json.detail;
-        } else if (Array.isArray(json.detail)) {
-          message = json.detail
-            .map((e: { msg?: string; loc?: string[] }) => {
-              const field = e.loc ? e.loc.filter((l) => l !== "body").join(".") : null;
-              return field ? `${field}: ${e.msg ?? e}` : (e.msg ?? String(e));
-            })
-            .join(" · ");
-        }
-      }
-    } catch {
-      // keep raw text if not parseable JSON
-    }
-    const kind = response.status === 401 || response.status === 403 ? "auth"
-      : response.status === 409 ? "conflict"
-      : response.status >= 500 ? "backend" : "validation";
-    throw new ApiError(message, kind, response.status);
-  }
+  if (!response.ok) throw errorFromResponse(response.status, await response.text());
 
   if (response.status === 204 || response.headers.get("content-length") === "0") {
     return null as T;
   }
   return (await response.json()) as T;
+}
+
+function errorFromResponse(status: number, text: string): ApiError {
+  let message = text || `Request failed with status ${status}`;
+  try {
+    const json = JSON.parse(text);
+    if (json?.detail) {
+      if (typeof json.detail === "string") {
+        message = json.detail;
+      } else if (Array.isArray(json.detail)) {
+        message = json.detail
+          .map((e: { msg?: string; loc?: string[] }) => {
+            const field = e.loc ? e.loc.filter((l) => l !== "body").join(".") : null;
+            return field ? `${field}: ${e.msg ?? e}` : (e.msg ?? String(e));
+          })
+          .join(" · ");
+      }
+    }
+  } catch {
+    // keep raw text if not parseable JSON
+  }
+  const kind = status === 401 || status === 403 ? "auth"
+    : status === 409 ? "conflict"
+    : status >= 500 ? "backend" : "validation";
+  return new ApiError(message, kind, status);
+}
+
+// POSTs a FormData body like browserApiFetch, but over XMLHttpRequest: fetch() has no
+// upload-progress events, and for a multi-GB ZIP the user needs to see how far the byte
+// transfer has got. Same error mapping as browserApiFetch.
+export function browserApiUpload<T>(
+  path: string,
+  body: FormData,
+  options: { timeoutMs: number; onProgress?: (loaded: number, total: number) => void; signal?: AbortSignal },
+): Promise<T> {
+  if (typeof navigator !== "undefined" && !navigator.onLine) return Promise.reject(new ApiError("Keine Internetverbindung", "offline"));
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${publicApiUrl}${path}`);
+    xhr.withCredentials = true;
+    xhr.timeout = options.timeoutMs;
+    if (options.onProgress) {
+      const onProgress = options.onProgress;
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) onProgress(event.loaded, event.total);
+      };
+    }
+    xhr.onload = () => {
+      if (xhr.status < 200 || xhr.status >= 300) {
+        reject(errorFromResponse(xhr.status, xhr.responseText));
+        return;
+      }
+      if (xhr.status === 204 || !xhr.responseText) {
+        resolve(null as T);
+        return;
+      }
+      try {
+        resolve(JSON.parse(xhr.responseText) as T);
+      } catch {
+        reject(new ApiError("Ungültige Antwort vom Server", "backend", xhr.status));
+      }
+    };
+    xhr.ontimeout = () => reject(new ApiError("Zeitüberschreitung beim Server", "timeout"));
+    xhr.onerror = () => reject(new ApiError("Backend nicht erreichbar", "backend"));
+    xhr.onabort = () => reject(new DOMException("Upload abgebrochen", "AbortError"));
+    if (options.signal) {
+      if (options.signal.aborted) {
+        xhr.abort();
+        return;
+      }
+      options.signal.addEventListener("abort", () => xhr.abort(), { once: true });
+    }
+    xhr.send(body);
+  });
 }

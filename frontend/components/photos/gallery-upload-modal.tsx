@@ -6,7 +6,7 @@ import { AlbumReleaseNotice } from "./album-share-release";
 import { findUploadRuleProblems, UploadTargetFields, useUploadTarget } from "@/components/files/upload-target-fields";
 import { Modal } from "@/components/ui/modal";
 import { TagInput } from "@/components/ui/tag-input";
-import { browserApiFetch } from "@/lib/api/client";
+import { browserApiFetch, browserApiUpload } from "@/lib/api/client";
 import { formatFileSize } from "@/lib/utils/format";
 import { isHeicName, isLiveClipName, pairLiveClips } from "@/lib/utils/live-photo";
 import { photoUploadProblem, PHOTO_UPLOAD_TIMEOUT_MS } from "@/lib/utils/upload-limits";
@@ -95,6 +95,8 @@ export function GalleryUploadModal({
   const [tagsValue, setTagsValue] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
+  // Bytes of the multipart body sent so far (null until the browser reports the first chunk).
+  const [progress, setProgress] = useState<{ loaded: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -162,10 +164,22 @@ export function GalleryUploadModal({
   if (sizeProblem) ruleProblems.push(sizeProblem);
 
   const totalBytes = selectedFiles.reduce((sum, file) => sum + file.size, 0);
+  const uploadPercent = progress && progress.total > 0 ? Math.min(100, Math.round((progress.loaded / progress.total) * 100)) : null;
+  // All bytes are out, but the server is still staging the upload and queueing the job.
+  const transferDone = progress !== null && progress.loaded >= progress.total;
+
+  // The multipart body carries the files back to back in queue order, so each file's share of
+  // the transferred bytes follows from its offset (boundaries/headers are negligible next to it).
+  function fileSentBytes(index: number): number {
+    if (!progress) return 0;
+    const offset = selectedFiles.slice(0, index).reduce((sum, file) => sum + file.size, 0);
+    return Math.max(0, Math.min(selectedFiles[index].size, progress.loaded - offset));
+  }
 
   async function handleUpload() {
     if (selectedFiles.length === 0 || uploading || target.incomplete || ruleProblems.length > 0) return;
     setUploading(true);
+    setProgress(null);
     setError(null);
     try {
       const body = new FormData();
@@ -177,13 +191,10 @@ export function GalleryUploadModal({
       // queued - scanning/import happen afterwards in the background (see
       // gallery-upload-progress.tsx), so this request only has to cover the raw byte
       // transfer, not the full processing time.
-      const job = await browserApiFetch<GalleryUploadJob>("/api/files/gallery-uploads", {
-        method: "POST",
-        body,
-        // browserApiFetch's default 15s timeout is far too short for a multi-GB ZIP
-        // transfer - mirrors the same fix already applied to admin-tenant-management.tsx's
-        // import upload.
-        signal: AbortSignal.timeout(PHOTO_UPLOAD_TIMEOUT_MS),
+      // XHR instead of browserApiFetch so the byte transfer can report progress.
+      const job = await browserApiUpload<GalleryUploadJob>("/api/files/gallery-uploads", body, {
+        timeoutMs: PHOTO_UPLOAD_TIMEOUT_MS,
+        onProgress: (loaded, total) => setProgress({ loaded, total }),
       });
       if (job) onQueued(job);
       onClose();
@@ -191,6 +202,7 @@ export function GalleryUploadModal({
       setError(err instanceof Error ? err.message : "Upload fehlgeschlagen");
     } finally {
       setUploading(false);
+      setProgress(null);
     }
   }
 
@@ -294,9 +306,17 @@ export function GalleryUploadModal({
                         <span className="muted">{formatFileSize(file.size)}</span>
                       </div>
                       <span className="gallery-upload-file-status">
-                        {uploading ? "Wird hochgeladen…" : clipIndexes.has(index) ? "Live-Photo-Video, gehört zum gleichnamigen Bild" : "Bereit zum Hochladen"}
+                        {uploading
+                          ? transferDone
+                            ? "Hochgeladen, wird übernommen…"
+                            : progress
+                              ? `Wird hochgeladen… ${formatFileSize(fileSentBytes(index))} von ${formatFileSize(file.size)}`
+                              : "Wird hochgeladen…"
+                          : clipIndexes.has(index) ? "Live-Photo-Video, gehört zum gleichnamigen Bild" : "Bereit zum Hochladen"}
                       </span>
-                      {uploading && <progress className="gallery-upload-progress" />}
+                      {uploading && (progress && !transferDone
+                        ? <progress className="gallery-upload-progress" value={fileSentBytes(index)} max={file.size || 1} />
+                        : <progress className="gallery-upload-progress" />)}
                     </div>
                     <button
                       type="button"
@@ -325,7 +345,11 @@ export function GalleryUploadModal({
         <div className="gallery-upload-footer">
           <span className="gallery-upload-summary">
             {selectedFiles.length} Datei{selectedFiles.length === 1 ? "" : "en"}
-            {selectedFiles.length > 0 ? ` · ${formatFileSize(totalBytes)}` : ""}
+            {selectedFiles.length > 0
+              ? progress && !transferDone
+                ? ` · ${formatFileSize(Math.min(progress.loaded, totalBytes))} von ${formatFileSize(totalBytes)}`
+                : ` · ${formatFileSize(totalBytes)}`
+              : ""}
           </span>
           <div className="gallery-upload-actions">
             <button type="button" className="button-ghost" onClick={onClose} disabled={uploading}>
@@ -338,7 +362,7 @@ export function GalleryUploadModal({
               disabled={uploading || selectedFiles.length === 0 || target.incomplete || ruleProblems.length > 0}
             >
               {uploading
-                ? "Lädt hoch…"
+                ? uploadPercent !== null && !transferDone ? `Lädt hoch… ${uploadPercent} %` : "Lädt hoch…"
                 : selectedFiles.length > 0
                   ? `${photoCount} ${photoCount === 1 ? "Bild" : "Bilder"} hochladen`
                   : "Hochladen"}

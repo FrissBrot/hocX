@@ -6764,6 +6764,20 @@ input[type="radio"] {
 .gallery-upload-progress::-webkit-progress-bar { background: var(--accent-soft); }
 .gallery-upload-progress::-webkit-progress-value { background: var(--accent); border-radius: var(--radius-pill); }
 .gallery-upload-progress::-moz-progress-bar { background: var(--accent); border-radius: var(--radius-pill); }
+/* No byte count yet (or the server is still staging the upload): a sweep instead of an empty track. */
+.gallery-upload-progress:indeterminate {
+  background: linear-gradient(90deg, var(--accent-soft) 30%, var(--accent) 50%, var(--accent-soft) 70%) 0 0 / 250% 100%;
+  animation: gallery-upload-progress-sweep 1.4s linear infinite;
+}
+.gallery-upload-progress:indeterminate::-webkit-progress-bar { background: transparent; }
+.gallery-upload-progress:indeterminate::-moz-progress-bar { background: transparent; }
+@keyframes gallery-upload-progress-sweep {
+  from { background-position: 100% 0; }
+  to { background-position: 0 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gallery-upload-progress:indeterminate { animation-duration: 3s; }
+}
 .gallery-upload-remove { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--muted); cursor: pointer; transition: background var(--dur-fast) ease, color var(--dur-fast) ease; }
 .gallery-upload-remove:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
 .gallery-upload-remove:disabled { cursor: default; opacity: .4; }
