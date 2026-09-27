@@ -217,7 +217,7 @@ export function ProtocolSearchModal({
                   itemRefs.current[index] = node;
                 }}
                 className={`protocol-search-item${active ? " protocol-search-item-active" : ""}`}
-                onMouseEnter={() => setActiveIndex(index)}
+                onMouseMove={() => { if (index !== activeIndex) setActiveIndex(index); }}
                 onClick={() => selectResult(result)}
                 role="option"
                 aria-selected={active}

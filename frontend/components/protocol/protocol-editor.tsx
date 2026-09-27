@@ -375,6 +375,13 @@ export function ProtocolEditor({
   const timers = useRef<Record<string, number>>({});
   const shouldScrollToElementRef = useRef(false);
   const passiveScrollTargetRef = useRef<string | null>(null);
+  // True while a programmatic smooth scroll (search, nav click, Ctrl+Enter) is in flight.
+  // The scroll-spy must stay passive during that time - otherwise it selects every section
+  // the scroll passes, and in accordion mode its instant anchor scroll aborts the smooth
+  // scroll so the jump ends somewhere between the start and the actual target.
+  const programmaticScrollRef = useRef(false);
+  const programmaticScrollTimerRef = useRef<number | undefined>(undefined);
+  const [scrollRequestId, setScrollRequestId] = useState(0);
   const selectedElementIdRef = useRef(selectedElementId);
   selectedElementIdRef.current = selectedElementId;
   const navRef = useRef<HTMLElement | null>(null);
@@ -527,6 +534,9 @@ export function ProtocolEditor({
   function focusElement(protocolElementId: string) {
     shouldScrollToElementRef.current = true;
     setSelectedElementId(protocolElementId);
+    // Also re-run the scroll effect when the target is already the selected element
+    // (e.g. search hit on the current section after the user scrolled away from it).
+    setScrollRequestId((current) => current + 1);
   }
 
   useEffect(() => {
@@ -577,6 +587,16 @@ export function ProtocolEditor({
                 sectionRect.top + sectionRect.height / 2
                 - (containerRect.top + containerRect.height / 2)
               ) / zoom;
+          programmaticScrollRef.current = true;
+          window.clearTimeout(programmaticScrollTimerRef.current);
+          const release = () => {
+            container.removeEventListener("scrollend", release);
+            window.clearTimeout(programmaticScrollTimerRef.current);
+            programmaticScrollRef.current = false;
+          };
+          container.addEventListener("scrollend", release);
+          // Fallback for browsers without `scrollend` and for no-op scrolls (delta ~ 0).
+          programmaticScrollTimerRef.current = window.setTimeout(release, 1200);
           container.scrollTo({ top: container.scrollTop + delta, behavior: "smooth" });
         }
       }
@@ -615,7 +635,7 @@ export function ProtocolEditor({
         }
       }, 120);
     });
-  }, [selectedElementId]);
+  }, [selectedElementId, scrollRequestId]);
 
   const visibleElementIdsKey = visibleElements.map((element) => element.id).join(",");
 
@@ -670,6 +690,7 @@ export function ProtocolEditor({
 
     function computeActiveSection() {
       rafId = null;
+      if (programmaticScrollRef.current) return;
       const containerRect = container!.getBoundingClientRect();
       const centerY = containerRect.top + containerRect.height / 2;
       const sections = visibleElementIdsKey
