@@ -30,6 +30,7 @@ from app.models.entities import (
     TemplateElement,
     TemplateParticipant,
     Tenant,
+    TenantDomain,
     TodoStatus,
     UserMfaFactor,
     WordImportProfile,
@@ -385,6 +386,25 @@ def make_word_import_profile(db, tenant_id: int, template_id: int, mapping_confi
     db.add(profile)
     db.flush()
     return profile
+
+
+def make_tenant_domain(
+    db,
+    tenant_id: int,
+    domain: str = "example.org",
+    purpose: str = "app",
+    status: str = "active",
+) -> TenantDomain:
+    row = TenantDomain(
+        tenant_id=tenant_id,
+        purpose=purpose,
+        domain=domain,
+        verification_token=uuid.uuid4().hex,
+        status=status,
+    )
+    db.add(row)
+    db.flush()
+    return row
 
 
 def make_fine(

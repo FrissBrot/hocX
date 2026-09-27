@@ -48,8 +48,8 @@ import {
   protocolStatusLabel,
   resequenceProtocolElements,
   sectionIconKey,
-  tallyAttendance,
   trimSectionName,
+  visibleAttendanceTally,
   visibleBlockTitle,
 } from "@/components/protocol/protocol-editor-shared";
 import { CollaborationStatusPanel } from "@/components/protocol/collaboration-status-panel";
@@ -495,14 +495,10 @@ export function ProtocolEditor({
     () => visibleElements.findIndex((element) => element.id === selectedElementId),
     [selectedElementId, visibleElements]
   );
-  const attendanceTally = useMemo(() => {
-    const attendanceBlock = elements.flatMap((element) => element.blocks).find((block) => block.element_type_code === "attendance");
-    if (!attendanceBlock) return null;
-    const entries = Array.isArray(attendanceBlock.configuration_snapshot_json.attendance_entries)
-      ? (attendanceBlock.configuration_snapshot_json.attendance_entries as Array<Record<string, any>>)
-      : [];
-    return tallyAttendance(availableParticipants, entries);
-  }, [elements, availableParticipants]);
+  const attendanceTally = useMemo(
+    () => visibleAttendanceTally(elements, availableParticipants),
+    [elements, availableParticipants]
+  );
   const [collabStatusPanelOpen, setCollabStatusPanelOpen] = useState(false);
   const collabHoverCloseTimerRef = useRef<number | undefined>(undefined);
   const collabOpenedByHoverRef = useRef(false);

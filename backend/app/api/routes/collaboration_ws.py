@@ -8,6 +8,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.db import SessionLocal
@@ -19,7 +20,7 @@ from app.core.security import (
     build_current_user,
     parse_session_token,
 )
-from app.models import AppUser, ListDefinition, Protocol
+from app.models import AppUser, ListDefinition, Protocol, TenantDomain
 from app.services import list_snapshot_service, public_id_service
 from app.services.access_service import AccessService
 from app.services.collaboration_service import CollaborationService
@@ -101,6 +102,20 @@ def _can_edit(user: CurrentUser) -> bool:
     return user.current_role in {"writer", "admin"}
 
 
+def _field_update_requires_lock(field_key: str) -> bool:
+    """Whether broadcasting a field_update for this key requires the sender to already
+    hold its lock. True for a real per-field edit ("block-<id>" text/attendance content,
+    or a matrix cell nested under it - see holds_lock_for_broadcast) that two people could
+    otherwise clobber on each other mid-edit. False for "block-<id>-todos"/"-images": those
+    carry the whole, already REST-confirmed array for the block rather than a diff of one
+    contested value, and the only lock ever taken is on the bare "block-<id>" key, never on
+    these suffixed keys - gating them the same as a real edit meant every one of these
+    broadcasts was silently dropped (bug found 2026-09-27), same as "element-titles"/
+    "track-changes-toggle" are already deliberately left unguarded below.
+    """
+    return field_key.startswith("block-") and not field_key.endswith(("-todos", "-images"))
+
+
 def _referenced_list_ids(protocol_id: int) -> set[int]:
     db = SessionLocal()
     try:
@@ -122,7 +137,43 @@ def _list_content_versions(list_ids: set[int]) -> dict[int, int]:
         db.close()
 
 
-def _origin_allowed(websocket: WebSocket) -> bool:
+def _static_allowed_origins() -> set[str]:
+    return {o for o in (
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        f"https://{settings.traefik_domain}" if settings.traefik_domain else None,
+    ) if o}
+
+
+def _active_app_domain_origins(db: Session | None = None) -> set[str]:
+    """Every tenant's own verified custom app domain (tenant_service.py's "custom_domain"
+    feature, tenant_domain.purpose='app'/status='active'), as an allowed WS Origin.
+    Without this, `_static_allowed_origins` only ever covers the shared main domain, so a
+    tenant browsing via their own registered domain had this WebSocket rejected with 4403
+    on every single connect - not a cross-origin request at all (frontend/backend share
+    the tenant's domain via the same reverse proxy, same as domain_bridge_service.py
+    assumes), but a WS handshake always carries an Origin header regardless of same-origin
+    status, and this check took that at face value against a 3-entry static list (bug
+    found 2026-09-27: this made live collaboration permanently unavailable - "Offline"
+    from the first connect attempt - for every tenant on a custom domain).
+
+    Takes an optional `db` (used by tests, against the same transaction a fixture already
+    set up) - the real call site always omits it and gets its own short-lived session, same
+    as every other DB access in this module.
+    """
+    owns_session = db is None
+    session = db if db is not None else SessionLocal()
+    try:
+        domains = session.execute(
+            select(TenantDomain.domain).where(TenantDomain.purpose == "app", TenantDomain.status == "active")
+        ).scalars().all()
+        return {f"https://{domain}" for domain in domains}
+    finally:
+        if owns_session:
+            session.close()
+
+
+async def _origin_allowed(websocket: WebSocket) -> bool:
     # Mirrors main.py's CORSMiddleware allowlist - the WS handshake otherwise relied only
     # on the SameSite=Lax session cookie with no Origin check of its own (audit finding,
     # 2026-08-25). Defensive: this is a same-site collaboration channel with no state-
@@ -131,17 +182,14 @@ def _origin_allowed(websocket: WebSocket) -> bool:
     origin = websocket.headers.get("origin")
     if not origin:
         return False
-    allowed = {o for o in (
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        f"https://{settings.traefik_domain}" if settings.traefik_domain else None,
-    ) if o}
-    return origin in allowed
+    if origin in _static_allowed_origins():
+        return True
+    return origin in await asyncio.to_thread(_active_app_domain_origins)
 
 
 @router.websocket("/api/ws/protocols/{protocol_id}")
 async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -> None:
-    if not _origin_allowed(websocket):
+    if not await _origin_allowed(websocket):
         await websocket.close(code=4403)
         return
     token = websocket.cookies.get(settings.auth_session_cookie)
@@ -286,7 +334,10 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
                 # lock push a change that looked, to every other open tab, exactly like
                 # a legitimate edit from the lock holder. Rejected updates are reported
                 # only to the sender, not broadcast.
-                if field_key.startswith("block-") and not await collab.holds_lock_for_broadcast(
+                #
+                # "block-<id>-todos"/"block-<id>-images" are exempt from that requirement -
+                # see _field_update_requires_lock.
+                if _field_update_requires_lock(field_key) and not await collab.holds_lock_for_broadcast(
                     protocol_id, field_key, user.user_id
                 ):
                     await websocket.send_json({

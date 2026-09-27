@@ -12,6 +12,7 @@ import {
   EventSummary,
   ParticipantSummary,
   ProtocolElement,
+  ProtocolElementBlock,
   ProtocolSummary,
   ProtocolTodo,
 } from "@/types/api";
@@ -83,6 +84,37 @@ export function tallyAttendance(
     excused: countByStatus("excused"),
     absent: countByStatus("absent"),
   };
+}
+
+/**
+ * The protocol's single "Anwesenheit" block, for the header/"Status & Zusammenarbeit"
+ * summary tile - restricted to elements/blocks that are actually visible right now
+ * (bug found 2026-09-27: the previous lookup searched every block regardless of
+ * is_visible_snapshot, so a hidden or pending-delete attendance block - e.g. one awaiting
+ * track-changes review, or one that simply sorts before the real one in `elements` - could
+ * win the `.find()` and show a tally that matched nothing the user could actually see or
+ * edit on screen). Deterministic by sort_index so element/reorder timing can't flip which
+ * block wins.
+ */
+export function findVisibleAttendanceBlock(elements: ProtocolElement[]): ProtocolElementBlock | null {
+  const candidates = elements
+    .filter((element) => element.is_visible_snapshot)
+    .flatMap((element) => element.blocks)
+    .filter((block) => block.is_visible_snapshot && block.element_type_code === "attendance")
+    .sort((left, right) => left.sort_index - right.sort_index);
+  return candidates[0] ?? null;
+}
+
+export function visibleAttendanceTally(
+  elements: ProtocolElement[],
+  participants: ParticipantSummary[]
+): AttendanceTally | null {
+  const attendanceBlock = findVisibleAttendanceBlock(elements);
+  if (!attendanceBlock) return null;
+  const entries = Array.isArray(attendanceBlock.configuration_snapshot_json.attendance_entries)
+    ? (attendanceBlock.configuration_snapshot_json.attendance_entries as Array<Record<string, any>>)
+    : [];
+  return tallyAttendance(participants, entries);
 }
 
 /** Maps a protocol section's dominant block type to an existing app-shell nav icon for the Schnellzugriff sidebar. */

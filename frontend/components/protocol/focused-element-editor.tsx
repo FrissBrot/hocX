@@ -2838,6 +2838,18 @@ export function FocusedElementEditor({
                   const previousEntries = attendanceEntries;
                   const nextEntries = attendanceEntries.filter((entry) => String(entry.participant_id) !== participant.id);
                   nextEntries.push({ participant_id: participant.id, participant_name: participant.display_name, status: newStatus });
+                  // Explicit lock/unlock around the save, rather than relying only on this
+                  // section's onFocusCapture/onBlurCapture (bug found 2026-09-27): clicking a
+                  // <button> doesn't reliably move DOM focus in every browser (notably Safari,
+                  // desktop and iOS, without "Full Keyboard Access"), so onFocusCapture often
+                  // never fired for these attendance buttons - the field lock was never
+                  // acquired, and the backend then silently rejected the field_update
+                  // broadcast (see collaboration_ws.py's "lock_not_held" check), leaving every
+                  // other viewer's attendance list stale until they reloaded. Sent over the
+                  // same WS connection right before the save, so by the time sendFieldUpdate
+                  // follows (inside saveBlockConfiguration), the server has already processed
+                  // this lock_request - messages on one connection are handled in order.
+                  collab.lockField(blockFieldKey);
                   try {
                     await saveBlockConfiguration(block.id, { ...blockConfig, attendance_entries: nextEntries });
 
@@ -2890,6 +2902,8 @@ export function FocusedElementEditor({
                         : "Anwesenheit/Busse eventuell nicht synchron. Bitte prüfen.",
                       "error"
                     );
+                  } finally {
+                    collab.unlockField(blockFieldKey);
                   }
                 }
 
