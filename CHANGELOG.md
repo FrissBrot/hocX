@@ -8,6 +8,101 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+## [1.1.3] - 2026-09-27
+
+Wartungsrelease auf 1.1.2 mit Feature-Gating und Preiskatalog im Plattform-Admin,
+mandantenübergreifendem Fotoalben-Teilen und mehreren Sicherheits-Fixes an der
+Abgabebox. Enthält die Migrationen `0084` bis `0096`; sie laufen beim Deploy
+automatisch. Für das Update von 1.1.2 sind keine neuen Umgebungsvariablen nötig.
+
+### Update von 1.1.2 auf 1.1.3
+
+Nach Veröffentlichung der Release-Images `HOCX_VERSION` in `.env` auf `v1.1.3` setzen,
+dann `./scripts/update_deploy_code.sh` und `./scripts/deploy.sh <test|prod>` ausführen.
+
+- Migrationen `0084` bis `0096` ergänzen Feature-Gating, Preiskatalog, Speicher-Zusatzpakete,
+  Freigabe-Links und mandantenübergreifendes Fotoalben-Teilen. Alle sind additiv oder
+  backfillen bestehende Mandanten automatisch (Finanzen, Abgabebox und eigene Domain
+  bleiben für alle bisherigen Mandanten freigeschaltet); keine bricht bei bestehenden
+  Daten ab, es sind keine manuellen Vorbereitungsschritte nötig.
+- Migration `0088` setzt ein manuell erweitertes Speicherkontingent zurück, wenn es über
+  der neuen automatischen Berechnung aus Plan und Zusatzpaketen lag; ein manuell
+  verringertes Kontingent bleibt unverändert. Das lässt sich nicht rückgängig machen.
+- Das Backend-Speicherlimit (`mem_limit`) steigt in den mitgelieferten Compose-Dateien
+  von 1024 MB auf 6144 MB (Spielraum für Galerie-Uploads und Bildverarbeitung) und wird
+  beim Update automatisch übernommen; der Host braucht entsprechend freien Arbeitsspeicher.
+- Der Galerie-Upload-Router in Traefik puffert Anfragen nicht mehr vollständig, sondern
+  streamt direkt zum Backend, das die bisherige Obergrenze jetzt selbst durchsetzt.
+- Vor dem Update das Datenbankbackup prüfen.
+- Git-Tag und GitHub-Release entstehen erst nach erfolgreicher Promotion aller Images
+  durch den Release-Workflow. Der Push dieser Vorbereitung veröffentlicht noch kein Release.
+
+### Neu
+
+- **Feature-Gating und Preiskatalog im Plattform-Admin:** Mandanten lassen sich einzelne
+  Funktionen (aktuell Finanzen, Abgabebox, eigene Domain) unabhängig von Rollen zu- oder
+  abschalten. Neuer Preiskatalog mit Plänen (Monats-/Jahrespreis, Nutzer-/Speicherlimits),
+  Rabatt in Prozent und interner Notiz pro Mandant sowie Abo-Zuweisung im Adminportal.
+  Bestehende Mandanten wurden beim Umstieg automatisch auf ihren bisherigen Funktionsumfang
+  freigeschaltet.
+- **Speicher-Zusatzpakete:** zusätzlich zum Plan-Kontingent einzeln zubuchbare
+  Speicherpakete pro Mandant; das Gesamtkontingent wird automatisch aus Plan und Paketen
+  berechnet.
+- **Fotoalben teilen:** Alben lassen sich mit anderen Mandanten teilen (Einladen per
+  Mandanten-ID, Annehmen/Ablehnen), auch automatische Zyklus- und Abgabe-Alben. Neu
+  hinzukommende Fotos in einem geteilten Album sind erst nach manueller Freigabe für den
+  Partner-Mandanten sichtbar; manuell hinzugefügte Fotos sind sofort geteilt. Name,
+  Profilbild und Teilnehmerzahl eines anderen Mandanten werden erst nach gegenseitig
+  angenommener Freigabe angezeigt, nicht schon bei offener Anfrage.
+- **Freigabe-Links:** öffentliche, tokenbasierte Download-Links ohne Login für einzelne
+  Dateien oder ein ganzes Album, verwaltet unter «Freigabe-Links» mit eigener öffentlicher
+  Download-Seite.
+- Neuer Dialog «Fotos hinzufügen» für Alben: Mehrfachauswahl nach Datumsgruppe,
+  «Alle auswählen», Filter und Suche über Tags, Termin, Protokoll oder Abgabe.
+- Ctrl+F Kapitel- und Volltextsuche im Protokoll-Editor.
+- Elemente lassen sich im Protokoll-Editor mit allen Blöcken duplizieren.
+- Foto-Viewer: mit den Tasten J/L zwischen Bildern wechseln.
+
+### Geändert
+
+- **Abgabebox und eigene Domain sind jetzt eigene Feature-Gates** statt immer freigeschaltet;
+  bestehende Mandanten behalten beim Umstieg automatisch den Zugriff.
+- Manuelles Speicherkontingent-Feld im Adminportal wieder entfernt: Das Kontingent ergibt
+  sich automatisch aus Plan und Speicher-Zusatzpaketen.
+- Überarbeiteter Teilen-Dialog für Fotoalben: Vorschaukarte des gefundenen Mandanten,
+  Statusliste «Geteilt mit», Entfernen bzw. Zurückziehen einer Freigabe.
+- Mandanten-ID ist in den Mandanten-Einstellungen sichtbar.
+- Protokollmenü vereinfacht; PDFs werden beim Öffnen eines Protokolls automatisch neu
+  erstellt.
+- Element-Anlegen-Popup an die neue Designvorlage angeglichen (Zyklus-Platzhalter-Karte,
+  vereinfachtes Blocktyp-Raster, ergänzte Einstellungsabschnitte für Bild, Sitzungsdatum
+  und Bussenliste).
+- Modal-Schliessen ist durchgängig ein Icon-Button statt eines Text-Buttons; Auswahl-Popups
+  (Teilnehmende, Terminverwaltung, strukturierte Listen) speichern jede Änderung sofort
+  statt über einen «Auswahl übernehmen»-Button.
+- Letztes rohes Datumsfeld (Todo-Export-Filter) durch den einheitlichen `DateInput` ersetzt.
+- Admin-Navigation: Das «Neu»-Badge ist komplett entfernt.
+- Redundante Inline-Styles am Zeitraum-Filter entfernt.
+
+### Behoben
+
+- **Sicherheitsaudit vom 24.09.2026:** Die Abgabebox prüfte das Speicherkontingent eines
+  Uploads nur gegen eine globale Konstante statt gegen das tatsächliche Mandantenkontingent;
+  ein Mandant auf einem kleineren Plan konnte sich darüber kostenlosen Zusatzspeicher bis zur
+  globalen Obergrenze verschaffen. Geprüft wird jetzt der jeweils kleinere der beiden Werte.
+  Ausserdem prüfte die Domain-Aktivierung das Feature-Gate für eigene Domains nicht wie das
+  Anlegen, sodass eine bereits angelegte Domain nach Entzug des Features weiterhin aktiviert
+  werden konnte.
+- **Galerie-Upload blieb dauerhaft auf «queued» hängen:** Periodische Hintergrundschleifen
+  (u. a. der Galerie-Upload-Ingest) nutzten Advisory Locks, die mit Connection-Pooling
+  unsicher sind; betroffen waren auch Start-Locks und die Quarantäne-Bereinigung der
+  Abgabebox.
+- Escape-Zuständigkeit für Modals, Popups und Auswahlmenüs vereinheitlicht.
+- Die Protokollliste aktualisiert sich beim Zurücknavigieren im Browser.
+- Backend-Reload: Parser-Worker werden jetzt sauber heruntergefahren.
+- Admin-Mandantenliste: Der `plan`-Filter griff bei direktem Routenaufruf fälschlich als
+  Text statt als leerer Filter.
+
 ## [1.1.2] - 2026-09-22
 
 Wartungsrelease auf 1.1.1 mit Verbesserungen an Fotos, Word-Import und Elementeditor
