@@ -17,6 +17,21 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: routerPushMock }),
 }));
 
+// HikingTourMap rendert MapLibre GL (braucht WebGL, das jsdom nicht kann) - durch einen
+// Stub ersetzt, der onMapClick fuer zwei feste Koordinaten simuliert (Start, dann Ziel).
+vi.mock("./hiking-tour-map", () => ({
+  HikingTourMap: ({ onMapClick }: { onMapClick?: (lat: number, lon: number) => void }) => (
+    <div>
+      <button type="button" onClick={() => onMapClick?.(47.05, 8.48)}>
+        Karte: Punkt A
+      </button>
+      <button type="button" onClick={() => onMapClick?.(46.98, 8.25)}>
+        Karte: Punkt B
+      </button>
+    </div>
+  ),
+}));
+
 import { HikingTourManager } from "./hiking-tour-manager";
 import { HikingTour, HikingTourSummary } from "@/types/api";
 
@@ -63,6 +78,12 @@ describe("HikingTourManager", () => {
       planned_start_time: null,
       routing_profile: null,
       waypoints: [],
+      route_legs: [],
+      route_distance_m: null,
+      route_ascent_m: null,
+      route_descent_m: null,
+      route_cost: null,
+      route_computed_at: null,
       created_at: "2026-01-01T10:00:00Z",
       updated_at: "2026-01-01T10:00:00Z",
     };
@@ -71,10 +92,8 @@ describe("HikingTourManager", () => {
     render(<HikingTourManager initialTours={[]} canWrite />);
     fireEvent.click(screen.getByRole("button", { name: "Neue Wanderung" }));
     fireEvent.change(screen.getByLabelText("Titel"), { target: { value: "Pilatus Höhenweg" } });
-    fireEvent.change(screen.getByLabelText("Start – Breite (Lat)"), { target: { value: "47.05" } });
-    fireEvent.change(screen.getByLabelText("Start – Länge (Lon)"), { target: { value: "8.48" } });
-    fireEvent.change(screen.getByLabelText("Ziel – Breite (Lat)"), { target: { value: "46.98" } });
-    fireEvent.change(screen.getByLabelText("Ziel – Länge (Lon)"), { target: { value: "8.25" } });
+    fireEvent.click(screen.getByRole("button", { name: "Karte: Punkt A" })); // setzt Start
+    fireEvent.click(screen.getByRole("button", { name: "Karte: Punkt B" })); // setzt Ziel
     fireEvent.click(screen.getByRole("button", { name: "Wanderung erstellen" }));
 
     await waitFor(() => expect(routerPushMock).toHaveBeenCalledWith("/wanderplaner/tour-2"));

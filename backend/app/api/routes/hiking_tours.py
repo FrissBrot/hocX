@@ -12,15 +12,18 @@ from app.schemas.hiking_tour import (
     HikingTourRead,
     HikingTourSummary,
     HikingTourUpdate,
+    RouteComputeRequest,
     ViaPointCreate,
     WaypointRead,
     WaypointUpdate,
 )
 from app.services.audit_service import AuditService
 from app.services.hiking_tour_service import HikingTourService
+from app.services.routing_service import RoutingError, RoutingService
 
 router = APIRouter()
 service = HikingTourService()
+routing_service = RoutingService()
 audit = AuditService()
 
 
@@ -98,6 +101,28 @@ def delete_hiking_tour(
         raise HTTPException(status_code=400, detail="Hiking tour could not be deleted") from exc
     audit.log(db, action="hiking_tour.deleted", actor=user, entity_type="hiking_tour", entity_id=tour_internal_id)
     return {"message": "Hiking tour deleted"}
+
+
+@router.post("/hiking-tours/{tour_id}/route", response_model=HikingTourRead)
+def compute_hiking_tour_route(
+    tour_id: uuid.UUID,
+    payload: RouteComputeRequest,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_wanderplaner_write(user)
+    tour = _get_tour_or_404(db, tour_id, user)
+    profile = payload.routing_profile or tour.routing_profile
+    if profile is None:
+        raise HTTPException(status_code=422, detail="Kein Routingprofil gewählt")
+    try:
+        return routing_service.compute_route(db, tour, profile=profile)
+    except RoutingError as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except (SQLAlchemyError, ValueError) as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Route konnte nicht berechnet werden") from exc
 
 
 @router.post("/hiking-tours/{tour_id}/waypoints", response_model=WaypointRead, status_code=status.HTTP_201_CREATED)

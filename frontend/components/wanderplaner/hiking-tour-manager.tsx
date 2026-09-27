@@ -7,6 +7,7 @@ import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
+import { HikingTourMap } from "@/components/wanderplaner/hiking-tour-map";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { formatDate } from "@/lib/utils/format";
@@ -26,42 +27,43 @@ const STATUS_VARIANT: Record<string, BadgeVariant> = {
   approved: "success",
 };
 
-type TourFormState = {
-  title: string;
-  description: string;
-  tour_date: string;
-  start_lat: string;
-  start_lon: string;
-  end_lat: string;
-  end_lon: string;
-};
-
-const EMPTY_FORM: TourFormState = {
-  title: "",
-  description: "",
-  tour_date: "",
-  start_lat: "",
-  start_lon: "",
-  end_lat: "",
-  end_lon: "",
-};
+type LatLon = { lat: number; lon: number };
 
 export function HikingTourManager({ initialTours, canWrite }: { initialTours: HikingTourSummary[]; canWrite: boolean }) {
   const router = useRouter();
   const showToast = useToast();
   const [tours, setTours] = useState(initialTours);
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState<TourFormState>(EMPTY_FORM);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [tourDate, setTourDate] = useState("");
+  const [start, setStart] = useState<LatLon | null>(null);
+  const [end, setEnd] = useState<LatLon | null>(null);
+  const [pendingField, setPendingField] = useState<"start" | "end">("start");
   const [saving, setSaving] = useState(false);
+
+  function resetCreateForm() {
+    setTitle("");
+    setDescription("");
+    setTourDate("");
+    setStart(null);
+    setEnd(null);
+    setPendingField("start");
+  }
+
+  function handleMapClick(lat: number, lon: number) {
+    if (pendingField === "start") {
+      setStart({ lat, lon });
+      setPendingField("end");
+    } else {
+      setEnd({ lat, lon });
+    }
+  }
 
   async function handleCreate(event: FormEvent) {
     event.preventDefault();
-    const startLat = Number(form.start_lat);
-    const startLon = Number(form.start_lon);
-    const endLat = Number(form.end_lat);
-    const endLon = Number(form.end_lon);
-    if ([startLat, startLon, endLat, endLon].some((value) => Number.isNaN(value))) {
-      showToast("Start und Ziel brauchen gültige Koordinaten", "error");
+    if (!start || !end) {
+      showToast("Bitte Start und Ziel auf der Karte setzen", "error");
       return;
     }
     setSaving(true);
@@ -69,11 +71,11 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
       const created = await browserApiFetch<HikingTour>("/api/hiking-tours", {
         method: "POST",
         body: JSON.stringify({
-          title: form.title.trim(),
-          description: form.description.trim() || null,
-          tour_date: form.tour_date || null,
-          start: { lat: startLat, lon: startLon },
-          end: { lat: endLat, lon: endLon },
+          title: title.trim(),
+          description: description.trim() || null,
+          tour_date: tourDate || null,
+          start,
+          end,
           via_points: [],
         }),
       });
@@ -82,7 +84,7 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
         ...prev,
       ]);
       setShowCreate(false);
-      setForm(EMPTY_FORM);
+      resetCreateForm();
       showToast("Wanderung erstellt", "success");
       router.push(`/wanderplaner/${created.id}`);
     } catch (err: unknown) {
@@ -91,6 +93,11 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
       setSaving(false);
     }
   }
+
+  const mapWaypoints = [
+    ...(start ? [{ id: "start", kind: "START" as const, lat: start.lat, lon: start.lon }] : []),
+    ...(end ? [{ id: "end", kind: "END" as const, lat: end.lat, lon: end.lon }] : []),
+  ];
 
   return (
     <div className="grid">
@@ -121,51 +128,69 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
         </DataTable>
       </div>
 
-      <Modal open={showCreate} title="Neue Wanderung" onClose={() => setShowCreate(false)} size="wide">
+      <Modal
+        open={showCreate}
+        title="Neue Wanderung"
+        onClose={() => {
+          setShowCreate(false);
+          resetCreateForm();
+        }}
+        size="wide"
+      >
         <form onSubmit={(event) => void handleCreate(event)}>
           <div className="grid">
             <label className="field-stack">
               <span className="field-label">Titel</span>
-              <input required value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} />
+              <input required value={title} onChange={(event) => setTitle(event.target.value)} />
             </label>
             <label className="field-stack">
               <span className="field-label">Beschreibung</span>
-              <textarea value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} rows={3} />
+              <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={2} />
             </label>
             <label className="field-stack">
               <span className="field-label">Datum</span>
-              <DateInput value={form.tour_date} onChange={(value) => setForm({ ...form, tour_date: value })} />
+              <DateInput value={tourDate} onChange={setTourDate} />
               <span className="field-help">Optional.</span>
             </label>
-            <div className="two-col">
-              <label className="field-stack">
-                <span className="field-label">Start – Breite (Lat)</span>
-                <input required type="number" step="0.0001" value={form.start_lat} onChange={(event) => setForm({ ...form, start_lat: event.target.value })} />
-              </label>
-              <label className="field-stack">
-                <span className="field-label">Start – Länge (Lon)</span>
-                <input required type="number" step="0.0001" value={form.start_lon} onChange={(event) => setForm({ ...form, start_lon: event.target.value })} />
-              </label>
+
+            <div className="field-stack">
+              <span className="field-label">Start und Ziel</span>
+              <div className="wanderplaner-map-hint">
+                <div className="wanderplaner-toggle-group">
+                  <button
+                    type="button"
+                    className={pendingField === "start" ? "button-toggle button-toggle-active" : "button-toggle"}
+                    onClick={() => setPendingField("start")}
+                  >
+                    Start setzen{start ? " ✓" : ""}
+                  </button>
+                  <button
+                    type="button"
+                    className={pendingField === "end" ? "button-toggle button-toggle-active" : "button-toggle"}
+                    onClick={() => setPendingField("end")}
+                  >
+                    Ziel setzen{end ? " ✓" : ""}
+                  </button>
+                </div>
+                <span className="field-help">
+                  Auf die Karte klicken, um {pendingField === "start" ? "den Start" : "das Ziel"} zu setzen.
+                </span>
+              </div>
+              <HikingTourMap waypoints={mapWaypoints} onMapClick={handleMapClick} className="wanderplaner-map-compact" />
             </div>
-            <div className="two-col">
-              <label className="field-stack">
-                <span className="field-label">Ziel – Breite (Lat)</span>
-                <input required type="number" step="0.0001" value={form.end_lat} onChange={(event) => setForm({ ...form, end_lat: event.target.value })} />
-              </label>
-              <label className="field-stack">
-                <span className="field-label">Ziel – Länge (Lon)</span>
-                <input required type="number" step="0.0001" value={form.end_lon} onChange={(event) => setForm({ ...form, end_lon: event.target.value })} />
-              </label>
-            </div>
-            <span className="field-help">
-              Koordinaten vorerst als Zahlenwerte (WGS84) – Setzen per Karte folgt in einer späteren Ausbaustufe.
-            </span>
           </div>
           <div className="modal-actions">
-            <button type="button" className="button-ghost" onClick={() => setShowCreate(false)}>
+            <button
+              type="button"
+              className="button-ghost"
+              onClick={() => {
+                setShowCreate(false);
+                resetCreateForm();
+              }}
+            >
               Abbrechen
             </button>
-            <button type="submit" className="button-primary" disabled={saving}>
+            <button type="submit" className="button-primary" disabled={saving || !start || !end}>
               {saving ? "Wird erstellt…" : "Wanderung erstellen"}
             </button>
           </div>

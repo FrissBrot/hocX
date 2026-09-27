@@ -847,6 +847,17 @@ export type HikingTourSummary = {
   updated_at: string;
 };
 
+export type HikingTourRouteLeg = {
+  sequence: number;
+  distance_m: number;
+  ascent_m: number;
+  descent_m: number;
+  cost: number;
+  routing_profile: HikingTourRoutingProfile;
+  coordinates: [number, number][];
+  computed_at: string;
+};
+
 export type HikingTour = {
   id: string;
   title: string;
@@ -859,6 +870,12 @@ export type HikingTour = {
   planned_start_time: string | null;
   routing_profile: HikingTourRoutingProfile | null;
   waypoints: HikingTourWaypoint[];
+  route_legs: HikingTourRouteLeg[];
+  route_distance_m: number | null;
+  route_ascent_m: number | null;
+  route_descent_m: number | null;
+  route_cost: number | null;
+  route_computed_at: string | null;
   created_at: string;
   updated_at: string;
 };

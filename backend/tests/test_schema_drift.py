@@ -36,8 +36,14 @@ from app.models import *  # noqa: F401,F403  (registers every model onto Base.me
 #    ever change if that image tag is bumped (a deliberate, visible change, not silent drift).
 #    hocX itself only uses the plain `postgis` extension (spatial_ref_sys); tiger_geocoder/
 #    topology are unused but can't be selectively disabled in this image without a custom build.
+#  - routing_edge_vertices_pgr: von pgr_createTopology() beim Wegenetz-Import angelegt
+#    (scripts/import_routing_network.py), nicht von einer Migration - nur intern von
+#    routing_service.py per Rohtext-SQL abgefragt, absichtlich nicht ORM-gemappt. Taucht in
+#    einer frisch migrierten DB erst auf, nachdem ein Import gelaufen ist (z.B. durch die
+#    `routing_network`-Fixture in conftest.py waehrend derselben Testsession).
 _KNOWN_UNMAPPED_TABLES = {
     "audit_log",
+    "routing_edge_vertices_pgr",
     "spatial_ref_sys",
     "topology",
     "layer",

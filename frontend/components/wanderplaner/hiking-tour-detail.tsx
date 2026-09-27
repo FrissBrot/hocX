@@ -1,16 +1,17 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 
 import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
+import { HikingTourMap } from "@/components/wanderplaner/hiking-tour-map";
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
-import { HikingTour, HikingTourWaypoint, HikingTourWaypointKind } from "@/types/api";
+import { HikingTour, HikingTourRoutingProfile, HikingTourWaypoint, HikingTourWaypointKind } from "@/types/api";
 
 const STATUS_LABEL: Record<string, string> = {
   draft: "Entwurf",
@@ -40,20 +41,18 @@ const KIND_LABEL: Record<HikingTourWaypointKind, string> = {
   USER_DEFINED: "Via-Punkt",
 };
 
-type EditFormState = {
-  title: string;
-  description: string;
-  tour_date: string;
+const ROUTING_PROFILE_LABEL: Record<HikingTourRoutingProfile, string> = {
+  wanderwege_bevorzugen: "Wanderwege bevorzugen",
+  schnellste_route: "Schnellste Route",
+  einfache_route: "Einfache Route",
 };
 
-type ViaPointFormState = {
-  label: string;
-  description: string;
-  lat: string;
-  lon: string;
-};
+type EditFormState = { title: string; description: string; tour_date: string };
 
-const EMPTY_VIA_FORM: ViaPointFormState = { label: "", description: "", lat: "", lon: "" };
+function formatDistance(meters: number | null): string {
+  if (meters === null) return "–";
+  return meters >= 1000 ? `${(meters / 1000).toFixed(1)} km` : `${Math.round(meters)} m`;
+}
 
 export function HikingTourDetail({ initialTour, canWrite }: { initialTour: HikingTour; canWrite: boolean }) {
   const router = useRouter();
@@ -66,11 +65,10 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
     description: tour.description ?? "",
     tour_date: tour.tour_date ?? "",
   });
-  const [showAddVia, setShowAddVia] = useState(false);
-  const [viaForm, setViaForm] = useState<ViaPointFormState>(EMPTY_VIA_FORM);
-  const [movingWaypointId, setMovingWaypointId] = useState<string | null>(null);
-  const [moveForm, setMoveForm] = useState<ViaPointFormState>(EMPTY_VIA_FORM);
+  const [placingVia, setPlacingVia] = useState(false);
+  const [profile, setProfile] = useState<HikingTourRoutingProfile>(tour.routing_profile ?? "wanderwege_bevorzugen");
   const [saving, setSaving] = useState(false);
+  const [computingRoute, setComputingRoute] = useState(false);
 
   async function handleEditSave(event: FormEvent) {
     event.preventDefault();
@@ -84,7 +82,7 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
           tour_date: editForm.tour_date || null,
         }),
       });
-      setTour(updated);
+      setTour((prev) => ({ ...updated, route_legs: prev.route_legs }));
       setShowEdit(false);
       showToast("Wanderung gespeichert", "success");
     } catch (err: unknown) {
@@ -105,61 +103,30 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
     }
   }
 
-  async function handleAddVia(event: FormEvent) {
-    event.preventDefault();
-    const lat = Number(viaForm.lat);
-    const lon = Number(viaForm.lon);
-    if (Number.isNaN(lat) || Number.isNaN(lon)) {
-      showToast("Ungültige Koordinaten", "error");
-      return;
-    }
-    setSaving(true);
+  async function handleMapClick(lat: number, lon: number) {
+    if (!placingVia) return;
+    setPlacingVia(false);
     try {
       const created = await browserApiFetch<HikingTourWaypoint>(`/api/hiking-tours/${tour.id}/waypoints`, {
         method: "POST",
-        body: JSON.stringify({ lat, lon, label: viaForm.label.trim() || null, description: viaForm.description.trim() || null }),
+        body: JSON.stringify({ lat, lon }),
       });
-      setTour((prev) => ({
-        ...prev,
-        waypoints: [...prev.waypoints, created].sort((a, b) => a.sequence - b.sequence),
-      }));
-      setShowAddVia(false);
-      setViaForm(EMPTY_VIA_FORM);
+      setTour((prev) => ({ ...prev, waypoints: [...prev.waypoints, created].sort((a, b) => a.sequence - b.sequence) }));
       showToast("Via-Punkt hinzugefügt", "success");
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : "Fehler beim Hinzufügen", "error");
-    } finally {
-      setSaving(false);
     }
   }
 
-  function openMove(waypoint: HikingTourWaypoint) {
-    setMovingWaypointId(waypoint.id);
-    setMoveForm({ label: waypoint.label ?? "", description: waypoint.description ?? "", lat: String(waypoint.lat), lon: String(waypoint.lon) });
-  }
-
-  async function handleMoveSave(event: FormEvent) {
-    event.preventDefault();
-    if (!movingWaypointId) return;
-    const lat = Number(moveForm.lat);
-    const lon = Number(moveForm.lon);
-    if (Number.isNaN(lat) || Number.isNaN(lon)) {
-      showToast("Ungültige Koordinaten", "error");
-      return;
-    }
-    setSaving(true);
+  async function handleMarkerDragEnd(waypointId: string, lat: number, lon: number) {
     try {
-      const updated = await browserApiFetch<HikingTourWaypoint>(`/api/hiking-tours/${tour.id}/waypoints/${movingWaypointId}`, {
+      const updated = await browserApiFetch<HikingTourWaypoint>(`/api/hiking-tours/${tour.id}/waypoints/${waypointId}`, {
         method: "PATCH",
-        body: JSON.stringify({ lat, lon, label: moveForm.label.trim() || null, description: moveForm.description.trim() || null }),
+        body: JSON.stringify({ lat, lon }),
       });
       setTour((prev) => ({ ...prev, waypoints: prev.waypoints.map((wp) => (wp.id === updated.id ? updated : wp)) }));
-      setMovingWaypointId(null);
-      showToast("Punkt gespeichert", "success");
     } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : "Fehler beim Speichern", "error");
-    } finally {
-      setSaving(false);
+      showToast(err instanceof Error ? err.message : "Punkt konnte nicht verschoben werden", "error");
     }
   }
 
@@ -173,6 +140,31 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
       showToast(err instanceof Error ? err.message : "Fehler beim Entfernen", "error");
     }
   }
+
+  async function handleComputeRoute() {
+    setComputingRoute(true);
+    try {
+      const updated = await browserApiFetch<HikingTour>(`/api/hiking-tours/${tour.id}/route`, {
+        method: "POST",
+        body: JSON.stringify({ routing_profile: profile }),
+      });
+      setTour(updated);
+      showToast("Route berechnet", "success");
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : "Route konnte nicht berechnet werden", "error");
+    } finally {
+      setComputingRoute(false);
+    }
+  }
+
+  const mapWaypoints = useMemo(
+    () => tour.waypoints.map((wp) => ({ id: wp.id, kind: wp.kind, lat: wp.lat, lon: wp.lon, label: wp.label })),
+    [tour.waypoints]
+  );
+  const routeCoordinates = useMemo<[number, number][]>(
+    () => tour.route_legs.flatMap((leg) => leg.coordinates),
+    [tour.route_legs]
+  );
 
   return (
     <div className="grid">
@@ -194,18 +186,58 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
         )}
       </div>
 
-      <div>
+      <div className="section-card">
         <DataToolbar
-          title="Wegpunkte"
-          description="Start, Ziel und Via-Punkte in Reihenfolge. Kartenbasierte Bearbeitung und automatische Wegpunkte folgen in einer späteren Ausbaustufe."
+          title="Karte & Route"
+          description="Wegpunkte lassen sich per Ziehen verschieben. Neue Via-Punkte per Klick setzen."
           actions={
             canWrite ? (
-              <button type="button" className="button-secondary" onClick={() => setShowAddVia(true)}>
-                Via-Punkt hinzufügen
-              </button>
+              <div className="page-header-actions">
+                <select value={profile} onChange={(event) => setProfile(event.target.value as HikingTourRoutingProfile)}>
+                  {Object.entries(ROUTING_PROFILE_LABEL).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <button type="button" className="button-secondary" onClick={() => void handleComputeRoute()} disabled={computingRoute}>
+                  {computingRoute ? "Wird berechnet…" : "Route berechnen"}
+                </button>
+                <button
+                  type="button"
+                  className={placingVia ? "button-toggle button-toggle-active" : "button-toggle"}
+                  onClick={() => setPlacingVia((value) => !value)}
+                >
+                  Via-Punkt hinzufügen
+                </button>
+              </div>
             ) : undefined
           }
         />
+        {placingVia && <p className="field-help">Auf die Karte klicken, um den Via-Punkt zu platzieren.</p>}
+        <HikingTourMap
+          waypoints={mapWaypoints}
+          routeCoordinates={routeCoordinates}
+          onMapClick={canWrite ? handleMapClick : undefined}
+          onMarkerDragEnd={canWrite ? handleMarkerDragEnd : undefined}
+        />
+        {tour.route_distance_m !== null && tour.route_distance_m !== undefined && (
+          <div className="wanderplaner-route-summary">
+            <span>
+              Distanz: <strong>{formatDistance(tour.route_distance_m)}</strong>
+            </span>
+            <span>
+              Aufstieg: <strong>{Math.round(tour.route_ascent_m ?? 0)} m</strong>
+            </span>
+            <span>
+              Abstieg: <strong>{Math.round(tour.route_descent_m ?? 0)} m</strong>
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div>
+        <DataToolbar title="Wegpunkte" description="Start, Ziel und Via-Punkte in Reihenfolge." />
         <DataTable columns={["#", "Typ", "Bezeichnung", "Breite", "Länge", ""]} emptyMessage="Keine Wegpunkte.">
           {tour.waypoints.map((waypoint) => (
             <tr key={waypoint.id}>
@@ -217,17 +249,10 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
               <td>{waypoint.lat.toFixed(4)}</td>
               <td>{waypoint.lon.toFixed(4)}</td>
               <td className="wanderplaner-row-actions">
-                {canWrite && (
-                  <>
-                    <button type="button" className="button-secondary button-ghost" onClick={() => openMove(waypoint)}>
-                      Verschieben
-                    </button>
-                    {waypoint.kind === "USER_DEFINED" && (
-                      <button type="button" className="button-secondary button-ghost" onClick={() => void handleDeleteWaypoint(waypoint)}>
-                        Entfernen
-                      </button>
-                    )}
-                  </>
+                {canWrite && waypoint.kind === "USER_DEFINED" && (
+                  <button type="button" className="button-secondary button-ghost" onClick={() => void handleDeleteWaypoint(waypoint)}>
+                    Entfernen
+                  </button>
                 )}
               </td>
             </tr>
@@ -253,64 +278,6 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
           </div>
           <div className="modal-actions">
             <button type="button" className="button-ghost" onClick={() => setShowEdit(false)}>
-              Abbrechen
-            </button>
-            <button type="submit" className="button-primary" disabled={saving}>
-              {saving ? "Wird gespeichert…" : "Speichern"}
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      <Modal open={showAddVia} title="Via-Punkt hinzufügen" onClose={() => setShowAddVia(false)}>
-        <form onSubmit={(event) => void handleAddVia(event)}>
-          <div className="grid">
-            <label className="field-stack">
-              <span className="field-label">Bezeichnung</span>
-              <input value={viaForm.label} onChange={(event) => setViaForm({ ...viaForm, label: event.target.value })} />
-            </label>
-            <div className="two-col">
-              <label className="field-stack">
-                <span className="field-label">Breite (Lat)</span>
-                <input required type="number" step="0.0001" value={viaForm.lat} onChange={(event) => setViaForm({ ...viaForm, lat: event.target.value })} />
-              </label>
-              <label className="field-stack">
-                <span className="field-label">Länge (Lon)</span>
-                <input required type="number" step="0.0001" value={viaForm.lon} onChange={(event) => setViaForm({ ...viaForm, lon: event.target.value })} />
-              </label>
-            </div>
-          </div>
-          <div className="modal-actions">
-            <button type="button" className="button-ghost" onClick={() => setShowAddVia(false)}>
-              Abbrechen
-            </button>
-            <button type="submit" className="button-primary" disabled={saving}>
-              {saving ? "Wird hinzugefügt…" : "Hinzufügen"}
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      <Modal open={movingWaypointId !== null} title="Punkt verschieben" onClose={() => setMovingWaypointId(null)}>
-        <form onSubmit={(event) => void handleMoveSave(event)}>
-          <div className="grid">
-            <label className="field-stack">
-              <span className="field-label">Bezeichnung</span>
-              <input value={moveForm.label} onChange={(event) => setMoveForm({ ...moveForm, label: event.target.value })} />
-            </label>
-            <div className="two-col">
-              <label className="field-stack">
-                <span className="field-label">Breite (Lat)</span>
-                <input required type="number" step="0.0001" value={moveForm.lat} onChange={(event) => setMoveForm({ ...moveForm, lat: event.target.value })} />
-              </label>
-              <label className="field-stack">
-                <span className="field-label">Länge (Lon)</span>
-                <input required type="number" step="0.0001" value={moveForm.lon} onChange={(event) => setMoveForm({ ...moveForm, lon: event.target.value })} />
-              </label>
-            </div>
-          </div>
-          <div className="modal-actions">
-            <button type="button" className="button-ghost" onClick={() => setMovingWaypointId(null)}>
               Abbrechen
             </button>
             <button type="submit" className="button-primary" disabled={saving}>

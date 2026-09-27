@@ -102,6 +102,55 @@ class WaypointRead(BaseModel):
         }
 
 
+class RouteComputeRequest(BaseModel):
+    """Body von POST /hiking-tours/{id}/route. routing_profile ueberschreibt optional das auf
+    der Tour gespeicherte Profil (und wird dabei dauerhaft uebernommen, siehe
+    routing_service.RoutingService.compute_route)."""
+
+    routing_profile: str | None = None
+
+    @field_validator("routing_profile")
+    @classmethod
+    def _validate_routing_profile(cls, value: str | None) -> str | None:
+        if value is not None and value not in ROUTING_PROFILES:
+            raise ValueError(f"Unknown routing profile: {value}")
+        return value
+
+
+class RouteLegRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    sequence: int
+    distance_m: float
+    ascent_m: float
+    descent_m: float
+    cost: float
+    routing_profile: str
+    # (lat, lon)-Paare in Reihenfolge entlang des Abschnitts - GeoJSON verwendet zwar
+    # (lon, lat), aber alle anderen Punkte dieser API (WaypointRead u.a.) sind lat/lon; fuers
+    # Frontend bleibt eine Konvention innerhalb der API wichtiger als GeoJSON-Konformität,
+    # die Karten-Komponente wandelt beim Zeichnen um.
+    coordinates: list[tuple[float, float]]
+    computed_at: datetime
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_orm(cls, data):
+        if not hasattr(data, "geom"):
+            return data
+        line = to_shape(data.geom)
+        return {
+            "sequence": data.sequence,
+            "distance_m": data.distance_m,
+            "ascent_m": data.ascent_m,
+            "descent_m": data.descent_m,
+            "cost": data.cost,
+            "routing_profile": data.routing_profile,
+            "coordinates": [(lat, lon) for lon, lat in line.coords],
+            "computed_at": data.computed_at,
+        }
+
+
 class HikingTourBase(BaseModel):
     title: str
     description: str | None = None
@@ -175,6 +224,12 @@ class HikingTourRead(HikingTourBase):
     id: uuid.UUID
     status: str
     waypoints: list[WaypointRead] = []
+    route_legs: list[RouteLegRead] = []
+    route_distance_m: float | None = None
+    route_ascent_m: float | None = None
+    route_descent_m: float | None = None
+    route_cost: float | None = None
+    route_computed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -195,6 +250,12 @@ class HikingTourRead(HikingTourBase):
             "planned_start_time": data.planned_start_time,
             "routing_profile": data.routing_profile,
             "waypoints": list(data.waypoints),
+            "route_legs": list(data.route_legs),
+            "route_distance_m": data.route_distance_m,
+            "route_ascent_m": data.route_ascent_m,
+            "route_descent_m": data.route_descent_m,
+            "route_cost": data.route_cost,
+            "route_computed_at": data.route_computed_at,
             "created_at": data.created_at,
             "updated_at": data.updated_at,
         }

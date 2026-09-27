@@ -1,11 +1,13 @@
 import { test, expect, request as playwrightRequest } from "@playwright/test";
 import { authFiles } from "./auth";
 
-// Wanderplaner Phase 1 (Basis-CRUD): Tour erstellen -> Start/Ziel als Wegpunkte sehen ->
-// Via-Punkt hinzufuegen -> Tour bearbeiten -> Via-Punkt entfernen -> Tour loeschen. Karte,
-// Routing, Marschzeit, Analyse, Druck folgen erst in spaeteren Phasen (siehe Wiki-Seite
-// "Wanderplaner") und sind hier bewusst nicht Teil des Flows.
-test("Tour erstellen, Wegpunkt hinzufuegen/entfernen und wieder loeschen", async ({ page }) => {
+// Wanderplaner Phase 1+2: Tour per Kartenklick erstellen (Start/Ziel) -> Wegpunkte sehen ->
+// Via-Punkt per Kartenklick hinzufuegen/entfernen -> Route berechnen (Button-Verdrahtung,
+// siehe Kommentar unten zum Grund fuer die tolerante Assertion) -> Tour bearbeiten -> loeschen.
+// Marschzeit, automatische Analyse, Rekognoszierung, Druck folgen erst in spaeteren Phasen
+// (siehe Wiki-Seite "Wanderplaner") und sind hier bewusst nicht Teil des Flows.
+test("Tour per Karte erstellen, Route berechnen, Wegpunkt hinzufuegen/entfernen und wieder loeschen", async ({ page }) => {
+  test.setTimeout(90_000); // MapLibre-Ladezeiten (echte swisstopo-Tiles) brauchen mehr als die Default-45s
   const writerApi = await playwrightRequest.newContext({ baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: authFiles.writer });
   const adminApi = await playwrightRequest.newContext({ baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: authFiles.platformAdmin });
   let tenantId: string | undefined;
@@ -25,10 +27,23 @@ test("Tour erstellen, Wegpunkt hinzufuegen/entfernen und wieder loeschen", async
 
     await page.getByRole("button", { name: "Neue Wanderung" }).click();
     await page.getByLabel("Titel").fill("E2E Rigi Kulm ab Goldau");
-    await page.getByLabel("Start – Breite (Lat)").fill("47.0512");
-    await page.getByLabel("Start – Länge (Lon)").fill("8.5478");
-    await page.getByLabel("Ziel – Breite (Lat)").fill("47.0576");
-    await page.getByLabel("Ziel – Länge (Lon)").fill("8.4883");
+    const createMap = page.locator(".wanderplaner-map");
+    await expect(createMap).toBeVisible();
+    // MapLibre haengt seinen Klick-Handler erst nach "load" ein (siehe hiking-tour-map.tsx) -
+    // ohne Wartezeit landen die folgenden Klicks manchmal, bevor die Karte bereit ist.
+    await page.waitForTimeout(1000);
+    const createMapBox = await createMap.boundingBox();
+    if (!createMapBox) throw new Error("Karte im Erstellen-Dialog nicht gefunden");
+    // Ueber den Locator klicken (nicht page.mouse.click mit vorab gelesener boundingBox) -
+    // das lässt Playwright Sichtbarkeit/Position im Klickmoment selbst pruefen, statt auf
+    // moeglicherweise veraltete, vorab gelesene Koordinaten zu vertrauen. Zwei verschiedene
+    // Punkte auf der (noch ganz Schweiz zeigenden) Karte anklicken - erster Klick setzt Start,
+    // zweiter automatisch das Ziel (siehe hiking-tour-manager.tsx). Welche realen Koordinaten
+    // das genau sind, ist fuer diesen Test irrelevant.
+    await createMap.click({ position: { x: createMapBox.width * 0.3, y: createMapBox.height * 0.5 } });
+    await expect(page.getByRole("button", { name: /Start setzen/ })).toContainText("✓");
+    await createMap.click({ position: { x: createMapBox.width * 0.7, y: createMapBox.height * 0.5 } });
+    await expect(page.getByRole("button", { name: /Ziel setzen/ })).toContainText("✓");
     await page.getByRole("button", { name: "Wanderung erstellen" }).click();
 
     await expect(page).toHaveURL(/\/wanderplaner\/.+/);
@@ -36,16 +51,26 @@ test("Tour erstellen, Wegpunkt hinzufuegen/entfernen und wieder loeschen", async
     await expect(page.getByText("Start", { exact: true })).toBeVisible();
     await expect(page.getByText("Ziel", { exact: true })).toBeVisible();
 
+    await page.waitForTimeout(1000); // Karte auf der Detailseite laedt neu (eigene MapLibre-Instanz)
     await page.getByRole("button", { name: "Via-Punkt hinzufügen" }).click();
-    await page.getByLabel("Bezeichnung").fill("Kloesterli");
-    await page.locator('label:has-text("Breite (Lat)") input').fill("47.0489");
-    await page.locator('label:has-text("Länge (Lon)") input').fill("8.4949");
-    await page.getByRole("button", { name: "Hinzufügen", exact: true }).click();
-    await expect(page.getByText("Kloesterli")).toBeVisible();
+    const detailMap = page.locator(".wanderplaner-map");
+    const detailMapBox = await detailMap.boundingBox();
+    if (!detailMapBox) throw new Error("Karte in der Detailansicht nicht gefunden");
+    await detailMap.click({ position: { x: detailMapBox.width / 2, y: detailMapBox.height / 2 } });
+    await expect(page.getByText("Via-Punkt hinzugefügt")).toBeVisible();
+    await expect(page.getByText("Via-Punkt", { exact: true })).toBeVisible();
 
-    await page.getByRole("row", { name: /Kloesterli/ }).getByRole("button", { name: "Entfernen" }).click();
+    // Route berechnen: prueft nur, dass Button/Request verdrahtet sind (Erfolg ODER ein
+    // erwarteter "kein Routing möglich"-Fehler sind beide gueltig - die geteilte E2E-Umgebung
+    // hat kein importiertes Wegenetz, siehe scripts/import_routing_network.py-Docstring: der
+    // Import ist ein separater Betriebsschritt, nicht Teil dieses Test-Deploys). Die fachliche
+    // Routing-Korrektheit selbst ist bereits durch test_routing_service.py abgedeckt.
+    await page.getByRole("button", { name: "Route berechnen" }).click();
+    await expect(page.locator(".app-toast").first()).toBeVisible({ timeout: 10_000 });
+
+    await page.getByRole("row", { name: /Via-Punkt/ }).getByRole("button", { name: "Entfernen" }).click();
     await page.getByRole("button", { name: "Entfernen" }).last().click();
-    await expect(page.getByText("Kloesterli")).toHaveCount(0);
+    await expect(page.getByText("Punkt entfernt")).toBeVisible();
 
     await page.getByRole("button", { name: "Bearbeiten" }).click();
     await page.getByLabel("Titel").fill("E2E Rigi Kulm ab Goldau (bearbeitet)");

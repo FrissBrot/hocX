@@ -1710,12 +1710,27 @@ class HikingTour(Base, TimestampMixin, UpdatedAtMixin):
     luggage_type: Mapped[str | None] = mapped_column(Text)
     planned_start_time: Mapped[Any | None] = mapped_column(Time)
     routing_profile: Mapped[str | None] = mapped_column(Text)
+    # Aggregierte Route-Summary (Phase 2) - aus den hiking_tour_route_leg-Zeilen berechnet,
+    # siehe routing_service.py::compute_route. NULL, solange keine Route berechnet wurde.
+    route_distance_m: Mapped[float | None] = mapped_column(Float)
+    route_ascent_m: Mapped[float | None] = mapped_column(Float)
+    route_descent_m: Mapped[float | None] = mapped_column(Float)
+    route_cost: Mapped[float | None] = mapped_column(Float)
+    route_computed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     waypoints: Mapped[list["HikingTourWaypoint"]] = relationship(
         "HikingTourWaypoint",
         primaryjoin="HikingTour.id == HikingTourWaypoint.hiking_tour_id",
         foreign_keys="HikingTourWaypoint.hiking_tour_id",
         order_by="HikingTourWaypoint.sequence",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+    route_legs: Mapped[list["HikingTourRouteLeg"]] = relationship(
+        "HikingTourRouteLeg",
+        primaryjoin="HikingTour.id == HikingTourRouteLeg.hiking_tour_id",
+        foreign_keys="HikingTourRouteLeg.hiking_tour_id",
+        order_by="HikingTourRouteLeg.sequence",
         lazy="selectin",
         cascade="all, delete-orphan",
     )
@@ -1758,3 +1773,84 @@ class HikingTourWaypoint(Base, TimestampMixin, UpdatedAtMixin):
     point: Mapped[WKBElement] = mapped_column(
         Geometry(geometry_type="POINT", srid=4326, spatial_index=False), nullable=False
     )
+
+
+class RoutingNetworkMeta(Base):
+    """Ein Eintrag pro (Re-)Import des Wegenetzes (scripts/import_routing_network.py) - rein
+    informativ/Audit, keine Route referenziert diese Zeile live (siehe Migration 0098)."""
+
+    __tablename__ = "routing_network_meta"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    source_description: Mapped[str] = mapped_column(Text, nullable=False)
+    edge_count: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class RoutingEdge(Base):
+    """Eine gerichtete Wegkante des importierten Wegenetzes (Auftrag Abschnitt 3). source/
+    target werden von pgr_createTopology() befuellt (siehe scripts/import_routing_network.py),
+    die cost_*/reverse_cost_*-Spalten beim Import aus app/core/routing_cost.py vorberechnet."""
+
+    __tablename__ = "routing_edge"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    geom: Mapped[WKBElement] = mapped_column(
+        Geometry(geometry_type="LINESTRING", srid=4326, spatial_index=False), nullable=False
+    )
+    source: Mapped[int | None] = mapped_column(BigInteger)
+    target: Mapped[int | None] = mapped_column(BigInteger)
+    length_m: Mapped[float] = mapped_column(Float, nullable=False)
+    ascent_m: Mapped[float] = mapped_column(Float, nullable=False)
+    descent_m: Mapped[float] = mapped_column(Float, nullable=False)
+    wanderweg_status: Mapped[str | None] = mapped_column(Text)
+    wegtyp: Mapped[str] = mapped_column(Text, nullable=False)
+    external_ref: Mapped[str | None] = mapped_column(Text)
+    cost_wanderwege_bevorzugen: Mapped[float] = mapped_column(Float, nullable=False)
+    cost_schnellste_route: Mapped[float] = mapped_column(Float, nullable=False)
+    cost_einfache_route: Mapped[float] = mapped_column(Float, nullable=False)
+    reverse_cost_wanderwege_bevorzugen: Mapped[float] = mapped_column(Float, nullable=False)
+    reverse_cost_schnellste_route: Mapped[float] = mapped_column(Float, nullable=False)
+    reverse_cost_einfache_route: Mapped[float] = mapped_column(Float, nullable=False)
+
+
+class HikingTourRouteLeg(Base):
+    """Die tatsaechlich berechnete Route zwischen zwei aufeinanderfolgenden Wegpunkten einer
+    Tour (Phase 2). Eigene Geometrie-Kopie statt einer Live-Referenz auf routing_edge, damit
+    ein spaeterer Netz-Reimport bestehende Touren nicht rueckwirkend veraendert (Auftrag
+    Abschnitt 3). Wird bei jedem POST /hiking-tours/{id}/route komplett neu berechnet und
+    ersetzt (siehe routing_service.py), nicht einzeln editiert."""
+
+    __tablename__ = "hiking_tour_route_leg"
+    __table_args__ = (
+        Index("idx_hiking_tour_route_leg_tour", "hiking_tour_id"),
+        UniqueConstraint("hiking_tour_id", "sequence", name="uq_hiking_tour_route_leg_tour_sequence"),
+        CheckConstraint(
+            "routing_profile IN ('wanderwege_bevorzugen', 'schnellste_route', 'einfache_route')",
+            name="ck_hiking_tour_route_leg_profile",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    hiking_tour_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("hiking_tour.id", ondelete="CASCADE"), nullable=False
+    )
+    from_waypoint_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("hiking_tour_waypoint.id", ondelete="CASCADE"), nullable=False
+    )
+    to_waypoint_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("hiking_tour_waypoint.id", ondelete="CASCADE"), nullable=False
+    )
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    geom: Mapped[WKBElement] = mapped_column(
+        Geometry(geometry_type="LINESTRING", srid=4326, spatial_index=False), nullable=False
+    )
+    distance_m: Mapped[float] = mapped_column(Float, nullable=False)
+    ascent_m: Mapped[float] = mapped_column(Float, nullable=False)
+    descent_m: Mapped[float] = mapped_column(Float, nullable=False)
+    cost: Mapped[float] = mapped_column(Float, nullable=False)
+    routing_profile: Mapped[str] = mapped_column(Text, nullable=False)
+    network_version_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("routing_network_meta.id", ondelete="SET NULL")
+    )
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))

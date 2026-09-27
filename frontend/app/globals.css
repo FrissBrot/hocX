@@ -16656,3 +16656,51 @@ input[type="radio"] {
   display: flex;
   gap: var(--space-2);
 }
+
+/* Wanderplaner: Karte (MapLibre) */
+.wanderplaner-map {
+  width: 100%;
+  height: 480px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.wanderplaner-map-compact {
+  height: 320px;
+}
+
+.wanderplaner-map-marker {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-pill);
+  background: var(--wanderplaner-marker-color, var(--accent)); /* design-ok: zur Laufzeit per JS gesetzte Laufzeitfarbe je Wegpunkt-Typ (hiking-tour-map.tsx), kein Design-Token */
+  border: 2px solid var(--on-solid);
+  box-shadow: var(--shadow);
+  cursor: grab;
+}
+
+.wanderplaner-map-marker:active {
+  cursor: grabbing;
+}
+
+.wanderplaner-map-hint {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.wanderplaner-toggle-group {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.wanderplaner-route-summary {
+  display: flex;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+  padding-top: var(--space-3);
+  font-size: var(--text-base);
+  color: var(--muted);
+}

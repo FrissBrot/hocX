@@ -31,3 +31,22 @@ def db():
         session.close()
         outer_transaction.rollback()
         connection.close()
+
+
+@pytest.fixture(scope="session")
+def routing_network():
+    """Importiert das Wanderplaner-Test-Fixture-Wegenetz (tests/fixtures/
+    routing_network_sample.geojson) einmal pro Testlauf. Laeuft bewusst AUSSERHALB der
+    pro-Test-SAVEPOINT-Transaktion der `db`-Fixture oben: scripts/import_routing_network.py
+    verwendet eine eigene Admin-Verbindung mit echtem COMMIT (siehe dessen Docstring - braucht
+    TRUNCATE/DDL-nahe Rechte, die die eingeschraenkte App-Rolle nicht hat), das importierte
+    Netz bleibt also fuer die ganze Session bestehen. Tests, die routing_service.py pruefen,
+    deklarieren diese Fixture explizit als Parameter."""
+    from pathlib import Path
+
+    from scripts.import_routing_network import import_network
+
+    import_network(
+        Path(__file__).parent / "fixtures" / "routing_network_sample.geojson",
+        "Test-Fixture (pytest session scope)",
+    )

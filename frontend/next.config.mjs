@@ -13,6 +13,17 @@ const scriptSrc = ["'self'", "'unsafe-inline'", isDevelopment && "'unsafe-eval'"
   .filter(Boolean)
   .join(" ");
 
+// Wanderplaner-Karte (MapLibre GL, siehe components/wanderplaner/hiking-tour-map.tsx) laedt
+// Vector-Tiles/Style/Hoehenprofil/Geocoding direkt im Browser von den offiziellen
+// geo.admin.ch-Diensten (kein Server-Proxy - siehe Wiki-Seite "Wanderplaner", Abschnitt
+// "Geodaten-Quellen") und erzeugt dafuer einen Web-Worker aus einer blob:-URL (Tile-Parsing
+// laeuft nicht im Hauptthread). Beides braucht eine gezielte CSP-Erweiterung, keine der
+// bestehenden Domains/Direktiven deckt das ab. Wildcard statt einzelner Hosts: Vector-Tiles
+// werden CDN-gesharded ueber nummerierte Subdomains ausgeliefert (vectortiles0-4.geo.admin.ch,
+// per tiles.json der Style-Definition, nicht vorhersagbar/stabil) - alle Subdomains gehoeren
+// derselben offiziellen swisstopo-Domain, kein Drittanbieter-Wildcard.
+const geoAdminHosts = ["https://*.geo.admin.ch"];
+
 const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -26,7 +37,8 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
       "font-src 'self'",
-      "connect-src 'self'",
+      `connect-src 'self' ${geoAdminHosts.join(" ")}`,
+      "worker-src 'self' blob:",
       "object-src 'none'",
       "frame-src 'none'",
       "frame-ancestors 'none'",
