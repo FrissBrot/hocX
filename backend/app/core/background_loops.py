@@ -92,5 +92,12 @@ async def run_advisory_locked_loop(
                             await asyncio.to_thread(task, db)
                         except Exception as exc:
                             db.rollback()
-                            record_system_error(db, exc=exc, source="background_loop")
+                            # source defaults to "backend" - system_error_log.source has a
+                            # CHECK constraint allowing only "backend"/"abgabebox-backend"
+                            # (see SystemErrorLog in app/models/entities.py); "background_loop"
+                            # violated it, so every write here silently failed inside
+                            # record_system_error's own try/except and never reached the
+                            # admin panel (found while auditing why central error logging
+                            # "didn't always work").
+                            record_system_error(db, exc=exc)
         await asyncio.sleep(interval_seconds)

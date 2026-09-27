@@ -7,6 +7,7 @@ from datetime import date, datetime, timedelta, timezone
 from sqlalchemy import delete, or_, select, update
 from sqlalchemy.orm import Session
 
+from app.core.error_log import record_system_error
 from app.models import Template, WordImportDocument
 from app.schemas.word_import import WordImportAnalysis, WordImportCommit, WordImportCommitResult
 from app.services.file_service import FileService
@@ -150,6 +151,12 @@ class WordImportQueueService:
                 db.rollback()
                 detail = getattr(exc, "detail", None) or "Datei konnte nicht gelesen werden"
                 errors.append(f"{filename}: {detail}")
+                # ValueError is this codebase's convention for an already-curated, expected
+                # validation message (e.g. "Vorlage stimmt nicht mit dem Dokument überein") -
+                # anything else is an unexpected bug and belongs in system_error_log, since
+                # this per-file failure is otherwise swallowed into `errors` and never raised.
+                if not isinstance(exc, ValueError):
+                    record_system_error(db, exc=exc, tenant_id=tenant_id, source="backend")
 
         # Display-name second pass (audit D13, 2026-08-16): ingest() processes files
         # sequentially, so a document ingested early in the batch only saw whichever
@@ -184,11 +191,12 @@ class WordImportQueueService:
                         continue
                     try:
                         self._apply_batch_consensus(db, document=document, hint=hint)
-                    except Exception:
+                    except Exception as exc:
                         db.rollback()
                         logger.exception(
                             "Batch-Konsens-Aktualisierung fehlgeschlagen für word_import_document id=%s", document.id
                         )
+                        record_system_error(db, exc=exc, tenant_id=tenant_id, source="backend")
         return documents, errors
 
     def _apply_batch_consensus(self, db: Session, *, document: WordImportDocument, hint: dict) -> None:
@@ -421,9 +429,10 @@ class WordImportQueueService:
                     reset_draft=False,
                 )
                 db.commit()
-            except Exception:
+            except Exception as exc:
                 db.rollback()
                 logger.exception("Vorschlags-Aktualisierung fehlgeschlagen für word_import_document id=%s", sibling.id)
+                record_system_error(db, exc=exc, tenant_id=tenant_id, source="backend")
 
     def _reanalyze_document(
         self,

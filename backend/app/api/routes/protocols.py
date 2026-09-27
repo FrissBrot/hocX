@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
 from app.core.db import get_db, SessionLocal
+from app.core.error_log import record_system_error
 from app.schemas.protocol import AttendanceExcusePayload, NextSessionRead, ProtocolCreateFromTemplate, ProtocolCycleEventsRead, ProtocolRead, ProtocolTodoRead, ProtocolUpdate, QuickTodoCreate, TodoListItem
 from app.services import public_id_service
 from app.services.access_service import AccessService
@@ -40,8 +41,11 @@ async def _generate_pdf_background(protocol_id: int) -> None:
     db = SessionLocal()
     try:
         await ExportService().export_pdf(db, protocol_id)
-    except Exception:
-        pass
+    except Exception as exc:
+        # Runs via BackgroundTasks, outside the request/response cycle the global exception
+        # handlers in main.py watch - without this, a failure here was invisible everywhere.
+        db.rollback()
+        record_system_error(db, exc=exc)
     finally:
         db.close()
 

@@ -50,6 +50,29 @@ if not captcha_configured() and not is_dev_or_test_environment():
     )
 
 
+def _record_background_error(exc: Exception) -> None:
+    """Same as _record_error below, but for code with no Request to pull a method/path from -
+    background loops run entirely outside the HTTP request/response cycle the global exception
+    handlers watch, so without this the error would only ever reach the container logs, never
+    system_error_log/the admin panel."""
+    db = SessionLocal()
+    try:
+        insert_error_log(
+            db,
+            tenant_id=None,
+            request_method=None,
+            request_path=None,
+            status_code=None,
+            error_type=type(exc).__name__,
+            error_message=str(exc),
+            traceback="".join(traceback_module.format_exception(type(exc), exc, exc.__traceback__)),
+        )
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+
 async def quarantine_cleanup_loop() -> None:
     """Entfernt alte verwaiste Quarantänedateien; registrierte Uploads bleiben erhalten."""
     interval_seconds = settings.quarantine_cleanup_interval_minutes * 60
@@ -61,8 +84,9 @@ async def quarantine_cleanup_loop() -> None:
                 try:
                     with SessionLocal() as db:
                         await asyncio.to_thread(cleanup_stale_quarantine_files, max_age_seconds, is_referenced=lambda path: upload_path_referenced(db, path))
-                except Exception:
+                except Exception as exc:
                     _logger.exception("Quarantäne-Cleanup fehlgeschlagen; beim nächsten Durchlauf erneut versuchen")
+                    _record_background_error(exc)
         await asyncio.sleep(interval_seconds)
 
 

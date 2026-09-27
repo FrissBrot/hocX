@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.db import SessionLocal
+from app.core.error_log import record_system_error
 from app.core.redis_client import get_redis
 from app.core.security import (
     CurrentUser,
@@ -34,6 +35,18 @@ protocol_service = ProtocolService()
 # reliable fallback/primary mechanism for the "Daten aktualisieren" live hint (see
 # poll_list_versions below for why this exists instead of relying on a Redis push).
 LIST_VERSION_POLL_INTERVAL_SECONDS = 15
+
+
+def _record_ws_error(exc: Exception, user: CurrentUser) -> None:
+    """These background tasks (forward_from_redis/poll_list_versions) run for the life of a
+    WebSocket connection, entirely outside any HTTP request - the global exception handlers
+    in main.py only see request/response exceptions, so an error here would otherwise vanish
+    with nothing in system_error_log to show for it."""
+    db = SessionLocal()
+    try:
+        record_system_error(db, exc=exc, tenant_id=user.current_tenant_id, actor_email=user.email, source="backend")
+    finally:
+        db.close()
 
 
 def _authenticate(token: str | None) -> CurrentUser | None:
@@ -225,8 +238,8 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
                 await websocket.send_text(message["data"])
         except asyncio.CancelledError:
             pass
-        except Exception:
-            pass
+        except Exception as exc:
+            _record_ws_error(exc, user)
 
     forward_task = asyncio.create_task(forward_from_redis())
 
@@ -261,8 +274,8 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
                         })
         except asyncio.CancelledError:
             pass
-        except Exception:
-            pass
+        except Exception as exc:
+            _record_ws_error(exc, user)
 
     poll_task = asyncio.create_task(poll_list_versions()) if list_ids else None
 
@@ -364,6 +377,11 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
 
     except WebSocketDisconnect:
         pass
+    except Exception as exc:
+        # Same reasoning as _record_ws_error's docstring: this loop runs for the life of the
+        # WebSocket connection, outside the HTTP request/response cycle the global handlers
+        # watch, so an unexpected bug here would otherwise never reach system_error_log.
+        _record_ws_error(exc, user)
     finally:
         forward_task.cancel()
         try:

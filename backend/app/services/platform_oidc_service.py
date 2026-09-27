@@ -58,8 +58,8 @@ def _verify_state(state: str) -> dict:
         payload = base64.urlsafe_b64decode(payload_b64)
         expected = hmac.new(settings.admin_auth_secret.encode(), payload, hashlib.sha256).digest()
         provided = base64.urlsafe_b64decode(sig_b64)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid OIDC state")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid OIDC state") from exc
     if not hmac.compare_digest(expected, provided):
         raise HTTPException(status_code=400, detail="OIDC state signature invalid")
     return json.loads(payload)
@@ -73,7 +73,7 @@ def _fetch_discovery(issuer_url: str) -> dict:
         with urllib.request.urlopen(url, timeout=10) as resp:
             return json.loads(resp.read())
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"OIDC discovery failed: {exc}")
+        raise HTTPException(status_code=502, detail=f"OIDC discovery failed: {exc}") from exc
 
 
 def _fetch_json(url: str, data: bytes | None = None, headers: dict | None = None) -> dict:
@@ -82,7 +82,7 @@ def _fetch_json(url: str, data: bytes | None = None, headers: dict | None = None
         with urllib.request.urlopen(req, timeout=10) as resp:
             return json.loads(resp.read())
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"OIDC request failed: {exc}")
+        raise HTTPException(status_code=502, detail=f"OIDC request failed: {exc}") from exc
 
 
 class PlatformOidcService:
