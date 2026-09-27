@@ -15,7 +15,7 @@ def _scan(content, *, host: str, port: int) -> str:
         result = pyclamd.ClamdNetworkSocket(host=host, port=port, timeout=60).scan_stream(content)
         if result is None:
             return "clean"
-        if any(status == "FOUND" for status, _reason in result.values()):
+        if any(status == "FOUND" and not reason.startswith("Heuristics.Limits.Exceeded") for status, reason in result.values()):
             return "infected"
         _logger.error("ClamAV konnte die Datei nicht prüfen: %s", result)
         return "error"

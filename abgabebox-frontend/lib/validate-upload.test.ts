@@ -52,9 +52,9 @@ describe("validateUploadFiles", () => {
     expect(result).toEqual({ ok: true });
   });
 
-  it("allows any extension when allowedFileTypes is empty", () => {
+  it("rejects unsupported formats even when allowedFileTypes is empty", () => {
     const result = validateUploadFiles([fakeFile("anything.xyz", 100)], { ...opts, allowedFileTypes: [] });
-    expect(result).toEqual({ ok: true });
+    expect(result.ok).toBe(false);
   });
 
   it("checks extension case-insensitively", () => {
@@ -78,4 +78,16 @@ describe("validateUploadFiles", () => {
     const result = validateUploadFiles(files, { ...opts, maxFiles: null, alreadyUploaded: 1000 });
     expect(result).toEqual({ ok: true });
   });
+});
+
+
+it("allows exactly 150 MiB of payload and rejects one additional byte", () => {
+  const opts = { maxFiles: null, allowedFileTypes: [], maxFileSizeMb: 100 };
+  const files = [{ name: "a.pdf", size: 100 * 1024 ** 2 }, { name: "b.pdf", size: 50 * 1024 ** 2 }] as File[];
+  expect(validateUploadFiles(files, opts)).toEqual({ ok: true });
+  expect(validateUploadFiles([...files, { name: "c.pdf", size: 1 } as File], opts).ok).toBe(false);
+});
+it("keeps a hard request count even for unlimited assignments", () => {
+  const files = Array.from({ length: 51 }, () => ({ name: "a.pdf", size: 1 }) as File);
+  expect(validateUploadFiles(files, { maxFiles: null, allowedFileTypes: [], maxFileSizeMb: 100 }).ok).toBe(false);
 });

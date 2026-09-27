@@ -134,6 +134,7 @@ def test_regenerate_malicious_domain_string_stays_a_single_contained_value(db, m
         f"tenant-app-{domain_row.id}-backend",
         f"tenant-app-{domain_row.id}-auth",
         f"tenant-app-{domain_row.id}-word-import",
+        f"tenant-app-{domain_row.id}-gallery-upload",
     }
     # The malicious string is preserved verbatim as one opaque value inside the rule -
     # it did not fragment into separate YAML structure.
@@ -157,3 +158,14 @@ def test_regenerate_newline_in_domain_does_not_produce_extra_yaml_keys(db, monke
     # No stray "fake-key" ever appears as a real top-level router or config key.
     assert "fake-key" not in config
     assert "fake-key" not in config.get("http", {})
+
+
+def test_custom_domains_use_release_upload_middlewares_and_prefix(monkeypatch):
+    monkeypatch.setattr(traefik_config_service.settings, 'router_prefix', 'release-test')
+    monkeypatch.setattr(traefik_config_service.settings, 'traefik_middleware_prefix', 'release-test-')
+    gallery = traefik_config_service._app_routers('photos.example.com', 1)['tenant-app-1-gallery-upload']
+    box = traefik_config_service._abgabebox_routers('box.example.com', 2)['tenant-abgabebox-2-upload']
+    assert gallery['service'] == 'release-test-gallery-upload@docker'
+    assert gallery['middlewares'] == ['release-test-gallery-upload-inflight@docker']
+    assert box['service'] == 'release-test-abgabebox-backend@docker'
+    assert 'release-test-abgabebox-upload-body-limit@docker' in box['middlewares']

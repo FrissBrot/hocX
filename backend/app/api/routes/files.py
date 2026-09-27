@@ -6,7 +6,6 @@ from typing import Annotated, Literal
 
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.dialects.postgresql import insert
 from app.models.entities import CycleConfig, Event, GalleryUploadJob, PhotoAlbum, PhotoAlbumItem, SubmissionAssignment
 from app.schemas.files import PhotoAlbumCreate, PhotoAlbumItemBestUpdate, PhotoAlbumRead, PhotoAlbumItemsUpdate
 from sqlalchemy.orm import Session
@@ -20,6 +19,10 @@ from app.core.config import settings
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
 from app.models import GalleryImage, ProtocolElementBlock, ProtocolImage, StoredFile, Tenant
 from app.schemas.files import (
+    AlbumPendingReleaseRead,
+    AlbumReleaseRequest,
+    AlbumReleaseResult,
+    SharedTargetAlbumRead,
     AlbumShareCreate,
     AlbumShareRequestRead,
     AlbumShareRespond,
@@ -52,7 +55,9 @@ from app.repositories.file_repository import StoredFileRepository
 from app.services.upload_lock import acquire_upload_lock
 from starlette.concurrency import run_in_threadpool
 
-router = APIRouter()
+from app.gallery_upload_route import GalleryUploadRoute
+
+router = APIRouter(route_class=GalleryUploadRoute)
 service = FileService()
 access_service = AccessService()
 submission_service = SubmissionService()
@@ -78,6 +83,9 @@ def list_files(
     source: FileOverviewSource | None = Query(default=None),
     album_id: Annotated[uuid.UUID | None, Query()] = None,
     exclude_album_id: Annotated[uuid.UUID | None, Query()] = None,
+    # Nur mit album_id, nur fuer den Besitzer wirksam: True zeigt nur die noch nicht
+    # freigegebenen Fotos (Pruefansicht vor der Freigabe).
+    share_pending: Annotated[bool | None, Query()] = None,
     only_images: bool = Query(default=False),
     exclude_images: bool = Query(default=False),
     search: str | None = Query(default=None),
@@ -97,10 +105,15 @@ def list_files(
     require_writer(user)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
-    if album_id is not None:
-        _get_album(db, user, album_id)
+    album = _get_album(db, user, album_id) if album_id is not None else None
     if exclude_album_id is not None:
         _get_album(db, user, exclude_album_id)
+    album_share_pending = None
+    if album is not None:
+        if photo_album_share_service.hides_pending_items(album, user.current_tenant_id):
+            album_share_pending = False
+        elif share_pending is not None:
+            album_share_pending = share_pending
     items = service.list_tenant_files(
         db,
         # None when album_id is set: the album_id JOIN already fully scopes the result to an
@@ -118,6 +131,7 @@ def list_files(
         sort_dir=sort_dir,
         album_id=album_id,
         exclude_album_id=exclude_album_id,
+        album_share_pending=album_share_pending,
     )
     if album_id is not None:
         # is_best fetched only for this page's items (at most `limit`), not the whole
@@ -126,15 +140,18 @@ def list_files(
         # no reason to also pre-fetch every member's is_best up front (audit fix,
         # 2026-09-17 - same over-fetch this whole route used to have for file_ids).
         page_ids = [item.id for item in items]
-        best_by_id: dict[uuid.UUID, bool] = dict(
-            db.execute(
-                select(PhotoAlbumItem.file_id, PhotoAlbumItem.is_best).where(
+        state_by_id = {
+            row.file_id: row
+            for row in db.execute(
+                select(PhotoAlbumItem.file_id, PhotoAlbumItem.is_best, PhotoAlbumItem.share_pending).where(
                     PhotoAlbumItem.album_id == album_id, PhotoAlbumItem.file_id.in_(page_ids)
                 )
             ).all()
-        ) if page_ids else {}
+        } if page_ids else {}
         for item in items:
-            item.is_best = best_by_id.get(item.id, False)
+            state = state_by_id.get(item.id)
+            item.is_best = bool(state and state.is_best)
+            item.share_pending = bool(state and state.share_pending)
         # Best-of first within an album, otherwise the caller's own sort/pagination as-is -
         # this only re-orders the (already album-scoped, at most PAGE_SIZE-large) page
         # itself, it doesn't change what page skip/limit fetch.
@@ -207,8 +224,11 @@ def list_similarity_groups(
         raise HTTPException(status_code=400, detail="No active tenant")
     file_ids = None
     if album_id is not None:
-        _get_album(db, user, album_id)
-        file_ids = list(db.scalars(select(PhotoAlbumItem.file_id).where(PhotoAlbumItem.album_id == album_id)))
+        album = _get_album(db, user, album_id)
+        item_query = select(PhotoAlbumItem.file_id).where(PhotoAlbumItem.album_id == album_id)
+        if photo_album_share_service.hides_pending_items(album, user.current_tenant_id):
+            item_query = item_query.where(PhotoAlbumItem.share_pending.is_(False))
+        file_ids = list(db.scalars(item_query))
     return service.group_similar_gallery_images(
         db,
         user.current_tenant_id,
@@ -358,6 +378,9 @@ async def upload_gallery_images(
     submission_assignment_id: uuid.UUID | None = Form(default=None),
     submission_element_ref: str | None = Form(default=None),
     cycle_config_id: uuid.UUID | None = Form(default=None),
+    # Im Upload-Dialog bestaetigt: Fotos, die dabei in ein geteiltes Auto-Album fallen, sofort
+    # freigeben (sonst nur vorgemerkt, siehe photo_album_service.add_items).
+    release_to_shared_albums: Annotated[bool, Form()] = False,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -442,6 +465,8 @@ async def upload_gallery_images(
             staged_paths.append(str(staged_path.relative_to(settings.storage_root)))
             batch_bytes += staged_path.stat().st_size
             reserved_bytes += await run_in_threadpool(inspect_gallery_zip, staged_path) if is_zip else staged_path.stat().st_size
+            if reserved_bytes > 20 * 1024**3:
+                raise HTTPException(413, "Der Upload ist entpackt grösser als 20 GiB")
             if batch_bytes > MAX_GALLERY_UPLOAD_BATCH_BYTES:
                 raise HTTPException(
                     status_code=413,
@@ -467,6 +492,7 @@ async def upload_gallery_images(
         upload_element_ref=submission_element_ref,
         upload_element_label=upload_element_label,
         upload_cycle_config_id=upload_cycle_config_id,
+        release_to_shared_albums=release_to_shared_albums,
         requested_by=user.user_id,
         # A ZIP's matching entries are only known once the ingest loop opens it; a batch
         # of individually-selected images (no ZIP at all) knows its count immediately.
@@ -477,12 +503,13 @@ async def upload_gallery_images(
         _enforce_tenant_storage_quota(db, tenant_id=user.current_tenant_id, repo=StoredFileRepository(), incoming_bytes=reserved_bytes)
         db.add(job)
         db.commit()
-        db.refresh(job)
     except BaseException:
         db.rollback()
         for relative_path in staged_paths:
             (Path(settings.storage_root) / relative_path).unlink(missing_ok=True)
         raise
+    # Once committed, staging belongs to the durable job even if refresh fails.
+    db.refresh(job)
     return _gallery_upload_job_to_read(job)
 
 
@@ -876,8 +903,12 @@ def list_albums(db: Session = Depends(get_db), user: CurrentUser = Depends(get_c
     require_writer(user)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
+    entries = photo_album_service.list_albums_with_stats(db, service, user.current_tenant_id)
+    shared_ids = photo_album_share_service.shared_album_ids(
+        db, [entry.album.id for entry in entries if entry.album.tenant_id == user.current_tenant_id]
+    )
     results = []
-    for entry in photo_album_service.list_albums_with_stats(db, service, user.current_tenant_id):
+    for entry in entries:
         is_owner = entry.album.tenant_id == user.current_tenant_id
         owner_tenant_name = None
         shared_with: list[AlbumTenantShareStatus] = []
@@ -886,6 +917,7 @@ def list_albums(db: Session = Depends(get_db), user: CurrentUser = Depends(get_c
                 AlbumTenantShareStatus(
                     tenant_public_id=row.tenant_public_id,
                     tenant_name=row.tenant_name,
+                    tenant_profile_image_url=row.tenant_profile_image_url,
                     status=row.status,
                     invited_at=row.invited_at,
                     responded_at=row.responded_at,
@@ -904,9 +936,72 @@ def list_albums(db: Session = Depends(get_db), user: CurrentUser = Depends(get_c
                 cover_thumbnail_urls=entry.cover_thumbnail_urls,
                 owner_tenant_name=owner_tenant_name,
                 shared_with=shared_with,
+                is_shared=not is_owner or entry.album.id in shared_ids,
+                pending_share_count=entry.pending_share_count,
             )
         )
     return results
+
+
+@router.get("/files/album-pending-releases", response_model=list[AlbumPendingReleaseRead])
+def list_album_pending_releases(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Eigene geteilte Alben mit automatisch einsortierten, noch nicht freigegebenen Fotos -
+    fuer den Hinweis auf der Fotos-Seite."""
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    return [
+        AlbumPendingReleaseRead(album_id=row.album_id, album_name=row.album_name, album_kind=row.album_kind, pending_count=row.pending_count)
+        for row in photo_album_share_service.list_pending_releases(db, user.current_tenant_id)
+    ]
+
+
+@router.post("/files/albums/{album_id}/release", response_model=AlbumReleaseResult)
+def release_album_items(
+    album_id: uuid.UUID, payload: AlbumReleaseRequest, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)
+):
+    """Gibt vorgemerkte Fotos eines eigenen Albums fuer die Partner frei - nur der Besitzer,
+    denn nur er sieht die vorgemerkten Fotos."""
+    require_writer(user)
+    album = db.scalar(select(PhotoAlbum).where(PhotoAlbum.id == album_id, PhotoAlbum.tenant_id == user.current_tenant_id))
+    if album is None:
+        raise HTTPException(status_code=404, detail="Album nicht gefunden")
+    released = photo_album_share_service.release_pending(db, album.id, payload.file_ids)
+    return AlbumReleaseResult(released=released)
+
+
+@router.get("/files/upload-target-shared-albums", response_model=list[SharedTargetAlbumRead])
+def list_upload_target_shared_albums(
+    event_id: uuid.UUID | None = Query(default=None),
+    submission_assignment_id: uuid.UUID | None = Query(default=None),
+    submission_element_ref: str | None = Query(default=None),
+    cycle_config_id: uuid.UUID | None = Query(default=None),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Welche bereits geteilten Alben ein Galerie-Upload mit diesem Bezug fuellen wuerde - der
+    Upload-Dialog fragt damit, ob die Fotos gleich freigegeben werden sollen."""
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    target = _resolve_upload_target(
+        db,
+        user,
+        event_id=event_id,
+        submission_assignment_id=submission_assignment_id,
+        submission_element_ref=submission_element_ref,
+        cycle_config_id=cycle_config_id,
+    )
+    albums = photo_album_service.existing_upload_target_albums(
+        db,
+        tenant_id=user.current_tenant_id,
+        event_id=target.event_id,
+        assignment_id=target.assignment_id,
+        element_ref=submission_element_ref,
+        cycle_config_id=target.cycle_config_id,
+    )
+    shared = photo_album_share_service.shared_album_ids(db, [album.id for album in albums])
+    return [SharedTargetAlbumRead(album_id=album.id, album_name=album.name) for album in albums if album.id in shared]
 
 
 @router.get("/files/album-share-requests", response_model=list[AlbumShareRequestRead])
@@ -1018,7 +1113,8 @@ def add_album_items(album_id: uuid.UUID, payload: PhotoAlbumItemsUpdate, db: Ses
     photos = service.list_tenant_files(db, user.current_tenant_id, only_images=True, file_ids=list(ids), limit=200)
     if {photo.id for photo in photos} != ids:
         raise HTTPException(status_code=404, detail="Foto nicht gefunden")
-    db.execute(insert(PhotoAlbumItem).values([{"album_id": album_id, "file_id": file_id} for file_id in ids]).on_conflict_do_nothing())
+    # Manuell hinzugefuegt = bewusst geteilt (das Frontend warnt vorher bei geteilten Alben).
+    photo_album_service.add_items(db, album, list(ids), release=True)
     db.commit()
     photo_album_service.recompute_best_of(db, service, album)
 

@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import time
 import uuid
 from contextlib import contextmanager
 from datetime import UTC, date, datetime
 from io import BytesIO
 from pathlib import Path, PurePosixPath
-from typing import Iterator, Literal
+from typing import Callable, Iterator, Literal
 
 from fastapi import HTTPException, UploadFile
 from PIL import Image
@@ -278,6 +279,7 @@ class FileService:
         file_ids: list[uuid.UUID] | None = None,
         album_id: uuid.UUID | None = None,
         exclude_album_id: uuid.UUID | None = None,
+        album_share_pending: bool | None = None,
     ) -> list[FileOverviewItem]:
         """tenant_id=None drops the tenant filter entirely (see
         StoredFileRepository._files_overview_branches) - used when album_id or file_ids
@@ -300,6 +302,7 @@ class FileService:
             file_ids=file_ids,
             album_id=album_id,
             exclude_album_id=exclude_album_id,
+            album_share_pending=album_share_pending,
         )
         return [self._build_overview_item(row) for row in rows]
 
@@ -818,7 +821,9 @@ class FileService:
         upload_element_ref: str | None = None,
         upload_element_label: str | None = None,
         upload_cycle_config: CycleConfig | None = None,
+        release_to_shared_albums: bool = False,
         live_clips: dict[str, bytes] | None = None,
+        before_commit: Callable[[list[FileOverviewItem], list[str]], None] | None = None,
     ) -> tuple[list[FileOverviewItem], list[str]]:
         """Persists a batch of already-decoded (filename, bytes) images for the "Dateien"/
         "Fotos" gallery upload window - only genuine images (magic bytes, not filename)
@@ -858,6 +863,9 @@ class FileService:
         upload_event = db.get(Event, upload_event_id) if upload_event_id is not None else None
         files, duplicate_errors = self._filter_exact_duplicates(db, tenant_id, files)
         if not files:
+            if before_commit:
+                before_commit([], duplicate_errors)
+            db.commit()
             return [], duplicate_errors
         live_clips = live_clips or {}
         clip_names = [filename for filename, _content in files if filename in live_clips]
@@ -883,7 +891,7 @@ class FileService:
             label = filename or "Bild"
             source_checksum = hashlib.sha256(content).hexdigest()
             source_filename = filename
-            if scan_status != "infected" and is_heic(content):
+            if scan_status not in ("infected", "error") and is_heic(content):
                 converted = await asyncio.to_thread(convert_heic_to_jpeg, content)
                 if converted is None:
                     errors.append(f"{label}: HEIC-Datei konnte nicht gelesen werden")
@@ -998,6 +1006,8 @@ class FileService:
                 )
             )
 
+        if before_commit:
+            before_commit(items, errors)
         db.commit()
 
         if items:
@@ -1031,6 +1041,7 @@ class FileService:
                         stored_file_public_ids=file_ids,
                         cycle_config=upload_cycle_config,
                         fallback_date=representative_date_by_year[cycle_year],
+                        release_shared=release_to_shared_albums,
                     )
             elif upload_event_id is not None or (upload_assignment is not None and upload_element_ref is not None):
                 photo_album_service.assign_uploaded_files(
@@ -1042,6 +1053,7 @@ class FileService:
                     assignment=upload_assignment,
                     element_ref=upload_element_ref,
                     element_label=upload_element_label,
+                    release_shared=release_to_shared_albums,
                 )
 
         return items, errors
@@ -1198,6 +1210,25 @@ class FileService:
     # "decode the whole batch, then ingest all of it" shape.
     GALLERY_INGEST_BATCH_SIZE = 4
 
+    def cleanup_gallery_staging(self, db: Session) -> None:
+        active_paths = {
+            path for paths in db.scalars(select(GalleryUploadJob.staged_paths).where(
+                GalleryUploadJob.status.in_(["queued", "running"])
+            )) for path in paths
+        }
+        cutoff = time.time() - 24 * 60 * 60  # deutlich länger als der 3-h-Empfang
+        for directory in (Path(settings.upload_root) / "_multipart", Path(settings.upload_root) / "_staging" / "gallery"):
+            if not directory.exists():
+                continue
+            for path in directory.iterdir():
+                if not path.is_file() or str(path.relative_to(settings.storage_root)) in active_paths:
+                    continue
+                try:
+                    if path.stat().st_mtime < cutoff:
+                        path.unlink(missing_ok=True)
+                except FileNotFoundError:
+                    pass  # ein gerade abgeschlossener Request hat die Datei übernommen
+
     def process_pending_gallery_upload_jobs(self, db: Session) -> None:
         """Background-loop task (see app/main.py's gallery_upload_ingest_loop): works
         through every currently-queued gallery_upload_job, oldest first, one at a time -
@@ -1208,12 +1239,12 @@ class FileService:
         _run_gallery_upload_job is async (it awaits save_gallery_uploads' scan_many), so
         each job gets its own asyncio.run() here rather than this whole method being async
         itself."""
+        self.cleanup_gallery_staging(db)
         # Der aufrufende Hintergrundloop hält den globalen Ingest-Lock. Ein running-Job
         # kann hier nur von einem abgebrochenen Vorgänger stammen. Quelldateien bleiben
         # bis zum erfolgreichen Abschluss erhalten; exakte Duplikate machen Replay sicher.
         for interrupted in db.scalars(select(GalleryUploadJob).where(GalleryUploadJob.status == "running")):
             interrupted.status = "queued"
-            interrupted.processed_files = 0
             interrupted.total_files = None
         db.commit()
         while True:
@@ -1242,12 +1273,12 @@ class FileService:
                 job.finished_at = datetime.now(UTC)
                 db.commit()
             else:
-                for relative_path in job.staged_paths:
-                    (Path(settings.storage_root) / relative_path).unlink(missing_ok=True)
                 job.status = "done"
                 job.reserved_bytes = 0
                 job.finished_at = datetime.now(UTC)
                 db.commit()
+                for relative_path in job.staged_paths:
+                    (Path(settings.storage_root) / relative_path).unlink(missing_ok=True)
 
     async def _run_gallery_upload_job(self, db: Session, job: GalleryUploadJob) -> None:
         upload_assignment = db.get(SubmissionAssignment, job.upload_assignment_id) if job.upload_assignment_id else None
@@ -1259,8 +1290,9 @@ class FileService:
         # incrementally instead of trusting the upfront count a pure-images batch gets.
         counting_incrementally = job.total_files is None
         if counting_incrementally:
-            job.total_files = 0
+            job.total_files = job.processed_files
             db.commit()
+        resume = {"remaining": job.processed_files}
 
         # Live Photos selected as separate files (IMG_1.HEIC + IMG_1.MOV): the clip is read
         # together with its image below and skipped as a file of its own. A ZIP is never
@@ -1279,26 +1311,23 @@ class FileService:
                 if index in clip_index_for_image
                 else None
             )
-            try:
-                if staged_path.suffix.lower() == ".zip":
-                    await self._ingest_gallery_zip(
-                        db, job, staged_path, upload_assignment=upload_assignment, upload_cycle_config=upload_cycle_config
-                    )
-                else:
-                    await self._ingest_gallery_batch(
-                        db,
-                        job,
-                        [(original_filename, staged_path.read_bytes())],
-                        upload_assignment=upload_assignment,
-                        upload_cycle_config=upload_cycle_config,
-                        live_clips={original_filename: clip_path.read_bytes()} if clip_path is not None else None,
-                    )
-                    if counting_incrementally:
-                        db.refresh(job)
-                        job.total_files += 1
-                        db.commit()
-            finally:
-                pass  # Rohdaten erst nach vollständigem Jobabschluss entfernen.
+            if staged_path.suffix.lower() == ".zip":
+                await self._ingest_gallery_zip(
+                    db, job, staged_path, upload_assignment=upload_assignment,
+                    upload_cycle_config=upload_cycle_config, resume=resume,
+                )
+            elif resume["remaining"]:
+                resume["remaining"] -= 1
+            else:
+                await self._ingest_gallery_batch(
+                    db, job, [(original_filename, staged_path.read_bytes())],
+                    upload_assignment=upload_assignment, upload_cycle_config=upload_cycle_config,
+                    live_clips={original_filename: clip_path.read_bytes()} if clip_path is not None else None,
+                )
+                if counting_incrementally:
+                    db.refresh(job)
+                    job.total_files += 1
+                    db.commit()
 
     async def _ingest_gallery_zip(
         self,
@@ -1308,6 +1337,7 @@ class FileService:
         *,
         upload_assignment: SubmissionAssignment | None,
         upload_cycle_config: CycleConfig | None,
+        resume: dict[str, int] | None = None,
     ) -> None:
         """Streams staged_path via iter_gallery_zip_entries and ingests it in bounded
         batches - see GALLERY_INGEST_BATCH_SIZE. A queued job's total_files starts at 0 (see
@@ -1320,6 +1350,8 @@ class FileService:
         to contain zero images - saw_anything tracks that here instead, so a ZIP with no
         images and no per-entry problems still gets one clear error rather than silently
         importing nothing."""
+        resume = resume if resume is not None else {"remaining": 0}
+        skip_clip = False
         batch: list[tuple[str, bytes]] = []
         live_clips: dict[str, bytes] = {}
         saw_anything = False
@@ -1337,14 +1369,19 @@ class FileService:
         for item in iter_gallery_zip_entries(staged_path):
             saw_anything = True
             if isinstance(item, str):
-                job.errors = [*job.errors, item]
+                job.errors = list(dict.fromkeys([*job.errors, item]))
                 db.commit()
                 continue
             if isinstance(item, GalleryZipClip):
                 # Always directly follows its image (see iter_gallery_zip_entries), which is
                 # why a batch is only flushed *before* the next image is added, never right
                 # after one - otherwise a pair could be split across two batches.
-                live_clips[item.image_name] = item.content
+                if not skip_clip:
+                    live_clips[item.image_name] = item.content
+                continue
+            skip_clip = resume["remaining"] > 0
+            if skip_clip:
+                resume["remaining"] -= 1
                 continue
             # Clips are matched to images by name, so two same-named images (different ZIP
             # folders) must not share a batch.
@@ -1383,24 +1420,20 @@ class FileService:
             with _tenant_protocol_image_upload_lock(db, job.tenant_id):
                 rules = submission_upload_rules.load_rules(db, upload_assignment, job.upload_element_ref)
             batch, rule_errors = rules.filter_batch(batch)
+        def checkpoint(items: list[FileOverviewItem], errors: list[str]) -> None:
+            job.imported_file_ids = [*job.imported_file_ids, *(str(item.id) for item in items)]
+            job.errors = [*job.errors, *rule_errors, *errors]
+            job.processed_files += len(batch) + len(rule_errors)
+
         if not batch:
-            db.commit()  # releases the lock
-            items, errors = [], []
+            checkpoint([], [])
+            db.commit()
         else:
-            items, errors = await self._save_gallery_batch(
-                db,
-                job,
-                batch,
-                upload_assignment=upload_assignment,
-                upload_cycle_config=upload_cycle_config,
-                live_clips=live_clips,
+            await self._save_gallery_batch(
+                db, job, batch, upload_assignment=upload_assignment,
+                upload_cycle_config=upload_cycle_config, live_clips=live_clips,
+                before_commit=checkpoint,
             )
-        errors = [*rule_errors, *errors]
-        db.refresh(job)
-        job.imported_file_ids = [*job.imported_file_ids, *(str(item.id) for item in items)]
-        job.errors = [*job.errors, *errors]
-        job.processed_files += len(batch) + len(rule_errors)
-        db.commit()
 
     async def _save_gallery_batch(
         self,
@@ -1411,6 +1444,7 @@ class FileService:
         upload_assignment: SubmissionAssignment | None,
         upload_cycle_config: CycleConfig | None,
         live_clips: dict[str, bytes] | None = None,
+        before_commit: Callable[[list[FileOverviewItem], list[str]], None] | None = None,
     ) -> tuple[list[FileOverviewItem], list[str]]:
         return await self.save_gallery_uploads(
             db,
@@ -1423,7 +1457,9 @@ class FileService:
             upload_element_ref=job.upload_element_ref,
             upload_element_label=job.upload_element_label,
             upload_cycle_config=upload_cycle_config,
+            release_to_shared_albums=job.release_to_shared_albums,
             live_clips=live_clips,
+            before_commit=before_commit,
         )
 
     def save_word_import_document(

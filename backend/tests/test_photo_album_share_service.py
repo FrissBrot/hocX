@@ -1,11 +1,14 @@
-"""Tests for photo_album_share_service.py: mandantenuebergreifende Freigabe eines "manual"
-Fotoalbums an einen anderen Mandanten (invite -> pending -> accepted/declined), und die daraus
-folgenden Zugriffsrechte (accessible_tenant_ids_for_album/accessible_album_ids_for_tenant)."""
+"""Tests for photo_album_share_service.py: mandantenuebergreifende Freigabe eines Fotoalbums
+(manuell oder automatisch gefuehrt) an einen anderen Mandanten (invite -> pending ->
+accepted/declined), und die daraus folgenden Zugriffsrechte
+(accessible_tenant_ids_for_album/accessible_album_ids_for_tenant)."""
+
+import uuid
 
 import pytest
 
-from app.models.entities import PhotoAlbum
-from app.services import photo_album_share_service
+from app.models.entities import PhotoAlbum, PhotoAlbumItem
+from app.services import photo_album_service, photo_album_share_service
 from tests.factories import make_cycle_config, make_tenant
 
 
@@ -27,13 +30,36 @@ def _make_cycle_album(db, tenant_id: int, name: str = "Zyklus-Album") -> PhotoAl
     return album
 
 
-def test_invite_rejects_non_manual_albums(db):
+def test_invite_allows_automatically_managed_albums_too(db):
+    """Sharing works on kind='cycle'/'submission'/'submission_element' albums exactly like on
+    a manual one - the invite/accept mechanism doesn't care how an album's items got there."""
     owner = make_tenant(db)
     partner = make_tenant(db)
     album = _make_cycle_album(db, owner.id)
 
-    with pytest.raises(photo_album_share_service.AlbumShareError):
-        photo_album_share_service.invite(db, album, target_tenant_id=partner.id, invited_by=None)
+    share = photo_album_share_service.invite(db, album, target_tenant_id=partner.id, invited_by=None)
+
+    assert share.status == "pending"
+
+
+def test_photos_added_automatically_to_an_already_shared_album_wait_for_release(db):
+    """The share covers the ALBUM, not a snapshot of its current items. A photo that the owner's
+    normal upload/sync pipeline later files into an already-shared album (see
+    photo_album_service.add_items) lands in the album right away but is only pre-marked
+    (share_pending). The partner only sees it after it is released manually."""
+    owner = make_tenant(db)
+    partner = make_tenant(db)
+    album = _make_cycle_album(db, owner.id)
+    photo_album_share_service.invite(db, album, target_tenant_id=partner.id, invited_by=None)
+    photo_album_share_service.respond(db, album_id=album.id, tenant_id=partner.id, accept=True, responded_by=None)
+
+    new_photo_id = uuid.uuid4()
+    photo_album_service.add_items(db, album, [new_photo_id])
+    db.commit()
+
+    assert db.get(PhotoAlbumItem, {"album_id": album.id, "file_id": new_photo_id}).share_pending is True
+    assert photo_album_share_service.release_pending(db, album.id) == 1
+    assert db.get(PhotoAlbumItem, {"album_id": album.id, "file_id": new_photo_id}).share_pending is False
 
 
 def test_invite_rejects_the_owner_itself(db):
@@ -218,9 +244,12 @@ def test_list_shares_for_album_reports_every_status(db):
     photo_album_share_service.invite(db, album, target_tenant_id=declined.id, invited_by=None)
     photo_album_share_service.respond(db, album_id=album.id, tenant_id=declined.id, accept=False, responded_by=None)
 
-    rows = {row.tenant_name: row.status for row in photo_album_share_service.list_shares_for_album(db, album.id)}
+    rows = {row.tenant_public_id: row for row in photo_album_share_service.list_shares_for_album(db, album.id)}
 
-    assert rows == {"Akzeptiert AG": "accepted", "Abgelehnt AG": "declined"}
+    assert {key: row.status for key, row in rows.items()} == {accepted.public_id: "accepted", declined.public_id: "declined"}
+    # Name nur mit Trust: Annehmen begruendet ihn, Ablehnen nicht.
+    assert rows[accepted.public_id].tenant_name == "Akzeptiert AG"
+    assert rows[declined.public_id].tenant_name is None
 
 
 def test_list_shares_for_album_reports_invited_and_responded_dates(db):
@@ -232,9 +261,9 @@ def test_list_shares_for_album_reports_invited_and_responded_dates(db):
     photo_album_share_service.respond(db, album_id=album.id, tenant_id=accepted.id, accept=True, responded_by=None)
     photo_album_share_service.invite(db, album, target_tenant_id=pending.id, invited_by=None)
 
-    rows = {row.tenant_name: row for row in photo_album_share_service.list_shares_for_album(db, album.id)}
+    rows = {row.tenant_public_id: row for row in photo_album_share_service.list_shares_for_album(db, album.id)}
 
-    assert rows["Akzeptiert AG"].invited_at is not None
-    assert rows["Akzeptiert AG"].responded_at is not None
-    assert rows["Offen AG"].invited_at is not None
-    assert rows["Offen AG"].responded_at is None
+    assert rows[accepted.public_id].invited_at is not None
+    assert rows[accepted.public_id].responded_at is not None
+    assert rows[pending.public_id].invited_at is not None
+    assert rows[pending.public_id].responded_at is None

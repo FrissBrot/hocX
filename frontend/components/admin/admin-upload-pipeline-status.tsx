@@ -37,12 +37,14 @@ const SOURCE_LABELS = SOURCE_LABEL;
 const SCAN_STATUS_LABELS: Record<string, string> = {
   clean: "Sauber",
   pending: "Prüfung ausstehend",
+  error: "Prüfung fehlgeschlagen",
   infected: "Infiziert",
 };
 
 const SCAN_STATUS_VARIANTS: Record<string, BadgeVariant> = {
   clean: "success",
   pending: "warning",
+  error: "danger",
   infected: "danger",
 };
 

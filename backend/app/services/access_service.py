@@ -112,7 +112,8 @@ class AccessService:
         album_ids = db.scalars(
             select(PhotoAlbumItem.album_id)
             .join(StoredFile, StoredFile.public_id == PhotoAlbumItem.file_id)
-            .where(StoredFile.id == stored_file_id)
+            # Noch nicht freigegebene Fotos (share_pending) sind fuer Partner nicht lesbar.
+            .where(StoredFile.id == stored_file_id, PhotoAlbumItem.share_pending.is_(False))
         )
         return any(tenant_id in photo_album_share_service.accessible_tenant_ids_for_album(db, album_id) for album_id in album_ids)
 

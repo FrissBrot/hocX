@@ -15,6 +15,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.entities import AppUser, PhotoAlbum, PhotoAlbumItem, ShareLink, ShareLinkFile
+from app.services import photo_album_share_service
 
 # 24 Bytes = 192 Bit Entropie, als URL-safe Base64 (32 Zeichen) - nicht erratbar. Gleiches Mass
 # wie submission_link_service.generate_token().
@@ -46,6 +47,7 @@ def create_for_files(
 def create_for_album(
     db: Session, *, tenant_id: int, name: str, album: PhotoAlbum, expires_at: datetime | None, created_by: int | None
 ) -> ShareLink:
+    photo_album_share_service.release_stale_pending(db, album.id)
     link = ShareLink(tenant_id=tenant_id, name=name, token=generate_token(), album_id=album.id, expires_at=expires_at, created_by=created_by)
     db.add(link)
     db.commit()
@@ -71,7 +73,12 @@ def resolve_active(db: Session, token: str) -> ShareLink | None:
 
 def file_ids_for_link(db: Session, link: ShareLink) -> list[uuid.UUID]:
     if link.album_id is not None:
-        return list(db.scalars(select(PhotoAlbumItem.file_id).where(PhotoAlbumItem.album_id == link.album_id)))
+        # Noch nicht freigegebene Fotos (share_pending) gehoeren nicht in den oeffentlichen Link.
+        return list(
+            db.scalars(
+                select(PhotoAlbumItem.file_id).where(PhotoAlbumItem.album_id == link.album_id, PhotoAlbumItem.share_pending.is_(False))
+            )
+        )
     return list(db.scalars(select(ShareLinkFile.file_id).where(ShareLinkFile.share_link_id == link.id)))
 
 
@@ -112,7 +119,7 @@ def list_for_tenant(db: Session, tenant_id: int) -> list[ShareLinkOverviewRow]:
     if album_ids:
         rows = db.execute(
             select(PhotoAlbumItem.album_id, func.count())
-            .where(PhotoAlbumItem.album_id.in_(album_ids))
+            .where(PhotoAlbumItem.album_id.in_(album_ids), PhotoAlbumItem.share_pending.is_(False))
             .group_by(PhotoAlbumItem.album_id)
         ).all()
         album_item_counts = dict(rows)

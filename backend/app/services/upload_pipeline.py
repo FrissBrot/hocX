@@ -319,6 +319,10 @@ async def stage_upload_to_disk(file: UploadFile, *, target_dir: Path, max_bytes:
     if file.size is not None and file.size > max_bytes:
         raise HTTPException(413, f"{file.filename or 'Datei'}: zu gross (maximal {max_bytes // 1024**2} MiB)")
     target_dir.mkdir(parents=True, exist_ok=True)
+    from app.gallery_upload_route import GalleryTemporaryFile
+    if isinstance(file.file, GalleryTemporaryFile):
+        target_path = target_dir / f"{uuid4().hex}{suffix}"
+        return await run_in_threadpool(file.file.adopt, target_path)
     if shutil.disk_usage(target_dir).free < (file.size or max_bytes) + 256 * 1024**2:
         raise HTTPException(507, "Zu wenig freier Speicher für den Upload")
     target_path = target_dir / f"{uuid4().hex}{suffix}"
@@ -446,10 +450,7 @@ def generate_thumbnail_bytes(content: bytes) -> tuple[bytes, int, int] | None:
         return None
 
 
-# Distinct namespace (paired with tenant_id as the two int32 advisory-lock keys) from
-# file_service.py's _PROTOCOL_IMAGE_QUOTA_LOCK_NAMESPACE and the background loops' fixed
-# single-bigint ids (202600xxx range) - guards the tenant-wide storage-quota check/write
-# race below.
+# Gemeinsamer Upload-Lock mit Galerie, Dokumenten und öffentlicher Abgabebox.
 _TENANT_STORAGE_QUOTA_LOCK_NAMESPACE = 909100001
 
 

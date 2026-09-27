@@ -29,6 +29,8 @@ function makeAlbum(overrides: Partial<PhotoAlbum> = {}): PhotoAlbum {
     cover_thumbnail_urls: [],
     owner_tenant_name: null,
     shared_with: [],
+    is_shared: false,
+    pending_share_count: 0,
     ...overrides,
   };
 }
@@ -111,11 +113,20 @@ describe("PhotoAlbums", () => {
     expect(screen.queryByRole("button", { name: "Mit anderem Mandanten teilen" })).toBeNull();
   });
 
-  it("offers 'Mit anderem Mandanten teilen' only for the tenant's own manual albums", async () => {
+  it("offers 'Mit anderem Mandanten teilen' for the tenant's own albums", async () => {
     mockListEndpoints([makeAlbum()], []);
 
     render(<PhotoAlbums />);
     fireEvent.click(await screen.findByText("Sommerlager"));
+
+    expect(await screen.findByRole("button", { name: "Mit anderem Mandanten teilen" })).toBeTruthy();
+  });
+
+  it("also offers sharing for an own automatically-managed album (e.g. a Zyklus-Album)", async () => {
+    mockListEndpoints([makeAlbum({ kind: "cycle", name: "Biber 2026" })], []);
+
+    render(<PhotoAlbums />);
+    fireEvent.click(await screen.findByText("Biber 2026"));
 
     expect(await screen.findByRole("button", { name: "Mit anderem Mandanten teilen" })).toBeTruthy();
   });

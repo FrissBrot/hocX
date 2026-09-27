@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const browserApiFetchMock = vi.fn();
 const showToastMock = vi.fn();
+const confirmMock = vi.fn();
 
 vi.mock("@/lib/api/client", () => ({
   browserApiBaseUrl: "",
@@ -11,6 +12,10 @@ vi.mock("@/lib/api/client", () => ({
 
 vi.mock("@/contexts/toast-context", () => ({
   useToast: () => showToastMock,
+}));
+
+vi.mock("@/contexts/confirm-context", () => ({
+  useConfirm: () => confirmMock,
 }));
 
 import { AlbumPhotoPicker } from "./album-photo-picker";
@@ -25,6 +30,8 @@ const album: PhotoAlbum = {
   cover_thumbnail_urls: [],
   owner_tenant_name: null,
   shared_with: [],
+  is_shared: false,
+  pending_share_count: 0,
 };
 
 function makeItem(id: string, groupDate: string, inAlbum = false): FileOverviewItem {
@@ -70,6 +77,7 @@ describe("AlbumPhotoPicker", () => {
   beforeEach(() => {
     browserApiFetchMock.mockReset();
     showToastMock.mockReset();
+    confirmMock.mockReset();
     browserApiFetchMock.mockImplementation((path: string) => Promise.resolve(path.startsWith("/api/files?") ? items : undefined));
   });
 
@@ -106,6 +114,32 @@ describe("AlbumPhotoPicker", () => {
     });
     expect(showToastMock).toHaveBeenCalledWith("2 Fotos zum Album hinzugefügt.", "success");
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("does not ask for confirmation when the album is not shared", async () => {
+    const onAdded = vi.fn();
+    render(<AlbumPhotoPicker album={album} onClose={vi.fn()} onAdded={onAdded} />);
+
+    fireEvent.click((await screen.findAllByRole("button", { name: "Alle auswählen" }))[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Hinzufügen" }));
+
+    await waitFor(() => expect(onAdded).toHaveBeenCalled());
+    expect(confirmMock).not.toHaveBeenCalled();
+  });
+
+  it("warns before adding photos to a shared album and adds nothing when cancelled", async () => {
+    confirmMock.mockResolvedValue(false);
+    const onAdded = vi.fn();
+    render(<AlbumPhotoPicker album={{ ...album, is_shared: true }} onClose={vi.fn()} onAdded={onAdded} />);
+
+    fireEvent.click((await screen.findAllByRole("button", { name: "Alle auswählen" }))[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Hinzufügen" }));
+
+    await waitFor(() => expect(confirmMock).toHaveBeenCalled());
+    expect(confirmMock.mock.calls[0][0]).toMatchObject({ title: "Fotos werden geteilt", confirmLabel: "Hinzufügen und teilen" });
+    expect(confirmMock.mock.calls[0][0].message).toContain("2 Fotos werden damit sofort");
+    expect(browserApiFetchMock).not.toHaveBeenCalledWith("/api/files/albums/album-1/items", expect.anything());
+    expect(onAdded).not.toHaveBeenCalled();
   });
 
   it("passes source filter and exclude_album_id to the listing", async () => {

@@ -136,7 +136,7 @@ def test_document_upload_enforces_the_abgabes_max_file_size(db):
         _upload_documents(db, writer, assignment, ref, [_upload_file(PDF + b"x" * (1024 * 1024), "gross.pdf")])
 
     assert exc_info.value.status_code == 413
-    assert "maximal 1 MB" in exc_info.value.detail
+    assert "maximal 1 MiB" in exc_info.value.detail
 
 
 def test_document_upload_counts_abgabebox_files_and_earlier_in_app_uploads_against_max_files(db):

@@ -1,7 +1,7 @@
 """Frühe Uploadgrenzen vor Starlettes Multipart-Parser, auch ohne Reverse Proxy."""
 import shutil
 import tempfile
-from starlette.exceptions import HTTPException
+from starlette.formparsers import MultiPartException
 from starlette.responses import JSONResponse
 
 
@@ -31,17 +31,27 @@ class UploadAdmissionMiddleware:
             return await JSONResponse({"detail": "Zu wenig freier Speicher für den Upload"}, 507)(scope, receive, send)
         self.active += 1
         received = 0
+        failure_status = None
+        next_disk_check = 4 * 1024**2
         async def bounded_receive():
-            nonlocal received
+            nonlocal received, failure_status, next_disk_check
             message = await receive()
             if message["type"] == "http.request":
                 received += len(message.get("body", b""))
                 if received > self.max_bytes:
-                    raise HTTPException(413, "Upload insgesamt zu gross")
-                if shutil.disk_usage(tempfile.gettempdir()).free < 256 * 1024**2:
-                    raise HTTPException(507, "Zu wenig freier Speicher für den Upload")
+                    failure_status = 413
+                    raise MultiPartException("Upload insgesamt zu gross")
+                if received >= next_disk_check:
+                    next_disk_check = received + 4 * 1024**2
+                    if shutil.disk_usage(tempfile.gettempdir()).free < 256 * 1024**2:
+                        failure_status = 507
+                        raise MultiPartException("Zu wenig freier Speicher für den Upload")
             return message
+        async def bounded_send(message):
+            if message["type"] == "http.response.start" and failure_status:
+                message = {**message, "status": failure_status}
+            await send(message)
         try:
-            await self.app(scope, bounded_receive, send)
+            await self.app(scope, bounded_receive, bounded_send)
         finally:
             self.active -= 1

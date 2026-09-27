@@ -18,7 +18,9 @@ vi.mock("@/contexts/confirm-context", () => ({
 }));
 
 import { AlbumShareModal } from "./album-share-modal";
-import { PhotoAlbum } from "@/types/api";
+import { AlbumTenantShareStatus, PhotoAlbum, TenantLookup } from "@/types/api";
+
+const TENANT_ID = "01a0b7e9-c62b-7044-b081-78169c5e02e3";
 
 function makeAlbum(overrides: Partial<PhotoAlbum> = {}): PhotoAlbum {
   return {
@@ -30,8 +32,42 @@ function makeAlbum(overrides: Partial<PhotoAlbum> = {}): PhotoAlbum {
     cover_thumbnail_urls: [],
     owner_tenant_name: null,
     shared_with: [],
+    is_shared: false,
+    pending_share_count: 0,
     ...overrides,
   };
+}
+
+function anonymous(id = TENANT_ID): TenantLookup {
+  return { id, trusted: false, name: null, slug: null, participant_count: null, profile_image_url: null };
+}
+
+function trusted(overrides: Partial<TenantLookup> = {}): TenantLookup {
+  return {
+    id: TENANT_ID,
+    trusted: true,
+    name: "Jubla Sonnenberg",
+    slug: "jubla-sonnenberg",
+    participant_count: 48,
+    profile_image_url: `/api/tenants/${TENANT_ID}/profile-image`,
+    ...overrides,
+  };
+}
+
+function share(overrides: Partial<AlbumTenantShareStatus> = {}): AlbumTenantShareStatus {
+  return {
+    tenant_public_id: "partner-1",
+    tenant_name: "Pfadi Wildegg",
+    tenant_profile_image_url: null,
+    status: "accepted",
+    invited_at: "2026-09-10T08:00:00Z",
+    responded_at: "2026-09-12T08:00:00Z",
+    ...overrides,
+  };
+}
+
+function typeInto(value: string) {
+  fireEvent.change(screen.getByPlaceholderText("Mandanten-ID einfügen"), { target: { value } });
 }
 
 describe("AlbumShareModal", () => {
@@ -41,78 +77,108 @@ describe("AlbumShareModal", () => {
     confirmMock.mockReset();
   });
 
-  it("looks up the tenant by public_id on blur and shows the found name", async () => {
-    browserApiFetchMock.mockResolvedValue({ id: "tenant-public-id", name: "Nachbarverein", slug: "nachbarverein", participant_count: 48 });
+  it("shows only an anonymous match for a pasted id without trust", async () => {
+    browserApiFetchMock.mockResolvedValue(anonymous());
 
     render(<AlbumShareModal open album={makeAlbum()} onClose={() => {}} onChanged={() => {}} />);
-    fireEvent.change(screen.getByPlaceholderText("Mandanten-ID einfügen"), { target: { value: "tenant-public-id" } });
-    fireEvent.blur(screen.getByPlaceholderText("Mandanten-ID einfügen"));
+    typeInto(TENANT_ID);
 
-    expect(await screen.findByText("✓ Gefunden")).toBeTruthy();
-    expect(screen.getByText("Nachbarverein")).toBeTruthy();
-    expect(screen.getByText("nachbarverein · 48 Teilnehmer")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Nachbarverein einladen" })).toBeEnabled();
-    expect(browserApiFetchMock).toHaveBeenCalledWith("/api/tenants/lookup?public_id=tenant-public-id");
+    expect(await screen.findByText("Mandant gefunden")).toBeTruthy();
+    expect(browserApiFetchMock).toHaveBeenCalledWith(`/api/tenants/lookup?public_id=${TENANT_ID}`);
+    expect(screen.getByTestId("tenant-avatar-generic")).toBeTruthy();
+    expect(screen.queryByRole("img")).toBeNull();
+    expect(screen.getByRole("button", { name: "Einladen" })).toBeEnabled();
   });
 
-  it("shows an error and keeps invite disabled when no tenant is found", async () => {
+  it("shows name, details and profile image for a trusted tenant", async () => {
+    browserApiFetchMock.mockResolvedValue(trusted());
+
+    render(<AlbumShareModal open album={makeAlbum()} onClose={() => {}} onChanged={() => {}} />);
+    typeInto(TENANT_ID);
+
+    expect(await screen.findByText("Jubla Sonnenberg")).toBeTruthy();
+    expect(screen.getByText("jubla-sonnenberg · 48 Teilnehmer")).toBeTruthy();
+    expect(document.querySelector(".album-share-found img")?.getAttribute("src")).toBe(`/api/tenants/${TENANT_ID}/profile-image`);
+    expect(screen.getByRole("button", { name: "Jubla Sonnenberg einladen" })).toBeEnabled();
+  });
+
+  it("searches names only among trusted tenants and lets one be picked", async () => {
+    browserApiFetchMock.mockResolvedValue([trusted()]);
+
+    render(<AlbumShareModal open album={makeAlbum()} onClose={() => {}} onChanged={() => {}} />);
+    typeInto("jubla");
+
+    fireEvent.click(await screen.findByRole("button", { name: /Jubla Sonnenberg/ }));
+
+    expect(browserApiFetchMock).toHaveBeenCalledWith("/api/tenants/trusted?search=jubla");
+    expect(browserApiFetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/api/tenants/lookup"));
+    expect(await screen.findByText("✓ Gefunden")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Jubla Sonnenberg einladen" })).toBeEnabled();
+  });
+
+  it("explains that unknown tenants are only found by id", async () => {
+    browserApiFetchMock.mockResolvedValue([]);
+
+    render(<AlbumShareModal open album={makeAlbum()} onClose={() => {}} onChanged={() => {}} />);
+    typeInto("Geheimer Verein");
+
+    expect(await screen.findByText(/Neue Mandanten findest du nur über ihre Mandanten-ID/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Einladen" })).toBeDisabled();
+  });
+
+  it("shows an error and keeps invite disabled when no tenant has the id", async () => {
     browserApiFetchMock.mockRejectedValue(new Error("404"));
 
     render(<AlbumShareModal open album={makeAlbum()} onClose={() => {}} onChanged={() => {}} />);
-    fireEvent.change(screen.getByPlaceholderText("Mandanten-ID einfügen"), { target: { value: "unknown" } });
-    fireEvent.blur(screen.getByPlaceholderText("Mandanten-ID einfügen"));
+    typeInto(TENANT_ID);
 
     expect(await screen.findByText("Kein Mandant mit dieser ID gefunden.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Einladen" })).toBeDisabled();
   });
 
-  it("resolves a pasted full tenant id right away and clears it again", async () => {
-    browserApiFetchMock.mockResolvedValue({ id: "01a0b7e9-c62b-7044-b081-78169c5e02e3", name: "Jubla Sonnenberg", slug: "jubla-sonnenberg", participant_count: 48 });
-
-    render(<AlbumShareModal open album={makeAlbum()} onClose={() => {}} onChanged={() => {}} />);
-    fireEvent.change(screen.getByPlaceholderText("Mandanten-ID einfügen"), { target: { value: "01a0b7e9-c62b-7044-b081-78169c5e02e3" } });
-
-    expect(await screen.findByText("Jubla Sonnenberg")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Eingabe leeren" }));
-    expect(screen.queryByText("Jubla Sonnenberg")).toBeNull();
-    expect(screen.getByRole("button", { name: "Einladen" })).toBeDisabled();
-  });
-
-  it("invites the found tenant and reports the change", async () => {
-    browserApiFetchMock.mockResolvedValueOnce({ id: "tenant-public-id", name: "Nachbarverein", slug: null, participant_count: 0 });
+  it("invites an anonymous tenant without ever naming it", async () => {
+    browserApiFetchMock.mockResolvedValueOnce(anonymous());
     browserApiFetchMock.mockResolvedValueOnce(undefined);
     const onChanged = vi.fn();
 
     render(<AlbumShareModal open album={makeAlbum()} onClose={() => {}} onChanged={onChanged} />);
-    fireEvent.change(screen.getByPlaceholderText("Mandanten-ID einfügen"), { target: { value: "tenant-public-id" } });
-    fireEvent.blur(screen.getByPlaceholderText("Mandanten-ID einfügen"));
-    await screen.findByText("✓ Gefunden");
+    typeInto(TENANT_ID);
+    await screen.findByText("Mandant gefunden");
 
-    fireEvent.click(screen.getByRole("button", { name: "Nachbarverein einladen" }));
+    fireEvent.click(screen.getByRole("button", { name: "Einladen" }));
 
-    await waitFor(() => expect(browserApiFetchMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
     const [path, init] = browserApiFetchMock.mock.calls[1];
     expect(path).toBe("/api/files/albums/album-1/shares");
-    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ target_tenant_public_id: "tenant-public-id" });
-    expect(showToastMock).toHaveBeenCalledWith("Einladung an Nachbarverein gesendet.", "success");
-    expect(onChanged).toHaveBeenCalledTimes(1);
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ target_tenant_public_id: TENANT_ID });
+    expect(showToastMock).toHaveBeenCalledWith("Einladung gesendet.", "success");
   });
 
-  it("lists existing shares with their status and revokes on confirm", async () => {
+  it("lists a pending invite to an untrusted tenant anonymously", () => {
+    const album = makeAlbum({
+      shared_with: [share({ tenant_public_id: TENANT_ID, tenant_name: null, status: "pending", responded_at: null })],
+    });
+
+    render(<AlbumShareModal open album={album} onClose={() => {}} onChanged={() => {}} />);
+
+    expect(screen.getByText("Unbekannter Mandant")).toBeTruthy();
+    expect(screen.getByText("01a0b7e9…")).toBeTruthy();
+    expect(screen.getByText("Einladung offen")).toBeTruthy();
+    expect(screen.getByTestId("tenant-avatar-generic")).toBeTruthy();
+  });
+
+  it("lists a trusted share with name and revokes it on confirm", async () => {
     confirmMock.mockResolvedValue(true);
     browserApiFetchMock.mockResolvedValue(undefined);
     const onChanged = vi.fn();
-    const album = makeAlbum({
-      shared_with: [{ tenant_public_id: "partner-1", tenant_name: "Nachbarverein", status: "accepted", invited_at: "2026-09-10T08:00:00Z", responded_at: "2026-09-12T08:00:00Z" }],
-    });
 
-    render(<AlbumShareModal open album={album} onClose={() => {}} onChanged={onChanged} />);
+    render(<AlbumShareModal open album={makeAlbum({ shared_with: [share()] })} onClose={() => {}} onChanged={onChanged} />);
 
-    expect(screen.getByText("Nachbarverein")).toBeTruthy();
+    expect(screen.getByText("Pfadi Wildegg")).toBeTruthy();
     expect(screen.getByText("Hat Zugriff")).toBeTruthy();
     expect(screen.getByText(/^seit 12\. Sept?\. 2026$/)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Freigabe für Nachbarverein entfernen" }));
+    fireEvent.click(screen.getByRole("button", { name: "Freigabe für Pfadi Wildegg entfernen" }));
 
     await waitFor(() => expect(browserApiFetchMock).toHaveBeenCalledWith("/api/files/albums/album-1/shares/partner-1", { method: "DELETE" }));
     expect(onChanged).toHaveBeenCalledTimes(1);
@@ -120,13 +186,10 @@ describe("AlbumShareModal", () => {
 
   it("does not revoke when the confirmation is declined", async () => {
     confirmMock.mockResolvedValue(false);
-    const album = makeAlbum({
-      shared_with: [{ tenant_public_id: "partner-1", tenant_name: "Nachbarverein", status: "pending", invited_at: "2026-09-21T08:00:00Z", responded_at: null }],
-    });
+    const album = makeAlbum({ shared_with: [share({ status: "pending", responded_at: null })] });
 
     render(<AlbumShareModal open album={album} onClose={() => {}} onChanged={() => {}} />);
-    expect(screen.getByText("Einladung offen")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Einladung an Nachbarverein zurückziehen" }));
+    fireEvent.click(screen.getByRole("button", { name: "Einladung an Pfadi Wildegg zurückziehen" }));
 
     await waitFor(() => expect(confirmMock).toHaveBeenCalledTimes(1));
     expect(browserApiFetchMock).not.toHaveBeenCalled();

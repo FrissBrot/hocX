@@ -4,7 +4,7 @@ import { ChangeEvent, DragEvent, FormEvent, useCallback, useEffect, useRef, useS
 
 import { CaptchaWidget } from "@/components/captcha-widget";
 import { publicApiUrl } from "@/lib/api";
-import { validateUploadFiles } from "@/lib/validate-upload";
+import { validateUploadFiles, SUPPORTED_UPLOAD_EXTENSIONS } from "@/lib/validate-upload";
 
 type Props = {
   linkToken: string;
@@ -45,8 +45,8 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
     };
   }, []);
 
-  const accept = allowedFileTypes.length > 0 ? allowedFileTypes.map((t) => `.${t}`).join(",") : undefined;
-  const typeLabel = allowedFileTypes.length > 0 ? allowedFileTypes.map((t) => t.toUpperCase()).join(", ") : "Alle Dateitypen";
+  const accept = (allowedFileTypes.length > 0 ? allowedFileTypes : SUPPORTED_UPLOAD_EXTENSIONS).map((t) => `.${t}`).join(",");
+  const typeLabel = allowedFileTypes.length > 0 ? allowedFileTypes.map((t) => t.toUpperCase()).join(", ") : "Bilder, PDF und Office-Dokumente";
   const remaining = maxFiles === null ? null : Math.max(0, maxFiles - uploadedSoFar);
 
   function validateAndSet(selected: File[]): boolean {
@@ -97,7 +97,7 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
         publicApiUrl(
           `/api/public/${encodeURIComponent(linkToken)}/assignments/${encodeURIComponent(assignmentSlug)}/elements/${encodeURIComponent(elementRef)}/captcha-verify`
         ),
-        { method: "POST", body: formData, signal: AbortSignal.timeout(3 * 60 * 60 * 1000) }
+        { method: "POST", body: formData, signal: AbortSignal.timeout(30_000) }
       );
       if (!response.ok) {
         // Eintausch fehlgeschlagen (z.B. FriendlyCaptcha-Loesung inzwischen abgelaufen) - Widget
@@ -248,7 +248,7 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
             : "Datei auswählen oder hierher ziehen"}
         </div>
         <div className="drop-zone-hint">
-          {typeLabel} · {remaining === null ? "beliebig viele Dateien" : `max. ${remaining} weitere ${remaining === 1 ? "Datei" : "Dateien"}`} · je {maxFileSizeMb} MB
+          {typeLabel} · {remaining === null ? "max. 50 Dateien pro Upload" : `max. ${remaining} weitere ${remaining === 1 ? "Datei" : "Dateien"}`} · je {maxFileSizeMb} MiB · insgesamt maximal 150 MiB
         </div>
       </div>
 

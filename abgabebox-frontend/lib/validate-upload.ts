@@ -1,3 +1,5 @@
+export const SUPPORTED_UPLOAD_EXTENSIONS = ["pdf", "jpg", "jpeg", "png", "gif", "webp", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "pages", "key", "numbers", "heic", "heif"];
+
 // Extracted from upload-form.tsx (audit A5, 2026-08-16) so the client-side file validation
 // - the reviewer's only defense before a request goes out from this unauthenticated public
 // form - is a plain, unit-testable function instead of logic only reachable by rendering the
@@ -35,6 +37,10 @@ export function validateUploadFiles(
         error: `Maximal ${maxFiles} Datei(en) insgesamt erlaubt (${remaining} noch möglich)`,
       };
     }
+  }
+  const unsupported = selected.find((file) => !SUPPORTED_UPLOAD_EXTENSIONS.includes(getExtension(file.name)));
+  if (unsupported) {
+    return { ok: false, error: `„${unsupported.name}“ wird nicht unterstützt. Bitte ein Bild, PDF oder Office-Dokument wählen.` };
   }
   if (allowedFileTypes.length > 0) {
     const allowed = allowedFileTypes.map((t) => t.toLowerCase());

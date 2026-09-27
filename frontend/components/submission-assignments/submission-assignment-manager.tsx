@@ -67,12 +67,14 @@ const LOG_STATUS_VARIANT: Record<string, BadgeVariant> = {
 const SCAN_STATUS_LABEL: Record<string, string> = {
   clean: "Geprüft",
   pending: "Quarantäne",
+  error: "Prüfung fehlgeschlagen",
   infected: "Schadware",
 };
 
 const SCAN_STATUS_VARIANT: Record<string, BadgeVariant> = {
   clean: "success",
   pending: "warning",
+  error: "danger",
   infected: "danger",
 };
 
@@ -89,6 +91,7 @@ type Props = {
 function statusLabel(element: SubmissionElementStatusEntry): string {
   if (element.status === "closed") return "Geschlossen";
   if (element.status === "submitted") {
+    if (element.files.some((f) => f.scan_status === "error")) return "Prüfung fehlgeschlagen";
     if (element.files.some((f) => f.scan_status === "pending")) return "In Quarantäne";
     return "Abgegeben";
   }
@@ -103,6 +106,7 @@ function statusLabel(element: SubmissionElementStatusEntry): string {
 function statusVariant(element: SubmissionElementStatusEntry): BadgeVariant | null {
   if (element.status === "closed") return "neutral";
   if (element.status === "submitted") {
+    if (element.files.some((f) => f.scan_status === "error")) return "danger";
     if (element.files.some((f) => f.scan_status === "pending")) return "warning";
     return "success";
   }

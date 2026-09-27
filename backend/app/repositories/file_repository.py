@@ -330,6 +330,7 @@ class StoredFileRepository:
         file_ids: list[uuid.UUID] | None = None,
         album_id: uuid.UUID | None = None,
         exclude_album_id: uuid.UUID | None = None,
+        album_share_pending: bool | None = None,
     ) -> list[Row]:
         """Every "Dateien"/"Fotos" the tenant has produced by uploading something - protocol
         images, the raw .docx/.pdf a word-import was read from, abgabebox submission uploads,
@@ -352,7 +353,10 @@ class StoredFileRepository:
 
         exclude_album_id is the opposite filter for the "Fotos hinzufuegen" picker's
         "Bereits enthaltene ausblenden": done in SQL rather than client-side so paging stays
-        dense (a client-side filter would leave pages that are mostly or entirely empty)."""
+        dense (a client-side filter would leave pages that are mostly or entirely empty).
+
+        album_share_pending (nur zusammen mit album_id) filtert auf photo_album_item.share_pending:
+        False blendet noch nicht freigegebene Fotos aus (Partner-Sicht), True zeigt nur diese."""
         branches = self._files_overview_branches(tenant_id)
         selected = [branch for key, branch in branches.items() if source is None or source == key]
         union_query = union_all(*selected).subquery("files_overview")
@@ -363,6 +367,8 @@ class StoredFileRepository:
                 PhotoAlbumItem,
                 and_(PhotoAlbumItem.file_id == union_query.c.public_id, PhotoAlbumItem.album_id == album_id),
             )
+            if album_share_pending is not None:
+                query = query.where(PhotoAlbumItem.share_pending.is_(album_share_pending))
         if exclude_album_id is not None:
             query = query.where(
                 ~select(PhotoAlbumItem.file_id)

@@ -13341,6 +13341,15 @@ input[type="radio"] {
   font-weight: 700;
 }
 
+/* Noch nicht für die Partner freigegeben (nur in der Albumansicht des Besitzers). */
+.photo-tile-badge-pending {
+  left: auto;
+  right: 8px;
+  background: var(--warning-bg);
+  color: var(--warning-fg);
+  font-weight: 600;
+}
+
 /* Live Photo: LIVE-Marke oben rechts (unten links sitzt "Best-of", oben links die Auswahl) und der
    Clip als Deckschicht über dem Standbild - erst sichtbar, wenn sein erstes Bild da ist. */
 .photo-tile-badge-live {
@@ -13982,6 +13991,60 @@ input[type="radio"] {
 .album-share-row-name {
   flex: 1;
   min-width: 200px;
+}
+
+/* Hinweis auf automatisch einsortierte, noch nicht freigegebene Fotos in geteilten Alben:
+   gut sichtbar (Warnpunkt, getönte Fläche), aber schlank und ohne Alarmtext. */
+.album-release-notice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent 70%);
+  background: color-mix(in srgb, var(--warning-bg) 60%, var(--panel) 40%);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.album-release-notice-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--warning);
+}
+
+.album-release-notice-text {
+  flex: 1;
+  min-width: 200px;
+}
+
+.album-release-notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.album-release-notice-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-strong);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.album-release-notice-link:hover {
+  text-decoration: underline;
+}
+
+/* Upload-Dialog: Bezug fällt in ein geteiltes Album - Freigabe direkt mitgeben. */
+.gallery-upload-share-release {
+  display: grid;
+  gap: var(--space-2);
 }
 
 /* Dateien table */
@@ -16403,8 +16466,12 @@ input[type="radio"] {
   width: 100%;
   min-width: 0;
   padding-right: 40px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: var(--text-base);
+}
+
+.album-share-modal .album-share-input input.album-share-input-id,
+.album-share-entry-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 .album-share-input-clear {
@@ -16460,9 +16527,14 @@ input[type="radio"] {
   font-weight: 700;
 }
 
-.album-share-found .album-share-avatar {
+.album-share-avatar-lg {
   width: 40px;
   height: 40px;
+}
+
+.album-share-avatar-img {
+  object-fit: cover;
+  background: var(--neutral-bg);
 }
 
 .album-share-avatar-success { background: var(--success-bg); color: var(--success-fg); }
@@ -16518,8 +16590,27 @@ input[type="radio"] {
   padding: var(--space-3) var(--space-4);
 }
 
-.album-share-entry + .album-share-entry {
+.album-share-entry + .album-share-entry,
+.album-share-list > li + li {
   border-top: 1px solid var(--border);
+}
+
+.album-share-suggestion,
+.album-share-suggestion:hover {
+  --button-bg: transparent;
+  --button-hover-bg: var(--neutral-bg);
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--button-bg);
+  color: var(--text);
+  font-weight: 400;
+  text-align: left;
+}
+
+.album-share-suggestion:hover {
+  background: var(--button-hover-bg);
 }
 
 .album-share-entry .badge {
@@ -16541,6 +16632,18 @@ input[type="radio"] {
 
   .album-share-entry .badge {
     margin-left: 48px;
+  }
+
+  .album-share-found {
+    flex-wrap: wrap;
+  }
+
+  .album-share-found .album-share-entry-text {
+    flex: 1 1 calc(100% - 52px);
+  }
+
+  .album-share-found-mark {
+    margin-left: 52px;
   }
 
   .album-share-entry-action {

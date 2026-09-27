@@ -1,6 +1,6 @@
 services:
   clamav:
-    image: clamav/clamav:latest
+    image: clamav/clamav@sha256:9cb27d7660bdf66e9878c832cb433dd8aa152cfbe16f3c2c0084c80b04ae22b4
     restart: unless-stopped
     # Audit finding, 2026-08-27: this file had NONE of the hardening docker-compose.yml
     # (dev) already applies to its own (profile-gated) clamav service - the actual prod
@@ -43,6 +43,7 @@ services:
         max-file: "3"
     volumes:
       - clamav_db:/var/lib/clamav
+      - ./infra/clamav/clamd.conf:/etc/clamav/clamd.conf:ro
     healthcheck:
       test: ["CMD", "clamdcheck.sh"]
       interval: 60s

@@ -207,4 +207,51 @@ describe("PhotosView", () => {
     expect(await screen.findByText(/Analyse läuft · 11 Bilder/)).toBeInTheDocument();
     expect(screen.queryByText(/19 von 30 Bildern bewertet/)).not.toBeInTheDocument();
   });
+
+  it("shows a notice for photos in shared albums that still need to be released", async () => {
+    mockFilesAndProgress([], NO_PROGRESS);
+    const baseImplementation = browserApiFetchMock.getMockImplementation()!;
+    browserApiFetchMock.mockImplementation((url: string, init?: unknown) =>
+      url === "/api/files/album-pending-releases"
+        ? Promise.resolve([{ album_id: "album-1", album_name: "Sommerlager", album_kind: "cycle", pending_count: 3 }])
+        : baseImplementation(url, init),
+    );
+    render(<PhotosView />);
+
+    expect(await screen.findByText("3 Fotos im geteilten Album „Sommerlager“ warten noch auf deine Freigabe.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
+    await waitFor(() => expect(screen.getByRole("tab", { name: "Alben" })).toHaveAttribute("aria-selected", "true"));
+  });
+
+  it("shows no release notice when nothing is pending", async () => {
+    mockFilesAndProgress([], NO_PROGRESS);
+    render(<PhotosView />);
+
+    await waitFor(() => expect(browserApiFetchMock).toHaveBeenCalledWith("/api/files/album-pending-releases"));
+    expect(screen.queryByText(/warten noch auf deine Freigabe/)).not.toBeInTheDocument();
+  });
+
+  it("filters the album view to pending photos and releases the selection", async () => {
+    const items = [makeItem({ id: "p1", share_pending: true }), makeItem({ id: "p2", share_pending: true })];
+    const onReleased = vi.fn();
+    browserApiFetchMock.mockImplementation((url: string) => {
+      if (url.startsWith("/api/files?")) return Promise.resolve(items);
+      if (url === "/api/files/albums/album-1/release") return Promise.resolve({ released: 1 });
+      return Promise.resolve([]);
+    });
+    render(<PhotosView albumId="album-1" sharePendingOnly onReleased={onReleased} />);
+
+    expect(await screen.findAllByText("Nicht freigegeben")).toHaveLength(2);
+    expect(browserApiFetchMock.mock.calls.some(([url]) => String(url).includes("share_pending=true"))).toBe(true);
+
+    fireEvent.click(screen.getAllByRole("checkbox")[0]);
+    fireEvent.click(await screen.findByRole("button", { name: "Freigeben" }));
+
+    await waitFor(() => expect(onReleased).toHaveBeenCalled());
+    expect(browserApiFetchMock).toHaveBeenCalledWith("/api/files/albums/album-1/release", {
+      method: "POST",
+      body: JSON.stringify({ file_ids: ["p1"] }),
+    });
+    expect(showToastMock).toHaveBeenCalledWith("1 Foto freigegeben.", "success");
+  });
 });

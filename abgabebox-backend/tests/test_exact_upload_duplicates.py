@@ -26,6 +26,8 @@ def setup_upload(monkeypatch):
     monkeypatch.setattr(public.repository, 'list_checksums_for_element', lambda *a, **k: {hashlib.sha256(PDF).hexdigest()})
     monkeypatch.setattr(public, 'tenant_upload_lock', lambda *a: nullcontext())
     monkeypatch.setattr(public, 'tenant_storage_bytes', lambda *a: 0)
+    monkeypatch.setattr(public.repository, "get_tenant_storage_quota_bytes", lambda *a, **k: None)
+    monkeypatch.setattr(public.repository, "get_tenant_storage_usage_bytes", lambda *a, **k: 0)
     monkeypatch.setattr(public.repository, 'list_tenant_image_hashes', lambda *a, **k: [])
 
 

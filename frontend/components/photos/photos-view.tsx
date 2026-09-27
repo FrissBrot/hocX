@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { AlbumReleaseNotice } from "./album-share-release";
 import { GalleryUploadModal } from "./gallery-upload-modal";
 import { GalleryUploadProgress } from "./gallery-upload-progress";
 import { mergeNewItems } from "./merge-new-items";
@@ -23,7 +24,13 @@ import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { useFileDrop } from "@/lib/hooks/use-file-drop";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
-import { FileOverviewItem, GalleryUploadJob, GalleryUploadJobDetail, PhotoAnalysisProgress as ProgressData } from "@/types/api";
+import {
+  AlbumPendingRelease,
+  FileOverviewItem,
+  GalleryUploadJob,
+  GalleryUploadJobDetail,
+  PhotoAnalysisProgress as ProgressData,
+} from "@/types/api";
 
 const PAGE_SIZE = 60;
 const SYNC_INTERVAL_MS = 15000;
@@ -43,9 +50,17 @@ const SORT_OPTIONS: SortOption[] = [
 
 type Props = {
   albumId?: string;
+  // Albumansicht des Besitzers: nur die noch nicht freigegebenen Fotos zeigen.
+  sharePendingOnly?: boolean;
+  // Nach einer Freigabe aus dieser Ansicht (Albumzähler/Hinweis neu laden).
+  onReleased?: () => void;
 };
 
-export function PhotosView({ albumId }: Props) {
+function photoCountLabel(count: number) {
+  return count === 1 ? "1 Foto" : `${count} Fotos`;
+}
+
+export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Props) {
   const embedded = Boolean(albumId);
   const router = useRouter();
   const showToast = useToast();
@@ -70,6 +85,9 @@ export function PhotosView({ albumId }: Props) {
   const [analysisProgress, setAnalysisProgress] = useState<ProgressData | null>(null);
   const [queuedUploadId, setQueuedUploadId] = useState<string | undefined>();
   const [galleryUploadJobs, setGalleryUploadJobs] = useState<GalleryUploadJob[]>([]);
+  // Eigene geteilte Alben mit automatisch einsortierten, noch nicht freigegebenen Fotos.
+  const [pendingReleases, setPendingReleases] = useState<AlbumPendingRelease[]>([]);
+  const [openAlbumId, setOpenAlbumId] = useState<string | null>(null);
   const requestIdRef = useRef(0);
   const didMountRef = useRef(false);
   const viewerOpenRef = useRef(false);
@@ -94,6 +112,7 @@ export function PhotosView({ albumId }: Props) {
     if (search.trim()) params.set("search", search.trim());
     tagFilter.forEach((tag) => params.append("tags", tag));
     if (albumId) params.set("album_id", albumId);
+    if (albumId && sharePendingOnly) params.set("share_pending", "true");
     params.set("skip", String(skip));
     params.set("limit", String(PAGE_SIZE));
     params.set("sort_by", sortKey);
@@ -122,7 +141,36 @@ export function PhotosView({ albumId }: Props) {
     }, firstLoad ? 0 : 250);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, tagFilter.join(","), sortKey, sortDir, albumId]);
+  }, [search, tagFilter.join(","), sortKey, sortDir, albumId, sharePendingOnly]);
+
+  function loadPendingReleases() {
+    if (embedded) return;
+    browserApiFetch<AlbumPendingRelease[]>("/api/files/album-pending-releases")
+      .then((data) => setPendingReleases(data ?? []))
+      .catch(() => {});
+  }
+
+  useEffect(() => {
+    loadPendingReleases();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  async function releaseSelected() {
+    if (!albumId || selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
+    try {
+      const result = await browserApiFetch<{ released: number }>(`/api/files/albums/${albumId}/release`, {
+        method: "POST",
+        body: JSON.stringify({ file_ids: ids }),
+      });
+      const released = result?.released ?? 0;
+      showToast(released > 0 ? `${photoCountLabel(released)} freigegeben.` : "Die Auswahl war bereits freigegeben.", "success");
+      reload();
+      onReleased?.();
+    } catch {
+      showToast("Fotos konnten nicht freigegeben werden.", "error");
+    }
+  }
 
   useEffect(() => {
     browserApiFetch<string[]>("/api/files/tags").then((tags) => setTagSuggestions(tags ?? [])).catch(() => {});
@@ -301,7 +349,10 @@ export function PhotosView({ albumId }: Props) {
     }
     if (errors.length > 0) showToast(errors.join(" · "), uploaded.length > 0 ? "info" : "error");
     if (job.error) showToast(job.error, "error");
+    loadPendingReleases();
   }
+
+  const pendingReleaseTotal = pendingReleases.reduce((sum, row) => sum + row.pending_count, 0);
 
   const grouped = sortKey === "group_date";
 
@@ -338,6 +389,34 @@ export function PhotosView({ albumId }: Props) {
               </button>
             </div>
           </div>
+          {pendingReleaseTotal > 0 && (
+            <AlbumReleaseNotice
+              message={
+                pendingReleases.length === 1
+                  ? `${photoCountLabel(pendingReleaseTotal)} im geteilten Album „${pendingReleases[0].album_name}“ ${pendingReleaseTotal === 1 ? "wartet" : "warten"} noch auf deine Freigabe.`
+                  : `${photoCountLabel(pendingReleaseTotal)} in ${pendingReleases.length} geteilten Alben warten noch auf deine Freigabe.`
+              }
+            >
+              {pendingReleases.slice(0, 3).map((row) => (
+                <button
+                  key={row.album_id}
+                  type="button"
+                  className="album-release-notice-link"
+                  onClick={() => {
+                    setTab("albums");
+                    setOpenAlbumId(row.album_id);
+                  }}
+                >
+                  {pendingReleases.length === 1 ? "Prüfen" : `${row.album_name} (${row.pending_count})`}
+                </button>
+              ))}
+              {pendingReleases.length > 3 && (
+                <button type="button" className="album-release-notice-link" onClick={() => setTab("albums")}>
+                  Alle Alben
+                </button>
+              )}
+            </AlbumReleaseNotice>
+          )}
           <div className="list-filter-row list-filter-row-compact">
             <FilterTabs
               options={[
@@ -378,7 +457,11 @@ export function PhotosView({ albumId }: Props) {
       )}
 
       {tab === "albums" && !embedded ? (
-        <PhotoAlbums />
+        <PhotoAlbums
+          openAlbumId={openAlbumId}
+          onOpenedAlbum={() => setOpenAlbumId(null)}
+          onReleaseChanged={loadPendingReleases}
+        />
       ) : tab === "duplicates" && !embedded ? (
         <PhotoSimilarSeries search={search} tagFilter={tagFilter} onDeleted={handleDeletedElsewhere} />
       ) : tab === "series" && !embedded ? (
@@ -416,6 +499,9 @@ export function PhotosView({ albumId }: Props) {
               tagSuggestions={tagSuggestions}
               onClearSelection={() => setSelectedIds(new Set())}
               onDone={() => reload()}
+              onReleaseSelected={
+                albumId && items.some((item) => item.share_pending && selectedIds.has(item.id)) ? () => void releaseSelected() : undefined
+              }
             />
           )}
 

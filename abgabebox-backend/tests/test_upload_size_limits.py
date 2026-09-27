@@ -22,7 +22,7 @@ from pathlib import Path
 
 from starlette.datastructures import UploadFile
 
-from app.routes.public import MAX_UPLOAD_REQUEST_BYTES, _read_upload_within_limit
+from app.routes.public import MAX_UPLOAD_BODY_BYTES, MAX_UPLOAD_REQUEST_BYTES, _read_upload_within_limit
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 # Audit A2 (2026-08-16): this test used to check only docker-compose.yml (dev), which is
@@ -98,4 +98,4 @@ def test_max_upload_request_bytes_matches_traefik_body_limit_label():
         compose_text = compose_path.read_text()
         match = pattern.search(compose_text)
         assert match is not None, f"abgabebox-upload-body-limit maxRequestBodyBytes label not found in {compose_path.name}"
-        assert int(match.group(1)) == MAX_UPLOAD_REQUEST_BYTES, f"mismatch in {compose_path.name}"
+        assert int(match.group(1)) == MAX_UPLOAD_BODY_BYTES, f"mismatch in {compose_path.name}"

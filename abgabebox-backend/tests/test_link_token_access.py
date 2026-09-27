@@ -47,6 +47,7 @@ def test_unknown_token_is_404(monkeypatch):
 
 
 def test_valid_token_resolves_to_the_links_tenant_and_link_id(monkeypatch):
+    monkeypatch.setattr(public.repository, "is_feature_enabled", lambda *a, **k: True)
     monkeypatch.setattr(repository, "get_link_by_token", lambda db, *, token: {"id": 7, "tenant_id": 42, "token": token})
 
     assert public._get_tenant_or_404(db=None, link_token=VALID_TOKEN) == {"id": 42, "link_id": 7}

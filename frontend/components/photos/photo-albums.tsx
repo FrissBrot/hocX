@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { AlbumPhotoPicker } from "./album-photo-picker";
+import { AlbumReleaseNotice } from "./album-share-release";
 import { AlbumShareModal } from "./album-share-modal";
 import { PhotosView } from "./photos-view";
 import { Badge } from "@/components/ui/badge";
@@ -59,7 +60,22 @@ function PendingAlbumShareRequests({ requests, onDone }: { requests: AlbumShareR
   );
 }
 
-export function PhotoAlbums() {
+function photoCountLabel(count: number) {
+  return count === 1 ? "1 Foto" : `${count} Fotos`;
+}
+
+export function PhotoAlbums({
+  openAlbumId,
+  onOpenedAlbum,
+  onReleaseChanged,
+}: {
+  // Von aussen (Hinweis auf der Fotos-Seite) direkt zu öffnendes Album.
+  openAlbumId?: string | null;
+  onOpenedAlbum?: () => void;
+  // Freigaben haben sich geändert - der Hinweis auf der Fotos-Seite lädt neu.
+  onReleaseChanged?: () => void;
+} = {}) {
+  const toast = useToast();
   const [albums, setAlbums] = useState<Album[]>([]);
   const [active, setActive] = useState<Album | null>(null);
   const [pendingRequests, setPendingRequests] = useState<AlbumShareRequest[]>([]);
@@ -72,6 +88,8 @@ export function PhotoAlbums() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
+  const [pendingOnly, setPendingOnly] = useState(false);
+  const [releasing, setReleasing] = useState(false);
 
   useEffect(() => {
     browserApiFetch<Album[]>("/api/files/albums")
@@ -85,6 +103,46 @@ export function PhotoAlbums() {
       .then((data) => setPendingRequests(data ?? []))
       .catch(() => {});
   }, [revision]);
+
+  // Album aus dem Hinweis auf der Fotos-Seite öffnen, direkt in der Prüfansicht.
+  useEffect(() => {
+    if (!openAlbumId || loading) return;
+    const album = albums.find((candidate) => candidate.id === openAlbumId);
+    if (album) {
+      setActive(album);
+      setPendingOnly(album.pending_share_count > 0);
+    }
+    onOpenedAlbum?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openAlbumId, loading, albums]);
+
+  function openAlbum(album: Album) {
+    setActive(album);
+    setPendingOnly(false);
+  }
+
+  function handleReleased() {
+    setRevision((value) => value + 1);
+    onReleaseChanged?.();
+  }
+
+  async function releaseAll(album: Album) {
+    if (releasing) return;
+    setReleasing(true);
+    try {
+      const result = await browserApiFetch<{ released: number }>(`/api/files/albums/${album.id}/release`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      toast(`${photoCountLabel(result?.released ?? 0)} freigegeben.`, "success");
+      setPendingOnly(false);
+      handleReleased();
+    } catch {
+      toast("Fotos konnten nicht freigegeben werden.", "error");
+    } finally {
+      setReleasing(false);
+    }
+  }
 
   async function createAlbum(event: React.FormEvent) {
     event.preventDefault();
@@ -111,7 +169,7 @@ export function PhotoAlbums() {
       <div className="grid">
         <div className="page-header">
           <div>
-            <button type="button" className="button-ghost" onClick={() => { setActive(null); setRevision((value) => value + 1); }}>← Alle Alben</button>
+            <button type="button" className="button-ghost" onClick={() => { setActive(null); setPendingOnly(false); setRevision((value) => value + 1); }}>← Alle Alben</button>
             <h2>{active.name}</h2>
             <p className="muted">
               {ALBUM_KIND_LABEL[active.kind]}{active.kind !== "manual" ? " (automatisch geführt)" : ""}
@@ -119,19 +177,36 @@ export function PhotoAlbums() {
             </p>
             {active.shared_with.length > 0 && (
               <p className="muted">
-                Geteilt mit: {active.shared_with.map((share) => `${share.tenant_name} (${share.status === "accepted" ? "aktiv" : share.status === "pending" ? "angefragt" : "abgelehnt"})`).join(", ")}
+                Geteilt mit: {active.shared_with.map((share) => `${share.tenant_name ?? `Mandant ${share.tenant_public_id.slice(0, 8)}…`} (${share.status === "accepted" ? "aktiv" : share.status === "pending" ? "angefragt" : "abgelehnt"})`).join(", ")}
               </p>
             )}
           </div>
           <div className="table-toolbar-actions">
             <button type="button" className="button-secondary" onClick={() => setPicking(true)}>Vorhandene Fotos hinzufügen</button>
             <button type="button" className="button-secondary" onClick={() => setSharingLink(true)}>Link teilen</button>
-            {active.kind === "manual" && !active.owner_tenant_name && (
+            {!active.owner_tenant_name && (
               <button type="button" className="button-secondary" onClick={() => setSharingTenant(true)}>Mit anderem Mandanten teilen</button>
             )}
           </div>
         </div>
-        <PhotosView key={active.id + revision} albumId={active.id} />
+        {active.pending_share_count > 0 && (
+          <AlbumReleaseNotice
+            message={`${photoCountLabel(active.pending_share_count)} ${active.pending_share_count === 1 ? "wurde" : "wurden"} automatisch einsortiert und ${active.pending_share_count === 1 ? "ist" : "sind"} noch nicht geteilt. Erst nach deiner Freigabe ${active.pending_share_count === 1 ? "ist es" : "sind sie"} für die Partner sichtbar.`}
+          >
+            <button type="button" className="button-ghost" onClick={() => setPendingOnly((current) => !current)}>
+              {pendingOnly ? "Alle Fotos anzeigen" : "Nur ausstehende anzeigen"}
+            </button>
+            <button type="button" className="button-secondary" disabled={releasing} onClick={() => void releaseAll(active)}>
+              {releasing ? "Wird freigegeben…" : "Alle freigeben"}
+            </button>
+          </AlbumReleaseNotice>
+        )}
+        <PhotosView
+          key={active.id + revision}
+          albumId={active.id}
+          sharePendingOnly={pendingOnly && active.pending_share_count > 0}
+          onReleased={handleReleased}
+        />
         {picking && (
           <AlbumPhotoPicker album={active} onClose={() => setPicking(false)} onAdded={() => setRevision((value) => value + 1)} />
         )}
@@ -160,7 +235,7 @@ export function PhotoAlbums() {
       ) : (
         <div className="album-grid">
           {albums.map((album) => (
-            <button type="button" className="album-card" key={album.id} onClick={() => setActive(album)}>
+            <button type="button" className="album-card" key={album.id} onClick={() => openAlbum(album)}>
               <div className="album-cover">
                 {Array.from({ length: 4 }).map((_, index) => {
                   const url = album.cover_thumbnail_urls[index];
@@ -185,6 +260,11 @@ export function PhotoAlbums() {
                 ) : album.shared_with.some((share) => share.status === "accepted") ? (
                   <Badge variant="neutral" className="album-card-badge">Geteilt</Badge>
                 ) : null}
+                {album.pending_share_count > 0 && (
+                  <Badge variant="warning" dot className="album-card-badge">
+                    {album.pending_share_count} zur Freigabe
+                  </Badge>
+                )}
               </div>
             </button>
           ))}

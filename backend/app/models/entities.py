@@ -1502,6 +1502,7 @@ class PhotoAlbum(Base, TimestampMixin):
 
 class PhotoAlbumItem(Base):
     __tablename__ = "photo_album_item"
+    __table_args__ = (Index("idx_photo_album_item_share_pending", "album_id", postgresql_where=text("share_pending")),)
 
     album_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("photo_album.id", ondelete="CASCADE"), primary_key=True)
     # Overview IDs cover both StoredFile and SubmissionUploadFile.
@@ -1512,6 +1513,10 @@ class PhotoAlbumItem(Base):
     # A user's manual "immer im Best-of" / "nie im Best-of" pick, surviving future
     # recomputes. NULL = automatically managed (the common case).
     best_override: Mapped[str | None] = mapped_column(Text)
+    # TRUE = automatisch in ein geteiltes Album einsortiert, aber noch nicht freigegeben: nur
+    # der Besitzer-Mandant sieht das Foto im Album, Partner und Album-Links erst nach der
+    # Freigabe (siehe photo_album_share_service.release_pending).
+    share_pending: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"), default=False)
 
 
 class PhotoAlbumTenantShare(Base, TimestampMixin):
@@ -1532,6 +1537,21 @@ class PhotoAlbumTenantShare(Base, TimestampMixin):
     invited_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
     responded_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
     responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class TenantTrust(Base, TimestampMixin):
+    """Vertrauensbeziehung zwischen zwei Mandanten, entsteht beim ersten Annehmen einer
+    Album-Freigabe (photo_album_share_service.respond) und bleibt danach bestehen, auch wenn
+    die Freigabe selbst wieder endet. Symmetrisch: pro Paar genau eine Zeile mit
+    tenant_low_id < tenant_high_id. Erst mit Trust sehen sich die Mandanten gegenseitig mit
+    Namen und Profilbild und koennen sich per Namen suchen (siehe tenant_trust_service.py);
+    ohne Trust ist ein Mandant nur ueber seine ID auffindbar und bleibt anonym."""
+
+    __tablename__ = "tenant_trust"
+    __table_args__ = (CheckConstraint("tenant_low_id < tenant_high_id", name="ck_tenant_trust_ordered"),)
+
+    tenant_low_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), primary_key=True)
+    tenant_high_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), primary_key=True)
 
 
 class ShareLink(Base, TimestampMixin):
@@ -1625,6 +1645,9 @@ class GalleryUploadJob(Base, TimestampMixin):
     # submission_service on every job it processes.
     upload_element_label: Mapped[str | None] = mapped_column(Text)
     upload_cycle_config_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("cycle_config.id", ondelete="SET NULL"))
+    # Beim Upload bestaetigt: Fotos, die dabei in ein geteiltes Auto-Album fallen, gleich
+    # freigeben statt sie als share_pending einzusortieren.
+    release_to_shared_albums: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"), default=False)
     requested_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
     # Unknown until a ZIP is opened and its matching entries counted; known immediately for
     # a batch of individually-selected images.

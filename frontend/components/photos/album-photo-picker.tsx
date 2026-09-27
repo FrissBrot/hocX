@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { confirmAddToSharedAlbum } from "./album-share-release";
 import { groupPhotosByDate } from "./grouping";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
+import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
@@ -31,6 +33,7 @@ function photoCountLabel(count: number) {
  * sichtbar (gedimmt, "Im Album"), lassen sich aber nicht erneut wählen. */
 export function AlbumPhotoPicker({ album, onClose, onAdded }: { album: PhotoAlbum; onClose: () => void; onAdded: () => void }) {
   const toast = useToast();
+  const confirm = useConfirm();
   const [search, setSearch] = useState("");
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const [hideContained, setHideContained] = useState(false);
@@ -138,8 +141,9 @@ export function AlbumPhotoPicker({ album, onClose, onAdded }: { album: PhotoAlbu
 
   async function submit() {
     if (busy || selectedIds.size === 0) return;
-    setBusy(true);
     const count = selectedIds.size;
+    if (!(await confirmAddToSharedAlbum(confirm, album, count))) return;
+    setBusy(true);
     try {
       await browserApiFetch(`/api/files/albums/${album.id}/items`, {
         method: "POST",

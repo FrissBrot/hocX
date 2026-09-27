@@ -4,7 +4,7 @@ import uuid
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 FileOverviewSource = Literal["protocol_image", "word_import", "submission_upload", "gallery_upload"]
 
@@ -82,6 +82,9 @@ class FileOverviewItem(BaseModel):
     # album's state; otherwise it's "best-of in at least one album" (None if the file is in
     # no album at all - see files.py's list_files and FileService.attach_album_context).
     is_best: bool | None = None
+    # Nur mit album_id und nur fuer den Besitzer des Albums: automatisch einsortiert, aber noch
+    # nicht fuer die Partner freigegeben (siehe photo_album_share_service).
+    share_pending: bool = False
 
 
 class PhotoAnalysisJobCreate(BaseModel):
@@ -179,7 +182,9 @@ class PhotoAlbumCreate(BaseModel):
 
 class AlbumTenantShareStatus(BaseModel):
     tenant_public_id: uuid.UUID
-    tenant_name: str
+    # None ohne Trust zwischen Besitzer und Partner (siehe tenant_trust_service).
+    tenant_name: str | None = None
+    tenant_profile_image_url: str | None = None
     status: Literal["pending", "accepted", "declined"]
     invited_at: datetime
     responded_at: datetime | None = None
@@ -204,6 +209,38 @@ class PhotoAlbumRead(BaseModel):
     # Partner tenants this album has been shared with - only populated for the owning tenant
     # (see files.py's list_albums), drives the "Freigabe verwalten" section.
     shared_with: list[AlbumTenantShareStatus] = []
+    # Gerade geteilt (Mandanten-Freigabe offen/angenommen oder aktiver Album-Link) - fuer ein
+    # Partner-Album immer True. Steuert den Warnhinweis beim Hinzufuegen von Fotos.
+    is_shared: bool = False
+    # Nur fuer den Besitzer: automatisch einsortierte, noch nicht freigegebene Fotos.
+    pending_share_count: int = 0
+
+
+class AlbumPendingReleaseRead(BaseModel):
+    """Ein eigenes, geteiltes Album mit noch nicht freigegebenen Fotos - fuer den Hinweis auf
+    der Fotos-Seite (GET /files/album-pending-releases)."""
+
+    album_id: uuid.UUID
+    album_name: str
+    album_kind: PhotoAlbumKind
+    pending_count: int
+
+
+class AlbumReleaseRequest(BaseModel):
+    # None = alle vorgemerkten Fotos des Albums freigeben.
+    file_ids: list[uuid.UUID] | None = Field(default=None, max_length=200)
+
+
+class AlbumReleaseResult(BaseModel):
+    released: int
+
+
+class SharedTargetAlbumRead(BaseModel):
+    """Ein bereits geteiltes Auto-Album, in das ein Galerie-Upload mit dem gewaehlten Bezug
+    fallen wuerde (GET /files/upload-target-shared-albums)."""
+
+    album_id: uuid.UUID
+    album_name: str
 
 
 class AlbumShareCreate(BaseModel):

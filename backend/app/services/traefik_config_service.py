@@ -46,7 +46,7 @@ def _app_routers(domain: str, domain_id: int) -> dict:
             "entryPoints": ["websecure"],
             "service": f"{settings.router_prefix}-gallery-upload@docker",
             "priority": 200,
-            "middlewares": [f"{settings.traefik_middleware_prefix}{name}@docker" for name in ("gallery-upload-inflight", "gallery-upload-body-limit")],
+            "middlewares": [f"{settings.traefik_middleware_prefix}{name}@docker" for name in ("gallery-upload-inflight",)],
             "tls": {"certResolver": "letsencrypt"},
         },
         f"{base}-word-import": {

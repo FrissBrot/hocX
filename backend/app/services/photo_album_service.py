@@ -21,7 +21,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import date
 
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -113,14 +113,24 @@ def set_best_override(db: Session, file_service, album: PhotoAlbum, file_id: uui
     recompute_best_of(db, file_service, album)
 
 
-def add_items(db: Session, album: PhotoAlbum, file_ids: list[uuid.UUID]) -> None:
+def add_items(db: Session, album: PhotoAlbum, file_ids: list[uuid.UUID], *, release: bool = False) -> None:
+    """Automatisches Einsortieren (release=False): faellt ein Foto in ein gerade geteiltes
+    Album, wird es nur vorgemerkt (share_pending) und erst nach manueller Freigabe geteilt.
+    release=True (manuelles Hinzufuegen nach Warnhinweis, bestaetigter Upload) teilt sofort und
+    gibt dabei auch ein schon vorgemerktes Foto frei."""
     if not file_ids:
         return
-    db.execute(
-        insert(PhotoAlbumItem)
-        .values([{"album_id": album.id, "file_id": file_id} for file_id in file_ids])
-        .on_conflict_do_nothing()
+    pending = not release and photo_album_share_service.is_album_shared(db, album.id)
+    statement = insert(PhotoAlbumItem).values(
+        [{"album_id": album.id, "file_id": file_id, "share_pending": pending} for file_id in file_ids]
     )
+    if release:
+        statement = statement.on_conflict_do_update(
+            index_elements=[PhotoAlbumItem.album_id, PhotoAlbumItem.file_id], set_={"share_pending": False}
+        )
+    else:
+        statement = statement.on_conflict_do_nothing()
+    db.execute(statement)
 
 
 @dataclass
@@ -134,6 +144,8 @@ class AlbumWithStats:
     photo_count: int
     best_of_count: int
     cover_thumbnail_urls: list[str] = field(default_factory=list)
+    # Nur fuer den Besitzer: automatisch einsortierte, noch nicht freigegebene Fotos.
+    pending_share_count: int = 0
 
 
 def list_albums_with_stats(db: Session, file_service, tenant_id: int) -> list[AlbumWithStats]:
@@ -153,14 +165,19 @@ def list_albums_with_stats(db: Session, file_service, tenant_id: int) -> list[Al
     if not albums:
         return []
     album_ids = [album.id for album in albums]
+    # Noch nicht freigegebene Fotos (share_pending) zaehlen nur in eigenen Alben mit - ein
+    # Partner sieht sie weder in den Zahlen noch als Cover.
+    item_visible = or_(PhotoAlbumItem.share_pending.is_(False), PhotoAlbum.tenant_id == tenant_id)
 
     count_rows = db.execute(
         select(
             PhotoAlbumItem.album_id,
             func.count().label("photo_count"),
             func.count().filter(PhotoAlbumItem.is_best).label("best_of_count"),
+            func.count().filter(PhotoAlbumItem.share_pending).label("pending_share_count"),
         )
-        .where(PhotoAlbumItem.album_id.in_(album_ids))
+        .join(PhotoAlbum, PhotoAlbum.id == PhotoAlbumItem.album_id)
+        .where(PhotoAlbumItem.album_id.in_(album_ids), item_visible)
         .group_by(PhotoAlbumItem.album_id)
     ).all()
     counts_by_album = {row.album_id: row for row in count_rows}
@@ -184,7 +201,8 @@ def list_albums_with_stats(db: Session, file_service, tenant_id: int) -> list[Al
         )
         .select_from(PhotoAlbumItem)
         .join(StoredFile, StoredFile.public_id == PhotoAlbumItem.file_id)
-        .where(PhotoAlbumItem.album_id.in_(album_ids))
+        .join(PhotoAlbum, PhotoAlbum.id == PhotoAlbumItem.album_id)
+        .where(PhotoAlbumItem.album_id.in_(album_ids), item_visible)
         .subquery()
     )
     cover_rows = db.execute(select(ranked.c.album_id, ranked.c.file_id, ranked.c.tenant_id).where(ranked.c.rn <= 4)).all()
@@ -204,6 +222,13 @@ def list_albums_with_stats(db: Session, file_service, tenant_id: int) -> list[Al
         for item in file_service.list_tenant_files(db, owning_tenant_id, file_ids=ids, limit=len(ids)):
             thumbnail_by_id[item.id] = item.thumbnail_url or item.content_url
 
+    # Vormerkungen in einem nicht (mehr) geteilten Album sind bedeutungslos, siehe
+    # photo_album_share_service.release_stale_pending.
+    owned_with_pending = [
+        album_id for album_id, row in counts_by_album.items() if row.pending_share_count and album_id not in shared_album_ids
+    ]
+    currently_shared = photo_album_share_service.shared_album_ids(db, owned_with_pending)
+
     results = []
     for album in albums:
         count_row = counts_by_album.get(album.id)
@@ -214,6 +239,7 @@ def list_albums_with_stats(db: Session, file_service, tenant_id: int) -> list[Al
                 photo_count=count_row.photo_count if count_row else 0,
                 best_of_count=count_row.best_of_count if count_row else 0,
                 cover_thumbnail_urls=[thumbnail_by_id[i] for i in cover_ids if i in thumbnail_by_id],
+                pending_share_count=count_row.pending_share_count if count_row and album.id in currently_shared else 0,
             )
         )
     return results
@@ -335,6 +361,43 @@ def cycle_albums_for_event(db: Session, *, tenant_id: int, event_id: int) -> lis
     return albums
 
 
+def existing_upload_target_albums(
+    db: Session,
+    *,
+    tenant_id: int,
+    event_id: int | None = None,
+    assignment_id: int | None = None,
+    element_ref: str | None = None,
+    cycle_config_id: int | None = None,
+) -> list[PhotoAlbum]:
+    """Die schon existierenden Auto-Alben, in die ein Galerie-Upload mit diesem Bezug fallen
+    wuerde (gleiche Zuordnung wie assign_uploaded_files, aber ohne Alben anzulegen - ein
+    noch nicht existierendes Album kann nicht geteilt sein). Beim Zyklus-Bezug haengt die
+    Periode vom Aufnahmedatum ab, daher zaehlen dort alle Perioden-Alben des Zyklus."""
+    conditions = []
+    if assignment_id is not None and element_ref is not None:
+        conditions.append(and_(PhotoAlbum.kind == "submission", PhotoAlbum.submission_assignment_id == assignment_id))
+        conditions.append(
+            and_(
+                PhotoAlbum.kind == "submission_element",
+                PhotoAlbum.submission_assignment_id == assignment_id,
+                PhotoAlbum.submission_element_ref == element_ref,
+            )
+        )
+    if event_id is not None:
+        for cycle_id, cycle_year in db.execute(
+            select(EventCycle.cycle_config_id, EventCycle.cycle_year).where(EventCycle.event_id == event_id)
+        ).all():
+            conditions.append(
+                and_(PhotoAlbum.kind == "cycle", PhotoAlbum.cycle_config_id == cycle_id, PhotoAlbum.cycle_year == cycle_year)
+            )
+    elif cycle_config_id is not None:
+        conditions.append(and_(PhotoAlbum.kind == "cycle", PhotoAlbum.cycle_config_id == cycle_config_id))
+    if not conditions:
+        return []
+    return list(db.scalars(select(PhotoAlbum).where(PhotoAlbum.tenant_id == tenant_id, or_(*conditions)).order_by(PhotoAlbum.name)))
+
+
 def cycle_album_for_date(db: Session, *, tenant_id: int, cycle_config: CycleConfig, on_date: date) -> PhotoAlbum:
     cycle_year = get_cycle_year(on_date, cycle_config.reset_month, cycle_config.reset_day)
     return get_or_create_cycle_album(db, tenant_id=tenant_id, cycle_config=cycle_config, cycle_year=cycle_year)
@@ -352,12 +415,14 @@ def assign_uploaded_files(
     element_label: str | None = None,
     cycle_config: CycleConfig | None = None,
     fallback_date: date | None = None,
+    release_shared: bool = False,
 ) -> None:
     """Files a freshly-uploaded batch into its target album(s) and recomputes best-of on
     each one touched. Exactly one of (assignment+element_ref), event_id or cycle_config is
     expected from a single upload's target picker - but event_id is also passed alongside
     assignment+element_ref when that element itself resolves to a Termin, so the files land
-    in the Zyklus album too, not just the Abgabe-Element one."""
+    in the Zyklus album too, not just the Abgabe-Element one. release_shared: die Freigabe
+    fuer geteilte Ziel-Alben wurde beim Upload schon bestaetigt (siehe add_items)."""
     if not stored_file_public_ids:
         return
     touched: dict[uuid.UUID, PhotoAlbum] = {}
@@ -366,20 +431,20 @@ def assign_uploaded_files(
         element_album = get_or_create_submission_element_album(
             db, tenant_id=tenant_id, assignment=assignment, element_ref=element_ref, element_label=element_label or element_ref
         )
-        add_items(db, element_album, stored_file_public_ids)
+        add_items(db, element_album, stored_file_public_ids, release=release_shared)
         touched[element_album.id] = element_album
 
         submission_album = get_or_create_submission_album(db, tenant_id=tenant_id, assignment=assignment)
-        add_items(db, submission_album, stored_file_public_ids)
+        add_items(db, submission_album, stored_file_public_ids, release=release_shared)
         touched[submission_album.id] = submission_album
 
     if event_id is not None:
         for album in cycle_albums_for_event(db, tenant_id=tenant_id, event_id=event_id):
-            add_items(db, album, stored_file_public_ids)
+            add_items(db, album, stored_file_public_ids, release=release_shared)
             touched[album.id] = album
     elif cycle_config is not None:
         album = cycle_album_for_date(db, tenant_id=tenant_id, cycle_config=cycle_config, on_date=fallback_date or date.today())
-        add_items(db, album, stored_file_public_ids)
+        add_items(db, album, stored_file_public_ids, release=release_shared)
         touched[album.id] = album
 
     db.commit()

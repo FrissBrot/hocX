@@ -74,15 +74,16 @@ def test_create_album_share_rejects_an_unknown_target_public_id(db):
     assert exc_info.value.status_code == 404
 
 
-def test_create_album_share_rejects_a_non_manual_album(db):
+def test_create_album_share_allows_an_automatically_managed_album(db):
     owner = make_tenant(db)
     partner = make_tenant(db)
     album = _make_cycle_album(db, owner.id)
     owner_user = make_current_user(owner.id, role="writer")
 
-    with pytest.raises(HTTPException) as exc_info:
-        files_routes.create_album_share(album.id, AlbumShareCreate(target_tenant_public_id=partner.public_id), db, owner_user)
-    assert exc_info.value.status_code == 422
+    files_routes.create_album_share(album.id, AlbumShareCreate(target_tenant_public_id=partner.public_id), db, owner_user)
+
+    partner_user = make_current_user(partner.id, role="writer")
+    assert [r.album_id for r in files_routes.list_album_share_requests(db, partner_user)] == [album.id]
 
 
 def test_create_album_share_rejects_a_duplicate_invitation(db):
@@ -316,17 +317,88 @@ def test_ensure_can_read_stored_file_still_denies_photos_outside_any_shared_albu
     assert exc_info.value.status_code == 403
 
 
-def test_lookup_tenant_returns_slug_and_active_participant_count(db):
-    owner = make_tenant(db)
+def _trusted_pair(db):
+    owner = make_tenant(db, "Pfadi Wildegg")
     partner = make_tenant(db, "Jubla Sonnenberg")
     partner.public_slug = "jubla-sonnenberg"
+    partner.profile_image_path = "tenant-profile-images/jubla.png"
+    album = _make_album(db, owner.id)
+    db.commit()
+    files_routes.create_album_share(album.id, AlbumShareCreate(target_tenant_public_id=partner.public_id), db, make_current_user(owner.id, role="writer"))
+    return owner, partner, album
+
+
+def test_lookup_tenant_without_trust_only_confirms_the_id(db):
+    owner = make_tenant(db)
+    stranger = make_tenant(db, "Geheimer Verein")
+    stranger.profile_image_path = "tenant-profile-images/x.png"
+    db.commit()
+
+    result = tenants_routes.lookup_tenant(public_id=stranger.public_id, db=db, user=make_current_user(owner.id, role="writer"))
+
+    assert result.id == stranger.public_id
+    assert result.trusted is False
+    assert result.name is None
+    assert result.profile_image_url is None
+    assert result.slug is None
+    assert result.participant_count is None
+
+
+def test_pending_invite_does_not_reveal_the_partner_name_to_the_owner(db):
+    owner, partner, album = _trusted_pair(db)
+
+    shares = files_routes.list_albums(db, make_current_user(owner.id, role="writer"))[0].shared_with
+
+    assert shares[0].tenant_public_id == partner.public_id
+    assert shares[0].tenant_name is None
+    assert shares[0].tenant_profile_image_url is None
+
+
+def test_accepting_a_share_establishes_mutual_trust_that_survives_revoking(db):
+    owner, partner, album = _trusted_pair(db)
     make_participant(db, partner.id, "Aktiv 1")
     make_participant(db, partner.id, "Aktiv 2")
     make_participant(db, partner.id, "Ausgetreten").is_active = False
+    partner_user = make_current_user(partner.id, role="writer")
+    owner_user = make_current_user(owner.id, role="writer")
+    files_routes.respond_album_share(album.id, AlbumShareRespond(accept=True), db, partner_user)
+    files_routes.delete_album_share(album.id, partner.public_id, db, owner_user)
+
+    seen_by_owner = tenants_routes.lookup_tenant(public_id=partner.public_id, db=db, user=owner_user)
+    seen_by_partner = tenants_routes.lookup_tenant(public_id=owner.public_id, db=db, user=partner_user)
+
+    assert seen_by_owner.trusted is True
+    assert seen_by_owner.name == "Jubla Sonnenberg"
+    assert seen_by_owner.slug == "jubla-sonnenberg"
+    assert seen_by_owner.participant_count == 2
+    assert seen_by_owner.profile_image_url == f"/api/tenants/{partner.public_id}/profile-image"
+    assert seen_by_partner.trusted is True
+    assert seen_by_partner.name == "Pfadi Wildegg"
+
+
+def test_name_search_only_finds_trusted_tenants_in_both_directions(db):
+    owner, partner, album = _trusted_pair(db)
+    make_tenant(db, "Jubla Fremd")
     db.commit()
+    owner_user = make_current_user(owner.id, role="writer")
+    partner_user = make_current_user(partner.id, role="writer")
+
+    assert tenants_routes.search_trusted_tenants(search="jubla", db=db, user=owner_user) == []
+
+    files_routes.respond_album_share(album.id, AlbumShareRespond(accept=True), db, partner_user)
+
+    assert [t.name for t in tenants_routes.search_trusted_tenants(search="jubla", db=db, user=owner_user)] == ["Jubla Sonnenberg"]
+    assert [t.name for t in tenants_routes.search_trusted_tenants(search="sonnenb", db=db, user=owner_user)] == ["Jubla Sonnenberg"]
+    assert [t.name for t in tenants_routes.search_trusted_tenants(search="wildegg", db=db, user=partner_user)] == ["Pfadi Wildegg"]
+    shares = files_routes.list_albums(db, owner_user)[0].shared_with
+    assert shares[0].tenant_name == "Jubla Sonnenberg"
+
+
+def test_declining_a_share_does_not_establish_trust(db):
+    owner, partner, album = _trusted_pair(db)
+    files_routes.respond_album_share(album.id, AlbumShareRespond(accept=False), db, make_current_user(partner.id, role="writer"))
 
     result = tenants_routes.lookup_tenant(public_id=partner.public_id, db=db, user=make_current_user(owner.id, role="writer"))
 
-    assert result.name == "Jubla Sonnenberg"
-    assert result.slug == "jubla-sonnenberg"
-    assert result.participant_count == 2
+    assert result.trusted is False
+    assert result.name is None

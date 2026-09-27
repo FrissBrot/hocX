@@ -51,26 +51,18 @@ if not captcha_configured() and not is_dev_or_test_environment():
 
 
 async def quarantine_cleanup_loop() -> None:
-    """Periodic sweep that deletes stale orphaned files under quarantine/ - see
-    storage.cleanup_stale_quarantine_files for why this is filesystem-age-based only (the
-    restricted DB role this service runs as has no SELECT on submission_upload_file/stored_file
-    to check for orphan status the way the main backend's rescan loops do).
-
-    Runs in every uvicorn worker (--workers 2, no single-instance process in this deployment),
-    so each tick is guarded by a Postgres advisory lock - only the worker that acquires it runs
-    the sweep, the other skips that tick. Same pattern as the main backend's
-    domain_health_check_loop/abgabebox_rescan_loop (backend/app/main.py). Advisory locks are a
-    plain Postgres function call, not a table grant, so this works fine under the restricted role
-    even though it has no SELECT/UPDATE/DELETE on any table.
-    """
+    """Entfernt alte verwaiste Quarantänedateien; registrierte Uploads bleiben erhalten."""
     interval_seconds = settings.quarantine_cleanup_interval_minutes * 60
     max_age_seconds = max(24 * 60 * 60, settings.quarantine_max_age_minutes * 60)
     while True:
         with engine.begin() as conn:
             acquired = conn.execute(text("SELECT pg_try_advisory_xact_lock(202600007)")).scalar()
             if acquired:
-                with SessionLocal() as db:
-                    await asyncio.to_thread(cleanup_stale_quarantine_files, max_age_seconds, is_referenced=lambda path: upload_path_referenced(db, path))
+                try:
+                    with SessionLocal() as db:
+                        await asyncio.to_thread(cleanup_stale_quarantine_files, max_age_seconds, is_referenced=lambda path: upload_path_referenced(db, path))
+                except Exception:
+                    _logger.exception("Quarantäne-Cleanup fehlgeschlagen; beim nächsten Durchlauf erneut versuchen")
         await asyncio.sleep(interval_seconds)
 
 

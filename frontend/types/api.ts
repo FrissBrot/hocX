@@ -241,11 +241,15 @@ export type FileOverviewItem = {
   // Best-of ("Stern") state: within the album this item was fetched for when scoped by
   // album_id, otherwise "best-of in at least one album" (null if in no album at all).
   is_best: boolean | null;
+  // Nur in der Albumansicht des Besitzers: automatisch einsortiert, noch nicht freigegeben.
+  share_pending?: boolean;
 };
 
 export type AlbumTenantShareStatus = {
   tenant_public_id: string;
-  tenant_name: string;
+  // Nur bei Trust (Mandant hat schon einmal eine Freigabe angenommen), sonst null.
+  tenant_name: string | null;
+  tenant_profile_image_url: string | null;
   status: "pending" | "accepted" | "declined";
   invited_at: string;
   responded_at: string | null;
@@ -260,6 +264,22 @@ export type PhotoAlbum = {
   cover_thumbnail_urls: string[];
   owner_tenant_name: string | null;
   shared_with: AlbumTenantShareStatus[];
+  // Gerade geteilt (Mandant eingeladen/angenommen oder aktiver Album-Link); Partner-Alben immer.
+  is_shared: boolean;
+  // Nur für den Besitzer: automatisch einsortierte Fotos, die noch freigegeben werden müssen.
+  pending_share_count: number;
+};
+
+export type AlbumPendingRelease = {
+  album_id: string;
+  album_name: string;
+  album_kind: PhotoAlbumKind;
+  pending_count: number;
+};
+
+export type SharedTargetAlbum = {
+  album_id: string;
+  album_name: string;
 };
 
 export type AlbumShareRequest = {
@@ -269,11 +289,14 @@ export type AlbumShareRequest = {
   created_at: string;
 };
 
+// Ohne Trust nur die ID (trusted=false, Rest null); mit Trust Name, Profilbild usw.
 export type TenantLookup = {
   id: string;
-  name: string;
+  trusted: boolean;
+  name: string | null;
   slug: string | null;
-  participant_count: number;
+  participant_count: number | null;
+  profile_image_url: string | null;
 };
 
 export type ShareLinkStatus = "active" | "expired" | "revoked";

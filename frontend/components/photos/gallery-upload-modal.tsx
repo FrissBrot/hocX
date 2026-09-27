@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { AlbumReleaseNotice } from "./album-share-release";
 import { findUploadRuleProblems, UploadTargetFields, useUploadTarget } from "@/components/files/upload-target-fields";
 import { Modal } from "@/components/ui/modal";
 import { TagInput } from "@/components/ui/tag-input";
@@ -9,7 +10,7 @@ import { browserApiFetch } from "@/lib/api/client";
 import { formatFileSize } from "@/lib/utils/format";
 import { isHeicName, isLiveClipName, pairLiveClips } from "@/lib/utils/live-photo";
 import { photoUploadProblem, PHOTO_UPLOAD_TIMEOUT_MS } from "@/lib/utils/upload-limits";
-import { GalleryUploadJob } from "@/types/api";
+import { GalleryUploadJob, SharedTargetAlbum } from "@/types/api";
 
 // HEIC/HEIF (iPhone) und .mov (Live-Photo-Clip) stehen mit Endung da, weil Browser ausser Safari dafür
 // keinen MIME-Typ melden. Der Clip wird nur zusammen mit dem gleichnamigen Bild angenommen.
@@ -102,6 +103,38 @@ export function GalleryUploadModal({
   // Abgabe-Element also brings that Abgabe's file rules along (target.rules).
   const target = useUploadTarget();
 
+  // Fällt der gewählte Bezug in ein schon geteiltes Auto-Album, landen die Bilder dort ohne
+  // Bestätigung nur vorgemerkt (erst nach Freigabe für die Partner sichtbar). Hier lässt sich
+  // die Freigabe direkt mitgeben.
+  const [sharedTargets, setSharedTargets] = useState<SharedTargetAlbum[]>([]);
+  const [releaseShared, setReleaseShared] = useState(false);
+  let targetQuery = "";
+  if (target.targetKind !== "none" && !target.incomplete) {
+    const fields = new FormData();
+    target.appendTo(fields);
+    const params = new URLSearchParams();
+    fields.forEach((value, key) => params.append(key, String(value)));
+    targetQuery = params.toString();
+  }
+  useEffect(() => {
+    setReleaseShared(false);
+    if (!targetQuery) {
+      setSharedTargets([]);
+      return;
+    }
+    let cancelled = false;
+    browserApiFetch<SharedTargetAlbum[]>(`/api/files/upload-target-shared-albums?${targetQuery}`)
+      .then((data) => {
+        if (!cancelled) setSharedTargets(data ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setSharedTargets([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [targetQuery]);
+
   function addFiles(fileList: FileList | File[]) {
     // Copy now: an <input>'s FileList is live and gets emptied by the `value = ""` reset in
     // onChange, which runs before React invokes the state updater below.
@@ -139,6 +172,7 @@ export function GalleryUploadModal({
       selectedFiles.forEach((file) => body.append("files", file));
       body.append("tags", tagsValue);
       target.appendTo(body);
+      if (releaseShared && sharedTargets.length > 0) body.append("release_to_shared_albums", "true");
       // Returns almost immediately once the upload is staged and a gallery_upload_job is
       // queued - scanning/import happen afterwards in the background (see
       // gallery-upload-progress.tsx), so this request only has to cover the raw byte
@@ -172,6 +206,18 @@ export function GalleryUploadModal({
       <div className="gallery-upload">
         <div className="gallery-upload-scroll">
           <UploadTargetFields target={target} />
+
+          {sharedTargets.length > 0 && (
+            <div className="gallery-upload-share-release">
+              <AlbumReleaseNotice
+                message={`Die Bilder landen im geteilten Album ${sharedTargets.map((album) => `„${album.album_name}“`).join(", ")}. Ohne Freigabe sind sie dort zunächst nur für deinen Mandanten sichtbar.`}
+              />
+              <label className="checkbox-row">
+                <input type="checkbox" checked={releaseShared} onChange={(event) => setReleaseShared(event.target.checked)} disabled={uploading} />
+                Bilder direkt freigeben und mit allen teilen, die Zugriff auf das Album haben
+              </label>
+            </div>
+          )}
 
           <div
             className={`gallery-upload-dropzone${isDragging ? " gallery-upload-dropzone-active" : ""}`}

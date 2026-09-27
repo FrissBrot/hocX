@@ -74,7 +74,7 @@ class Settings(BaseSettings):
     # a sequential, per-file ClamAV scan (each up to a 30s socket timeout, see scanner.py) of up
     # to 1000 files. Enforced in routes/public.py's upload() before any file is read or scanned,
     # regardless of what max_files_per_element says.
-    max_files_per_upload_request: int = Field(default=50, validation_alias="ABGABEBOX_MAX_FILES_PER_UPLOAD_REQUEST")
+    max_files_per_upload_request: int = Field(default=50, ge=1, le=50, validation_alias="ABGABEBOX_MAX_FILES_PER_UPLOAD_REQUEST")
     # Distinguishes genuine local dev/test stacks (where running without a FriendlyCaptcha
     # account is a deliberate, accepted choice - see captcha.py's captcha_enabled()) from a real
     # deployment (audit finding, 2026-08-27: production must fail CLOSED - reject uploads -

@@ -25,9 +25,13 @@ class TenantLookupRead(BaseModel):
     the right organisation?" before sending it a photo-album share invitation, never more."""
 
     id: uuid.UUID
-    name: str
+    # Ohne Trust (tenant_trust_service) bleibt der Mandant anonym: nur id, trusted=False,
+    # alles andere None - bestaetigt also lediglich, dass die ID existiert.
+    trusted: bool = False
+    name: str | None = None
     slug: str | None = None
-    participant_count: int = 0
+    participant_count: int | None = None
+    profile_image_url: str | None = None
 
 
 class TenantSubscriptionFeatureRead(BaseModel):

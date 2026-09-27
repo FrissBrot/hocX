@@ -111,14 +111,8 @@ services:
     # docker-compose.release.yml.
     user: "0:0"
     restart: unless-stopped
-    # 768m -> 1024m -> 6144m: headroom for the gallery-upload background ingest loop (see
-    # app/main.py's gallery_upload_ingest_loop) - streaming/batched now, so no longer O(ZIP
-    # size), but still real per-batch work (ClamAV + PIL decodes) on top of normal traffic.
-    # 6144m (2026-09-23): a direct (non-ZIP) gallery photo can now be up to
-    # GALLERY_DIRECT_IMAGE_MAX_BYTES (4 GiB, see upload_pipeline.py) - _run_gallery_upload_job
-    # reads that file fully into memory via read_bytes() before ingest_file's PIL decode/
-    # thumbnail/perceptual-hash work runs on it, so 1024m would OOM-kill the container on any
-    # photo bigger than roughly its own size.
+    # Zwei Worker und die Bildverarbeitung teilen sich dieses Budget. ZIPs werden
+    # auf Platte gepuffert; im Speicher liegen höchstens vier Bilder à 100 MiB plus Decoder.
     mem_limit: 6144m
     cpus: 1.5
     logging:
@@ -296,28 +290,16 @@ services:
       - "traefik.http.middlewares.word-import-ratelimit.ratelimit.period=1m"
       # 150 MB - matches MAX_WORD_IMPORT_BATCH_BYTES in routes/word_import.py
       - "traefik.http.middlewares.word-import-body-limit.buffering.maxRequestBodyBytes=157286400"
-      # Dedicated router for the gallery ("Bilder hochladen") upload endpoint specifically -
-      # supports ZIPs up to GALLERY_ZIP_MAX_BYTES (1 TiB, see upload_pipeline.py) and direct
-      # (non-ZIP) photos up to GALLERY_DIRECT_IMAGE_MAX_BYTES (4 GiB) now that the request
-      # only streams bytes to disk and queues a background job (see gallery_upload_ingest_loop)
-      # instead of holding the whole batch in memory. Falls through to the generic
-      # hocx-backend router (no body limit) for every other /api/files/* path, same scoping
-      # idea as hocx-word-import above.
-      # 2026-09-23: this middleware's own maxRequestBodyBytes was still the old 5-GiB-ish cap
-      # from before GALLERY_ZIP_MAX_BYTES was raised to 1 TiB (commit aab6251) - stale enough
-      # that it silently overruled the new backend/Next.js limits for any request Traefik
-      # forwards straight to the backend (i.e. every real deployment, see below). Matches
-      # GALLERY_ZIP_MAX_BYTES/proxyClientMaxBodySize now instead of being out of sync with them.
+
+      # Galerie streamt direkt zum Backend (10 GiB + 1 MiB, dort begrenzt).
+      # Kein Traefik-Buffer: sonst läge jedes ZIP doppelt auf Platte.
       - "traefik.http.routers.hocx-gallery-upload.rule=Host(`${TRAEFIK_DOMAIN}`) && Path(`/api/files/gallery-uploads`) && Method(`POST`)"
       - "traefik.http.routers.hocx-gallery-upload.entrypoints=websecure"
       - "traefik.http.routers.hocx-gallery-upload.tls.certresolver=letsencrypt"
       - "traefik.http.routers.hocx-gallery-upload.priority=200"
       - "traefik.http.routers.hocx-gallery-upload.service=hocx-gallery-upload"
-      - "traefik.http.routers.hocx-gallery-upload.middlewares=gallery-upload-inflight,gallery-upload-body-limit"
+      - "traefik.http.routers.hocx-gallery-upload.middlewares=gallery-upload-inflight"
       - "traefik.http.services.hocx-gallery-upload.loadbalancer.server.port=8000"
-      # 1 TiB, matching GALLERY_ZIP_MAX_BYTES/proxyClientMaxBodySize - the ZIP content is
-      # streamed to disk regardless of this number, so the only real ceiling left is disk space.
-      - "traefik.http.middlewares.gallery-upload-body-limit.buffering.maxRequestBodyBytes=10738466816"
       - "traefik.http.middlewares.gallery-upload-inflight.inflightreq.amount=2"
 
   # Photo-culling Phase 3: scores face quality for photo_analysis_job batches. Its own
@@ -463,8 +445,8 @@ services:
       - "traefik.http.routers.abgabebox-backend.entrypoints=websecure"
       - "traefik.http.routers.abgabebox-backend.tls.certresolver=letsencrypt"
       - "traefik.http.routers.abgabebox-backend.priority=100"
-      - "traefik.http.routers.abgabebox-backend.service=abgabebox-backend"
-      - "traefik.http.services.abgabebox-backend.loadbalancer.server.port=8000"
+      - "traefik.http.routers.abgabebox-backend.service=hocx-abgabebox-backend"
+      - "traefik.http.services.hocx-abgabebox-backend.loadbalancer.server.port=8000"
       # Dedizierter Router nur fuer den Upload-POST, mit Rate-Limit gegen Spam/DoS
       # (analog auth-ratelimit) - da dieser Endpoint komplett unauthentifiziert ist.
       # H11 (2026-08-12 Audit): zusaetzlich ein Body-Limit, analog word-import-body-limit
@@ -481,7 +463,7 @@ services:
       - "traefik.http.routers.abgabebox-upload.entrypoints=websecure"
       - "traefik.http.routers.abgabebox-upload.tls.certresolver=letsencrypt"
       - "traefik.http.routers.abgabebox-upload.priority=200"
-      - "traefik.http.routers.abgabebox-upload.service=abgabebox-backend"
+      - "traefik.http.routers.abgabebox-upload.service=hocx-abgabebox-backend"
       - "traefik.http.routers.abgabebox-upload.middlewares=abgabebox-upload-ratelimit,abgabebox-upload-inflight,abgabebox-upload-body-limit"
       - "traefik.http.middlewares.abgabebox-upload-ratelimit.ratelimit.average=30"
       - "traefik.http.middlewares.abgabebox-upload-ratelimit.ratelimit.burst=10"
@@ -504,14 +486,14 @@ services:
       - "traefik.http.routers.abgabebox-public-get.entrypoints=websecure"
       - "traefik.http.routers.abgabebox-public-get.tls.certresolver=letsencrypt"
       - "traefik.http.routers.abgabebox-public-get.priority=200"
-      - "traefik.http.routers.abgabebox-public-get.service=abgabebox-backend"
+      - "traefik.http.routers.abgabebox-public-get.service=hocx-abgabebox-backend"
       - "traefik.http.routers.abgabebox-public-get.middlewares=abgabebox-public-ratelimit"
       - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.average=30"
       - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.burst=20"
       - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.period=1m"
 
   clamav:
-    image: clamav/clamav:latest
+    image: clamav/clamav@sha256:9cb27d7660bdf66e9878c832cb433dd8aa152cfbe16f3c2c0084c80b04ae22b4
     restart: unless-stopped
     # Grosszuegiger als die anderen Services - die Signaturdatenbank allein braucht schon
     # mehrere hundert MB im Speicher, ein zu enges Limit fuehrt zu Crash-Loops statt Schutz.
@@ -524,6 +506,7 @@ services:
         max-file: "3"
     volumes:
       - clamav_db:/var/lib/clamav
+      - ./infra/clamav/clamd.conf:/etc/clamav/clamd.conf:ro
     healthcheck:
       test: ["CMD", "clamdcheck.sh"]
       interval: 60s
@@ -583,7 +566,8 @@ services:
       - "traefik.http.routers.abgabebox-frontend.entrypoints=websecure"
       - "traefik.http.routers.abgabebox-frontend.tls.certresolver=letsencrypt"
       - "traefik.http.routers.abgabebox-frontend.priority=10"
-      - "traefik.http.services.abgabebox-frontend.loadbalancer.server.port=3000"
+      - "traefik.http.routers.abgabebox-frontend.service=hocx-abgabebox-frontend"
+      - "traefik.http.services.hocx-abgabebox-frontend.loadbalancer.server.port=3000"
 
   # Software-Dokumentation (MkDocs Material), statischer Build hinter nginx.
   docs:

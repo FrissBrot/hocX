@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { confirmAddToSharedAlbum } from "./album-share-release";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { ShareLinkModal } from "@/components/ui/share-link-modal";
 import { TagInput } from "@/components/ui/tag-input";
@@ -15,11 +16,14 @@ export function PhotoBulkBar({
   tagSuggestions,
   onClearSelection,
   onDone,
+  onReleaseSelected,
 }: {
   selectedIds: string[];
   tagSuggestions: string[];
   onClearSelection: () => void;
   onDone: () => void;
+  // Albumansicht des Besitzers mit noch nicht freigegebenen Fotos in der Auswahl.
+  onReleaseSelected?: () => void;
 }) {
   const confirm = useConfirm();
   const showToast = useToast();
@@ -36,6 +40,8 @@ export function PhotoBulkBar({
 
   async function addToAlbum() {
     if (!selectedAlbumId || busy) return;
+    const album = albums.find((candidate) => candidate.id === selectedAlbumId);
+    if (album && !(await confirmAddToSharedAlbum(confirm, album, selectedIds.length))) return;
     setBusy(true);
     try {
       await browserApiFetch(`/api/files/albums/${selectedAlbumId}/items`, {
@@ -123,6 +129,11 @@ export function PhotoBulkBar({
     <div className="photo-bulk-bar">
       <span className="pill">{selectedIds.length} ausgewählt</span>
       <div className="table-toolbar-actions">
+        {onReleaseSelected && (
+          <button type="button" className="button-secondary" onClick={onReleaseSelected} disabled={busy}>
+            Freigeben
+          </button>
+        )}
         <SearchableSelect
           className="photo-bulk-bar-album-select"
           options={albums}

@@ -99,6 +99,7 @@ export function PhotoTile({
         )}
       </button>
       {item.is_best && <span className="photo-tile-badge">★ Best-of</span>}
+      {item.share_pending && <span className="photo-tile-badge photo-tile-badge-pending">Nicht freigegeben</span>}
     </div>
   );
 }
