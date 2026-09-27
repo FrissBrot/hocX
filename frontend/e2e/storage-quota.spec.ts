@@ -14,8 +14,8 @@ import { uniquePng } from "./unique-fixture";
 // itself calls, end to end: platform admin sets the quota, then a tenant writer's upload is
 // rejected once it would exceed it.
 test("rejects a gallery upload once the platform-admin-configured storage quota is exceeded", async () => {
-  // Two full upload+ingest round trips, each polled up to 60s (see uploadOversized below) -
-  // the default 45s test timeout (playwright.config.ts) would abort before either finishes.
+  // The accepted upload's ingest is polled up to 60s - the default 45s test timeout
+  // (playwright.config.ts) could abort before it finishes.
   test.setTimeout(120_000);
   const writerApi = await playwrightRequest.newContext({ baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: authFiles.writer });
   const adminApi = await playwrightRequest.newContext({ baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: authFiles.platformAdmin });
@@ -35,33 +35,32 @@ test("rejects a gallery upload once the platform-admin-configured storage quota 
     const setQuota = await adminApi.patch(`/api/admin/tenants/${tenantId}/storage-quota`, { data: { quota_mb: 1 } });
     expect(setQuota.ok(), await setQuota.text()).toBeTruthy();
 
-    // The gallery-uploads endpoint only stages the file and queues a gallery_upload_job
-    // (201) - the quota check itself happens when the background ingest loop processes it
-    // (file_service.py's save_gallery_uploads), and one bad file never fails the job as a
-    // whole: it ends "done" with the problem in the job detail's `errors` while
-    // `imported_items` stays empty for it.
-    const uploadOversized = async () => {
-      const response = await writerApi.post("/api/files/gallery-uploads", {
+    // The gallery-uploads endpoint reserves the staged bytes against the quota before it
+    // queues the gallery_upload_job (files.py's upload_gallery_images calls
+    // _enforce_tenant_storage_quota under the tenant upload lock), so an upload that would
+    // exceed the quota is rejected synchronously with 400 - no job is ever created for it.
+    const postOversized = () =>
+      writerApi.post("/api/files/gallery-uploads", {
         multipart: { files: { name: "sample-oversized.png", mimeType: "image/png", buffer: imageBuffer } },
       });
-      expect(response.ok(), await response.text()).toBeTruthy();
-      const job = await response.json();
-      await expect
-        .poll(async () => (await (await writerApi.get(`/api/files/gallery-upload-jobs/${job.id}`)).json()).status, { timeout: 60_000 })
-        .toBe("done");
-      return (await writerApi.get(`/api/files/gallery-upload-jobs/${job.id}`)).json();
-    };
 
-    const rejectedBody = await uploadOversized();
-    expect(rejectedBody.imported_items).toHaveLength(0);
-    expect(rejectedBody.errors.join(" ")).toContain("Speicherkontingent des Mandanten erreicht");
+    const rejected = await postOversized();
+    expect(rejected.status()).toBe(400);
+    expect((await rejected.json()).detail).toContain("Speicherkontingent des Mandanten erreicht");
 
     // Lifting the quota again must let the identical upload through - proves this is real,
     // reversible enforcement rather than a fixture/checksum-dependent fluke.
     const liftQuota = await adminApi.patch(`/api/admin/tenants/${tenantId}/storage-quota`, { data: { quota_mb: null } });
     expect(liftQuota.ok(), await liftQuota.text()).toBeTruthy();
 
-    const acceptedBody = await uploadOversized();
+    // Once admitted, the background ingest loop processes the queued job.
+    const accepted = await postOversized();
+    expect(accepted.ok(), await accepted.text()).toBeTruthy();
+    const job = await accepted.json();
+    await expect
+      .poll(async () => (await (await writerApi.get(`/api/files/gallery-upload-jobs/${job.id}`)).json()).status, { timeout: 60_000 })
+      .toBe("done");
+    const acceptedBody = await (await writerApi.get(`/api/files/gallery-upload-jobs/${job.id}`)).json();
     expect(acceptedBody.imported_items).toHaveLength(1);
   } finally {
     // Always restore "no quota" - a leftover 0-byte quota would break every other e2e spec
