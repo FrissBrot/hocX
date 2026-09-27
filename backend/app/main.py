@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 
-from app.api.routes import admin, admin_auth, auth, collaboration_ws, cycle_configs, document_templates, events, exports, files, finance, fines, lists, participants, protocol_elements, protocols, public_share, share_links, statistics, storage, submission_assignments, table_snapshots, tag_config, templates, tenants, todos, users, word_import
+from app.api.routes import admin, admin_auth, auth, collaboration_ws, cycle_configs, document_templates, events, exports, files, finance, fines, hiking_tours, lists, participants, protocol_elements, protocols, public_share, share_links, statistics, storage, submission_assignments, table_snapshots, tag_config, templates, tenants, todos, users, word_import
 from app.core.background_loops import BACKGROUND_LOCK_IDS, run_advisory_locked_loop
 from app.core.db import SessionLocal, engine
 from app.core.config import settings
@@ -454,6 +454,7 @@ app.include_router(cycle_configs.router, prefix="/api", tags=["cycle-configs"])
 app.include_router(table_snapshots.router, prefix="/api", tags=["table-snapshots"])
 app.include_router(participants.router, prefix="/api", tags=["participants"])
 app.include_router(events.router, prefix="/api", tags=["events"])
+app.include_router(hiking_tours.router, prefix="/api", tags=["hiking-tours"])
 app.include_router(tag_config.router, prefix="/api", tags=["tag-config"])
 app.include_router(lists.router, prefix="/api", tags=["lists"])
 app.include_router(protocols.router, prefix="/api", tags=["protocols"])

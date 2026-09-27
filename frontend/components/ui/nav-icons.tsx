@@ -22,7 +22,8 @@ export type NavIconKey =
   | "tenant"
   | "activity"
   | "tools"
-  | "storage";
+  | "storage"
+  | "wanderplaner";
 
 type IconProps = Omit<SVGProps<SVGSVGElement>, "viewBox" | "fill">;
 
@@ -194,6 +195,13 @@ const ICONS: Record<NavIconKey, (props: IconProps) => React.ReactElement> = {
       <path d="M4 6.2c0-1.5 3.6-2.7 8-2.7s8 1.2 8 2.7-3.6 2.7-8 2.7-8-1.2-8-2.7z" />
       <path d="M4 6.2v5.8c0 1.5 3.6 2.7 8 2.7s8-1.2 8-2.7V6.2" />
       <path d="M4 12v5.8c0 1.5 3.6 2.7 8 2.7s8-1.2 8-2.7V12" />
+    </Icon>
+  ),
+  wanderplaner: (props) => (
+    <Icon {...props}>
+      <path d="M8 5.5l4 6-2.3 3.3L12 20l7-13-3.2 1.6L13 4.5 8 5.5z" />
+      <path d="M3.5 20l4.9-8.4L11 15l2-2.8" />
+      <circle cx="17" cy="6.3" r="1.3" fill="currentColor" stroke="none" />
     </Icon>
   ),
 };

@@ -21,9 +21,12 @@ from sqlalchemy import (
     SmallInteger,
     Table,
     Text,
+    Time,
     UniqueConstraint,
     text,
 )
+from geoalchemy2 import Geometry
+from geoalchemy2.elements import WKBElement
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -1665,3 +1668,93 @@ class GalleryUploadJob(Base, TimestampMixin):
     error: Mapped[str | None] = mapped_column(Text)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class HikingTour(Base, TimestampMixin, UpdatedAtMixin):
+    """Wanderplaner-Tour (Phase 1: Basis-CRUD, siehe Wiki-Seite "Wanderplaner"). Route-
+    Geometrie, Routingparameter und die Wegenetz-Version werden erst mit der
+    Routing-Engine (Phase 2) ergaenzt - eine Tour ohne berechnete Route ist gueltig
+    (Status bleibt "draft")."""
+
+    __tablename__ = "hiking_tour"
+    __table_args__ = (
+        Index("idx_hiking_tour_tenant", "tenant_id"),
+        Index("idx_hiking_tour_tenant_date", "tenant_id", "tour_date"),
+        CheckConstraint(
+            "status IN ('draft', 'analyzed', 'reconnoitered', 'approved')", name="ck_hiking_tour_status"
+        ),
+        CheckConstraint(
+            "routing_profile IS NULL OR routing_profile IN "
+            "('wanderwege_bevorzugen', 'schnellste_route', 'einfache_route')",
+            name="ck_hiking_tour_routing_profile",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    tour_date: Mapped[date | None] = mapped_column(Date)
+    # Rekognoszierungs-Workflow (Auftrag Abschnitt 17): draft -> analyzed -> reconnoitered ->
+    # approved. Der Uebergang zu "approved"/"reconnoitered" ist immer eine bewusste
+    # Benutzeraktion, siehe hiking_tour_service - nie automatisch aus einer Analyse gesetzt.
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'draft'"))
+    # Presets fuer Gruppentyp/Gepaeck leben als Konstanten im Service (march_time_service ab
+    # Phase 3), nicht als DB-Enum - freier Text haelt die Tabelle stabil, waehrend Presets
+    # sich mit der Marschzeit-Referenzdatei noch aendern koennen.
+    group_type: Mapped[str | None] = mapped_column(Text)
+    speed_factor_kmh: Mapped[Any | None] = mapped_column(Numeric(4, 2))
+    luggage_type: Mapped[str | None] = mapped_column(Text)
+    planned_start_time: Mapped[Any | None] = mapped_column(Time)
+    routing_profile: Mapped[str | None] = mapped_column(Text)
+
+    waypoints: Mapped[list["HikingTourWaypoint"]] = relationship(
+        "HikingTourWaypoint",
+        primaryjoin="HikingTour.id == HikingTourWaypoint.hiking_tour_id",
+        foreign_keys="HikingTourWaypoint.hiking_tour_id",
+        order_by="HikingTourWaypoint.sequence",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+
+
+class HikingTourWaypoint(Base, TimestampMixin, UpdatedAtMixin):
+    """Ein Punkt entlang einer Wanderung: Start, Ziel, vom Benutzer gesetzte Via-Punkte, und
+    (ab Phase 4) automatisch erzeugte Punkte (Pausen, Gipfel, Entscheidungspunkte,
+    Ausstiege, ...) - siehe kind/WAYPOINT_KINDS. Bewusst eine gemeinsame Tabelle statt
+    einer pro Konzept (Auftrag Abschnitt 18), da die geordnete Punktliste ohnehin die
+    Grundlage der Marschzeittabelle ist. Nur transitiv ueber hiking_tour_id tenant-
+    gescoped (kein eigenes tenant_id, siehe public_id_service-Docstring) - Tenant-Zugriff
+    wird ueber die Parent-Tour geprueft.
+    """
+
+    __tablename__ = "hiking_tour_waypoint"
+    __table_args__ = (
+        Index("idx_hiking_tour_waypoint_tour", "hiking_tour_id"),
+        UniqueConstraint("hiking_tour_id", "sequence", name="uq_hiking_tour_waypoint_tour_sequence"),
+        CheckConstraint(
+            "kind IN ('START', 'END', 'NAVIGATION', 'BREAK', 'SUMMIT', 'PASS', 'HUT', 'WATER', "
+            "'DECISION', 'EMERGENCY_EXIT', 'USER_DEFINED')",
+            name="ck_hiking_tour_waypoint_kind",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    hiking_tour_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("hiking_tour.id", ondelete="CASCADE"), nullable=False
+    )
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    label: Mapped[str | None] = mapped_column(Text)
+    description: Mapped[str | None] = mapped_column(Text)
+    # SRID 4326 (WGS84 lat/lon) - siehe Migration 0097 fuer die Begruendung. spatial_index=False:
+    # der Index wird explizit in der Migration angelegt, nicht implizit von GeoAlchemy2.
+    point: Mapped[WKBElement] = mapped_column(
+        Geometry(geometry_type="POINT", srid=4326, spatial_index=False), nullable=False
+    )

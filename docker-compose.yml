@@ -33,7 +33,11 @@ services:
       - --configFile=/etc/traefik/traefik.yml
 
   db:
-    image: postgres:16
+    # postgis/postgis statt reinem postgres:16 - Wanderplaner-Feature (Migration 0097)
+    # braucht die PostGIS-Extension fuer Geometrie-Spalten (Tour-Start/-Ziel/-Wegpunkte)
+    # und spaeter pgRouting fuer die Routing-Engine (siehe Wiki-Seite "Wanderplaner").
+    # Gleiche Postgres-Major-Version (16) wie vorher, keine weiteren Aenderungen noetig.
+    image: postgis/postgis:16-3.4
     restart: unless-stopped
     mem_limit: 768m
     cpus: 1.0

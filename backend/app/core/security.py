@@ -263,6 +263,22 @@ def require_abgabebox_write(user: CurrentUser) -> CurrentUser:
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Abgabebox write access required")
 
 
+def require_wanderplaner_read(user: CurrentUser) -> CurrentUser:
+    """Every tenant role may inspect Wanderplaner-Touren, if the tenant has das Feature gebucht."""
+    require_feature(user, "wanderplaner")
+    if user.current_role in {"reader", "kassier", "writer", "admin"}:
+        return user
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Wanderplaner read access required")
+
+
+def require_wanderplaner_write(user: CurrentUser) -> CurrentUser:
+    """Only writer/admin may manage Wanderplaner-Touren, if the tenant has das Feature gebucht."""
+    require_feature(user, "wanderplaner")
+    if user.current_role in {"writer", "admin"}:
+        return user
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Wanderplaner write access required")
+
+
 def require_all_fines_read(user: CurrentUser) -> CurrentUser:
     """Reader accounts may only use the self-scoped fines listing."""
     if user.current_role in {"writer", "kassier", "admin"}:

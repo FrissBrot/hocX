@@ -19,4 +19,6 @@ scipy==1.18.0
 Pillow==12.3.0
 pillow-heif==1.7.0
 ImageHash==4.3.2
+GeoAlchemy2==0.16.0
+shapely==2.0.6
 

@@ -12,6 +12,8 @@ from app.core.security import (
     require_feature,
     require_finance_read,
     require_finance_write,
+    require_wanderplaner_read,
+    require_wanderplaner_write,
 )
 from app.models.entities import TenantDomain
 from app.schemas.user import TenantDomainCreate
@@ -115,6 +117,47 @@ def test_default_factory_user_has_custom_domain_booked():
     migration 0086's backfill: every pre-existing tenant keeps its Self-Service domain setup."""
     user = make_current_user(tenant_id=1, role="admin")
     assert require_feature(user, "custom_domain") is user
+
+
+@pytest.mark.parametrize("role", ["reader", "writer", "kassier", "admin"])
+def test_wanderplaner_read_blocked_when_tenant_has_not_booked_it(role):
+    """wanderplaner ist wie abgabebox ein Opt-in-Feature (Migration 0097: kein Backfill fuer
+    Bestandsmandanten, anders als finance in 0084) - make_current_user()'s Default-Featureset
+    enthaelt es deshalb bewusst nicht (siehe unten)."""
+    user = make_current_user(tenant_id=1, role=role, features=frozenset())
+    with pytest.raises(HTTPException) as exc_info:
+        require_wanderplaner_read(user)
+    assert exc_info.value.status_code == 403
+
+
+@pytest.mark.parametrize("role", ["writer", "admin"])
+def test_wanderplaner_write_blocked_when_tenant_has_not_booked_it(role):
+    user = make_current_user(tenant_id=1, role=role, features=frozenset())
+    with pytest.raises(HTTPException) as exc_info:
+        require_wanderplaner_write(user)
+    assert exc_info.value.status_code == 403
+
+
+def test_wanderplaner_read_allowed_when_tenant_has_booked_it():
+    user = make_current_user(tenant_id=1, role="reader", features=frozenset({"wanderplaner"}))
+    assert require_wanderplaner_read(user) is user
+
+
+def test_wanderplaner_write_blocked_for_reader_even_when_booked():
+    """Feature-Gating und Rollenpruefung sind unabhaengige Schichten (siehe Modul-Docstring) -
+    gebucht reicht nicht, die Rolle muss zusaetzlich writer/admin sein."""
+    user = make_current_user(tenant_id=1, role="reader", features=frozenset({"wanderplaner"}))
+    with pytest.raises(HTTPException) as exc_info:
+        require_wanderplaner_write(user)
+    assert exc_info.value.status_code == 403
+
+
+def test_default_factory_user_has_no_wanderplaner_booked():
+    """Gegenteil von test_default_factory_user_has_finance_booked(): wanderplaner ist neu und
+    NICHT rueckwirkend fuer Bestandsmandanten gebucht (siehe Migration 0097)."""
+    user = make_current_user(tenant_id=1, role="admin")
+    with pytest.raises(HTTPException):
+        require_wanderplaner_write(user)
 
 
 def test_verify_domain_blocked_when_custom_domain_revoked_after_pending_domain_created(db):

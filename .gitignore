@@ -1,6 +1,12 @@
 .DS_Store
 .env
 .env.local
+# Vom Nutzer bereitgestellte Referenzdatei fuer die Wanderplaner-Marschzeitberechnung
+# (Auftrag Phase 0) - Formel/Presets sind im Wiki dokumentiert, die Datei selbst bleibt
+# lokal, kein Repo-Asset.
+/Marschtabelle_Zeitberechnung.xlsx
+# Lokale Zweit-Dev-Stack-Overrides fuer parallele Branch-Arbeit (siehe Worktree-Konvention).
+docker-compose.dev.branch-ports.yml
 .claude/settings.local.json
 .venv/
 __pycache__/

@@ -1,6 +1,8 @@
 services:
   db:
-    image: postgres:16
+    # postgis/postgis statt reinem postgres:16 - siehe docker-compose.yml (dev) fuer die
+    # Begruendung (Wanderplaner-Feature, Migration 0097).
+    image: postgis/postgis:16-3.4
     restart: unless-stopped
     # Audit I1, 2026-08-16: this file had NO resource limits at all, unlike
     # docker-compose.yml (dev) after M28 - a runaway container here could take down the

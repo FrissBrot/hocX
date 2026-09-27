@@ -16650,3 +16650,9 @@ input[type="radio"] {
     margin-left: auto;
   }
 }
+
+/* Wanderplaner: Wegpunkt-Zeilenaktionen (Tabellenzelle) */
+.wanderplaner-row-actions {
+  display: flex;
+  gap: var(--space-2);
+}

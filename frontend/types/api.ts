@@ -809,6 +809,60 @@ export type ParticipantSummary = {
   updated_at: string;
 };
 
+export type HikingTourWaypointKind =
+  | "START"
+  | "END"
+  | "NAVIGATION"
+  | "BREAK"
+  | "SUMMIT"
+  | "PASS"
+  | "HUT"
+  | "WATER"
+  | "DECISION"
+  | "EMERGENCY_EXIT"
+  | "USER_DEFINED";
+
+export type HikingTourStatus = "draft" | "analyzed" | "reconnoitered" | "approved";
+
+export type HikingTourRoutingProfile = "wanderwege_bevorzugen" | "schnellste_route" | "einfache_route";
+
+export type HikingTourWaypoint = {
+  id: string;
+  sequence: number;
+  kind: HikingTourWaypointKind;
+  label: string | null;
+  description: string | null;
+  lat: number;
+  lon: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type HikingTourSummary = {
+  id: string;
+  title: string;
+  tour_date: string | null;
+  status: HikingTourStatus;
+  created_at: string;
+  updated_at: string;
+};
+
+export type HikingTour = {
+  id: string;
+  title: string;
+  description: string | null;
+  tour_date: string | null;
+  status: HikingTourStatus;
+  group_type: string | null;
+  speed_factor_kmh: string | null;
+  luggage_type: string | null;
+  planned_start_time: string | null;
+  routing_profile: HikingTourRoutingProfile | null;
+  waypoints: HikingTourWaypoint[];
+  created_at: string;
+  updated_at: string;
+};
+
 export type EventSummary = {
   id: string;
   tenant_id: string;

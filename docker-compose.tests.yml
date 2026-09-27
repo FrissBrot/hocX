@@ -1,6 +1,9 @@
 services:
   test-db:
-    image: postgres:16
+    # postgis/postgis statt reinem postgres:16 - siehe docker-compose.yml (dev) fuer die
+    # Begruendung (Wanderplaner-Feature, Migration 0097). Backend-Tests laufen gegen
+    # diese DB, brauchen also dieselbe Extension wie dev/release.
+    image: postgis/postgis:16-3.4
     environment:
       POSTGRES_DB: hocx_test
       POSTGRES_USER: hocx_test
