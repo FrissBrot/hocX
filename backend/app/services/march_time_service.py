@@ -16,7 +16,10 @@ from app.models.entities import HikingTour
 
 class MarchTimeService:
     def build_table(self, tour: HikingTour) -> MarchTimeTable:
-        waypoints = list(tour.waypoints)
+        # EMERGENCY_EXIT-Wegpunkte (Phase 4) liegen abseits der eigentlichen Route (ein
+        # Abstecher zu einer Strasse, kein Teil des Wanderwegs selbst) und zaehlen deshalb
+        # nicht zur linearen Wegpunktkette, die route_legs/Marschzeit voraussetzen.
+        waypoints = [wp for wp in tour.waypoints if wp.kind != "EMERGENCY_EXIT"]
         legs = list(tour.route_legs)
         if not legs:
             raise ValueError("Route muss zuerst berechnet werden, bevor eine Marschzeittabelle erstellt werden kann")

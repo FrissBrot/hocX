@@ -17,10 +17,12 @@ from app.schemas.hiking_tour import (
     ViaPointCreate,
     WaypointRead,
     WaypointUpdate,
+    WaypointVerificationUpdate,
 )
 from app.schemas.march_time import MarchTimeTableRead
 from app.services.audit_service import AuditService
 from app.services.elevation_service import ElevationProfileService, ElevationServiceError
+from app.services.hiking_tour_analysis_service import HikingTourAnalysisService
 from app.services.hiking_tour_service import HikingTourService
 from app.services.march_time_service import MarchTimeService
 from app.services.routing_service import RoutingError, RoutingService
@@ -30,6 +32,7 @@ service = HikingTourService()
 routing_service = RoutingService()
 elevation_service = ElevationProfileService()
 march_time_service = MarchTimeService()
+analysis_service = HikingTourAnalysisService()
 audit = AuditService()
 
 
@@ -175,6 +178,49 @@ def get_march_table(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return MarchTimeTableRead.from_domain(table)
+
+
+@router.post("/hiking-tours/{tour_id}/analyze", response_model=HikingTourRead)
+def analyze_hiking_tour(
+    tour_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Automatische Analyse (Auftrag Abschnitt 7-11, Phase 4): erkennt zusaetzliche
+    Wegpunkte, schlaegt Pausen vor und platziert Entscheidungs-/Notausstiegspunkte. Braucht
+    eine bereits berechnete Route UND ein abgerufenes Hoehenprofil (kuratierte 422en unten)."""
+    require_wanderplaner_write(user)
+    tour = _get_tour_or_404(db, tour_id, user)
+    try:
+        return analysis_service.analyze(db, tour)
+    except (RoutingError, ValueError) as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Automatische Analyse konnte nicht durchgeführt werden") from exc
+
+
+@router.patch("/hiking-tours/{tour_id}/waypoints/{waypoint_id}/verification", response_model=WaypointRead)
+def update_waypoint_verification(
+    tour_id: uuid.UUID,
+    waypoint_id: uuid.UUID,
+    payload: WaypointVerificationUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_wanderplaner_write(user)
+    tour = _get_tour_or_404(db, tour_id, user)
+    waypoint = service.repository.get_waypoint_by_public_id(db, tour, waypoint_id)
+    if waypoint is None:
+        raise HTTPException(status_code=404, detail="Waypoint not found")
+    if waypoint.verification_status is None:
+        raise HTTPException(status_code=422, detail="Dieser Wegpunkt hat keinen Verifizierungsstatus")
+    try:
+        return service.repository.update_waypoint(db, waypoint, {"verification_status": payload.verification_status})
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Waypoint could not be updated") from exc
 
 
 @router.post("/hiking-tours/{tour_id}/waypoints", response_model=WaypointRead, status_code=status.HTTP_201_CREATED)

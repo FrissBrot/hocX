@@ -7,6 +7,7 @@ import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
+import { PillMenu } from "@/components/ui/pill-menu";
 import { HikingTourElevationChart } from "@/components/wanderplaner/hiking-tour-elevation-chart";
 import { HikingTourMap } from "@/components/wanderplaner/hiking-tour-map";
 import { HikingTourMarchTable } from "@/components/wanderplaner/hiking-tour-march-table";
@@ -20,8 +21,38 @@ import {
   HikingTourRoutingProfile,
   HikingTourWaypoint,
   HikingTourWaypointKind,
+  HikingTourWaypointVerificationStatus,
   MarchTimeTable,
 } from "@/types/api";
+
+// Auftrag Abschnitt 11: Verifizierungsstatus automatisch erkannter sicherheitsrelevanter
+// Punkte (Entscheidungspunkte, Notausstiege) - nie als geprüfte Tatsache dargestellt.
+const VERIFICATION_LABEL: Record<HikingTourWaypointVerificationStatus, string> = {
+  AUTO_DETECTED: "Automatisch erkannt",
+  NEEDS_VERIFICATION: "Vor Ort prüfen",
+  VERIFIED: "Vom Leiter bestätigt",
+  REJECTED: "Verworfen",
+};
+
+const VERIFICATION_VARIANT: Record<HikingTourWaypointVerificationStatus, BadgeVariant> = {
+  AUTO_DETECTED: "info",
+  NEEDS_VERIFICATION: "warning",
+  VERIFIED: "success",
+  REJECTED: "danger",
+};
+
+const VERIFICATION_OPTIONS = (Object.keys(VERIFICATION_LABEL) as HikingTourWaypointVerificationStatus[]).map((value) => ({
+  value,
+  label: VERIFICATION_LABEL[value],
+  variant: VERIFICATION_VARIANT[value],
+}));
+
+function formatMinutesShort(minutes: number): string {
+  const rounded = Math.round(minutes);
+  const hours = Math.floor(rounded / 60);
+  const rest = rounded % 60;
+  return hours > 0 ? `${hours}h${rest.toString().padStart(2, "0")}` : `${rest}min`;
+}
 
 const STATUS_LABEL: Record<string, string> = {
   draft: "Entwurf",
@@ -83,6 +114,7 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
   const [fetchingElevation, setFetchingElevation] = useState(false);
   const [marchTable, setMarchTable] = useState<MarchTimeTable | null>(null);
   const [hoveredPoint, setHoveredPoint] = useState<ElevationProfilePoint | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
 
   async function handleEditSave(event: FormEvent) {
     event.preventDefault();
@@ -232,6 +264,31 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
     }
   }
 
+  async function handleAnalyze() {
+    setAnalyzing(true);
+    try {
+      const updated = await browserApiFetch<HikingTour>(`/api/hiking-tours/${tour.id}/analyze`, { method: "POST" });
+      setTour(updated);
+      showToast("Tour automatisch analysiert", "success");
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : "Automatische Analyse fehlgeschlagen", "error");
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
+  async function handleVerificationChange(waypoint: HikingTourWaypoint, status: HikingTourWaypointVerificationStatus) {
+    try {
+      const updated = await browserApiFetch<HikingTourWaypoint>(`/api/hiking-tours/${tour.id}/waypoints/${waypoint.id}/verification`, {
+        method: "PATCH",
+        body: JSON.stringify({ verification_status: status }),
+      });
+      setTour((prev) => ({ ...prev, waypoints: prev.waypoints.map((wp) => (wp.id === updated.id ? updated : wp)) }));
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : "Status konnte nicht geändert werden", "error");
+    }
+  }
+
   const mapWaypoints = useMemo(
     () => tour.waypoints.map((wp) => ({ id: wp.id, kind: wp.kind, lat: wp.lat, lon: wp.lon, label: wp.label })),
     [tour.waypoints]
@@ -319,9 +376,20 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
             description="Aus swisstopo-Höhendaten (profile.json). Beim Überfahren markiert der Punkt die Stelle auf der Karte."
             actions={
               canWrite ? (
-                <button type="button" className="button-secondary" onClick={() => void handleFetchElevationProfile()} disabled={fetchingElevation}>
-                  {fetchingElevation ? "Wird abgerufen…" : "Höhenprofil abrufen"}
-                </button>
+                <div className="page-header-actions">
+                  <button type="button" className="button-secondary" onClick={() => void handleFetchElevationProfile()} disabled={fetchingElevation}>
+                    {fetchingElevation ? "Wird abgerufen…" : "Höhenprofil abrufen"}
+                  </button>
+                  <button
+                    type="button"
+                    className="button-secondary"
+                    onClick={() => void handleAnalyze()}
+                    disabled={analyzing || !tour.elevation_profile_fetched_at}
+                    title={!tour.elevation_profile_fetched_at ? "Zuerst das Höhenprofil abrufen" : undefined}
+                  >
+                    {analyzing ? "Wird analysiert…" : "Automatisch analysieren"}
+                  </button>
+                </div>
               ) : undefined
             }
           />
@@ -340,15 +408,28 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
       )}
 
       <div>
-        <DataToolbar title="Wegpunkte" description="Start, Ziel und Via-Punkte in Reihenfolge." />
-        <DataTable columns={["#", "Typ", "Bezeichnung", "Breite", "Länge", "Pause", ""]} emptyMessage="Keine Wegpunkte.">
+        <DataToolbar title="Wegpunkte" description="Start, Ziel, Via-Punkte und automatisch erkannte Punkte in Reihenfolge." />
+        <DataTable columns={["#", "Typ", "Bezeichnung", "Breite", "Länge", "Pause", "Status", ""]} emptyMessage="Keine Wegpunkte.">
           {tour.waypoints.map((waypoint) => (
             <tr key={waypoint.id}>
               <td>{waypoint.sequence}</td>
               <td>
                 <Badge variant={waypoint.kind === "START" || waypoint.kind === "END" ? "info" : "neutral"}>{KIND_LABEL[waypoint.kind]}</Badge>
               </td>
-              <td>{waypoint.label || <span className="muted">–</span>}</td>
+              <td>
+                {waypoint.label || <span className="muted">–</span>}
+                {waypoint.description && <div className="field-help">{waypoint.description}</div>}
+                {waypoint.decision_metrics_json && (
+                  <div className="field-help">
+                    Ab Start: {formatMinutesShort(waypoint.decision_metrics_json.time_from_start_minutes)} · Bis Ziel:{" "}
+                    {formatMinutesShort(waypoint.decision_metrics_json.time_to_end_minutes)} · Zurück:{" "}
+                    {formatMinutesShort(waypoint.decision_metrics_json.time_back_minutes)}
+                    {waypoint.decision_metrics_json.nearest_exit_label && waypoint.decision_metrics_json.time_to_exit_minutes !== null && (
+                      <> · Nächster Ausstieg: {formatMinutesShort(waypoint.decision_metrics_json.time_to_exit_minutes)}</>
+                    )}
+                  </div>
+                )}
+              </td>
               <td>{waypoint.lat.toFixed(4)}</td>
               <td>{waypoint.lon.toFixed(4)}</td>
               <td>
@@ -371,8 +452,23 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
                   <span className="muted">–</span>
                 )}
               </td>
+              <td>
+                {waypoint.verification_status ? (
+                  canWrite ? (
+                    <PillMenu
+                      value={waypoint.verification_status}
+                      options={VERIFICATION_OPTIONS}
+                      onChange={(status) => void handleVerificationChange(waypoint, status)}
+                    />
+                  ) : (
+                    <Badge variant={VERIFICATION_VARIANT[waypoint.verification_status]}>{VERIFICATION_LABEL[waypoint.verification_status]}</Badge>
+                  )
+                ) : (
+                  <span className="muted">–</span>
+                )}
+              </td>
               <td className="wanderplaner-row-actions">
-                {canWrite && waypoint.kind === "USER_DEFINED" && (
+                {canWrite && (waypoint.kind === "USER_DEFINED" || waypoint.auto_generated) && (
                   <button type="button" className="button-secondary button-ghost" onClick={() => void handleDeleteWaypoint(waypoint)}>
                     Entfernen
                   </button>

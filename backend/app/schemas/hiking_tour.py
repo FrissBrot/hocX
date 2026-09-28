@@ -87,6 +87,11 @@ class WaypointRead(BaseModel):
     elevation_m: float | None = None
     break_minutes: int | None = None
     break_reason: str | None = None
+    # Phase 4 (Auftrag Abschnitt 7-11): siehe Migration 0100.
+    auto_generated: bool = False
+    verification_status: str | None = None
+    decision_metrics_json: dict | None = None
+    exit_metrics_json: dict | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -107,9 +112,33 @@ class WaypointRead(BaseModel):
             "elevation_m": data.elevation_m,
             "break_minutes": data.break_minutes,
             "break_reason": data.break_reason,
+            "auto_generated": data.auto_generated,
+            "verification_status": data.verification_status,
+            "decision_metrics_json": data.decision_metrics_json,
+            "exit_metrics_json": data.exit_metrics_json,
             "created_at": data.created_at,
             "updated_at": data.updated_at,
         }
+
+
+VERIFICATION_STATUSES = ("AUTO_DETECTED", "NEEDS_VERIFICATION", "VERIFIED", "REJECTED")
+
+
+class WaypointVerificationUpdate(BaseModel):
+    """Body von PATCH /hiking-tours/{id}/waypoints/{id}/verification (Auftrag Abschnitt 11) -
+    bewusst ein eigener, enger Endpunkt statt eines Felds in WaypointUpdate: das Bestaetigen/
+    Verwerfen eines automatischen Fundes ist eine andere Aktion als das Bearbeiten von
+    Text/Position, mit eigener Berechtigung denkbar (aktuell noch require_wanderplaner_write,
+    wie der Rest)."""
+
+    verification_status: str
+
+    @field_validator("verification_status")
+    @classmethod
+    def _validate_status(cls, value: str) -> str:
+        if value not in VERIFICATION_STATUSES:
+            raise ValueError(f"Unknown verification status: {value}")
+        return value
 
 
 class RouteComputeRequest(BaseModel):

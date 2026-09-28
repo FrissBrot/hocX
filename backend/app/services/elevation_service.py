@@ -135,7 +135,10 @@ class ElevationProfileService:
         tour.elevation_profile_json = profile
         tour.elevation_profile_fetched_at = datetime.now(UTC)
 
-        waypoints = list(tour.waypoints)
+        # EMERGENCY_EXIT-Wegpunkte (Phase 4) liegen abseits der Route (kein Teil der
+        # fortlaufenden legs-Kette) - ihre Hoehe wird hier nicht mitbefuellt, siehe
+        # march_time_service.py fuer denselben Filter und die Begruendung.
+        waypoints = [wp for wp in tour.waypoints if wp.kind != "EMERGENCY_EXIT"]
         cumulative_distance = 0.0
         for index, waypoint in enumerate(waypoints):
             if index > 0:

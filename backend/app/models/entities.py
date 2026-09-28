@@ -1786,6 +1786,11 @@ class HikingTourWaypoint(Base, TimestampMixin, UpdatedAtMixin):
     # noch den Vorschlagsalgorithmus liefern muss, kein Schema mehr aendern.
     break_minutes: Mapped[int | None] = mapped_column(Integer)
     break_reason: Mapped[str | None] = mapped_column(Text)
+    # Phase 4 (Auftrag Abschnitt 7-11): siehe Migration 0100 fuer die Begruendung.
+    auto_generated: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    verification_status: Mapped[str | None] = mapped_column(Text)
+    decision_metrics_json: Mapped[dict | None] = mapped_column(JSONB)
+    exit_metrics_json: Mapped[dict | None] = mapped_column(JSONB)
 
 
 class RoutingNetworkMeta(Base):

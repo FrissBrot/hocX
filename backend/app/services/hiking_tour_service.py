@@ -109,6 +109,8 @@ class HikingTourService:
         return self.repository.update_waypoint(db, waypoint, values)
 
     def delete_waypoint(self, db: Session, waypoint: HikingTourWaypoint) -> None:
-        if waypoint.kind != "USER_DEFINED":
+        # Auftrag Abschnitt 7: automatisch erzeugte Punkte muessen loeschbar sein, nicht nur
+        # vom Benutzer gesetzte Via-Punkte (Phase 4, siehe hiking_tour_analysis_service.py).
+        if waypoint.kind != "USER_DEFINED" and not waypoint.auto_generated:
             raise ValueError("Start und Ziel koennen nicht geloescht werden, nur verschoben")
         self.repository.delete_waypoint(db, waypoint)

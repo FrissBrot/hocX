@@ -826,6 +826,24 @@ export type HikingTourStatus = "draft" | "analyzed" | "reconnoitered" | "approve
 
 export type HikingTourRoutingProfile = "wanderwege_bevorzugen" | "schnellste_route" | "einfache_route";
 
+export type HikingTourWaypointVerificationStatus = "AUTO_DETECTED" | "NEEDS_VERIFICATION" | "VERIFIED" | "REJECTED";
+
+export type HikingTourDecisionMetrics = {
+  time_from_start_minutes: number;
+  time_to_end_minutes: number;
+  time_back_minutes: number;
+  nearest_exit_label: string | null;
+  time_to_exit_minutes: number | null;
+  distance_to_exit_m: number | null;
+};
+
+export type HikingTourExitMetrics = {
+  distance_m: number;
+  ascent_m: number;
+  descent_m: number;
+  time_to_exit_minutes: number;
+};
+
 export type HikingTourWaypoint = {
   id: string;
   sequence: number;
@@ -837,6 +855,11 @@ export type HikingTourWaypoint = {
   elevation_m: number | null;
   break_minutes: number | null;
   break_reason: string | null;
+  // Phase 4 (Auftrag Abschnitt 7-11)
+  auto_generated: boolean;
+  verification_status: HikingTourWaypointVerificationStatus | null;
+  decision_metrics_json: HikingTourDecisionMetrics | null;
+  exit_metrics_json: HikingTourExitMetrics | null;
   created_at: string;
   updated_at: string;
 };

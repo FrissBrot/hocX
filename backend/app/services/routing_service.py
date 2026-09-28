@@ -129,7 +129,10 @@ class RoutingService:
     def compute_route(self, db: Session, tour: HikingTour, *, profile: str) -> HikingTour:
         if profile not in ROUTING_PROFILES:
             raise ValueError(f"Unknown routing profile: {profile}")
-        waypoints: list[HikingTourWaypoint] = list(tour.waypoints)
+        # EMERGENCY_EXIT-Wegpunkte (Phase 4) sind ein Abstecher abseits der Route, keine
+        # Kettenglieder zwischen Start und Ziel - siehe march_time_service.py fuer denselben
+        # Filter und die Begruendung.
+        waypoints: list[HikingTourWaypoint] = [wp for wp in tour.waypoints if wp.kind != "EMERGENCY_EXIT"]
         if len(waypoints) < 2:
             raise RoutingError("Tour braucht mindestens Start und Ziel für eine Route")
 

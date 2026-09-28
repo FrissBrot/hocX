@@ -4,8 +4,14 @@ import { authFiles } from "./auth";
 // Wanderplaner Phase 1+2: Tour per Kartenklick erstellen (Start/Ziel) -> Wegpunkte sehen ->
 // Via-Punkt per Kartenklick hinzufuegen/entfernen -> Route berechnen (Button-Verdrahtung,
 // siehe Kommentar unten zum Grund fuer die tolerante Assertion) -> Tour bearbeiten -> loeschen.
-// Marschzeit, automatische Analyse, Rekognoszierung, Druck folgen erst in spaeteren Phasen
-// (siehe Wiki-Seite "Wanderplaner") und sind hier bewusst nicht Teil des Flows.
+// Hoehenprofil/Marschzeit (Phase 3) und automatische Analyse (Phase 4, "Automatisch
+// analysieren"-Button in hiking-tour-detail.tsx) sind hier bewusst NICHT Teil des Flows: die
+// geteilte E2E-Umgebung hat kein importiertes Wegenetz (siehe
+// scripts/import_routing_network.py-Docstring), "Route berechnen" schlaegt darum erwartungs-
+// gemaess fehl, und beide Folge-Features setzen eine erfolgreich berechnete Route voraus.
+// Ihre fachliche Korrektheit ist bereits durch Backend-Integrationstests gegen das
+// Fixture-Wegenetz abgedeckt (test_hiking_tour_analysis_service.py u.a.). Rekognoszierung und
+// Druck folgen erst in spaeteren Phasen (siehe Wiki-Seite "Wanderplaner").
 test("Tour per Karte erstellen, Route berechnen, Wegpunkt hinzufuegen/entfernen und wieder loeschen", async ({ page }) => {
   test.setTimeout(90_000); // MapLibre-Ladezeiten (echte swisstopo-Tiles) brauchen mehr als die Default-45s
   const writerApi = await playwrightRequest.newContext({ baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: authFiles.writer });
