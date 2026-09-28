@@ -1717,6 +1717,10 @@ class HikingTour(Base, TimestampMixin, UpdatedAtMixin):
     route_descent_m: Mapped[float | None] = mapped_column(Float)
     route_cost: Mapped[float | None] = mapped_column(Float)
     route_computed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # [{"distance_m": float, "elevation_m": float}, ...], siehe elevation_service.py - nie
+    # zeilenweise abgefragt, nur als Ganzes fuers Hoehenprofil-Chart gelesen.
+    elevation_profile_json: Mapped[list[dict] | None] = mapped_column(JSONB)
+    elevation_profile_fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     waypoints: Mapped[list["HikingTourWaypoint"]] = relationship(
         "HikingTourWaypoint",
@@ -1773,6 +1777,15 @@ class HikingTourWaypoint(Base, TimestampMixin, UpdatedAtMixin):
     point: Mapped[WKBElement] = mapped_column(
         Geometry(geometry_type="POINT", srid=4326, spatial_index=False), nullable=False
     )
+    # Phase 3: aus hiking_tour.elevation_profile_json interpoliert (siehe
+    # elevation_service.py::elevation_at_distance), nicht direkt vom Hoehendienst pro
+    # Wegpunkt geholt - ein Aufruf fuer die ganze Route reicht (siehe dessen Docstring).
+    elevation_m: Mapped[float | None] = mapped_column(Float)
+    # Manuell gesetzt (Phase 3). Automatische Pausenvorschlaege mit Begruendung sind Phase 4
+    # (Auftrag Abschnitt 8) - diese Spalten sind bewusst schon jetzt da, damit Phase 4 nur
+    # noch den Vorschlagsalgorithmus liefern muss, kein Schema mehr aendern.
+    break_minutes: Mapped[int | None] = mapped_column(Integer)
+    break_reason: Mapped[str | None] = mapped_column(Text)
 
 
 class RoutingNetworkMeta(Base):

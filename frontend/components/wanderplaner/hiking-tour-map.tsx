@@ -41,13 +41,17 @@ type Props = {
   routeCoordinates?: [number, number][];
   onMapClick?: (lat: number, lon: number) => void;
   onMarkerDragEnd?: (waypointId: string, lat: number, lon: number) => void;
+  /** Hover-Synchronisation Höhenprofil -> Karte (Auftrag Abschnitt 6): temporaerer Marker,
+   * unabhaengig von waypoints (loest kein fitBounds aus). */
+  highlightPoint?: { lat: number; lon: number } | null;
   className?: string;
 };
 
-export function HikingTourMap({ waypoints, routeCoordinates, onMapClick, onMarkerDragEnd, className }: Props) {
+export function HikingTourMap({ waypoints, routeCoordinates, onMapClick, onMarkerDragEnd, highlightPoint, className }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
+  const highlightMarkerRef = useRef<maplibregl.Marker | null>(null);
   const onMapClickRef = useRef(onMapClick);
   onMapClickRef.current = onMapClick;
 
@@ -104,6 +108,24 @@ export function HikingTourMap({ waypoints, routeCoordinates, onMapClick, onMarke
       markersRef.current.forEach((marker) => marker.remove());
     };
   }, [waypoints, onMarkerDragEnd]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (!highlightPoint) {
+      highlightMarkerRef.current?.remove();
+      highlightMarkerRef.current = null;
+      return;
+    }
+
+    if (!highlightMarkerRef.current) {
+      const element = document.createElement("div");
+      element.className = "wanderplaner-map-marker-highlight";
+      highlightMarkerRef.current = new maplibregl.Marker({ element }).addTo(map);
+    }
+    highlightMarkerRef.current.setLngLat([highlightPoint.lon, highlightPoint.lat]);
+  }, [highlightPoint]);
 
   useEffect(() => {
     const map = mapRef.current;

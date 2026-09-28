@@ -60,6 +60,10 @@ class WaypointUpdate(BaseModel):
     description: str | None = None
     lat: float | None = Field(default=None, ge=-90, le=90)
     lon: float | None = Field(default=None, ge=-180, le=180)
+    # Phase 3: manuelle Pause. Automatische Vorschlaege mit Begruendung folgen in Phase 4
+    # (Auftrag Abschnitt 8) - dieselben Felder, nur dann auch serverseitig vorbefuellt.
+    break_minutes: int | None = Field(default=None, ge=0)
+    break_reason: str | None = None
 
     @model_validator(mode="after")
     def _check_bounds(self) -> "WaypointUpdate":
@@ -80,6 +84,9 @@ class WaypointRead(BaseModel):
     description: str | None = None
     lat: float
     lon: float
+    elevation_m: float | None = None
+    break_minutes: int | None = None
+    break_reason: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -97,6 +104,9 @@ class WaypointRead(BaseModel):
             "description": data.description,
             "lat": point.y,
             "lon": point.x,
+            "elevation_m": data.elevation_m,
+            "break_minutes": data.break_minutes,
+            "break_reason": data.break_reason,
             "created_at": data.created_at,
             "updated_at": data.updated_at,
         }
@@ -230,6 +240,9 @@ class HikingTourRead(HikingTourBase):
     route_descent_m: float | None = None
     route_cost: float | None = None
     route_computed_at: datetime | None = None
+    # Das volle Profil (potenziell hunderte Punkte) wird bewusst NICHT hier mitgeschickt,
+    # nur ob/wann eins existiert - siehe GET /hiking-tours/{id}/elevation-profile.
+    elevation_profile_fetched_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -256,6 +269,19 @@ class HikingTourRead(HikingTourBase):
             "route_descent_m": data.route_descent_m,
             "route_cost": data.route_cost,
             "route_computed_at": data.route_computed_at,
+            "elevation_profile_fetched_at": data.elevation_profile_fetched_at,
             "created_at": data.created_at,
             "updated_at": data.updated_at,
         }
+
+
+class ElevationProfilePoint(BaseModel):
+    distance_m: float
+    elevation_m: float
+    lat: float
+    lon: float
+
+
+class ElevationProfileRead(BaseModel):
+    fetched_at: datetime
+    points: list[ElevationProfilePoint]

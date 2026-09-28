@@ -834,8 +834,58 @@ export type HikingTourWaypoint = {
   description: string | null;
   lat: number;
   lon: number;
+  elevation_m: number | null;
+  break_minutes: number | null;
+  break_reason: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type ElevationProfilePoint = {
+  distance_m: number;
+  elevation_m: number;
+  lat: number;
+  lon: number;
+};
+
+export type ElevationProfile = {
+  fetched_at: string;
+  points: ElevationProfilePoint[];
+};
+
+export type MarchTimeEntry = {
+  sequence: number;
+  label: string | null;
+  kind: HikingTourWaypointKind;
+  elevation_m: number | null;
+  segment_distance_m: number;
+  cumulative_distance_m: number;
+  segment_ascent_m: number;
+  segment_descent_m: number;
+  segment_lkm: number;
+  cumulative_lkm: number;
+  segment_duration_minutes: number;
+  cumulative_duration_minutes: number;
+  planned_arrival: string | null;
+  break_minutes: number;
+  planned_departure: string | null;
+  remarks: string | null;
+};
+
+export type MarchTimeSummary = {
+  total_distance_m: number;
+  total_ascent_m: number;
+  total_descent_m: number;
+  total_lkm: number;
+  walking_duration_minutes: number;
+  break_duration_minutes: number;
+  total_duration_minutes: number;
+};
+
+export type MarchTimeTable = {
+  speed_factor_kmh: number;
+  entries: MarchTimeEntry[];
+  summary: MarchTimeSummary;
 };
 
 export type HikingTourSummary = {
@@ -876,6 +926,7 @@ export type HikingTour = {
   route_descent_m: number | null;
   route_cost: number | null;
   route_computed_at: string | null;
+  elevation_profile_fetched_at: string | null;
   created_at: string;
   updated_at: string;
 };

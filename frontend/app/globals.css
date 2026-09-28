@@ -16684,6 +16684,20 @@ input[type="radio"] {
   cursor: grabbing;
 }
 
+.wanderplaner-map-marker-highlight {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-pill);
+  background: var(--chart-1);
+  border: 2px solid var(--on-solid);
+  box-shadow: var(--shadow-popover);
+  pointer-events: none;
+}
+
+.wanderplaner-break-input {
+  width: 64px;
+}
+
 .wanderplaner-map-hint {
   display: flex;
   align-items: center;

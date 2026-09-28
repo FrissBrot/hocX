@@ -1,17 +1,27 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
+import { HikingTourElevationChart } from "@/components/wanderplaner/hiking-tour-elevation-chart";
 import { HikingTourMap } from "@/components/wanderplaner/hiking-tour-map";
+import { HikingTourMarchTable } from "@/components/wanderplaner/hiking-tour-march-table";
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
-import { HikingTour, HikingTourRoutingProfile, HikingTourWaypoint, HikingTourWaypointKind } from "@/types/api";
+import {
+  ElevationProfile,
+  ElevationProfilePoint,
+  HikingTour,
+  HikingTourRoutingProfile,
+  HikingTourWaypoint,
+  HikingTourWaypointKind,
+  MarchTimeTable,
+} from "@/types/api";
 
 const STATUS_LABEL: Record<string, string> = {
   draft: "Entwurf",
@@ -69,6 +79,10 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
   const [profile, setProfile] = useState<HikingTourRoutingProfile>(tour.routing_profile ?? "wanderwege_bevorzugen");
   const [saving, setSaving] = useState(false);
   const [computingRoute, setComputingRoute] = useState(false);
+  const [elevationProfile, setElevationProfile] = useState<ElevationProfile | null>(null);
+  const [fetchingElevation, setFetchingElevation] = useState(false);
+  const [marchTable, setMarchTable] = useState<MarchTimeTable | null>(null);
+  const [hoveredPoint, setHoveredPoint] = useState<ElevationProfilePoint | null>(null);
 
   async function handleEditSave(event: FormEvent) {
     event.preventDefault();
@@ -141,6 +155,18 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
     }
   }
 
+  async function handleUpdateBreakMinutes(waypoint: HikingTourWaypoint, minutes: number) {
+    try {
+      const updated = await browserApiFetch<HikingTourWaypoint>(`/api/hiking-tours/${tour.id}/waypoints/${waypoint.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ break_minutes: minutes }),
+      });
+      setTour((prev) => ({ ...prev, waypoints: prev.waypoints.map((wp) => (wp.id === updated.id ? updated : wp)) }));
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : "Pause konnte nicht gespeichert werden", "error");
+    }
+  }
+
   async function handleComputeRoute() {
     setComputingRoute(true);
     try {
@@ -154,6 +180,55 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
       showToast(err instanceof Error ? err.message : "Route konnte nicht berechnet werden", "error");
     } finally {
       setComputingRoute(false);
+    }
+  }
+
+  useEffect(() => {
+    if (tour.route_legs.length === 0) {
+      setMarchTable(null);
+      return;
+    }
+    let cancelled = false;
+    browserApiFetch<MarchTimeTable>(`/api/hiking-tours/${tour.id}/march-table`)
+      .then((table) => {
+        if (!cancelled) setMarchTable(table);
+      })
+      .catch(() => {
+        if (!cancelled) setMarchTable(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tour.id, tour.route_computed_at, tour.route_legs.length]);
+
+  useEffect(() => {
+    if (!tour.elevation_profile_fetched_at) {
+      setElevationProfile(null);
+      return;
+    }
+    let cancelled = false;
+    browserApiFetch<ElevationProfile>(`/api/hiking-tours/${tour.id}/elevation-profile`)
+      .then((profile) => {
+        if (!cancelled) setElevationProfile(profile);
+      })
+      .catch(() => {
+        if (!cancelled) setElevationProfile(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tour.id, tour.elevation_profile_fetched_at]);
+
+  async function handleFetchElevationProfile() {
+    setFetchingElevation(true);
+    try {
+      const updated = await browserApiFetch<HikingTour>(`/api/hiking-tours/${tour.id}/elevation-profile`, { method: "POST" });
+      setTour((prev) => ({ ...updated, route_legs: prev.route_legs }));
+      showToast("Höhenprofil abgerufen", "success");
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : "Höhenprofil konnte nicht abgerufen werden", "error");
+    } finally {
+      setFetchingElevation(false);
     }
   }
 
@@ -220,6 +295,7 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
           routeCoordinates={routeCoordinates}
           onMapClick={canWrite ? handleMapClick : undefined}
           onMarkerDragEnd={canWrite ? handleMarkerDragEnd : undefined}
+          highlightPoint={hoveredPoint ? { lat: hoveredPoint.lat, lon: hoveredPoint.lon } : null}
         />
         {tour.route_distance_m !== null && tour.route_distance_m !== undefined && (
           <div className="wanderplaner-route-summary">
@@ -236,9 +312,36 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
         )}
       </div>
 
+      {tour.route_legs.length > 0 && (
+        <div className="section-card">
+          <DataToolbar
+            title="Höhenprofil"
+            description="Aus swisstopo-Höhendaten (profile.json). Beim Überfahren markiert der Punkt die Stelle auf der Karte."
+            actions={
+              canWrite ? (
+                <button type="button" className="button-secondary" onClick={() => void handleFetchElevationProfile()} disabled={fetchingElevation}>
+                  {fetchingElevation ? "Wird abgerufen…" : "Höhenprofil abrufen"}
+                </button>
+              ) : undefined
+            }
+          />
+          {elevationProfile ? (
+            <HikingTourElevationChart points={elevationProfile.points} onHoverPoint={setHoveredPoint} />
+          ) : (
+            <p className="field-help">Noch kein Höhenprofil abgerufen.</p>
+          )}
+        </div>
+      )}
+
+      {marchTable && (
+        <div className="section-card">
+          <HikingTourMarchTable table={marchTable} />
+        </div>
+      )}
+
       <div>
         <DataToolbar title="Wegpunkte" description="Start, Ziel und Via-Punkte in Reihenfolge." />
-        <DataTable columns={["#", "Typ", "Bezeichnung", "Breite", "Länge", ""]} emptyMessage="Keine Wegpunkte.">
+        <DataTable columns={["#", "Typ", "Bezeichnung", "Breite", "Länge", "Pause", ""]} emptyMessage="Keine Wegpunkte.">
           {tour.waypoints.map((waypoint) => (
             <tr key={waypoint.id}>
               <td>{waypoint.sequence}</td>
@@ -248,6 +351,26 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
               <td>{waypoint.label || <span className="muted">–</span>}</td>
               <td>{waypoint.lat.toFixed(4)}</td>
               <td>{waypoint.lon.toFixed(4)}</td>
+              <td>
+                {canWrite ? (
+                  <input
+                    key={`${waypoint.id}-${waypoint.break_minutes ?? 0}`}
+                    type="number"
+                    min={0}
+                    defaultValue={waypoint.break_minutes ?? 0}
+                    aria-label="Pause in Minuten"
+                    className="wanderplaner-break-input"
+                    onBlur={(event) => {
+                      const minutes = Number(event.target.value) || 0;
+                      if (minutes !== (waypoint.break_minutes ?? 0)) void handleUpdateBreakMinutes(waypoint, minutes);
+                    }}
+                  />
+                ) : waypoint.break_minutes ? (
+                  `${waypoint.break_minutes} min`
+                ) : (
+                  <span className="muted">–</span>
+                )}
+              </td>
               <td className="wanderplaner-row-actions">
                 {canWrite && waypoint.kind === "USER_DEFINED" && (
                   <button type="button" className="button-secondary button-ghost" onClick={() => void handleDeleteWaypoint(waypoint)}>

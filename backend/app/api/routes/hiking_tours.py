@@ -8,6 +8,7 @@ from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, require_wanderplaner_read, require_wanderplaner_write
 from app.models.entities import HikingTour
 from app.schemas.hiking_tour import (
+    ElevationProfileRead,
     HikingTourCreate,
     HikingTourRead,
     HikingTourSummary,
@@ -17,13 +18,18 @@ from app.schemas.hiking_tour import (
     WaypointRead,
     WaypointUpdate,
 )
+from app.schemas.march_time import MarchTimeTableRead
 from app.services.audit_service import AuditService
+from app.services.elevation_service import ElevationProfileService, ElevationServiceError
 from app.services.hiking_tour_service import HikingTourService
+from app.services.march_time_service import MarchTimeService
 from app.services.routing_service import RoutingError, RoutingService
 
 router = APIRouter()
 service = HikingTourService()
 routing_service = RoutingService()
+elevation_service = ElevationProfileService()
+march_time_service = MarchTimeService()
 audit = AuditService()
 
 
@@ -123,6 +129,52 @@ def compute_hiking_tour_route(
     except (SQLAlchemyError, ValueError) as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Route konnte nicht berechnet werden") from exc
+
+
+@router.post("/hiking-tours/{tour_id}/elevation-profile", response_model=HikingTourRead)
+def fetch_elevation_profile(
+    tour_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_wanderplaner_write(user)
+    tour = _get_tour_or_404(db, tour_id, user)
+    try:
+        return elevation_service.fetch_and_store(db, tour)
+    except ElevationServiceError as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except (SQLAlchemyError, ValueError) as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc) if isinstance(exc, ValueError) else "Höhenprofil konnte nicht abgerufen werden") from exc
+
+
+@router.get("/hiking-tours/{tour_id}/elevation-profile", response_model=ElevationProfileRead)
+def get_elevation_profile(
+    tour_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_wanderplaner_read(user)
+    tour = _get_tour_or_404(db, tour_id, user)
+    if tour.elevation_profile_json is None or tour.elevation_profile_fetched_at is None:
+        raise HTTPException(status_code=404, detail="Kein Höhenprofil vorhanden")
+    return ElevationProfileRead(fetched_at=tour.elevation_profile_fetched_at, points=tour.elevation_profile_json)
+
+
+@router.get("/hiking-tours/{tour_id}/march-table", response_model=MarchTimeTableRead)
+def get_march_table(
+    tour_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_wanderplaner_read(user)
+    tour = _get_tour_or_404(db, tour_id, user)
+    try:
+        table = march_time_service.build_table(tour)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return MarchTimeTableRead.from_domain(table)
 
 
 @router.post("/hiking-tours/{tour_id}/waypoints", response_model=WaypointRead, status_code=status.HTTP_201_CREATED)
