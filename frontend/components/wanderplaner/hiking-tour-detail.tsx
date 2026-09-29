@@ -362,6 +362,13 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
           scale: printForm.scale,
           overlap_fraction: printForm.overlapPercent / 100,
         }),
+        // browserApiFetch's Standard-Timeout (15s) reicht nicht: WMTS-Kachelabruf + pdflatex-
+        // Kompilierung dauern je nach Blattanzahl/Massstab real 20-60+ Sekunden (siehe
+        // hiking_tour_print_service.py - der Backend-seitige pdflatex-Timeout selbst ist schon
+        // 120s). Ohne diese Ueberschreibung brach der Request client-seitig ab, waehrend der
+        // Server noch am Rechnen war (gefunden per echtem E2E-Test gegen den echten
+        // swisstopo-Dienst, nicht nur durch gemockte Unit-Tests).
+        signal: AbortSignal.timeout(180_000),
       });
       setPrintResult(result);
       showToast("Druck-PDF erstellt", "success");

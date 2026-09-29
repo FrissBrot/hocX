@@ -52,7 +52,11 @@ test("Tour per Karte erstellen, Route berechnen, Wegpunkt hinzufuegen/entfernen 
     await expect(page.getByRole("button", { name: /Ziel setzen/ })).toContainText("✓");
     await page.getByRole("button", { name: "Wanderung erstellen" }).click();
 
-    await expect(page).toHaveURL(/\/wanderplaner\/.+/);
+    // Grosszuegiger Timeout: die dynamische Detailroute (/wanderplaner/[id]) kompiliert im
+    // Next.js-Dev-Server (siehe docker-compose.dev.yml, auch der geteilte E2E-Stack laeuft im
+    // Dev-Modus) bei ihrem allerersten Besuch on-demand nach - laenger als das Standard-
+    // Timeout, wenn diese Route seit einem Server-Neustart noch nie kompiliert wurde.
+    await expect(page).toHaveURL(/\/wanderplaner\/.+/, { timeout: 15_000 });
     await expect(page.getByRole("heading", { name: "E2E Rigi Kulm ab Goldau" })).toBeVisible();
     await expect(page.getByText("Start", { exact: true })).toBeVisible();
     await expect(page.getByText("Ziel", { exact: true })).toBeVisible();
