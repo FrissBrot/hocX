@@ -13,6 +13,7 @@ from app.schemas.hiking_tour import (
     HikingTourRead,
     HikingTourSummary,
     HikingTourUpdate,
+    ReconnaissanceUpdate,
     RouteComputeRequest,
     ViaPointCreate,
     WaypointRead,
@@ -221,6 +222,46 @@ def update_waypoint_verification(
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Waypoint could not be updated") from exc
+
+
+@router.patch("/hiking-tours/{tour_id}/reconnaissance", response_model=HikingTourRead)
+def update_hiking_tour_reconnaissance(
+    tour_id: uuid.UUID,
+    payload: ReconnaissanceUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Auftrag Abschnitt 17: Rekognoszierungs-Checkliste - eine bewusste Nutzeraktion, die die
+    Tour (falls noch nicht weiter) auf 'reconnoitered' setzt."""
+    require_wanderplaner_write(user)
+    tour = _get_tour_or_404(db, tour_id, user)
+    try:
+        updated = service.update_reconnaissance(db, tour, payload, user_id=user.user_id)
+    except (SQLAlchemyError, ValueError) as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc) if isinstance(exc, ValueError) else "Rekognoszierung konnte nicht gespeichert werden") from exc
+    audit.log(db, action="hiking_tour.reconnoitered", actor=user, entity_type="hiking_tour", entity_id=tour.id)
+    return updated
+
+
+@router.post("/hiking-tours/{tour_id}/approve", response_model=HikingTourRead)
+def approve_hiking_tour(
+    tour_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Auftrag Abschnitt 17: Freigabe - eine bewusste Nutzeraktion, nur aus 'reconnoitered'."""
+    require_wanderplaner_write(user)
+    tour = _get_tour_or_404(db, tour_id, user)
+    try:
+        updated = service.approve_tour(db, tour, user_id=user.user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Tour konnte nicht freigegeben werden") from exc
+    audit.log(db, action="hiking_tour.approved", actor=user, entity_type="hiking_tour", entity_id=tour.id)
+    return updated
 
 
 @router.post("/hiking-tours/{tour_id}/waypoints", response_model=WaypointRead, status_code=status.HTTP_201_CREATED)

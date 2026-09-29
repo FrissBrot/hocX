@@ -27,6 +27,20 @@ WAYPOINT_KINDS = (
 )
 ROUTING_PROFILES = ("wanderwege_bevorzugen", "schnellste_route", "einfache_route")
 
+# Auftrag Abschnitt 17 (Beispielliste) - feste Item-Liste statt Freitext-Keys, damit Frontend
+# und Backend dieselben Labels kennen. Kein Item ist Pflicht (siehe HikingTour.
+# reconnaissance_checklist_json-Kommentar in entities.py): die bewusste Nutzeraktion selbst
+# ist die Bestaetigung, nicht jedes einzelne Haekchen.
+RECONNAISSANCE_CHECKLIST_ITEMS = (
+    "trail_condition",
+    "problem_spots",
+    "exits",
+    "access_roads",
+    "water_points",
+    "alternative_route",
+    "decision_points",
+)
+
 # Grobe Bounding Box Schweiz/Liechtenstein (inkl. Toleranzrand fuer Grenzregionen) -
 # harte Vorpruefung vor jeder Geometrie-Erstellung, siehe Auftrag Abschnitt 20 ("Start/Ziel
 # ausserhalb Schweiz/Liechtenstein"). Kein Ersatz fuer eine spaetere praezise
@@ -272,6 +286,13 @@ class HikingTourRead(HikingTourBase):
     # Das volle Profil (potenziell hunderte Punkte) wird bewusst NICHT hier mitgeschickt,
     # nur ob/wann eins existiert - siehe GET /hiking-tours/{id}/elevation-profile.
     elevation_profile_fetched_at: datetime | None = None
+    # Rekognoszierung/Freigabe (Phase 5, Auftrag Abschnitt 17).
+    reconnaissance_checklist: dict[str, bool] = {}
+    reconnaissance_remarks: str | None = None
+    reconnoitered_at: datetime | None = None
+    reconnoitered_by_name: str | None = None
+    approved_at: datetime | None = None
+    approved_by_name: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -299,9 +320,32 @@ class HikingTourRead(HikingTourBase):
             "route_cost": data.route_cost,
             "route_computed_at": data.route_computed_at,
             "elevation_profile_fetched_at": data.elevation_profile_fetched_at,
+            "reconnaissance_checklist": data.reconnaissance_checklist_json or {},
+            "reconnaissance_remarks": data.reconnaissance_remarks,
+            "reconnoitered_at": data.reconnoitered_at,
+            "reconnoitered_by_name": data.reconnoitered_by.display_name if data.reconnoitered_by else None,
+            "approved_at": data.approved_at,
+            "approved_by_name": data.approved_by.display_name if data.approved_by else None,
             "created_at": data.created_at,
             "updated_at": data.updated_at,
         }
+
+
+class ReconnaissanceUpdate(BaseModel):
+    """Body von PATCH /hiking-tours/{id}/reconnaissance (Auftrag Abschnitt 17). checklist wird
+    mit dem bestehenden Stand gemergt (partielles Abhaken ueber mehrere Aufrufe hinweg bleibt
+    erhalten), remarks ersetzt den bisherigen Text komplett, wenn angegeben."""
+
+    checklist: dict[str, bool] = {}
+    remarks: str | None = None
+
+    @field_validator("checklist")
+    @classmethod
+    def _validate_checklist_keys(cls, value: dict[str, bool]) -> dict[str, bool]:
+        unknown = set(value) - set(RECONNAISSANCE_CHECKLIST_ITEMS)
+        if unknown:
+            raise ValueError(f"Unknown checklist items: {sorted(unknown)}")
+        return value
 
 
 class ElevationProfilePoint(BaseModel):

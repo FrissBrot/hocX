@@ -1721,6 +1721,19 @@ class HikingTour(Base, TimestampMixin, UpdatedAtMixin):
     # zeilenweise abgefragt, nur als Ganzes fuers Hoehenprofil-Chart gelesen.
     elevation_profile_json: Mapped[list[dict] | None] = mapped_column(JSONB)
     elevation_profile_fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Rekognoszierung (Phase 5, Auftrag Abschnitt 17): {item_key: bool}, siehe
+    # RECONNAISSANCE_CHECKLIST_ITEMS in hiking_tour.py fuer die feste Item-Liste. Absichtlich
+    # kein Pflicht-"alle Haken gesetzt" - die bewusste Nutzeraktion (Klick auf "Als
+    # rekognosziert markieren") ist die eigentliche Bestaetigung, nicht jedes einzelne Item.
+    reconnaissance_checklist_json: Mapped[dict | None] = mapped_column(JSONB)
+    reconnaissance_remarks: Mapped[str | None] = mapped_column(Text)
+    reconnoitered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reconnoitered_by_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    approved_by_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+
+    reconnoitered_by: Mapped["AppUser | None"] = relationship("AppUser", foreign_keys=[reconnoitered_by_user_id], lazy="joined")
+    approved_by: Mapped["AppUser | None"] = relationship("AppUser", foreign_keys=[approved_by_user_id], lazy="joined")
 
     waypoints: Mapped[list["HikingTourWaypoint"]] = relationship(
         "HikingTourWaypoint",

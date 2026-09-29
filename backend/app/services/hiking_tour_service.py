@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 
 from geoalchemy2.shape import from_shape
 from shapely.geometry import Point
@@ -8,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models import HikingTour, HikingTourWaypoint
 from app.repositories.hiking_tour_repository import HikingTourRepository
-from app.schemas.hiking_tour import HikingTourCreate, HikingTourUpdate, WaypointUpdate, ViaPointCreate
+from app.schemas.hiking_tour import HikingTourCreate, HikingTourUpdate, ReconnaissanceUpdate, WaypointUpdate, ViaPointCreate
 
 
 def _make_point(lat: float, lon: float):
@@ -114,3 +115,32 @@ class HikingTourService:
         if waypoint.kind != "USER_DEFINED" and not waypoint.auto_generated:
             raise ValueError("Start und Ziel koennen nicht geloescht werden, nur verschoben")
         self.repository.delete_waypoint(db, waypoint)
+
+    def update_reconnaissance(self, db: Session, tour: HikingTour, payload: ReconnaissanceUpdate, *, user_id: int) -> HikingTour:
+        """Auftrag Abschnitt 17: eine bewusste Nutzeraktion, nie automatisch aus der Analyse
+        gesetzt. Checkliste wird gemerged (mehrere Aufrufe koennen nach und nach Punkte
+        abhaken), nicht ersetzt - remarks dagegen komplett ersetzt, wenn mitgeschickt."""
+        if tour.status == "approved":
+            raise ValueError("Freigegebene Touren können nicht mehr rekognosziert werden")
+        merged_checklist = {**(tour.reconnaissance_checklist_json or {}), **payload.checklist}
+        values: dict = {
+            "reconnaissance_checklist_json": merged_checklist,
+            "reconnoitered_at": datetime.now(UTC),
+            "reconnoitered_by_user_id": user_id,
+        }
+        if payload.remarks is not None:
+            values["reconnaissance_remarks"] = payload.remarks
+        if tour.status in ("draft", "analyzed"):
+            values["status"] = "reconnoitered"
+        return self.repository.update(db, tour, values)
+
+    def approve_tour(self, db: Session, tour: HikingTour, *, user_id: int) -> HikingTour:
+        """Auftrag Abschnitt 17: "Die Software darf eine Tour nicht allein aufgrund
+        automatischer Analysen als 'rekognosziert' markieren" - dieselbe bewusste-Aktion-
+        Anforderung gilt sinngemäss für die Freigabe, deshalb nur aus 'reconnoitered' heraus
+        möglich (nie direkt aus 'draft'/'analyzed')."""
+        if tour.status != "reconnoitered":
+            raise ValueError("Tour muss zuerst rekognosziert werden, bevor sie freigegeben werden kann")
+        return self.repository.update(
+            db, tour, {"status": "approved", "approved_at": datetime.now(UTC), "approved_by_user_id": user_id}
+        )

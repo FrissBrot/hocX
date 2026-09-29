@@ -47,6 +47,18 @@ const VERIFICATION_OPTIONS = (Object.keys(VERIFICATION_LABEL) as HikingTourWaypo
   variant: VERIFICATION_VARIANT[value],
 }));
 
+// Auftrag Abschnitt 17 - dieselbe feste Item-Liste wie RECONNAISSANCE_CHECKLIST_ITEMS im
+// Backend (app/schemas/hiking_tour.py), hier nur mit deutschen Labels.
+const RECONNAISSANCE_CHECKLIST_LABELS: Record<string, string> = {
+  trail_condition: "Wegzustand geprüft",
+  problem_spots: "Problematische Stellen geprüft",
+  exits: "Ausstiege geprüft",
+  access_roads: "Zufahrten geprüft",
+  water_points: "Wasserstellen geprüft",
+  alternative_route: "Alternativroute geprüft",
+  decision_points: "Wichtige Entscheidungspunkte geprüft",
+};
+
 function formatMinutesShort(minutes: number): string {
   const rounded = Math.round(minutes);
   const hours = Math.floor(rounded / 60);
@@ -115,6 +127,11 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
   const [marchTable, setMarchTable] = useState<MarchTimeTable | null>(null);
   const [hoveredPoint, setHoveredPoint] = useState<ElevationProfilePoint | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [showReconnaissance, setShowReconnaissance] = useState(false);
+  const [checklistDraft, setChecklistDraft] = useState<Record<string, boolean>>(tour.reconnaissance_checklist);
+  const [remarksDraft, setRemarksDraft] = useState(tour.reconnaissance_remarks ?? "");
+  const [savingReconnaissance, setSavingReconnaissance] = useState(false);
+  const [approving, setApproving] = useState(false);
 
   async function handleEditSave(event: FormEvent) {
     event.preventDefault();
@@ -289,6 +306,38 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
     }
   }
 
+  async function handleSaveReconnaissance(event: FormEvent) {
+    event.preventDefault();
+    setSavingReconnaissance(true);
+    try {
+      const updated = await browserApiFetch<HikingTour>(`/api/hiking-tours/${tour.id}/reconnaissance`, {
+        method: "PATCH",
+        body: JSON.stringify({ checklist: checklistDraft, remarks: remarksDraft }),
+      });
+      setTour((prev) => ({ ...updated, route_legs: prev.route_legs }));
+      setShowReconnaissance(false);
+      showToast("Rekognoszierung gespeichert", "success");
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : "Rekognoszierung konnte nicht gespeichert werden", "error");
+    } finally {
+      setSavingReconnaissance(false);
+    }
+  }
+
+  async function handleApprove() {
+    if (!(await confirm({ message: `Wanderung «${tour.title}» freigeben?`, confirmLabel: "Freigeben" }))) return;
+    setApproving(true);
+    try {
+      const updated = await browserApiFetch<HikingTour>(`/api/hiking-tours/${tour.id}/approve`, { method: "POST" });
+      setTour((prev) => ({ ...updated, route_legs: prev.route_legs }));
+      showToast("Wanderung freigegeben", "success");
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : "Freigabe fehlgeschlagen", "error");
+    } finally {
+      setApproving(false);
+    }
+  }
+
   const mapWaypoints = useMemo(
     () => tour.waypoints.map((wp) => ({ id: wp.id, kind: wp.kind, lat: wp.lat, lon: wp.lon, label: wp.label })),
     [tour.waypoints]
@@ -311,6 +360,14 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
             <button type="button" className="button-secondary" onClick={() => setShowEdit(true)}>
               Bearbeiten
             </button>
+            <button type="button" className="button-secondary" onClick={() => setShowReconnaissance(true)}>
+              Rekognoszierung
+            </button>
+            {tour.status === "reconnoitered" && (
+              <button type="button" className="button-primary" onClick={() => void handleApprove()} disabled={approving}>
+                {approving ? "Wird freigegeben…" : "Freigeben"}
+              </button>
+            )}
             <button type="button" className="button-danger" onClick={() => void handleDeleteTour()}>
               Löschen
             </button>
@@ -501,6 +558,57 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
             </button>
             <button type="submit" className="button-primary" disabled={saving}>
               {saving ? "Wird gespeichert…" : "Speichern"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={showReconnaissance}
+        title="Rekognoszierung"
+        onClose={() => setShowReconnaissance(false)}
+      >
+        <form onSubmit={(event) => void handleSaveReconnaissance(event)}>
+          <div className="grid">
+            {(tour.reconnoitered_at || tour.approved_at) && (
+              <p className="muted">
+                {tour.reconnoitered_at && (
+                  <>
+                    Rekognosziert {tour.reconnoitered_by_name ? `von ${tour.reconnoitered_by_name} ` : ""}
+                    am {new Date(tour.reconnoitered_at).toLocaleDateString("de-CH")}.{" "}
+                  </>
+                )}
+                {tour.approved_at && (
+                  <>
+                    Freigegeben {tour.approved_by_name ? `von ${tour.approved_by_name} ` : ""}
+                    am {new Date(tour.approved_at).toLocaleDateString("de-CH")}.
+                  </>
+                )}
+              </p>
+            )}
+            <div className="grid">
+              {Object.entries(RECONNAISSANCE_CHECKLIST_LABELS).map(([key, label]) => (
+                <label key={key} className="mini-menu-option">
+                  <span>{label}</span>
+                  <input
+                    type="checkbox"
+                    checked={checklistDraft[key] ?? false}
+                    onChange={(event) => setChecklistDraft((prev) => ({ ...prev, [key]: event.target.checked }))}
+                  />
+                </label>
+              ))}
+            </div>
+            <label className="field-stack">
+              <span className="field-label">Weitere Bemerkungen</span>
+              <textarea rows={3} value={remarksDraft} onChange={(event) => setRemarksDraft(event.target.value)} />
+            </label>
+          </div>
+          <div className="modal-actions">
+            <button type="button" className="button-ghost" onClick={() => setShowReconnaissance(false)}>
+              Abbrechen
+            </button>
+            <button type="submit" className="button-primary" disabled={savingReconnaissance}>
+              {savingReconnaissance ? "Wird gespeichert…" : "Als rekognosziert markieren"}
             </button>
           </div>
         </form>

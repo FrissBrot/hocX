@@ -950,6 +950,13 @@ export type HikingTour = {
   route_cost: number | null;
   route_computed_at: string | null;
   elevation_profile_fetched_at: string | null;
+  // Phase 5 (Auftrag Abschnitt 17)
+  reconnaissance_checklist: Record<string, boolean>;
+  reconnaissance_remarks: string | null;
+  reconnoitered_at: string | null;
+  reconnoitered_by_name: string | null;
+  approved_at: string | null;
+  approved_by_name: string | null;
   created_at: string;
   updated_at: string;
 };
