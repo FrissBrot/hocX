@@ -18,6 +18,7 @@ import {
   ElevationProfile,
   ElevationProfilePoint,
   HikingTour,
+  HikingTourPrintResult,
   HikingTourRoutingProfile,
   HikingTourWaypoint,
   HikingTourWaypointKind,
@@ -58,6 +59,12 @@ const RECONNAISSANCE_CHECKLIST_LABELS: Record<string, string> = {
   alternative_route: "Alternativroute geprüft",
   decision_points: "Wichtige Entscheidungspunkte geprüft",
 };
+
+// Auftrag Abschnitt 15 - dieselben Werte wie PAPER_SIZES_MM/DEFAULT_SCALES im Backend
+// (app/core/print_layout.py); Architektur ist dort fuer weitere Massstaebe offen, hier nur
+// die drei geforderten Presets.
+const PRINT_PAPER_OPTIONS = ["A4", "A3", "A2", "A1"] as const;
+const PRINT_SCALE_OPTIONS = [10_000, 25_000, 50_000] as const;
 
 function formatMinutesShort(minutes: number): string {
   const rounded = Math.round(minutes);
@@ -132,6 +139,10 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
   const [remarksDraft, setRemarksDraft] = useState(tour.reconnaissance_remarks ?? "");
   const [savingReconnaissance, setSavingReconnaissance] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [showPrint, setShowPrint] = useState(false);
+  const [printForm, setPrintForm] = useState({ paper: "A4", orientation: "landscape", scale: 25_000, overlapPercent: 15 });
+  const [printing, setPrinting] = useState(false);
+  const [printResult, setPrintResult] = useState<HikingTourPrintResult | null>(null);
 
   async function handleEditSave(event: FormEvent) {
     event.preventDefault();
@@ -338,6 +349,29 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
     }
   }
 
+  async function handlePrint(event: FormEvent) {
+    event.preventDefault();
+    setPrinting(true);
+    setPrintResult(null);
+    try {
+      const result = await browserApiFetch<HikingTourPrintResult>(`/api/hiking-tours/${tour.id}/print`, {
+        method: "POST",
+        body: JSON.stringify({
+          paper: printForm.paper,
+          orientation: printForm.orientation,
+          scale: printForm.scale,
+          overlap_fraction: printForm.overlapPercent / 100,
+        }),
+      });
+      setPrintResult(result);
+      showToast("Druck-PDF erstellt", "success");
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : "Druck-PDF konnte nicht erstellt werden", "error");
+    } finally {
+      setPrinting(false);
+    }
+  }
+
   const mapWaypoints = useMemo(
     () => tour.waypoints.map((wp) => ({ id: wp.id, kind: wp.kind, lat: wp.lat, lon: wp.lon, label: wp.label })),
     [tour.waypoints]
@@ -363,6 +397,11 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
             <button type="button" className="button-secondary" onClick={() => setShowReconnaissance(true)}>
               Rekognoszierung
             </button>
+            {tour.route_legs.length > 0 && (
+              <button type="button" className="button-secondary" onClick={() => { setPrintResult(null); setShowPrint(true); }}>
+                Drucken
+              </button>
+            )}
             {tour.status === "reconnoitered" && (
               <button type="button" className="button-primary" onClick={() => void handleApprove()} disabled={approving}>
                 {approving ? "Wird freigegeben…" : "Freigeben"}
@@ -609,6 +648,73 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
             </button>
             <button type="submit" className="button-primary" disabled={savingReconnaissance}>
               {savingReconnaissance ? "Wird gespeichert…" : "Als rekognosziert markieren"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={showPrint} title="Drucken" onClose={() => setShowPrint(false)}>
+        <form onSubmit={(event) => void handlePrint(event)}>
+          <div className="grid two-col">
+            <label className="field-stack">
+              <span className="field-label">Papierformat</span>
+              <select value={printForm.paper} onChange={(event) => setPrintForm((prev) => ({ ...prev, paper: event.target.value }))}>
+                {PRINT_PAPER_OPTIONS.map((paper) => (
+                  <option key={paper} value={paper}>
+                    {paper}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field-stack">
+              <span className="field-label">Ausrichtung</span>
+              <select
+                value={printForm.orientation}
+                onChange={(event) => setPrintForm((prev) => ({ ...prev, orientation: event.target.value }))}
+              >
+                <option value="portrait">Hochformat</option>
+                <option value="landscape">Querformat</option>
+              </select>
+            </label>
+            <label className="field-stack">
+              <span className="field-label">Massstab</span>
+              <select
+                value={printForm.scale}
+                onChange={(event) => setPrintForm((prev) => ({ ...prev, scale: Number(event.target.value) }))}
+              >
+                {PRINT_SCALE_OPTIONS.map((scale) => (
+                  <option key={scale} value={scale}>
+                    1:{scale.toLocaleString("de-CH")}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field-stack">
+              <span className="field-label">Überlappung (%)</span>
+              <input
+                type="number"
+                min={0}
+                max={80}
+                value={printForm.overlapPercent}
+                onChange={(event) => setPrintForm((prev) => ({ ...prev, overlapPercent: Number(event.target.value) }))}
+              />
+            </label>
+          </div>
+          {printResult && (
+            <p className="field-help">
+              PDF mit {printResult.sheet_count} Kartenblatt{printResult.sheet_count === 1 ? "" : "blättern"} erstellt -{" "}
+              <a href={printResult.content_url} target="_blank" rel="noreferrer">
+                PDF herunterladen
+              </a>
+              .
+            </p>
+          )}
+          <div className="modal-actions">
+            <button type="button" className="button-ghost" onClick={() => setShowPrint(false)}>
+              Schliessen
+            </button>
+            <button type="submit" className="button-primary" disabled={printing}>
+              {printing ? "Wird erstellt…" : "PDF erstellen"}
             </button>
           </div>
         </form>

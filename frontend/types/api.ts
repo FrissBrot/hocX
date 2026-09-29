@@ -961,6 +961,14 @@ export type HikingTour = {
   updated_at: string;
 };
 
+// Phase 6 (Auftrag Abschnitt 15)
+export type HikingTourPrintResult = {
+  generated_file_id: string;
+  content_url: string;
+  sheet_count: number;
+  created_at: string;
+};
+
 export type EventSummary = {
   id: string;
   tenant_id: string;

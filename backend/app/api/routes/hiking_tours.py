@@ -13,6 +13,8 @@ from app.schemas.hiking_tour import (
     HikingTourRead,
     HikingTourSummary,
     HikingTourUpdate,
+    PrintRequest,
+    PrintResponse,
     ReconnaissanceUpdate,
     RouteComputeRequest,
     ViaPointCreate,
@@ -24,7 +26,9 @@ from app.schemas.march_time import MarchTimeTableRead
 from app.services.audit_service import AuditService
 from app.services.elevation_service import ElevationProfileService, ElevationServiceError
 from app.services.hiking_tour_analysis_service import HikingTourAnalysisService
+from app.services.hiking_tour_print_service import HikingTourPrintService
 from app.services.hiking_tour_service import HikingTourService
+from app.services.map_print_service import MapPrintServiceError
 from app.services.march_time_service import MarchTimeService
 from app.services.routing_service import RoutingError, RoutingService
 
@@ -34,6 +38,7 @@ routing_service = RoutingService()
 elevation_service = ElevationProfileService()
 march_time_service = MarchTimeService()
 analysis_service = HikingTourAnalysisService()
+print_service = HikingTourPrintService()
 audit = AuditService()
 
 
@@ -179,6 +184,39 @@ def get_march_table(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return MarchTimeTableRead.from_domain(table)
+
+
+@router.post("/hiking-tours/{tour_id}/print", response_model=PrintResponse)
+async def print_hiking_tour(
+    tour_id: uuid.UUID,
+    payload: PrintRequest,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Auftrag Abschnitt 15: Kartendruck-PDF (Tourübersicht, Marschzeittabelle, Höhenprofil,
+    Kartenblätter). Braucht eine bereits berechnete Route."""
+    require_wanderplaner_write(user)
+    tour = _get_tour_or_404(db, tour_id, user)
+    try:
+        stored_file, sheet_count = await print_service.export_pdf(
+            db, tour, paper=payload.paper, orientation=payload.orientation, scale=payload.scale, overlap_fraction=payload.overlap_fraction
+        )
+    except MapPrintServiceError as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Druck-PDF konnte nicht erzeugt werden") from exc
+    audit.log(db, action="hiking_tour.printed", actor=user, entity_type="hiking_tour", entity_id=tour.id)
+    return PrintResponse(
+        generated_file_id=stored_file.public_id,
+        content_url=f"/api/stored-files/{stored_file.public_id}/content",
+        sheet_count=sheet_count,
+        created_at=stored_file.created_at,
+    )
 
 
 @router.post("/hiking-tours/{tour_id}/analyze", response_model=HikingTourRead)

@@ -358,3 +358,51 @@ class ElevationProfilePoint(BaseModel):
 class ElevationProfileRead(BaseModel):
     fetched_at: datetime
     points: list[ElevationProfilePoint]
+
+
+class PrintRequest(BaseModel):
+    """Body von POST /hiking-tours/{id}/print (Auftrag Abschnitt 15)."""
+
+    paper: str = "A4"
+    orientation: str = "landscape"
+    scale: int = 25_000
+    overlap_fraction: float = 0.15
+
+    @field_validator("paper")
+    @classmethod
+    def _validate_paper(cls, value: str) -> str:
+        from app.core.print_layout import PAPER_SIZES_MM
+
+        if value not in PAPER_SIZES_MM:
+            raise ValueError(f"Unknown paper size: {value}")
+        return value
+
+    @field_validator("orientation")
+    @classmethod
+    def _validate_orientation(cls, value: str) -> str:
+        from app.core.print_layout import ORIENTATIONS
+
+        if value not in ORIENTATIONS:
+            raise ValueError(f"Unknown orientation: {value}")
+        return value
+
+    @field_validator("scale")
+    @classmethod
+    def _validate_scale(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("Massstab muss positiv sein")
+        return value
+
+    @field_validator("overlap_fraction")
+    @classmethod
+    def _validate_overlap(cls, value: float) -> float:
+        if not (0 <= value < 0.9):
+            raise ValueError("Überlappung muss zwischen 0 und 0.9 liegen")
+        return value
+
+
+class PrintResponse(BaseModel):
+    generated_file_id: uuid.UUID
+    content_url: str
+    sheet_count: int
+    created_at: datetime
