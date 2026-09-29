@@ -232,6 +232,61 @@ CVE-2026-48710 (CISA KEV, Fix in 1.0.1); PyPI-Check in dieser Session: neuestes 
 
 ---
 
+## [DEP-04] [MEDIUM/gemischt] `npm audit` findet 2 (abgabebox-frontend) bzw. 27 (frontend) transitive JS-Schwachstellen — 1 sofort fixbar, Rest braucht Breaking-Change-Bumps
+
+Status: TEILWEISE BEHOBEN (nanoid via `npm audit fix`), Rest **NEEDS_VERIFICATION/POTENTIAL**
+(nur mit Breaking Changes lösbar, hier bewusst nicht blind erzwungen)
+
+Betroffene Dateien: `frontend/package-lock.json`, `abgabebox-frontend/package-lock.json`
+
+### Beschreibung
+Fork K hat nur die direkt in `package.json` gepinnten Top-Level-Dependencies inventarisiert,
+nicht den vollständig aufgelösten `node_modules`-Baum. Beim Verifizieren des DEP-01-Fixes
+(`npm install` nach dem Next.js-Bump) zeigte `npm audit` zusätzliche, rein transitive Funde:
+
+- **nanoid < 3.3.18** (High, GHSA-2v37-7h3g-55p8, DoS bei `size=0`) — **behoben** via
+  `npm audit fix` in beiden Frontends (nur `package-lock.json` geändert, kein Breaking Change,
+  `tsc`/`vitest` danach grün).
+- **sharp < 0.35.4** (High, libheif-CVEs) — transitive Pin-Vorgabe von Next.js selbst (auch die
+  gerade gepatchte `16.3.6` zieht noch eine ältere `sharp`-Version); nicht durch uns fixbar ohne
+  Next.js-Upgrade auf eine noch nicht existierende Version oder ein riskantes manuelles
+  `overrides`-Pinning. **POTENTIAL, Restrisiko** — abhängig von einem künftigen Next.js-Patch.
+- **@tiptap/core-Kette** (Moderate, betrifft `extension-text`/`-text-style`/`-strike`/
+  `-paragraph`/`-list-item`/`-ordered-list`/`tiptap-markdown`) — nur durch einen Major-Bump auf
+  Tiptap 3.x lösbar (aktuell `^2.11.5` gepinnt). Ein solcher Bump könnte das von Fork C als sicher
+  verifizierte XSS-Verhalten (`Markdown.configure({ html: false })`, siehe C-06) verändern und
+  bräuchte eine erneute Stored-XSS-Prüfung — **bewusst nicht blind in dieser Audit-Fix-Runde
+  durchgeführt**, da es über "Dependency-Patch" hinausgeht und Re-Testing des Editors erfordert.
+- **markdown-it < 14.3.1** (Moderate, ReDoS via `linkify`) — transitive Folge der Tiptap-Kette,
+  gleiche Einschränkung.
+- **playwright < 1.55.1** (High, TLS-Zertifikatsprüfung bei Browser-Download) — nur in
+  `devDependencies` (E2E-Test-Tooling), kein Produktions-Runtime-Risiko.
+- **undici 8.0.0–8.10.1** (mehrere High/Moderate, diverse DoS/Cache-Poisoning) — transitiv über
+  Test-/Build-Tooling, nicht im Produktions-Bundle verifiziert (nicht abschliessend geprüft,
+  welcher konkrete devDependency-Pfad undici zieht).
+
+### Impact
+Nanoid-Fix: behoben, kein Restrisiko. Sharp/Tiptap-Kette: Restrisiko bleibt bestehen, aber
+Ausnutzbarkeit unklar (sharp nur bei Next.js-Image-Optimization-Nutzung relevant — noch nicht
+verifiziert, ob dieses Repo `next/image` überhaupt nutzt; Tiptap-CVE-Details selbst nicht
+einzeln nachrecherchiert).
+
+### Recommended Fix
+1. `npm audit fix` in beide Frontends bereits angewendet (nanoid) — **erledigt**.
+2. `pip-audit`/`npm audit` als CI-Schritt ergänzen (bereits von Fork K empfohlen) — hätte dies
+   automatisch und kontinuierlich erfasst statt es erst bei der manuellen Fix-Verifikation zu
+   entdecken.
+3. Tiptap-3.x-Migration + Re-Verifikation des Rich-Text-Editors als eigene, getestete Aufgabe
+   einplanen (nicht Teil dieses Audits).
+4. `sharp`/Next.js-Version beobachten, sobald Next.js selbst eine neuere `sharp`-Version zieht.
+
+### Evidence
+`npm audit`-Ausgabe in beiden Frontend-Containern (Session vom 2026-09-30, nach `npm install`
+für den DEP-01-Fix); `git diff --stat` zeigt nur `package-lock.json`-Änderungen für den
+nanoid-Fix, keine `package.json`-Änderung.
+
+---
+
 ## [DEP-03] [POTENTIAL/LOW] PyJWT 2.10.1 unter Fix-Version, Risiko auf Platform-Admin-OIDC-Login begrenzt
 
 Status: POTENTIAL (geringes Risiko, begrenzte Angriffsfläche)

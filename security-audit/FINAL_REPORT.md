@@ -16,6 +16,7 @@ Tiefenprüfungs-Durchläufe (Fork A-M) über alle im Auftrag geforderten Abschni
 | Low | 2 | TEN-01, DEPLOY-01 |
 | Potential/Low | 1 | DEP-03 |
 | Info | 4 | TEN-02, WS-01, PUB-01, `/bridge`-Notiz |
+| Gemischt (teils behoben) | 1 | DEP-04 (npm audit, erst bei Fix-Verifikation entdeckt) |
 
 **Wichtigstes Ergebnis:** Dieses Repository wurde bereits mehrfach zuvor auditiert (sichtbar an
 Dutzenden `# audit finding ...`-Kommentaren im Code, datiert 2026-08-16 bis 2026-09-24, sowie an
