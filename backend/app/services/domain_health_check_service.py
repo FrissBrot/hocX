@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models import TenantDomain
-from app.services import domain_verification_service
+from app.services import domain_verification_service, traefik_config_service
 
 
 def run_health_check(db: Session) -> None:
@@ -14,8 +14,18 @@ def run_health_check(db: Session) -> None:
     last_checked_at accordingly. Does NOT touch Traefik routing - a domain flagged unhealthy
     stays routed (a DNS check can be a transient false negative; auto-unrouting on that signal
     risks the exact kind of instability this is meant to guard against). The flag only feeds
-    visibility (admin/self-service UI) and gates the "auto-redirect to custom domain" bridge."""
-    rows = db.query(TenantDomain).filter(TenantDomain.status == "active").all()
+    visibility (admin/self-service UI) and gates the "auto-redirect to custom domain" bridge -
+    excluded here too (security-audit FEAT-01), so a domain whose tenant lost `custom_domain`
+    stops being reported healthy and stops being offered by the bridge, even before the next
+    regenerate() physically removes its Traefik router."""
+    rows = (
+        db.query(TenantDomain)
+        .filter(
+            TenantDomain.status == "active",
+            TenantDomain.tenant_id.in_(traefik_config_service.tenant_ids_with_custom_domain_feature(db)),
+        )
+        .all()
+    )
     now = datetime.now(timezone.utc)
     for row in rows:
         target_host = settings.traefik_domain if row.purpose == "app" else settings.traefik_abgabebox_domain

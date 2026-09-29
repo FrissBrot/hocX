@@ -11,14 +11,18 @@ current tenant - a bare public_id lookup would let a valid UUID from one tenant 
 on another tenant's row (public_id is unguessable but is not itself an authorization
 check). Two cases:
 
-- The model has its own tenant_id column (Protocol, Event, Template, ...): pass
-  tenant_id= here and it's filtered in the same query.
+- The model has its own tenant_id column (Protocol, Event, Template, StoredFile,
+  ProtocolTodo, ...): pass tenant_id= here and it's filtered in the same query.
 - The model is only transitively tenant-scoped through a parent FK (ProtocolElement,
-  ProtocolElementBlock, ProtocolTodo, StoredFile, ...): tenant_id= here is a no-op (the
-  column doesn't exist), so the caller must still run the existing
-  app.repositories.access_repository lookups (tenant_id_for_protocol,
+  ProtocolElementBlock, ProtocolImage, ProtocolText, ProtocolDisplaySnapshot, ...):
+  tenant_id= here is a no-op (the column doesn't exist), so the caller must still run
+  the existing app.repositories.access_repository lookups (tenant_id_for_protocol,
   protocol_id_for_block, tenant_id_for_stored_file, ...) on the resolved internal id,
   exactly as routers already do today for the numeric-id path params these replace.
+
+  (security-audit TEN-02, 2026-09-30: StoredFile/ProtocolTodo used to be transitively
+  scoped and are listed as such in some older callers' comments - both gained their own
+  tenant_id column since. Check app/models/entities.py before assuming either list.)
 """
 
 from __future__ import annotations

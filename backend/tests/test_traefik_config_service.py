@@ -24,7 +24,8 @@ import yaml
 
 from app.models import TenantDomain
 from app.services import traefik_config_service
-from tests.factories import make_tenant
+from app.services.admin_tenant_service import AdminTenantService
+from tests.factories import grant_tenant_feature, make_tenant
 
 
 def _make_domain(db, tenant_id: int, domain: str, purpose: str = "app", status: str = "active") -> TenantDomain:
@@ -50,6 +51,7 @@ def _regenerate_into_tmp(monkeypatch, tmp_path, db) -> dict:
 
 def test_regenerate_writes_valid_config_for_active_app_domain(db, monkeypatch, tmp_path):
     tenant = make_tenant(db, "Traefik Test Verein")
+    grant_tenant_feature(db, tenant.id)
     domain_row = _make_domain(db, tenant.id, "verein.example.com", purpose="app", status="active")
 
     config = _regenerate_into_tmp(monkeypatch, tmp_path, db)
@@ -68,6 +70,7 @@ def test_regenerate_writes_file_group_readable_not_world_readable(db, monkeypatc
     world-readable) - without an explicit chmod, every regenerate() call would silently
     re-break that hardening and fail the next deploy's permission check."""
     tenant = make_tenant(db, "Permissions Test Verein")
+    grant_tenant_feature(db, tenant.id)
     _make_domain(db, tenant.id, "perms.example.com", purpose="app", status="active")
 
     monkeypatch.setattr(traefik_config_service.settings, "traefik_dynamic_config_dir", str(tmp_path))
@@ -79,6 +82,7 @@ def test_regenerate_writes_file_group_readable_not_world_readable(db, monkeypatc
 
 def test_regenerate_ignores_pending_domains(db, monkeypatch, tmp_path):
     tenant = make_tenant(db, "Pending Domain Verein")
+    grant_tenant_feature(db, tenant.id)
     _make_domain(db, tenant.id, "pending.example.com", purpose="app", status="pending")
 
     config = _regenerate_into_tmp(monkeypatch, tmp_path, db)
@@ -104,6 +108,7 @@ def test_regenerate_with_no_active_domains_writes_empty_document(db, monkeypatch
 
 def test_regenerate_abgabebox_purpose_produces_abgabebox_routers(db, monkeypatch, tmp_path):
     tenant = make_tenant(db, "Abgabebox Verein")
+    grant_tenant_feature(db, tenant.id)
     domain_row = _make_domain(db, tenant.id, "box.example.com", purpose="abgabebox", status="active")
 
     config = _regenerate_into_tmp(monkeypatch, tmp_path, db)
@@ -120,6 +125,7 @@ def test_regenerate_malicious_domain_string_stays_a_single_contained_value(db, m
     must still round-trip as a single opaque string - never additional YAML keys, never a
     second router, never invalid YAML that fails to parse."""
     tenant = make_tenant(db, "Injection Test Verein")
+    grant_tenant_feature(db, tenant.id)
     malicious = "evil.example.com`) || Host(`attacker.example.com"
     domain_row = _make_domain(db, tenant.id, malicious, purpose="app", status="active")
 
@@ -147,6 +153,7 @@ def test_regenerate_newline_in_domain_does_not_produce_extra_yaml_keys(db, monke
     key). yaml.safe_dump must block-quote/escape it so the parsed structure still contains
     exactly one router set for this domain."""
     tenant = make_tenant(db, "Newline Verein")
+    grant_tenant_feature(db, tenant.id)
     malicious = "evil.example.com\nfake-key: fake-value"
     domain_row = _make_domain(db, tenant.id, malicious, purpose="app", status="active")
 
@@ -158,6 +165,58 @@ def test_regenerate_newline_in_domain_does_not_produce_extra_yaml_keys(db, monke
     # No stray "fake-key" ever appears as a real top-level router or config key.
     assert "fake-key" not in config
     assert "fake-key" not in config.get("http", {})
+
+
+def test_regenerate_excludes_active_domain_whose_tenant_lost_the_feature(db, monkeypatch, tmp_path):
+    """security-audit FEAT-01: require_feature("custom_domain") only gates create_domain/
+    verify_domain - once a domain is 'active', regenerate() used to serve it forever, even
+    after the feature was revoked (manual downgrade, or a tenant import that never assigns the
+    feature at all, see FEAT-02). No `grant_tenant_feature` call here on purpose."""
+    tenant = make_tenant(db, "Downgraded Verein")
+    _make_domain(db, tenant.id, "downgraded.example.com", purpose="app", status="active")
+
+    config = _regenerate_into_tmp(monkeypatch, tmp_path, db)
+
+    routers = (config.get("http") or {}).get("routers") or {}
+    assert not any("downgraded.example.com" in str(r) for r in routers.values())
+
+
+def test_regenerate_reincludes_domain_once_feature_is_granted(db, monkeypatch, tmp_path):
+    tenant = make_tenant(db, "Regranted Verein")
+    domain_row = _make_domain(db, tenant.id, "regranted.example.com", purpose="app", status="active")
+
+    before = _regenerate_into_tmp(monkeypatch, tmp_path, db)
+    assert not any("regranted.example.com" in str(r) for r in (before.get("http") or {}).get("routers", {}).values())
+
+    grant_tenant_feature(db, tenant.id)
+    after = _regenerate_into_tmp(monkeypatch, tmp_path, db)
+    routers = after["http"]["routers"]
+    assert routers[f"tenant-app-{domain_row.id}-frontend"]["rule"] == "Host(`regranted.example.com`)"
+
+
+def test_revoking_custom_domain_feature_immediately_drops_the_domain_from_traefik_config(db, monkeypatch, tmp_path):
+    """security-audit FEAT-01: regenerate() only runs at startup and after domain
+    create/verify/delete - without AdminTenantService.update_tenant_features() also triggering
+    it, a revoked feature would leave the domain routed until one of those unrelated events
+    happens to fire next."""
+    tenant = make_tenant(db, "Live Downgrade Verein")
+    grant_tenant_feature(db, tenant.id)
+    _make_domain(db, tenant.id, "live-downgrade.example.com", purpose="app", status="active")
+    monkeypatch.setattr(traefik_config_service.settings, "traefik_dynamic_config_dir", str(tmp_path))
+
+    # Sanity check: the domain is actually being served before the revoke.
+    traefik_config_service.regenerate(db)
+    before_path = tmp_path / "tenant-domains.yml"
+    with open(before_path) as fh:
+        before = yaml.safe_load(fh) or {}
+    assert any("live-downgrade.example.com" in str(r) for r in (before.get("http") or {}).get("routers", {}).values())
+
+    AdminTenantService().update_tenant_features(db, tenant.id, [], admin_id=1)
+
+    with open(before_path) as fh:
+        after = yaml.safe_load(fh) or {}
+    routers = (after.get("http") or {}).get("routers") or {}
+    assert not any("live-downgrade.example.com" in str(r) for r in routers.values())
 
 
 def test_custom_domains_use_release_upload_middlewares_and_prefix(monkeypatch):

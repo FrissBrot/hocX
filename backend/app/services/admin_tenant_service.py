@@ -46,7 +46,7 @@ from app.schemas.admin import (
 from app.schemas.user import TenantUpdate
 from app.services.document_template_service import DocumentTemplateService
 from app.services.file_service import _safe_storage_path
-from app.services import submission_link_service
+from app.services import submission_link_service, traefik_config_service
 from app.services.storage_service import StorageService
 from app.services.tenant_service import apply_tenant_profile_image
 
@@ -437,6 +437,12 @@ class AdminTenantService:
         for code in wanted - current.keys():
             db.add(TenantFeature(tenant_id=tenant_id, feature_code=code, enabled_by_admin_id=admin_id))
         db.commit()
+        if "custom_domain" in (current.keys() - wanted):
+            # security-audit FEAT-01: regenerate() only runs at startup and after domain
+            # create/verify/delete - without this call, revoking the feature here would leave
+            # an already-active domain routed until one of those unrelated events happens to
+            # trigger a regenerate.
+            traefik_config_service.regenerate(db)
         return self._read_model(db, tenant)
 
     def get_tenant(self, db: Session, tenant_id: int) -> AdminTenantRead | None:

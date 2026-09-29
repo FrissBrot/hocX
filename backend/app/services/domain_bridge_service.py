@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.redis_client import get_redis_sync
 from app.models import Tenant, TenantDomain
+from app.services import traefik_config_service
 
 # v2: the token carries only "user_id:mfa" now that a user belongs to exactly one tenant. The
 # prefix changed with the format so a still-live (60s TTL) pre-switch token, whose value is
@@ -62,6 +63,9 @@ def resolve_bridge_redirect(
             TenantDomain.purpose == "app",
             TenantDomain.status == "active",
             TenantDomain.is_healthy.is_(True),
+            # security-audit FEAT-01: don't rely on is_healthy alone staying in sync after a
+            # feature revoke - check the current booking directly too.
+            TenantDomain.tenant_id.in_(traefik_config_service.tenant_ids_with_custom_domain_feature(db)),
         )
         .one_or_none()
     )
@@ -80,7 +84,12 @@ def resolve_tenant_by_app_domain(db: Session, domain: str) -> Tenant | None:
     their org's own domain, without exposing a manual tenant picker."""
     row = (
         db.query(TenantDomain)
-        .filter(TenantDomain.domain == domain, TenantDomain.purpose == "app", TenantDomain.status == "active")
+        .filter(
+            TenantDomain.domain == domain,
+            TenantDomain.purpose == "app",
+            TenantDomain.status == "active",
+            TenantDomain.tenant_id.in_(traefik_config_service.tenant_ids_with_custom_domain_feature(db)),
+        )
         .one_or_none()
     )
     if row is None:

@@ -563,12 +563,5 @@ class ProtocolImageRepository:
     def get(self, db: Session, image_id: int) -> ProtocolImage | None:
         return db.get(ProtocolImage, image_id)
 
-    def get_by_public_id(self, db: Session, public_id: uuid.UUID) -> ProtocolImage | None:
-        # ProtocolImage has no tenant_id column of its own (scoped transitively via
-        # protocol_element_block -> protocol_element -> protocol) - callers must verify
-        # tenant/access via access_repository on the resolved row, same as for the
-        # numeric-id path this replaces.
-        return public_id_service.get_by_public_id(db, ProtocolImage, public_id)
-
     def delete(self, db: Session, protocol_image: ProtocolImage) -> None:
         db.delete(protocol_image)

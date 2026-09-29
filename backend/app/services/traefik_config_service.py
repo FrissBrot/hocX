@@ -8,9 +8,21 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models import TenantDomain
+from app.models import TenantDomain, TenantFeature
 
 _DYNAMIC_FILE_NAME = "tenant-domains.yml"
+
+
+def tenant_ids_with_custom_domain_feature(db: Session):
+    """Subquery of tenant_ids that currently have `custom_domain` booked.
+
+    Every place that decides whether an already-`active` TenantDomain row should still be
+    treated as live (Traefik routing here, the health-check loop, the login bridge) filters
+    through this - `require_feature` only gates *creating*/*verifying* a domain, so without this
+    a feature revoke (manual downgrade or a tenant import/restore that never assigns the
+    feature) would leave an already-provisioned domain served indefinitely
+    (security-audit FEAT-01/FEAT-02)."""
+    return select(TenantFeature.tenant_id).where(TenantFeature.feature_code == "custom_domain")
 
 
 def _app_routers(domain: str, domain_id: int) -> dict:
@@ -108,7 +120,16 @@ def regenerate(db: Session) -> None:
     so no new containers are started per tenant. Called after every domain create/verify/delete
     and once at backend startup to correct any drift.
     """
-    rows = db.execute(select(TenantDomain).where(TenantDomain.status == "active")).scalars().all()
+    rows = (
+        db.execute(
+            select(TenantDomain).where(
+                TenantDomain.status == "active",
+                TenantDomain.tenant_id.in_(tenant_ids_with_custom_domain_feature(db)),
+            )
+        )
+        .scalars()
+        .all()
+    )
 
     routers: dict = {}
     for row in rows:

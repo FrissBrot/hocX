@@ -31,6 +31,7 @@ from app.models.entities import (
     TemplateParticipant,
     Tenant,
     TenantDomain,
+    TenantFeature,
     TodoStatus,
     UserMfaFactor,
     WordImportProfile,
@@ -402,6 +403,17 @@ def make_tenant_domain(
         verification_token=uuid.uuid4().hex,
         status=status,
     )
+    db.add(row)
+    db.flush()
+    return row
+
+
+def grant_tenant_feature(db, tenant_id: int, feature_code: str = "custom_domain") -> TenantFeature:
+    """A real `tenant_feature` DB row - distinct from `make_current_user`'s
+    `current_tenant_features` frozenset, which only fakes what a request-scoped `CurrentUser`
+    saw and is never read by code that queries the table directly (e.g.
+    traefik_config_service.tenant_ids_with_custom_domain_feature)."""
+    row = TenantFeature(tenant_id=tenant_id, feature_code=feature_code)
     db.add(row)
     db.flush()
     return row
