@@ -41,6 +41,10 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
   const [end, setEnd] = useState<LatLon | null>(null);
   const [pendingField, setPendingField] = useState<"start" | "end">("start");
   const [saving, setSaving] = useState(false);
+  const [showGpxImport, setShowGpxImport] = useState(false);
+  const [gpxTitle, setGpxTitle] = useState("");
+  const [gpxFile, setGpxFile] = useState<File | null>(null);
+  const [importingGpx, setImportingGpx] = useState(false);
 
   function resetCreateForm() {
     setTitle("");
@@ -94,6 +98,30 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
     }
   }
 
+  async function handleGpxImport(event: FormEvent) {
+    event.preventDefault();
+    if (!gpxFile) {
+      showToast("Bitte eine GPX-Datei auswählen", "error");
+      return;
+    }
+    setImportingGpx(true);
+    try {
+      const formData = new FormData();
+      formData.append("title", gpxTitle.trim() || gpxFile.name.replace(/\.gpx$/i, ""));
+      formData.append("file", gpxFile);
+      const created = await browserApiFetch<HikingTour>("/api/hiking-tours/gpx-import", { method: "POST", body: formData });
+      setShowGpxImport(false);
+      setGpxTitle("");
+      setGpxFile(null);
+      showToast("GPX-Datei importiert", "success");
+      router.push(`/wanderplaner/${created.id}`);
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : "GPX-Import fehlgeschlagen", "error");
+    } finally {
+      setImportingGpx(false);
+    }
+  }
+
   const mapWaypoints = [
     ...(start ? [{ id: "start", kind: "START" as const, lat: start.lat, lon: start.lon }] : []),
     ...(end ? [{ id: "end", kind: "END" as const, lat: end.lat, lon: end.lon }] : []),
@@ -107,9 +135,14 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
           <p className="muted">Wanderungen planen, Route berechnen und Marschzeittabelle erstellen.</p>
         </div>
         {canWrite && (
-          <button type="button" className="button-primary" onClick={() => setShowCreate(true)}>
-            Neue Wanderung
-          </button>
+          <div className="page-header-actions">
+            <button type="button" className="button-secondary" onClick={() => setShowGpxImport(true)}>
+              GPX importieren
+            </button>
+            <button type="button" className="button-primary" onClick={() => setShowCreate(true)}>
+              Neue Wanderung
+            </button>
+          </div>
         )}
       </div>
 
@@ -192,6 +225,44 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
             </button>
             <button type="submit" className="button-primary" disabled={saving || !start || !end}>
               {saving ? "Wird erstellt…" : "Wanderung erstellen"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={showGpxImport}
+        title="GPX importieren"
+        onClose={() => {
+          setShowGpxImport(false);
+          setGpxFile(null);
+        }}
+      >
+        <form onSubmit={(event) => void handleGpxImport(event)}>
+          <div className="grid">
+            <p className="field-help">Die GPX-Datei dient als Ausgangspunkt einer neuen Wanderung (Start/Ziel/Via-Punkte).</p>
+            <label className="field-stack">
+              <span className="field-label">Titel</span>
+              <input value={gpxTitle} onChange={(event) => setGpxTitle(event.target.value)} placeholder={gpxFile?.name.replace(/\.gpx$/i, "") ?? ""} />
+            </label>
+            <label className="field-stack">
+              <span className="field-label">GPX-Datei</span>
+              <input type="file" accept=".gpx" required onChange={(event) => setGpxFile(event.target.files?.[0] ?? null)} />
+            </label>
+          </div>
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="button-ghost"
+              onClick={() => {
+                setShowGpxImport(false);
+                setGpxFile(null);
+              }}
+            >
+              Abbrechen
+            </button>
+            <button type="submit" className="button-primary" disabled={importingGpx || !gpxFile}>
+              {importingGpx ? "Wird importiert…" : "Importieren"}
             </button>
           </div>
         </form>

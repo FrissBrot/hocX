@@ -3,18 +3,26 @@ test_elevation_service.py) - `fetch_tile()` liefert eine einfarbige Testkachel s
 echten Netzwerk-Requests."""
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from PIL import Image
 
 from app.core.print_layout import compute_page_geometry, plan_sheets
 from app.core.print_layout import RoutePoint2D
+from app.core.redis_client import get_redis_sync
 from app.core.swiss_coords import wgs84_to_lv95
 from app.services.map_print_service import MapPrintServiceError, MapPrintService, OverlayWaypoint, SheetOverlay
 
 RIGI_KULM = {"lat": 47.0576, "lon": 8.4883}
 GOLDAU = {"lat": 47.0512, "lon": 8.5478}
+
+
+@pytest.fixture(autouse=True)
+def _isolated_tile_cache():
+    get_redis_sync().flushdb()
+    yield
+    get_redis_sync().flushdb()
 
 
 def _fake_tile(*_args, **_kwargs) -> Image.Image:
@@ -63,3 +71,32 @@ class TestRenderSheetImage:
         with patch.object(MapPrintService, "fetch_tile", side_effect=MapPrintServiceError("boom")):
             with pytest.raises(MapPrintServiceError):
                 MapPrintService().render_sheet_image(sheet, geometry, SheetOverlay())
+
+
+class TestFetchTileCaching:
+    def _mock_jpeg_response(self):
+        buffer_image = Image.new("RGB", (256, 256), color=(200, 100, 50))
+        import io
+
+        buffer = io.BytesIO()
+        buffer_image.save(buffer, format="JPEG")
+        body = buffer.getvalue()
+        response = MagicMock()
+        response.read.return_value = body
+        response.__enter__.return_value = response
+        response.__exit__.return_value = False
+        return response
+
+    def test_a_second_fetch_of_the_same_tile_hits_the_cache_not_the_network(self):
+        with patch("app.services.map_print_service.urllib.request.urlopen", return_value=self._mock_jpeg_response()) as mocked:
+            MapPrintService().fetch_tile(12, 100, 200)
+            MapPrintService().fetch_tile(12, 100, 200)
+
+        assert mocked.call_count == 1
+
+    def test_a_different_tile_coordinate_is_not_served_from_the_cache(self):
+        with patch("app.services.map_print_service.urllib.request.urlopen", return_value=self._mock_jpeg_response()) as mocked:
+            MapPrintService().fetch_tile(12, 100, 200)
+            MapPrintService().fetch_tile(12, 100, 201)
+
+        assert mocked.call_count == 2

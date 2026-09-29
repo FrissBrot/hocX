@@ -402,6 +402,11 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
                 Drucken
               </button>
             )}
+            {tour.route_legs.length > 0 && (
+              <a className="button-secondary" href={`/api/hiking-tours/${tour.id}/gpx`}>
+                GPX exportieren
+              </a>
+            )}
             {tour.status === "reconnoitered" && (
               <button type="button" className="button-primary" onClick={() => void handleApprove()} disabled={approving}>
                 {approving ? "Wird freigegeben…" : "Freigeben"}

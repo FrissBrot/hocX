@@ -117,3 +117,16 @@ def test_unknown_profile_raises_value_error(db, routing_network):
 
     with pytest.raises(ValueError, match="Unknown routing profile"):
         RoutingService().compute_route(db, tour, profile="ueberhaupt-kein-profil")
+
+
+def test_start_equals_end_produces_a_valid_loop_route_instead_of_crashing(db, routing_network):
+    # Auftrag Abschnitt 20 ("Start = Ziel" explizit behandeln): eine Rundwanderung ist
+    # legitim (z.B. Start/Ziel am selben Parkplatz), nicht automatisch ein Fehlerfall.
+    tenant = make_tenant(db, "Routing Verein 9")
+    tour = _create_tour(db, tenant.id, start=A, end=A, profile="schnellste_route")
+
+    result = RoutingService().compute_route(db, tour, profile="schnellste_route")
+
+    assert len(result.route_legs) == 1
+    assert result.route_legs[0].distance_m == 0.0
+    assert result.route_distance_m == 0.0

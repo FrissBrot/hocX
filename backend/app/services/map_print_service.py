@@ -13,6 +13,7 @@ ohnehin bekommt (Auftrag Abschnitt 15)."""
 
 from __future__ import annotations
 
+import base64
 import io
 import math
 import urllib.error
@@ -22,6 +23,7 @@ from dataclasses import dataclass, field
 from PIL import Image, ImageDraw, ImageFont
 
 from app.core.print_layout import PageGeometry, PrintSheet
+from app.core.redis_client import get_redis_sync
 from app.core.swiss_coords import lv95_to_wgs84, wgs84_to_lv95
 from app.core.web_mercator import TILE_SIZE_PX, choose_zoom, lonlat_to_pixel, pixel_to_tile
 
@@ -30,6 +32,13 @@ WMTS_LAYER = "ch.swisstopo.pixelkarte-farbe"
 PRINT_DPI = 200
 FOOTER_FONT_SIZE_PX = 26
 SCALE_BAR_FONT_SIZE_PX = 22
+REQUEST_TIMEOUT_SECONDS = 15
+# Mehr Kacheln als das fuer ein einzelnes Blatt zu laden waere ein Zeichen eines Bugs
+# (falscher Zoom/falsche Bounding Box) - lieber laut scheitern als eine Endlosschleife/
+# einen riesigen Speicherverbrauch riskieren (Auftrag Abschnitt 22).
+MAX_TILES_PER_SHEET = 400
+TILE_CACHE_KEY_PREFIX = "wanderplaner:wmts-tile:"
+TILE_CACHE_TTL_SECONDS = 60 * 60 * 24 * 30  # 30 Tage, wie elevation_service.py
 
 
 def _load_font(size_px: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
@@ -45,11 +54,6 @@ def _load_font(size_px: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
         return ImageFont.truetype(font_manager.findfont("DejaVu Sans"), size_px)
     except Exception:
         return ImageFont.load_default()
-REQUEST_TIMEOUT_SECONDS = 15
-# Mehr Kacheln als das fuer ein einzelnes Blatt zu laden waere ein Zeichen eines Bugs
-# (falscher Zoom/falsche Bounding Box) - lieber laut scheitern als eine Endlosschleife/
-# einen riesigen Speicherverbrauch riskieren (Auftrag Abschnitt 22).
-MAX_TILES_PER_SHEET = 400
 
 # Grobe Entsprechung der Wegpunkt-Farbtokens aus hiking-tour-map.tsx (KIND_COLOR_TOKEN) - als
 # RGB-Tupel, weil serverseitiges Python die CSS-Custom-Properties aus design/tokens.css nicht
@@ -108,12 +112,29 @@ def _nice_scale_bar_length_m(ground_width_m: float) -> float:
 
 class MapPrintService:
     def fetch_tile(self, zoom: int, x: int, y: int) -> Image.Image:
+        # Auftrag Abschnitt 21: "Kartendaten [cachen], soweit Lizenz/API dies zulassen" -
+        # swisstopo-Rasterkacheln sind statische, oeffentliche Geodaten (aendern sich
+        # praktisch nie zwischen zwei Drucken derselben Gegend), Redis-Cache-Key = Kachel-
+        # Koordinate (nicht Tour-Id - zwei Touren durch dieselbe Gegend teilen sich Kacheln,
+        # genau wie beim Hoehenprofil-Cache in elevation_service.py). TTL 30 Tage, dieselbe
+        # Begruendung wie dort.
+        # get_redis_sync() ist auf decode_responses=True gepoolt (fuer die ueberall sonst
+        # gespeicherten Text-/JSON-Werte, z.B. elevation_service.py) - binaere JPEG-Bytes
+        # muessen deshalb base64-kodiert werden, sonst schlaegt schon das Lesen mit einem
+        # UnicodeDecodeError fehl.
+        cache = get_redis_sync()
+        cache_key = f"{TILE_CACHE_KEY_PREFIX}{WMTS_LAYER}:{zoom}:{x}:{y}"
+        cached = cache.get(cache_key)
+        if cached:
+            return Image.open(io.BytesIO(base64.b64decode(cached))).convert("RGB")
+
         url = WMTS_URL_TEMPLATE.format(layer=WMTS_LAYER, z=zoom, x=x, y=y)
         try:
             with urllib.request.urlopen(url, timeout=REQUEST_TIMEOUT_SECONDS) as response:
                 data = response.read()
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             raise MapPrintServiceError("Kartendienst (swisstopo) nicht erreichbar") from exc
+        cache.setex(cache_key, TILE_CACHE_TTL_SECONDS, base64.b64encode(data).decode("ascii"))
         return Image.open(io.BytesIO(data)).convert("RGB")
 
     def _project(self, lat: float, lon: float, sheet: PrintSheet, size: tuple[int, int]) -> tuple[float, float]:

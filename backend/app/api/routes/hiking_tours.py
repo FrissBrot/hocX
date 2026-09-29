@@ -1,10 +1,11 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
+from app.core.gpx import MAX_FILE_SIZE_BYTES as GPX_MAX_FILE_SIZE_BYTES
 from app.core.security import CurrentUser, get_current_user, require_wanderplaner_read, require_wanderplaner_write
 from app.models.entities import HikingTour
 from app.schemas.hiking_tour import (
@@ -25,6 +26,7 @@ from app.schemas.hiking_tour import (
 from app.schemas.march_time import MarchTimeTableRead
 from app.services.audit_service import AuditService
 from app.services.elevation_service import ElevationProfileService, ElevationServiceError
+from app.services.gpx_service import GpxExportService, GpxImportService
 from app.services.hiking_tour_analysis_service import HikingTourAnalysisService
 from app.services.hiking_tour_print_service import HikingTourPrintService
 from app.services.hiking_tour_service import HikingTourService
@@ -39,6 +41,8 @@ elevation_service = ElevationProfileService()
 march_time_service = MarchTimeService()
 analysis_service = HikingTourAnalysisService()
 print_service = HikingTourPrintService()
+gpx_import_service = GpxImportService()
+gpx_export_service = GpxExportService()
 audit = AuditService()
 
 
@@ -72,6 +76,28 @@ def create_hiking_tour(
     except (SQLAlchemyError, ValueError) as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Hiking tour could not be created") from exc
+
+
+@router.post("/hiking-tours/gpx-import", response_model=HikingTourRead, status_code=status.HTTP_201_CREATED)
+async def import_hiking_tour_gpx(
+    title: str = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Auftrag Abschnitt 16: GPX-Import als Ausgangspunkt einer neuen Tour. Liest höchstens
+    `MAX_FILE_SIZE_BYTES + 1` Bytes (Auftrag Abschnitt 22: Ressourcenerschöpfung durch riesige
+    Dateien vermeiden) - eine tatsächlich überlange Datei wird nie vollständig gepuffert."""
+    require_wanderplaner_write(user)
+    content = await file.read(GPX_MAX_FILE_SIZE_BYTES + 1)
+    try:
+        return gpx_import_service.import_tour(db, content, tenant_id=user.current_tenant_id, title=title)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="GPX-Datei konnte nicht importiert werden") from exc
 
 
 @router.get("/hiking-tours/{tour_id}", response_model=HikingTourRead)
@@ -216,6 +242,28 @@ async def print_hiking_tour(
         content_url=f"/api/stored-files/{stored_file.public_id}/content",
         sheet_count=sheet_count,
         created_at=stored_file.created_at,
+    )
+
+
+@router.get("/hiking-tours/{tour_id}/gpx")
+def export_hiking_tour_gpx(
+    tour_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Auftrag Abschnitt 16: GPX-Export der Route. Klein/schnell genug, um bei jedem Aufruf
+    frisch erzeugt zu werden - anders als das Druck-PDF (Phase 6) kein StoredFile nötig."""
+    require_wanderplaner_read(user)
+    tour = _get_tour_or_404(db, tour_id, user)
+    try:
+        content = gpx_export_service.export_tour(tour)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    filename = f"{tour.title}.gpx".replace('"', "")
+    return Response(
+        content=content,
+        media_type="application/gpx+xml",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
