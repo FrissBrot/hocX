@@ -374,6 +374,13 @@ export function ProtocolEditor({
   };
   const timers = useRef<Record<string, number>>({});
   const shouldScrollToElementRef = useRef(false);
+  // Separate from shouldScrollToElementRef: only an explicit jump (sidebar/keyboard/search,
+  // set in focusElement below) should steal focus into a field. Restoring the remembered
+  // scroll position on page load must still land the view there (so returning users keep
+  // their place), but doing that right after opening the page - without the user asking for
+  // it - must not also autofocus a form field (usability-audit finding F9, 2026-10-01: a
+  // freshly opened protocol jumped straight into an input with the cursor already blinking).
+  const shouldAutoFocusRef = useRef(false);
   const passiveScrollTargetRef = useRef<string | null>(null);
   // True while a programmatic smooth scroll (search, nav click, Ctrl+Enter) is in flight.
   // The scroll-spy must stay passive during that time - otherwise it selects every section
@@ -533,6 +540,7 @@ export function ProtocolEditor({
 
   function focusElement(protocolElementId: string) {
     shouldScrollToElementRef.current = true;
+    shouldAutoFocusRef.current = true;
     setSelectedElementId(protocolElementId);
     // Also re-run the scroll effect when the target is already the selected element
     // (e.g. search hit on the current section after the user scrolled away from it).
@@ -624,12 +632,15 @@ export function ProtocolEditor({
       }
 
       window.setTimeout(() => {
-        const section = document.getElementById(`protocol-element-${selectedElementId}`);
-        if (!section) return;
-        const firstEditable = section.querySelector<HTMLElement>(
-          '[data-form-input], textarea:not([readonly]), input:not([readonly]):not([type="file"])'
-        );
-        firstEditable?.focus({ preventScroll: true });
+        const shouldAutoFocus = shouldAutoFocusRef.current;
+        shouldAutoFocusRef.current = false;
+        if (shouldAutoFocus) {
+          const section = document.getElementById(`protocol-element-${selectedElementId}`);
+          const firstEditable = section?.querySelector<HTMLElement>(
+            '[data-form-input], textarea:not([readonly]), input:not([readonly]):not([type="file"])'
+          );
+          firstEditable?.focus({ preventScroll: true });
+        }
         if (!panelRef.current && window.matchMedia("(min-width: 901px)").matches) {
           window.scrollTo(0, 0);
         }

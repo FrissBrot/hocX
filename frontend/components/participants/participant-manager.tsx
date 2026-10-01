@@ -511,7 +511,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
         open={showModal}
         onClose={() => setShowModal(false)}
         title={selectedParticipant ? "Teilnehmer bearbeiten" : "Teilnehmer erstellen"}
-        description="Teilnehmer koennen direkt Templates zugewiesen und spaeter in Todos ausgewaehlt werden."
+        description="Teilnehmer können direkt Templates zugewiesen und später in Todos ausgewählt werden."
       >
         <ModalSaveForm className="grid" onSubmit={saveParticipant}>
           <div className="two-col">

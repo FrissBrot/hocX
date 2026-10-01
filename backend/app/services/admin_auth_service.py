@@ -34,7 +34,7 @@ class AdminAuthService:
         password_ok = verify_password(payload.password, admin.password_hash if admin is not None else DUMMY_PASSWORD_HASH)
         if admin is None or not admin.is_active or not password_ok:
             record_failed_attempt(lockout_key, period_seconds=_ACCOUNT_LOGIN_WINDOW_SECONDS)
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="E-Mail oder Passwort ist ungültig.")
 
         # Audit finding, 2026-08-27: a correct password alone used to grant a full,
         # unprotected session for the highest-privilege account tier in this system.

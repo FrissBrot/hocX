@@ -45,7 +45,7 @@ const LOG_STATUS_LABEL: Record<string, string> = {
   scan_infected: "Scan: Schadware",
   rescan_clean: "Rescan: Sauber",
   rescan_infected: "Rescan: Schadware",
-  rescan_pending: "Rescan: ClamAV offline",
+  rescan_pending: "Rescan: Prüfung nicht verfügbar",
 };
 
 const LOG_STATUS_VARIANT: Record<string, BadgeVariant> = {
@@ -592,9 +592,12 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
           <p className="muted">{hasNoAssignments ? "Öffentliche Abgabeboxen für Dokumente und Formulare." : "Externe Abgaben ohne Anmeldung — gekoppelt an Termine oder eine Liste, oder manuell."}</p>
         </div>
         <div className="table-toolbar-actions">
-          <span className={`subm-clamav subm-clamav-${clamavStatus}`}>
+          <span
+            className={`subm-clamav subm-clamav-${clamavStatus}`}
+            title={clamavStatus === "offline" ? "Virenprüfung momentan nicht verfügbar – Uploads werden zurückgehalten, bis sie geprüft werden können." : undefined}
+          >
             <span className="subm-clamav-dot" />
-            ClamAV {clamavStatus === "online" ? "Online" : clamavStatus === "offline" ? "Offline" : "…"}
+            {clamavStatus === "online" ? "Virenprüfung aktiv" : clamavStatus === "offline" ? "Virenprüfung offline" : "Virenprüfung: …"}
           </span>
           <button type="button" className="button-ghost" onClick={() => setLinksModalOpen(true)}>
             Links ({links.length})

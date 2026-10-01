@@ -23,6 +23,25 @@ export type UserFormState = {
 
 export const DEFAULT_ROLE_CODE = "reader";
 
+// Backend minimum (UserCreate.password, backend/app/schemas/user.py) - kept in sync here so
+// the disabled-submit check below matches what the API actually accepts.
+const MIN_PASSWORD_LENGTH = 12;
+
+// Treibt das disabled-Attribut des Speichern-Buttons statt natives `required` (Design-Regeln
+// Abschnitt 8) - natives `required` liess den Browser bei leerem Absenden eine englische
+// Meldung ("Please fill out this field.") zeigen, UX-Audit-Befund F5.
+export function isUserFormValid(form: UserFormState, { requireTenant = false }: { requireTenant?: boolean } = {}): boolean {
+  const isEdit = Boolean(form.id);
+  return (
+    form.first_name.trim() !== "" &&
+    form.last_name.trim() !== "" &&
+    form.display_name.trim() !== "" &&
+    form.email.trim() !== "" &&
+    (isEdit ? form.password === "" || form.password.length >= MIN_PASSWORD_LENGTH : form.password.length >= MIN_PASSWORD_LENGTH) &&
+    (!requireTenant || isEdit || form.tenant_id !== "")
+  );
+}
+
 /** Baut ein leeres Formular auf. `tenantId` nur im globalen Admin-Formular vorbelegen. */
 export function emptyUserForm(tenantId = ""): UserFormState {
   return {

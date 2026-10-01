@@ -14,7 +14,7 @@ import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
 import { UserSummary } from "@/types/api";
-import { emptyUserForm, userFormToPayload, UserFormState } from "@/components/users/user-form-shared";
+import { emptyUserForm, isUserFormValid, userFormToPayload, UserFormState } from "@/components/users/user-form-shared";
 
 type Props = {
   initialUsers: UserSummary[];
@@ -313,26 +313,31 @@ export function UserManagement({ initialUsers }: Props) {
           <div className="three-col">
             <label className="field-stack">
               <span className="field-label">Vorname</span>
-              <input value={userForm.first_name} onChange={(event) => setUserForm((current) => ({ ...current, first_name: event.target.value }))} required />
+              <input value={userForm.first_name} onChange={(event) => setUserForm((current) => ({ ...current, first_name: event.target.value }))} />
             </label>
             <label className="field-stack">
               <span className="field-label">Nachname</span>
-              <input value={userForm.last_name} onChange={(event) => setUserForm((current) => ({ ...current, last_name: event.target.value }))} required />
+              <input value={userForm.last_name} onChange={(event) => setUserForm((current) => ({ ...current, last_name: event.target.value }))} />
             </label>
             <label className="field-stack">
               <span className="field-label">Anzeigename</span>
-              <input value={userForm.display_name} onChange={(event) => setUserForm((current) => ({ ...current, display_name: event.target.value }))} required />
+              <input value={userForm.display_name} onChange={(event) => setUserForm((current) => ({ ...current, display_name: event.target.value }))} />
             </label>
           </div>
 
           <div className="two-col">
             <label className="field-stack">
               <span className="field-label">E-Mail</span>
-              <input value={userForm.email} onChange={(event) => setUserForm((current) => ({ ...current, email: event.target.value }))} required />
+              <input value={userForm.email} onChange={(event) => setUserForm((current) => ({ ...current, email: event.target.value }))} />
             </label>
             <label className="field-stack">
               <span className="field-label">{userForm.id ? "Neues Passwort" : "Passwort"}</span>
-              <input type="password" autoComplete="new-password" value={userForm.password} onChange={(event) => setUserForm((current) => ({ ...current, password: event.target.value }))} required={!userForm.id} />
+              <input type="password" autoComplete="new-password" value={userForm.password} onChange={(event) => setUserForm((current) => ({ ...current, password: event.target.value }))} />
+              <span className="field-help">
+                {userForm.id
+                  ? "Nur ausfüllen, um das Passwort zu ändern. Mindestens 12 Zeichen."
+                  : "Wird hier direkt vergeben, mindestens 12 Zeichen. Es gibt keine automatische Einladungs-E-Mail – das Passwort dem Benutzer separat mitteilen."}
+              </span>
             </label>
           </div>
 
@@ -367,7 +372,7 @@ export function UserManagement({ initialUsers }: Props) {
 
           {userForm.is_participant_account ? (
             <div className="info-note">
-              Dieses Konto wurde automatisch aus einem Teilnehmer erstellt. Fuer den ersten Login bitte Login aktivieren
+              Dieses Konto wurde automatisch aus einem Teilnehmer erstellt. Für den ersten Login bitte Login aktivieren
               und ein neues Passwort setzen.
             </div>
           ) : null}
@@ -380,7 +385,7 @@ export function UserManagement({ initialUsers }: Props) {
             <button type="button" className="button-ghost" onClick={() => setUserModalOpen(false)}>
               Abbrechen
             </button>
-            <button data-modal-save type="submit" className="button-primary">
+            <button data-modal-save type="submit" className="button-primary" disabled={!isUserFormValid(userForm)}>
               Speichern
             </button>
           </div>

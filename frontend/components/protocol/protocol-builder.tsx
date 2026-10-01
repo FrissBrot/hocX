@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useRefreshOnRestore } from "@/lib/hooks/use-refresh-on-restore";
 
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +22,15 @@ import { ProtocolSummary, TemplateSummary } from "@/types/api";
 import { protocolStatusLabel, protocolStatusVariant } from "@/components/protocol/protocol-status";
 
 const PAGE_SIZE = 100;
+
+// Resolves a template pattern ("Sitzung {n} - {date:DD.MM.YYYY}") into a readable preview
+// for the create dialog - audit finding F4, 2026-10-01: the raw placeholder syntax was
+// shown unlabeled and unresolved, which non-technical users read as a display bug rather
+// than a preview. {n} (the server-assigned sequence number) isn't known until creation, so
+// it's spelled out instead of faked with a specific number.
+function resolvePatternPreview(pattern: string, protocolDateIso: string): string {
+  return pattern.replace(/\{n\}/g, "lfd. Nr.").replace(/\{date(?::[^}]*)?\}/g, formatDate(protocolDateIso) || "Datum");
+}
 
 const STATUS_FILTER_OPTIONS: FilterTabOption[] = [
   { value: "all", label: "Alle" },
@@ -46,6 +55,7 @@ type ProtocolFormState = {
 
 export function ProtocolBuilder({ initialProtocols, templates, readOnly = false }: ProtocolBuilderProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   useRefreshOnRestore();
   const [protocols, setProtocols] = useState(initialProtocols);
   const [hasMore, setHasMore] = useState(initialProtocols.length === PAGE_SIZE);
@@ -76,6 +86,14 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
   );
   const autoProtocolNumber = !!selectedTemplate?.protocol_number_pattern?.trim();
   const autoTitle = !!selectedTemplate?.title_pattern?.trim();
+
+  useEffect(() => {
+    if (readOnly) return;
+    if (searchParams.get("create") === "1") {
+      setShowCreateForm(true);
+      router.replace("/protocols", { scroll: false });
+    }
+  }, [searchParams, readOnly, router]);
 
   const hasNoProtocols = protocols.length === 0 && !hasMore;
 
@@ -253,9 +271,17 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
             />
           </label>
           {selectedTemplate?.protocol_number_pattern || selectedTemplate?.title_pattern ? (
-            <div className="info-note">
-              {selectedTemplate.protocol_number_pattern ? `Nummer: ${selectedTemplate.protocol_number_pattern}` : "Nummer: manuell"}{" · "}
-              {selectedTemplate.title_pattern ? `Titel: ${selectedTemplate.title_pattern}` : "Titel: manuell"}
+            <div className="field-stack">
+              <span className="field-label">Vorschau</span>
+              <div className="info-note">
+                {selectedTemplate.protocol_number_pattern
+                  ? `Nummer: ${resolvePatternPreview(selectedTemplate.protocol_number_pattern, form.protocol_date)}`
+                  : "Nummer: manuell"}
+                {" · "}
+                {selectedTemplate.title_pattern
+                  ? `Titel: ${resolvePatternPreview(selectedTemplate.title_pattern, form.protocol_date)}`
+                  : "Titel: manuell"}
+              </div>
             </div>
           ) : null}
           <div className="three-col">

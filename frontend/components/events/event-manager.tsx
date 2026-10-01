@@ -925,7 +925,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         title={form.id ? "Termin bearbeiten" : "Termin erstellen"}
-        description="Der Tag hilft spaeter beim Verknuepfen mit passenden Protokollpunkten."
+        description="Der Tag hilft später beim Verknüpfen mit passenden Protokollpunkten."
       >
         <ModalSaveForm className="grid" onSubmit={saveEvent}>
           <div className="two-col">

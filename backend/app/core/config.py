@@ -57,6 +57,14 @@ class Settings(BaseSettings):
     abgabebox_base_url: str = "https://upload.example.com"
     traefik_domain: str | None = None
     traefik_abgabebox_domain: str | None = None
+    # Extra Origins for CORS (main.py) and the protocol-collaboration WebSocket
+    # (collaboration_ws.py's _static_allowed_origins) beyond localhost/127.0.0.1:3000 and
+    # traefik_domain - needed whenever a deployment's published port differs from the
+    # container-internal port 3000 (e.g. docker-compose.e2e.yml maps the frontend to host
+    # port 13000, so the browser's Origin header is "http://127.0.0.1:13000", which the
+    # static 3000-only list never matched - this silently 403'd every WS handshake).
+    # Comma-separated, e.g. "http://127.0.0.1:13000,https://staging.example.com".
+    extra_cors_origins: str = ""
     router_prefix: str = "hocx"
     traefik_middleware_prefix: str = ""
     traefik_dynamic_config_dir: str = "/app/traefik_dynamic"
@@ -128,6 +136,10 @@ class Settings(BaseSettings):
     redis_url: str = "redis://redis:6379/0"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @property
+    def extra_cors_origin_set(self) -> set[str]:
+        return {o.strip() for o in self.extra_cors_origins.split(",") if o.strip()}
 
     def validate_for_production(self) -> None:
         if self.auth_secret in _INSECURE_DEFAULTS or len(self.auth_secret) < 32:

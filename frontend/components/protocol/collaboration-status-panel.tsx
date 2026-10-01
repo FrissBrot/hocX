@@ -99,7 +99,9 @@ export function CollaborationStatusPanel({
           </div>
         ) : (
           <p className="muted collab-status-active-empty">
-            {connected ? "Niemand sonst bearbeitet gerade live." : "Live-Kollaboration nicht verfügbar."}
+            {connected
+              ? "Niemand sonst bearbeitet gerade live."
+              : "Live-Zusammenarbeit momentan nicht verbunden – deine Änderungen werden trotzdem automatisch gespeichert."}
           </p>
         )}
 

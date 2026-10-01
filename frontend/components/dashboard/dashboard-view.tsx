@@ -108,7 +108,7 @@ export function DashboardView({ todos, fines, nextSession, canExcuse, canWrite, 
             canWrite || canConfigure ? (
               <>
                 {canWrite ? (
-                  <button type="button" className="button-primary" onClick={() => router.push("/protocols")}>
+                  <button type="button" className="button-primary" onClick={() => router.push("/protocols?create=1")}>
                     + Neues Protokoll
                   </button>
                 ) : null}

@@ -396,7 +396,7 @@ app.add_middleware(
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         f"https://{settings.traefik_domain}" if settings.traefik_domain else None,
-    ] if o],
+    ] if o] + sorted(settings.extra_cors_origin_set),
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Cookie", "Authorization"],

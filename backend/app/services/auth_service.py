@@ -49,9 +49,9 @@ class AuthService:
         password_ok = verify_password(payload.password, user.password_hash if user is not None else DUMMY_PASSWORD_HASH)
         if user is None or not user.is_active or not password_ok:
             record_failed_attempt(lockout_key, period_seconds=_ACCOUNT_LOGIN_WINDOW_SECONDS)
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="E-Mail oder Passwort ist ungültig.")
         if (user.external_identity_json or {}).get("login_enabled") is False:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Login is disabled for this account")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Login ist für dieses Konto deaktiviert.")
 
         current_user = build_current_user(db, user)
 

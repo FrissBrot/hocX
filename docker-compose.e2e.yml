@@ -9,6 +9,13 @@ services:
       - "127.0.0.1:18000:8000"
     environment:
       TRAEFIK_DOMAIN: ""
+      # The e2e stack publishes the frontend on host port 13000 (see below) while the
+      # container itself still listens on 3000, so the browser's Origin header is
+      # "http://127.0.0.1:13000" - not covered by main.py's/collaboration_ws.py's static
+      # 3000-only allowlist. Without this, every protocol-collaboration WebSocket handshake
+      # got rejected with 403 in this stack (surfaced in the UI as a permanent, unexplained
+      # "Offline" label - usability-audit finding F3, 2026-10-01).
+      EXTRA_CORS_ORIGINS: "http://127.0.0.1:13000"
       # Default is 15 minutes (app/core/config.py) - far too slow for
       # e2e/abgabebox-photo-album-sync.spec.ts to wait out. Shortened here only (never in
       # docker-compose.yml/.dev.yml) so the real photo_album_sync_loop still ticks and

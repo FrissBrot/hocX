@@ -155,7 +155,7 @@ def _static_allowed_origins() -> set[str]:
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         f"https://{settings.traefik_domain}" if settings.traefik_domain else None,
-    ) if o}
+    ) if o} | settings.extra_cors_origin_set
 
 
 def _active_app_domain_origins(db: Session | None = None) -> set[str]:

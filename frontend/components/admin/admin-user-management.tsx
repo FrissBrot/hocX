@@ -13,7 +13,7 @@ import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
 import { AdminTenantSummary, AdminUserPage, UserSummary } from "@/types/api";
-import { emptyUserForm, userFormToPayload, UserFormState } from "@/components/users/user-form-shared";
+import { emptyUserForm, isUserFormValid, userFormToPayload, UserFormState } from "@/components/users/user-form-shared";
 
 type Props = {
   initialPage: AdminUserPage;
@@ -266,26 +266,31 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
           <div className="three-col">
             <label className="field-stack">
               <span className="field-label">Vorname</span>
-              <input value={userForm.first_name} onChange={(event) => setUserForm((current) => ({ ...current, first_name: event.target.value }))} required />
+              <input value={userForm.first_name} onChange={(event) => setUserForm((current) => ({ ...current, first_name: event.target.value }))} />
             </label>
             <label className="field-stack">
               <span className="field-label">Nachname</span>
-              <input value={userForm.last_name} onChange={(event) => setUserForm((current) => ({ ...current, last_name: event.target.value }))} required />
+              <input value={userForm.last_name} onChange={(event) => setUserForm((current) => ({ ...current, last_name: event.target.value }))} />
             </label>
             <label className="field-stack">
               <span className="field-label">Anzeigename</span>
-              <input value={userForm.display_name} onChange={(event) => setUserForm((current) => ({ ...current, display_name: event.target.value }))} required />
+              <input value={userForm.display_name} onChange={(event) => setUserForm((current) => ({ ...current, display_name: event.target.value }))} />
             </label>
           </div>
 
           <div className="three-col">
             <label className="field-stack">
               <span className="field-label">E-Mail</span>
-              <input value={userForm.email} onChange={(event) => setUserForm((current) => ({ ...current, email: event.target.value }))} required />
+              <input value={userForm.email} onChange={(event) => setUserForm((current) => ({ ...current, email: event.target.value }))} />
             </label>
             <label className="field-stack">
               <span className="field-label">{userForm.id ? "Neues Passwort" : "Passwort"}</span>
-              <input type="password" autoComplete="new-password" value={userForm.password} onChange={(event) => setUserForm((current) => ({ ...current, password: event.target.value }))} required={!userForm.id} minLength={8} />
+              <input type="password" autoComplete="new-password" value={userForm.password} onChange={(event) => setUserForm((current) => ({ ...current, password: event.target.value }))} />
+              <span className="field-help">
+                {userForm.id
+                  ? "Nur ausfüllen, um das Passwort zu ändern. Mindestens 12 Zeichen."
+                  : "Wird hier direkt vergeben, mindestens 12 Zeichen. Es gibt keine automatische Einladungs-E-Mail – das Passwort dem Benutzer separat mitteilen."}
+              </span>
             </label>
             <label className="field-stack">
               <span className="field-label">Sprache</span>
@@ -349,7 +354,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
           {formError && <div className="form-error-banner">{formError}</div>}
 
           <div className="table-actions table-actions-start">
-            <button data-modal-save type="submit" className="button-secondary">
+            <button data-modal-save type="submit" className="button-secondary" disabled={!isUserFormValid(userForm, { requireTenant: true })}>
               Speichern
             </button>
           </div>
