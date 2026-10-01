@@ -334,7 +334,7 @@ export function MatrixEmbeddedBlockEditor({
                   className="button-secondary button-danger todo-delete"
                   onClick={async () => {
                     const ok = await confirm({
-                      message: `Todo "${String(item.task ?? "").trim() || "Unbenannt"}" löschen?`,
+                      message: `Todo "${String(item.task ?? "").trim() || "Unbenannt"}" endgültig löschen?`,
                       tone: "danger",
                       confirmLabel: "Löschen",
                     });
@@ -609,7 +609,7 @@ export function MatrixEmbeddedBlockEditor({
                 className="button-secondary button-danger todo-delete"
                 onClick={async () => {
                   const ok = await confirm({
-                    message: `Zeile "${String(row.label ?? "").trim() || "Unbenannt"}" löschen?`,
+                    message: `Zeile "${String(row.label ?? "").trim() || "Unbenannt"}" endgültig löschen?`,
                     tone: "danger",
                     confirmLabel: "Löschen",
                   });
@@ -1085,7 +1085,7 @@ export function MatrixEmbeddedBlockEditor({
                 className="button-secondary button-danger todo-delete"
                 onClick={async () => {
                   const ok = await confirm({
-                    message: `Bulletpoint "${String(item ?? "").trim() || "Unbenannt"}" löschen?`,
+                    message: `Bulletpoint "${String(item ?? "").trim() || "Unbenannt"}" endgültig löschen?`,
                     tone: "danger",
                     confirmLabel: "Löschen",
                   });

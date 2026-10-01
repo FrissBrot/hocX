@@ -207,7 +207,7 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
           </div>
         )}
         {canUploadMore && (
-          <button type="button" className="button" style={{ marginTop: "var(--space-4)" }} onClick={() => setDone(false)}>
+          <button type="button" className="button upload-again-button" onClick={() => setDone(false)}>
             Weitere Datei hochladen
           </button>
         )}

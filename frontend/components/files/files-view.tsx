@@ -190,7 +190,7 @@ export function FilesView({ initialItems }: Props) {
         </div>
         {hasNoFiles ? null : (
           <div className="table-toolbar-actions">
-            <button type="button" className="button-secondary" onClick={openUpload}>
+            <button type="button" className="button-primary" onClick={openUpload}>
               + Dateien hochladen
             </button>
           </div>

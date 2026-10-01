@@ -114,7 +114,7 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
   }
 
   async function deleteFine(fine: AttendanceFineListItem) {
-    if (!(await confirm({ message: `Busse von ${fine.participant_name_snapshot} löschen?`, tone: "danger", confirmLabel: "Löschen" }))) return;
+    if (!(await confirm({ message: `Busse von ${fine.participant_name_snapshot} endgültig löschen?`, tone: "danger", confirmLabel: "Löschen" }))) return;
     try {
       await browserApiFetch(`/api/fines/${fine.id}`, { method: "DELETE" });
       setFines((prev) => prev.filter((f) => f.id !== fine.id));

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { DateInput } from "@/components/ui/date-input";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ActionIcon } from "@/components/ui/action-icons";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { FinanceAccount, FinanceTransaction } from "@/types/api";
 import { browserApiFetch } from "@/lib/api/client";
@@ -133,7 +134,7 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
 
   async function deleteAccount(account: FinanceAccount, e: React.MouseEvent) {
     e.stopPropagation();
-    if (!(await confirm({ message: `Konto "${account.name}" und alle Transaktionen löschen?`, tone: "danger", confirmLabel: "Löschen" }))) return;
+    if (!(await confirm({ message: `Konto "${account.name}" und alle Transaktionen endgültig löschen?`, tone: "danger", confirmLabel: "Löschen" }))) return;
     try {
       await browserApiFetch(`/api/finance/accounts/${account.id}`, { method: "DELETE" });
       setAccounts((prev) => prev.filter((a) => a.id !== account.id));
@@ -188,7 +189,7 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
 
   async function deleteTx(tx: FinanceTransaction) {
     if (!selected) return;
-    if (!(await confirm({ message: "Transaktion löschen?", tone: "danger", confirmLabel: "Löschen" }))) return;
+    if (!(await confirm({ message: "Transaktion endgültig löschen?", tone: "danger", confirmLabel: "Löschen" }))) return;
     try {
       await browserApiFetch(`/api/finance/transactions/${tx.id}`, { method: "DELETE" });
       await Promise.all([reloadFirstPage(selected.id), refreshAccounts(selected.id)]);
@@ -279,7 +280,7 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
       <aside className="finance-sidebar">
         <div className="finance-sidebar-header">
           <span className="finance-sidebar-title">Konten</span>
-          {canWrite && <button type="button" className="button-icon-soft" onClick={startCreateAccount} title="Konto erstellen">＋</button>}
+          {canWrite && <button type="button" className="button-icon-soft" onClick={startCreateAccount} title="Konto erstellen" aria-label="Konto erstellen"><ActionIcon name="add" /></button>}
         </div>
 
         <div className="finance-account-list">
@@ -304,8 +305,8 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
               {account.description ? <div className="finance-account-desc">{account.description}</div> : null}
               <div className="finance-account-actions">
                 <span className="finance-account-count">{account.transaction_count} Transaktionen</span>
-                {canWrite && <button type="button" className="button-icon-soft-sm" onClick={(e) => startEditAccount(account, e)} title="Bearbeiten">✎</button>}
-                {canWrite && <button type="button" className="button-icon-soft-sm button-icon-soft-danger" onClick={(e) => void deleteAccount(account, e)} title="Löschen">✕</button>}
+                {canWrite && <button type="button" className="button-icon-soft-sm" onClick={(e) => startEditAccount(account, e)} title="Bearbeiten" aria-label="Bearbeiten"><ActionIcon name="edit" /></button>}
+                {canWrite && <button type="button" className="button-icon-soft-sm button-icon-soft-danger" onClick={(e) => void deleteAccount(account, e)} title="Löschen" aria-label="Löschen"><ActionIcon name="delete" /></button>}
               </div>
             </div>
           ))}
@@ -402,8 +403,8 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
                         {formatAmount(running, currency)}
                       </span>
                       <span className="finance-tx-actions">
-                        {canWrite && <button type="button" className="button-icon-soft-sm" onClick={() => startEditTx(tx)} title="Bearbeiten">✎</button>}
-                        {canWrite && <button type="button" className="button-icon-soft-sm button-icon-soft-danger" onClick={() => void deleteTx(tx)} title="Löschen">✕</button>}
+                        {canWrite && <button type="button" className="button-icon-soft-sm" onClick={() => startEditTx(tx)} title="Bearbeiten" aria-label="Bearbeiten"><ActionIcon name="edit" /></button>}
+                        {canWrite && <button type="button" className="button-icon-soft-sm button-icon-soft-danger" onClick={() => void deleteTx(tx)} title="Löschen" aria-label="Löschen"><ActionIcon name="delete" /></button>}
                       </span>
                     </div>
                   );

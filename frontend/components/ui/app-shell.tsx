@@ -323,7 +323,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
                 {mobileNavOpen ? "Schliessen" : "☰"}
               </button>
             </div>
-            <div className="topbar-breadcrumb">
+            <nav className="topbar-breadcrumb" aria-label="Brotkrumen">
               {activeCrumb.group ? (
                 <>
                   <span className="topbar-breadcrumb-group">{activeCrumb.group}</span>
@@ -331,7 +331,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
                 </>
               ) : null}
               <span className="topbar-breadcrumb-page">{activeCrumb.label}</span>
-            </div>
+            </nav>
             <Popover open={avatarMenuOpen} onOpenChange={setAvatarMenuOpen} anchorRef={avatarTriggerRef} align="start">
               <Menu>
                 <div className="menu-header">

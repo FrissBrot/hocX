@@ -4,6 +4,7 @@ import { Dispatch, FormEvent, SetStateAction } from "react";
 
 import { DateInput } from "@/components/ui/date-input";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
+import { ActionIcon } from "@/components/ui/action-icons";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { formatDateInputValue } from "@/lib/utils/format";
 import {
@@ -271,7 +272,7 @@ export function SubmissionAssignmentFormModal({
               setForm((c) => ({ ...c, title, ...(editing ? {} : { public_slug: slugify(title) }) }));
             }}
           />
-          <button type="button" className="subm-edit-close" aria-label="Schliessen" onClick={onClose}>×</button>
+          <button type="button" className="subm-edit-close" title="Schliessen" aria-label="Schliessen" onClick={onClose}><ActionIcon name="close" /></button>
         </header>
 
         <div className="subm-edit-body">

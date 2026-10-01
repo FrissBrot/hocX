@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { usePopupEscape } from "@/lib/hooks/use-popup-escape";
+import { ActionIcon } from "@/components/ui/action-icons";
 import type { TagConfig } from "@/lib/hooks/use-tag-config";
 
 export const TAG_COLORS = [
@@ -176,7 +177,7 @@ export function TagInput({
             <div className="tag-edit-panel">
               <div className="tag-edit-header">
                 <span className="tag-edit-title">Tag bearbeiten</span>
-                <button type="button" className="tag-edit-cancel" onPointerDown={(e) => { e.preventDefault(); setEditingTag(null); setRenameError(null); }}>✕</button>
+                <button type="button" className="tag-edit-cancel" title="Schliessen" aria-label="Schliessen" onPointerDown={(e) => { e.preventDefault(); setEditingTag(null); setRenameError(null); }}><ActionIcon name="close" /></button>
               </div>
               {onTagRename && (
                 <input
@@ -247,6 +248,7 @@ export function TagInput({
                   type="button"
                   className="tag-input-edit-btn"
                   title="Farbe / Umbenennen"
+                  aria-label="Farbe / Umbenennen"
                   onPointerDown={(e) => {
                     e.preventDefault();
                     setEditingTag(s);
@@ -254,7 +256,7 @@ export function TagInput({
                     setRenameError(null);
                   }}
                 >
-                  ✎
+                  <ActionIcon name="edit" />
                 </button>
               )}
             </div>

@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import { NavIcon } from "@/components/ui/nav-icons";
+import { ActionIcon } from "@/components/ui/action-icons";
 import { CollaboratorAvatar } from "@/components/protocol/collaboration-presence";
 import type { CollaboratorInfo } from "@/lib/hooks/use-protocol-collaboration";
 import type { AttendanceTally } from "@/components/protocol/protocol-editor-shared";
@@ -56,7 +57,7 @@ export function CollaborationStatusPanel({
             <span className="eyebrow">Status &amp; Zusammenarbeit</span>
           </div>
           <button type="button" className="button-ghost quick-flyout-close" onClick={onClose} aria-label="Schliessen">
-            ✕
+            <ActionIcon name="close" />
           </button>
         </div>
 

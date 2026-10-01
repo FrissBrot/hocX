@@ -68,6 +68,7 @@ Alle in `frontend/components/ui/` (Import: `@/components/ui/<name>`). Erst hier 
 | Auswahl aus Liste (Mehrfach) | `SearchableMultiSelect` | |
 | Kurze feste Auswahl (<7 Optionen, ohne Suche) | natives `<select>` | Kein Nachbau |
 | Aktionen einer Zeile/Karte | `ActionMenu` (`items: {label, onClick, danger?}[]`) | Kebab-Menü statt vieler Buttons |
+| Filter-/Options-Menü mit Checkboxen (Ansicht, Spalten, Fälligkeit) | CSS-Klassen `.mini-menu-*` aus `globals.css` | Eingebetteter Trigger + Popover mit Sections/Checkboxen, kein Klick-Aktionsmenü für ein Objekt — dafür `ActionMenu` |
 | Tags | `TagInput` | Farben aus `TAG_COLORS` |
 | Datum | `DateInput` | Nie `<input type="date">` roh, Details in Abschnitt 6 |
 | Suche | `SearchInput` | Nie eigenes Suchfeld |
@@ -85,8 +86,9 @@ Entscheidungsbaum, von oben nach unten:
 1. **Auswahl eines Datensatzes aus einer Liste** → `SearchableSelect` / `SearchableMultiSelect`.
 2. **Aktionen zu einem Objekt** → `ActionMenu`.
 3. **Status eines Objekts ändern** → `PillMenu`.
-4. **Wenige feste Werte** → natives `<select>`.
-5. **Autocomplete unter einem Textfeld** (Vorschläge erscheinen beim Tippen) oder eine Liste, die keiner der Bausteine abdeckt → CSS-Klassen `.dropdown-*` aus `globals.css`:
+4. **Checkbox-/Options-Menü** (Filter, Spalten-Auswahl, Ansicht-Einstellungen, Fälligkeit) → CSS-Klassen `.mini-menu-*` aus `globals.css` (Trigger + Popover mit Sections).
+5. **Wenige feste Werte** → natives `<select>`.
+6. **Autocomplete unter einem Textfeld** (Vorschläge erscheinen beim Tippen) oder eine Liste, die keiner der Bausteine abdeckt → CSS-Klassen `.dropdown-*` aus `globals.css`:
 
 ```tsx
 <div style={{ position: "relative" }}>            {/* einziger erlaubter Inline-Style */}
@@ -136,6 +138,7 @@ Für **jedes** Datumsfeld: `DateInput` aus `@/components/ui/date-input`. Nie `<i
 |---|---|
 | `button-primary` | Die **eine** Hauptaktion pro Ansicht/Modal (Speichern, Erstellen) |
 | `button-secondary` | Gleichrangige Aktion mit Rahmen (z. B. „CSV-Import", Filter- und Zusatzaktionen) |
+| `button-secondary button-ghost` | Kompakte, randlose Variante von `button-secondary` (übernimmt dessen Höhe/Abstand, aber `button-ghost`s transparenten Hintergrund) für Toolbar-Nebenaktionen wie CSV-Import/Export |
 | `button-ghost` | Nebenaktion ohne Gewicht (Abbrechen, Schliessen, Zurück) |
 | `button-danger` | Zerstörerische Aktion (Löschen) |
 | `button-toggle` / `-active` | Umschalter mit zwei Zuständen |

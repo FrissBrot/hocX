@@ -5,6 +5,7 @@ import { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from "
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { Badge } from "@/components/ui/badge";
+import { ActionIcon } from "@/components/ui/action-icons";
 import { TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
 import { StructuredListTable, TrackedEntryInfo } from "@/components/lists/structured-list-table";
 import { DateInput } from "@/components/ui/date-input";
@@ -2311,10 +2312,10 @@ export function FocusedElementEditor({
                                         (cur) => cur, true)}
                                       placeholder={String(column!.title_placeholder ?? `Spalte ${columnIndex + 1}`)}
                                     />
-                                    <button type="button" className="matrix-col-remove"
+                                    <button type="button" className="matrix-col-remove" title="Spalte entfernen" aria-label="Spalte entfernen"
                                       onClick={() => saveMatrixColumns(block.id, blockConfig,
                                         matrixColumns(blockConfig).filter(e => String(e.id ?? "") !== columnId!))}>
-                                      ×
+                                      <ActionIcon name="delete" />
                                     </button>
                                   </>
                                 ) : (
@@ -3198,7 +3199,7 @@ export function FocusedElementEditor({
                                       showToast(error instanceof Error ? error.message : "Busse konnte nicht gelöscht werden", "error");
                                     }
                                   }}
-                                >✕</button>
+                                ><ActionIcon name="delete" /></button>
                               ) : <span />}
                             </div>
                           );
@@ -3271,7 +3272,7 @@ export function FocusedElementEditor({
                                   showToast(error instanceof Error ? error.message : "Busse konnte nicht gelöscht werden", "error");
                                 }
                               }}
-                            >✕</button>
+                            ><ActionIcon name="delete" /></button>
                           ) : <span />}
                         </div>
                       );

@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { usePopupEscape, usePopupScrollLock } from "@/lib/hooks/use-popup-escape";
 import { LivePhotoClip } from "@/components/photos/live-photo-clip";
 import { TagInput } from "@/components/ui/tag-input";
+import { ActionIcon } from "@/components/ui/action-icons";
 import { useDeferredPopupSave } from "@/lib/hooks/use-deferred-popup-save";
 import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { formatDateTime, formatFileSize, formatWeekdayDate } from "@/lib/utils/format";
@@ -165,7 +166,7 @@ export function PhotoViewer({
       <div className="photo-viewer-header">
         <div className="photo-viewer-header-left">
           <button type="button" className="photo-viewer-close" aria-label="Schliessen" onClick={() => void saveAndClose()}>
-            ✕
+            <ActionIcon name="close" />
           </button>
           <div>
             <div className="photo-viewer-title">{item.original_name}</div>

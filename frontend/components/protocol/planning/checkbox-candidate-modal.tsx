@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 
 import { Modal } from "@/components/ui/modal";
+import { ActionIcon } from "@/components/ui/action-icons";
 import { SearchInput } from "@/components/ui/search-input";
 
 export type CandidateItem = {
@@ -131,7 +132,7 @@ export function CheckboxCandidateModal({
                             setEditingItem(item);
                           }}
                         >
-                          ✎
+                          <ActionIcon name="edit" />
                         </button>
                       </div>
                     ) : null}

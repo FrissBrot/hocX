@@ -51,16 +51,16 @@ export function TenantDomainsManager({ initialTenant }: Props) {
 
   async function deleteDomain(domainId: string, hostname: string) {
     const ok = await confirm({
-      message: `Domain "${hostname}" wirklich entfernen? Der Zugriff über diese Adresse endet sofort.`,
+      message: `Domain "${hostname}" endgültig löschen? Der Zugriff über diese Adresse endet sofort.`,
       tone: "danger",
-      confirmLabel: "Entfernen",
+      confirmLabel: "Löschen",
     });
     if (!ok) return;
     try {
       await browserApiFetch<{ message: string }>(`/api/tenants/${tenantId}/domains/${domainId}`, { method: "DELETE" });
       await loadDomains();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Domain konnte nicht entfernt werden", "error");
+      showToast(error instanceof Error ? error.message : "Domain konnte nicht gelöscht werden", "error");
     }
   }
 
@@ -78,7 +78,7 @@ export function TenantDomainsManager({ initialTenant }: Props) {
           <span className={`record-list-row-dot record-list-row-dot-${status.variant}`} />
           <ActionMenu
             ariaLabel={`Aktionen für ${d.domain}`}
-            items={[{ label: "Entfernen", onClick: () => deleteDomain(d.id, d.domain), danger: true }]}
+            items={[{ label: "Löschen", onClick: () => deleteDomain(d.id, d.domain), danger: true }]}
           />
         </div>
       </div>

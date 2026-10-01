@@ -7,6 +7,7 @@ import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
+import { ActionIcon } from "@/components/ui/action-icons";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
@@ -1131,7 +1132,7 @@ function PartUploadModal({
             <h2>Part hochladen</h2>
             <p className="muted">Eigene Datei in die Parts-Bibliothek legen — Layouts binden sie danach über ihren Slot ein.</p>
           </div>
-          <button type="button" className="doctpl-part-close" aria-label="Schliessen" onClick={onClose}>×</button>
+          <button type="button" className="doctpl-part-close" title="Schliessen" aria-label="Schliessen" onClick={onClose}><ActionIcon name="close" /></button>
         </header>
 
         <div className="doctpl-part-body">

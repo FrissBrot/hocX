@@ -50,7 +50,7 @@ export function MfaAdminModal({ open, onClose, title, loadPath, deletePathBase }
   async function deleteFactor(factorId: string, label: string) {
     if (!deletePathBase) return;
     const ok = await confirm({
-      message: `MFA-Faktor "${label}" wirklich löschen? Der Benutzer muss ihn danach neu einrichten.`,
+      message: `MFA-Faktor "${label}" endgültig löschen? Der Benutzer muss ihn danach neu einrichten.`,
       tone: "danger",
       confirmLabel: "Jetzt löschen",
     });

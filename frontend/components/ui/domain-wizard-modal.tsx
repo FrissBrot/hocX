@@ -102,9 +102,9 @@ export function DomainWizardModal({ open, onClose, tenantId, domain, onChanged }
     // 2026-08-16) - a misclick here during DNS setup instantly discarded the domain
     // config (incl. its verification token) with no way back.
     const ok = await confirm({
-      message: `Domain "${activeDomain.domain}" entfernen? Die DNS-Einrichtung muss danach neu gestartet werden.`,
+      message: `Domain "${activeDomain.domain}" endgültig löschen? Die DNS-Einrichtung muss danach neu gestartet werden.`,
       tone: "danger",
-      confirmLabel: "Entfernen",
+      confirmLabel: "Löschen",
     });
     if (!ok) return;
     setBusy(true);
@@ -113,7 +113,7 @@ export function DomainWizardModal({ open, onClose, tenantId, domain, onChanged }
       onChanged();
       onClose();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Domain konnte nicht entfernt werden", "error");
+      showToast(error instanceof Error ? error.message : "Domain konnte nicht gelöscht werden", "error");
     } finally {
       setBusy(false);
     }
@@ -203,7 +203,7 @@ export function DomainWizardModal({ open, onClose, tenantId, domain, onChanged }
 
           <div className="wizard-footer">
             <button type="button" className="button-ghost wizard-remove-link" disabled={busy} onClick={removeAndClose}>
-              Domain entfernen
+              Domain löschen
             </button>
             <div className="wizard-footer-actions">
               <button type="button" className="button-ghost" onClick={onClose}>Später fertigstellen</button>

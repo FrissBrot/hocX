@@ -6,6 +6,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { FilterTabOption, FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
+import { ActionIcon } from "@/components/ui/action-icons";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { SearchableMultiSelect, SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
@@ -1868,7 +1869,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
         </div>
         <button
           type="button"
-          className="button-secondary"
+          className="button-primary"
           onClick={() => {
             setCreateDefinitionForm(initialDefinitionForm);
             setCreateBlockForm({ ...initialBlockForm, id: "1", sort_index: "10" });
@@ -1877,7 +1878,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
             setTypePickerMode("create");
           }}
         >
-          Neues Element
+          + Neues Element
         </button>
       </div>
 
@@ -2066,7 +2067,7 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
           <button type="button" className="button-ghost" onClick={() => setShowCreateBlockHelp((current) => !current)}>
             Hilfe
           </button>
-          <button type="button" className="button-icon" aria-label="Schliessen" title="Schliessen" onClick={() => { setShowCreateBlockModal(false); setShowCreateBlockHelp(false); setCreatingNewDefinition(false); setMatrixDesignerMode(null); setTypePickerMode(null); }}>×</button>
+          <button type="button" className="button-icon" aria-label="Schliessen" title="Schliessen" onClick={() => { setShowCreateBlockModal(false); setShowCreateBlockHelp(false); setCreatingNewDefinition(false); setMatrixDesignerMode(null); setTypePickerMode(null); }}><ActionIcon name="close" /></button>
           </>
         }
       >

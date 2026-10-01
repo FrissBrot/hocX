@@ -8,6 +8,7 @@ import { clearDraft, queueMutation, readDraft, removeMutation, saveDraft } from 
 import { useToast } from "@/contexts/toast-context";
 import { formatDateRange } from "@/lib/utils/format";
 import { NavIcon } from "@/components/ui/nav-icons";
+import { ActionIcon } from "@/components/ui/action-icons";
 import { EventSummary, ParticipantSummary, ProtocolSummary } from "@/types/api";
 
 type DueDraft =
@@ -430,7 +431,7 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
               aria-label="Schliessen"
               onClick={() => setActive(null)}
             >
-              ✕
+              <ActionIcon name="close" />
             </button>
           </div>
 
@@ -466,7 +467,7 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
               aria-label="Schliessen"
               onClick={() => setActive(null)}
             >
-              ✕
+              <ActionIcon name="close" />
             </button>
           </div>
 

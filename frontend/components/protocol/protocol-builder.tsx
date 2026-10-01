@@ -220,7 +220,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
           <p className="muted">Alle Sitzungsprotokolle dieses Mandanten.</p>
         </div>
         {!readOnly && !hasNoProtocols ? (
-          <button type="button" className="button-secondary" onClick={() => setShowCreateForm((c) => !c)}>
+          <button type="button" className={showCreateForm ? "button-ghost" : "button-primary"} onClick={() => setShowCreateForm((c) => !c)}>
             {showCreateForm ? "Abbrechen" : "+ Neues Protokoll"}
           </button>
         ) : null}

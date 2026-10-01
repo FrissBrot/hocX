@@ -520,7 +520,7 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
           <h1 className="page-title">Vorlagen</h1>
           <p className="muted">Vorlagen sind schlanke Container: sie wählen fertige Elemente aus und legen nur deren Reihenfolge fest.</p>
         </div>
-        <button type="button" className="button-secondary" onClick={() => setShowCreateForm((current) => !current)}>
+        <button type="button" className={showCreateForm ? "button-ghost" : "button-primary"} onClick={() => setShowCreateForm((current) => !current)}>
           {showCreateForm ? "Abbrechen" : "+ Vorlage"}
         </button>
       </div>
@@ -1565,23 +1565,23 @@ export function TemplateEditor({
       >
         <ModalSaveForm className="grid" onSubmit={saveTemplate}>
           <label className="field-stack">
-            <span className="field-label">Template name</span>
+            <span className="field-label">Name der Vorlage</span>
             <input value={templateMeta.name} onChange={(event) => setTemplateMeta((current) => ({ ...current, name: event.target.value }))} />
           </label>
           <label className="field-stack">
-            <span className="field-label">Description</span>
+            <span className="field-label">Beschreibung</span>
             <textarea rows={4} value={templateMeta.description} onChange={(event) => setTemplateMeta((current) => ({ ...current, description: event.target.value }))} />
           </label>
           <div className="two-col">
             <label className="field-stack">
-              <span className="field-label">Protocol number pattern</span>
-              <input value={templateMeta.protocol_number_pattern} onChange={(event) => setTemplateMeta((current) => ({ ...current, protocol_number_pattern: event.target.value }))} placeholder="e.g. Sitzung {n}" />
+              <span className="field-label">Protokollnummer-Muster</span>
+              <input value={templateMeta.protocol_number_pattern} onChange={(event) => setTemplateMeta((current) => ({ ...current, protocol_number_pattern: event.target.value }))} placeholder="z. B. Sitzung {n}" />
               <span className="field-help">Beispiele: Sitzung [n], Sitzung [mm].[n_month], J[yy]-[n_year], V[n_cycle]. Eckige und geschweifte Klammern funktionieren beide.</span>
             </label>
             <label className="field-stack">
-              <span className="field-label">Title pattern</span>
-              <input value={templateMeta.title_pattern} onChange={(event) => setTemplateMeta((current) => ({ ...current, title_pattern: event.target.value }))} placeholder="e.g. Sitzung {n} - {date:DD.MM.YYYY}" />
-              <span className="field-help">Used automatically when a new protocol is created and the title field is left empty.</span>
+              <span className="field-label">Titel-Muster</span>
+              <input value={templateMeta.title_pattern} onChange={(event) => setTemplateMeta((current) => ({ ...current, title_pattern: event.target.value }))} placeholder="z. B. Sitzung {n} - {date:DD.MM.YYYY}" />
+              <span className="field-help">Wird automatisch verwendet, wenn ein neues Protokoll erstellt wird und das Titelfeld leer bleibt.</span>
             </label>
           </div>
           <label className="field-stack">

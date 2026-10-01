@@ -169,6 +169,10 @@ a.card-link.card-colored-3:hover { border-color: var(--c3); box-shadow: 0 0 0 3p
   cursor: not-allowed;
 }
 
+.upload-again-button {
+  margin-top: var(--space-4);
+}
+
 .back-btn {
   display: inline-flex;
   align-items: center;

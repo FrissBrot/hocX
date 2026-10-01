@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { Badge, BadgeVariant } from "@/components/ui/badge";
+import { ActionIcon } from "@/components/ui/action-icons";
 import { DataTable } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Modal } from "@/components/ui/modal";
@@ -221,14 +222,6 @@ function DownloadIcon() {
     <svg viewBox="0 0 24 24" aria-hidden="true" width="14" height="14">
       <path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function PlusIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" width="14" height="14">
-      <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 }
@@ -456,7 +449,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
 
   async function deleteAssignment(id: string) {
     const ok = await confirm({
-      message: "Abgabe wirklich löschen? Alle zugehörigen Elemente und Verweise werden entfernt.",
+      message: "Abgabe endgültig löschen? Alle zugehörigen Elemente und Verweise werden entfernt.",
       tone: "danger",
     });
     if (!ok) return;
@@ -598,7 +591,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
           <h1 className="page-title">Abgaben</h1>
           <p className="muted">{hasNoAssignments ? "Öffentliche Abgabeboxen für Dokumente und Formulare." : "Externe Abgaben ohne Anmeldung — gekoppelt an Termine oder eine Liste, oder manuell."}</p>
         </div>
-        <div className="subm-toolbar-actions">
+        <div className="table-toolbar-actions">
           <span className={`subm-clamav subm-clamav-${clamavStatus}`}>
             <span className="subm-clamav-dot" />
             ClamAV {clamavStatus === "online" ? "Online" : clamavStatus === "offline" ? "Offline" : "…"}
@@ -607,8 +600,8 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
             Links ({links.length})
           </button>
           {hasNoAssignments ? null : (
-            <button type="button" className="button-secondary subm-new-button" onClick={openCreate}>
-              <PlusIcon /> Abgabe
+            <button type="button" className="button-primary subm-new-button" onClick={openCreate}>
+              + Abgabe
             </button>
           )}
         </div>
@@ -663,7 +656,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
                     aria-label="Bearbeiten"
                     title="Bearbeiten"
                   >
-                    ✎
+                    <ActionIcon name="edit" />
                   </button>
                   <button
                     type="button"
@@ -672,7 +665,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
                     aria-label="Löschen"
                     title="Löschen"
                   >
-                    ×
+                    <ActionIcon name="delete" />
                   </button>
                 </div>
               </td>

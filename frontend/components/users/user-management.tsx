@@ -180,8 +180,8 @@ export function UserManagement({ initialUsers }: Props) {
           <p className="muted">{hasOnlyOwnAccess ? "Zugänge und Rollen dieses Mandanten." : "Die Konten dieses Mandanten und ihre Rollen."}</p>
         </div>
         {hasOnlyOwnAccess ? null : (
-          <button type="button" className="button-secondary" onClick={openNewUser}>
-            Neuer Benutzer
+          <button type="button" className="button-primary" onClick={openNewUser}>
+            + Neuer Benutzer
           </button>
         )}
       </div>

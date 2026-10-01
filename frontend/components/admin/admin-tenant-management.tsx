@@ -315,7 +315,7 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
           <h1 className="page-title">Mandanten</h1>
           <p className="muted">Alle Mandanten im System. Neue Mandanten werden hier zentral angelegt.</p>
         </div>
-        <div className="page-header-actions">
+        <div className="table-toolbar-actions">
           <button type="button" className="button-secondary" onClick={openImport}>
             Mandant importieren
           </button>

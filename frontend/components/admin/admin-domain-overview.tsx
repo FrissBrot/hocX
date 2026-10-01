@@ -67,10 +67,10 @@ export function AdminDomainOverview({ initialPage }: Props) {
 
   async function deleteDomain(domain: AdminDomainSummary) {
     const confirmed = await confirm({
-      title: `"${domain.domain}" entfernen?`,
+      title: `"${domain.domain}" endgültig löschen?`,
       message: `Diese Domain wird vom Mandanten "${domain.tenant_name}" entfernt. Der Mandant kann danach eine neue Domain hinterlegen und erneut verifizieren.`,
       tone: "danger",
-      confirmLabel: "Entfernen"
+      confirmLabel: "Löschen"
     });
     if (!confirmed) return;
     try {
@@ -82,9 +82,9 @@ export function AdminDomainOverview({ initialPage }: Props) {
       } else {
         await fetchPage(offset, search);
       }
-      showToast("Domain entfernt", "success");
+      showToast("Domain gelöscht", "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Domain konnte nicht entfernt werden", "error");
+      showToast(error instanceof Error ? error.message : "Domain konnte nicht gelöscht werden", "error");
     }
   }
 
@@ -124,7 +124,7 @@ export function AdminDomainOverview({ initialPage }: Props) {
               {d.last_checked_at ? new Date(d.last_checked_at).toLocaleString("de-CH") : "—"}
             </td>
             <td>
-              <ActionMenu items={[{ label: "Entfernen", onClick: () => deleteDomain(d), danger: true }]} />
+              <ActionMenu items={[{ label: "Löschen", onClick: () => deleteDomain(d), danger: true }]} />
             </td>
           </tr>
         ))}

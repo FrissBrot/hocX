@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 
 import { EmptyState } from "@/components/ui/empty-state";
+import { ActionIcon } from "@/components/ui/action-icons";
 import {
   BarChart,
   Bar,
@@ -136,9 +137,7 @@ function ChartCard({ title, children, className = "" }: { title: string; childre
         <div className="stats-fs-header">
           <span className="stats-chart-title">{title}</span>
           <button type="button" className="stats-fs-close" onClick={() => setFullscreen(false)} aria-label="Schliessen">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <line x1="3" y1="3" x2="13" y2="13" /><line x1="13" y1="3" x2="3" y2="13" />
-            </svg>
+            <ActionIcon name="close" />
           </button>
         </div>
         <div className="stats-fs-content">

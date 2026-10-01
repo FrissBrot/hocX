@@ -4,6 +4,7 @@ import { ComponentProps, createContext, ReactNode, useContext, useEffect, useRef
 import { createPortal } from "react-dom";
 
 import { usePopupEscape, usePopupScrollLock } from "@/lib/hooks/use-popup-escape";
+import { ActionIcon } from "@/components/ui/action-icons";
 
 const ModalDepth = createContext(0);
 const pendingSaves = new WeakMap<HTMLFormElement, Promise<void>>();
@@ -84,9 +85,7 @@ export function Modal({ open, title, description, children, onClose, onEscape, s
               {headerActions}
               {!hideCloseButton ? (
                 <button type="button" className="button-icon modal-close" onClick={onClose} aria-label="Schliessen">
-                  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="16" height="16">
-                    <path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-                  </svg>
+                  <ActionIcon name="close" />
                 </button>
               ) : null}
             </div>

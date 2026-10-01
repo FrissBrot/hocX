@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useConfirm } from "@/contexts/confirm-context";
+import { ActionIcon } from "@/components/ui/action-icons";
 import { browserApiFetch } from "@/lib/api/client";
 import { CycleConfigSummary } from "@/types/api";
 import { formatCycleName } from "@/lib/utils/cycle";
@@ -244,7 +245,7 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
         {!showCreate && editId === null ? (
           <button
             type="button"
-            className="button-secondary"
+            className="button-primary"
             onClick={() => {
               setShowCreate(true);
               setCreateError(null);
@@ -362,18 +363,7 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
                       aria-label="Löschen"
                       onClick={() => void handleDelete(cfg.id)}
                     >
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 9a1 1 0 001 1h6a1 1 0 001-1l1-9" />
-                      </svg>
+                      <ActionIcon name="delete" />
                     </button>
                   </div>
                 </div>

@@ -429,7 +429,7 @@ export function ListManager({
           <h1 className="page-title">Listen</h1>
           <p className="muted">{lists.length === 0 ? "Frei definierbare Listen für Material, Ämter oder Anmeldungen." : "Alle Listen dieses Mandanten."}</p>
         </div>
-        {lists.length > 0 ? <button type="button" className="button-secondary" onClick={openCreate}>Neue Liste</button> : null}
+        {lists.length > 0 ? <button type="button" className="button-primary" onClick={openCreate}>+ Neue Liste</button> : null}
       </div>
       {lists.length === 0 ? (
         <EmptyState

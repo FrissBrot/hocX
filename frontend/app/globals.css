@@ -9469,6 +9469,25 @@ input[type="radio"] {
   .finance-account-modal {
     padding: var(--space-4);
   }
+
+  .finance-tx-form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .finance-tx-table {
+    overflow-x: auto;
+  }
+
+  .finance-tx-header,
+  .finance-tx-row {
+    min-width: 480px;
+  }
+}
+
+@media (max-width: 900px) {
+  .finance-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* Finance form (Inhalt des Modal) */
@@ -11096,13 +11115,6 @@ input[type="radio"] {
 @keyframes subm-shimmer {
   0% { background-position: -200px 0; }
   100% { background-position: calc(200px + 100%) 0; }
-}
-
-.subm-toolbar-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  flex-wrap: wrap;
 }
 
 .subm-clamav {
@@ -15143,12 +15155,6 @@ input[type="radio"] {
 
 .admin-breadcrumb .topbar-breadcrumb-group:hover {
   color: var(--text);
-}
-
-.page-header-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
 }
 
 /* Avatare: getönte Fläche mit dunklem Buchstaben, Ton aus avatarTone() */

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Modal } from "@/components/ui/modal";
+import { ActionIcon } from "@/components/ui/action-icons";
 import { TagInput } from "@/components/ui/tag-input";
 import { TodoAssigneeMenu } from "./todo-assignee-menu";
 import { TodoDueMenu, DuePatch } from "./todo-due-menu";
@@ -46,7 +47,7 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
   }
 
   async function remove() {
-    if (!await confirm({ message: "Dieses Todo löschen?", tone: "danger", confirmLabel: "Löschen" })) return;
+    if (!await confirm({ message: "Dieses Todo endgültig löschen?", tone: "danger", confirmLabel: "Löschen" })) return;
     setBusy(true);
     try {
       const result = await browserApiFetch<{ pending_delete: boolean; todo: TodoListItem | null }>(`/api/protocol-todos/${todo.id}`, { method: "DELETE" });
@@ -61,7 +62,7 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
     <header className="todo-edit-heading">
       <div className="todo-edit-eyebrow">Todo bearbeiten {todo.protocol_number && <><span>·</span><span className="todo-edit-number">{todo.protocol_number}</span></>}</div>
       <input aria-label="Aufgabe" className="todo-edit-title" value={draft.task} disabled={!editable} onChange={(e) => setDraft({ ...draft, task: e.target.value })} />
-      <button type="button" className="todo-edit-close" aria-label="Schliessen" disabled={busy} onClick={onClose}>×</button>
+      <button type="button" className="todo-edit-close" title="Schliessen" aria-label="Schliessen" disabled={busy} onClick={onClose}><ActionIcon name="close" /></button>
     </header>
     <div className="todo-edit-body">
       <div className="todo-edit-main">

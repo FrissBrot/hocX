@@ -30,9 +30,6 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
   return (
     <AppShell initialSession={session}>
       <section className="panel">
-        <div className="eyebrow">Template Detail</div>
-        <h1>{template.name}</h1>
-        <p className="muted">Choose finished elements here and place them in order. The element structure itself is maintained in the Elements area.</p>
         <TemplateEditor
           initialTemplate={template}
           initialElements={elements ?? []}

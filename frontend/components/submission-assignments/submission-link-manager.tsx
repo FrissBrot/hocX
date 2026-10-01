@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
+import { ActionIcon } from "@/components/ui/action-icons";
 import { CopyField } from "@/components/ui/copy-field";
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -170,7 +171,7 @@ export function SubmissionLinkManager({ links, onLinksChange, onLinkRemoved }: P
                   aria-label="Umbenennen"
                   title="Umbenennen"
                 >
-                  ✎
+                  <ActionIcon name="edit" />
                 </button>
                 <button
                   type="button"
@@ -179,7 +180,7 @@ export function SubmissionLinkManager({ links, onLinksChange, onLinkRemoved }: P
                   aria-label="Löschen"
                   title="Löschen"
                 >
-                  ×
+                  <ActionIcon name="delete" />
                 </button>
               </>
             )}
