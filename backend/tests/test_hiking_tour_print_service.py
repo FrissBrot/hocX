@@ -74,7 +74,7 @@ def test_export_pdf_produces_a_real_pdf_file(db, routing_network):
         import asyncio
 
         stored_file, sheet_count = asyncio.run(
-            HikingTourPrintService().export_pdf(db, tour, paper="A4", orientation="landscape", scale=25_000, overlap_fraction=0.15)
+            HikingTourPrintService().export_pdf(db, tour, paper="A4", orientation="landscape", scale=25_000)
         )
 
     assert sheet_count >= 1
@@ -95,4 +95,4 @@ def test_export_pdf_requires_a_computed_route(db):
     with pytest.raises(ValueError, match="Route"):
         import asyncio
 
-        asyncio.run(HikingTourPrintService().export_pdf(db, tour, paper="A4", orientation="landscape", scale=25_000, overlap_fraction=0.15))
+        asyncio.run(HikingTourPrintService().export_pdf(db, tour, paper="A4", orientation="landscape", scale=25_000))

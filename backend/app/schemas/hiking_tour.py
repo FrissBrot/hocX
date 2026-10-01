@@ -366,7 +366,6 @@ class PrintRequest(BaseModel):
     paper: str = "A4"
     orientation: str = "landscape"
     scale: int = 25_000
-    overlap_fraction: float = 0.15
 
     @field_validator("paper")
     @classmethod
@@ -393,12 +392,6 @@ class PrintRequest(BaseModel):
             raise ValueError("Massstab muss positiv sein")
         return value
 
-    @field_validator("overlap_fraction")
-    @classmethod
-    def _validate_overlap(cls, value: float) -> float:
-        if not (0 <= value < 0.9):
-            raise ValueError("Überlappung muss zwischen 0 und 0.9 liegen")
-        return value
 
 
 class PrintResponse(BaseModel):

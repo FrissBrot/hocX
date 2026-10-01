@@ -153,3 +153,16 @@ def test_deleting_an_auto_generated_waypoint_is_allowed(db, routing_network):
 
     auto_waypoint = next(wp for wp in result.waypoints if wp.auto_generated)
     HikingTourService().delete_waypoint(db, auto_waypoint)  # raises on failure
+
+
+def test_reanalysis_keeps_end_last_and_does_not_double_back(db, routing_network):
+    tenant = make_tenant(db, "Wiederholte Analyse")
+    tour, body = _prepare_tour(db, tenant.id, climb=True)
+    base_distance = tour.route_distance_m
+    with patch("app.services.elevation_service.urllib.request.urlopen", side_effect=lambda *a, **kw: _mock_response(body)):
+        for _ in range(2):
+            result = HikingTourAnalysisService().analyze(db, tour)
+            chain = [w for w in result.waypoints if w.kind != 'EMERGENCY_EXIT']
+            assert chain[0].kind == 'START'
+            assert chain[-1].kind == 'END'
+            assert result.route_distance_m == pytest.approx(base_distance, rel=0.01)

@@ -9,12 +9,13 @@ Zwei getrennte Berechnungen:
    die Grundlage für "der Massstab im fertigen PDF muss physikalisch korrekt sein" (die
    Bildkompositierung skaliert später exakt auf `ground_width_m`/`ground_height_m`).
 2. `plan_sheets()`: platziert Blätter entlang der Route (nicht als starres Raster, siehe
-   Docstring dort) mit konfigurierbarer Überlappung, bis die ganze Route abgedeckt ist.
+   Docstring dort) mit fester physischer Überlappung, bis die ganze Route abgedeckt ist.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+import math
 
 from app.core.swiss_coords import lv95_to_wgs84
 
@@ -40,7 +41,7 @@ MARGIN_SIDE_MM = 10.0
 MARGIN_TOP_MM = 10.0
 MARGIN_BOTTOM_MM = 25.0
 
-DEFAULT_OVERLAP_FRACTION = 0.15
+SHEET_OVERLAP_MM = 10.0
 
 
 @dataclass(frozen=True)
@@ -115,77 +116,82 @@ def plan_sheets(
     *,
     ground_width_m: float,
     ground_height_m: float,
-    overlap_fraction: float = DEFAULT_OVERLAP_FRACTION,
+    scale: int = 25_000,
 ) -> list[PrintSheet]:
-    """Platziert Blätter entlang der Route statt als starres Nord-Süd-Raster (Auftrag
-    Abschnitt 15): ein gieriger Durchlauf, der pro Blatt so viele aufeinanderfolgende
-    Routenpunkte wie möglich in eine Bounding Box von `ground_width_m` x `ground_height_m`
-    packt, bevor das nächste Blatt beginnt. Dadurch braucht ein gerader Streckenabschnitt
-    wenige Blätter (die Bounding Box füllt sich langsam), ein verwinkelter Abschnitt
-    (Kehren, Spitzkehren) mehr (die Bounding Box füllt sich schnell, obwohl die
-    Streckenlänge klein ist) - genau das durch die Streckenform selbst, nicht durch ein
-    festes Raster.
+    """Nur von der Route durchlaufene Kartenblätter mit 10 mm Überlappung planen.
 
-    Jedes Blatt ist exakt `ground_width_m` x `ground_height_m` gross (die durch
-    `compute_page_geometry()` vorgegebene physische Grösse) und auf den Mittelpunkt der
-    abgedeckten Punkte zentriert - die ganze Route bleibt damit lückenlos abgedeckt, auch an
-    den Blatträndern.
+    Die Verschiebung zum nächsten Blatt ist Blattbreite/-höhe minus 10 mm im
+    jeweiligen Massstab. Auch das letzte Blatt wird nicht nachträglich zentriert:
+    sonst würde sein Überlappungsstreifen wieder grösser. Bei einem Eckübergang
+    werden beide Achsen verschoben. Wieder besuchte Blätter werden wiederverwendet.
+    Segment-Schnittpunkte sichern die lückenlose Abdeckung auch dünner GPX-Geometrien.
     """
-    if ground_width_m <= 0 or ground_height_m <= 0:
-        raise ValueError("Blattgrösse muss positiv sein")
+    overlap_m = SHEET_OVERLAP_MM * scale / 1000
+    if scale <= 0 or not all(math.isfinite(v) for v in (ground_width_m, ground_height_m)):
+        raise ValueError("Ungültige Blattgrösse oder Massstab")
+    if min(ground_width_m, ground_height_m) <= overlap_m:
+        raise ValueError("Blattgrösse muss grösser als die Überlappung sein")
     if not points:
         return []
 
-    sheets: list[PrintSheet] = []
-    start_index = 0
-    n = len(points)
-
-    while start_index < n:
-        min_x = max_x = points[start_index].x
-        min_y = max_y = points[start_index].y
-        end_index = start_index
-
-        for i in range(start_index + 1, n):
-            new_min_x, new_max_x = min(min_x, points[i].x), max(max_x, points[i].x)
-            new_min_y, new_max_y = min(min_y, points[i].y), max(max_y, points[i].y)
-            if (new_max_x - new_min_x) > ground_width_m or (new_max_y - new_min_y) > ground_height_m:
-                break
-            min_x, max_x, min_y, max_y = new_min_x, new_max_x, new_min_y, new_max_y
-            end_index = i
-
-        center_x, center_y = (min_x + max_x) / 2, (min_y + max_y) / 2
-        half_w, half_h = ground_width_m / 2, ground_height_m / 2
-        lat, lon = lv95_to_wgs84(center_x, center_y)
-        sheets.append(
-            PrintSheet(
-                sequence=len(sheets) + 1,
-                center_lat=lat,
-                center_lon=lon,
-                min_x=center_x - half_w,
-                max_x=center_x + half_w,
-                min_y=center_y - half_h,
-                max_y=center_y + half_h,
-                start_distance_m=points[start_index].distance_m,
-                end_distance_m=points[end_index].distance_m,
-            )
-        )
-
-        if end_index == n - 1:
+    # Erstes Blatt auf möglichst viele aufeinanderfolgende Punkte zentrieren.
+    min_x = max_x = points[0].x
+    min_y = max_y = points[0].y
+    for point in points[1:]:
+        x0, x1 = min(min_x, point.x), max(max_x, point.x)
+        y0, y1 = min(min_y, point.y), max(max_y, point.y)
+        if x1 - x0 > ground_width_m or y1 - y0 > ground_height_m:
             break
-        if end_index == start_index:
-            # Schon zwei aufeinanderfolgende Punkte passen nicht mehr in ein Blatt (bei
-            # sinnvollen Massstab/Papier-Kombinationen praktisch ausgeschlossen) -
-            # garantiert trotzdem Fortschritt statt einer Endlosschleife.
-            start_index += 1
-            continue
+        min_x, max_x, min_y, max_y = x0, x1, y0, y1
+    origin_x, origin_y = (min_x + max_x) / 2, (min_y + max_y) / 2
+    step_x, step_y = ground_width_m - overlap_m, ground_height_m - overlap_m
+    sheets: list[PrintSheet] = []
+    indices: dict[tuple[int, int], int] = {}
 
-        overlap_m = overlap_fraction * min(ground_width_m, ground_height_m)
-        target_distance = points[end_index].distance_m - overlap_m
-        next_start = end_index
-        for i in range(start_index, end_index + 1):
-            if points[i].distance_m >= target_distance:
-                next_start = i
+    def get_sheet(ix: int, iy: int, distance: float) -> int:
+        key = (ix, iy)
+        if key in indices:
+            return indices[key]
+        cx, cy = origin_x + ix * step_x, origin_y + iy * step_y
+        lat, lon = lv95_to_wgs84(cx, cy)
+        index = len(sheets)
+        indices[key] = index
+        sheets.append(PrintSheet(index + 1, lat, lon,
+                                 cx - ground_width_m / 2, cx + ground_width_m / 2,
+                                 cy - ground_height_m / 2, cy + ground_height_m / 2,
+                                 distance, distance))
+        return index
+
+    ix = iy = 0
+    active = get_sheet(ix, iy, points[0].distance_m)
+    current = points[0]
+    epsilon = 1e-7  # LV95-Meter; nur Rundungsrauschen an einem Blattrand.
+    for target in points[1:]:
+        while True:
+            sheet = sheets[active]
+            dx, dy = target.x - current.x, target.y - current.y
+            if (sheet.min_x - epsilon <= target.x <= sheet.max_x + epsilon
+                    and sheet.min_y - epsilon <= target.y <= sheet.max_y + epsilon):
+                sheets[active] = replace(sheet, end_distance_m=target.distance_m)
+                current = target
                 break
-        start_index = next_start if next_start > start_index else start_index + 1
-
+            tx = ((sheet.max_x if dx > 0 else sheet.min_x) - current.x) / dx if dx else math.inf
+            ty = ((sheet.max_y if dy > 0 else sheet.min_y) - current.y) / dy if dy else math.inf
+            t = max(0.0, min(tx, ty))
+            crossing = RoutePoint2D(
+                current.distance_m + t * (target.distance_m - current.distance_m),
+                current.x + t * dx, current.y + t * dy,
+            )
+            sheets[active] = replace(sheet, end_distance_m=crossing.distance_m)
+            move_x, move_y = tx <= ty + 1e-12, ty <= tx + 1e-12
+            if move_x:
+                ix += 1 if dx > 0 else -1
+            if move_y:
+                iy += 1 if dy > 0 else -1
+            # Entfernungsbereich ist informativ; die Überlappung selbst wird exakt
+            # durch die räumliche Blattverschiebung bestimmt, nicht entlang der Route.
+            component = max(abs(dx) if move_x else 0, abs(dy) if move_y else 0)
+            overlap_distance = overlap_m * (target.distance_m - current.distance_m) / component
+            active = get_sheet(ix, iy, max(points[0].distance_m, crossing.distance_m - overlap_distance))
+            current = crossing
     return sheets

@@ -4,10 +4,9 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { Badge, BadgeVariant } from "@/components/ui/badge";
-import { DataTable, DataToolbar } from "@/components/ui/data-table";
+import { DataToolbar } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
-import { PillMenu } from "@/components/ui/pill-menu";
 import { HikingTourElevationChart } from "@/components/wanderplaner/hiking-tour-elevation-chart";
 import { HikingTourMap } from "@/components/wanderplaner/hiking-tour-map";
 import { HikingTourMarchTable } from "@/components/wanderplaner/hiking-tour-march-table";
@@ -26,28 +25,6 @@ import {
   MarchTimeTable,
 } from "@/types/api";
 
-// Auftrag Abschnitt 11: Verifizierungsstatus automatisch erkannter sicherheitsrelevanter
-// Punkte (Entscheidungspunkte, Notausstiege) - nie als geprüfte Tatsache dargestellt.
-const VERIFICATION_LABEL: Record<HikingTourWaypointVerificationStatus, string> = {
-  AUTO_DETECTED: "Automatisch erkannt",
-  NEEDS_VERIFICATION: "Vor Ort prüfen",
-  VERIFIED: "Vom Leiter bestätigt",
-  REJECTED: "Verworfen",
-};
-
-const VERIFICATION_VARIANT: Record<HikingTourWaypointVerificationStatus, BadgeVariant> = {
-  AUTO_DETECTED: "info",
-  NEEDS_VERIFICATION: "warning",
-  VERIFIED: "success",
-  REJECTED: "danger",
-};
-
-const VERIFICATION_OPTIONS = (Object.keys(VERIFICATION_LABEL) as HikingTourWaypointVerificationStatus[]).map((value) => ({
-  value,
-  label: VERIFICATION_LABEL[value],
-  variant: VERIFICATION_VARIANT[value],
-}));
-
 // Auftrag Abschnitt 17 - dieselbe feste Item-Liste wie RECONNAISSANCE_CHECKLIST_ITEMS im
 // Backend (app/schemas/hiking_tour.py), hier nur mit deutschen Labels.
 const RECONNAISSANCE_CHECKLIST_LABELS: Record<string, string> = {
@@ -65,13 +42,6 @@ const RECONNAISSANCE_CHECKLIST_LABELS: Record<string, string> = {
 // die drei geforderten Presets.
 const PRINT_PAPER_OPTIONS = ["A4", "A3", "A2", "A1"] as const;
 const PRINT_SCALE_OPTIONS = [10_000, 25_000, 50_000] as const;
-
-function formatMinutesShort(minutes: number): string {
-  const rounded = Math.round(minutes);
-  const hours = Math.floor(rounded / 60);
-  const rest = rounded % 60;
-  return hours > 0 ? `${hours}h${rest.toString().padStart(2, "0")}` : `${rest}min`;
-}
 
 const STATUS_LABEL: Record<string, string> = {
   draft: "Entwurf",
@@ -131,6 +101,7 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
   const [computingRoute, setComputingRoute] = useState(false);
   const [elevationProfile, setElevationProfile] = useState<ElevationProfile | null>(null);
   const [fetchingElevation, setFetchingElevation] = useState(false);
+  const [marchTableRevision, setMarchTableRevision] = useState(0);
   const [marchTable, setMarchTable] = useState<MarchTimeTable | null>(null);
   const [hoveredPoint, setHoveredPoint] = useState<ElevationProfilePoint | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
@@ -140,7 +111,7 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
   const [savingReconnaissance, setSavingReconnaissance] = useState(false);
   const [approving, setApproving] = useState(false);
   const [showPrint, setShowPrint] = useState(false);
-  const [printForm, setPrintForm] = useState({ paper: "A4", orientation: "landscape", scale: 25_000, overlapPercent: 15 });
+  const [printForm, setPrintForm] = useState({ paper: "A4", orientation: "landscape", scale: 25_000 });
   const [printing, setPrinting] = useState(false);
   const [printResult, setPrintResult] = useState<HikingTourPrintResult | null>(null);
 
@@ -221,6 +192,7 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
         method: "PATCH",
         body: JSON.stringify({ break_minutes: minutes }),
       });
+      setMarchTableRevision((value) => value + 1);
       setTour((prev) => ({ ...prev, waypoints: prev.waypoints.map((wp) => (wp.id === updated.id ? updated : wp)) }));
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : "Pause konnte nicht gespeichert werden", "error");
@@ -233,6 +205,8 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
       const updated = await browserApiFetch<HikingTour>(`/api/hiking-tours/${tour.id}/route`, {
         method: "POST",
         body: JSON.stringify({ routing_profile: profile }),
+        // Landesweites Wegenetz und mehrere Zwischenpunkte benötigen länger als 15s.
+        signal: AbortSignal.timeout(180_000),
       });
       setTour(updated);
       showToast("Route berechnet", "success");
@@ -259,7 +233,7 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
     return () => {
       cancelled = true;
     };
-  }, [tour.id, tour.route_computed_at, tour.route_legs.length]);
+  }, [tour.id, tour.route_computed_at, tour.route_legs.length, marchTableRevision]);
 
   useEffect(() => {
     if (!tour.elevation_profile_fetched_at) {
@@ -295,7 +269,7 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
   async function handleAnalyze() {
     setAnalyzing(true);
     try {
-      const updated = await browserApiFetch<HikingTour>(`/api/hiking-tours/${tour.id}/analyze`, { method: "POST" });
+      const updated = await browserApiFetch<HikingTour>(`/api/hiking-tours/${tour.id}/analyze`, { method: "POST", signal: AbortSignal.timeout(180_000) });
       setTour(updated);
       showToast("Tour automatisch analysiert", "success");
     } catch (err: unknown) {
@@ -360,7 +334,6 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
           paper: printForm.paper,
           orientation: printForm.orientation,
           scale: printForm.scale,
-          overlap_fraction: printForm.overlapPercent / 100,
         }),
         // browserApiFetch's Standard-Timeout (15s) reicht nicht: WMTS-Kachelabruf + pdflatex-
         // Kompilierung dauern je nach Blattanzahl/Massstab real 20-60+ Sekunden (siehe
@@ -509,82 +482,15 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
         </div>
       )}
 
-      {marchTable && (
-        <div className="section-card">
-          <HikingTourMarchTable table={marchTable} />
-        </div>
-      )}
-
-      <div>
-        <DataToolbar title="Wegpunkte" description="Start, Ziel, Via-Punkte und automatisch erkannte Punkte in Reihenfolge." />
-        <DataTable columns={["#", "Typ", "Bezeichnung", "Breite", "Länge", "Pause", "Status", ""]} emptyMessage="Keine Wegpunkte.">
-          {tour.waypoints.map((waypoint) => (
-            <tr key={waypoint.id}>
-              <td>{waypoint.sequence}</td>
-              <td>
-                <Badge variant={waypoint.kind === "START" || waypoint.kind === "END" ? "info" : "neutral"}>{KIND_LABEL[waypoint.kind]}</Badge>
-              </td>
-              <td>
-                {waypoint.label || <span className="muted">–</span>}
-                {waypoint.description && <div className="field-help">{waypoint.description}</div>}
-                {waypoint.decision_metrics_json && (
-                  <div className="field-help">
-                    Ab Start: {formatMinutesShort(waypoint.decision_metrics_json.time_from_start_minutes)} · Bis Ziel:{" "}
-                    {formatMinutesShort(waypoint.decision_metrics_json.time_to_end_minutes)} · Zurück:{" "}
-                    {formatMinutesShort(waypoint.decision_metrics_json.time_back_minutes)}
-                    {waypoint.decision_metrics_json.nearest_exit_label && waypoint.decision_metrics_json.time_to_exit_minutes !== null && (
-                      <> · Nächster Ausstieg: {formatMinutesShort(waypoint.decision_metrics_json.time_to_exit_minutes)}</>
-                    )}
-                  </div>
-                )}
-              </td>
-              <td>{waypoint.lat.toFixed(4)}</td>
-              <td>{waypoint.lon.toFixed(4)}</td>
-              <td>
-                {canWrite ? (
-                  <input
-                    key={`${waypoint.id}-${waypoint.break_minutes ?? 0}`}
-                    type="number"
-                    min={0}
-                    defaultValue={waypoint.break_minutes ?? 0}
-                    aria-label="Pause in Minuten"
-                    className="wanderplaner-break-input"
-                    onBlur={(event) => {
-                      const minutes = Number(event.target.value) || 0;
-                      if (minutes !== (waypoint.break_minutes ?? 0)) void handleUpdateBreakMinutes(waypoint, minutes);
-                    }}
-                  />
-                ) : waypoint.break_minutes ? (
-                  `${waypoint.break_minutes} min`
-                ) : (
-                  <span className="muted">–</span>
-                )}
-              </td>
-              <td>
-                {waypoint.verification_status ? (
-                  canWrite ? (
-                    <PillMenu
-                      value={waypoint.verification_status}
-                      options={VERIFICATION_OPTIONS}
-                      onChange={(status) => void handleVerificationChange(waypoint, status)}
-                    />
-                  ) : (
-                    <Badge variant={VERIFICATION_VARIANT[waypoint.verification_status]}>{VERIFICATION_LABEL[waypoint.verification_status]}</Badge>
-                  )
-                ) : (
-                  <span className="muted">–</span>
-                )}
-              </td>
-              <td className="wanderplaner-row-actions">
-                {canWrite && (waypoint.kind === "USER_DEFINED" || waypoint.auto_generated) && (
-                  <button type="button" className="button-secondary button-ghost" onClick={() => void handleDeleteWaypoint(waypoint)}>
-                    Entfernen
-                  </button>
-                )}
-              </td>
-            </tr>
-          ))}
-        </DataTable>
+      <div className="section-card">
+        <HikingTourMarchTable
+          table={marchTable}
+          waypoints={tour.waypoints}
+          canWrite={canWrite}
+          onUpdateBreakMinutes={(waypoint, minutes) => void handleUpdateBreakMinutes(waypoint, minutes)}
+          onVerificationChange={(waypoint, status) => void handleVerificationChange(waypoint, status)}
+          onDeleteWaypoint={(waypoint) => void handleDeleteWaypoint(waypoint)}
+        />
       </div>
 
       <Modal open={showEdit} title="Wanderung bearbeiten" onClose={() => setShowEdit(false)}>
@@ -700,16 +606,6 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
                   </option>
                 ))}
               </select>
-            </label>
-            <label className="field-stack">
-              <span className="field-label">Überlappung (%)</span>
-              <input
-                type="number"
-                min={0}
-                max={80}
-                value={printForm.overlapPercent}
-                onChange={(event) => setPrintForm((prev) => ({ ...prev, overlapPercent: Number(event.target.value) }))}
-              />
             </label>
           </div>
           {printResult && (

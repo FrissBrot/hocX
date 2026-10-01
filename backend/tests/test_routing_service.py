@@ -130,3 +130,57 @@ def test_start_equals_end_produces_a_valid_loop_route_instead_of_crashing(db, ro
     assert len(result.route_legs) == 1
     assert result.route_legs[0].distance_m == 0.0
     assert result.route_distance_m == 0.0
+
+
+def test_two_far_points_do_not_become_a_zero_distance_straight_line(db, routing_network):
+    tenant = make_tenant(db, "Ausserhalb Netz")
+    tour = _create_tour(db, tenant.id, start=FAR_AWAY, end={"lat": 46.21, "lon": 6.16}, profile="schnellste_route")
+    with pytest.raises(RoutingError, match="innerhalb von 150 m"):
+        RoutingService().compute_route(db, tour, profile="schnellste_route")
+    assert tour.route_legs == []
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_points_inside_a_curved_edge_follow_only_the_relevant_path(db, routing_network, reverse):
+    from sqlalchemy import text
+    from geoalchemy2.shape import to_shape
+    # Beide Punkte sind weit vom Endknoten entfernt, aber liegen auf derselben Kurve.
+    db.execute(text("UPDATE routing_edge SET geom=ST_GeomFromText("
+                    "'LINESTRING(8.50 47.00,8.50 47.005,8.51 47.005,8.51 47.01)',4326) "
+                    "WHERE external_ref='E1'"))
+    start, end = {"lon": 8.50, "lat": 47.003}, {"lon": 8.51, "lat": 47.007}
+    if reverse:
+        start, end = end, start
+    tenant = make_tenant(db, "Teilkante")
+    tour = _create_tour(db, tenant.id, start=start, end=end, profile="schnellste_route")
+    result = RoutingService().compute_route(db, tour, profile="schnellste_route")
+    leg = result.route_legs[0]
+    coords = list(to_shape(leg.geom).coords)
+    assert len(coords) == 4
+    assert coords[0] == pytest.approx((start['lon'], start['lat']))
+    assert coords[-1] == pytest.approx((end['lon'], end['lat']))
+    assert 0 < leg.distance_m < 1800
+    assert (leg.descent_m if reverse else leg.ascent_m) > 0
+
+
+def test_off_path_points_snap_to_path_without_drawing_access_straight_lines(db, routing_network):
+    from geoalchemy2.shape import to_shape
+    tenant = make_tenant(db, "Snapping")
+    tour = _create_tour(db, tenant.id, start={"lat": 47.0001, "lon": 8.5001}, end=C, profile="schnellste_route")
+    result = RoutingService().compute_route(db, tour, profile="schnellste_route")
+    assert result.route_distance_m > 0
+    assert len(list(to_shape(result.route_legs[0].geom).coords)) >= 3
+
+
+def test_recalculation_invalidates_old_elevation_and_records_network_version(db, routing_network):
+    from datetime import UTC, datetime
+    tenant = make_tenant(db, 'Neue Geometrie')
+    tour = _create_tour(db, tenant.id, profile='schnellste_route')
+    tour.elevation_profile_json = [{'distance_m': 0, 'elevation_m': 400}]
+    tour.elevation_profile_fetched_at = datetime.now(UTC)
+    tour.waypoints[0].elevation_m = 400
+    result = RoutingService().compute_route(db,tour,profile='schnellste_route')
+    assert result.elevation_profile_json is None
+    assert result.elevation_profile_fetched_at is None
+    assert result.waypoints[0].elevation_m is None
+    assert result.route_legs[0].network_version_id is not None

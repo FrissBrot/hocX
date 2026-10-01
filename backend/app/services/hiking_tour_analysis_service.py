@@ -87,7 +87,15 @@ class HikingTourAnalysisService:
         if not tour.elevation_profile_json:
             raise ValueError("Höhenprofil muss zuerst abgerufen werden, bevor eine automatische Analyse möglich ist")
 
+        had_auto_waypoints = any(wp.auto_generated for wp in tour.waypoints)
         self._remove_previous_auto_waypoints(db, tour)
+        if had_auto_waypoints:
+            # Entfernte automatische Punkte hinterlassen sonst alte Teilstrecken:
+            # deren Distanzen passen nicht zur verbleibenden Wegpunktkette und
+            # können neue Analysepunkte sogar hinter das Ziel einsortieren.
+            db.expire(tour, ["route_legs"])
+            tour = self.routing_service.compute_route(db, tour, profile=tour.routing_profile or "wanderwege_bevorzugen")
+            tour = self.elevation_service.fetch_and_store(db, tour)
 
         elevation_points = [
             RoutePoint(distance_m=p["distance_m"], lat=p["lat"], lon=p["lon"], elevation_m=p["elevation_m"])

@@ -16718,3 +16718,8 @@ input[type="radio"] {
   font-size: var(--text-base);
   color: var(--muted);
 }
+
+/* Marschtabelle: volle verfügbare Seitenbreite, auf kleinen Geräten scrollbar. */
+.wanderplaner-march-table { min-width: 0; width: 100%; }
+.wanderplaner-march-table .table-shell { max-width: none; width: 100%; }
+.wanderplaner-march-table .wanderplaner-row-actions { flex-wrap: wrap; }

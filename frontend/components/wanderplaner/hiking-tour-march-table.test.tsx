@@ -1,7 +1,7 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
-import type { MarchTimeTable } from "@/types/api";
+import type { HikingTourWaypoint, MarchTimeTable } from "@/types/api";
 
 import { HikingTourMarchTable } from "./hiking-tour-march-table";
 
@@ -59,9 +59,19 @@ function table(overrides: Partial<MarchTimeTable> = {}): MarchTimeTable {
   };
 }
 
+function waypoints(): HikingTourWaypoint[] {
+  return table().entries.map((entry) => ({
+    id: String(entry.sequence), sequence: entry.sequence, kind: entry.kind,
+    label: entry.label, description: null, lat: 47, lon: 8,
+    elevation_m: entry.elevation_m, break_minutes: entry.break_minutes,
+    break_reason: null, auto_generated: false, verification_status: null,
+    decision_metrics_json: null, exit_metrics_json: null, created_at: "", updated_at: "",
+  }));
+}
+
 describe("HikingTourMarchTable", () => {
   it("renders one row per waypoint with formatted times and the Lkm-based summary", () => {
-    render(<HikingTourMarchTable table={table()} />);
+    render(<HikingTourMarchTable table={table()} waypoints={waypoints()} />);
 
     expect(screen.getAllByText("08:00")).toHaveLength(2); // Ankunft und Abmarsch am Start sind identisch
     expect(screen.getByText("11:30")).toBeInTheDocument();
@@ -74,7 +84,7 @@ describe("HikingTourMarchTable", () => {
   });
 
   it("shows a dash instead of '0 min' in the Pause column for waypoints without a break", () => {
-    render(<HikingTourMarchTable table={table()} />);
+    render(<HikingTourMarchTable table={table()} waypoints={waypoints()} />);
 
     const startRow = screen.getByText("Start").closest("tr")!;
     const pauseCell = startRow.querySelectorAll("td")[11];
@@ -83,4 +93,40 @@ describe("HikingTourMarchTable", () => {
     const endRow = screen.getByText("Ziel").closest("tr")!;
     expect(endRow.querySelectorAll("td")[11].textContent).toBe("15 min");
   });
+});
+
+it("keeps waypoints editable in a single table before route calculation", () => {
+  const onUpdateBreakMinutes = vi.fn();
+  const onDeleteWaypoint = vi.fn();
+  const point = { ...waypoints()[0], kind: "USER_DEFINED" as const, label: "Zwischenhalt" };
+  render(<HikingTourMarchTable table={null} waypoints={[point]} canWrite
+    onUpdateBreakMinutes={onUpdateBreakMinutes} onDeleteWaypoint={onDeleteWaypoint} />);
+  expect(screen.getAllByRole("table")).toHaveLength(1);
+  const row = screen.getByText("Zwischenhalt").closest("tr")!;
+  expect(row.querySelectorAll("td")[3].textContent).toBe("–");
+  fireEvent.blur(screen.getByRole("spinbutton"), { target: { value: "10" } });
+  expect(onUpdateBreakMinutes).toHaveBeenCalledWith(point, 10);
+  fireEvent.click(screen.getByRole("button", { name: "Entfernen" }));
+  expect(onDeleteWaypoint).toHaveBeenCalledWith(point);
+});
+
+it("retains emergency exits without inventing marching times", () => {
+  const exit = { ...waypoints()[0], id: "exit", sequence: 3, kind: "EMERGENCY_EXIT" as const,
+    label: "Ausstieg", verification_status: "NEEDS_VERIFICATION" as const };
+  render(<HikingTourMarchTable table={table()} waypoints={[...waypoints(), exit]} />);
+  const row = screen.getByText("Ausstieg").closest("tr")!;
+  expect(row.querySelectorAll("td")[8].textContent).toBe("–");
+  expect(screen.getByText("Vor Ort prüfen")).toBeInTheDocument();
+  expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Entfernen" })).not.toBeInTheDocument();
+});
+
+it("offers all review actions for automatic points without an initial status", () => {
+  const onVerificationChange = vi.fn();
+  const point = { ...waypoints()[0], auto_generated: true, verification_status: null };
+  render(<HikingTourMarchTable table={null} waypoints={[point]} canWrite onVerificationChange={onVerificationChange} />);
+  for (const [label, status] of [["Bestätigen", "VERIFIED"], ["Fürs Reko markieren", "NEEDS_VERIFICATION"], ["Ablehnen", "REJECTED"]]) {
+    fireEvent.click(screen.getByRole("button", { name: label }));
+    expect(onVerificationChange).toHaveBeenLastCalledWith(point, status);
+  }
 });

@@ -57,7 +57,7 @@ class TestPlanSheets:
 
     def test_a_long_straight_route_needs_multiple_overlapping_sheets(self):
         points = _straight_line(200, step_m=50.0)  # 10km
-        sheets = plan_sheets(points, ground_width_m=2000.0, ground_height_m=2000.0, overlap_fraction=0.15)
+        sheets = plan_sheets(points, ground_width_m=2000.0, ground_height_m=2000.0)
 
         assert len(sheets) > 1
         for previous, current in zip(sheets, sheets[1:]):
@@ -109,3 +109,40 @@ class TestPlanSheets:
             assert False, "expected ValueError"
         except ValueError:
             pass
+
+
+import pytest
+
+
+@pytest.mark.parametrize('paper', ['A4', 'A3', 'A2', 'A1'])
+@pytest.mark.parametrize('orientation', ['portrait', 'landscape'])
+@pytest.mark.parametrize('scale', [10_000, 25_000, 50_000])
+@pytest.mark.parametrize('vertical', [False, True])
+def test_physical_overlap_is_ten_mm_including_last_sheet(paper, orientation, scale, vertical):
+    geometry = compute_page_geometry(paper=paper, orientation=orientation, scale=scale)
+    span = geometry.ground_height_m if vertical else geometry.ground_width_m
+    points = [RoutePoint2D(distance_m=i * span / 10,
+                          x=2_680_000 + (0 if vertical else i * span / 10),
+                          y=1_200_000 + (i * span / 10 if vertical else 0)) for i in range(26)]
+    sheets = plan_sheets(points, ground_width_m=geometry.ground_width_m,
+                         ground_height_m=geometry.ground_height_m, scale=scale)
+    assert len(sheets) >= 3
+    for first, second in zip(sheets, sheets[1:]):
+        overlap_m = (first.max_y - second.min_y) if vertical else (first.max_x - second.min_x)
+        assert overlap_m * 1000 / scale == pytest.approx(10, abs=1e-7)
+
+
+def test_sparse_diagonal_segments_have_no_gaps_between_sheets():
+    points = [RoutePoint2D(0, 2_680_000, 1_200_000), RoutePoint2D(15000, 2_690_000, 1_210_000)]
+    sheets = plan_sheets(points, ground_width_m=2000, ground_height_m=2000, scale=25_000)
+    for i in range(1001):
+        x, y = 2_680_000 + 10*i, 1_200_000 + 10*i
+        assert any(s.min_x <= x <= s.max_x and s.min_y <= y <= s.max_y for s in sheets)
+    for a,b in zip(sheets,sheets[1:]):
+        assert (a.max_x-b.min_x)*1000/25_000 == pytest.approx(10)
+        assert (a.max_y-b.min_y)*1000/25_000 == pytest.approx(10)
+
+
+def test_old_client_cannot_override_fixed_overlap():
+    from app.schemas.hiking_tour import PrintRequest
+    assert PrintRequest(overlap_fraction=0.8).model_dump() == PrintRequest().model_dump()

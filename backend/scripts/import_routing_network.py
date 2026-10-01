@@ -23,7 +23,10 @@ die hocx_app bewusst nicht darf (Least-Privilege). Dieses Skript ist ein manuell
 angestossener Betriebs-/Wartungsschritt wie eine Alembic-Migration, kein Teil der
 Request-Laufzeit - dieselbe Vertrauensstufe wie `alembic upgrade head`.
 
-Fuer echte swissTLM3D-Daten: der Export (GeoPackage/Shapefile von shop.swisstopo.admin.ch)
+Für den direkten amtlichen GeoPackage-Import inkl. Download stattdessen:
+  python -m scripts.import_swisstopo_network --download
+
+Für andere GeoJSON-Quellen: der Export (GeoPackage/Shapefile von shop.swisstopo.admin.ch)
 muss vorher in dieses GeoJSON-Schema konvertiert werden (z.B. via ogr2ogr + einem Attribut-
 Mapping von swissTLM3D-Objektklassen auf wanderweg_status/wegtyp/is_walkable) - dieser
 Konvertierungsschritt ist nicht Teil dieses Skripts, da er von der jeweils aktuellen
@@ -146,7 +149,7 @@ def import_network(geojson_path: Path, description: str) -> int:
             {"tol": TOPOLOGY_TOLERANCE_DEGREES},
         )
         # pgr_createTopology legt keinen raeumlichen Index an - ohne ihn wuerde jede
-        # Punkt-Snapping-Abfrage (routing_service.py::_nearest_vertex) das ganze Netz
+        # Punkt-Snapping-Abfrage (emergency_exit_service.py::_nearest_vertex) das ganze Netz
         # sequenziell scannen.
         db.execute(text("CREATE INDEX IF NOT EXISTS idx_routing_edge_vertices_pgr_geom ON routing_edge_vertices_pgr USING GIST (the_geom)"))
         db.execute(

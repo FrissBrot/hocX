@@ -73,6 +73,10 @@ und prüft die erreichbaren Dienste. Nach dem Start sind verfügbar:
 | Abgabebox | <http://localhost:3001> |
 | Abgabebox-API | <http://localhost:8001> |
 
+Für den Wanderplaner (`/hiking-planner`) muss zusätzlich das echte Wegenetz importiert
+werden. Der reproduzierbare swisstopo-Download und die Routing-Grenzen stehen in
+[Wanderplaner: echtes Wegenetz](documentation/hiking-routing.md).
+
 Der gleiche Stack kann ohne Wrapper gestartet werden:
 
 ```bash

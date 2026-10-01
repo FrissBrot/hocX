@@ -246,7 +246,6 @@ class HikingTourPrintService:
         paper: str,
         orientation: str,
         scale: int,
-        overlap_fraction: float,
     ) -> tuple[StoredFile, int]:
         if not tour.route_legs:
             raise ValueError("Route muss zuerst berechnet werden, bevor gedruckt werden kann")
@@ -257,7 +256,7 @@ class HikingTourPrintService:
             raise ValueError("Route ist zu kurz zum Drucken")
 
         points_2d = [RoutePoint2D(distance_m=d, x=(xy := wgs84_to_lv95(lat, lon))[0], y=xy[1]) for d, lat, lon in route_points]
-        sheets = plan_sheets(points_2d, ground_width_m=geometry.ground_width_m, ground_height_m=geometry.ground_height_m, overlap_fraction=overlap_fraction)
+        sheets = plan_sheets(points_2d, ground_width_m=geometry.ground_width_m, ground_height_m=geometry.ground_height_m, scale=scale)
         if not sheets:
             raise ValueError("Keine Route zum Drucken vorhanden")
 

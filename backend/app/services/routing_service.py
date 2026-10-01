@@ -1,20 +1,8 @@
-"""Serverseitiges Wanderrouting (Auftrag Abschnitt 3) auf dem via
-scripts/import_routing_network.py importierten Wegenetz (routing_edge +
-routing_edge_vertices_pgr, siehe Migration 0098). Berechnet fuer eine Tour die Route
-zwischen jedem Paar aufeinanderfolgender Wegpunkte separat (hiking_tour_route_leg) statt
-einer einzigen Gesamtgeometrie - das ist die natuerliche Grundlage fuer die
-Marschzeittabelle (Phase 3) und dafuer, dass ein spaeter eingefuegter Wegpunkt (Phase 4/5)
-nur die beiden angrenzenden Legs neu berechnet statt der ganzen Tour.
+"""Wanderrouting auf dem importierten Wegenetz mit pgRouting.
 
-pgr_dijkstra statt pgr_astar: bei diesem Kantenumfang (kantonale/landesweite Wanderwege,
-keine Millionen Kanten) ist der Performance-Unterschied vernachlaessigbar, pgr_dijkstra ist
-die einfachere, besser dokumentierte Funktion. Falls die Netzgroesse das je aendert, ist
-das ein reiner Austausch der SQL-Funktion in _run_dijkstra(), keine API-Aenderung.
-
-Punkt-Snapping: der naechste Netzknoten (routing_edge_vertices_pgr), nicht die naechste
-Kante mit virtuellem Einfuegepunkt (pgr_withPoints waere praeziser) - bewusst vereinfacht
-fuer die erste Ausbaustufe, siehe Wiki-Seite "Wanderplaner" fuer die Begruendung. Bei einem
-dichten Wegenetz ist der Unterschied zur echten Position typischerweise wenige Meter.
+Wegpunkte werden maximal 150 m auf eine Wegkante projiziert. pgr_withPoints
+berechnet auch Teilkanten, damit Start/Ziel mitten auf einem Weg liegen können.
+Es gibt keinen Luftlinien-Ersatz für fehlende oder unverbundene Wege.
 """
 
 from __future__ import annotations
@@ -25,6 +13,7 @@ from datetime import UTC, datetime
 from geoalchemy2.elements import WKBElement
 from geoalchemy2.shape import from_shape, to_shape
 from shapely.geometry import LineString, Point
+from shapely.ops import substring
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -46,83 +35,87 @@ class _LegResult:
     cost: float
 
 
-def _nearest_vertex(db: Session, *, lon: float, lat: float) -> int | None:
-    row = db.execute(
-        text(
-            "SELECT id FROM routing_edge_vertices_pgr "
-            "ORDER BY the_geom <-> ST_SetSRID(ST_MakePoint(:lon, :lat), 4326) LIMIT 1"
-        ),
-        {"lon": lon, "lat": lat},
-    ).first()
-    return row[0] if row else None
+MAX_SNAP_DISTANCE_M = 150.0
 
 
-def _is_reachable(db: Session, *, edges_sql: str, from_vertex: int, to_vertex: int) -> bool:
-    return bool(
-        db.execute(
-            text(
-                "SELECT EXISTS (SELECT 1 FROM pgr_dijkstra(:edges_sql, :from_v, :to_v, true) "
-                "WHERE edge = -1 AND node = :to_v)"
-            ),
-            {"edges_sql": edges_sql, "from_v": from_vertex, "to_v": to_vertex},
-        ).scalar()
-    )
+@dataclass(frozen=True)
+class _Snap:
+    edge_id: int
+    fraction: float
+    vertex_id: int | None
+    point: tuple[float, float]
 
 
-def _route_leg(db: Session, *, profile: str, from_vertex: int, to_vertex: int) -> _LegResult:
+def _snap_to_edge(db: Session, *, lon: float, lat: float) -> _Snap | None:
+    row = db.execute(text("""
+        WITH point AS (SELECT ST_SetSRID(ST_MakePoint(:lon, :lat), 4326) AS geom),
+        candidates AS (
+            SELECT e.*, ST_LineLocatePoint(e.geom, p.geom) AS fraction,
+                   ST_Distance(e.geom::geography, p.geom::geography) AS distance_m
+            FROM routing_edge e CROSS JOIN point p
+            WHERE e.geom && ST_Expand(p.geom, 0.003)
+              AND e.source IS NOT NULL AND e.target IS NOT NULL
+            ORDER BY distance_m, e.id LIMIT 1
+        )
+        SELECT id, source, target, fraction, distance_m,
+               ST_X(ST_LineInterpolatePoint(geom, fraction)) AS lon,
+               ST_Y(ST_LineInterpolatePoint(geom, fraction)) AS lat
+        FROM candidates WHERE distance_m <= :max_distance
+    """), {"lon": lon, "lat": lat, "max_distance": MAX_SNAP_DISTANCE_M}).first()
+    if row is None:
+        return None
+    vertex = row.source if row.fraction <= 1e-9 else row.target if row.fraction >= 1 - 1e-9 else None
+    return _Snap(row.id, row.fraction, vertex, (row.lon, row.lat))
+
+
+def _route_leg(db: Session, *, profile: str, start: _Snap, end: _Snap) -> _LegResult:
+    if start.point == end.point or (start.vertex_id is not None and start.vertex_id == end.vertex_id):
+        return _LegResult(LineString([start.point, start.point]), 0.0, 0.0, 0.0, 0.0)
     edges_sql = (
         f"SELECT id, source, target, cost_{profile} AS cost, reverse_cost_{profile} AS reverse_cost "
-        "FROM routing_edge"
+        "FROM routing_edge ORDER BY id"
     )
-    if from_vertex == to_vertex:
-        return _LegResult(geom=LineString(), distance_m=0.0, ascent_m=0.0, descent_m=0.0, cost=0.0)
-    if not _is_reachable(db, edges_sql=edges_sql, from_vertex=from_vertex, to_vertex=to_vertex):
-        raise RoutingError("Kein Routing zwischen diesen Punkten möglich")
-
-    rows = db.execute(
-        text(
-            """
-            WITH route AS (
-                SELECT * FROM pgr_dijkstra(:edges_sql, :from_v, :to_v, true)
-            )
-            SELECT
-                route.seq,
-                route.cost AS step_cost,
-                CASE WHEN route.node = e.source THEN e.geom ELSE ST_Reverse(e.geom) END AS oriented_geom,
-                CASE WHEN route.node = e.source THEN e.ascent_m ELSE e.descent_m END AS leg_ascent_m,
-                CASE WHEN route.node = e.source THEN e.descent_m ELSE e.ascent_m END AS leg_descent_m,
-                e.length_m
-            FROM route
-            JOIN routing_edge e ON e.id = route.edge
-            ORDER BY route.seq
-            """
-        ),
-        {"edges_sql": edges_sql, "from_v": from_vertex, "to_v": to_vertex},
-    ).all()
-
+    # Nur intern aus DB-Zahlen aufgebaut; keine Benutzereingaben in dynamischem SQL.
+    points = [(pid, snap) for pid, snap in ((1, start), (2, end)) if snap.vertex_id is None]
+    points_sql = " UNION ALL ".join(
+        f"SELECT {pid}::bigint AS pid, {int(snap.edge_id)}::bigint AS edge_id, "
+        f"{float(snap.fraction)!r}::float8 AS fraction, 'b'::char AS side"
+        for pid, snap in points
+    ) or "SELECT 1::bigint AS pid, 1::bigint AS edge_id, 0.5::float8 AS fraction WHERE false"
+    rows = db.execute(text("""
+        WITH route AS (
+            SELECT *, lead(node) OVER (ORDER BY seq) AS next_node
+            FROM pgr_withPoints(:edges_sql, :points_sql, CAST(:from_v AS bigint),
+                CAST(:to_v AS bigint), directed := true, driving_side := 'b', details := true)
+        )
+        SELECT r.node, r.next_node, r.cost AS step_cost, e.source, e.target,
+               e.geom, e.length_m, e.ascent_m, e.descent_m
+        FROM route r JOIN routing_edge e ON e.id = r.edge ORDER BY r.seq
+    """), {"edges_sql": edges_sql, "points_sql": points_sql,
+           "from_v": start.vertex_id if start.vertex_id is not None else -1,
+           "to_v": end.vertex_id if end.vertex_id is not None else -2}).all()
     if not rows:
-        # from_vertex != to_vertex aber trotzdem keine Kante dazwischen - degenerierter Fall
-        # (z.B. beide Punkte snappen auf denselben Knoten trotz unterschiedlicher Ids durch
-        # Rundung). Als Nullstrecke behandeln statt eines verwirrenden Fehlers.
-        return _LegResult(geom=LineString(), distance_m=0.0, ascent_m=0.0, descent_m=0.0, cost=0.0)
-
+        raise RoutingError("Kein Routing zwischen diesen Punkten möglich: Wegenetz nicht verbunden")
     coords: list[tuple[float, float]] = []
     distance_m = ascent_m = descent_m = cost = 0.0
+    fractions = {-1: start.fraction, -2: end.fraction}
     for row in rows:
-        # Aus rohem text()-SQL kommt die Geometrie als reiner EWKB-Hex-String zurueck (die
-        # Column-Typinfo aus dem ORM-Mapping greift hier nicht) - explizit als WKBElement
-        # verpacken, bevor to_shape() sie in ein Shapely-Objekt uebersetzt.
-        segment = to_shape(WKBElement(row.oriented_geom, srid=4326, extended=True))
-        points = list(segment.coords)
-        if coords and points and coords[-1] == points[0]:
-            points = points[1:]
-        coords.extend(points)
-        distance_m += row.length_m
-        ascent_m += row.leg_ascent_m
-        descent_m += row.leg_descent_m
+        frm = fractions[row.node] if row.node < 0 else 0.0 if row.node == row.source else 1.0
+        to = fractions[row.next_node] if row.next_node < 0 else 0.0 if row.next_node == row.source else 1.0
+        line = to_shape(WKBElement(row.geom, srid=4326, extended=True))
+        segment = substring(line, frm, to, normalized=True)
+        points_on_edge = list(segment.coords)
+        if coords and points_on_edge and coords[-1] == points_on_edge[0]:
+            points_on_edge = points_on_edge[1:]
+        coords.extend(points_on_edge)
+        proportion = abs(to - frm)
+        distance_m += row.length_m * proportion
+        ascent_m += (row.ascent_m if to >= frm else row.descent_m) * proportion
+        descent_m += (row.descent_m if to >= frm else row.ascent_m) * proportion
         cost += row.step_cost
-
-    return _LegResult(geom=LineString(coords), distance_m=distance_m, ascent_m=ascent_m, descent_m=descent_m, cost=cost)
+    if len(coords) < 2:
+        raise RoutingError("Keine gültige Weggeometrie zwischen diesen Punkten gefunden")
+    return _LegResult(LineString(coords), distance_m, ascent_m, descent_m, cost)
 
 
 class RoutingService:
@@ -136,21 +129,21 @@ class RoutingService:
         if len(waypoints) < 2:
             raise RoutingError("Tour braucht mindestens Start und Ziel für eine Route")
 
-        vertex_ids: list[int] = []
+        snaps: list[_Snap] = []
         for waypoint in waypoints:
             point: Point = to_shape(waypoint.point)
-            vertex_id = _nearest_vertex(db, lon=point.x, lat=point.y)
-            if vertex_id is None:
+            snap = _snap_to_edge(db, lon=point.x, lat=point.y)
+            if snap is None:
                 raise RoutingError(
-                    f"Kein Wegenetz in der Nähe von Wegpunkt {waypoint.sequence} "
+                    f"Kein begehbarer Weg innerhalb von {MAX_SNAP_DISTANCE_M:g} m bei Wegpunkt {waypoint.sequence} "
                     f"({waypoint.label or waypoint.kind}) gefunden"
                 )
-            vertex_ids.append(vertex_id)
+            snaps.append(snap)
 
         legs: list[_LegResult] = []
         for index in range(len(waypoints) - 1):
             try:
-                legs.append(_route_leg(db, profile=profile, from_vertex=vertex_ids[index], to_vertex=vertex_ids[index + 1]))
+                legs.append(_route_leg(db, profile=profile, start=snaps[index], end=snaps[index + 1]))
             except RoutingError as exc:
                 frm, to = waypoints[index], waypoints[index + 1]
                 raise RoutingError(
@@ -166,6 +159,7 @@ class RoutingService:
         db.expire(tour, ["route_legs"])
         db.flush()
 
+        network_version_id = db.scalar(text("SELECT max(id) FROM routing_network_meta"))
         total_distance = total_ascent = total_descent = total_cost = 0.0
         for index, leg in enumerate(legs):
             db.add(
@@ -174,15 +168,13 @@ class RoutingService:
                     from_waypoint_id=waypoints[index].id,
                     to_waypoint_id=waypoints[index + 1].id,
                     sequence=waypoints[index].sequence,
-                    geom=from_shape(leg.geom, srid=4326) if not leg.geom.is_empty else from_shape(
-                        LineString([to_shape(waypoints[index].point).coords[0], to_shape(waypoints[index + 1].point).coords[0]]),
-                        srid=4326,
-                    ),
+                    geom=from_shape(leg.geom, srid=4326),
                     distance_m=leg.distance_m,
                     ascent_m=leg.ascent_m,
                     descent_m=leg.descent_m,
                     cost=leg.cost,
                     routing_profile=profile,
+                    network_version_id=network_version_id,
                 )
             )
             total_distance += leg.distance_m
@@ -190,6 +182,11 @@ class RoutingService:
             total_descent += leg.descent_m
             total_cost += leg.cost
 
+        # Das alte Höhenprofil gehört zur vorherigen Geometrie.
+        tour.elevation_profile_json = None
+        tour.elevation_profile_fetched_at = None
+        for waypoint in waypoints:
+            waypoint.elevation_m = None
         tour.routing_profile = profile
         tour.route_distance_m = total_distance
         tour.route_ascent_m = total_ascent

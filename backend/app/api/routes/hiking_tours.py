@@ -225,7 +225,7 @@ async def print_hiking_tour(
     tour = _get_tour_or_404(db, tour_id, user)
     try:
         stored_file, sheet_count = await print_service.export_pdf(
-            db, tour, paper=payload.paper, orientation=payload.orientation, scale=payload.scale, overlap_fraction=payload.overlap_fraction
+            db, tour, paper=payload.paper, orientation=payload.orientation, scale=payload.scale
         )
     except MapPrintServiceError as exc:
         db.rollback()
@@ -301,7 +301,7 @@ def update_waypoint_verification(
     waypoint = service.repository.get_waypoint_by_public_id(db, tour, waypoint_id)
     if waypoint is None:
         raise HTTPException(status_code=404, detail="Waypoint not found")
-    if waypoint.verification_status is None:
+    if waypoint.verification_status is None and not waypoint.auto_generated:
         raise HTTPException(status_code=422, detail="Dieser Wegpunkt hat keinen Verifizierungsstatus")
     try:
         return service.repository.update_waypoint(db, waypoint, {"verification_status": payload.verification_status})
