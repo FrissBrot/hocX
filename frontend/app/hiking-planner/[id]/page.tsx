@@ -13,7 +13,7 @@ export default async function WanderplanerTourPage({ params }: { params: Promise
 
   const tour = await backendFetchWithSession<HikingTour>(`/api/hiking-tours/${id}`);
   if (!tour) {
-    redirect("/wanderplaner");
+    redirect("/hiking-planner");
   }
   const canWrite = ["admin", "writer"].includes(session.current_role ?? "");
 

@@ -171,7 +171,7 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
     try {
       await browserApiFetch(`/api/hiking-tours/${tour.id}`, { method: "DELETE" });
       showToast("Wanderung gelöscht", "success");
-      router.push("/wanderplaner");
+      router.push("/hiking-planner");
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : "Fehler beim Löschen", "error");
     }

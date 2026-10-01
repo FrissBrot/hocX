@@ -64,6 +64,9 @@ const nextConfig = {
   // outside dev (only read when `next dev` is running).
   allowedDevOrigins: ["127.0.0.1"],
   experimental: {
+    // Kartendruck wartet auf WMTS-Kacheln und PDF-Erstellung; passend zum
+    // 180s-Client-Timeout darf der API-Proxy nicht nach 30s abbrechen.
+    proxyTimeout: 180_000,
     // 10 GiB Fotos + 1 MiB Multipart-Overhead, wie der Release-Router.
     proxyClientMaxBodySize: 10738466816,
     staleTimes: {
@@ -77,6 +80,9 @@ const nextConfig = {
         headers: securityHeaders,
       },
     ];
+  },
+  async redirects() {
+    return [{ source: "/wanderplaner/:path*", destination: "/hiking-planner/:path*", permanent: true }];
   },
   async rewrites() {
     if (!apiProxyTarget) {

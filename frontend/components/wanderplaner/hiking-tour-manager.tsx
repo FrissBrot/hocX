@@ -90,7 +90,7 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
       setShowCreate(false);
       resetCreateForm();
       showToast("Wanderung erstellt", "success");
-      router.push(`/wanderplaner/${created.id}`);
+      router.push(`/hiking-planner/${created.id}`);
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : "Fehler beim Erstellen", "error");
     } finally {
@@ -114,7 +114,7 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
       setGpxTitle("");
       setGpxFile(null);
       showToast("GPX-Datei importiert", "success");
-      router.push(`/wanderplaner/${created.id}`);
+      router.push(`/hiking-planner/${created.id}`);
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : "GPX-Import fehlgeschlagen", "error");
     } finally {
@@ -150,7 +150,7 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
         <DataToolbar title="Wanderungen" />
         <DataTable columns={["Titel", "Datum", "Status"]} emptyMessage="Noch keine Wanderungen geplant.">
           {tours.map((tour) => (
-            <tr key={tour.id} className="table-row-clickable" onClick={() => router.push(`/wanderplaner/${tour.id}`)}>
+            <tr key={tour.id} className="table-row-clickable" onClick={() => router.push(`/hiking-planner/${tour.id}`)}>
               <td>{tour.title}</td>
               <td>{tour.tour_date ? formatDate(tour.tour_date) : <span className="muted">–</span>}</td>
               <td>

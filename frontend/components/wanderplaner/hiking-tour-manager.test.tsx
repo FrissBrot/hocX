@@ -96,7 +96,7 @@ describe("HikingTourManager", () => {
     fireEvent.click(screen.getByRole("button", { name: "Karte: Punkt B" })); // setzt Ziel
     fireEvent.click(screen.getByRole("button", { name: "Wanderung erstellen" }));
 
-    await waitFor(() => expect(routerPushMock).toHaveBeenCalledWith("/wanderplaner/tour-2"));
+    await waitFor(() => expect(routerPushMock).toHaveBeenCalledWith("/hiking-planner/tour-2"));
     const [url, init] = browserApiFetchMock.mock.calls[0];
     expect(url).toBe("/api/hiking-tours");
     const body = JSON.parse(init.body);

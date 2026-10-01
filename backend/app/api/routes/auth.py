@@ -1,3 +1,5 @@
+from urllib.parse import urlsplit
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
@@ -36,10 +38,28 @@ def _expected_origin(request: Request) -> str:
     # (local dev only) still falls back to the request's own host, same as before.
     if settings.traefik_domain:
         return f"https://{settings.traefik_domain}"
+    # Next.js rewrites replace Host with the internal backend hostname. Only local
+    # development may use a loopback browser Origin; production stays domain-pinned.
+    if not settings.is_production:
+        origin = request.headers.get("origin", "")
+        parsed = urlsplit(origin)
+        if (
+            parsed.scheme in {"http", "https"}
+            and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+            and not parsed.username and not parsed.password
+            and not parsed.path and not parsed.query and not parsed.fragment
+        ):
+            return origin
     host = request.headers.get("host") or request.url.netloc
     if host.startswith("localhost") or host.startswith("127.0.0.1"):
         return f"http://{host}"
     return f"https://{host}"
+
+
+def _passkey_hostname(request: Request) -> str | None:
+    if settings.traefik_domain:
+        return request.url.hostname
+    return urlsplit(_expected_origin(request)).hostname
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -67,7 +87,7 @@ def start_login_passkey_setup(payload: MfaTicketRequest, request: Request, db: S
     return service.start_login_passkey_setup(
         db,
         payload,
-        request_host=request.url.hostname,
+        request_host=_passkey_hostname(request),
         request_origin=_expected_origin(request),
     )
 
@@ -86,7 +106,7 @@ def start_login_passkey_assertion(payload: MfaTicketRequest, request: Request, d
     return service.start_login_passkey_assertion(
         db,
         payload,
-        request_host=request.url.hostname,
+        request_host=_passkey_hostname(request),
         request_origin=_expected_origin(request),
     )
 

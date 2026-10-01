@@ -68,6 +68,8 @@ export function HikingTourMap({ waypoints, routeCoordinates, onMapClick, onMarke
     map.on("click", (event) => onMapClickRef.current?.(event.lngLat.lat, event.lngLat.lng));
     mapRef.current = map;
     return () => {
+      highlightMarkerRef.current?.remove();
+      highlightMarkerRef.current = null;
       map.remove();
       mapRef.current = null;
     };
@@ -122,7 +124,9 @@ export function HikingTourMap({ waypoints, routeCoordinates, onMapClick, onMarke
     if (!highlightMarkerRef.current) {
       const element = document.createElement("div");
       element.className = "wanderplaner-map-marker-highlight";
-      highlightMarkerRef.current = new maplibregl.Marker({ element }).addTo(map);
+      highlightMarkerRef.current = new maplibregl.Marker({ element })
+        .setLngLat([highlightPoint.lon, highlightPoint.lat])
+        .addTo(map);
     }
     highlightMarkerRef.current.setLngLat([highlightPoint.lon, highlightPoint.lat]);
   }, [highlightPoint]);

@@ -56,7 +56,7 @@ test.describe("Wanderplaner: Hoehenprofil, Analyse, Rekognoszierung, Druck, GPX"
 
   test("Hoehenprofil abrufen und automatisch analysieren", async ({ page }) => {
     const tourId = await createRoutedTour("E2E Lifecycle Hoehenprofil");
-    await page.goto(`/wanderplaner/${tourId}`);
+    await page.goto(`/hiking-planner/${tourId}`);
     await expect(page.getByRole("heading", { name: "E2E Lifecycle Hoehenprofil" })).toBeVisible({ timeout: 15_000 });
 
     await page.getByRole("button", { name: "Höhenprofil abrufen" }).click();
@@ -69,7 +69,7 @@ test.describe("Wanderplaner: Hoehenprofil, Analyse, Rekognoszierung, Druck, GPX"
 
   test("Rekognoszierung und Freigabe", async ({ page }) => {
     const tourId = await createRoutedTour("E2E Lifecycle Rekognoszierung");
-    await page.goto(`/wanderplaner/${tourId}`);
+    await page.goto(`/hiking-planner/${tourId}`);
     await expect(page.getByRole("heading", { name: "E2E Lifecycle Rekognoszierung" })).toBeVisible({ timeout: 15_000 });
 
     await page.getByRole("button", { name: "Rekognoszierung" }).click();
@@ -87,7 +87,7 @@ test.describe("Wanderplaner: Hoehenprofil, Analyse, Rekognoszierung, Druck, GPX"
 
   test("Druck-PDF erstellen", async ({ page }) => {
     const tourId = await createRoutedTour("E2E Lifecycle Druck");
-    await page.goto(`/wanderplaner/${tourId}`);
+    await page.goto(`/hiking-planner/${tourId}`);
     await expect(page.getByRole("heading", { name: "E2E Lifecycle Druck" })).toBeVisible({ timeout: 15_000 });
 
     await page.getByRole("button", { name: "Drucken" }).click();
@@ -98,7 +98,7 @@ test.describe("Wanderplaner: Hoehenprofil, Analyse, Rekognoszierung, Druck, GPX"
 
   test("GPX exportieren", async ({ page }) => {
     const tourId = await createRoutedTour("E2E Lifecycle GPX Export");
-    await page.goto(`/wanderplaner/${tourId}`);
+    await page.goto(`/hiking-planner/${tourId}`);
     await expect(page.getByRole("heading", { name: "E2E Lifecycle GPX Export" })).toBeVisible({ timeout: 15_000 });
 
     const downloadPromise = page.waitForEvent("download");
@@ -108,15 +108,15 @@ test.describe("Wanderplaner: Hoehenprofil, Analyse, Rekognoszierung, Druck, GPX"
   });
 
   test("GPX importieren legt eine neue Tour an", async ({ page }) => {
-    await page.goto("/wanderplaner");
-    await expect(page.locator(".nav-link[href=\"/wanderplaner\"]")).toBeVisible({ timeout: 15_000 });
+    await page.goto("/hiking-planner");
+    await expect(page.locator(".nav-link[href=\"/hiking-planner\"]")).toBeVisible({ timeout: 15_000 });
 
     await page.getByRole("button", { name: "GPX importieren" }).click();
     await page.getByLabel("Titel").fill("E2E Lifecycle GPX Import");
     await page.setInputFiles('input[type="file"]', path.join(__dirname, "fixtures", "rigi-kulm.gpx"));
     await page.getByRole("button", { name: "Importieren", exact: true }).click();
 
-    await expect(page).toHaveURL(/\/wanderplaner\/.+/, { timeout: 15_000 });
+    await expect(page).toHaveURL(/\/hiking-planner\/.+/, { timeout: 15_000 });
     await expect(page.getByRole("heading", { name: "E2E Lifecycle GPX Import" })).toBeVisible();
     // Die GPX-Datei benennt Start/Ziel explizit ("Start"/"Ziel") - der Import uebernimmt das
     // als Wegpunkt-Label (siehe gpx_service.py), deshalb erscheint der Text hier doppelt

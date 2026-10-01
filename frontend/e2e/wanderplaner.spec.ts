@@ -28,8 +28,8 @@ test("Tour per Karte erstellen, Route berechnen, Wegpunkt hinzufuegen/entfernen 
     });
     expect(enable.ok(), await enable.text()).toBeTruthy();
 
-    await page.goto("/wanderplaner");
-    await expect(page.locator(".nav-link[href=\"/wanderplaner\"]")).toBeVisible();
+    await page.goto("/hiking-planner");
+    await expect(page.locator(".nav-link[href=\"/hiking-planner\"]")).toBeVisible();
 
     await page.getByRole("button", { name: "Neue Wanderung" }).click();
     await page.getByLabel("Titel").fill("E2E Rigi Kulm ab Goldau");
@@ -52,11 +52,11 @@ test("Tour per Karte erstellen, Route berechnen, Wegpunkt hinzufuegen/entfernen 
     await expect(page.getByRole("button", { name: /Ziel setzen/ })).toContainText("✓");
     await page.getByRole("button", { name: "Wanderung erstellen" }).click();
 
-    // Grosszuegiger Timeout: die dynamische Detailroute (/wanderplaner/[id]) kompiliert im
+    // Grosszuegiger Timeout: die dynamische Detailroute (/hiking-planner/[id]) kompiliert im
     // Next.js-Dev-Server (siehe docker-compose.dev.yml, auch der geteilte E2E-Stack laeuft im
     // Dev-Modus) bei ihrem allerersten Besuch on-demand nach - laenger als das Standard-
     // Timeout, wenn diese Route seit einem Server-Neustart noch nie kompiliert wurde.
-    await expect(page).toHaveURL(/\/wanderplaner\/.+/, { timeout: 15_000 });
+    await expect(page).toHaveURL(/\/hiking-planner\/.+/, { timeout: 15_000 });
     await expect(page.getByRole("heading", { name: "E2E Rigi Kulm ab Goldau" })).toBeVisible();
     await expect(page.getByText("Start", { exact: true })).toBeVisible();
     await expect(page.getByText("Ziel", { exact: true })).toBeVisible();
@@ -89,7 +89,7 @@ test("Tour per Karte erstellen, Route berechnen, Wegpunkt hinzufuegen/entfernen 
 
     await page.getByRole("button", { name: "Löschen" }).first().click();
     await page.getByRole("button", { name: "Löschen" }).last().click();
-    await expect(page).toHaveURL("/wanderplaner");
+    await expect(page).toHaveURL("/hiking-planner");
     await expect(page.getByText("E2E Rigi Kulm ab Goldau (bearbeitet)")).toHaveCount(0);
   } finally {
     if (tenantId) {

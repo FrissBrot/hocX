@@ -44,7 +44,7 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
         { href: "/todos", label: "Todos", icon: "todos" },
         ...(isWriter && hasAbgabebox ? [{ href: "/submission-assignments", label: "Abgaben", icon: "submissions" as const }] : []),
         ...(hasFinance ? [{ href: "/finances", label: "Finanzen", icon: "finances" as const, match: ["/fines"] }] : []),
-        ...(hasWanderplaner ? [{ href: "/wanderplaner", label: "Wanderplaner", icon: "wanderplaner" as const }] : []),
+        ...(hasWanderplaner ? [{ href: "/hiking-planner", label: "Wanderplaner", icon: "wanderplaner" as const }] : []),
       ],
     },
   ];
