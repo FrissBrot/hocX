@@ -70,3 +70,39 @@ docker compose -p hocx-tests-wanderplaner -f docker-compose.tests.yml --profile 
 
 Die Tests prüfen gekrümmte Teilkanten in beiden Richtungen, Profilunterschiede,
 Netzlücken, entfernte Punkte, Rundtouren, Höhenprofil-Invalidierung und GeoPackage-Mapping.
+
+## Automatische Wegpunkte aus lokalen Umgebungsdaten
+
+Nach der Migration `0102_local_landmarks` einmalig im Backend-Container ausführen:
+
+```sh
+python -m scripts.import_osm_landmarks --download
+```
+
+Alternativ `--pbf /data/switzerland.osm.pbf`. Der öffentliche
+[Schweizer Landesextrakt von Geofabrik](https://download.geofabrik.de/europe/switzerland.html)
+wird heruntergeladen und mit `osmium` in die lokale PostGIS-Datenbank importiert.
+Quelle: © [OpenStreetMap-Mitwirkende](https://www.openstreetmap.org/copyright), ODbL.
+Der Download enthält keine Anfrage nach einer konkreten Wanderroute. Rohdateien werden
+nach dem Import entfernt. Für Aktualisierungen denselben Befehl erneut ausführen;
+Fehler lassen den bisherigen Datensatz unverändert. Quelle, SHA256, Objektanzahl und
+Importzeit stehen in `hiking_landmark_import`. Import und Index benötigen zusätzlich
+zum rund 500 MB grossen Download freien Datenbank- und temporären Speicherplatz.
+
+Die Analyse selbst verwendet ausschliesslich lokale Daten: OSM-Verzweigungen
+(mindestens drei verbundene Wegäste), tatsächliche Bach-/Strassenquerungen und Hütten
+bzw. Alpen unmittelbar an der Route. Parallel verlaufende Strassen und reine Kurven
+werden nicht als Querungen gewertet. Das vorhandene Höhenprofil bestimmt mit dem
+Gruppentempo die Gehzeit. Ziel sind etwa 15 Minuten zwischen markanten Punkten;
+nahe Kandidaten werden zusammengefasst (mindestens 7 Gehminuten und 100 m Abstand),
+bevorzugt werden Querungen und Hütten. Es gibt keine künstlichen Füllpunkte in
+Abschnitten ohne geeignete Orte. Namen stammen aus OSM, bei fehlendem Namen aus der
+nahen Umgebung. Wiederholte/unbenannte Orte erhalten einen eindeutigen Kilometerzusatz.
+
+Die vorhandene Route wird lokal in Teilabschnitte aufgeteilt, statt sie wegen neuer
+Orientierungspunkte neu zu berechnen. Das gespeicherte Höhenprofil wird weiterverwendet;
+Analyse und erneute Analyse rufen keine externen Dienste auf. Fehlen lokale Daten,
+erscheint eine Fehlermeldung; es gibt **keinen Online-Fallback**. Der separate,
+bestehende Höhenprofil-Abruf verwendet weiterhin swisstopo und ist kein Bestandteil
+der automatischen Analyse. Vor jedem solchen Abruf fragt die Oberfläche nach Zustimmung. Geodaten sind nicht vollständig: die Vorschläge behalten
+den Status „Automatisch erkannt“ und müssen geprüft werden.

@@ -26,6 +26,21 @@ C = {"lat": 47.00, "lon": 8.52}
 
 
 @pytest.fixture(autouse=True)
+def _local_landmarks(monkeypatch):
+    # Reproduzierbare lokale OSM-Topologie: ein echter Dreiwege-Knoten auf der Route.
+    from shapely.geometry import LineString
+    def fetch(self, db, coordinates):
+        line = LineString(coordinates)
+        start, mid, end = [line.interpolate(f, normalized=True) for f in (0, 0.5, 1)]
+        geometry = [{'lat':p.y, 'lon':p.x} for p in (start, mid, end)]
+        return [
+            {'tags':{'highway':'path', 'name':'Alpweg'}, 'nodes':[1,2,3], 'geometry':geometry},
+            {'tags':{'highway':'path'}, 'nodes':[2,4], 'geometry':[geometry[1], {'lat':mid.y+0.001,'lon':mid.x}]},
+        ]
+    monkeypatch.setattr('app.services.route_landmark_service.RouteLandmarkService.fetch', fetch)
+
+
+@pytest.fixture(autouse=True)
 def _isolated_elevation_cache():
     # Alle Touren hier nutzen dieselben A/C-Koordinaten - ohne das hier wuerde der
     # Hoehenprofil-Cache (Redis, Key = Hash der Routengeometrie, siehe elevation_service.py)
@@ -81,7 +96,7 @@ def _prepare_tour(db, tenant_id: int, *, climb: bool):
     return tour, body
 
 
-def test_analyze_inserts_navigation_waypoints_for_a_detected_climb_and_resplits_the_route(db, routing_network):
+def test_analyze_inserts_named_junction_waypoints_and_resplits_the_route(db, routing_network):
     tenant = make_tenant(db, "Analyse Verein 1")
     tour, body = _prepare_tour(db, tenant.id, climb=True)
     legs_before = len(tour.route_legs)
@@ -89,9 +104,9 @@ def test_analyze_inserts_navigation_waypoints_for_a_detected_climb_and_resplits_
     with patch("app.services.elevation_service.urllib.request.urlopen", side_effect=lambda *a, **kw: _mock_response(body)):
         result = HikingTourAnalysisService().analyze(db, tour)
 
-    navigation_waypoints = [wp for wp in result.waypoints if wp.kind == "NAVIGATION" and wp.auto_generated]
+    navigation_waypoints = [wp for wp in result.waypoints if wp.kind == "DECISION" and wp.auto_generated]
     assert len(navigation_waypoints) >= 1
-    assert any("Aufstieg" in (wp.description or "") for wp in navigation_waypoints)
+    assert any("Alpweg" in wp.label for wp in navigation_waypoints)
     assert len(result.route_legs) > legs_before
     assert result.status == "analyzed"
 
@@ -166,3 +181,16 @@ def test_reanalysis_keeps_end_last_and_does_not_double_back(db, routing_network)
             assert chain[0].kind == 'START'
             assert chain[-1].kind == 'END'
             assert result.route_distance_m == pytest.approx(base_distance, rel=0.01)
+
+
+def test_analysis_keeps_route_and_profile_and_never_calls_external_services(db, routing_network):
+    tenant = make_tenant(db, "Lokale Analyse")
+    tour, _ = _prepare_tour(db, tenant.id, climb=True)
+    original_distance = tour.route_distance_m
+    original_profile = list(tour.elevation_profile_json)
+    with patch('urllib.request.urlopen', side_effect=AssertionError('Analyse muss lokal bleiben')):
+        result = HikingTourAnalysisService().analyze(db, tour)
+    assert result.elevation_profile_json == original_profile
+    assert sum(leg.distance_m for leg in result.route_legs) == pytest.approx(original_distance)
+    assert sum(leg.ascent_m for leg in result.route_legs) == pytest.approx(result.route_ascent_m)
+    assert len({wp.label for wp in result.waypoints if wp.auto_generated}) == len([wp for wp in result.waypoints if wp.auto_generated])

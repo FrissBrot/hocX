@@ -23,3 +23,5 @@ GeoAlchemy2==0.16.0
 shapely==2.0.6
 defusedxml==0.7.1
 
+
+osmium==4.3.0

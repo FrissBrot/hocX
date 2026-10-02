@@ -78,6 +78,7 @@ export function HikingTourMarchTable({ table, waypoints, canWrite = false, onUpd
           const entry = candidate?.kind === waypoint.kind ? candidate : undefined;
           const elevation = entry?.elevation_m ?? waypoint.elevation_m;
           const metrics = waypoint.decision_metrics_json;
+          const verificationStatus = waypoint.verification_status ?? (waypoint.auto_generated ? "AUTO_DETECTED" : null);
           return (
             <tr key={waypoint.id}>
               <td>{waypoint.sequence}</td>
@@ -114,21 +115,12 @@ export function HikingTourMarchTable({ table, waypoints, canWrite = false, onUpd
                   {metrics.nearest_exit_label && metrics.time_to_exit_minutes !== null && <> · Nächster Ausstieg: {formatMinutes(metrics.time_to_exit_minutes)}</>}
                 </div>}
               </td>
-              <td>{waypoint.verification_status ? canWrite && onVerificationChange ? (
-                <PillMenu value={waypoint.verification_status} options={VERIFICATION_OPTIONS}
+              <td>{verificationStatus ? canWrite && onVerificationChange ? (
+                <PillMenu value={verificationStatus} options={VERIFICATION_OPTIONS}
                   onChange={(status) => onVerificationChange(waypoint, status)} />
-              ) : <Badge variant={VERIFICATION_VARIANT[waypoint.verification_status]}>{VERIFICATION_LABEL[waypoint.verification_status]}</Badge> : dash}</td>
+              ) : <Badge variant={VERIFICATION_VARIANT[verificationStatus]}>{VERIFICATION_LABEL[verificationStatus]}</Badge> : dash}</td>
               <td>
                 <div className="wanderplaner-row-actions">
-                {canWrite && onVerificationChange && waypoint.auto_generated && <>
-                  <button type="button" className="button-secondary" disabled={waypoint.verification_status === "VERIFIED"}
-                    onClick={() => onVerificationChange(waypoint, "VERIFIED")}>Bestätigen</button>
-                  <button type="button" className="button-secondary" disabled={waypoint.verification_status === "NEEDS_VERIFICATION"}
-                    onClick={() => onVerificationChange(waypoint, "NEEDS_VERIFICATION")}>Fürs Reko markieren</button>
-                  <button type="button" className="button-secondary" disabled={waypoint.verification_status === "REJECTED"}
-                    onClick={() => onVerificationChange(waypoint, "REJECTED")}>Ablehnen</button>
-                </>}
-
                 {canWrite && onDeleteWaypoint && (waypoint.kind === "USER_DEFINED" || waypoint.auto_generated) && (
                   <button type="button" className="button-secondary button-ghost" onClick={() => onDeleteWaypoint(waypoint)}>Entfernen</button>
                 )}

@@ -254,6 +254,10 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
   }, [tour.id, tour.elevation_profile_fetched_at]);
 
   async function handleFetchElevationProfile() {
+    if (!(await confirm({
+      message: "Für das Höhenprofil wird der Verlauf dieser Wanderroute an swisstopo (api3.geo.admin.ch) übertragen. Konto- und Teilnehmerdaten werden nicht mitgesendet. Möchtest du diesen Abruf erlauben?",
+      confirmLabel: "Abruf erlauben",
+    }))) return;
     setFetchingElevation(true);
     try {
       const updated = await browserApiFetch<HikingTour>(`/api/hiking-tours/${tour.id}/elevation-profile`, { method: "POST" });
@@ -454,7 +458,7 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
         <div className="section-card">
           <DataToolbar
             title="Höhenprofil"
-            description="Aus swisstopo-Höhendaten (profile.json). Beim Überfahren markiert der Punkt die Stelle auf der Karte."
+            description="Beim Überfahren markiert das Höhenprofil die Stelle auf der Karte. Die automatische Analyse ergänzt markante Verzweigungen, Querungen und Hütten – ungefähr alle 15 Gehminuten."
             actions={
               canWrite ? (
                 <div className="page-header-actions">

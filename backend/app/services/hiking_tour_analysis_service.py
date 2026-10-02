@@ -1,47 +1,30 @@
-"""Automatische Tour-Analyse (Auftrag Abschnitt 7-11, Phase 4): erkennt zusaetzliche
-Wegpunkte (Richtungsaenderungen, Beginn/Ende langer Aufstiege), schlaegt Pausen vor,
-platziert Entscheidungspunkte mit Kennzahlen (inkl. naechstem Notausstieg) und sucht potenzielle
-Fahrzeug-Ausstiege. Reine Orchestrierung: die eigentlichen Algorithmen leben DB-frei in
-app/core/waypoint_detection.py, break_planning.py, decision_points.py - dieser Service
-uebersetzt ihre Ergebnisse in HikingTourWaypoint-Zeilen und ruft RoutingService/
-ElevationProfileService fuer die dadurch noetige Neuberechnung.
+"""Lokale Touranalyse: markante OSM-Orte statt geometrischer Kurven.
 
-Ablauf (ein Aufruf von analyze()):
-1. Aus dem bereits abgerufenen Hoehenprofil (Phase 3) Richtungsaenderungen und
-   Aufstiegsabschnitte erkennen (NAVIGATION-Wegpunkte) sowie Entscheidungspunkte platzieren
-   (DECISION-Wegpunkte) - beides bezogen auf die noch unveraenderte Route.
-2. Alle neuen Punkte einfuegen (Sequence neu durchnummeriert), Route NEU berechnen (das
-   spaltet jedes betroffene Leg an den neuen Punkten auf) und das Hoehenprofil erneut abrufen
-   (identische Routengeometrie -> Redis-Cache-Treffer, kein echter Netzwerkaufruf).
-3. Mit der jetzt aktuellen Marschzeittabelle: Pausenvorschlaege (auf bestehende/neue Zeilen
-   angewendet) und je Entscheidungspunkt eine Ausstiegssuche (EMERGENCY_EXIT-Wegpunkte,
-   ABSEITS der Wegpunktkette - siehe routing_service.py/march_time_service.py fuer den
-   Filter, der sie von der linearen Route ausschliesst - ein Abstecher zu einer Strasse ist
-   kein Teil der geplanten Wanderung selbst).
-
-Ein erneuter Aufruf ist idempotent: alle zuvor automatisch erzeugten Punkte werden zuerst
-entfernt und neu berechnet, nie dupliziert."""
+Verzweigungen, Querungen und Hütten werden anhand der Marschzeit ausgedünnt.
+Die Umgebungsabfrage bleibt vollständig in der lokalen Datenbank.
+"""
 
 from __future__ import annotations
 
+from dataclasses import replace
+from datetime import UTC, datetime
+
 from geoalchemy2.shape import from_shape, to_shape
-from shapely.geometry import Point
+from shapely.geometry import LineString, Point
+from shapely.ops import substring
 from sqlalchemy.orm import Session
 
 from app.core.break_planning import MarchTableRow, suggest_breaks
-from app.core.decision_points import DecisionRow, ExitCandidate, compute_decision_metrics, find_decision_candidates
+from app.core.decision_points import DecisionRow, ExitCandidate, compute_decision_metrics
 from app.core.march_time import resolve_speed_factor_kmh
-from app.core.waypoint_detection import RoutePoint, detect_climb_segments, detect_direction_changes
-from app.models.entities import HikingTour, HikingTourWaypoint
-from app.services.elevation_service import ElevationProfileService
+from app.core.waypoint_detection import RoutePoint, detect_climb_segments
+from app.core.route_landmarks import find_landmarks, select_landmarks
+from app.core.swiss_coords import wgs84_to_lv95
+from app.services.route_landmark_service import RouteLandmarkService
+from app.models.entities import HikingTour, HikingTourWaypoint, HikingTourRouteLeg
+from app.services.elevation_service import elevation_at_distance
 from app.services.emergency_exit_service import EmergencyExitService
 from app.services.march_time_service import MarchTimeService
-from app.services.routing_service import RoutingService
-
-# Neue Punkte naeher als das an einem bereits vorhandenen Wegpunkt werden verworfen (Auftrag:
-# "Nicht jeder kleine Richtungswechsel darf einen Wegpunkt erzeugen" - gilt sinngemaess auch
-# fuers Vermeiden von Wegpunkt-Duplikaten dicht nebeneinander).
-MIN_GAP_TO_EXISTING_M = 150.0
 
 # Damit reine Sequence-Neunummerierungen nie mit einer noch gueltigen alten Sequence
 # kollidieren (UNIQUE(hiking_tour_id, sequence)) - hoch genug fuer jede realistische Tour.
@@ -71,13 +54,11 @@ class HikingTourAnalysisService:
     def __init__(
         self,
         *,
-        routing_service: RoutingService | None = None,
-        elevation_service: ElevationProfileService | None = None,
         march_time_service: MarchTimeService | None = None,
         emergency_exit_service: EmergencyExitService | None = None,
+        landmark_service: RouteLandmarkService | None = None,
     ) -> None:
-        self.routing_service = routing_service or RoutingService()
-        self.elevation_service = elevation_service or ElevationProfileService()
+        self.landmark_service = landmark_service or RouteLandmarkService()
         self.march_time_service = march_time_service or MarchTimeService()
         self.emergency_exit_service = emergency_exit_service or EmergencyExitService()
 
@@ -87,98 +68,40 @@ class HikingTourAnalysisService:
         if not tour.elevation_profile_json:
             raise ValueError("Höhenprofil muss zuerst abgerufen werden, bevor eine automatische Analyse möglich ist")
 
-        had_auto_waypoints = any(wp.auto_generated for wp in tour.waypoints)
+        coordinates = [coordinate[:2] for leg in tour.route_legs for coordinate in to_shape(leg.geom).coords]
+        # Erst Datenverfügbarkeit prüfen, bevor vorhandene automatische Punkte entfernt werden.
+        elements = self.landmark_service.fetch(db, coordinates)
+
+        original_chain = [wp for wp in tour.waypoints if wp.kind != "EMERGENCY_EXIT"]
+        original_legs = list(tour.route_legs)
+        original_distances = _cumulative_distances(original_chain, original_legs)
+        # Geometrien und Kennzahlen vor dem Entfernen der alten Automatik sichern.
+        snapshots = [(to_shape(leg.geom), leg.distance_m, leg.ascent_m, leg.descent_m,
+                      leg.cost, leg.network_version_id) for leg in original_legs]
         self._remove_previous_auto_waypoints(db, tour)
-        if had_auto_waypoints:
-            # Entfernte automatische Punkte hinterlassen sonst alte Teilstrecken:
-            # deren Distanzen passen nicht zur verbleibenden Wegpunktkette und
-            # können neue Analysepunkte sogar hinter das Ziel einsortieren.
-            db.expire(tour, ["route_legs"])
-            tour = self.routing_service.compute_route(db, tour, profile=tour.routing_profile or "wanderwege_bevorzugen")
-            tour = self.elevation_service.fetch_and_store(db, tour)
 
         elevation_points = [
             RoutePoint(distance_m=p["distance_m"], lat=p["lat"], lon=p["lon"], elevation_m=p["elevation_m"])
             for p in tour.elevation_profile_json
         ]
         chain_waypoints = [wp for wp in tour.waypoints if wp.kind != "EMERGENCY_EXIT"]
-        legs = list(tour.route_legs)
-        existing_distances = set(_cumulative_distances(chain_waypoints, legs).values())
+        distances = {wp.id: original_distances[wp.id] for wp in chain_waypoints}
+        existing_distances = set(distances.values())
 
-        direction_changes = detect_direction_changes(elevation_points)
-        climb_segments = detect_climb_segments(elevation_points)
-        decision_candidates = find_decision_candidates(climb_segments=climb_segments, elevation_points=elevation_points)
+        speed = resolve_speed_factor_kmh(group_type=tour.group_type, luggage_type=tour.luggage_type,
+            override_kmh=float(tour.speed_factor_kmh) if tour.speed_factor_kmh is not None else None)
+        candidates = find_landmarks(coordinates, elements)
+        route_length = LineString([wgs84_to_lv95(lat, lon) for lon, lat in coordinates]).length
+        ratio = sum(snapshot[1] for snapshot in snapshots) / route_length if route_length else 1
+        candidates = [replace(c, distance_m=c.distance_m * ratio) for c in candidates]
+        selected = select_landmarks(candidates, elevation_points, speed, existing_distances,
+            [wp.label for wp in chain_waypoints if wp.label])
+        new_points = [(p.distance_m, p.lat, p.lon, p.kind, p.label, p.description, "AUTO_DETECTED") for p in selected]
 
-        new_points: list[tuple[float, float, float, str, str, str | None, str | None]] = []
-        # (distance_m, lat, lon, kind, label, description, verification_status)
-
-        def too_close(distance_m: float, kind: str) -> bool:
-            # Nur gegen bestehende Wegpunkte und bereits eingeplante Punkte DERSELBEN Art
-            # abgleichen: ein Entscheidungspunkt darf durchaus an derselben Stelle wie eine
-            # erkannte Richtungsaenderung liegen (unterschiedliche Information), aber zwei
-            # NAVIGATION-Punkte oder zwei DECISION-Punkte dicht nebeneinander waeren
-            # redundante Wegpunkt-Haeufung (Auftrag: "Nicht jeder kleine Richtungswechsel
-            # darf einen Wegpunkt erzeugen").
-            if any(abs(distance_m - d) < MIN_GAP_TO_EXISTING_M for d in existing_distances):
-                return True
-            return any(
-                abs(distance_m - existing[0]) < MIN_GAP_TO_EXISTING_M for existing in new_points if existing[3] == kind
-            )
-
-        for change in direction_changes:
-            if too_close(change.distance_m, "NAVIGATION"):
-                continue
-            new_points.append(
-                (
-                    change.distance_m,
-                    change.lat,
-                    change.lon,
-                    "NAVIGATION",
-                    "Richtungsänderung",
-                    f"Automatisch erkannt: Richtungsänderung um {round(change.bearing_change_deg)}°.",
-                    None,
-                )
-            )
-
-        for segment in climb_segments:
-            if not too_close(segment.start_distance_m, "NAVIGATION"):
-                new_points.append(
-                    (
-                        segment.start_distance_m,
-                        segment.start_lat,
-                        segment.start_lon,
-                        "NAVIGATION",
-                        "Beginn Aufstieg",
-                        f"Automatisch erkannt: Beginn eines längeren Aufstiegs (ca. {round(segment.ascent_m)} Hm).",
-                        None,
-                    )
-                )
-            if not too_close(segment.end_distance_m, "NAVIGATION"):
-                new_points.append(
-                    (
-                        segment.end_distance_m,
-                        segment.end_lat,
-                        segment.end_lon,
-                        "NAVIGATION",
-                        "Ende Aufstieg",
-                        f"Automatisch erkannt: Ende eines längeren Aufstiegs (ca. {round(segment.ascent_m)} Hm).",
-                        None,
-                    )
-                )
-
-        for candidate in decision_candidates:
-            if too_close(candidate.distance_m, "DECISION"):
-                continue
-            new_points.append(
-                (candidate.distance_m, candidate.lat, candidate.lon, "DECISION", candidate.label, candidate.reason, "AUTO_DETECTED")
-            )
-
-        if new_points:
-            self._insert_waypoints(db, tour, chain_waypoints, new_points)
-            db.flush()
-            db.expire(tour, ["waypoints"])
-            tour = self.routing_service.compute_route(db, tour, profile=tour.routing_profile or "wanderwege_bevorzugen")
-            tour = self.elevation_service.fetch_and_store(db, tour)
+        ordered_distances = self._insert_waypoints(db, tour, chain_waypoints, new_points, distances)
+        db.flush()
+        db.expire(tour, ["waypoints", "route_legs"])
+        self._resplit_route(db, tour, snapshots, ordered_distances)
 
         self._suggest_breaks_and_decision_metrics(db, tour)
 
@@ -202,8 +125,8 @@ class HikingTourAnalysisService:
         tour: HikingTour,
         chain_waypoints: list[HikingTourWaypoint],
         new_points: list[tuple[float, float, float, str, str, str | None, str | None]],
-    ) -> None:
-        distances = _cumulative_distances(chain_waypoints, list(tour.route_legs))
+        distances: dict[int, float],
+    ) -> list[float]:
         existing_ordered = [(distances[wp.id], "EXISTING", wp) for wp in chain_waypoints]
         combined: list[tuple[float, str, object]] = existing_ordered + [(p[0], "NEW", p) for p in new_points]
         combined.sort(key=lambda item: item[0])
@@ -234,6 +157,43 @@ class HikingTourAnalysisService:
                     )
                 )
         db.flush()
+
+        return [item[0] for item in combined]
+
+    def _resplit_route(self, db, tour, snapshots, distances):
+        """Bestehende Route nur aufteilen; kein Neurouting und kein externer Höhenabruf."""
+        db.query(HikingTourRouteLeg).filter(HikingTourRouteLeg.hiking_tour_id == tour.id).delete()
+        db.expire(tour, ["route_legs"])
+        chain = [wp for wp in tour.waypoints if wp.kind != "EMERGENCY_EXIT"]
+        for waypoint, distance in zip(chain, distances):
+            waypoint.elevation_m = elevation_at_distance(tour.elevation_profile_json, distance)
+        for i, (start, end) in enumerate(zip(distances, distances[1:])):
+            coordinates, ascent, descent, cost = [], 0.0, 0.0, 0.0
+            offset = 0.0
+            network_version = None
+            for geometry, length, up, down, old_cost, version in snapshots:
+                lo, hi = max(start, offset), min(end, offset+length)
+                if hi > lo and length > 0:
+                    part = substring(geometry, (lo-offset)/length, (hi-offset)/length, normalized=True)
+                    points = list(part.coords)
+                    coordinates.extend(points[1:] if coordinates and points[0] == coordinates[-1] else points)
+                    fraction = (hi-lo)/length
+                    ascent += up*fraction
+                    descent += down*fraction
+                    cost += old_cost*fraction
+                    network_version = version
+                offset += length
+            if len(coordinates) < 2:
+                point = to_shape(chain[i].point)
+                coordinates = [(point.x, point.y)]*2
+            db.add(HikingTourRouteLeg(hiking_tour_id=tour.id, from_waypoint_id=chain[i].id,
+                to_waypoint_id=chain[i+1].id, sequence=chain[i].sequence,
+                geom=from_shape(LineString(coordinates), srid=4326), distance_m=end-start,
+                ascent_m=ascent, descent_m=descent, cost=cost,
+                routing_profile=tour.routing_profile or "wanderwege_bevorzugen", network_version_id=network_version))
+        tour.route_computed_at = datetime.now(UTC)
+        db.flush()
+        db.expire(tour, ["route_legs"])
 
     def _suggest_breaks_and_decision_metrics(self, db: Session, tour: HikingTour) -> None:
         table = self.march_time_service.build_table(tour)
@@ -276,7 +236,6 @@ class HikingTourAnalysisService:
                 continue
             waypoint.break_minutes = suggestion.minutes
             waypoint.break_reason = suggestion.reason
-            waypoint.auto_generated = True
             if waypoint.kind == "NAVIGATION":
                 waypoint.kind = "BREAK"
             db.add(waypoint)
@@ -302,7 +261,7 @@ class HikingTourAnalysisService:
                     hiking_tour_id=tour.id,
                     sequence=_EXIT_SEQUENCE_OFFSET + waypoint.sequence,  # eigener Namensraum, siehe Konstante
                     kind="EMERGENCY_EXIT",
-                    label="Potenzieller Fahrzeug-Ausstieg",
+                    label=f"Ausstieg bei {waypoint.label}",
                     description="Potenzieller Fahrzeug-Ausstieg – vor der Tour prüfen.",
                     point=_make_point(finding.exit_lat, finding.exit_lon),
                     auto_generated=True,

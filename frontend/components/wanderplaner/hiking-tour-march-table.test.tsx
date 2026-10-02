@@ -125,8 +125,9 @@ it("offers all review actions for automatic points without an initial status", (
   const onVerificationChange = vi.fn();
   const point = { ...waypoints()[0], auto_generated: true, verification_status: null };
   render(<HikingTourMarchTable table={null} waypoints={[point]} canWrite onVerificationChange={onVerificationChange} />);
-  for (const [label, status] of [["Bestätigen", "VERIFIED"], ["Fürs Reko markieren", "NEEDS_VERIFICATION"], ["Ablehnen", "REJECTED"]]) {
-    fireEvent.click(screen.getByRole("button", { name: label }));
+  for (const [label, status] of [["Vom Leiter bestätigt", "VERIFIED"], ["Vor Ort prüfen", "NEEDS_VERIFICATION"], ["Verworfen", "REJECTED"]]) {
+    fireEvent.click(screen.getByRole("button", { name: "Automatisch erkannt" }));
+    fireEvent.click(screen.getByText(label));
     expect(onVerificationChange).toHaveBeenLastCalledWith(point, status);
   }
 });
