@@ -18,6 +18,7 @@ const ALBUM_KIND_LABEL: Record<PhotoAlbumKind, string> = {
   cycle: "Zyklus",
   submission: "Abgabe",
   submission_element: "Abgabe-Element",
+  hiking_tour: "Wandertour",
 };
 
 function PendingAlbumShareRequests({ requests, onDone }: { requests: AlbumShareRequest[]; onDone: () => void }) {

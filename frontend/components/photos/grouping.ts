@@ -5,6 +5,7 @@ export type PhotoDateGroup = {
   date: string;
   contextLabel: string | undefined;
   items: FileOverviewItem[];
+  tourGroups: { key: string; title?: string; items: FileOverviewItem[] }[];
 };
 
 function mostFrequent(values: string[]): string | undefined {
@@ -80,6 +81,14 @@ export function groupPhotosByDate(items: FileOverviewItem[]): PhotoDateGroup[] {
   }
   return order.map((key) => {
     const groupItems = byDate.get(key)!;
-    return { key, date: key, contextLabel: groupContextLabel(groupItems, key), items: groupItems };
+    const tourGroups = new Map<string, { key: string; title?: string; items: FileOverviewItem[] }>();
+    for (const item of groupItems) {
+      const tourKey = item.hiking_tour_id ?? "unassigned";
+      if (!tourGroups.has(tourKey)) {
+        tourGroups.set(tourKey, { key: tourKey, title: item.hiking_tour_title ?? undefined, items: [] });
+      }
+      tourGroups.get(tourKey)!.items.push(item);
+    }
+    return { key, date: key, contextLabel: groupContextLabel(groupItems, key), items: groupItems, tourGroups: [...tourGroups.values()] };
   });
 }

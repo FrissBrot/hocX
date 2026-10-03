@@ -1014,6 +1014,9 @@ class StoredFile(Base, TimestampMixin):
     # every file from disk on each request. None for non-images, images PIL couldn't
     # decode, images without EXIF, and files uploaded before this column existed.
     exif_taken_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    gps_analyzed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    gps_latitude: Mapped[float | None] = mapped_column(Float)
+    gps_longitude: Mapped[float | None] = mapped_column(Float)
     scan_status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'clean'"))
     # User-assigned tags for the "Dateien" overview page's filter/editor - separate from the
     # auto-derived "origin tag" (which protocol/word-import/submission this file came from,
@@ -1480,20 +1483,16 @@ class SystemErrorLog(Base):
 
 
 class PhotoAlbum(Base, TimestampMixin):
-    """`kind` distinguishes an admin-created album ("manual") from the three auto-generated
-    kinds this table also holds (see photo_album_service.py): one per Zyklus+Periode
-    ("cycle"), one per Abgabe ("submission"), one per Abgabe-Element ("submission_element").
-    Exactly one of (cycle_config_id, cycle_year) / submission_assignment_id (+ optionally
-    submission_element_ref) is set, matching `kind` - see migration 0068's
-    ck_photo_album_kind_fields, enforced in Postgres rather than just in Python since
-    get_or_create_*_album()'s uniqueness guarantee (the partial unique indexes from that
-    same migration) depends on it."""
+    """Manuelle Alben und automatische Alben pro Zyklus, Abgabe, Abgabe-Element oder
+    Wandertour. Feldbedingungen und partielle eindeutige Indizes sichern jeweils genau
+    ein Album pro Ziel (Migrationen 0068 und 0104)."""
 
     __tablename__ = "photo_album"
 
     id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
+    hiking_tour_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("hiking_tour.id", ondelete="CASCADE"))
     kind: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'manual'"))
     cycle_config_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("cycle_config.id", ondelete="CASCADE"))
     cycle_year: Mapped[int | None] = mapped_column(SmallInteger)

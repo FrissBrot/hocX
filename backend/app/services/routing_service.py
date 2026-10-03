@@ -194,6 +194,9 @@ class RoutingService:
         tour.route_cost = total_cost
         tour.route_computed_at = datetime.now(UTC)
         db.add(tour)
+        db.flush()
+        from app.services.photo_tour_link_service import sync_photos_for_tours
+        sync_photos_for_tours(db, tour.tenant_id)
         db.commit()
         db.refresh(tour)
         return tour

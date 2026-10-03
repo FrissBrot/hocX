@@ -59,18 +59,30 @@ export function PhotoDateGroups({
               · {group.items.length} {group.items.length === 1 ? "Foto" : "Fotos"}
             </span>
           </button>
-          <div className="photo-grid">
-            {group.items.map((item) => (
-              <PhotoTile
-                key={item.id}
-                item={item}
-                selected={selectedIds.has(item.id)}
-                selectionMode={selectionMode}
-                onOpen={() => onOpen(item)}
-                onToggleSelect={() => onToggleSelect(item.id)}
-              />
-            ))}
-          </div>
+          {group.tourGroups.map((tourGroup) => (
+            <div key={tourGroup.key}>
+              {tourGroup.title && (
+                <button type="button" className="button-ghost photo-date-header"
+                  aria-pressed={tourGroup.items.every((item) => selectedIds.has(item.id))}
+                  onClick={() => onToggleGroup(tourGroup.items.map((item) => item.id))}>
+                  <span className="photo-date-context">{tourGroup.title}</span>
+                  <span className="photo-date-count">· {tourGroup.items.length}</span>
+                </button>
+              )}
+              <div className="photo-grid">
+                {tourGroup.items.map((item) => (
+                  <PhotoTile
+                    key={item.id}
+                    item={item}
+                    selected={selectedIds.has(item.id)}
+                    selectionMode={selectionMode}
+                    onOpen={() => onOpen(item)}
+                    onToggleSelect={() => onToggleSelect(item.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       ))}
     </>

@@ -112,8 +112,7 @@ MAX_ANALYSIS_JOB_IMAGES = 2000
 
 def _extract_image_metadata(content: bytes) -> tuple[int | None, int | None, datetime | None, str | None]:
     """(width, height, exif_taken_at, exif_camera) for the file-detail metadata panel.
-    Deliberately does not read/return GPS EXIF data (present on some phone photos) - that's
-    location data about where a user was, not something this feature needs to expose.
+    GPS wird separat für die automatische Tourzuordnung gelesen.
     Returns all-None for non-images or content PIL can't decode."""
     try:
         with Image.open(BytesIO(content)) as image:
@@ -304,7 +303,10 @@ class FileService:
             exclude_album_id=exclude_album_id,
             album_share_pending=album_share_pending,
         )
-        return [self._build_overview_item(row) for row in rows]
+        items = [self._build_overview_item(row) for row in rows]
+        from app.services.photo_tour_link_service import attach_tour_context
+        attach_tour_context(db, items)
+        return items
 
     def analysis_progress(self, db: Session, tenant_id: int) -> PhotoAnalysisProgress:
         """Backs the Fotos page's tenant-wide "Foto-Analyse läuft - X von Y Bildern
@@ -1006,6 +1008,9 @@ class FileService:
                 )
             )
 
+        from app.services.photo_tour_link_service import attach_tour_context
+        db.flush()
+        attach_tour_context(db, items)
         if before_commit:
             before_commit(items, errors)
         db.commit()

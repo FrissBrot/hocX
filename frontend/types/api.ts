@@ -188,7 +188,7 @@ export type SubmissionFile = {
 
 export type FileOverviewSource = "protocol_image" | "word_import" | "submission_upload" | "gallery_upload";
 
-export type PhotoAlbumKind = "manual" | "cycle" | "submission" | "submission_element";
+export type PhotoAlbumKind = "manual" | "cycle" | "submission" | "submission_element" | "hiking_tour";
 
 export type FileAlbumRef = {
   id: string;
@@ -233,6 +233,8 @@ export type FileOverviewItem = {
   group_date: string | null;
   // Short context label for that date group's header (protocol/word-import/submission/
   // event) - null when there's nothing more specific than the plain date.
+  hiking_tour_id?: string | null;
+  hiking_tour_title?: string | null;
   context_label: string | null;
   // Live Photo: content URL of the short MP4 played on hover (null for ordinary photos).
   live_video_url: string | null;

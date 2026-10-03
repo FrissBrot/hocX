@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 FileOverviewSource = Literal["protocol_image", "word_import", "submission_upload", "gallery_upload"]
 
-PhotoAlbumKind = Literal["manual", "cycle", "submission", "submission_element"]
+PhotoAlbumKind = Literal["manual", "cycle", "submission", "submission_element", "hiking_tour"]
 
 
 class FileAlbumRef(BaseModel):
@@ -71,6 +71,8 @@ class FileOverviewItem(BaseModel):
     # Short context label for that date group's header (protocol title + block title, word-
     # import display name, submission assignment title, or event title) - None when there's
     # nothing more specific than the plain upload date (e.g. an event-less gallery upload).
+    hiking_tour_id: uuid.UUID | None = None
+    hiking_tour_title: str | None = None
     context_label: str | None = None
     # Live Photo: content URL of the short MP4 the Fotos grid plays on hover - None for every
     # ordinary photo (see apple_media.py).

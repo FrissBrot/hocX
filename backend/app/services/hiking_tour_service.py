@@ -72,13 +72,20 @@ class HikingTourService:
 
         db.flush()
         RouteLandmarkService().assign_unique_names(db, tour)
+        from app.services.photo_tour_link_service import sync_photos_for_tours
+        sync_photos_for_tours(db, tenant_id)
         db.commit()
         db.refresh(tour)
         return tour
 
     def update_tour(self, db: Session, tour: HikingTour, payload: HikingTourUpdate) -> HikingTour:
         values = payload.model_dump(exclude_unset=True)
-        return self.repository.update(db, tour, values)
+        updated = self.repository.update(db, tour, values, commit=False)
+        from app.services.photo_tour_link_service import sync_photos_for_tours
+        sync_photos_for_tours(db, tour.tenant_id)
+        db.commit()
+        db.refresh(updated)
+        return updated
 
     def delete_tour(self, db: Session, tour: HikingTour) -> None:
         self.repository.delete(db, tour)

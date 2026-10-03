@@ -140,3 +140,17 @@ describe("groupPhotosByDate", () => {
     expect(groups.map((group) => group.date)).toEqual(["2026-08-12", "2026-07-10"]);
   });
 });
+
+it("unterteilt einen Termintag nach Tour-ID und behält nicht zugeordnete Fotos", () => {
+  const items = [
+    makeItem({ hiking_tour_id: "tour-1", hiking_tour_title: "Rigi", context_label: "Lager" }),
+    makeItem({ hiking_tour_id: "tour-2", hiking_tour_title: "Rigi", context_label: "Lager" }),
+    makeItem({ hiking_tour_id: "tour-1", hiking_tour_title: "Rigi", context_label: "Lager" }),
+    makeItem(),
+  ];
+  const [group] = groupPhotosByDate(items);
+  expect(group.contextLabel).toBe("Lager");
+  expect(group.tourGroups.map((tour) => [tour.key, tour.items.length])).toEqual([
+    ["tour-1", 2], ["tour-2", 1], ["unassigned", 1],
+  ]);
+});

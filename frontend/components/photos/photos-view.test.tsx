@@ -180,6 +180,22 @@ describe("PhotosView", () => {
     expect(screen.getByText(/2 Fotos/)).toBeInTheDocument();
   });
 
+  it("zeigt Touren innerhalb eines Termintags und markiert nur die gewählte Tour", async () => {
+    mockFilesAndProgress([
+      makeItem({ id: "a", group_date: "2026-07-10", context_label: "Sommerlager", hiking_tour_id: "tour-1", hiking_tour_title: "Rigi" }),
+      makeItem({ id: "b", group_date: "2026-07-10", context_label: "Sommerlager", hiking_tour_id: "tour-1", hiking_tour_title: "Rigi" }),
+      makeItem({ id: "c", group_date: "2026-07-10", context_label: "Sommerlager", hiking_tour_id: "tour-2", hiking_tour_title: "Pilatus" }),
+      makeItem({ id: "d", group_date: "2026-07-10" }),
+    ], NO_PROGRESS);
+    render(<PhotosView />);
+    const tourButton = await screen.findByRole("button", { name: /Rigi/ });
+    expect(screen.getByText("Sommerlager")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Pilatus/ })).toBeInTheDocument();
+    fireEvent.click(tourButton);
+    expect(await screen.findByText("2 ausgewählt")).toBeInTheDocument();
+    expect(tourButton).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("shows the bulk-action bar with a count once photos are selected", async () => {
     const items = [makeItem({ id: "a" }), makeItem({ id: "b" })];
     mockFilesAndProgress(items, NO_PROGRESS);

@@ -425,3 +425,48 @@ def test_gallery_upload_job_reports_a_zip_with_no_images(db):
     assert job.status == "done"
     assert job.imported_file_ids == []
     assert job.errors == ["ZIP enthält keine Bilddateien"]
+
+
+def test_gallery_upload_matches_tour_and_retains_event_context(db):
+    from app.services.hiking_tour_service import HikingTourService
+    from tests.test_hiking_tour_service import _basic_payload
+
+    tenant = make_tenant(db)
+    day = date(2026, 7, 10)
+    event = make_event(db, tenant.id, title='Sommerlager', event_date=day)
+    tour = HikingTourService().create_tour(db, _basic_payload(tour_date=day), tenant_id=tenant.id)
+    exif = Image.Exif()
+    exif[306] = '2026:07:10 12:00:00'
+    exif[0x8825] = {1: 'N', 2: (47.0, 3.0, 4.32), 3: 'E', 4: (8.0, 32.0, 52.08)}
+    buffer = io.BytesIO()
+    Image.new('RGB', (48, 48)).save(buffer, format='JPEG', exif=exif)
+    items, errors = asyncio.run(service.save_gallery_uploads(db, tenant_id=tenant.id, files=[('tour.jpg', buffer.getvalue())], tags=[], created_by=None))
+    assert errors == []
+    assert items[0].hiking_tour_id == tour.public_id
+    assert items[0].hiking_tour_title == tour.title
+    assert items[0].context_label == event.title
+    album = db.query(PhotoAlbum).filter_by(hiking_tour_id=tour.id).one()
+    assert db.get(PhotoAlbumItem, (album.id, items[0].id)) is not None
+    fetched = service.list_tenant_files(db, tenant.id)
+    assert fetched[0].hiking_tour_id == tour.public_id
+
+
+def test_new_tour_backfills_gps_from_existing_photo(db):
+    from app.services.hiking_tour_service import HikingTourService
+    from tests.test_hiking_tour_service import _basic_payload
+
+    tenant = make_tenant(db)
+    exif = Image.Exif()
+    exif[306] = '2026:07:10 12:00:00'
+    exif[0x8825] = {1: 'N', 2: (47.0, 3.0, 4.32), 3: 'E', 4: (8.0, 32.0, 52.08)}
+    buffer = io.BytesIO()
+    Image.new('RGB', (48, 48)).save(buffer, format='JPEG', exif=exif)
+    items, _ = asyncio.run(service.save_gallery_uploads(db, tenant_id=tenant.id, files=[('alt.jpg', buffer.getvalue())], tags=[], created_by=None))
+    stored = db.query(StoredFile).filter_by(public_id=items[0].id).one()
+    stored.scan_status = "clean"
+    stored.gps_latitude = stored.gps_longitude = stored.gps_analyzed_at = stored.exif_taken_at = None
+    db.flush()
+    tour = HikingTourService().create_tour(db, _basic_payload(tour_date=date(2026, 7, 10)), tenant_id=tenant.id)
+    album = db.query(PhotoAlbum).filter_by(hiking_tour_id=tour.id).one()
+    assert db.get(PhotoAlbumItem, (album.id, stored.public_id)) is not None
+    assert stored.gps_analyzed_at is not None
