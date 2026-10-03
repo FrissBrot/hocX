@@ -107,6 +107,7 @@ class HikingTourAnalysisService:
         db.expire(tour, ["waypoints", "route_legs"])
         self._resplit_route(db, tour, snapshots, ordered_distances)
 
+        self.landmark_service.assign_unique_names(db, tour)
         self._suggest_breaks_and_decision_metrics(db, tour)
 
         if tour.status == "draft":
@@ -251,6 +252,7 @@ class HikingTourAnalysisService:
         )
         profile = tour.routing_profile or "wanderwege_bevorzugen"
 
+        used_names = {wp.label for wp in tour.waypoints if wp.label}
         for waypoint in tour.waypoints:
             if waypoint.kind != "DECISION" or not waypoint.auto_generated:
                 continue
@@ -265,7 +267,7 @@ class HikingTourAnalysisService:
                     hiking_tour_id=tour.id,
                     sequence=_EXIT_SEQUENCE_OFFSET + waypoint.sequence,  # eigener Namensraum, siehe Konstante
                     kind="EMERGENCY_EXIT",
-                    label=self.landmark_service.nearest_name(db, finding.exit_lat, finding.exit_lon),
+                    label=self.landmark_service.unique_name(db, finding.exit_lat, finding.exit_lon, used_names),
                     description="Potenzieller Fahrzeug-Ausstieg – vor der Tour prüfen.",
                     point=_make_point(finding.exit_lat, finding.exit_lon),
                     auto_generated=True,
@@ -278,6 +280,8 @@ class HikingTourAnalysisService:
                         "time_to_exit_minutes": finding.time_to_exit_minutes,
                     },
                 )
+                if exit_waypoint.label:
+                    used_names.add(exit_waypoint.label)
                 db.add(exit_waypoint)
                 exit_candidate = ExitCandidate(
                     waypoint_label=exit_waypoint.label,

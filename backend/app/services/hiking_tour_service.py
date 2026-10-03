@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from geoalchemy2.shape import from_shape
+from geoalchemy2.shape import from_shape, to_shape
 from shapely.geometry import Point
 from sqlalchemy.orm import Session
 
@@ -70,6 +70,8 @@ class HikingTourService:
         )
         self.repository.add_waypoint(db, end, commit=False)
 
+        db.flush()
+        RouteLandmarkService().assign_unique_names(db, tour)
         db.commit()
         db.refresh(tour)
         return tour
@@ -99,7 +101,9 @@ class HikingTourService:
             hiking_tour_id=tour.id,
             sequence=new_sequence,
             kind="USER_DEFINED",
-            label=payload.label or RouteLandmarkService().nearest_name(db, payload.lat, payload.lon),
+            label=RouteLandmarkService().unique_name(db, payload.lat, payload.lon,
+                [wp.label for wp in tour.waypoints],
+                payload.label or RouteLandmarkService().nearest_name(db, payload.lat, payload.lon)),
             description=payload.description,
             point=_make_point(payload.lat, payload.lon),
         )
@@ -112,6 +116,16 @@ class HikingTourService:
         values = payload.model_dump(exclude={"lat", "lon"}, exclude_unset=True)
         if payload.lat is not None and payload.lon is not None:
             values["point"] = _make_point(payload.lat, payload.lon)
+        if payload.label:
+            point = to_shape(waypoint.point)
+            others = db.query(HikingTourWaypoint).filter(
+                HikingTourWaypoint.hiking_tour_id == waypoint.hiking_tour_id,
+                HikingTourWaypoint.id != waypoint.id,
+            ).all()
+            values["label"] = RouteLandmarkService().unique_name(db,
+                payload.lat if payload.lat is not None else point.y,
+                payload.lon if payload.lon is not None else point.x,
+                [other.label for other in others], payload.label)
         return self.repository.update_waypoint(db, waypoint, values)
 
     def delete_waypoint(self, db: Session, waypoint: HikingTourWaypoint) -> None:

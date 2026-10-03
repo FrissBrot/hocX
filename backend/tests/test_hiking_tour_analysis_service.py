@@ -194,3 +194,25 @@ def test_analysis_keeps_route_and_profile_and_never_calls_external_services(db, 
     assert sum(leg.distance_m for leg in result.route_legs) == pytest.approx(original_distance)
     assert sum(leg.ascent_m for leg in result.route_legs) == pytest.approx(result.route_ascent_m)
     assert all(not (wp.label or "").startswith(("KP ", "NA ")) for wp in result.waypoints if wp.auto_generated)
+
+
+def test_analysis_uses_unique_geo_names_for_route_points_and_exits(db, routing_network):
+    from sqlalchemy import text
+    tenant = make_tenant(db, "Eindeutige Geo-Namen")
+    tour, _ = _prepare_tour(db, tenant.id, climb=False)
+    db.execute(text("""INSERT INTO hiking_landmark (osm_type, osm_id, tags, geom)
+        VALUES ('node', 99201, '{"name":"Talweg"}',
+            ST_Transform(ST_SetSRID(ST_MakePoint(8.51,47.00),4326),2056)),
+            ('node', 99202, '{"name":"Oberalp"}',
+            ST_Transform(ST_SetSRID(ST_MakePoint(8.51,47.001),4326),2056)),
+            ('node', 99203, '{"name":"Alpbach"}',
+            ST_Transform(ST_SetSRID(ST_MakePoint(8.51,47.002),4326),2056))"""))
+    result = HikingTourAnalysisService().analyze(db, tour)
+    names = [point.label for point in result.waypoints]
+    assert all(names)
+    assert len(names) == len({name.casefold() for name in names})
+    decision = next(point for point in result.waypoints if point.kind == "DECISION")
+    exit_point = next(point for point in result.waypoints if point.kind == "EMERGENCY_EXIT")
+    assert decision.decision_metrics_json["nearest_exit_label"] == exit_point.label
+    repeated = HikingTourAnalysisService().analyze(db, result)
+    assert [point.label for point in repeated.waypoints] == names

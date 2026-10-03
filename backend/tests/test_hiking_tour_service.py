@@ -161,12 +161,19 @@ def test_update_tour_only_changes_given_fields(db):
     assert updated.description == "Alt"
 
 
-def test_unnamed_via_points_use_local_environment_and_preserve_custom_names(db, monkeypatch):
-    from app.services.route_landmark_service import RouteLandmarkService
-    monkeypatch.setattr(RouteLandmarkService, "nearest_name", lambda self, db, lat, lon: "Rigi Klösterli")
+def test_unnamed_via_points_use_unique_local_environment_and_preserve_custom_names(db):
+    from sqlalchemy import text
     tenant = make_tenant(db, "Via Ortsnamen")
     service = HikingTourService()
+    db.execute(text("""INSERT INTO hiking_landmark (osm_type, osm_id, tags, geom)
+        VALUES ('node', 99101, '{"name":"Rigi Klösterli"}',
+            ST_Transform(ST_SetSRID(ST_MakePoint(8.4949,47.0489),4326),2056)),
+            ('node', 99102, '{"name":"Klosterweg"}',
+            ST_Transform(ST_SetSRID(ST_MakePoint(8.4954,47.0489),4326),2056))"""))
     tour = service.create_tour(db, _basic_payload(via_points=[ViaPointCreate(**KLOESTERLI)]), tenant_id=tenant.id)
     assert tour.waypoints[1].label == "Rigi Klösterli"
-    assert service.add_via_point(db, tour, ViaPointCreate(**KLOESTERLI)).label == "Rigi Klösterli"
+    added = service.add_via_point(db, tour, ViaPointCreate(**KLOESTERLI))
+    assert added.label == "Rigi Klösterli / Klosterweg"
     assert service.add_via_point(db, tour, ViaPointCreate(**KLOESTERLI, label="Sammelpunkt")).label == "Sammelpunkt"
+    labels = [point.label.casefold() for point in tour.waypoints if point.label]
+    assert len(labels) == len(set(labels))
