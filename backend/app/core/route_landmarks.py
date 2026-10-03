@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from bisect import bisect_right
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from math import acos, degrees, hypot
 
 from shapely import remove_repeated_points
@@ -18,7 +18,7 @@ class Landmark:
     lat: float
     lon: float
     kind: str
-    label: str
+    label: str | None
     description: str
     priority: int
 
@@ -72,28 +72,25 @@ def find_landmarks(coordinates, elements) -> list[Landmark]:
                     positions[node] = metric_point(geometry[i])
                 neighbours.setdefault(node, set()).update(nodes[max(0, i-1):i] + nodes[i+1:i+2])
 
-    def label(prefix, tags, point):
-        name = tags.get('name') or tags.get('ref')
-        if name:
-            return name if prefix == 'Bei' else f'{prefix} {name}'
+    def label(tags, point):
+        if tags.get('name'):
+            return tags['name']
         nearby = [(point.distance(g), t['name']) for t, g in names
                   if point.distance(g) <= (1500 if t.get('place') else 250)]
-        if nearby:
-            return min(nearby)[1] if prefix == 'Bei' else f'{prefix} {min(nearby)[1]}'
-        return prefix  # Keine Ortsnamen erfinden; km-Zusatz wird unten ergänzt.
+        return min(nearby)[1] if nearby else None
 
     candidates = []
-    def add(point, tags, prefix, kind, priority):
+    def add(point, tags, kind, priority):
         distance = route.project(point)
         snapped = route.interpolate(distance)
         lat, lon = lv95_to_wgs84(snapped.x, snapped.y)
-        candidates.append(Landmark(distance, lat, lon, kind, label(prefix, tags, point),
+        candidates.append(Landmark(distance, lat, lon, kind, label(tags, point),
             'Automatisch aus OpenStreetMap erkannt; Lage und Begehbarkeit vor Ort prüfen.', priority))
 
     for node, adjacent in neighbours.items():
         point = positions.get(node)
         if len(adjacent) >= 3 and point is not None and point.distance(route) <= 18:
-            add(point, {}, 'KP', 'DECISION', 3)
+            add(point, {}, 'DECISION', 3)
     roads = {'motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'unclassified', 'residential', 'service', 'living_street'}
     for tags, shape in features:
         water = tags.get('waterway') in ('stream', 'river', 'canal', 'ditch')
@@ -102,12 +99,12 @@ def find_landmarks(coordinates, elements) -> list[Landmark]:
             for point in _points(route.intersection(shape)):
                 if _transverse(route, shape, point):
                     # Auch Brücken sind nützliche Orientierungspunkte, keine behauptete Furt.
-                    add(point, tags, 'Bach' if water else 'Strasse', 'NAVIGATION', 5 if water else 4)
+                    add(point, tags, 'NAVIGATION', 5 if water else 4)
         hut = tags.get('tourism') in ('alpine_hut', 'wilderness_hut') or tags.get('building') in ('hut', 'cabin')
         alp = tags.get('place') in ('isolated_dwelling', 'farm') and tags.get('name')
         if (hut or alp) and shape.distance(route) <= 60:
             from shapely.ops import nearest_points
-            add(nearest_points(shape, route)[0], tags, 'Bei', 'HUT' if hut else 'NAVIGATION', 4)
+            add(nearest_points(shape, route)[0], tags, 'HUT' if hut else 'NAVIGATION', 4)
     return candidates
 
 
@@ -143,21 +140,10 @@ def select_landmarks(candidates, profile, speed_kmh, existing_distances=(), rese
                     break
                 earliest = min(t for t, c in near)
                 near = [(t, c) for t, c in near if t <= earliest+5]
-            t, chosen = max(near, key=lambda item: (item[1].priority*2 - abs(item[0]-cursor-15)/3, -item[0], item[1].label))
+            t, chosen = max(near, key=lambda item: (item[1].priority*2 - abs(item[0]-cursor-15)/3, -item[0], item[1].label or ""))
             selected.append(chosen)
             cursor = t
             available = [(time, c) for time, c in available if time >= cursor+7 and c.distance_m-chosen.distance_m >= 100]
-    # Lesbare, eindeutige Namen auch bei mehrfacher Querung desselben Bachs.
-    used = set(reserved_names)
-    result = []
-    for candidate in sorted(selected, key=lambda c: c.distance_m):
-        base = candidate.label
-        if base in used or base in ('KP', 'Bach', 'Strasse', 'Bei'):
-            base = f'{base} · km {candidate.distance_m/1000:.2f}'
-        name, suffix = base, 2
-        while name in used:
-            name = f'{base} ({suffix})'
-            suffix += 1
-        used.add(name)
-        result.append(replace(candidate, label=name))
-    return result
+    # Derselbe Umgebungsname darf mehrfach vorkommen. Typ, Zeilennummer und
+    # Koordinaten unterscheiden die Punkte, ohne Zusätze im Ortsnamen.
+    return sorted(selected, key=lambda c: c.distance_m)

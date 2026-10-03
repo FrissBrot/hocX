@@ -8,15 +8,15 @@ import { HikingTourWaypoint, HikingTourWaypointVerificationStatus, HikingTourWay
 const KIND_LABEL: Record<HikingTourWaypointKind, string> = {
   START: "Start",
   END: "Ziel",
-  NAVIGATION: "Wegpunkt",
-  BREAK: "Pause",
+  NAVIGATION: "Fixpunkt",
+  BREAK: "Pausenplatz",
   SUMMIT: "Gipfel",
   PASS: "Pass",
   HUT: "Hütte",
   WATER: "Wasser",
-  DECISION: "Kontrollpunkt",
+  DECISION: "Fixpunkt",
   EMERGENCY_EXIT: "Notausstieg",
-  USER_DEFINED: "Via",
+  USER_DEFINED: "Fixpunkt",
 };
 
 function formatHm(time: string | null): string {
@@ -76,7 +76,7 @@ export function HikingTourMarchTable({ table, waypoints, canWrite = false, onUpd
         ? `Geschwindigkeitsfaktor: ${table.speed_factor_kmh} Lkm/h`
         : "Route berechnen, um Distanzen und Marschzeiten anzuzeigen."} />
       <DataTable
-        columns={["#", "Wegpunkt", "Höhe", "Distanz", "Kum. Distanz", "Auf", "Ab", "Lkm", "Zeit", "Kum. Zeit", "Ankunft", "Pause", "Abmarsch", "Bemerkungen", "Status", "Aktionen"]}
+        columns={["#", "Name", "Typ", "Höhe", "Distanz", "Kum. Distanz", "Auf", "Ab", "Lkm", "Zeit", "Kum. Zeit", "Ankunft", "Pause", "Abmarsch", "Bemerkungen", "Status", "Aktionen"]}
         emptyMessage="Keine Wegpunkte."
       >
         {orderedWaypoints.map((waypoint, index) => {
@@ -89,12 +89,10 @@ export function HikingTourMarchTable({ table, waypoints, canWrite = false, onUpd
             <tr key={waypoint.id}>
               <td>{index + 1}</td>
               <td>
-                {waypoint.label || KIND_LABEL[waypoint.kind]}
-                {waypoint.label && waypoint.label !== KIND_LABEL[waypoint.kind] && (
-                  <div><Badge variant={waypoint.kind === "START" || waypoint.kind === "END" ? "info" : "neutral"}>{KIND_LABEL[waypoint.kind]}</Badge></div>
-                )}
+                {waypoint.label || dash}
                 <div className="field-help">{waypoint.lat.toFixed(4)}, {waypoint.lon.toFixed(4)}</div>
               </td>
+              <td>{KIND_LABEL[waypoint.kind]}</td>
               <td>{elevation != null ? `${Math.round(elevation)} m` : dash}</td>
               <td>{entry ? `${(entry.segment_distance_m / 1000).toFixed(2)} km` : dash}</td>
               <td>{entry ? `${(entry.cumulative_distance_m / 1000).toFixed(2)} km` : dash}</td>

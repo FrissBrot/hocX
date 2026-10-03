@@ -44,7 +44,9 @@ class HikingTourService:
 
         sequence = 0
         start = HikingTourWaypoint(
-            hiking_tour_id=tour.id, sequence=sequence, kind="START", point=_make_point(payload.start.lat, payload.start.lon)
+            hiking_tour_id=tour.id, sequence=sequence, kind="START",
+            label=RouteLandmarkService().nearest_name(db, payload.start.lat, payload.start.lon),
+            point=_make_point(payload.start.lat, payload.start.lon)
         )
         self.repository.add_waypoint(db, start, commit=False)
         sequence += 1
@@ -62,7 +64,9 @@ class HikingTourService:
             sequence += 1
 
         end = HikingTourWaypoint(
-            hiking_tour_id=tour.id, sequence=sequence, kind="END", point=_make_point(payload.end.lat, payload.end.lon)
+            hiking_tour_id=tour.id, sequence=sequence, kind="END",
+            label=RouteLandmarkService().nearest_name(db, payload.end.lat, payload.end.lon),
+            point=_make_point(payload.end.lat, payload.end.lon)
         )
         self.repository.add_waypoint(db, end, commit=False)
 

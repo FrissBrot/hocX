@@ -39,7 +39,7 @@ def test_recognizes_actual_junction_crossings_and_nearby_hut():
         {'type':'node','id':7, **coordinate(750,100), 'tags':{'place':'locality','name':'Oberalp'}},
     ]
     result = find_landmarks(route(), elements)
-    assert {c.label for c in result} == {'KP Oberalp', 'Bach Alpbach', 'Strasse Alpstrasse', 'Testhütte'}
+    assert {c.label for c in result} == {'Oberalp', 'Alpbach', 'Alpstrasse', 'Testhütte'}
     assert {c.kind for c in result} == {'DECISION','NAVIGATION','HUT'}
     assert next(c for c in result if c.kind == 'HUT').distance_m == pytest.approx(1800, abs=2)
 
@@ -58,7 +58,7 @@ def test_timing_prefers_landmarks_near_fifteen_minutes_and_deduplicates_clusters
     candidates = [candidate(d) for d in range(100,3000,100)]
     result = select_landmarks(candidates, profile(), 4, [0,3000])
     assert [p.distance_m for p in result] == [1000,2000]
-    assert len({p.label for p in result}) == len(result)
+    assert [p.label for p in result] == [candidates[0].label, candidates[0].label]
 
 
 def test_striking_crossing_beats_exact_interval():
@@ -79,6 +79,11 @@ def test_sparse_landmarks_are_not_replaced_with_artificial_points():
     assert len(select_landmarks([candidate(1800)], profile(), 4)) == 1
 
 
-def test_unnamed_points_get_honest_unique_distance_labels():
-    points = [candidate(1000, 'KP'),candidate(2000, 'KP')]
-    assert [c.label for c in select_landmarks(points, profile(), 4)] == ['KP · km 1.00','KP · km 2.00']
+def test_unnamed_points_remain_unnamed_without_distance_suffixes():
+    points = [candidate(1000, None), candidate(2000, None)]
+    assert [c.label for c in select_landmarks(points, profile(), 4)] == [None, None]
+
+
+def test_repeated_environment_names_remain_unchanged():
+    points = [candidate(1000, 'Oberalp'), candidate(2000, 'Oberalp')]
+    assert [c.label for c in select_landmarks(points, profile(), 4, reserved_names=['Oberalp'])] == ['Oberalp', 'Oberalp']

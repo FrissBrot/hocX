@@ -13,6 +13,7 @@ class RouteLandmarkService:
         x, y = wgs84_to_lv95(lat, lon)
         return db.scalar(text("""SELECT tags->>'name' FROM hiking_landmark
             WHERE NULLIF(tags->>'name', '') IS NOT NULL
+              AND geom && ST_Expand(ST_SetSRID(ST_MakePoint(:x,:y),2056),1500)
               AND ST_DWithin(geom, ST_SetSRID(ST_MakePoint(:x,:y),2056),
                   CASE WHEN tags ? 'place' THEN 1500 ELSE 250 END)
             ORDER BY ST_Distance(geom, ST_SetSRID(ST_MakePoint(:x,:y),2056)), osm_type, osm_id

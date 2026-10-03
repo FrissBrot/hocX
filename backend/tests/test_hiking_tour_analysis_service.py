@@ -193,4 +193,4 @@ def test_analysis_keeps_route_and_profile_and_never_calls_external_services(db, 
     assert result.elevation_profile_json == original_profile
     assert sum(leg.distance_m for leg in result.route_legs) == pytest.approx(original_distance)
     assert sum(leg.ascent_m for leg in result.route_legs) == pytest.approx(result.route_ascent_m)
-    assert len({wp.label for wp in result.waypoints if wp.auto_generated}) == len([wp for wp in result.waypoints if wp.auto_generated])
+    assert all(not (wp.label or "").startswith(("KP ", "NA ")) for wp in result.waypoints if wp.auto_generated)

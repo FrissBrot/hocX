@@ -86,12 +86,12 @@ describe("HikingTourMarchTable", () => {
   it("shows a dash instead of '0 min' in the Pause column for waypoints without a break", () => {
     render(<HikingTourMarchTable table={table()} waypoints={waypoints()} />);
 
-    const startRow = screen.getByText("Start").closest("tr")!;
-    const pauseCell = startRow.querySelectorAll("td")[11];
+    const startRow = screen.getAllByText("Start")[0].closest("tr")!;
+    const pauseCell = startRow.querySelectorAll("td")[12];
     expect(pauseCell.textContent).toBe("–");
 
-    const endRow = screen.getByText("Ziel").closest("tr")!;
-    expect(endRow.querySelectorAll("td")[11].textContent).toBe("15 min");
+    const endRow = screen.getAllByText("Ziel")[0].closest("tr")!;
+    expect(endRow.querySelectorAll("td")[12].textContent).toBe("15 min");
   });
 });
 
@@ -103,7 +103,7 @@ it("keeps waypoints editable in a single table before route calculation", () => 
     onUpdateBreakMinutes={onUpdateBreakMinutes} onDeleteWaypoint={onDeleteWaypoint} />);
   expect(screen.getAllByRole("table")).toHaveLength(1);
   const row = screen.getByText("Zwischenhalt").closest("tr")!;
-  expect(row.querySelectorAll("td")[3].textContent).toBe("–");
+  expect(row.querySelectorAll("td")[4].textContent).toBe("–");
   fireEvent.blur(screen.getByRole("spinbutton"), { target: { value: "10" } });
   expect(onUpdateBreakMinutes).toHaveBeenCalledWith(point, 10);
   fireEvent.click(screen.getByRole("button", { name: "Entfernen" }));
@@ -115,7 +115,7 @@ it("retains emergency exits without inventing marching times", () => {
     label: "Ausstieg", verification_status: "NEEDS_VERIFICATION" as const };
   render(<HikingTourMarchTable table={table()} waypoints={[...waypoints(), exit]} />);
   const row = screen.getByText("Ausstieg").closest("tr")!;
-  expect(row.querySelectorAll("td")[8].textContent).toBe("–");
+  expect(row.querySelectorAll("td")[9].textContent).toBe("–");
   expect(screen.getByText("Vor Ort prüfen")).toBeInTheDocument();
   expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Entfernen" })).not.toBeInTheDocument();
@@ -141,5 +141,22 @@ it("offers all review actions for automatic points without an initial status", (
   expect(rows.map(row => row.querySelector("td")?.textContent)).toEqual(["1", "2", "3"]);
   expect(rows[1]).toHaveTextContent("NA Test");
   expect(rows[2]).toHaveTextContent("Ziel");
-  expect(rows[1].querySelectorAll("td")[8]).toHaveTextContent("–");
+  expect(rows[1].querySelectorAll("td")[9]).toHaveTextContent("–");
+});
+
+
+it("separates environment names and point types into their own columns", () => {
+  const points = [
+    { ...waypoints()[0], label: "Oberalp", kind: "DECISION" as const },
+    { ...waypoints()[1], label: "Unteralp", kind: "BREAK" as const },
+    { ...waypoints()[0], id: "exit", sequence: 500001, label: "Talstrasse", kind: "EMERGENCY_EXIT" as const },
+  ];
+  render(<HikingTourMarchTable table={null} waypoints={points} />);
+  expect(screen.getByRole("columnheader", { name: "Name" })).toBeInTheDocument();
+  expect(screen.getByRole("columnheader", { name: "Typ" })).toBeInTheDocument();
+  for (const [name, type] of [["Oberalp", "Fixpunkt"], ["Unteralp", "Pausenplatz"], ["Talstrasse", "Notausstieg"]]) {
+    const cells = screen.getByText(name).closest("tr")!.querySelectorAll("td");
+    expect(cells[1]).not.toHaveTextContent(type);
+    expect(cells[2]).toHaveTextContent(type);
+  }
 });

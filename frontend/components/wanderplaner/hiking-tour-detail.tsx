@@ -60,15 +60,15 @@ const STATUS_VARIANT: Record<string, BadgeVariant> = {
 const KIND_LABEL: Record<HikingTourWaypointKind, string> = {
   START: "Start",
   END: "Ziel",
-  NAVIGATION: "Wegpunkt",
-  BREAK: "Pause",
+  NAVIGATION: "Fixpunkt",
+  BREAK: "Pausenplatz",
   SUMMIT: "Gipfel",
   PASS: "Pass",
   HUT: "Hütte",
   WATER: "Wasser",
-  DECISION: "Kontrollpunkt",
+  DECISION: "Fixpunkt",
   EMERGENCY_EXIT: "Notausstieg",
-  USER_DEFINED: "Via",
+  USER_DEFINED: "Fixpunkt",
 };
 
 const ROUTING_PROFILE_LABEL: Record<HikingTourRoutingProfile, string> = {

@@ -87,7 +87,7 @@ class HikingTourAnalysisService:
         chain_waypoints = [wp for wp in tour.waypoints if wp.kind != "EMERGENCY_EXIT"]
         distances = {wp.id: original_distances[wp.id] for wp in chain_waypoints}
         for waypoint in chain_waypoints:
-            if waypoint.kind == "USER_DEFINED" and not waypoint.label:
+            if not waypoint.label:
                 point = to_shape(waypoint.point)
                 waypoint.label = self.landmark_service.nearest_name(db, point.y, point.x)
         existing_distances = set(distances.values())
@@ -128,7 +128,7 @@ class HikingTourAnalysisService:
         db: Session,
         tour: HikingTour,
         chain_waypoints: list[HikingTourWaypoint],
-        new_points: list[tuple[float, float, float, str, str, str | None, str | None]],
+        new_points: list[tuple[float, float, float, str, str | None, str | None, str | None]],
         distances: dict[int, float],
     ) -> list[float]:
         existing_ordered = [(distances[wp.id], "EXISTING", wp) for wp in chain_waypoints]
@@ -265,7 +265,7 @@ class HikingTourAnalysisService:
                     hiking_tour_id=tour.id,
                     sequence=_EXIT_SEQUENCE_OFFSET + waypoint.sequence,  # eigener Namensraum, siehe Konstante
                     kind="EMERGENCY_EXIT",
-                    label=f"NA {(waypoint.label or 'KP').removeprefix('KP ')}",
+                    label=self.landmark_service.nearest_name(db, finding.exit_lat, finding.exit_lon),
                     description="Potenzieller Fahrzeug-Ausstieg – vor der Tour prüfen.",
                     point=_make_point(finding.exit_lat, finding.exit_lon),
                     auto_generated=True,
