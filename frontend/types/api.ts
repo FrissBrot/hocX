@@ -838,6 +838,7 @@ export type HikingTourDecisionMetrics = {
 };
 
 export type HikingTourExitMetrics = {
+  source_sequence?: number;
   distance_m: number;
   ascent_m: number;
   descent_m: number;

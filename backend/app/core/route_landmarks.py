@@ -75,11 +75,11 @@ def find_landmarks(coordinates, elements) -> list[Landmark]:
     def label(prefix, tags, point):
         name = tags.get('name') or tags.get('ref')
         if name:
-            return f'{prefix} {name}'
+            return name if prefix == 'Bei' else f'{prefix} {name}'
         nearby = [(point.distance(g), t['name']) for t, g in names
                   if point.distance(g) <= (1500 if t.get('place') else 250)]
         if nearby:
-            return f'Bei {min(nearby)[1]}' if prefix == 'Bei' else f'{prefix} bei {min(nearby)[1]}'
+            return min(nearby)[1] if prefix == 'Bei' else f'{prefix} {min(nearby)[1]}'
         return prefix  # Keine Ortsnamen erfinden; km-Zusatz wird unten ergänzt.
 
     candidates = []
@@ -93,7 +93,7 @@ def find_landmarks(coordinates, elements) -> list[Landmark]:
     for node, adjacent in neighbours.items():
         point = positions.get(node)
         if len(adjacent) >= 3 and point is not None and point.distance(route) <= 18:
-            add(point, {}, 'Verzweigung', 'DECISION', 3)
+            add(point, {}, 'KP', 'DECISION', 3)
     roads = {'motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'unclassified', 'residential', 'service', 'living_street'}
     for tags, shape in features:
         water = tags.get('waterway') in ('stream', 'river', 'canal', 'ditch')
@@ -102,7 +102,7 @@ def find_landmarks(coordinates, elements) -> list[Landmark]:
             for point in _points(route.intersection(shape)):
                 if _transverse(route, shape, point):
                     # Auch Brücken sind nützliche Orientierungspunkte, keine behauptete Furt.
-                    add(point, tags, 'Bachquerung' if water else 'Strassenquerung', 'NAVIGATION', 5 if water else 4)
+                    add(point, tags, 'Bach' if water else 'Strasse', 'NAVIGATION', 5 if water else 4)
         hut = tags.get('tourism') in ('alpine_hut', 'wilderness_hut') or tags.get('building') in ('hut', 'cabin')
         alp = tags.get('place') in ('isolated_dwelling', 'farm') and tags.get('name')
         if (hut or alp) and shape.distance(route) <= 60:
@@ -152,7 +152,7 @@ def select_landmarks(candidates, profile, speed_kmh, existing_distances=(), rese
     result = []
     for candidate in sorted(selected, key=lambda c: c.distance_m):
         base = candidate.label
-        if base in used or base in ('Verzweigung', 'Bachquerung', 'Strassenquerung', 'Bei'):
+        if base in used or base in ('KP', 'Bach', 'Strasse', 'Bei'):
             base = f'{base} · km {candidate.distance_m/1000:.2f}'
         name, suffix = base, 2
         while name in used:

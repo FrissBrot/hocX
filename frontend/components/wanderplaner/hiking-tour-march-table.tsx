@@ -13,10 +13,10 @@ const KIND_LABEL: Record<HikingTourWaypointKind, string> = {
   SUMMIT: "Gipfel",
   PASS: "Pass",
   HUT: "Hütte",
-  WATER: "Wasserstelle",
-  DECISION: "Entscheidungspunkt",
+  WATER: "Wasser",
+  DECISION: "Kontrollpunkt",
   EMERGENCY_EXIT: "Notausstieg",
-  USER_DEFINED: "Via-Punkt",
+  USER_DEFINED: "Via",
 };
 
 function formatHm(time: string | null): string {
@@ -63,6 +63,12 @@ type Props = {
 
 export function HikingTourMarchTable({ table, waypoints, canWrite = false, onUpdateBreakMinutes, onVerificationChange, onDeleteWaypoint }: Props) {
   const entries = new Map(table?.entries.map((entry) => [entry.sequence, entry]) ?? []);
+  // Notausstiege stehen direkt nach dem zugehörigen Kontrollpunkt. Alte Analysen
+  // kodieren dessen Sequenz im reservierten Bereich ab 500000.
+  const position = (waypoint: HikingTourWaypoint) => waypoint.kind === "EMERGENCY_EXIT"
+    ? (waypoint.exit_metrics_json?.source_sequence ?? (waypoint.sequence >= 500000 ? waypoint.sequence - 500000 : waypoint.sequence)) + 0.5
+    : waypoint.sequence;
+  const orderedWaypoints = [...waypoints].sort((a, b) => position(a) - position(b));
   const dash = <span className="muted">–</span>;
   return (
     <div className="wanderplaner-march-table">
@@ -73,7 +79,7 @@ export function HikingTourMarchTable({ table, waypoints, canWrite = false, onUpd
         columns={["#", "Wegpunkt", "Höhe", "Distanz", "Kum. Distanz", "Auf", "Ab", "Lkm", "Zeit", "Kum. Zeit", "Ankunft", "Pause", "Abmarsch", "Bemerkungen", "Status", "Aktionen"]}
         emptyMessage="Keine Wegpunkte."
       >
-        {waypoints.map((waypoint) => {
+        {orderedWaypoints.map((waypoint, index) => {
           const candidate = entries.get(waypoint.sequence);
           const entry = candidate?.kind === waypoint.kind ? candidate : undefined;
           const elevation = entry?.elevation_m ?? waypoint.elevation_m;
@@ -81,7 +87,7 @@ export function HikingTourMarchTable({ table, waypoints, canWrite = false, onUpd
           const verificationStatus = waypoint.verification_status ?? (waypoint.auto_generated ? "AUTO_DETECTED" : null);
           return (
             <tr key={waypoint.id}>
-              <td>{waypoint.sequence}</td>
+              <td>{index + 1}</td>
               <td>
                 {waypoint.label || KIND_LABEL[waypoint.kind]}
                 {waypoint.label && waypoint.label !== KIND_LABEL[waypoint.kind] && (

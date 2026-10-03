@@ -8,6 +8,16 @@ from app.core.swiss_coords import wgs84_to_lv95
 
 
 class RouteLandmarkService:
+    def nearest_name(self, db, lat, lon):
+        """Benannte Umgebung aus lokalen Kartendaten; ohne Treffer kein erfundener Name."""
+        x, y = wgs84_to_lv95(lat, lon)
+        return db.scalar(text("""SELECT tags->>'name' FROM hiking_landmark
+            WHERE NULLIF(tags->>'name', '') IS NOT NULL
+              AND ST_DWithin(geom, ST_SetSRID(ST_MakePoint(:x,:y),2056),
+                  CASE WHEN tags ? 'place' THEN 1500 ELSE 250 END)
+            ORDER BY ST_Distance(geom, ST_SetSRID(ST_MakePoint(:x,:y),2056)), osm_type, osm_id
+            LIMIT 1"""), {'x': x, 'y': y})
+
     def fetch(self, db, coordinates):
         if not db.scalar(text('SELECT count(*) FROM hiking_landmark_import')):
             raise ValueError('Lokale Umgebungsdaten fehlen. Bitte zuerst den Schweizer OSM-Datensatz importieren.')

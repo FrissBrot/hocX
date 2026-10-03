@@ -159,3 +159,14 @@ def test_update_tour_only_changes_given_fields(db):
 
     assert updated.title == "Neuer Titel"
     assert updated.description == "Alt"
+
+
+def test_unnamed_via_points_use_local_environment_and_preserve_custom_names(db, monkeypatch):
+    from app.services.route_landmark_service import RouteLandmarkService
+    monkeypatch.setattr(RouteLandmarkService, "nearest_name", lambda self, db, lat, lon: "Rigi Klösterli")
+    tenant = make_tenant(db, "Via Ortsnamen")
+    service = HikingTourService()
+    tour = service.create_tour(db, _basic_payload(via_points=[ViaPointCreate(**KLOESTERLI)]), tenant_id=tenant.id)
+    assert tour.waypoints[1].label == "Rigi Klösterli"
+    assert service.add_via_point(db, tour, ViaPointCreate(**KLOESTERLI)).label == "Rigi Klösterli"
+    assert service.add_via_point(db, tour, ViaPointCreate(**KLOESTERLI, label="Sammelpunkt")).label == "Sammelpunkt"

@@ -7,6 +7,7 @@ from geoalchemy2.shape import from_shape
 from shapely.geometry import Point
 from sqlalchemy.orm import Session
 
+from app.services.route_landmark_service import RouteLandmarkService
 from app.models import HikingTour, HikingTourWaypoint
 from app.repositories.hiking_tour_repository import HikingTourRepository
 from app.schemas.hiking_tour import HikingTourCreate, HikingTourUpdate, ReconnaissanceUpdate, WaypointUpdate, ViaPointCreate
@@ -53,7 +54,7 @@ class HikingTourService:
                 hiking_tour_id=tour.id,
                 sequence=sequence,
                 kind="USER_DEFINED",
-                label=via.label,
+                label=via.label or RouteLandmarkService().nearest_name(db, via.lat, via.lon),
                 description=via.description,
                 point=_make_point(via.lat, via.lon),
             )
@@ -94,7 +95,7 @@ class HikingTourService:
             hiking_tour_id=tour.id,
             sequence=new_sequence,
             kind="USER_DEFINED",
-            label=payload.label,
+            label=payload.label or RouteLandmarkService().nearest_name(db, payload.lat, payload.lon),
             description=payload.description,
             point=_make_point(payload.lat, payload.lon),
         )

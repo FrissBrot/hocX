@@ -39,7 +39,7 @@ def test_recognizes_actual_junction_crossings_and_nearby_hut():
         {'type':'node','id':7, **coordinate(750,100), 'tags':{'place':'locality','name':'Oberalp'}},
     ]
     result = find_landmarks(route(), elements)
-    assert {c.label for c in result} == {'Verzweigung bei Oberalp', 'Bachquerung Alpbach', 'Strassenquerung Alpstrasse', 'Bei Testhütte'}
+    assert {c.label for c in result} == {'KP Oberalp', 'Bach Alpbach', 'Strasse Alpstrasse', 'Testhütte'}
     assert {c.kind for c in result} == {'DECISION','NAVIGATION','HUT'}
     assert next(c for c in result if c.kind == 'HUT').distance_m == pytest.approx(1800, abs=2)
 
@@ -80,5 +80,5 @@ def test_sparse_landmarks_are_not_replaced_with_artificial_points():
 
 
 def test_unnamed_points_get_honest_unique_distance_labels():
-    points = [candidate(1000, 'Verzweigung'),candidate(2000, 'Verzweigung')]
-    assert [c.label for c in select_landmarks(points, profile(), 4)] == ['Verzweigung · km 1.00','Verzweigung · km 2.00']
+    points = [candidate(1000, 'KP'),candidate(2000, 'KP')]
+    assert [c.label for c in select_landmarks(points, profile(), 4)] == ['KP · km 1.00','KP · km 2.00']

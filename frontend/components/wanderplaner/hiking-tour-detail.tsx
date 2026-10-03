@@ -65,10 +65,10 @@ const KIND_LABEL: Record<HikingTourWaypointKind, string> = {
   SUMMIT: "Gipfel",
   PASS: "Pass",
   HUT: "Hütte",
-  WATER: "Wasserstelle",
-  DECISION: "Entscheidungspunkt",
+  WATER: "Wasser",
+  DECISION: "Kontrollpunkt",
   EMERGENCY_EXIT: "Notausstieg",
-  USER_DEFINED: "Via-Punkt",
+  USER_DEFINED: "Via",
 };
 
 const ROUTING_PROFILE_LABEL: Record<HikingTourRoutingProfile, string> = {

@@ -131,3 +131,15 @@ it("offers all review actions for automatic points without an initial status", (
     expect(onVerificationChange).toHaveBeenLastCalledWith(point, status);
   }
 });
+
+ it("places emergency exits after their control point with consecutive row numbers", () => {
+  const points = waypoints();
+  const exit = { ...points[0], id: "exit", sequence: 500001,
+    kind: "EMERGENCY_EXIT" as const, label: "NA Test" };
+  render(<HikingTourMarchTable table={table()} waypoints={[...points, exit]} />);
+  const rows = screen.getAllByRole("row").slice(1);
+  expect(rows.map(row => row.querySelector("td")?.textContent)).toEqual(["1", "2", "3"]);
+  expect(rows[1]).toHaveTextContent("NA Test");
+  expect(rows[2]).toHaveTextContent("Ziel");
+  expect(rows[1].querySelectorAll("td")[8]).toHaveTextContent("–");
+});

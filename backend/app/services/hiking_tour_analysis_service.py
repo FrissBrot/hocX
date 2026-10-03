@@ -86,6 +86,10 @@ class HikingTourAnalysisService:
         ]
         chain_waypoints = [wp for wp in tour.waypoints if wp.kind != "EMERGENCY_EXIT"]
         distances = {wp.id: original_distances[wp.id] for wp in chain_waypoints}
+        for waypoint in chain_waypoints:
+            if waypoint.kind == "USER_DEFINED" and not waypoint.label:
+                point = to_shape(waypoint.point)
+                waypoint.label = self.landmark_service.nearest_name(db, point.y, point.x)
         existing_distances = set(distances.values())
 
         speed = resolve_speed_factor_kmh(group_type=tour.group_type, luggage_type=tour.luggage_type,
@@ -261,12 +265,13 @@ class HikingTourAnalysisService:
                     hiking_tour_id=tour.id,
                     sequence=_EXIT_SEQUENCE_OFFSET + waypoint.sequence,  # eigener Namensraum, siehe Konstante
                     kind="EMERGENCY_EXIT",
-                    label=f"Ausstieg bei {waypoint.label}",
+                    label=f"NA {(waypoint.label or 'KP').removeprefix('KP ')}",
                     description="Potenzieller Fahrzeug-Ausstieg – vor der Tour prüfen.",
                     point=_make_point(finding.exit_lat, finding.exit_lon),
                     auto_generated=True,
                     verification_status="AUTO_DETECTED",
                     exit_metrics_json={
+                        "source_sequence": waypoint.sequence,
                         "distance_m": finding.distance_m,
                         "ascent_m": finding.ascent_m,
                         "descent_m": finding.descent_m,
