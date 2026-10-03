@@ -16723,3 +16723,15 @@ input[type="radio"] {
 .wanderplaner-march-table { min-width: 0; width: 100%; }
 .wanderplaner-march-table .table-shell { max-width: none; width: 100%; }
 .wanderplaner-march-table .wanderplaner-row-actions { flex-wrap: wrap; }
+
+.wanderplaner-elevation-label {
+  font-size: var(--text-xs);
+  fill: var(--text);
+}
+
+.wanderplaner-elevation-leader {
+  stroke: var(--muted);
+  stroke-width: 1;
+  fill: none;
+  pointer-events: none;
+}

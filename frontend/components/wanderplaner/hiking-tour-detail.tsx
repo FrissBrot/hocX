@@ -479,7 +479,7 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
             }
           />
           {elevationProfile ? (
-            <HikingTourElevationChart points={elevationProfile.points} onHoverPoint={setHoveredPoint} />
+            <HikingTourElevationChart points={elevationProfile.points} waypoints={tour.waypoints} marchTable={marchTable} onHoverPoint={setHoveredPoint} />
           ) : (
             <p className="field-help">Noch kein Höhenprofil abgerufen.</p>
           )}
