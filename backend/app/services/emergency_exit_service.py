@@ -20,6 +20,7 @@ Schicht, nicht dieses Modul."""
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import isfinite
 
 from geoalchemy2.elements import WKBElement
 from geoalchemy2.shape import to_shape
@@ -28,6 +29,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.march_time import leistungskilometer
+from app.core.routing_cost import ROUTING_PROFILES
 
 # Kostenobergrenze fuer die Ausstiegssuche (dieselbe Einheit wie routing_edge.cost_<profil> -
 # ein Vielfaches der Leistungskilometer, siehe routing_cost.py). Grosszuegig, aber begrenzt,
@@ -62,10 +64,16 @@ def _nearest_road_vertex(db: Session, *, edges_sql: str, from_vertex: int, max_s
     row = db.execute(
         text(
             """
-            WITH road_vertices AS (
-                SELECT DISTINCT source AS vid FROM routing_edge WHERE wegtyp = 'normalstrasse' AND source IS NOT NULL
+            WITH local_edges AS (
+                SELECT source, target FROM routing_edge
+                WHERE wegtyp = 'normalstrasse' AND geom && (
+                    SELECT ST_Envelope(ST_Transform(ST_Expand(ST_Transform(the_geom, 2056), :radius_m), 4326))
+                    FROM routing_edge_vertices_pgr WHERE id = :from_v
+                )
+            ), road_vertices AS (
+                SELECT source AS vid FROM local_edges WHERE source IS NOT NULL
                 UNION
-                SELECT DISTINCT target AS vid FROM routing_edge WHERE wegtyp = 'normalstrasse' AND target IS NOT NULL
+                SELECT target AS vid FROM local_edges WHERE target IS NOT NULL
             ),
             reach AS (
                 SELECT node, agg_cost FROM pgr_drivingDistance(:edges_sql, :from_v, :max_cost, true)
@@ -77,7 +85,8 @@ def _nearest_road_vertex(db: Session, *, edges_sql: str, from_vertex: int, max_s
             LIMIT 1
             """
         ),
-        {"edges_sql": edges_sql, "from_v": from_vertex, "max_cost": max_search_cost},
+        {"edges_sql": edges_sql, "from_v": from_vertex, "max_cost": max_search_cost,
+         "radius_m": max_search_cost * 1000 + 1000},
     ).first()
     return row[0] if row else None
 
@@ -130,10 +139,25 @@ class EmergencyExitService:
         """Naechstgelegener potenzieller Fahrzeug-Ausstieg ab (lat, lon), oder None, wenn
         innerhalb von max_search_cost keiner erreichbar ist (z.B. kein Strassennetz
         importiert - siehe Wiki "Wanderplaner", Offene Punkte)."""
-        edges_sql = f"SELECT id, source, target, cost_{profile} AS cost, reverse_cost_{profile} AS reverse_cost FROM routing_edge"
+        if profile not in ROUTING_PROFILES:
+            raise ValueError("Unbekanntes Routingprofil")
+        if not isfinite(max_search_cost) or max_search_cost <= 0:
+            raise ValueError("Suchkosten müssen positiv und endlich sein")
         from_vertex = _nearest_vertex(db, lon=lon, lat=lat)
         if from_vertex is None:
             return None
+        # Jede Profilkante kostet mindestens ihre Länge in km. Ein Pfad mit
+        # Kosten <= Suchlimit bleibt deshalb innerhalb dieses Radius um den
+        # Startknoten. 1 km Reserve deckt Projektions-/Rundungsabweichungen ab.
+        # GiST nutzt die WGS84-Boundingbox; beide pgRouting-Aufrufe laden nur
+        # diesen lokalen Graphen statt bei jedem Kontrollpunkt die ganze Schweiz.
+        radius_m = max_search_cost * 1000 + 1000
+        edges_sql = (
+            f"SELECT id, source, target, cost_{profile} AS cost, reverse_cost_{profile} AS reverse_cost "
+            "FROM routing_edge WHERE geom && ("
+            "SELECT ST_Envelope(ST_Transform(ST_Expand(ST_Transform(the_geom, 2056), "
+            f"{radius_m!r}), 4326)) FROM routing_edge_vertices_pgr WHERE id = {int(from_vertex)})"
+        )
         road_vertex = _nearest_road_vertex(db, edges_sql=edges_sql, from_vertex=from_vertex, max_search_cost=max_search_cost)
         if road_vertex is None:
             return None

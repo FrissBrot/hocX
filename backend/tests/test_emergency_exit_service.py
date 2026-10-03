@@ -3,6 +3,8 @@
 extra als `wegtyp = 'normalstrasse'` angelegt - genau fuer diesen Testfall."""
 from __future__ import annotations
 
+import pytest
+
 from app.services.emergency_exit_service import EmergencyExitService
 
 A = {"lat": 47.00, "lon": 8.50}
@@ -40,3 +42,16 @@ def test_returns_none_far_away_from_any_network(db, routing_network):
 def test_returns_none_from_an_isolated_network_segment_without_road_access(db, routing_network):
     finding = EmergencyExitService().find_exit(db, lat=ISLAND["lat"], lon=ISLAND["lon"], profile="schnellste_route", speed_factor_kmh=4.0)
     assert finding is None
+
+
+def test_cost_limit_still_excludes_unreachable_roads_in_local_graph(db, routing_network):
+    finding = EmergencyExitService().find_exit(db, **C, profile="schnellste_route",
+        speed_factor_kmh=4.0, max_search_cost=0.1)
+    assert finding is None
+
+
+@pytest.mark.parametrize("limit", [0, -1, float("inf"), float("nan")])
+def test_rejects_invalid_search_limits_before_querying(db, limit):
+    with pytest.raises(ValueError, match="Suchkosten"):
+        EmergencyExitService().find_exit(db, **C, profile="schnellste_route",
+            speed_factor_kmh=4.0, max_search_cost=limit)
