@@ -107,6 +107,18 @@ class StoredFileRepository:
             query = query.where(StoredFile.id != exclude_stored_file_id)
         return list(db.execute(query).all())
 
+    def list_checksum_and_storage_path(self, db: Session, ids: list[int]) -> dict[int, tuple[str | None, str]]:
+        """(checksum_sha256, storage_path) by id - neither column is part of the overview
+        rows list_tenant_files returns (see _shared_file_overview_columns), but
+        FileService.group_similar_gallery_images' pixel-level duplicate verification needs
+        both: the checksum for a cheap exact-copy shortcut, storage_path to read the file."""
+        if not ids:
+            return {}
+        rows = db.execute(
+            select(StoredFile.id, StoredFile.checksum_sha256, StoredFile.storage_path).where(StoredFile.id.in_(ids))
+        ).all()
+        return {row.id: (row.checksum_sha256, row.storage_path) for row in rows}
+
     @staticmethod
     def _shared_file_overview_columns() -> list:
         """The 18-column prefix every branch of _files_overview_branches shares - factored

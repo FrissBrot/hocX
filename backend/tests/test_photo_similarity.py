@@ -275,6 +275,9 @@ def test_gallery_tabs_separate_copies_from_different_photos(tmp_path, monkeypatc
             for i in (1, 2, 3)]
     repository = Mock()
     repository.list_tenant_files.return_value = rows
+    repository.list_checksum_and_storage_path.return_value = {
+        row.id: (row.checksum_sha256, row.storage_path) for row in rows
+    }
     service = FileService(stored_file_repository=repository)
     monkeypatch.setattr(service, "_build_overview_item", lambda row: row.id)
     # Nur Gruppenzugehörigkeit prüfen, unabhängig vom API-Ausgabeschema.

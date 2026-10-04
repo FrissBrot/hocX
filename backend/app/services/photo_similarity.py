@@ -126,13 +126,20 @@ def group_similar_images(
 
 
 def duplicate_signature(path: Path) -> tuple[float, np.ndarray] | None:
-    """Bildinhalt normalisieren; Auflösung, JPEG-Qualität und EXIF-Rotation tolerieren."""
+    """Bildinhalt normalisieren; Auflösung, JPEG-Qualität, EXIF-Rotation und - wie der
+    pHash-Kandidatenfilter selbst (siehe group_similar_images) - auch Schärfe/Blur
+    tolerieren: ein unscharfes Serienbild derselben Aufnahme ist kein anderes Foto. Der
+    Blur-Radius 6 ist bewusst so gewählt, dass ein kräftig geweichzeichnetes Serienbild
+    (radius=6, siehe tests/test_gallery_similarity_groups.py) innerhalb der Toleranz von
+    same_photo bleibt, eine echte lokale Inhaltsänderung (ein anderer Bildausschnitt,
+    siehe tests/test_photo_similarity.py) aber weiterhin klar darüber liegt - ein
+    niedrigerer Radius (1) liess genau diese Serienbilder an same_photo scheitern."""
     try:
         with Image.open(path) as original:
             image = ImageOps.exif_transpose(original).convert("RGB")
             ratio = image.width / image.height
             image = image.resize((128, 128), Image.Resampling.LANCZOS)
-            image = image.filter(ImageFilter.GaussianBlur(radius=1))
+            image = image.filter(ImageFilter.GaussianBlur(radius=6))
             return ratio, np.asarray(image, dtype=np.float32)
     except (OSError, UnidentifiedImageError, Image.DecompressionBombError):
         # Fehlende/unlesbare Originale sind kein Beleg für ein Duplikat.

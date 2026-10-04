@@ -466,15 +466,21 @@ class FileService:
         ]
         threshold = SIMILARITY_HAMMING_THRESHOLD if kind == "duplicate" else SERIES_HAMMING_THRESHOLD
         signatures = {}
+        # checksum_sha256/storage_path aren't part of the overview rows list_tenant_files
+        # returns (see _shared_file_overview_columns) - fetched separately, only for the
+        # ids actually being grouped.
+        file_paths = self.stored_file_repository.list_checksum_and_storage_path(db, list(rows_by_id))
 
         def matches(a: int, b: int) -> bool:
             row_a, row_b = rows_by_id[a], rows_by_id[b]
-            if row_a.checksum_sha256 and row_a.checksum_sha256 == row_b.checksum_sha256:
+            checksum_a, path_a = file_paths[a]
+            checksum_b, path_b = file_paths[b]
+            if checksum_a and checksum_a == checksum_b:
                 return True
-            for row in (row_a, row_b):
-                if row.id not in signatures:
+            for key, row, path in ((a, row_a, path_a), (b, row_b, path_b)):
+                if key not in signatures:
                     root = settings.abgabebox_storage_root if row.source == "submission_upload" else settings.storage_root
-                    signatures[row.id] = duplicate_signature(_safe_storage_path(root, row.storage_path))
+                    signatures[key] = duplicate_signature(_safe_storage_path(root, path))
             return same_photo(signatures[a], signatures[b])
 
         if kind == "duplicate":
